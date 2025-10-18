@@ -13,6 +13,7 @@
     "@monaco-editor/react": "^4.8.0-rc.2",
     "@viz-js/viz": "^3.20.0",
     "antd": "^5.27.5",
+    "js-yaml": "^4.1.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

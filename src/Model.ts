@@ -19,6 +19,7 @@ function render_component(component: Component): string {
   let out = "";
 
   if (Object.keys(component.ports).length == 0) {
+    console.log(component.name);
     out += component.name;
   } else {
     out += `subgraph cluster_${component.name} {
@@ -39,6 +40,8 @@ export function graph(model: Model): string {
   let out = "digraph {";
 
   Object.keys(model.components).forEach((key) => {
+    console.log("component")
+    console.log(key)
     let component = model.components[key];
     out += render_component(component);
   });
