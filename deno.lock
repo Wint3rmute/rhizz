@@ -3,6 +3,7 @@
   "specifiers": {
     "npm:@eslint/js@^9.36.0": "9.37.0",
     "npm:@monaco-editor/react@^4.8.0-rc.2": "4.8.0-rc.2_monaco-editor@0.54.0_react@19.2.0_react-dom@19.2.0__react@19.2.0",
+    "npm:@types/js-yaml@^4.0.9": "4.0.9",
     "npm:@types/node@^24.6.0": "24.8.1",
     "npm:@types/react-dom@^19.1.9": "19.2.2_@types+react@19.2.2",
     "npm:@types/react@^19.1.16": "19.2.2",
@@ -835,6 +836,9 @@
     },
     "@types/estree@1.0.8": {
       "integrity": "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="
+    },
+    "@types/js-yaml@4.0.9": {
+      "integrity": "sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg=="
     },
     "@types/json-schema@7.0.15": {
       "integrity": "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA=="
@@ -2319,6 +2323,7 @@
       "dependencies": [
         "npm:@eslint/js@^9.36.0",
         "npm:@monaco-editor/react@^4.8.0-rc.2",
+        "npm:@types/js-yaml@^4.0.9",
         "npm:@types/node@^24.6.0",
         "npm:@types/react-dom@^19.1.9",
         "npm:@types/react@^19.1.16",
