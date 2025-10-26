@@ -6,7 +6,8 @@
 - Interface modeling via can_encapulate and is_abstract keywords
 - Verification of interface coherency via chujwieco
 - Gradual typing (verification) of a system - how well is it defined?
-- Allows for sketching prototypes and specify details later while preserving the superstructure
+- Allows for sketching prototypes and specify details later while preserving the
+  superstructure
 - Fully abstract/business level or detailed?
 - Rhizz score tells you how well the system is defined
 
@@ -16,7 +17,8 @@ More notes: https://baczek.me/mbse/
 
 - TS-based application
 - Running on local device with a file watcher
-- On file changes, validate & view the system model, refresh a webpage with system explorer
+- On file changes, validate & view the system model, refresh a webpage with
+  system explorer
 
 ### System description
 
@@ -25,7 +27,8 @@ More notes: https://baczek.me/mbse/
 - components.yml
 - interfaces.yml
 
-Those can instead be turned into a directory like systems/ once a large file gets unwieldy.
+Those can instead be turned into a directory like systems/ once a large file
+gets unwieldy.
 
 # React + TypeScript + Vite
 

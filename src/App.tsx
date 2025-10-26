@@ -9,6 +9,20 @@ import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { Alert } from "antd";
 
+const DEFAULT_EDITOR_CONTENTS = `
+name: Car
+components:
+  -
+    name: Engine
+    components:
+      -
+        name: Fuel
+      -
+        name: Controller
+  -
+    name: OnBoardComputer
+ `.trim();
+
 function Ed(
   { on_editor_change }: { on_editor_change: (value: string) => void },
 ) {
@@ -18,16 +32,12 @@ function Ed(
     }
   };
 
-  const default_value = `model:
-  - asd
- `.trim();
-
   return (
     <Editor
       height="90vh"
       width="80%"
       defaultLanguage="yaml"
-      defaultValue={default_value}
+      defaultValue={DEFAULT_EDITOR_CONTENTS}
       onChange={handleEditorChange}
     />
   );
@@ -57,7 +67,9 @@ function ParsingError({ result }: { result: ModelParsingResult }) {
 
 function App() {
   const [yaml_ok, set_yaml_ok] = useState(false);
-  const [editor_content, set_editor_content] = useState("");
+  const [editor_content, set_editor_content] = useState(
+    DEFAULT_EDITOR_CONTENTS,
+  );
   const [model, set_model] = useState<ModelParsingResult>(null);
   const graph_ref = useRef<HTMLParagraphElement>(null);
 
