@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import * as Viz from "@viz-js/viz";
 import * as z from "zod";
-import { Component, graph, Model, Port, SystemModel } from "./Model.ts";
+import { graph, Model, SystemModel } from "./Model.ts";
 import Editor from "@monaco-editor/react";
 // import { Button } from 'antd';
-import { Col, Flex, Grid, Row } from "antd";
+import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { Alert } from "antd";
 

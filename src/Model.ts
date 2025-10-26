@@ -1,7 +1,6 @@
 import * as z from "zod";
 
 type Components = Record<string, Component>;
-type Ports = Record<string, Port>;
 
 export const Component = z.object({
   name: z.string(),
