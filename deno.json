@@ -2,7 +2,7 @@
   "lint": {
     "rules": {
       "tags": ["recommended"],
-      "include": ["eqeqeq"]
+      "include": ["eqeqeq", "no-unused-vars", "no-empty", "no-extra-semi"]
     }
   }
 }
