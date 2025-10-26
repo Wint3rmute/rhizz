@@ -1,5 +1,8 @@
 # Rhizz - Rhizomatic Systems Engineering
 
+Systems Engineering tool I'm experimenting with, based on my rants about
+Model-Based Systems Engineering: https://baczek.me/mbse
+
 ## Functional
 
 - System modeling via a set of YAML files
