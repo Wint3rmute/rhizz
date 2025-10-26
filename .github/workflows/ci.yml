@@ -27,7 +27,10 @@ jobs:
       - name: Install dependencies
         run: deno install
 
-      - name: Run lint
+      - name: Run deno lint
+        run: deno lint
+
+      - name: Run eslint
         run: deno run lint
 
   build:
