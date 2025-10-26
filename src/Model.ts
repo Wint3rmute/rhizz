@@ -22,7 +22,7 @@ export function render_component(
 
   if (children === undefined) {
     out += ` ${name} `;
-  } else if (children.length == 0) {
+  } else if (children.length === 0) {
     out += ` ${name} `;
   } else {
     out += ` subgraph cluster_${name} { `;
