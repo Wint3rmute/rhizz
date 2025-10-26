@@ -17,12 +17,12 @@ export const SystemModel = z.object({
 type SystemModel = z.infer<typeof SystemModel>;
 
 export class Model {
-  name: string;
+  name!: string;
   components: Components = {};
 }
 
 export class Port {
-  name: string;
+  name!: string;
 }
 
 export function render_component(name: string, children: Component[] | undefined): string {
