@@ -60,7 +60,7 @@ function ParsingError({ result }: { result: ModelParsingResult }) {
     ));
     return listItems;
   } else if (result instanceof yaml.YAMLException) {
-    let error_code = (
+    const error_code = (
       <code style={{ whiteSpace: "pre", textAlign: "left" }}>
         {result.toString()}
       </code>
