@@ -1,3 +1,32 @@
+# Rhizz - Rhizomatic Systems Engineering
+
+## Functional
+
+- System modeling via a set of YAML files
+- Interface modeling via can_encapulate and is_abstract keywords
+- Verification of interface coherency via chujwieco
+- Gradual typing (verification) of a system - how well is it defined?
+- Allows for sketching prototypes and specify details later while preserving the superstructure
+- Fully abstract/business level or detailed?
+- Rhizz score tells you how well the system is defined
+
+More notes: https://baczek.me/mbse/
+
+## Non-functional
+
+- TS-based application
+- Running on local device with a file watcher
+- On file changes, validate & view the system model, refresh a webpage with system explorer
+
+### System description
+
+- systems.yml
+- setups.yml
+- components.yml
+- interfaces.yml
+
+Those can instead be turned into a directory like systems/ once a large file gets unwieldy.
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and
