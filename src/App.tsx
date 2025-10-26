@@ -12,7 +12,7 @@ import { Alert } from "antd";
 function Ed(
   { on_editor_change }: { on_editor_change: (value: string) => void },
 ) {
-  let handleEditorChange = (value: string | undefined, _event: any) => {
+  const handleEditorChange = (value: string | undefined) => {
     if (value) {
       on_editor_change(value);
     }
@@ -72,14 +72,14 @@ function App() {
           set_model(result.error);
         } else {
           console.log("Model set");
-          let new_model: SystemModel = result.data;
+          const new_model: SystemModel = result.data;
           set_model(new_model);
 
-          let graphviz_input = graph(new_model);
+          const graphviz_input = graph(new_model);
           const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
           console.log(graphviz_input);
 
-          let parent = graph_ref.current;
+          const parent = graph_ref.current;
           if (!parent) {
             // TODO: raise error?
             return;
