@@ -26,7 +26,7 @@ deno run build
 ### Linting
 
 ```bash
-deno run lint
+deno lint && deno run lint
 ```
 
 ### Testing
