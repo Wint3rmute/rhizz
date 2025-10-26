@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import * as Viz from "@viz-js/viz";
 import * as z from "zod";
-import { graph, Model, SystemModel } from "./Model.ts";
+import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
 import Editor from "@monaco-editor/react";
 // import { Button } from 'antd';
 import { Col, Row } from "antd";
@@ -33,7 +33,7 @@ function Ed(
   );
 }
 
-type ModelParsingResult = Model | null | z.ZodError;
+type ModelParsingResult = SystemModel | null | z.ZodError;
 
 function ParsingError({ result }: { result: ModelParsingResult }) {
   if (result instanceof z.ZodError) {
@@ -58,7 +58,7 @@ function ParsingError({ result }: { result: ModelParsingResult }) {
 function App() {
   const [yaml_ok, set_yaml_ok] = useState(false);
   const [editor_content, set_editor_content] = useState("");
-  const [model, set_model] = useState<ModelParsingResult>(new Model());
+  const [model, set_model] = useState<ModelParsingResult>(null);
   const graph_ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -66,16 +66,16 @@ function App() {
     try {
       Viz.instance().then((viz) => {
         const doc = yaml.load(editor_content);
-        const result = SystemModel.safeParse(doc);
+        const result = SystemModelSchema.safeParse(doc);
         if (!result.success) {
           result.error;
           set_model(result.error);
         } else {
           console.log("Model set");
-          let model = result.data;
-          set_model(model);
+          let new_model: SystemModel = result.data;
+          set_model(new_model);
 
-          let graphviz_input = graph(model);
+          let graphviz_input = graph(new_model);
           const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
           console.log(graphviz_input);
 

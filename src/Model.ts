@@ -1,29 +1,18 @@
 import * as z from "zod";
 
-type Components = Record<string, Component>;
-
-export const Component = z.object({
+export const ComponentSchema = z.object({
   name: z.string(),
   get components(){
-    return z.optional(z.array(Component))
+    return z.optional(z.array(ComponentSchema))
   }
 }); // .strict();
-type Component = z.infer<typeof Component>;
+export type Component = z.infer<typeof ComponentSchema>;
 
-export const SystemModel = z.object({
+export const SystemModelSchema = z.object({
   name: z.string(),
-  components: z.array(Component),
+  components: z.array(ComponentSchema),
 }).strict();
-type SystemModel = z.infer<typeof SystemModel>;
-
-export class Model {
-  name!: string;
-  components: Components = {};
-}
-
-export class Port {
-  name!: string;
-}
+export type SystemModel = z.infer<typeof SystemModelSchema>;
 
 export function render_component(name: string, children: Component[] | undefined): string {
   let out = "";
