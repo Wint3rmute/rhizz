@@ -2,7 +2,8 @@
 
 ## Package Management
 
-**Never use `npm` commands.** This project uses Deno for package management and development tasks.
+**Never use `npm` commands.** This project uses Deno for package management and
+development tasks.
 
 - Use `deno` commands instead of `npm`
 - Dependencies are managed through Deno's import system
@@ -11,16 +12,19 @@
 ## Common Tasks
 
 ### Building
+
 ```bash
 deno run build
 ```
 
 ### Testing
+
 ```bash
 deno test
 ```
 
 ### Linting
+
 ```bash
 deno run lint
 ```

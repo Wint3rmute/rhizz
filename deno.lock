@@ -19,7 +19,8 @@
     "npm:react@^19.1.1": "19.2.0",
     "npm:rolldown-vite@7.1.14": "7.1.14_@types+node@24.8.1_picomatch@4.0.3",
     "npm:typescript-eslint@^8.45.0": "8.46.1_eslint@9.37.0_typescript@5.9.3_@typescript-eslint+parser@8.46.1__eslint@9.37.0__typescript@5.9.3",
-    "npm:typescript@~5.9.3": "5.9.3"
+    "npm:typescript@~5.9.3": "5.9.3",
+    "npm:zod@^4.1.12": "4.1.12"
   },
   "npm": {
     "@ant-design/colors@7.2.1": {
@@ -2316,6 +2317,9 @@
     },
     "yocto-queue@0.1.0": {
       "integrity": "sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q=="
+    },
+    "zod@4.1.12": {
+      "integrity": "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="
     }
   },
   "workspace": {
@@ -2339,7 +2343,8 @@
         "npm:react@^19.1.1",
         "npm:rolldown-vite@7.1.14",
         "npm:typescript-eslint@^8.45.0",
-        "npm:typescript@~5.9.3"
+        "npm:typescript@~5.9.3",
+        "npm:zod@^4.1.12"
       ]
     }
   }

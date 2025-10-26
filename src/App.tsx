@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import * as Viz from "@viz-js/viz";
-import { Component, graph, Model, Port } from "./Model.ts";
+import * as z from "zod";
+import { Component, graph, Model, Port, SystemModel } from "./Model.ts";
 import Editor from "@monaco-editor/react";
 // import { Button } from 'antd';
-import { Flex, Grid, Row, Col } from "antd";
+import { Col, Flex, Grid, Row } from "antd";
 import * as yaml from "js-yaml";
+import { Alert } from "antd";
 
 function Ed(
   { on_editor_change }: { on_editor_change: (value: string) => void },
@@ -14,7 +16,6 @@ function Ed(
     if (value) {
       on_editor_change(value);
     }
-    // console.log(value, event);
   };
 
   const default_value = `model:
@@ -32,58 +33,65 @@ function Ed(
   );
 }
 
+type ModelParsingResult = Model | null | z.ZodError;
+
+function ParsingError({ result }: { result: ModelParsingResult }) {
+  if (result instanceof z.ZodError) {
+    // console.log(result)
+    // console.log(result.issues)
+
+    const listItems = result.issues.map((issue, index) => (
+      <div key={index}>
+        <Alert
+          message={`${issue.path}: ${issue.code}`}
+          description={issue.message}
+          type="error"
+        />
+      </div>
+    ));
+    return listItems;
+  } else {
+    return null;
+  }
+}
+
 function App() {
   const [yaml_ok, set_yaml_ok] = useState(false);
   const [editor_content, set_editor_content] = useState("");
-  const [model, set_model] = useState(new Model());
+  const [model, set_model] = useState<ModelParsingResult>(new Model());
   const graph_ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     // Get document, or throw exception on error
     try {
-
       Viz.instance().then((viz) => {
-        let new_model = new Model();
-        new_model.components = {};
-        new_model.name = "Drone";
-
-        let component = new Component();
-        component.name = "Drone";
-        component.ports = {};
-
-        const doc = yaml.load(editor_content, 'utf8');
-        let yaml_model: string[] = doc.model;
-        yaml_model.forEach((port_name) => {
-          console.log(`got port ${port_name}`);
-          let port = new Port();
-          port.name = port_name;
-          component.ports[port_name] = port;
-        })
-
-        new_model.components["drone"] = component;
-        set_model(new_model);
-        console.log(new_model);
-        set_yaml_ok(true);
-
-
-        const system_graph = graph(new_model);
-        console.log(system_graph);
-
-        const svg = viz.renderSVGElement(system_graph);
-
-        let parent = graph_ref.current;
-        if (!parent) {
-          // TODO: raise error?
-          return;
-        }
-
-        if (parent.firstChild) {
-          parent.replaceChild(svg, parent.firstChild);
+        const doc = yaml.load(editor_content, "utf8");
+        const result = SystemModel.safeParse(doc);
+        if (!result.success) {
+          result.error;
+          set_model(result.error);
         } else {
-          parent.appendChild(svg);
+          console.log("Model set");
+          let model: SystemModel = result.data;
+          set_model(model);
+
+          let graphviz_input = graph(model);
+          const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
+          console.log(graphviz_input);
+
+          let parent = graph_ref.current;
+          if (!parent) {
+            // TODO: raise error?
+            return;
+          }
+
+          if (parent.firstChild) {
+            parent.replaceChild(svg, parent.firstChild);
+          } else {
+            parent.appendChild(svg);
+          }
         }
       });
-
     } catch (e) {
       console.error(e);
       set_yaml_ok(false);
@@ -116,6 +124,7 @@ function App() {
       <h1>Rhizz{yaml_ok ? "!" : "?"}</h1>
       <Row>
         <Col span={12}>
+          <ParsingError result={model} />
           <p ref={graph_ref}>
             Graph here?
           </p>
@@ -123,7 +132,7 @@ function App() {
         <Col span={12}>
           <Ed on_editor_change={set_editor_content} />
         </Col>
-      </Row >
+      </Row>
     </>
   );
 }

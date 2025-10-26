@@ -1,50 +1,55 @@
+import * as z from "zod";
+
 type Components = Record<string, Component>;
 type Ports = Record<string, Port>;
+
+export const Component = z.object({
+  name: z.string(),
+  get components(){
+    return z.optional(z.array(Component))
+  }
+}); // .strict();
+type Component = z.infer<typeof Component>;
+
+export const SystemModel = z.object({
+  name: z.string(),
+  components: z.array(Component),
+}).strict();
+type SystemModel = z.infer<typeof SystemModel>;
 
 export class Model {
   name: string;
   components: Components = {};
 }
 
-export class Component {
-  name: string;
-  ports: Ports = {};
-}
-
 export class Port {
   name: string;
 }
 
-function render_component(component: Component): string {
+export function render_component(name: string, children: Component[] | undefined): string {
   let out = "";
 
-  if (Object.keys(component.ports).length == 0) {
-    console.log(component.name);
-    out += component.name;
+  if (children === undefined) {
+    out += ` ${name} `;
+  } else if  (children.length == 0){
+    out += ` ${name} `;
   } else {
-    out += `subgraph cluster_${component.name} {
-        label = "${component.name}"`;
+    out += ` subgraph cluster_${name} { `;
+    out += `label = "${name}" `
 
-    Object.keys(component.ports).forEach((key) => {
-      let port = component.ports[key];
-      out += ` ${port.name} `;
+    children.map((component) => {
+      out += render_component(component.name, component.components)
     });
-
-    out += "}";
+    out += ` } `;
   }
 
   return out;
 }
 
-export function graph(model: Model): string {
-  let out = "digraph {";
+export function graph(model: SystemModel): string {
+  let out = "digraph { ";
 
-  Object.keys(model.components).forEach((key) => {
-    console.log("component")
-    console.log(key)
-    let component = model.components[key];
-    out += render_component(component);
-  });
+  out += render_component(model.name, model.components)
 
   out += "}";
   return out;
