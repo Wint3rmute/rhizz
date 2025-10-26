@@ -10,17 +10,19 @@ import * as yaml from "js-yaml";
 import { Alert } from "antd";
 
 const DEFAULT_EDITOR_CONTENTS = `
-name: Car
+name: Rocket
+
 components:
-  -
-    name: Engine
+  - name: Thruster
     components:
-      -
-        name: Fuel
-      -
-        name: Controller
-  -
-    name: OnBoardComputer
+      - name: Propeller
+      - name: VectoringControl
+  - name: Communication
+    components:
+      - name: UHF
+  - name: Control
+    components:
+      - name: OnBoardComputer
  `.trim();
 
 function Ed(
@@ -43,13 +45,10 @@ function Ed(
   );
 }
 
-type ModelParsingResult = SystemModel | null | z.ZodError;
+type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
 
 function ParsingError({ result }: { result: ModelParsingResult }) {
   if (result instanceof z.ZodError) {
-    // console.log(result)
-    // console.log(result.issues)
-
     const listItems = result.issues.map((issue, index) => (
       <div key={index}>
         <Alert
@@ -60,6 +59,21 @@ function ParsingError({ result }: { result: ModelParsingResult }) {
       </div>
     ));
     return listItems;
+  } else if (result instanceof yaml.YAMLException) {
+    let error_code = (
+      <code style={{ whiteSpace: "pre", textAlign: "left" }}>
+        {result.toString()}
+      </code>
+    );
+    return (
+      <>
+        <Alert
+          message={`YAML Parsing Error`}
+          description={error_code}
+          type="error"
+        />
+      </>
+    );
   } else {
     return null;
   }
@@ -74,10 +88,10 @@ function App() {
   const graph_ref = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    // Get document, or throw exception on error
-    try {
-      Viz.instance().then((viz) => {
+    Viz.instance().then((viz) => {
+      try {
         const doc = yaml.load(editor_content);
+        console.log(doc);
         const result = SystemModelSchema.safeParse(doc);
         if (!result.success) {
           set_model(result.error);
@@ -102,11 +116,16 @@ function App() {
             parent.appendChild(svg);
           }
         }
-      });
-    } catch (e) {
-      console.error(e);
-      set_yaml_ok(false);
-    }
+      } catch (e) {
+        if (e instanceof yaml.YAMLException) {
+          console.log("YAML Exception!");
+          set_model(e);
+          set_yaml_ok(false);
+        } else {
+          console.error(e);
+        }
+      }
+    });
   }, [editor_content]);
 
   // useEffect(() => {

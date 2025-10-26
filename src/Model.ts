@@ -15,21 +15,21 @@ export const SystemModelSchema = z.object({
 export type SystemModel = z.infer<typeof SystemModelSchema>;
 
 export function render_component(
-  name: string,
-  children: Component[] | undefined,
+  component: Component,
 ): string {
+  console.log(`Rendering ${component.name}`);
   let out = "";
 
-  if (children === undefined) {
-    out += ` ${name} `;
-  } else if (children.length === 0) {
-    out += ` ${name} `;
+  if (component.components === undefined) {
+    out += ` ${component.name} `;
+  } else if (component.components.length === 0) {
+    out += ` ${component.name} `;
   } else {
-    out += ` subgraph cluster_${name} { `;
-    out += `label = "${name}" `;
+    out += ` subgraph cluster_${component.name} { `;
+    out += `label = "${component.name}" `;
 
-    children.map((component) => {
-      out += render_component(component.name, component.components);
+    component.components.forEach((component) => {
+      out += render_component(component);
     });
     out += ` } `;
   }
@@ -38,9 +38,15 @@ export function render_component(
 }
 
 export function graph(model: SystemModel): string {
-  let out = "digraph { ";
+  let out = 'digraph { rankdir="LR" ';
 
-  out += render_component(model.name, model.components);
+  out += ` subgraph cluster_${model.name} { label = "${model.name}" `;
+
+  model.components.forEach((component) => {
+    out += render_component(component);
+  });
+
+  out += "}";
 
   out += "}";
   return out;
