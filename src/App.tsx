@@ -65,14 +65,14 @@ function App() {
     // Get document, or throw exception on error
     try {
       Viz.instance().then((viz) => {
-        const doc = yaml.load(editor_content, "utf8");
+        const doc = yaml.load(editor_content);
         const result = SystemModel.safeParse(doc);
         if (!result.success) {
           result.error;
           set_model(result.error);
         } else {
           console.log("Model set");
-          let model: SystemModel = result.data;
+          let model = result.data;
           set_model(model);
 
           let graphviz_input = graph(model);
