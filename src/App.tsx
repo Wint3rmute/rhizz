@@ -80,7 +80,6 @@ function App() {
         const doc = yaml.load(editor_content);
         const result = SystemModelSchema.safeParse(doc);
         if (!result.success) {
-          result.error;
           set_model(result.error);
         } else {
           console.log("Model set");
