@@ -24,6 +24,9 @@ jobs:
           deno-version: v2.x
           cache: true
       
+      - name: Install dependencies
+        run: deno install
+
       - name: Run lint
         run: deno run lint
 
@@ -40,6 +43,9 @@ jobs:
         with:
           deno-version: v2.x
           cache: true
-      
+
+      - name: Install dependencies
+        run: deno install
+     
       - name: Run build
         run: deno run build
