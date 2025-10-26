@@ -11,20 +11,26 @@ development tasks.
 
 ## Common Tasks
 
+### Installation
+
+```bash
+deno install
+```
+
 ### Building
 
 ```bash
 deno run build
 ```
 
-### Testing
-
-```bash
-deno test
-```
-
 ### Linting
 
 ```bash
 deno run lint
+```
+
+### Testing
+
+```bash
+deno test
 ```
