@@ -8,9 +8,17 @@ export const ComponentSchema = z.object({
 }); // .strict();
 export type Component = z.infer<typeof ComponentSchema>;
 
+export const ConnectionSchema = z.object({
+  name: z.string(),
+  from: z.string(),
+  to: z.string(),
+}).strict();
+export type Connection = z.infer<typeof ConnectionSchema>;
+
 export const SystemModelSchema = z.object({
   name: z.string(),
   components: z.array(ComponentSchema),
+  connections: z.array(ConnectionSchema).optional().default([]),
 }).strict();
 export type SystemModel = z.infer<typeof SystemModelSchema>;
 
@@ -47,6 +55,11 @@ export function graph(model: SystemModel): string {
   });
 
   out += "}";
+
+  model.connections.forEach((connection) => {
+    out +=
+      ` ${connection.from} -> ${connection.to} [label="${connection.name}"]; `;
+  });
 
   out += "}";
   return out;
