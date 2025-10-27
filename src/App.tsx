@@ -4,10 +4,10 @@ import * as Viz from "@viz-js/viz";
 import * as z from "zod";
 import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
 import Editor from "@monaco-editor/react";
-// import { Button } from 'antd';
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { Alert } from "antd";
+import { useLocalStorage } from "./UseLocalStorage.ts";
 
 const DEFAULT_EDITOR_CONTENTS = `
 name: Rocket
@@ -26,7 +26,10 @@ components:
  `.trim();
 
 function Ed(
-  { on_editor_change }: { on_editor_change: (value: string) => void },
+  { default_value, on_editor_change }: {
+    default_value: string;
+    on_editor_change: (value: string) => void;
+  },
 ) {
   const handleEditorChange = (value: string | undefined) => {
     if (value) {
@@ -39,7 +42,7 @@ function Ed(
       height="90vh"
       width="80%"
       defaultLanguage="yaml"
-      defaultValue={DEFAULT_EDITOR_CONTENTS}
+      defaultValue={default_value}
       onChange={handleEditorChange}
     />
   );
@@ -81,7 +84,8 @@ function ParsingError({ result }: { result: ModelParsingResult }) {
 
 function App() {
   const [yaml_ok, set_yaml_ok] = useState(false);
-  const [editor_content, set_editor_content] = useState(
+  const [editor_content, set_editor_content] = useLocalStorage(
+    "EDITOR_CONTENTS",
     DEFAULT_EDITOR_CONTENTS,
   );
   const [model, set_model] = useState<ModelParsingResult>(null);
@@ -128,27 +132,6 @@ function App() {
     });
   }, [editor_content]);
 
-  // useEffect(() => {
-  //   Viz.instance().then((viz) => {
-  //     const system_graph = graph(model);
-  //     console.log(system_graph);
-
-  //     const svg = viz.renderSVGElement(system_graph);
-
-  //     let parent = graph_ref.current; //document.getElementById("graph");
-  //     if (!parent) {
-  //       // TODO: raise error?
-  //       return;
-  //     }
-
-  //     if (parent.firstChild) {
-  //       parent.replaceChild(svg, parent.firstChild);
-  //     } else {
-  //       parent.appendChild(svg);
-  //     }
-  //   });
-  // }, [graph_ref, model]);
-
   return (
     <>
       <h1>Rhizz{yaml_ok ? "!" : "?"}</h1>
@@ -160,7 +143,10 @@ function App() {
           </p>
         </Col>
         <Col span={12}>
-          <Ed on_editor_change={set_editor_content} />
+          <Ed
+            default_value={editor_content}
+            on_editor_change={set_editor_content}
+          />
         </Col>
       </Row>
     </>
