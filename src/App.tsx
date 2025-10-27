@@ -23,6 +23,14 @@ components:
   - name: Control
     components:
       - name: OnBoardComputer
+
+connections:
+  - name: Telemetry
+    from: OnBoardComputer
+    to: UHF
+  - name: ThrustControl
+    from: OnBoardComputer
+    to: Propeller
  `.trim();
 
 function Ed(
