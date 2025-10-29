@@ -7,9 +7,8 @@ type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
 
 export function try_load_yaml(input: string): object | yaml.YAMLException {
   try {
-    const doc: object = (yaml.load(input) as object);
+    const doc: object = yaml.load(input) as object;
     return doc;
-
   } catch (e) {
     if (e instanceof yaml.YAMLException) {
       console.log("YAML Exception!");

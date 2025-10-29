@@ -7,7 +7,7 @@ import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { Alert } from "antd";
 import { useLocalStorage } from "./UseLocalStorage.ts";
-import { ParsingError, try_load_yaml } from "./ModelParser.tsx"
+import { ParsingError, try_load_yaml } from "./ModelParser.tsx";
 import { ModelEditor } from "./ModelEditor.tsx";
 
 const DEFAULT_EDITOR_CONTENTS = `
@@ -37,7 +37,6 @@ connections:
 type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
 
 function App() {
-  const [yaml_ok, set_yaml_ok] = useState(false);
   const [editor_content, set_editor_content] = useLocalStorage(
     "EDITOR_CONTENTS",
     DEFAULT_EDITOR_CONTENTS,
@@ -78,7 +77,6 @@ function App() {
         if (e instanceof yaml.YAMLException) {
           console.log("YAML Exception!");
           set_model(e);
-          set_yaml_ok(false);
         } else {
           console.error(e);
         }
@@ -88,7 +86,7 @@ function App() {
 
   return (
     <>
-      <h1>Rhizz{yaml_ok ? "!" : "?"}</h1>
+      <h1>Rhizz</h1>
       <Row>
         <Col span={12}>
           <ParsingError result={model} />
