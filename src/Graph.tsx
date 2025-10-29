@@ -9,7 +9,6 @@ export function Graph({ graphviz_input }: { graphviz_input: string }) {
     Viz.instance().then((viz) => {
       try {
         const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" });
-        console.log(graphviz_input);
 
         const parent = graph_ref.current;
         if (!parent) {
@@ -22,16 +21,20 @@ export function Graph({ graphviz_input }: { graphviz_input: string }) {
         } else {
           parent.appendChild(svg);
         }
-        set_graph_loading_state(``);
+        set_graph_loading_state("");
       } catch (e) {
-        set_graph_loading_state(`${e}`);
+        set_graph_loading_state(`${e} whiile rendering "${graphviz_input}"`);
       }
     });
   }, [graphviz_input]);
 
   return (
-    <p ref={graph_ref}>
-      {graph_loading_state}
-    </p>
+    <>
+      <p ref={graph_ref}>
+      </p>
+      <p>
+        {graph_loading_state}
+      </p>
+    </>
   );
 }

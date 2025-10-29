@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import * as z from "zod";
 import { graph } from "./Model.ts";
 import { Col, Row } from "antd";
@@ -42,7 +42,6 @@ function FullEditor() {
     DEFAULT_EDITOR_CONTENTS,
   );
   const [model, set_model] = useState<ModelParsingResult>(null);
-  const graph_ref = useRef<HTMLParagraphElement>(null);
 
   const [graph_input, set_graph_input] = useState<string>("");
 
@@ -57,10 +56,6 @@ function FullEditor() {
       new_model instanceof z.ZodError ||
       new_model instanceof yaml.YAMLException
     ) {
-      const parent = graph_ref.current;
-      if (parent && parent.firstChild) {
-        parent.removeChild(parent.firstChild);
-      }
       return;
     }
 
