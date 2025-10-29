@@ -5,8 +5,9 @@ import * as z from "zod";
 import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
+import { Alert } from "antd";
 import { useLocalStorage } from "./UseLocalStorage.ts";
-import { ParsingError } from "./ModelParser.tsx";
+import { ParsingError, try_load_yaml } from "./ModelParser.tsx"
 import { ModelEditor } from "./ModelEditor.tsx";
 
 const DEFAULT_EDITOR_CONTENTS = `

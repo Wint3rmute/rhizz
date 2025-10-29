@@ -5,6 +5,21 @@ import * as yaml from "js-yaml";
 
 type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
 
+export function try_load_yaml(input: string): object | yaml.YAMLException {
+  try {
+    const doc: object = (yaml.load(input) as object);
+    return doc;
+
+  } catch (e) {
+    if (e instanceof yaml.YAMLException) {
+      console.log("YAML Exception!");
+      return e;
+    } else {
+      throw e;
+    }
+  }
+}
+
 export function ParsingError({ result }: { result: ModelParsingResult }) {
   if (result instanceof z.ZodError) {
     const listItems = result.issues.map((issue, index) => (
