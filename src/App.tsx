@@ -2,100 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import * as Viz from "@viz-js/viz";
 import * as z from "zod";
-import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
-import Editor from "@monaco-editor/react";
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
-import { Alert } from "antd";
 import { useLocalStorage } from "./UseLocalStorage.ts";
+import rocket from "./examples/rocket.yml?raw";
+import CodeEditor from "./Editor.tsx";
+import { ParsingError } from "./ModelParser.tsx";
 
-const DEFAULT_EDITOR_CONTENTS = `
-name: Rocket
-
-components:
-  - name: Thruster
-    components:
-      - name: Propeller
-      - name: VectoringControl
-  - name: Communication
-    components:
-      - name: UHF
-  - name: Control
-    components:
-      - name: OnBoardComputer
-
-connections:
-  - name: Telemetry
-    from: OnBoardComputer
-    to: UHF
-  - name: ThrustControl
-    from: OnBoardComputer
-    to: Propeller
- `.trim();
-
-function Ed(
-  { default_value, on_editor_change }: {
-    default_value: string;
-    on_editor_change: (value: string) => void;
-  },
-) {
-  const handleEditorChange = (value: string | undefined) => {
-    if (value) {
-      on_editor_change(value);
-    }
-  };
-
-  return (
-    <Editor
-      height="90vh"
-      width="80%"
-      defaultLanguage="yaml"
-      defaultValue={default_value}
-      onChange={handleEditorChange}
-    />
-  );
-}
-
-type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
-
-function ParsingError({ result }: { result: ModelParsingResult }) {
-  if (result instanceof z.ZodError) {
-    const listItems = result.issues.map((issue, index) => (
-      <div key={index}>
-        <Alert
-          message={`${issue.path}: ${issue.code}`}
-          description={issue.message}
-          type="error"
-        />
-      </div>
-    ));
-    return listItems;
-  } else if (result instanceof yaml.YAMLException) {
-    const error_code = (
-      <code style={{ whiteSpace: "pre", textAlign: "left" }}>
-        {result.toString()}
-      </code>
-    );
-    return (
-      <>
-        <Alert
-          message={`YAML Parsing Error`}
-          description={error_code}
-          type="error"
-        />
-      </>
-    );
-  } else {
-    return null;
-  }
-}
+const DEFAULT_EDITOR_CONTENTS = rocket.trim();
 
 function App() {
   const [yaml_ok, set_yaml_ok] = useState(false);
-  const [editor_content, set_editor_content] = useLocalStorage(
-    "EDITOR_CONTENTS",
+  // const [editor_content, set_editor_content] = useLocalStorage(
+  //   "EDITOR_CONTENTS",
+  //   DEFAULT_EDITOR_CONTENTS,
+  // );
+
+  const [editor_content, set_editor_content] = useState(
     DEFAULT_EDITOR_CONTENTS,
   );
+
   const [model, set_model] = useState<ModelParsingResult>(null);
   const graph_ref = useRef<HTMLParagraphElement>(null);
 
@@ -140,6 +66,13 @@ function App() {
     });
   }, [editor_content]);
 
+  if (import.meta.hot) {
+    console.log("Setting editor content");
+    useEffect(() => {
+      set_editor_content(DEFAULT_EDITOR_CONTENTS.trim());
+    }, [DEFAULT_EDITOR_CONTENTS]);
+  }
+
   return (
     <>
       <h1>Rhizz{yaml_ok ? "!" : "?"}</h1>
@@ -151,7 +84,7 @@ function App() {
           </p>
         </Col>
         <Col span={12}>
-          <Ed
+          <CodeEditor
             default_value={editor_content}
             on_editor_change={set_editor_content}
           />
