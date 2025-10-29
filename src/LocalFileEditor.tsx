@@ -13,20 +13,22 @@ import RocketSystem from "./rocket.yml?raw";
 
 function LocalFileEditor() {
   const [editor_content, set_editor_content] = useState(
-    "",
+    RocketSystem,
   );
   const [model, set_model] = useState<ModelParsingResult>(null);
   const [graph_input, set_graph_input] = useState<string>(
     "digraph G { a -> b; }",
   );
 
-  /* This part just won't work */
+  // This is hacky but I want to make IDE changes and see diagrams live-reload
+  // in the app. Disabling a bit of eslint rules makes sense here.
   if (import.meta.hot) {
-    console.log("Hot reload");
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       console.log("Setting editor content");
-      set_editor_content(RocketSystem.trim() + ` ${import.meta.hot}`);
-    }, [editor_content]);
+      set_editor_content(RocketSystem.trim());
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [RocketSystem]);
   }
 
   useEffect(() => {
