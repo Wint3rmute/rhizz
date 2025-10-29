@@ -6,9 +6,9 @@ import * as yaml from "js-yaml";
 import { useLocalStorage } from "./UseLocalStorage.ts";
 import {
   type ModelParsingResult,
-  ParsingError,
   try_parse_model,
-} from "./ModelParser.tsx";
+} from "./model-parser-utils.ts";
+import { ParsingError } from "./ModelParser.tsx";
 import { ModelEditor } from "./ModelEditor.tsx";
 import { Graph } from "./Graph.tsx";
 
