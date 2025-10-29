@@ -35,6 +35,20 @@ connections:
 
 type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
 
+function try_parse_model(editor_content: string): ModelParsingResult {
+  const yaml_load_result = try_load_yaml(editor_content);
+  if (yaml_load_result instanceof yaml.YAMLException) {
+    return yaml_load_result;
+  }
+
+  const result = SystemModelSchema.safeParse(yaml_load_result);
+  if (!result.success) {
+    return result.error;
+  }
+  const model: SystemModel = result.data;
+  return model;
+}
+
 function App() {
   const [editor_content, set_editor_content] = useLocalStorage(
     "EDITOR_CONTENTS",
@@ -45,53 +59,22 @@ function App() {
 
   useEffect(() => {
     Viz.instance().then((viz) => {
-      const yaml_load_result = try_load_yaml(editor_content);
-      if (yaml_load_result instanceof yaml.YAMLException) {
-        set_model(yaml_load_result);
-        return;
-      }
-
-      const result = SystemModelSchema.safeParse(yaml_load_result);
-      if (!result.success) {
-        set_model(result.error);
-        return;
-      }
-
-      const new_model: SystemModel = result.data;
+      const new_model = try_parse_model(editor_content);
       set_model(new_model);
 
-      // try {
-      //   const doc = yaml.load(editor_content);
-      //   console.log(doc);
-      //   const result = SystemModelSchema.safeParse(doc);
-      //   if (!result.success) {
-      //     set_model(result.error);
-      //   } else {
-      //     console.log("Model set");
-      //     const new_model: SystemModel = result.data;
-      //     set_model(new_model);
-      //     const graphviz_input = graph(new_model);
-      //     const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
-      //     console.log(graphviz_input);
-      //     const parent = graph_ref.current;
-      //     if (!parent) {
-      //       // TODO: raise error?
-      //       return;
-      //     }
-      //     if (parent.firstChild) {
-      //       parent.replaceChild(svg, parent.firstChild);
-      //     } else {
-      //       parent.appendChild(svg);
-      //     }
-      //   }
-      // } catch (e) {
-      //   if (e instanceof yaml.YAMLException) {
-      //     console.log("YAML Exception!");
-      //     set_model(e);
-      //   } else {
-      //     console.error(e);
-      //   }
-      // }
+      const graphviz_input = graph(new_model);
+      const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
+      console.log(graphviz_input);
+      const parent = graph_ref.current;
+      if (!parent) {
+        // TODO: raise error?
+        return;
+      }
+      if (parent.firstChild) {
+        parent.replaceChild(svg, parent.firstChild);
+      } else {
+        parent.appendChild(svg);
+      }
     });
   }, [editor_content]);
 
