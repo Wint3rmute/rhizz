@@ -5,7 +5,6 @@ import * as z from "zod";
 import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
-import { Alert } from "antd";
 import { useLocalStorage } from "./UseLocalStorage.ts";
 import { ParsingError, try_load_yaml } from "./ModelParser.tsx";
 import { ModelEditor } from "./ModelEditor.tsx";
@@ -46,41 +45,53 @@ function App() {
 
   useEffect(() => {
     Viz.instance().then((viz) => {
-      try {
-        const doc = yaml.load(editor_content);
-        console.log(doc);
-        const result = SystemModelSchema.safeParse(doc);
-        if (!result.success) {
-          set_model(result.error);
-        } else {
-          console.log("Model set");
-          const new_model: SystemModel = result.data;
-          set_model(new_model);
-
-          const graphviz_input = graph(new_model);
-          const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
-          console.log(graphviz_input);
-
-          const parent = graph_ref.current;
-          if (!parent) {
-            // TODO: raise error?
-            return;
-          }
-
-          if (parent.firstChild) {
-            parent.replaceChild(svg, parent.firstChild);
-          } else {
-            parent.appendChild(svg);
-          }
-        }
-      } catch (e) {
-        if (e instanceof yaml.YAMLException) {
-          console.log("YAML Exception!");
-          set_model(e);
-        } else {
-          console.error(e);
-        }
+      const yaml_load_result = try_load_yaml(editor_content);
+      if (yaml_load_result instanceof yaml.YAMLException) {
+        set_model(yaml_load_result);
+        return;
       }
+
+      const result = SystemModelSchema.safeParse(yaml_load_result);
+      if (!result.success) {
+        set_model(result.error);
+        return;
+      }
+
+      const new_model: SystemModel = result.data;
+      set_model(new_model);
+
+      // try {
+      //   const doc = yaml.load(editor_content);
+      //   console.log(doc);
+      //   const result = SystemModelSchema.safeParse(doc);
+      //   if (!result.success) {
+      //     set_model(result.error);
+      //   } else {
+      //     console.log("Model set");
+      //     const new_model: SystemModel = result.data;
+      //     set_model(new_model);
+      //     const graphviz_input = graph(new_model);
+      //     const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
+      //     console.log(graphviz_input);
+      //     const parent = graph_ref.current;
+      //     if (!parent) {
+      //       // TODO: raise error?
+      //       return;
+      //     }
+      //     if (parent.firstChild) {
+      //       parent.replaceChild(svg, parent.firstChild);
+      //     } else {
+      //       parent.appendChild(svg);
+      //     }
+      //   }
+      // } catch (e) {
+      //   if (e instanceof yaml.YAMLException) {
+      //     console.log("YAML Exception!");
+      //     set_model(e);
+      //   } else {
+      //     console.error(e);
+      //   }
+      // }
     });
   }, [editor_content]);
 
