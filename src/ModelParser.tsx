@@ -1,9 +1,7 @@
-import { type SystemModel } from "./Model.ts";
 import { Alert } from "antd";
 import * as z from "zod";
 import * as yaml from "js-yaml";
-
-type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
+import { type ModelParsingResult } from "./model-parser-utils.ts";
 
 export function ParsingError({ result }: { result: ModelParsingResult }) {
   if (result instanceof z.ZodError) {
