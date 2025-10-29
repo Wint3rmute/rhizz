@@ -3,11 +3,11 @@ import "./App.css";
 import * as Viz from "@viz-js/viz";
 import * as z from "zod";
 import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
-import Editor from "@monaco-editor/react";
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { Alert } from "antd";
 import { useLocalStorage } from "./UseLocalStorage.ts";
+import { ModelEditor } from "./ModelEditor.tsx";
 
 const DEFAULT_EDITOR_CONTENTS = `
 name: Rocket
@@ -32,29 +32,6 @@ connections:
     from: OnBoardComputer
     to: Propeller
  `.trim();
-
-function Ed(
-  { default_value, on_editor_change }: {
-    default_value: string;
-    on_editor_change: (value: string) => void;
-  },
-) {
-  const handleEditorChange = (value: string | undefined) => {
-    if (value) {
-      on_editor_change(value);
-    }
-  };
-
-  return (
-    <Editor
-      height="90vh"
-      width="80%"
-      defaultLanguage="yaml"
-      defaultValue={default_value}
-      onChange={handleEditorChange}
-    />
-  );
-}
 
 type ModelParsingResult = SystemModel | null | z.ZodError | yaml.YAMLException;
 
@@ -151,7 +128,7 @@ function App() {
           </p>
         </Col>
         <Col span={12}>
-          <Ed
+          <ModelEditor
             default_value={editor_content}
             on_editor_change={set_editor_content}
           />
