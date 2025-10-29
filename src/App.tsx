@@ -6,7 +6,8 @@ import { graph, type SystemModel, SystemModelSchema } from "./Model.ts";
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { useLocalStorage } from "./UseLocalStorage.ts";
-import { ParsingError, try_load_yaml } from "./ModelParser.tsx";
+import { ParsingError } from "./ModelParser.tsx";
+import { try_load_yaml } from "./yaml-utils.ts";
 import { ModelEditor } from "./ModelEditor.tsx";
 
 const DEFAULT_EDITOR_CONTENTS = `
@@ -62,14 +63,31 @@ function App() {
       const new_model = try_parse_model(editor_content);
       set_model(new_model);
 
+      // Early return if parsing failed — remove any existing SVG so the UI
+      // doesn't show stale graphs while there are parsing errors.
+      if (
+        !new_model ||
+        new_model instanceof z.ZodError ||
+        new_model instanceof yaml.YAMLException
+      ) {
+        const parent = graph_ref.current;
+        if (parent && parent.firstChild) {
+          parent.removeChild(parent.firstChild);
+        }
+        return;
+      }
+
+      // Valid SystemModel: render the graph
       const graphviz_input = graph(new_model);
-      const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" }); // Try "fdp"
+      const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" });
       console.log(graphviz_input);
+      
       const parent = graph_ref.current;
       if (!parent) {
         // TODO: raise error?
         return;
       }
+      
       if (parent.firstChild) {
         parent.replaceChild(svg, parent.firstChild);
       } else {
