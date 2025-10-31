@@ -2,6 +2,7 @@ import { Alert } from "antd";
 import * as z from "zod";
 import * as yaml from "js-yaml";
 import { type ModelParsingResult } from "./model-parser-utils.ts";
+import { ModelCompilationError } from "./model-compiler.ts";
 
 export function ParsingError({ result }: { result: ModelParsingResult }) {
   if (result instanceof z.ZodError) {
@@ -26,6 +27,18 @@ export function ParsingError({ result }: { result: ModelParsingResult }) {
         <Alert
           message={`YAML Parsing Error`}
           description={error_code}
+          type="error"
+        />
+      </>
+    );
+  } else if (
+    result instanceof ModelCompilationError
+  ) {
+    return (
+      <>
+        <Alert
+          message={`Model Compilation Error`}
+          description={result.message}
           type="error"
         />
       </>

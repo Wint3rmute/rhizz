@@ -24,8 +24,9 @@ export type Protocol = z.infer<typeof ProtocolSchema>;
 
 export const SystemModelSchema = z.object({
   name: z.string(),
+  components_index: z.record(z.string(), ComponentSchema),
+  protocols: z.array(ProtocolSchema),
   components: z.array(ComponentSchema),
-  connections: z.array(ConnectionSchema).optional().default([]),
-  protocols: z.array(ProtocolSchema).optional().default([]),
+  connections: z.array(ConnectionSchema),
 }).strict();
 export type SystemModel = z.infer<typeof SystemModelSchema>;
