@@ -15,10 +15,18 @@ export const ConnectionSchema = z.object({
 }).strict();
 export type Connection = z.infer<typeof ConnectionSchema>;
 
+export const ProtocolSchema = z.object({
+  name: z.string(),
+  is_abstract: z.boolean().optional().default(true),
+  can_encapsulate: z.array(z.string()).optional().default([]),
+}).strict()
+export type Protocol = z.infer<typeof ProtocolSchema>;
+
 export const SystemModelSchema = z.object({
   name: z.string(),
   components: z.array(ComponentSchema),
   connections: z.array(ConnectionSchema).optional().default([]),
+  protocols: z.array(ProtocolSchema).optional().default([]),
 }).strict();
 export type SystemModel = z.infer<typeof SystemModelSchema>;
 
@@ -46,7 +54,13 @@ export function render_component(
 }
 
 export function graph(model: SystemModel): string {
-  let out = 'digraph { rankdir="LR" ';
+  let out = `
+  digraph { rankdir="LR"
+     graph [fontname = "monospace"];
+     node [fontname = "monospace"];
+     edge [fontname = "monospace"];
+     compound=true;
+  `;
 
   out += ` subgraph cluster_${model.name} { label = "${model.name}" `;
 
