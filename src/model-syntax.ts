@@ -19,7 +19,7 @@ export const ProtocolSchema = z.object({
   name: z.string(),
   is_abstract: z.boolean().optional().default(true),
   can_encapsulate: z.array(z.string()).optional().default([]),
-}).strict()
+}).strict();
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
 export const SystemModelSchema = z.object({

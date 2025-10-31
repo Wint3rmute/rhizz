@@ -10,6 +10,7 @@ import {
 import { ParsingError } from "./ModelParser.tsx";
 import { Graph } from "./Graph.tsx";
 import RocketSystem from "./rocket.yml?raw";
+import { ModelCompilationError } from "./model-compiler.ts";
 
 function LocalFileEditor() {
   const [editor_content, set_editor_content] = useState(
@@ -39,7 +40,8 @@ function LocalFileEditor() {
     if (
       !new_model ||
       new_model instanceof z.ZodError ||
-      new_model instanceof yaml.YAMLException
+      new_model instanceof yaml.YAMLException ||
+      new_model instanceof ModelCompilationError
     ) {
       return;
     }

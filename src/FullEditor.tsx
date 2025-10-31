@@ -11,6 +11,7 @@ import {
 import { ParsingError } from "./ModelParser.tsx";
 import { ModelEditor } from "./ModelEditor.tsx";
 import { Graph } from "./Graph.tsx";
+import { ModelCompilationError } from "./model-compiler.ts";
 
 const DEFAULT_EDITOR_CONTENTS = `
 name: Rocket
@@ -54,7 +55,8 @@ function FullEditor() {
     if (
       !new_model ||
       new_model instanceof z.ZodError ||
-      new_model instanceof yaml.YAMLException
+      new_model instanceof yaml.YAMLException ||
+      new_model instanceof ModelCompilationError
     ) {
       return;
     }
