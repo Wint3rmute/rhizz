@@ -1,7 +1,7 @@
 import { try_load_yaml } from "./yaml-utils.ts";
 import * as z from "zod";
 import * as yaml from "js-yaml";
-import { type SystemModel, SystemModelSchema } from "./ModelSyntax.ts";
+import { type SystemModel, SystemModelSchema } from "./model-syntax.ts";
 
 export type ModelParsingResult =
   | SystemModel

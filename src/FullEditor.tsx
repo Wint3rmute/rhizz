@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as z from "zod";
-import { graph } from "./ModelSyntax.ts";
+import { graph } from "./model-syntax.ts";
 import { Col, Row } from "antd";
 import * as yaml from "js-yaml";
 import { useLocalStorage } from "./UseLocalStorage.ts";
