@@ -38,5 +38,7 @@ export function compile(model: syntax.SystemModel): semantics.SystemModel {
     name: model.name,
     components_index,
     protocols: model.protocols,
+    components: model.components,
+    connections: model.connections,
   };
 }
