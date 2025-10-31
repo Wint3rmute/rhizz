@@ -1,6 +1,10 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@*": "1.0.15",
+    "jsr:@std/assert@^1.0.15": "1.0.15",
+    "jsr:@std/async@*": "1.0.15",
+    "jsr:@std/internal@^1.0.12": "1.0.12",
     "npm:@eslint/js@^9.36.0": "9.37.0",
     "npm:@monaco-editor/react@^4.8.0-rc.2": "4.8.0-rc.2_monaco-editor@0.54.0_react@19.2.0_react-dom@19.2.0__react@19.2.0",
     "npm:@types/js-yaml@^4.0.9": "4.0.9",
@@ -22,6 +26,20 @@
     "npm:typescript-eslint@^8.45.0": "8.46.1_eslint@9.37.0_typescript@5.9.3_@typescript-eslint+parser@8.46.1__eslint@9.37.0__typescript@5.9.3",
     "npm:typescript@~5.9.3": "5.9.3",
     "npm:zod@^4.1.12": "4.1.12"
+  },
+  "jsr": {
+    "@std/assert@1.0.15": {
+      "integrity": "d64018e951dbdfab9777335ecdb000c0b4e3df036984083be219ce5941e4703b",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/async@1.0.15": {
+      "integrity": "55d1d9d04f99403fe5730ab16bdcc3c47f658a6bf054cafb38a50f046238116e"
+    },
+    "@std/internal@1.0.12": {
+      "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
+    }
   },
   "npm": {
     "@ant-design/colors@7.2.1": {
@@ -2350,6 +2368,9 @@
     }
   },
   "workspace": {
+    "dependencies": [
+      "jsr:@std/assert@^1.0.15"
+    ],
     "packageJson": {
       "dependencies": [
         "npm:@eslint/js@^9.36.0",

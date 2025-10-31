@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: deno install
 
+      - name: Run deno check
+        run: deno check
+
       - name: Run deno lint
         run: deno lint
 

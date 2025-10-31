@@ -4,5 +4,8 @@
       "tags": ["recommended"],
       "include": ["eqeqeq", "no-unused-vars", "no-empty", "no-extra-semi"]
     }
-  }
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.15"
+  },
 }

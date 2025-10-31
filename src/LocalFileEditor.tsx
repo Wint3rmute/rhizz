@@ -9,12 +9,12 @@ import {
 } from "./model-parser-utils.ts";
 import { ParsingError } from "./ModelParser.tsx";
 import { Graph } from "./Graph.tsx";
-import RocketSystem from "./rocket.yml?raw";
+import { rocket_model } from "./rocket.ts";
 import { ModelCompilationError } from "./model-compiler.ts";
 
 function LocalFileEditor() {
   const [editor_content, set_editor_content] = useState(
-    RocketSystem,
+    rocket_model,
   );
   const [model, set_model] = useState<ModelParsingResult>(null);
   const [graph_input, set_graph_input] = useState<string>(
@@ -27,9 +27,9 @@ function LocalFileEditor() {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       console.log("Setting editor content");
-      set_editor_content(RocketSystem.trim());
+      set_editor_content(rocket_model.trim());
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [RocketSystem]);
+    }, [rocket_model]);
   }
 
   useEffect(() => {

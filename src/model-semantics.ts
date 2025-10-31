@@ -28,5 +28,5 @@ export const SystemModelSchema = z.object({
   protocols: z.array(ProtocolSchema),
   components: z.array(ComponentSchema),
   connections: z.array(ConnectionSchema),
-});
+}).strict();
 export type SystemModel = z.infer<typeof SystemModelSchema>;
