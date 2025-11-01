@@ -1,4 +1,4 @@
-import { assert } from "jsr:@std/assert@^1.0.15";
+import { assert } from "@std/assert";
 import { rocket_model } from "../src/rocket.ts";
 import { try_parse_model } from "../src/model-parser-utils.ts";
 
@@ -7,4 +7,3 @@ Deno.test("simple test", () => {
   assert(parsing_result);
   assert("components" in parsing_result);
 });
-
