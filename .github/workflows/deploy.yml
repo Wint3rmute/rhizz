@@ -32,7 +32,7 @@ jobs:
         run: deno install
 
       - name: Run build
-        run: deno run build
+        run: deno task build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

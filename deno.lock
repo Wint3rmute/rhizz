@@ -20,7 +20,9 @@
     "npm:react@^19.1.1": "19.2.0",
     "npm:rolldown-vite@7.1.14": "7.1.14_@types+node@24.9.2_picomatch@4.0.3",
     "npm:typescript-eslint@^8.45.0": "8.46.2_eslint@9.39.0_typescript@5.9.3_@typescript-eslint+parser@8.46.2__eslint@9.39.0__typescript@5.9.3",
+    "npm:typescript@*": "5.9.3",
     "npm:typescript@~5.9.3": "5.9.3",
+    "npm:vite@*": "7.1.12_@types+node@24.9.2_picomatch@4.0.3",
     "npm:zod@^4.1.12": "4.1.12"
   },
   "npm": {
@@ -2157,32 +2159,28 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@std/assert@^1.0.15"
-    ],
-    "packageJson": {
-      "dependencies": [
-        "npm:@eslint/js@^9.36.0",
-        "npm:@monaco-editor/react@^4.8.0-rc.2",
-        "npm:@types/js-yaml@^4.0.9",
-        "npm:@types/node@^24.6.0",
-        "npm:@types/react-dom@^19.1.9",
-        "npm:@types/react@^19.1.16",
-        "npm:@vitejs/plugin-react@^5.0.4",
-        "npm:@viz-js/viz@^3.20.0",
-        "npm:antd@^5.27.5",
-        "npm:eslint-plugin-react-hooks@^5.2.0",
-        "npm:eslint-plugin-react-refresh@~0.4.22",
-        "npm:eslint@^9.36.0",
-        "npm:globals@^16.4.0",
-        "npm:js-yaml@^4.1.0",
-        "npm:react-dom@^19.1.1",
-        "npm:react-router-dom@^7.9.5",
-        "npm:react@^19.1.1",
-        "npm:rolldown-vite@7.1.14",
-        "npm:typescript-eslint@^8.45.0",
-        "npm:typescript@~5.9.3",
-        "npm:zod@^4.1.12"
-      ]
-    }
+      "jsr:@std/assert@^1.0.15",
+      "npm:@eslint/js@^9.36.0",
+      "npm:@monaco-editor/react@^4.8.0-rc.2",
+      "npm:@types/js-yaml@^4.0.9",
+      "npm:@types/node@^24.6.0",
+      "npm:@types/react-dom@^19.1.9",
+      "npm:@types/react@^19.1.16",
+      "npm:@vitejs/plugin-react@^5.0.4",
+      "npm:@viz-js/viz@^3.20.0",
+      "npm:antd@^5.27.5",
+      "npm:eslint-plugin-react-hooks@^5.2.0",
+      "npm:eslint-plugin-react-refresh@~0.4.22",
+      "npm:eslint@^9.36.0",
+      "npm:globals@^16.4.0",
+      "npm:js-yaml@^4.1.0",
+      "npm:react-dom@^19.1.1",
+      "npm:react-router-dom@^7.9.5",
+      "npm:react@^19.1.1",
+      "npm:rolldown-vite@7.1.14",
+      "npm:typescript-eslint@^8.45.0",
+      "npm:typescript@~5.9.3",
+      "npm:zod@^4.1.12"
+    ]
   }
 }
