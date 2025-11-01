@@ -37,7 +37,7 @@ jobs:
         run: deno run lint
 
   test:
-    name: Build
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
