@@ -12,6 +12,7 @@ export const ConnectionSchema = z.object({
   name: z.string(),
   from: z.string(),
   to: z.string(),
+  protocol: z.string().optional(),
 }).strict();
 export type Connection = z.infer<typeof ConnectionSchema>;
 

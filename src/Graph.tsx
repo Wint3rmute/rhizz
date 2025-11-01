@@ -6,9 +6,11 @@ export function Graph({ graphviz_input }: { graphviz_input: string }) {
   const [graph_loading_state, set_graph_loading_state] = useState<string>();
 
   useEffect(() => {
-    Viz.instance().then((viz) => {
+    const render_graph = async () => {
+      const viz = await Viz.instance();
       try {
         const svg = viz.renderSVGElement(graphviz_input, { engine: "dot" });
+        svg.setAttribute("width", "100%");
 
         const parent = graph_ref.current;
         if (!parent) {
@@ -25,7 +27,8 @@ export function Graph({ graphviz_input }: { graphviz_input: string }) {
       } catch (e) {
         set_graph_loading_state(`${e} whiile rendering "${graphviz_input}"`);
       }
-    });
+    };
+    render_graph();
   }, [graphviz_input]);
 
   return (

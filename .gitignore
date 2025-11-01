@@ -28,3 +28,6 @@ package.json
 # Deno coverage
 cov/
 *.lcov
+
+# Temporary vite files
+.vite

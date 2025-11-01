@@ -32,6 +32,9 @@ export function graph(model: SystemModel): string {
      node [fontname = "monospace"];
      edge [fontname = "monospace"];
      compound=true;
+     node [shape=box, fixedsize=false, margin=0.3];
+     edge [arrowsize=0.8];
+     splines=polyline;
   `;
 
   out += ` subgraph cluster_${model.name} { label = "${model.name}" `;
@@ -53,6 +56,11 @@ export function graph(model: SystemModel): string {
       return;
     }
 
+    let style = "dotted";
+    if (connection.protocol && !connection.protocol.is_abstract) {
+      style = "solid";
+    }
+
     // Logic to determine if we need to connect to dummy nodes
     const connection_from_node =
       from_component.components && from_component.components.length > 0
@@ -66,7 +74,7 @@ export function graph(model: SystemModel): string {
 
     // Create the edge with lhead and ltail to point to either the node or dummy
     out +=
-      ` ${connection_from_node} -> ${connection_to_node} [lhead="cluster_${connection.to}", ltail="cluster_${connection.from}", label="${connection.name}"]; `;
+      ` ${connection_from_node} -> ${connection_to_node} [lhead="cluster_${connection.to}", ltail="cluster_${connection.from}", label="${connection.name}", style="${style}"]; `;
   });
 
   out += "}";
