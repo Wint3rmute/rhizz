@@ -3,7 +3,6 @@ import type { Component, SystemModel } from "./model-semantics.ts";
 export function render_component(
   component: Component,
 ): string {
-  console.log(`Rendering ${component.name}`);
   let out = "";
 
   if (component.components === undefined) {
