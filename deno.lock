@@ -12,6 +12,7 @@
     "npm:antd@^5.27.5": "5.27.6_react@19.2.0_react-dom@19.2.0__react@19.2.0_dayjs@1.11.19",
     "npm:eslint-plugin-react-hooks@^5.2.0": "5.2.0_eslint@9.39.0",
     "npm:eslint-plugin-react-refresh@~0.4.22": "0.4.24_eslint@9.39.0",
+    "npm:eslint@*": "9.39.0",
     "npm:eslint@^9.36.0": "9.39.0",
     "npm:globals@^16.4.0": "16.5.0",
     "npm:js-yaml@^4.1.0": "4.1.0",
@@ -20,7 +21,6 @@
     "npm:react@^19.1.1": "19.2.0",
     "npm:rolldown-vite@7.1.14": "7.1.14_@types+node@24.9.2_picomatch@4.0.3",
     "npm:typescript-eslint@^8.45.0": "8.46.2_eslint@9.39.0_typescript@5.9.3_@typescript-eslint+parser@8.46.2__eslint@9.39.0__typescript@5.9.3",
-    "npm:typescript@*": "5.9.3",
     "npm:typescript@~5.9.3": "5.9.3",
     "npm:vite@*": "7.1.12_@types+node@24.9.2_picomatch@4.0.3",
     "npm:zod@^4.1.12": "4.1.12"
