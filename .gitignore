@@ -24,3 +24,7 @@ package.json
 *.njsproj
 *.sln
 *.sw?
+
+# Deno coverage
+cov/
+*.lcov
