@@ -32,3 +32,11 @@ More notes: https://baczek.me/mbse/
 
 Those can instead be turned into a directory like systems/ once a large file
 gets unwieldy.
+
+## Implementation notes
+
+### File watcher
+
+- https://www.electronjs.org/docs/latest/tutorial/ipc
+- https://nodejs.org/docs/latest/api/fs.html#fswatchfilename-options-listener
+- https://github.com/paulmillr/chokidar
