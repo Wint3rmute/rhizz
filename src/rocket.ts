@@ -1,4 +1,4 @@
-export const rocket_model: string = `name: LaunchSystem
+export const rocket_model = `name: LaunchSystem
 
 components:
   - name: Rocket

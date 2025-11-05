@@ -24,11 +24,9 @@ function LocalFileEditor() {
   // This is hacky but I want to make IDE changes and see diagrams live-reload
   // in the app. Disabling a bit of eslint rules makes sense here.
   if (import.meta.hot) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       console.log("Setting editor content");
       set_editor_content(rocket_model.trim());
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [rocket_model]);
   }
 
