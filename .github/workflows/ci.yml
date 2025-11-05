@@ -18,42 +18,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          deno-version: v2.x
-          cache: true
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: deno install
-
-      - name: Run deno check
-        run: deno task check
-
-      - name: Run deno lint
-        run: deno lint
+        run: npm ci
 
       - name: Run eslint
-        run: deno task lint
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-          cache: true
-
-      - name: Install dependencies
-        run: deno install
-
-      - name: Run tests
-        run: deno test
+        run: npm run lint
 
   build:
     name: Build
@@ -62,14 +37,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          deno-version: v2.x
-          cache: true
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: deno install
+        run: npm ci
 
-      - name: Run build
-        run: deno task build
+      - name: Package Electron app
+        run: npm run package
