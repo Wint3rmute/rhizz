@@ -10,7 +10,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "test": "tsx --test tests/model_compile_test.ts"
+    "test": "tsx --test $(find tests -name '*test.ts')"
   },
   "keywords": [],
   "author": {

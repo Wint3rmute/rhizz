@@ -7,13 +7,13 @@ import * as Viz from "@viz-js/viz";
 
 test("parse & render a model", async () => {
   const parsing_result = try_parse_model(rocket_model);
-  assert.ok(parsing_result);
-  assert.ok("components" in parsing_result);
+  assert.ok(parsing_result, "Parsing result should be truthy");
+  assert.ok(parsing_result && "components" in parsing_result, "Parsing result should have components");
   const output = graph(parsing_result);
-  assert.ok(output);
+  assert.ok(output, "Graph output should be generated");
   const viz = await Viz.instance();
-  assert.ok(viz);
+  assert.ok(viz, "Viz instance should be created");
 
   const rendered_graph = viz.renderString(output);
-  assert.ok(rendered_graph);
+  assert.ok(rendered_graph, "Graph should be rendered");
 });
