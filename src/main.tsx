@@ -6,7 +6,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { RouteNotFound } from "./RouteNotFound.tsx";
 import LocalFileEditor from "./LocalFileEditor.tsx";
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter basename="/rhizz">
       <Routes>
