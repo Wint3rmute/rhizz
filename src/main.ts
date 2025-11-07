@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import process from "node:process";
+import { watch , readFileSync } from "node:fs";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -26,6 +27,21 @@ const createWindow = () => {
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
+
+  console.log("Watching model dir...");
+  watch("model", (eventType, filename) => {
+    console.log(`event type is: ${eventType}`);
+    if (filename) {
+      console.log(`filename provided: ${filename}`);
+      if (filename === "system.yml") {
+        const system_contents = readFileSync("model/system.yml", "utf-8");
+        console.log(system_contents);
+        mainWindow.webContents.send("update-model", system_contents);
+      }
+    } else {
+      console.log("filename not provided");
+    }
+  });
 
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();

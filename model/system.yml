@@ -1,0 +1,62 @@
+name: RocketLaunch
+
+components:
+  # The part which flies
+  - name: Rocket
+    components:
+      - name: Propeller
+      - name: UHF
+      - name: OnBoardComputer
+
+  # The part which monitors
+  - name: GroundControl
+    components:
+      - name: GroundStation
+      - name: MissionControl
+
+connections:
+  - name: Telemetry
+    from: Rocket
+    to: GroundControl
+    protocol: Telemetry
+  - name: Telecommands
+    from: GroundControl
+    to: Rocket
+    protocol: Telemetry
+
+  - name: RF_Downlink
+    from: UHF
+    to: GroundStation
+  - name: RF_Uplink
+    from: GroundStation
+    to: UHF
+
+  - name: TelecommandPacket
+    from: UHF
+    to: OnBoardComputer
+    protocol: UART
+
+  - name: Telemetrypacket
+    from: OnBoardComputer
+    to: UHF
+    protocol: UART
+
+  - name: ThrustControl
+    from: OnBoardComputer
+    to: Propeller
+    protocol: CAN
+
+  - name: ThrustMetrics
+    from: Propeller
+    to: OnBoardComputer
+    protocol: CAN
+
+protocols:
+  - name: Telemetry
+    is_abstract: true
+
+  - name: UART
+    is_abstract: false
+
+  - name: CAN
+    is_abstract: false

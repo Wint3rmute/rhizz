@@ -10,7 +10,6 @@ import {
   try_parse_model,
 } from "./model-parser-utils.ts";
 import { ParsingError } from "./ModelParser.tsx";
-import { ModelEditor } from "./ModelEditor.tsx";
 import { Graph } from "./Graph.tsx";
 import { ModelCompilationError } from "./model-compiler.ts";
 
@@ -48,6 +47,13 @@ function FullEditor() {
   const [graph_input, set_graph_input] = useState<string>("");
 
   useEffect(() => {
+    console.log("Subscribing");
+    globalThis.electronAPI.onModelFilesUpdate((value) => {
+      set_editor_content(`${value}`);
+    });
+  });
+
+  useEffect(() => {
     const new_model = try_parse_model(editor_content);
     set_model(new_model);
 
@@ -71,15 +77,9 @@ function FullEditor() {
     <>
       <h1>Rhizz</h1>
       <Row>
-        <Col span={12}>
+        <Col span={24}>
           <ParsingError result={model} />
           <Graph graphviz_input={graph_input} />
-        </Col>
-        <Col span={12}>
-          <ModelEditor
-            default_value={editor_content}
-            on_editor_change={set_editor_content}
-          />
         </Col>
       </Row>
     </>
