@@ -1,19 +1,11 @@
 import { try_load_yaml } from "./yaml-utils.ts";
 import * as z from "zod";
 import * as yaml from "js-yaml";
-import { SystemModelSchema } from "./model-syntax.ts";
-import type { SystemModel } from "./model-semantics.ts";
+import { type SystemModel, SystemModelSchema } from "./model-syntax.ts";
 import { compile, ModelCompilationError } from "./model-compiler.ts";
 
-export class ModelParsingSuccess {
-  constructor(
-    public readonly model: SystemModel,
-    public readonly extras: string[],
-  ) {}
-}
-
 export type ModelParsingResult =
-  | ModelParsingSuccess
+  | SystemModel
   | null
   | z.ZodError
   | yaml.YAMLException
@@ -29,10 +21,9 @@ export function try_parse_model(editor_content: string): ModelParsingResult {
   if (!result.success) {
     return result.error;
   }
-  const syntax_model = result.data;
+  const model: SystemModel = result.data;
   try {
-    const semantic_model = compile(syntax_model);
-    return new ModelParsingSuccess(semantic_model, []);
+    compile(model);
   } catch (e) {
     if (e instanceof ModelCompilationError) {
       return e;
@@ -40,4 +31,5 @@ export function try_parse_model(editor_content: string): ModelParsingResult {
       throw e;
     }
   }
+  return model;
 }

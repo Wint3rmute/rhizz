@@ -11,7 +11,8 @@
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "lint:fix": "eslint --fix --ext .ts,.tsx .",
-    "test": "tsx --test $(find tests -name '*test.ts')"
+    "test": "tsx --test $(find tests -name '*test.ts')",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": {
@@ -38,7 +39,7 @@
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "tsx": "^4.20.6",
-    "typescript": "~4.5.4",
+    "typescript": "^5.7.2",
     "vite": "^5.4.21"
   },
   "dependencies": {
