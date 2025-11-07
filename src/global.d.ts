@@ -8,6 +8,6 @@ declare global {
     };
   }
 
-  // Make electronAPI available on globalThis as well
+  // eslint-disable-next-line no-var
   var electronAPI: Window["electronAPI"];
 }
