@@ -16,7 +16,7 @@ const items = [
   },
 ];
 
-const App: React.FC = ({ children }) => {
+const App: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
