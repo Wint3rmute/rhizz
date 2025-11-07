@@ -13,6 +13,7 @@ components:
     components:
       - name: GroundStation
       - name: MissionControl
+      - name: FlightControlTeam
 
 connections:
   - name: Telemetry
@@ -51,6 +52,16 @@ connections:
     to: OnBoardComputer
     protocol: CAN
 
+  - name: Uses
+    from: FlightControlTeam
+    to: MissionControl
+    protocol: HID
+
+  - name: Ethernet
+    from: MissionControl
+    to: GroundStation
+    protocol: Ethernet
+
 protocols:
   - name: Telemetry
     is_abstract: true
@@ -59,4 +70,10 @@ protocols:
     is_abstract: false
 
   - name: CAN
+    is_abstract: false
+
+  - name: HID
+    is_abstract: false
+
+  - name: Ethernet
     is_abstract: false
