@@ -30,6 +30,9 @@ jobs:
       - name: Run eslint
         run: npm run lint
 
+      - name: Run typecheck
+        run: npm run typecheck
+
   test:
     name: Test
     runs-on: ubuntu-latest
