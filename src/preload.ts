@@ -5,6 +5,6 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   setTitle: (title: string) => ipcRenderer.send("set-title", title),
-  onModelFilesUpdate: (callback) =>
+  onModelFilesUpdate: (callback: (value: string) => void) =>
     ipcRenderer.on("update-model", (_event, value) => callback(value)),
 });

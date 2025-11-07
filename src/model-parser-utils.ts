@@ -3,9 +3,10 @@ import * as z from "zod";
 import * as yaml from "js-yaml";
 import { type SystemModel, SystemModelSchema } from "./model-syntax.ts";
 import { compile, ModelCompilationError } from "./model-compiler.ts";
+import type { SystemModel as SemanticSystemModel } from "./model-semantics.ts";
 
 export type ModelParsingResult =
-  | SystemModel
+  | SemanticSystemModel
   | null
   | z.ZodError
   | yaml.YAMLException
@@ -23,7 +24,7 @@ export function try_parse_model(editor_content: string): ModelParsingResult {
   }
   const model: SystemModel = result.data;
   try {
-    compile(model);
+    return compile(model);
   } catch (e) {
     if (e instanceof ModelCompilationError) {
       return e;
@@ -31,5 +32,4 @@ export function try_parse_model(editor_content: string): ModelParsingResult {
       throw e;
     }
   }
-  return model;
 }

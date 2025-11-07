@@ -7,7 +7,6 @@ import * as yaml from "js-yaml";
 import { useLocalStorage } from "./UseLocalStorage.ts";
 import {
   type ModelParsingResult,
-  ModelParsingSuccess,
   try_parse_model,
 } from "./model-parser-utils.ts";
 import { ParsingError } from "./ModelParser.tsx";
@@ -58,12 +57,17 @@ function FullEditor() {
     const new_model = try_parse_model(editor_content);
     set_model(new_model);
 
-    if (!new_model || !(new_model instanceof ModelParsingSuccess)) {
+    // Check if it's a successful parse (SystemModel with 'components_index' property)
+    if (
+      !new_model ||
+      typeof new_model !== "object" ||
+      !("components_index" in new_model)
+    ) {
       return;
     }
 
     // Valid SystemModel: render the graph
-    const graphviz_input = graph(new_model.model);
+    const graphviz_input = graph(new_model);
     set_graph_input(graphviz_input);
   }, [editor_content]);
 
