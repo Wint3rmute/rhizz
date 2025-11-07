@@ -2,8 +2,7 @@ import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import process from "node:process";
-import { watch } from "node:fs";
-import { readFileSync } from "node:fs";
+import { watch , readFileSync } from "node:fs";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
