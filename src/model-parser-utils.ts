@@ -5,8 +5,15 @@ import { SystemModelSchema } from "./model-syntax.ts";
 import type { SystemModel } from "./model-semantics.ts";
 import { compile, ModelCompilationError } from "./model-compiler.ts";
 
+export class ModelParsingSuccess {
+  constructor(
+    public readonly model: SystemModel,
+    public readonly extras: string[],
+  ) {}
+}
+
 export type ModelParsingResult =
-  | SystemModel
+  | ModelParsingSuccess
   | null
   | z.ZodError
   | yaml.YAMLException
@@ -25,7 +32,7 @@ export function try_parse_model(editor_content: string): ModelParsingResult {
   const syntax_model = result.data;
   try {
     const semantic_model = compile(syntax_model);
-    return semantic_model;
+    return new ModelParsingSuccess(semantic_model, []);
   } catch (e) {
     if (e instanceof ModelCompilationError) {
       return e;
