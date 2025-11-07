@@ -1,16 +1,14 @@
-import { useEffect, useState } from "react";
-import * as z from "zod";
+import React, { useEffect, useState } from "react";
 import { graph } from "./model-visualizer.ts";
 import { Col, Row } from "antd";
-import * as yaml from "js-yaml";
 import {
   type ModelParsingResult,
+  ModelParsingSuccess,
   try_parse_model,
 } from "./model-parser-utils.ts";
 import { ParsingError } from "./ModelParser.tsx";
 import { Graph } from "./Graph.tsx";
 import { rocket_model } from "./rocket.ts";
-import { ModelCompilationError } from "./model-compiler.ts";
 
 function LocalFileEditor() {
   const [editor_content, set_editor_content] = useState(
@@ -35,16 +33,11 @@ function LocalFileEditor() {
     const new_model = try_parse_model(editor_content);
     set_model(new_model);
 
-    if (
-      !new_model ||
-      new_model instanceof z.ZodError ||
-      new_model instanceof yaml.YAMLException ||
-      new_model instanceof ModelCompilationError
-    ) {
+    if (!(new_model instanceof ModelParsingSuccess)) {
       return;
     }
 
-    const graphviz_input = graph(new_model);
+    const graphviz_input = graph(new_model.model);
     console.log("Setting graph input...");
     set_graph_input(graphviz_input);
   }, [editor_content]);

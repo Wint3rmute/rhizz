@@ -35,7 +35,6 @@ const createWindow = () => {
       console.log(`filename provided: ${filename}`);
       if (filename === "system.yml") {
         const system_contents = readFileSync("model/system.yml", "utf-8");
-        console.log(system_contents);
         mainWindow.webContents.send("update-model", system_contents);
       }
     } else {

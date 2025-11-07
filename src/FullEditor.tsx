@@ -1,9 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
-import * as z from "zod";
 import { graph } from "./model-visualizer.ts";
 import { Col, Row } from "antd";
-import * as yaml from "js-yaml";
 import { useLocalStorage } from "./UseLocalStorage.ts";
 import {
   type ModelParsingResult,
@@ -12,7 +10,6 @@ import {
 } from "./model-parser-utils.ts";
 import { ParsingError } from "./ModelParser.tsx";
 import { Graph } from "./Graph.tsx";
-import { ModelCompilationError } from "./model-compiler.ts";
 
 const DEFAULT_EDITOR_CONTENTS = `
 name: Rocket
@@ -49,7 +46,7 @@ function FullEditor() {
 
   useEffect(() => {
     console.log("Subscribing");
-    globalThis.electronAPI.onModelFilesUpdate((value) => {
+    globalThis.electronAPI.onModelFilesUpdate((value: string) => {
       set_editor_content(`${value}`);
     });
   });
@@ -58,7 +55,8 @@ function FullEditor() {
     const new_model = try_parse_model(editor_content);
     set_model(new_model);
 
-    if (!new_model || !(new_model instanceof ModelParsingSuccess)) {
+    // Check if it's a successful parse (ModelParsingSuccess)
+    if (!(new_model instanceof ModelParsingSuccess)) {
       return;
     }
 

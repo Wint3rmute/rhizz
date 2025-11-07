@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "commonjs",
+    "module": "ESNext",
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -9,7 +9,13 @@
     "sourceMap": true,
     "baseUrl": ".",
     "outDir": "dist",
-    "moduleResolution": "node",
-    "resolveJsonModule": true
-  }
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "jsx": "react",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src/**/*", "tests/**/*", "forge.env.d.ts"],
+  "exclude": ["node_modules", "dist", ".vite", "out"]
 }
