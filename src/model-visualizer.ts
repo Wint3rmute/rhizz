@@ -29,6 +29,8 @@ export function graph(model: SystemModel): string {
   let out = `
   digraph { rankdir="LR"
      graph [fontname = "monospace"];
+     graph [pad="0.0", nodesep="0", ranksep="1"];
+
      node [fontname = "monospace"];
      edge [fontname = "monospace"];
      compound=true;
