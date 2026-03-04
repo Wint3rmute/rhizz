@@ -96,8 +96,14 @@ system "buzzvid" {
         description = "Ordered list of video IDs with scores"
         tags        = ["data"]
 
-        field "video_ids" { type = "string[]"; description = "Ordered video IDs" }
-        field "scores"    { type = "float32[]"; description = "Relevance scores 0-1" }
+        field "video_ids" {
+          type        = "string[]"
+          description = "Ordered video IDs"
+        }
+        field "scores" {
+          type        = "float32[]"
+          description = "Relevance scores 0-1"
+        }
       }
     }
 
@@ -143,16 +149,29 @@ system "buzzvid" {
       description = "Request next page of video feed"
       tags        = ["api"]
 
-      field "cursor"    { type = "string"; description = "Pagination cursor" }
-      field "feed_type" { type = "string"; description = "for_you | following" }
+      field "cursor" {
+        type        = "string"
+        description = "Pagination cursor"
+      }
+      field "feed_type" {
+        type        = "string"
+        description = "for_you | following"
+      }
     }
 
     message "upload-video" {
       description = "Initiate video upload"
       tags        = ["api", "video"]
 
-      field "title"      { type = "string"; description = "Video title" }
-      field "chunk_size" { type = "uint32"; unit = "bytes"; description = "Upload chunk size" }
+      field "title" {
+        type        = "string"
+        description = "Video title"
+      }
+      field "chunk_size" {
+        type        = "uint32"
+        unit        = "bytes"
+        description = "Upload chunk size"
+      }
     }
   }
 

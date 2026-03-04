@@ -7,17 +7,6 @@ How to work on this file:
 - Run tests & linters (`cargo test`, `cargo clippy`, `cargo build`) until it's all working
 - Delete the task from the file once done, report that you're finished
 
-## Task 1 — Foundation
-
-- Add dependencies to `Cargo.toml`: `hcl-rs`, `clap` (derive feature), `owo-colors`, `walkdir`, `anyhow`
-- Set up module structure: `parse`, `model`, `resolve`, `validate`, `score`, `dot`, `cli`
-- Define raw model types: `RawFile`, `Labeled<T>`, `RawProject`, `RawSystem`, `RawComponent`, `RawInterface`, `RawMessage`, `RawField` — all optional fields, no logic
-- Implement `parse_file(src: &str) -> Result<RawFile>` by walking `hcl::Body`, handling recursive component/interface nesting
-- Implement file discovery: glob all `.hcl` files in a directory, parse each, merge into one `RawFile`; detect E010 (multiple `project` blocks) during merge
-- **Test:** parse all three example projects without error and assert field values on at least one
-
----
-
 ## Task 2 — Resolution
 
 - Define resolved model types and newtyped ID structs (`ComponentId`, `InterfaceId`, etc.) and the full `Model` arena as described in `SPEC/models.md`
