@@ -21,7 +21,7 @@ TASKS.md        – ordered implementation tasks
 
 1. Read the next task in `TASKS.md`.
 2. Implement it using red/green TDD.
-3. Run `cargo test`, `cargo clippy`, and `cargo build` until everything passes.
+3. Run `cargo test`, `cargo clippy`, `cargo doc` and `cargo build` until everything passes.
 4. Run `cargo fmt` to format the code.
 5. Delete the completed task from `TASKS.md` and report that you are finished.
 
