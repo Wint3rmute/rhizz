@@ -22,5 +22,8 @@ mod score;
 mod validate;
 
 fn main() {
-    println!("rhizz");
+    use clap::Parser;
+    let args = cli::Cli::parse();
+    let code = cli::run(&args);
+    std::process::exit(code);
 }
