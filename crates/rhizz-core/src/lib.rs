@@ -72,9 +72,9 @@ pub fn compile(sources: &[Source]) -> CompileResult {
     }
 
     match resolve::resolve(merged) {
-        Ok((model, warnings)) => CompileResult {
+        Ok((model, diagnostics)) => CompileResult {
             model: Some(model),
-            diagnostics: warnings,
+            diagnostics,
         },
         Err(diagnostics) => CompileResult {
             model: None,

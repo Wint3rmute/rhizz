@@ -10,19 +10,6 @@ How to work on this file:
 
 ---
 
-## Task 8 — Establish `rhizz-core`
-
-Move `model.rs`, `parse.rs`, `resolve.rs`, `validate.rs`, and `score.rs` from `src/` into `crates/rhizz-core/src/`.
-Expose a clean public API:
-- `Source { filename: String, content: String }`
-- `CompileResult { model: Option<Model>, diagnostics: Vec<Diagnostic> }`
-- `fn compile(sources: &[Source]) -> CompileResult`
-- `fn score(model: &Model) -> ScoreReport`
-
-All public types must derive `Clone`, `serde::Serialize`, and `serde::Deserialize`.
-The crate must have **no** `std::fs`, `std::env`, or any I/O dependency.
-All pre-existing unit tests travel with their modules; they must pass under the new crate.
-
 ## Task 9 — Establish `rhizz-dot`
 
 Move `dot.rs` into `crates/rhizz-dot/src/`.
