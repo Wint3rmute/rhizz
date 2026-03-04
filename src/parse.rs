@@ -1,3 +1,7 @@
+// Public API will be consumed by the resolve module in Task 2; suppress
+// dead_code until then.
+#![allow(dead_code)]
+
 /// Raw (deserialization) model and file-level parsing.
 ///
 /// Two concerns live here:
@@ -230,14 +234,11 @@ fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
     let a: MessageAttrs = attrs(body)?;
     let mut fields = Vec::new();
     for block in body.blocks() {
-        match block.identifier() {
-            "field" => {
-                let label = first_label(block)?;
-                let inner = parse_field(block.body())
-                    .with_context(|| format!("in field '{label}'"))?;
-                fields.push(Labeled { label, inner });
-            }
-            _ => {}
+        if block.identifier() == "field" {
+            let label = first_label(block)?;
+            let inner = parse_field(block.body())
+                .with_context(|| format!("in field '{label}'"))?;
+            fields.push(Labeled { label, inner });
         }
     }
     Ok(RawMessage {
@@ -252,14 +253,11 @@ fn parse_interface(body: &hcl::Body) -> Result<RawInterface> {
     let a: InterfaceAttrs = attrs(body)?;
     let mut messages = Vec::new();
     for block in body.blocks() {
-        match block.identifier() {
-            "message" => {
-                let label = first_label(block)?;
-                let inner = parse_message(block.body())
-                    .with_context(|| format!("in message '{label}'"))?;
-                messages.push(Labeled { label, inner });
-            }
-            _ => {}
+        if block.identifier() == "message" {
+            let label = first_label(block)?;
+            let inner = parse_message(block.body())
+                .with_context(|| format!("in message '{label}'"))?;
+            messages.push(Labeled { label, inner });
         }
     }
     Ok(RawInterface {
@@ -432,7 +430,7 @@ pub fn parse_dir(dir: &Path) -> Result<RawFile> {
         .filter_map(|e| e.ok())
         .filter(|e| {
             e.file_type().is_file()
-                && e.path().extension().map_or(false, |ext| ext == "hcl")
+                && e.path().extension().is_some_and(|ext| ext == "hcl")
         })
         .map(|e| e.path().to_path_buf())
         .collect();

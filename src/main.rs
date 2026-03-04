@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 mod parse;
 mod model;
 mod resolve;
