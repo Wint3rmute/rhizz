@@ -11,20 +11,26 @@ use std::collections::{HashMap, HashSet};
 
 // ── Resolver state ────────────────────────────────────────────────────────────
 
+/// Internal state used throughout the resolution pass.
 #[derive(Default)]
 struct Resolver {
+    /// The model being built.
     model: Model,
+    /// Index for looking up entities by `(scope, label)`.
     scope_index: ScopeIndex,
+    /// Accumulated diagnostics (errors and warnings).
     diagnostics: Vec<Diagnostic>,
     /// Maps system label → SystemId for view resolution.
     system_label_index: HashMap<String, SystemId>,
 }
 
 impl Resolver {
+    /// Record an error diagnostic.
     fn push_error(&mut self, code: &str, msg: impl Into<String>) {
         self.diagnostics.push(Diagnostic::error(code, msg));
     }
 
+    /// Record a warning diagnostic.
     fn push_warning(&mut self, code: &str, msg: impl Into<String>) {
         self.diagnostics.push(Diagnostic::warning(code, msg));
     }
@@ -58,10 +64,15 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     let mut system_labels_seen: HashSet<String> = HashSet::new();
 
     // Collected so Phase B can iterate after all systems are in the arena.
+    /// Deferred work for a system’s Phase B (interface processing).
     struct SystemWork {
+        /// The allocated system id.
         sid: SystemId,
+        /// System label (for diagnostics).
         label: String,
+        /// Raw interfaces to resolve in Phase B.
         interfaces: Vec<Labeled<RawInterface>>,
+        /// The system’s abstraction level.
         system_level: i32,
     }
     let mut pending_systems: Vec<SystemWork> = Vec::new();
@@ -478,6 +489,7 @@ fn has_encapsulation_cycle(interfaces: &[Interface], start: InterfaceId) -> bool
 
 // ── Message / Field processing ────────────────────────────────────────────────
 
+/// Process message blocks within an interface, returning their [`MessageId`]s.
 fn process_messages(
     r: &mut Resolver,
     messages: &[Labeled<RawMessage>],
@@ -516,6 +528,7 @@ fn process_messages(
     msg_ids
 }
 
+/// Process field blocks within a message, returning their [`FieldId`]s.
 fn process_fields(
     r: &mut Resolver,
     fields: &[Labeled<crate::parse::RawField>],
@@ -567,6 +580,7 @@ fn process_fields(
 
 // ── View resolution ───────────────────────────────────────────────────────────
 
+/// Resolve a raw view block, emitting E007 for undefined system references.
 fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
     // E007 — undefined system
     let system = match &lv.inner.system {

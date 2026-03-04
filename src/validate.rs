@@ -1,4 +1,4 @@
-// Validation pass — warning pass over the resolved Model.
+//! Validation pass — warning pass over the resolved Model.
 
 use crate::model::{ComponentParent, Diagnostic, Model};
 use std::collections::{HashMap, HashSet};
