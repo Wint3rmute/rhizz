@@ -8,15 +8,6 @@ How to work on this file:
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Delete the task from the file once done, report that you're finished
 
-## Task 4 — Completion Scoring
-
-- Implement `score(model: &Model) -> ScoreReport` with the per-entity 0.0/0.5/1.0 logic from SPEC.md §5
-- Produce per-category counts (components/interfaces/messages) and overall aggregate
-- Implement `ScoreReport` display formatting matching the spec output format
-- **Test:** assert score values for each example match hand-calculated expectations
-
----
-
 ## Task 5 — Graphviz DOT Generation
 
 - Implement `render_view(model: &Model, view: &View) -> String`
