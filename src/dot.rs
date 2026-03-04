@@ -1,7 +1,7 @@
 //! Graphviz DOT generation.
 //!
-//! The public entry point is [`render_view`], which converts a resolved
-//! [`View`] (with its filter predicates) into a Graphviz DOT string ready to
+//! The public entry point is [`crate::dot::render_view`], which converts a resolved
+//! [`crate::model::View`] (with its filter predicates) into a Graphviz DOT string ready to
 //! be written to a `.dot` file.
 // Public API consumed by downstream passes (Task 6).
 #![allow(dead_code)]
