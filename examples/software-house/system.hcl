@@ -51,8 +51,14 @@ system "acme-software" {
         description = "Request for code review"
         tags        = ["process"]
 
-        field "pr_url"   { type = "string"; description = "Pull request URL" }
-        field "urgency"  { type = "enum(low,normal,high)"; description = "Review priority" }
+        field "pr_url" {
+          type        = "string"
+          description = "Pull request URL"
+        }
+        field "urgency" {
+          type        = "enum(low,normal,high)"
+          description = "Review priority"
+        }
       }
     }
 
@@ -95,8 +101,14 @@ system "acme-software" {
         description = "Figma link + acceptance criteria"
         tags        = ["process"]
 
-        field "figma_url"  { type = "string"; description = "Design file URL" }
-        field "feature_id" { type = "string"; description = "Feature tracker ID" }
+        field "figma_url" {
+          type        = "string"
+          description = "Design file URL"
+        }
+        field "feature_id" {
+          type        = "string"
+          description = "Feature tracker ID"
+        }
       }
     }
   }
@@ -156,9 +168,19 @@ system "acme-software" {
       description = "Prioritized list of stories for the sprint"
       tags        = ["agile"]
 
-      field "sprint_id" { type = "string"; description = "Sprint identifier" }
-      field "stories"   { type = "string[]"; description = "Ordered story IDs" }
-      field "capacity"  { type = "uint8"; unit = "points"; description = "Team capacity" }
+      field "sprint_id" {
+        type        = "string"
+        description = "Sprint identifier"
+      }
+      field "stories" {
+        type        = "string[]"
+        description = "Ordered story IDs"
+      }
+      field "capacity" {
+        type        = "uint8"
+        unit        = "points"
+        description = "Team capacity"
+      }
     }
   }
 
@@ -174,9 +196,18 @@ system "acme-software" {
       description = "Bug report with reproduction steps"
       tags        = ["quality"]
 
-      field "ticket_id"  { type = "string"; description = "Issue tracker ID" }
-      field "severity"   { type = "enum(critical,major,minor)"; description = "Bug severity" }
-      field "repro_steps" { type = "string"; description = "Steps to reproduce" }
+      field "ticket_id" {
+        type        = "string"
+        description = "Issue tracker ID"
+      }
+      field "severity" {
+        type        = "enum(critical,major,minor)"
+        description = "Bug severity"
+      }
+      field "repro_steps" {
+        type        = "string"
+        description = "Steps to reproduce"
+      }
     }
   }
 
@@ -192,8 +223,14 @@ system "acme-software" {
       description = "Release approval or rejection"
       tags        = ["quality"]
 
-      field "build_id" { type = "string"; description = "Build/version identifier" }
-      field "approved" { type = "bool"; description = "Pass or fail" }
+      field "build_id" {
+        type        = "string"
+        description = "Build/version identifier"
+      }
+      field "approved" {
+        type        = "bool"
+        description = "Pass or fail"
+      }
     }
   }
 

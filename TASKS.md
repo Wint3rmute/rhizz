@@ -5,18 +5,8 @@ How to work on this file:
 - Read the next task
 - Implement it, use red/green TDD
 - Run tests & linters (`cargo test`, `cargo clippy`, `cargo build`) until it's all working
+- Once all linters/builds/tests pass, run `cargo fmt`
 - Delete the task from the file once done, report that you're finished
-
-## Task 1 — Foundation
-
-- Add dependencies to `Cargo.toml`: `hcl-rs`, `clap` (derive feature), `owo-colors`, `walkdir`, `anyhow`
-- Set up module structure: `parse`, `model`, `resolve`, `validate`, `score`, `dot`, `cli`
-- Define raw model types: `RawFile`, `Labeled<T>`, `RawProject`, `RawSystem`, `RawComponent`, `RawInterface`, `RawMessage`, `RawField` — all optional fields, no logic
-- Implement `parse_file(src: &str) -> Result<RawFile>` by walking `hcl::Body`, handling recursive component/interface nesting
-- Implement file discovery: glob all `.hcl` files in a directory, parse each, merge into one `RawFile`; detect E010 (multiple `project` blocks) during merge
-- **Test:** parse all three example projects without error and assert field values on at least one
-
----
 
 ## Task 2 — Resolution
 

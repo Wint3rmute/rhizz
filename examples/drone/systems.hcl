@@ -102,8 +102,14 @@ system "quadcopter" {
       description = "Per-motor throttle command"
       tags        = ["control"]
 
-      field "motor_id" { type = "uint8";  description = "Motor index 1-4" }
-      field "value"    { type = "uint16"; description = "Throttle 0-2047" }
+      field "motor_id" {
+        type        = "uint8"
+        description = "Motor index 1-4"
+      }
+      field "value" {
+        type        = "uint16"
+        description = "Throttle 0-2047"
+      }
     }
   }
 
@@ -119,10 +125,25 @@ system "quadcopter" {
       description = "Navigation position/velocity/time solution"
       tags        = ["navigation"]
 
-      field "latitude"  { type = "int32";  unit = "deg*1e7"; description = "Latitude" }
-      field "longitude" { type = "int32";  unit = "deg*1e7"; description = "Longitude" }
-      field "altitude"  { type = "int32";  unit = "mm";      description = "Altitude above MSL" }
-      field "fix_type"  { type = "uint8";  description = "GNSS fix type" }
+      field "latitude" {
+        type        = "int32"
+        unit        = "deg*1e7"
+        description = "Latitude"
+      }
+      field "longitude" {
+        type        = "int32"
+        unit        = "deg*1e7"
+        description = "Longitude"
+      }
+      field "altitude" {
+        type        = "int32"
+        unit        = "mm"
+        description = "Altitude above MSL"
+      }
+      field "fix_type" {
+        type        = "uint8"
+        description = "GNSS fix type"
+      }
     }
   }
 
@@ -138,7 +159,10 @@ system "quadcopter" {
       description = "16 RC channel values"
       tags        = ["control"]
 
-      field "channels" { type = "uint16[16]"; description = "Channel values 172-1811" }
+      field "channels" {
+        type        = "uint16[16]"
+        description = "Channel values 172-1811"
+      }
     }
   }
 
