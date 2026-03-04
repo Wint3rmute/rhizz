@@ -8,17 +8,6 @@ How to work on this file:
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Delete the task from the file once done, report that you're finished
 
-## Task 5 — Graphviz DOT Generation
-
-- Implement `render_view(model: &Model, view: &View) -> String`
-- Apply filter predicates: tag inclusion/exclusion, `max_level`, component whitelist, `show_messages`
-- Emit `subgraph cluster_*` for non-leaf components, box nodes for leaf components
-- Emit directed/undirected edges for interfaces; include message names in edge labels when `show_messages = true`
-- Write rendered `.dot` files to `--output-dir`
-- **Test:** render all views in each example; assert output contains expected node/edge identifiers
-
----
-
 ## Task 6 — CLI
 
 - Implement `clap` arg parser as specified in `SPEC/cli.md`: `check`, `score`, `views`, `build` subcommands; default to `build`
