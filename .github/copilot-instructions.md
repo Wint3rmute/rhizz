@@ -5,24 +5,16 @@
 **rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in Rust.
 Systems are described in `.hcl` files (HCL syntax, same as Terraform) that can be
 version-controlled, diffed, and reviewed without a GUI. See `SPEC.md` and `SPEC/` for
-the full specification, and `examples/` for worked examples.
+the full specification, and `examples/` for examples of systems defined with `rhizz`.
 
 ## Repository Layout
 
 ```
-src/
-  main.rs       – entry point
-  cli.rs        – clap CLI arg parsing
-  parse.rs      – HCL → RawFile
-  model.rs      – resolved model types (ComponentId, InterfaceId, …)
-  resolve.rs    – raw → resolved Model + Diagnostic emission
-  validate.rs   – warning pass over resolved Model
-  score.rs      – completion scoring (ScoreReport)
-  dot.rs        – Graphviz DOT rendering
-examples/       – drone, social-media, software-house worked examples
+src/ .          – source code
+examples/       – example systems
 SPEC.md         – full specification (single file)
 SPEC/           – specification split by topic (cli.md, models.md, …)
-TASKS.md        – ordered implementation tasks; delete a task once done
+TASKS.md        – ordered implementation tasks
 ```
 
 ## Development Workflow
@@ -37,7 +29,6 @@ TASKS.md        – ordered implementation tasks; delete a task once done
 
 ```bash
 cargo build                       # debug build
-cargo build --release             # release build
 cargo test --all                  # run all tests
 cargo clippy --all-targets --all-features -- -D warnings   # lint (warnings are errors)
 cargo fmt --all -- --check        # check formatting
