@@ -9,7 +9,7 @@
 ///   2. `parse_file` / `parse_dir` / `merge` that turn HCL text into those structs.
 ///
 /// No validation, no resolution — that is Task 2+.
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -236,8 +236,7 @@ fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
     for block in body.blocks() {
         if block.identifier() == "field" {
             let label = first_label(block)?;
-            let inner = parse_field(block.body())
-                .with_context(|| format!("in field '{label}'"))?;
+            let inner = parse_field(block.body()).with_context(|| format!("in field '{label}'"))?;
             fields.push(Labeled { label, inner });
         }
     }
@@ -255,8 +254,8 @@ fn parse_interface(body: &hcl::Body) -> Result<RawInterface> {
     for block in body.blocks() {
         if block.identifier() == "message" {
             let label = first_label(block)?;
-            let inner = parse_message(block.body())
-                .with_context(|| format!("in message '{label}'"))?;
+            let inner =
+                parse_message(block.body()).with_context(|| format!("in message '{label}'"))?;
             messages.push(Labeled { label, inner });
         }
     }
@@ -374,8 +373,7 @@ fn parse_view(body: &hcl::Body) -> Result<RawView> {
 /// Parse a single `.hcl` source string into a `RawFile`.
 /// `path` is used only for error context messages.
 pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
-    let body = hcl::parse(src)
-        .with_context(|| format!("HCL parse error in {}", path.display()))?;
+    let body = hcl::parse(src).with_context(|| format!("HCL parse error in {}", path.display()))?;
 
     let mut file = RawFile::default();
 
@@ -388,30 +386,23 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
                         path.display()
                     );
                 }
-                file.project = Some(
-                    parse_project(block.body())
-                        .context("in project block")?,
-                );
+                file.project = Some(parse_project(block.body()).context("in project block")?);
                 file.project_source = Some(path.to_path_buf());
             }
             "system" => {
                 let label = first_label(block)?;
-                let inner = parse_system(block.body())
-                    .with_context(|| format!("in system '{label}'"))?;
+                let inner =
+                    parse_system(block.body()).with_context(|| format!("in system '{label}'"))?;
                 file.systems.push(Labeled { label, inner });
             }
             "view" => {
                 let label = first_label(block)?;
-                let inner = parse_view(block.body())
-                    .with_context(|| format!("in view '{label}'"))?;
+                let inner =
+                    parse_view(block.body()).with_context(|| format!("in view '{label}'"))?;
                 file.views.push(Labeled { label, inner });
             }
             other => {
-                bail!(
-                    "unknown top-level block '{}' in {}",
-                    other,
-                    path.display()
-                );
+                bail!("unknown top-level block '{}' in {}", other, path.display());
             }
         }
     }
@@ -428,10 +419,7 @@ pub fn parse_dir(dir: &Path) -> Result<RawFile> {
         .max_depth(1) // flat directory, like Terraform
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_type().is_file()
-                && e.path().extension().is_some_and(|ext| ext == "hcl")
-        })
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
         .map(|e| e.path().to_path_buf())
         .collect();
 
@@ -494,12 +482,20 @@ mod tests {
 
         // Two systems: quadcopter + ground-control
         assert_eq!(raw.systems.len(), 2, "expected 2 systems");
-        let quad = raw.systems.iter().find(|s| s.label == "quadcopter").unwrap();
+        let quad = raw
+            .systems
+            .iter()
+            .find(|s| s.label == "quadcopter")
+            .unwrap();
         assert!(quad.inner.description.is_some());
 
         // Components at top level of quadcopter
-        let comp_labels: Vec<&str> =
-            quad.inner.components.iter().map(|c| c.label.as_str()).collect();
+        let comp_labels: Vec<&str> = quad
+            .inner
+            .components
+            .iter()
+            .map(|c| c.label.as_str())
+            .collect();
         assert!(comp_labels.contains(&"flight-controller"));
         assert!(comp_labels.contains(&"esc"));
         assert!(comp_labels.contains(&"battery"));
@@ -511,15 +507,23 @@ mod tests {
             .iter()
             .find(|c| c.label == "flight-controller")
             .unwrap();
-        let fc_child_labels: Vec<&str> =
-            fc.inner.components.iter().map(|c| c.label.as_str()).collect();
+        let fc_child_labels: Vec<&str> = fc
+            .inner
+            .components
+            .iter()
+            .map(|c| c.label.as_str())
+            .collect();
         assert!(fc_child_labels.contains(&"mcu"));
         assert!(fc_child_labels.contains(&"imu"));
         assert!(fc_child_labels.contains(&"barometer"));
 
         // Interfaces at system level
-        let iface_labels: Vec<&str> =
-            quad.inner.interfaces.iter().map(|i| i.label.as_str()).collect();
+        let iface_labels: Vec<&str> = quad
+            .inner
+            .interfaces
+            .iter()
+            .map(|i| i.label.as_str())
+            .collect();
         assert!(iface_labels.contains(&"motor-control"));
         assert!(iface_labels.contains(&"rc-link"));
 
@@ -536,7 +540,11 @@ mod tests {
 
         // Views
         assert_eq!(raw.views.len(), 4, "expected 4 views");
-        let ov = raw.views.iter().find(|v| v.label == "drone-overview").unwrap();
+        let ov = raw
+            .views
+            .iter()
+            .find(|v| v.label == "drone-overview")
+            .unwrap();
         assert!(ov.inner.filter.is_some());
         assert!(ov.inner.output.is_some());
     }
@@ -605,8 +613,12 @@ mod tests {
             .iter()
             .find(|i| i.label == "client-api")
             .expect("client-api interface missing");
-        let msg_labels: Vec<&str> =
-            client_api.inner.messages.iter().map(|m| m.label.as_str()).collect();
+        let msg_labels: Vec<&str> = client_api
+            .inner
+            .messages
+            .iter()
+            .map(|m| m.label.as_str())
+            .collect();
         assert!(msg_labels.contains(&"get-feed"));
         assert!(msg_labels.contains(&"upload-video"));
 
@@ -634,8 +646,12 @@ mod tests {
         assert_eq!(acme.label, "acme-software");
 
         // Departments exist as top-level components
-        let dept_labels: Vec<&str> =
-            acme.inner.components.iter().map(|c| c.label.as_str()).collect();
+        let dept_labels: Vec<&str> = acme
+            .inner
+            .components
+            .iter()
+            .map(|c| c.label.as_str())
+            .collect();
         assert!(dept_labels.contains(&"engineering"));
         assert!(dept_labels.contains(&"product"));
         assert!(dept_labels.contains(&"qa"));
@@ -649,8 +665,12 @@ mod tests {
             .iter()
             .find(|c| c.label == "engineering")
             .unwrap();
-        let team_labels: Vec<&str> =
-            eng.inner.components.iter().map(|c| c.label.as_str()).collect();
+        let team_labels: Vec<&str> = eng
+            .inner
+            .components
+            .iter()
+            .map(|c| c.label.as_str())
+            .collect();
         assert!(team_labels.contains(&"frontend-team"));
         assert!(team_labels.contains(&"backend-team"));
         assert!(team_labels.contains(&"platform-team"));
@@ -675,8 +695,7 @@ mod tests {
         assert_eq!(sprint.inner.messages.len(), 1);
         let msg = &sprint.inner.messages[0];
         assert_eq!(msg.label, "sprint-backlog");
-        let field_labels: Vec<&str> =
-            msg.inner.fields.iter().map(|f| f.label.as_str()).collect();
+        let field_labels: Vec<&str> = msg.inner.fields.iter().map(|f| f.label.as_str()).collect();
         assert!(field_labels.contains(&"sprint_id"));
         assert!(field_labels.contains(&"stories"));
         assert!(field_labels.contains(&"capacity"));
@@ -694,7 +713,10 @@ mod tests {
         "#;
         let path = PathBuf::from("test.hcl");
         let err = parse_file(src, &path).unwrap_err();
-        assert!(err.to_string().contains("E010"), "expected E010 error, got: {err}");
+        assert!(
+            err.to_string().contains("E010"),
+            "expected E010 error, got: {err}"
+        );
     }
 
     // ── Inline unit parse tests ─────────────────────────────────────────────
@@ -750,7 +772,9 @@ mod tests {
         "#;
         let path = PathBuf::from("test.hcl");
         let raw = parse_file(src, &path).unwrap();
-        let field = &raw.systems[0].inner.interfaces[0].inner.messages[0].inner.fields[0];
+        let field = &raw.systems[0].inner.interfaces[0].inner.messages[0]
+            .inner
+            .fields[0];
         assert_eq!(field.inner.field_type.as_deref(), Some("uint8"));
         assert_eq!(field.inner.unit.as_deref(), Some("ms"));
     }

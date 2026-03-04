@@ -1,11 +1,11 @@
 #![deny(clippy::all)]
-mod parse;
-mod model;
-mod resolve;
-mod validate;
-mod score;
-mod dot;
 mod cli;
+mod dot;
+mod model;
+mod parse;
+mod resolve;
+mod score;
+mod validate;
 
 fn main() {
     println!("rhizz");
