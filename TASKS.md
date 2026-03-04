@@ -44,7 +44,7 @@ The CLI crate must contain no parsing, validation, scoring, or DOT-rendering log
 Move integration tests (examples: drone, social-media, software-house) to `crates/rhizz-cli/tests/`.
 Verify that the `rhizz` binary behaviour is identical to before.
 
-## Task 11 — Clean up and verify
+Then:
 
 Delete the old `src/` directory at the repo root once all code has migrated.
 Run `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc --all`, and `cargo build --all`.
@@ -52,6 +52,6 @@ Fix any warnings or errors surfaced.
 Run `cargo fmt --all`.
 
 
-## Task 12 - Task template
+## Task 11 - Task template
 
 Use this template when creating new tasks. Keep on increasing the task number!
