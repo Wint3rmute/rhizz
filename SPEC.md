@@ -1,4 +1,4 @@
-# `rhizz` Specification v0.1
+# `rhizz` Specification v0.2
 
 ## 1. Project Structure
 
@@ -340,7 +340,7 @@ Overall:     16/29           55.2%
 
 ## 6. View Generation (Graphviz)
 
-> **Impl:** the `View`, `ViewFilter`, and `ViewOutput` structs are defined in [view models](SPEC/models.md#view-models). The renderer reads from the resolved `Model` and applies filter predicates against tags, levels, and component whitelist.
+> **Impl:** the `View`, `ViewFilter`, and `ViewOutput` structs are defined in [view models](SPEC/models.md#view-models). The renderer reads from the resolved `Model` and applies filter predicates against tags, levels, and component whitelist. DOT string generation is provided by the shared `rhizz-dot` crate (see Section 12) so that any frontend can produce `.dot` output without re-implementing the logic.
 
 The view renderer applies the filter, then produces a DOT file:
 
@@ -379,6 +379,8 @@ digraph "power-distribution" {
 ## 7. CLI Interface
 
 > **Impl:** see [SPEC/cli.md](SPEC/cli.md) — `clap` struct layout, JSON output schema, pipeline stages, and error formatting.
+
+The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend over `rhizz-core`. It is responsible for file discovery, output formatting, exit codes, and writing generated `.dot` files to disk. All model compilation, validation, scoring, and view rendering logic lives in `rhizz-core` and `rhizz-dot` — `rhizz-cli` contains no model logic of its own.
 
 ```
 rhizz <command> [options] [path]
@@ -634,6 +636,8 @@ view "fc-internals" {
 | `level` auto-increments from parent | Reduces boilerplate; explicit override still available |
 | Views are top-level blocks | A view can reference any system; decoupled from the model itself |
 | `encapsulates` is a name-based reference | Captures protocol layering (HTTP → TCP → Ethernet) without deep nesting |
+| Multiple frontends share one compiler core | Keeps all model semantics in one tested place; frontends own only I/O and presentation |
+| DOT rendering in `rhizz-dot` | Pure text transform useful to every frontend; extracted so neither CLI nor GUI re-implements it |
 
 **Out of scope for v1, currently non-goals. Candidates for v2:**
 
@@ -642,5 +646,46 @@ view "fc-internals" {
 - Temporal / sequence diagrams (message ordering)
 - Per-message direction in bidirectional interfaces
 - Type-checked fields with a schema language
-- Interactive HTML/web view output
 - Diffing / changelog between model versions
+
+---
+
+## 10. Workspace Layout
+
+The repository is organised as a Cargo workspace. The compiler core, the DOT renderer, and each frontend are separate crates. This enforces a hard boundary: model logic lives in the core and shared crates; frontends own only I/O and presentation.
+
+Frontends depend on `rhizz-core` and, when they need to emit DOT output, on `rhizz-dot`. Frontends do not depend on each other. Any number of frontends may coexist in the workspace.
+
+> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for crate layout and dependency graph.
+
+---
+
+## 11. `rhizz-core`
+
+`rhizz-core` is the model compiler. It is a pure library with no filesystem access, no terminal dependencies, and no rendering logic. Frontends supply source text; `rhizz-core` returns a resolved model and a list of diagnostics.
+
+All public types are serialisable and cloneable so that any frontend can store, transmit, or display results without additional conversion. Diagnostic codes are part of the public API and must remain stable.
+
+> **Impl:** see [SPEC/architecture.md § rhizz-core](SPEC/architecture.md#rhizz-core) for the full API surface and invariants.
+
+---
+
+## 12. `rhizz-dot`
+
+`rhizz-dot` is a shared library that converts a resolved model and a view definition into a DOT-format string. It encapsulates all view filter logic (tag filtering, level capping, component whitelist, message visibility) so that no frontend needs to re-implement it.
+
+> **Impl:** see [SPEC/architecture.md § rhizz-dot](SPEC/architecture.md#rhizz-dot) for the API.
+
+---
+
+## 13. Frontend Contract
+
+A frontend is any crate that consumes `rhizz-core` to present the model to a user or automated process. Frontends must:
+
+- Own all I/O — file discovery, reading, watching, and writing output.
+- Pass source text to `rhizz-core` and receive results; never re-implement parsing, validation, scoring, or view rendering.
+- Render diagnostics and results in a manner appropriate to their medium.
+
+The CLI frontend (`rhizz-cli`) and the desktop GUI frontend (`rhizz-gui`, built with `egui`) are the first two frontends. Additional frontends (web, LSP, etc.) may be added without changes to the core crates.
+
+> **Impl:** see [SPEC/architecture.md § Frontend Contract](SPEC/architecture.md#frontend-contract) and [SPEC/gui.md](SPEC/gui.md) for frontend-specific details.
