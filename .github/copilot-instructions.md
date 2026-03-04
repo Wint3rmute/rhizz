@@ -1,0 +1,62 @@
+# Copilot Instructions for rhizz
+
+## Project Overview
+
+**rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in Rust.
+Systems are described in `.hcl` files (HCL syntax, same as Terraform) that can be
+version-controlled, diffed, and reviewed without a GUI. See `SPEC.md` and `SPEC/` for
+the full specification, and `examples/` for worked examples.
+
+## Repository Layout
+
+```
+src/
+  main.rs       – entry point
+  cli.rs        – clap CLI arg parsing
+  parse.rs      – HCL → RawFile
+  model.rs      – resolved model types (ComponentId, InterfaceId, …)
+  resolve.rs    – raw → resolved Model + Diagnostic emission
+  validate.rs   – warning pass over resolved Model
+  score.rs      – completion scoring (ScoreReport)
+  dot.rs        – Graphviz DOT rendering
+examples/       – drone, social-media, software-house worked examples
+SPEC.md         – full specification (single file)
+SPEC/           – specification split by topic (cli.md, models.md, …)
+TASKS.md        – ordered implementation tasks; delete a task once done
+```
+
+## Development Workflow
+
+1. Read the next task in `TASKS.md`.
+2. Implement it using red/green TDD.
+3. Run `cargo test`, `cargo clippy`, and `cargo build` until everything passes.
+4. Run `cargo fmt` to format the code.
+5. Delete the completed task from `TASKS.md` and report that you are finished.
+
+## Build, Test & Lint Commands
+
+```bash
+cargo build                       # debug build
+cargo build --release             # release build
+cargo test --all                  # run all tests
+cargo clippy --all-targets --all-features -- -D warnings   # lint (warnings are errors)
+cargo fmt --all -- --check        # check formatting
+cargo fmt                         # auto-format
+```
+
+## Coding Conventions
+
+- The crate has `#![deny(clippy::all)]`; all Clippy warnings must be fixed, never suppressed unless there is a strong reason.
+- Use `anyhow::Result` for fallible functions that surface errors to the caller.
+- Prefer `thiserror` for library-facing error types when type-safe matching is needed.
+- Diagnostics use the `Diagnostic` type with fields `code`, `file`, `line` (optional), and `message`.
+  - Error codes start with `E` (blocking), warning codes start with `W` (non-blocking).
+- All identifier types (`ComponentId`, `InterfaceId`, …) are newtypes over a numeric arena index.
+- Follow the existing module boundaries: parsing, resolution, validation, scoring, and rendering are separate modules.
+
+## Testing Approach
+
+- Unit tests live in `#[cfg(test)]` modules inside each source file.
+- Integration tests exercise the three worked examples under `examples/` (drone, social-media, software-house).
+- Use `cargo test --all` to run everything.
+- Assert exact diagnostic codes (not just counts) for error/warning tests.
