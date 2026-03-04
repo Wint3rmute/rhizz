@@ -1,5 +1,4 @@
-// Public API will be consumed by the resolve module in Task 2; suppress
-// dead_code until then.
+// Public API consumed by the resolve module.
 #![allow(dead_code)]
 
 /// Raw (deserialization) model and file-level parsing.
