@@ -8,14 +8,6 @@ How to work on this file:
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Delete the task from the file once done, report that you're finished
 
-## Task 3 — Validation and Warnings
-
-- Implement a warning pass over the resolved `Model`, emitting W001–W007 as non-blocking `Diagnostic` values
-- Implement `Diagnostic` type with fields: `code`, `file`, `line` (optional), `message`
-- **Test:** assert that each example emits exactly the expected warning codes and none of the examples produce unexpected errors
-
----
-
 ## Task 4 — Completion Scoring
 
 - Implement `score(model: &Model) -> ScoreReport` with the per-entity 0.0/0.5/1.0 logic from SPEC.md §5
