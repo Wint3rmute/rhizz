@@ -141,7 +141,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     }
 
     // ── Warnings ──────────────────────────────────────────────────────────────
-    emit_warnings(&mut r);
+    r.diagnostics.extend(crate::validate::validate(&r.model));
 
     // ── Return ────────────────────────────────────────────────────────────────
     let has_errors = r.diagnostics.iter().any(|d| d.is_error());
@@ -188,16 +188,7 @@ fn register_component(
         );
     }
 
-    // W007 — level decreasing relative to parent
-    if level < parent_level {
-        r.push_warning(
-            "W007",
-            format!(
-                "component '{}' has level {} which is less than parent level {}",
-                lc.label, level, parent_level
-            ),
-        );
-    }
+    // W007 — level decreasing relative to parent (checked in the validate pass)
 
     // Register in parent scope so siblings can reference it.
     r.scope_index
@@ -290,16 +281,7 @@ fn process_interfaces_in_scope(
         let level = li.inner.level.unwrap_or(parent_level + 1);
         let leaf = li.inner.leaf.unwrap_or(false);
 
-        // W007 — level decreasing
-        if level < parent_level {
-            r.push_warning(
-                "W007",
-                format!(
-                    "interface '{}' has level {} which is less than parent level {}",
-                    li.label, level, parent_level
-                ),
-            );
-        }
+        // W007 — level decreasing relative to parent (checked in the validate pass)
 
         // E008 — invalid direction
         let direction = match li.inner.direction.as_deref() {
@@ -636,121 +618,6 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
         filter,
         output,
     });
-}
-
-// ── Warning emission ──────────────────────────────────────────────────────────
-
-fn emit_warnings(r: &mut Resolver) {
-    // Collect all warnings first into a Vec, then push them — this avoids
-    // simultaneous immutable borrows of r.model with the mutable borrow of
-    // r.diagnostics inside push_warning.
-    let mut new_warnings: Vec<Diagnostic> = Vec::new();
-
-    // W001 — non-leaf component with no child components
-    for comp in &r.model.components {
-        if !comp.leaf && comp.children.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W001",
-                format!(
-                    "component '{}' is non-leaf but has no child components",
-                    comp.label
-                ),
-            ));
-        }
-    }
-
-    // W002 — non-leaf interface with no messages
-    for iface in &r.model.interfaces {
-        if !iface.leaf && iface.messages.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W002",
-                format!(
-                    "interface '{}' is non-leaf but has no messages",
-                    iface.label
-                ),
-            ));
-        }
-    }
-
-    // W003 — message with no fields
-    for msg in &r.model.messages {
-        if msg.fields.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W003",
-                format!("message '{}' has no fields", msg.label),
-            ));
-        }
-    }
-
-    // W004 — component not referenced by any interface (orphan)
-    let mut referenced: HashSet<usize> = HashSet::new();
-    for iface in &r.model.interfaces {
-        referenced.insert(iface.from.0);
-        referenced.insert(iface.to.0);
-    }
-    for (cid, comp) in r.model.components.iter().enumerate() {
-        if !referenced.contains(&cid) {
-            new_warnings.push(Diagnostic::warning(
-                "W004",
-                format!(
-                    "component '{}' is not referenced by any interface",
-                    comp.label
-                ),
-            ));
-        }
-    }
-
-    // W005 — entity missing description
-    for sys in &r.model.systems {
-        if sys.description.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W005",
-                format!("system '{}' is missing a description", sys.label),
-            ));
-        }
-    }
-    for comp in &r.model.components {
-        if comp.description.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W005",
-                format!("component '{}' is missing a description", comp.label),
-            ));
-        }
-    }
-    for iface in &r.model.interfaces {
-        if iface.description.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W005",
-                format!("interface '{}' is missing a description", iface.label),
-            ));
-        }
-    }
-    for msg in &r.model.messages {
-        if msg.description.is_empty() {
-            new_warnings.push(Diagnostic::warning(
-                "W005",
-                format!("message '{}' is missing a description", msg.label),
-            ));
-        }
-    }
-
-    // W006 — from == to
-    for iface in &r.model.interfaces {
-        if iface.from == iface.to {
-            new_warnings.push(Diagnostic::warning(
-                "W006",
-                format!(
-                    "interface '{}' has 'from' and 'to' pointing to the same component",
-                    iface.label
-                ),
-            ));
-        }
-    }
-
-    // W007 — level decreases relative to parent (checked per-entity at allocation time
-    // for components/interfaces; systems have no parent to compare against)
-
-    r.diagnostics.extend(new_warnings);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
