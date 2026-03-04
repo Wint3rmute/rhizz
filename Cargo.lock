@@ -374,6 +374,7 @@ dependencies = [
  "anyhow",
  "hcl-rs",
  "serde",
+ "walkdir",
 ]
 
 [[package]]
