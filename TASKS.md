@@ -8,19 +8,6 @@ How to work on this file:
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Delete the task from the file once done, report that you're finished
 
-## Task 2 — Resolution
-
-- Define resolved model types and newtyped ID structs (`ComponentId`, `InterfaceId`, etc.) and the full `Model` arena as described in `SPEC/models.md`
-- Implement `resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>>`:
-  - Walk raw tree depth-first, allocate IDs, populate arenas
-  - Build `ScopeIndex` mapping `(Scope, label) → id` for components and interfaces
-  - Resolve `from`/`to` and `encapsulates` references via scope lookup
-  - Apply all defaults (`level` auto-increment, `leaf = false`, empty strings)
-  - Emit errors E001–E010 as `Diagnostic` values; return `Err` if any errors present
-- **Test:** resolve drone + social-media + software-house examples; assert resolved IDs, relationships, and that deliberate W001/W002/W005 triggers are present
-
----
-
 ## Task 3 — Validation and Warnings
 
 - Implement a warning pass over the resolved `Model`, emitting W001–W007 as non-blocking `Diagnostic` values
