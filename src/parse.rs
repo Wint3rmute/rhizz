@@ -18,7 +18,9 @@ use walkdir::WalkDir;
 /// A block that carries a label (e.g. `system "my-system" { … }`).
 #[derive(Debug, Clone)]
 pub struct Labeled<T> {
+    /// The block label (e.g. `"my-system"`).
     pub label: String,
+    /// The parsed inner value.
     pub inner: T,
 }
 
@@ -28,63 +30,103 @@ pub struct RawFile {
     /// Source file path hint — used for diagnostics.
     /// After merging this holds the last file that contributed a project block.
     pub project_source: Option<PathBuf>,
+    /// Parsed project block, if present.
     pub project: Option<RawProject>,
+    /// All parsed system blocks.
     pub systems: Vec<Labeled<RawSystem>>,
+    /// All parsed view blocks.
     pub views: Vec<Labeled<RawView>>,
 }
 
+/// Raw project metadata before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawProject {
+    /// Optional project name.
     pub name: Option<String>,
+    /// Optional semantic version.
     pub version: Option<String>,
+    /// List of authors.
     pub authors: Vec<String>,
 }
 
+/// Raw system block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawSystem {
+    /// Optional description text.
     pub description: Option<String>,
+    /// Filtering tags.
     pub tags: Vec<String>,
+    /// Optional explicit abstraction level.
     pub level: Option<i32>,
+    /// Child component blocks.
     pub components: Vec<Labeled<RawComponent>>,
+    /// Child interface blocks.
     pub interfaces: Vec<Labeled<RawInterface>>,
 }
 
+/// Raw component block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawComponent {
+    /// Optional description text.
     pub description: Option<String>,
+    /// Filtering tags.
     pub tags: Vec<String>,
+    /// Optional explicit abstraction level.
     pub level: Option<i32>,
+    /// Whether this component is atomic.
     pub leaf: Option<bool>,
+    /// Nested child component blocks.
     pub components: Vec<Labeled<RawComponent>>,
+    /// Nested interface blocks.
     pub interfaces: Vec<Labeled<RawInterface>>,
 }
 
+/// Raw interface block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawInterface {
+    /// Optional description text.
     pub description: Option<String>,
+    /// Filtering tags.
     pub tags: Vec<String>,
+    /// Optional explicit abstraction level.
     pub level: Option<i32>,
+    /// Whether this interface is atomic.
     pub leaf: Option<bool>,
+    /// Direction string (`"unidirectional"` or `"bidirectional"`).
     pub direction: Option<String>,
+    /// Source component label.
     pub from: Option<String>,
+    /// Target component label.
     pub to: Option<String>,
+    /// Labels of sibling interfaces this one encapsulates.
     pub encapsulates: Vec<String>,
+    /// Nested message blocks.
     pub messages: Vec<Labeled<RawMessage>>,
 }
 
+/// Raw message block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawMessage {
+    /// Optional description text.
     pub description: Option<String>,
+    /// Filtering tags.
     pub tags: Vec<String>,
+    /// Optional explicit abstraction level.
     pub level: Option<i32>,
+    /// Nested field blocks.
     pub fields: Vec<Labeled<RawField>>,
 }
 
+/// Raw field block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawField {
-    pub field_type: Option<String>, // mapped from HCL `type` attribute
+    /// Data type string (mapped from HCL `type` attribute).
+    pub field_type: Option<String>,
+    /// Optional description text.
     pub description: Option<String>,
+    /// Physical unit string.
     pub unit: Option<String>,
+    /// Whether the field is required.
     pub required: Option<bool>,
 }
 
@@ -93,102 +135,161 @@ pub struct RawField {
 // These are used exclusively with `hcl::from_body` to extract simple
 // key-value attributes from a block body, ignoring nested child blocks.
 
+/// Serde helper for deserializing project attributes.
 #[derive(Deserialize, Default)]
 struct ProjectAttrs {
+    /// Optional project name.
     name: Option<String>,
+    /// Optional version string.
     version: Option<String>,
+    /// Optional author list.
     authors: Option<Vec<String>>,
 }
 
+/// Serde helper for deserializing system attributes.
 #[derive(Deserialize, Default)]
 struct SystemAttrs {
+    /// Optional description.
     description: Option<String>,
+    /// Optional tags list.
     tags: Option<Vec<String>>,
+    /// Optional abstraction level.
     level: Option<i32>,
 }
 
+/// Serde helper for deserializing component attributes.
 #[derive(Deserialize, Default)]
 struct ComponentAttrs {
+    /// Optional description.
     description: Option<String>,
+    /// Optional tags list.
     tags: Option<Vec<String>>,
+    /// Optional abstraction level.
     level: Option<i32>,
+    /// Optional leaf flag.
     leaf: Option<bool>,
 }
 
+/// Serde helper for deserializing interface attributes.
 #[derive(Deserialize, Default)]
 struct InterfaceAttrs {
+    /// Optional description.
     description: Option<String>,
+    /// Optional tags list.
     tags: Option<Vec<String>>,
+    /// Optional abstraction level.
     level: Option<i32>,
+    /// Optional leaf flag.
     leaf: Option<bool>,
+    /// Direction string.
     direction: Option<String>,
+    /// Source component label.
     from: Option<String>,
+    /// Target component label.
     to: Option<String>,
+    /// Encapsulated interface labels.
     encapsulates: Option<Vec<String>>,
 }
 
+/// Serde helper for deserializing message attributes.
 #[derive(Deserialize, Default)]
 struct MessageAttrs {
+    /// Optional description.
     description: Option<String>,
+    /// Optional tags list.
     tags: Option<Vec<String>>,
+    /// Optional abstraction level.
     level: Option<i32>,
 }
 
+/// Serde helper for deserializing field attributes.
 #[derive(Deserialize, Default)]
 struct FieldAttrs {
     // `type` is a Rust keyword; serde rename handles this transparently.
+    /// Data type string (renamed from HCL `type`).
     #[serde(rename = "type")]
     field_type: Option<String>,
+    /// Optional description.
     description: Option<String>,
+    /// Physical unit string.
     unit: Option<String>,
+    /// Whether the field is required.
     required: Option<bool>,
 }
 
+/// Serde helper for deserializing view attributes.
 #[derive(Deserialize, Default)]
 struct ViewAttrs {
+    /// Optional description.
     description: Option<String>,
+    /// Optional tags list.
     tags: Option<Vec<String>>,
+    /// Target system label.
     system: Option<String>,
 }
 
+/// Serde helper for deserializing filter sub-block attributes.
 #[derive(Deserialize, Default)]
 struct FilterAttrs {
+    /// Tag whitelist.
     include_tags: Option<Vec<String>>,
+    /// Tag blacklist.
     exclude_tags: Option<Vec<String>>,
+    /// Maximum abstraction level.
     max_level: Option<i32>,
+    /// Component label whitelist.
     components: Option<Vec<String>>,
+    /// Whether to show messages on edges.
     show_messages: Option<bool>,
 }
 
+/// Serde helper for deserializing output sub-block attributes.
 #[derive(Deserialize, Default)]
 struct OutputAttrs {
+    /// Output filename.
     filename: Option<String>,
+    /// Graphviz rank direction.
     rankdir: Option<String>,
 }
 
 // ── Raw view types ────────────────────────────────────────────────────────────
 
+/// Raw view block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawView {
+    /// Optional description text.
     pub description: Option<String>,
+    /// Filtering tags.
     pub tags: Vec<String>,
+    /// Target system label.
     pub system: Option<String>,
+    /// Optional filter sub-block.
     pub filter: Option<RawViewFilter>,
+    /// Optional output sub-block.
     pub output: Option<RawViewOutput>,
 }
 
+/// Raw filter sub-block of a view.
 #[derive(Debug, Clone, Default)]
 pub struct RawViewFilter {
+    /// Tag whitelist (empty = match all).
     pub include_tags: Vec<String>,
+    /// Tag blacklist.
     pub exclude_tags: Vec<String>,
+    /// Maximum abstraction level.
     pub max_level: Option<i32>,
+    /// Component label whitelist (empty = all).
     pub components: Vec<String>,
+    /// Whether to show messages on edges.
     pub show_messages: Option<bool>,
 }
 
+/// Raw output sub-block of a view.
 #[derive(Debug, Clone, Default)]
 pub struct RawViewOutput {
+    /// Output filename.
     pub filename: Option<String>,
+    /// Graphviz rank direction.
     pub rankdir: Option<String>,
 }
 
@@ -210,6 +311,7 @@ fn attrs<T: for<'de> Deserialize<'de> + Default>(body: &hcl::Body) -> Result<T> 
 
 // ── Block parsers ─────────────────────────────────────────────────────────────
 
+/// Parse a `project` block body into a [`RawProject`].
 fn parse_project(body: &hcl::Body) -> Result<RawProject> {
     let a: ProjectAttrs = attrs(body)?;
     Ok(RawProject {
@@ -219,6 +321,7 @@ fn parse_project(body: &hcl::Body) -> Result<RawProject> {
     })
 }
 
+/// Parse a `field` block body into a [`RawField`].
 fn parse_field(body: &hcl::Body) -> Result<RawField> {
     let a: FieldAttrs = attrs(body)?;
     Ok(RawField {
@@ -229,6 +332,7 @@ fn parse_field(body: &hcl::Body) -> Result<RawField> {
     })
 }
 
+/// Parse a `message` block body into a [`RawMessage`].
 fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
     let a: MessageAttrs = attrs(body)?;
     let mut fields = Vec::new();
@@ -247,6 +351,7 @@ fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
     })
 }
 
+/// Parse an `interface` block body into a [`RawInterface`].
 fn parse_interface(body: &hcl::Body) -> Result<RawInterface> {
     let a: InterfaceAttrs = attrs(body)?;
     let mut messages = Vec::new();
@@ -271,6 +376,7 @@ fn parse_interface(body: &hcl::Body) -> Result<RawInterface> {
     })
 }
 
+/// Parse a `component` block body into a [`RawComponent`].
 fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
     let a: ComponentAttrs = attrs(body)?;
     let mut components = Vec::new();
@@ -302,6 +408,7 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
     })
 }
 
+/// Parse a `system` block body into a [`RawSystem`].
 fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
     let a: SystemAttrs = attrs(body)?;
     let mut components = Vec::new();
@@ -332,6 +439,7 @@ fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
     })
 }
 
+/// Parse a `view` block body into a [`RawView`].
 fn parse_view(body: &hcl::Body) -> Result<RawView> {
     let a: ViewAttrs = attrs(body)?;
     let mut filter = None;

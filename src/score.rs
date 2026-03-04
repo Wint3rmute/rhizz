@@ -77,6 +77,7 @@ pub struct CategoryScore {
 }
 
 impl CategoryScore {
+    /// Build a [`CategoryScore`] from a slice of per-entity scores.
     fn from_scores(scores: &[f64]) -> Self {
         let mut s = CategoryScore {
             complete: 0,
@@ -123,8 +124,11 @@ impl CategoryScore {
 pub struct ScoreReport {
     /// Project name, used in the report header.
     pub project_name: String,
+    /// Component scoring breakdown.
     pub components: CategoryScore,
+    /// Interface scoring breakdown.
     pub interfaces: CategoryScore,
+    /// Message scoring breakdown.
     pub messages: CategoryScore,
 }
 
