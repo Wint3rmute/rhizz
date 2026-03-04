@@ -10,12 +10,6 @@ How to work on this file:
 
 ---
 
-## Task 7 — Convert root to a Cargo workspace
-
-Replace the root `Cargo.toml` `[package]` section with a `[workspace]` manifest that lists `crates/rhizz-core`, `crates/rhizz-dot`, and `crates/rhizz-cli` as members.
-Create the three `crates/` subdirectories, each with a skeleton `Cargo.toml` and empty `src/lib.rs` (or `src/main.rs` for the CLI).
-Verify that `cargo build` succeeds on the empty workspace.
-
 ## Task 8 — Establish `rhizz-core`
 
 Move `model.rs`, `parse.rs`, `resolve.rs`, `validate.rs`, and `score.rs` from `src/` into `crates/rhizz-core/src/`.
