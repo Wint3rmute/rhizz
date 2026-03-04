@@ -353,17 +353,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
-name = "rhizz"
+name = "rhizz-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "hcl-rs",
  "owo-colors",
+ "rhizz-core",
+ "rhizz-dot",
  "serde",
  "serde_json",
  "tempfile",
  "walkdir",
+]
+
+[[package]]
+name = "rhizz-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hcl-rs",
+ "serde",
+]
+
+[[package]]
+name = "rhizz-dot"
+version = "0.1.0"
+dependencies = [
+ "rhizz-core",
 ]
 
 [[package]]
