@@ -1,0 +1,17 @@
+[package]
+name = "rhizz-gui"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "rhizz-gui"
+path = "src/main.rs"
+
+[dependencies]
+rhizz-core = { path = "../rhizz-core" }
+rhizz-dot  = { path = "../rhizz-dot" }
+eframe     = "0.31"
+egui       = "0.31"
+notify     = "6"
+walkdir    = "2"
+anyhow     = "1"

@@ -8,21 +8,21 @@ The desktop GUI is implemented in the `rhizz-gui` crate using `egui`. It follows
 - Any change to a `.hcl` file triggers an immediate recompile via `rhizz_core::compile`.
 - The last successfully resolved `Model` is kept in memory as a fallback. If the current edit produces hard errors, the UI continues to display the previous valid state while showing the new diagnostics.
 
-## In-Memory Editing
+## Editing
 
-- Source text for each file is held in memory and displayed in an editor pane.
-- Edits are compiled on each keystroke (or on a short debounce) without writing to disk first.
-- Saving writes the buffer back to disk; the filesystem watcher then confirms the round-trip.
+- The user is expected to edit `.hcl` files with their editor of choice. The UI only serves as a validation/viewing tool
 
 ## Diagnostic Display
 
-- Errors and warnings are shown inline in the editor pane, annotated at the relevant line.
-- A sidebar panel lists all diagnostics with code, file, and message, and allows navigation to the offending location.
+- Errors and warnings are shown in a dedicated pane
+- A sidebar panel lists all interfaces, components, systems
 
 ## View Rendering
 
 - For each view defined in the model, `rhizz-gui` calls `rhizz_dot::render_view` to obtain a DOT string.
-- The DOT graph is displayed within the UI. The rendering strategy (embedded layout engine vs. calling the system `dot` binary) is an implementation decision for the `rhizz-gui` crate.
+- The DOT string is fed to the [`layout-rs`](https://crates.io/crates/layout-rs) crate, which parses it and computes a layered graph layout entirely in-process — no Graphviz installation required.
+- The resulting node positions and edges are drawn directly onto an `egui::Painter` inside a `ScrollArea`, giving the user free pan and zoom.
+- Each view is rendered into its own tab.
 
 ## Score Dashboard
 
