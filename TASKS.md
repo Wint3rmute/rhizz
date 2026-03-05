@@ -10,6 +10,6 @@ How to work on this file:
 
 ---
 
-## Task 11 - Task template
+## Task 12 - Task template
 
 Use this template when creating new tasks. Keep on increasing the task number!

@@ -3,6 +3,9 @@
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
+use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
@@ -76,6 +79,12 @@ pub enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Run check + score + views, then watch for .hcl changes and re-run.
+    Watch {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
 }
 
 /// Effective command kind (without the path).
@@ -89,6 +98,8 @@ enum CommandKind {
     Views,
     /// Run check + score + views in sequence (default).
     Build,
+    /// Watch for .hcl changes and re-run Build automatically.
+    Watch,
 }
 
 impl Cli {
@@ -99,6 +110,7 @@ impl Cli {
             Some(Command::Score { path }) => (CommandKind::Score, path),
             Some(Command::Views { path }) => (CommandKind::Views, path),
             Some(Command::Build { path }) => (CommandKind::Build, path),
+            Some(Command::Watch { path }) => (CommandKind::Watch, path),
             None => (CommandKind::Build, &self.path),
         }
     }
@@ -298,10 +310,7 @@ fn to_json_diagnostic(d: &Diagnostic) -> JsonDiagnostic {
 // ── Pipeline ─────────────────────────────────────────────────────────────────
 
 /// Run the CLI pipeline and return the process exit code.
-pub fn run(cli: &Cli) -> i32 {
-    let color = use_color(cli);
-    let (cmd, path) = cli.effective();
-
+fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
     // ── Load sources ──────────────────────────────────────────────────────────
     let sources = match load_sources(path) {
         Ok(s) => s,
@@ -464,6 +473,111 @@ pub fn run(cli: &Cli) -> i32 {
     }
 
     if effective_failure { 1 } else { 0 }
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
+/// Dispatch to the appropriate pipeline based on the parsed CLI command.
+pub fn run(cli: &Cli) -> i32 {
+    let color = use_color(cli);
+    let (cmd, path) = cli.effective();
+
+    if cmd == CommandKind::Watch {
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+        // Best-effort: a second call (e.g. in parallel tests) returns an error we can ignore.
+        let _ = ctrlc::set_handler(move || r.store(false, Ordering::SeqCst));
+        return run_watch(cli, path, color, running);
+    }
+
+    run_pipeline(cli, cmd, path, color)
+}
+
+// ── Watch ─────────────────────────────────────────────────────────────────────
+
+/// Run the build pipeline once, then re-run it every time an `.hcl` file in
+/// `path` is created, modified, or deleted.  Exits cleanly on Ctrl-C.
+fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i32 {
+    use notify::{RecursiveMode, Watcher};
+
+    if color {
+        use owo_colors::OwoColorize as _;
+        eprintln!("Watching {} for changes…", path.display().cyan());
+    } else {
+        eprintln!("Watching {} for changes…", path.display());
+    }
+
+    // Initial build.
+    run_pipeline(cli, CommandKind::Build, path, color);
+
+    // Set up the file-system watcher.
+    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+    let mut watcher = match notify::recommended_watcher(tx) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("Error: cannot create file watcher: {e}");
+            return 1;
+        }
+    };
+    if let Err(e) = watcher.watch(path, RecursiveMode::NonRecursive) {
+        eprintln!("Error: cannot watch {}: {e}", path.display());
+        return 1;
+    }
+
+    const DEBOUNCE: Duration = Duration::from_millis(200);
+    const POLL: Duration = Duration::from_millis(100);
+
+    while running.load(Ordering::SeqCst) {
+        match rx.recv_timeout(POLL) {
+            Ok(Ok(event)) if is_hcl_event(&event) => {
+                // Consume any additional events that arrive within the debounce window
+                // so a single logical save does not trigger multiple rebuilds.
+                drain_debounce(&rx, DEBOUNCE);
+                // Clear the terminal before each rebuild for a clean view.
+                print!("\x1B[2J\x1B[1;1H");
+                run_pipeline(cli, CommandKind::Build, path, color);
+            }
+            Ok(_) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    if color {
+        use owo_colors::OwoColorize as _;
+        eprintln!("{}", "Stopped watching.".dimmed());
+    } else {
+        eprintln!("Stopped watching.");
+    }
+    0
+}
+
+/// Return `true` if `event` is a create/modify/remove on an `.hcl` file.
+fn is_hcl_event(event: &notify::Event) -> bool {
+    use notify::EventKind::{Create, Modify, Remove};
+    matches!(event.kind, Create(_) | Modify(_) | Remove(_))
+        && event
+            .paths
+            .iter()
+            .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
+}
+
+/// Drain the watch receiver for `window` to batch rapid successive events.
+/// Returns the count of additional events consumed.
+fn drain_debounce(rx: &mpsc::Receiver<notify::Result<notify::Event>>, window: Duration) -> usize {
+    let deadline = Instant::now() + window;
+    let mut count = 0;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        match rx.recv_timeout(remaining) {
+            Ok(_) => count += 1,
+            Err(_) => break,
+        }
+    }
+    count
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -645,5 +759,57 @@ mod tests {
         ]);
         let code = run(&cli);
         assert_eq!(code, 1, "invalid path should exit 1");
+    }
+
+    // ── watch command ─────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_watch_subcommand() {
+        let cli = parse_args(&["watch", "examples/drone"]);
+        assert!(
+            matches!(cli.command, Some(Command::Watch { .. })),
+            "expected Watch subcommand"
+        );
+    }
+
+    #[test]
+    fn debounce_drains_rapid_events() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+
+        // Pre-fill the channel with 5 events before the window starts.
+        for _ in 0..5 {
+            tx.send(Ok(notify::Event::new(notify::EventKind::Any)))
+                .unwrap();
+        }
+        drop(tx); // close sender so recv_timeout returns Disconnected when empty
+
+        let drained = drain_debounce(&rx, Duration::from_millis(50));
+        assert_eq!(drained, 5, "all 5 rapid events should be consumed");
+        assert!(
+            rx.try_recv().is_err(),
+            "channel should be empty after drain"
+        );
+    }
+
+    #[test]
+    fn debounce_does_not_block_past_window() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        // Empty channel — drain should return promptly after the window.
+        let (_tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+        let start = Instant::now();
+        let drained = drain_debounce(&rx, Duration::from_millis(50));
+        let elapsed = start.elapsed();
+
+        assert_eq!(drained, 0, "nothing to drain");
+        // Should exit in roughly the window duration (allow generous slack).
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "drain took too long: {elapsed:?}"
+        );
     }
 }
