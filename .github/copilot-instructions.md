@@ -19,11 +19,12 @@ TASKS.md        – ordered implementation tasks
 
 ## Development Workflow
 
-1. Read the next task in `TASKS.md`.
-2. Implement it using red/green TDD.
-3. Run `cargo test`, `cargo clippy`, `cargo doc` and `cargo build` until everything passes.
-4. Run `cargo fmt` to format the code.
-5. Delete the completed task from `TASKS.md` and report that you are finished.
+1. Read the next task from the `# TODO` section of `TASKS.md` (first level-2 header).
+2. Get extra context from recently finished tasks in the `# FINISHED` section of `TASKS.md`.
+3. Implement it using red/green TDD.
+4. Run `cargo test`, `cargo clippy`, `cargo doc` and `cargo build` until everything passes.
+5. Run `cargo fmt` to format the code.
+6. Move the completed task to the top of the `# FINISHED` section in `TASKS.md` and report that you are finished.
 
 ## Build, Test & Lint Commands
 
