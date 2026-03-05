@@ -9,17 +9,6 @@ How to work on this file:
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Move the completed task to the top of the `# FINISHED` section
 
-## Task 13 — Startup load + diagnostic pane
-
-On launch, read all `.hcl` files from the project directory argument, call `rhizz_core::compile`, and display results in the window.
-
-- A scrollable bottom pane lists every diagnostic (`code`, `file`, `line`, `message`); errors in red, warnings in yellow.
-- A left sidebar lists every system, component, and interface by name (flat list is fine).
-- No watcher yet — compile once at startup and display the static result.
-- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
-
----
-
 ## Task 14 — File watcher + live recompile
 
 Register a `notify` watcher on the project directory. Recompile and refresh all panels on any `.hcl` change.
