@@ -2,15 +2,13 @@
 //! formatting.
 
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use anyhow::Context as _;
 use clap::{Parser, Subcommand};
+use walkdir::WalkDir;
 
-use crate::dot;
-use crate::model::Diagnostic;
-use crate::parse;
-use crate::resolve;
-use crate::score;
+use rhizz_core::{Diagnostic, Source};
 
 // ── CLI argument types ───────────────────────────────────────────────────────
 
@@ -104,6 +102,37 @@ impl Cli {
             None => (CommandKind::Build, &self.path),
         }
     }
+}
+
+// ── I/O helpers ───────────────────────────────────────────────────────────────
+
+/// Walk `dir` (depth 1) and return a [`Source`] for every `.hcl` file found.
+///
+/// Files are sorted by path so that the compilation order is deterministic.
+fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
+    let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    hcl_files.sort();
+
+    if hcl_files.is_empty() {
+        anyhow::bail!("no .hcl files found in {}", dir.display());
+    }
+
+    let mut sources = Vec::new();
+    for path in &hcl_files {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        sources.push(Source {
+            filename: path.display().to_string(),
+            content,
+        });
+    }
+    Ok(sources)
 }
 
 // ── Color helper ─────────────────────────────────────────────────────────────
@@ -273,9 +302,9 @@ pub fn run(cli: &Cli) -> i32 {
     let color = use_color(cli);
     let (cmd, path) = cli.effective();
 
-    // ── Parse ─────────────────────────────────────────────────────────────────
-    let raw = match parse::parse_dir(path) {
-        Ok(raw) => raw,
+    // ── Load sources ──────────────────────────────────────────────────────────
+    let sources = match load_sources(path) {
+        Ok(s) => s,
         Err(e) => {
             if cli.json {
                 let out = JsonOutput {
@@ -302,14 +331,10 @@ pub fn run(cli: &Cli) -> i32 {
         }
     };
 
-    // ── Resolve (includes validation pass) ──────────────────────────────────
-    let (model, diagnostics) = match resolve::resolve(raw) {
-        Ok((model, warnings)) => (Some(model), warnings),
-        Err(all_diags) => {
-            // Resolution failed — all_diags contains errors (and possibly warnings).
-            (None, all_diags)
-        }
-    };
+    // ── Compile (parse + resolve + validate) ──────────────────────────────────
+    let result = rhizz_core::compile(&sources);
+    let model = result.model;
+    let diagnostics = result.diagnostics;
 
     let errors: Vec<&Diagnostic> = diagnostics.iter().filter(|d| d.is_error()).collect();
     let warnings: Vec<&Diagnostic> = diagnostics.iter().filter(|d| d.is_warning()).collect();
@@ -321,7 +346,7 @@ pub fn run(cli: &Cli) -> i32 {
 
     // ── Score (if check passed and command requires it) ────────────────────────
     let score_report = if !has_errors && matches!(cmd, CommandKind::Score | CommandKind::Build) {
-        model.as_ref().map(score::score)
+        model.as_ref().map(rhizz_core::score)
     } else {
         None
     };
@@ -340,7 +365,7 @@ pub fn run(cli: &Cli) -> i32 {
                 continue;
             }
 
-            let dot_content = dot::render_view(m, view);
+            let dot_content = rhizz_dot::render_view(m, view);
             let out_path = cli.output_dir.join(&view.output.filename);
 
             // Ensure output directory exists.
@@ -452,7 +477,7 @@ mod tests {
     /// Helper: path to an example directory.
     fn example_dir(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("examples")
+            .join("../../examples")
             .join(name)
     }
 
