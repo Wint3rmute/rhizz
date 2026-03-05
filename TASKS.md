@@ -9,6 +9,40 @@ How to work on this file:
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Move the completed task to the top of the `# FINISHED` section
 
+## Task 12 — Scaffold `rhizz-gui` crate
+
+Add `crates/rhizz-gui` to the Cargo workspace as a new binary crate.
+
+- Add `rhizz-gui` to the `members` list in the root `Cargo.toml`.
+- Create `crates/rhizz-gui/Cargo.toml` with dependencies: `eframe`, `egui`, `rhizz-core`, `rhizz-dot`, `notify`, `walkdir`, `anyhow`.
+- `src/main.rs` accepts a single positional CLI argument — a path to a project directory — and opens a blank `eframe` window titled "rhizz" with the path shown in the title bar.
+- No model logic yet; the window just needs to open without panicking.
+- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
+
+---
+
+## Task 13 — Startup load + diagnostic pane
+
+On launch, read all `.hcl` files from the project directory argument, call `rhizz_core::compile`, and display results in the window.
+
+- A scrollable bottom pane lists every diagnostic (`code`, `file`, `line`, `message`); errors in red, warnings in yellow.
+- A left sidebar lists every system, component, and interface by name (flat list is fine).
+- No watcher yet — compile once at startup and display the static result.
+- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
+
+---
+
+## Task 14 — File watcher + live recompile
+
+Register a `notify` watcher on the project directory. Recompile and refresh all panels on any `.hcl` change.
+
+- Use the same `notify` + `mpsc` + debounce pattern as `rhizz-cli`'s `watch` command (200 ms debounce).
+- Keep the last successfully resolved `Model` in memory. If the new compile has hard errors, show the new diagnostics but continue rendering the previous valid model everywhere else.
+- A small status bar at the bottom shows either "OK" or "X errors, Y warnings" after each recompile.
+- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
+
+---
+
 ## Task 15 — View tabs with `layout-rs` rendering
 
 For each view in the model, show a tab at the top of the main area.
