@@ -7,6 +7,10 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use egui::Color32;
+use layout::core::color::Color as LayoutColor;
+use layout::core::format::{ClipHandle, RenderBackend};
+use layout::core::geometry::Point;
+use layout::core::style::StyleAttr;
 use notify::{RecursiveMode, Watcher};
 use rhizz_core::{Diagnostic, Model, Source};
 use walkdir::WalkDir;
@@ -102,6 +106,8 @@ struct RhizzApp {
     diagnostics: Vec<Diagnostic>,
     no_hcl_files: bool,
     rx: mpsc::Receiver<CompileOutput>,
+    /// Index of the currently selected view tab.
+    selected_view: usize,
 }
 
 impl RhizzApp {
@@ -167,6 +173,7 @@ impl RhizzApp {
             diagnostics,
             no_hcl_files,
             rx,
+            selected_view: 0,
         }
     }
 
@@ -177,8 +184,10 @@ impl RhizzApp {
         if output.no_hcl_files {
             // All files removed — clear the model too.
             self.model = None;
+            self.selected_view = 0;
         } else if let Some(m) = output.model {
-            // Successful compile — update model.
+            // Successful compile — update model and reset tab selection.
+            self.selected_view = 0;
             self.model = Some(m);
         }
         // If model is None but no_hcl_files is false, hard errors occurred;
@@ -279,12 +288,8 @@ impl eframe::App for RhizzApp {
                 });
             });
 
-        // ── Central panel: project info ───────────────────────────────────────
+        // ── Central panel: view tabs + graph rendering ────────────────────────
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("rhizz");
-            ui.label(format!("Project: {}", self.path.display()));
-            ui.separator();
-
             if self.no_hcl_files {
                 ui.add_space(20.0);
                 ui.label(
@@ -295,14 +300,276 @@ impl eframe::App for RhizzApp {
                     .color(Color32::from_rgb(220, 180, 60))
                     .size(16.0),
                 );
-            } else if let Some(ref model) = self.model {
+                return;
+            }
+
+            let Some(ref model) = self.model else {
+                ui.heading("rhizz");
+                ui.label(format!("Project: {}", self.path.display()));
+                return;
+            };
+
+            if model.views.is_empty() {
+                ui.heading("rhizz");
+                ui.label(format!("Project: {}", self.path.display()));
+                ui.separator();
                 ui.label(format!(
                     "{} system(s), {} component(s), {} interface(s)",
                     model.systems.len(),
                     model.components.len(),
                     model.interfaces.len(),
                 ));
+                return;
             }
+
+            // Clamp selected_view in case a recompile produced fewer views.
+            if self.selected_view >= model.views.len() {
+                self.selected_view = 0;
+            }
+
+            // ── Tab bar ───────────────────────────────────────────────────────
+            ui.horizontal(|ui| {
+                for (i, view) in model.views.iter().enumerate() {
+                    let label = egui::RichText::new(&view.label);
+                    let label = if i == self.selected_view {
+                        label.strong()
+                    } else {
+                        label
+                    };
+                    if ui
+                        .selectable_label(i == self.selected_view, label)
+                        .clicked()
+                    {
+                        self.selected_view = i;
+                    }
+                }
+            });
+            ui.separator();
+
+            // ── Graph canvas ──────────────────────────────────────────────────
+            let view = &model.views[self.selected_view];
+            draw_view(ui, model, view);
         });
+    }
+}
+
+// ── EguiBackend ───────────────────────────────────────────────────────────────
+
+fn layout_color_to_egui(c: &LayoutColor) -> Color32 {
+    // to_web_color() returns "#rrggbbaa"
+    let web = c.to_web_color();
+    let hex = u32::from_str_radix(web.trim_start_matches('#'), 16).unwrap_or(0x000000ff);
+    let r = ((hex >> 24) & 0xff) as u8;
+    let g = ((hex >> 16) & 0xff) as u8;
+    let b = ((hex >> 8) & 0xff) as u8;
+    let a = (hex & 0xff) as u8;
+    Color32::from_rgba_unmultiplied(r, g, b, a)
+}
+
+struct EguiBackend<'p> {
+    painter: &'p egui::Painter,
+    offset: egui::Vec2,
+    clip_counter: usize,
+}
+
+impl<'p> EguiBackend<'p> {
+    fn new(painter: &'p egui::Painter, offset: egui::Vec2) -> Self {
+        Self {
+            painter,
+            offset,
+            clip_counter: 0,
+        }
+    }
+
+    fn pt(&self, p: Point) -> egui::Pos2 {
+        egui::pos2(p.x as f32 + self.offset.x, p.y as f32 + self.offset.y)
+    }
+}
+
+impl RenderBackend for EguiBackend<'_> {
+    fn draw_rect(
+        &mut self,
+        xy: Point,
+        size: Point,
+        look: &StyleAttr,
+        _properties: Option<String>,
+        _clip: Option<ClipHandle>,
+    ) {
+        let min = self.pt(xy);
+        let max = self.pt(Point::new(xy.x + size.x, xy.y + size.y));
+        let rect = egui::Rect::from_min_max(min, max);
+        let corner_radius = egui::CornerRadius::same(look.rounded as u8);
+        let fill = look
+            .fill_color
+            .map(|c| layout_color_to_egui(&c))
+            .unwrap_or(Color32::TRANSPARENT);
+        let stroke_color = layout_color_to_egui(&look.line_color);
+        let stroke_width = look.line_width as f32;
+        self.painter.rect_filled(rect, corner_radius, fill);
+        self.painter.rect_stroke(
+            rect,
+            corner_radius,
+            egui::Stroke::new(stroke_width, stroke_color),
+            egui::StrokeKind::Outside,
+        );
+    }
+
+    fn draw_line(
+        &mut self,
+        start: Point,
+        stop: Point,
+        look: &StyleAttr,
+        _properties: Option<String>,
+    ) {
+        let stroke = egui::Stroke::new(
+            look.line_width as f32,
+            layout_color_to_egui(&look.line_color),
+        );
+        self.painter
+            .line_segment([self.pt(start), self.pt(stop)], stroke);
+    }
+
+    fn draw_circle(
+        &mut self,
+        xy: Point,
+        size: Point,
+        look: &StyleAttr,
+        _properties: Option<String>,
+    ) {
+        let center = self.pt(xy);
+        let radius = (size.x.min(size.y) / 2.0) as f32;
+        let fill = look
+            .fill_color
+            .map(|c| layout_color_to_egui(&c))
+            .unwrap_or(Color32::TRANSPARENT);
+        let stroke = egui::Stroke::new(
+            look.line_width as f32,
+            layout_color_to_egui(&look.line_color),
+        );
+        self.painter.circle(center, radius, fill, stroke);
+    }
+
+    fn draw_text(&mut self, xy: Point, text: &str, look: &StyleAttr) {
+        let pos = self.pt(xy);
+        let font_size = look.font_size as f32;
+        self.painter.text(
+            pos,
+            egui::Align2::CENTER_CENTER,
+            text,
+            egui::FontId::proportional(font_size),
+            Color32::BLACK,
+        );
+    }
+
+    fn draw_arrow(
+        &mut self,
+        path: &[(Point, Point)],
+        _dashed: bool,
+        head: (bool, bool),
+        look: &StyleAttr,
+        _properties: Option<String>,
+        text: &str,
+    ) {
+        if path.is_empty() {
+            return;
+        }
+        let stroke = egui::Stroke::new(
+            look.line_width as f32,
+            layout_color_to_egui(&look.line_color),
+        );
+
+        // Draw the path as connected line segments.
+        let points: Vec<egui::Pos2> = path.iter().map(|(p, _)| self.pt(*p)).collect();
+        for i in 0..points.len().saturating_sub(1) {
+            self.painter
+                .line_segment([points[i], points[i + 1]], stroke);
+        }
+
+        // Arrowhead at the end.
+        if head.1 && points.len() >= 2 {
+            let tip = points[points.len() - 1];
+            let prev = points[points.len() - 2];
+            let dir = (tip - prev).normalized();
+            let perp = egui::vec2(-dir.y, dir.x);
+            let arrow_len = 10.0_f32;
+            let half_w = 4.0_f32;
+            let a = tip - dir * arrow_len + perp * half_w;
+            let b = tip - dir * arrow_len - perp * half_w;
+            self.painter.add(egui::Shape::convex_polygon(
+                vec![tip, a, b],
+                stroke.color,
+                stroke,
+            ));
+        }
+
+        // Arrowhead at the start.
+        if head.0 && points.len() >= 2 {
+            let tip = points[0];
+            let next = points[1];
+            let dir = (tip - next).normalized();
+            let perp = egui::vec2(-dir.y, dir.x);
+            let arrow_len = 10.0_f32;
+            let half_w = 4.0_f32;
+            let a = tip - dir * arrow_len + perp * half_w;
+            let b = tip - dir * arrow_len - perp * half_w;
+            self.painter.add(egui::Shape::convex_polygon(
+                vec![tip, a, b],
+                stroke.color,
+                stroke,
+            ));
+        }
+
+        // Edge label (if any).
+        if !text.is_empty() && points.len() >= 2 {
+            let mid = points[points.len() / 2];
+            self.painter.text(
+                mid,
+                egui::Align2::CENTER_CENTER,
+                text,
+                egui::FontId::proportional(look.font_size as f32),
+                Color32::BLACK,
+            );
+        }
+    }
+
+    fn create_clip(&mut self, _xy: Point, _size: Point, _rounded_px: usize) -> ClipHandle {
+        let handle = self.clip_counter;
+        self.clip_counter += 1;
+        handle
+    }
+}
+
+// ── Graph rendering ───────────────────────────────────────────────────────────
+
+fn draw_view(ui: &mut egui::Ui, model: &Model, view: &rhizz_core::View) {
+    use layout::gv;
+
+    let dot = rhizz_dot::render_view(model, view);
+    let mut parser = gv::DotParser::new(&dot);
+
+    match parser.process() {
+        Ok(graph) => {
+            let mut builder = gv::GraphBuilder::new();
+            builder.visit_graph(&graph);
+            let mut vg = builder.get();
+
+            let available = ui.available_size();
+            egui::ScrollArea::both().show(ui, |ui| {
+                // Reserve a drawing area at least as large as the viewport.
+                let (resp, painter) = ui.allocate_painter(
+                    available.max(egui::vec2(800.0, 600.0)),
+                    egui::Sense::hover(),
+                );
+                let offset = resp.rect.min.to_vec2();
+                let mut backend = EguiBackend::new(&painter, offset);
+                vg.do_it(false, false, false, &mut backend);
+            });
+        }
+        Err(e) => {
+            ui.label(
+                egui::RichText::new(format!("DOT parse error: {e}"))
+                    .color(Color32::from_rgb(220, 80, 80)),
+            );
+        }
     }
 }
