@@ -382,6 +382,7 @@ name = "rhizz-dot"
 version = "0.1.0"
 dependencies = [
  "rhizz-core",
+ "walkdir",
 ]
 
 [[package]]

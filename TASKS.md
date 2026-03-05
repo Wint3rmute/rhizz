@@ -10,13 +10,6 @@ How to work on this file:
 
 ---
 
-## Task 9 — Establish `rhizz-dot`
-
-Move `dot.rs` into `crates/rhizz-dot/src/`.
-Expose `fn render_view(model: &Model, view: &View) -> String`.
-Add `rhizz-core` as a path dependency.
-No I/O. All pre-existing tests travel with the module.
-
 ## Task 10 — Migrate CLI into `rhizz-cli`
 
 Move `cli.rs` and the `main.rs` entry point into `crates/rhizz-cli/src/`.
