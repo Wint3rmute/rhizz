@@ -10,17 +10,6 @@ How to work on this file:
 
 ---
 
-## Task 14 — File watcher + live recompile
-
-Register a `notify` watcher on the project directory. Recompile and refresh all panels on any `.hcl` change.
-
-- Use the same `notify` + `mpsc` + debounce pattern as `rhizz-cli`'s `watch` command (200 ms debounce).
-- Keep the last successfully resolved `Model` in memory. If the new compile has hard errors, show the new diagnostics but continue rendering the previous valid model everywhere else.
-- A small status bar at the bottom shows either "OK" or "X errors, Y warnings" after each recompile.
-- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
-
----
-
 ## Task 15 — View tabs with `layout-rs` rendering
 
 For each view in the model, show a tab at the top of the main area.

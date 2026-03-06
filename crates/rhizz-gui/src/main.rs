@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use egui::Color32;
 use notify::{RecursiveMode, Watcher as _};
 use rhizz_core::{Diagnostic, Model, Source};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use walkdir::WalkDir;
 
 // Mermaid view renderer (replaces the former rhizz-dot / graphviz path).
@@ -155,7 +155,7 @@ impl eframe::App for RhizzApp {
         loop {
             match self.watch_rx.try_recv() {
                 Ok(Ok(ref event)) if is_hcl_event(event) => {
-                    info!("Filesystem event received, HCL file changed.");
+                    debug!("Filesystem event received, HCL file changed.");
                     changed = true;
                 }
                 Ok(event) => {
@@ -168,6 +168,7 @@ impl eframe::App for RhizzApp {
             }
         }
         if changed {
+            info!("Source files changed, rebuilding the model...");
             let (model, diagnostics) = load_and_compile(&self.path);
             let view_count = model.as_ref().map_or(0, |m| m.views.len());
             self.model = model;
@@ -204,6 +205,11 @@ impl eframe::App for RhizzApp {
                         ))
                     })
                     .map_err(|e| e.to_string());
+                if let Err(ref e) = result {
+                    warn!("Failed to render view {idx}: {e}");
+                } else {
+                    debug!("View {idx} texture rendered successfully");
+                }
                 *slot = Some(result);
             }
         }
