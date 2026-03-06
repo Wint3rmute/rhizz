@@ -3137,6 +3137,7 @@ dependencies = [
  "anyhow",
  "eframe",
  "egui",
+ "image",
  "notify",
  "rhizz-core",
  "rhizz-mermaid",

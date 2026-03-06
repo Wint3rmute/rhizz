@@ -9,7 +9,7 @@ use rhizz_core::{Diagnostic, Model, Source};
 use walkdir::WalkDir;
 
 // Mermaid view renderer (replaces the former rhizz-dot / graphviz path).
-use rhizz_mermaid::render_view;
+use rhizz_mermaid::render_view_png;
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -68,22 +68,54 @@ struct RhizzApp {
     diagnostics: Vec<Diagnostic>,
     /// Index of the currently-selected view tab.
     selected_view: usize,
+    /// Cached PNG textures for each view (index matches model.views).
+    /// `None` = not yet rendered; `Err(msg)` = render failed.
+    view_textures: Vec<Option<Result<egui::TextureHandle, String>>>,
 }
 
 impl RhizzApp {
     fn new(path: PathBuf) -> Self {
         let (model, diagnostics) = load_and_compile(&path);
+        let view_count = model.as_ref().map_or(0, |m| m.views.len());
         Self {
             path,
             model,
             diagnostics,
             selected_view: 0,
+            view_textures: vec![None; view_count],
         }
     }
 }
 
 impl eframe::App for RhizzApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // ── Lazy-render PNG texture for the selected view ─────────────────────
+        let view_count = self.model.as_ref().map_or(0, |m| m.views.len());
+        if view_count > 0 {
+            let idx = self.selected_view.min(view_count - 1);
+            if let Some(model) = &self.model
+                && let Some(slot) = self.view_textures.get_mut(idx)
+                && slot.is_none()
+            {
+                let result = render_view_png(model, &model.views[idx])
+                    .and_then(|png| {
+                        let img = image::load_from_memory(&png)
+                            .map_err(|e| anyhow::anyhow!("PNG decode: {e}"))?;
+                        let rgba = img.into_rgba8();
+                        let size = [rgba.width() as usize, rgba.height() as usize];
+                        // PNG stores straight (unassociated) alpha per the PNG spec,
+                        // so `from_rgba_unmultiplied` is the correct conversion here.
+                        let ci = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+                        Ok(ctx.load_texture(
+                            format!("view_{idx}"),
+                            ci,
+                            egui::TextureOptions::default(),
+                        ))
+                    })
+                    .map_err(|e| e.to_string());
+                *slot = Some(result);
+            }
+        }
         // ── Left sidebar: systems / components / interfaces ───────────────────
         egui::SidePanel::left("sidebar").show(ctx, |ui| {
             ui.heading("Model");
@@ -174,14 +206,27 @@ impl eframe::App for RhizzApp {
 
                     ui.separator();
 
-                    // ── Mermaid source for the selected view ──────────────────
+                    // ── Rasterized PNG for the selected view ──────────────────
                     // Clamp the index in case the model changed (e.g. after a
-                    // future live-reload).
-                    let idx = self.selected_view.min(model.views.len().saturating_sub(1));
-                    let mmd = render_view(model, &model.views[idx]);
+                    // future live-reload). model.views is non-empty here (guarded
+                    // above by the `model.views.is_empty()` check).
+                    let idx = self.selected_view.min(model.views.len() - 1);
 
                     egui::ScrollArea::both().show(ui, |ui| {
-                        ui.code(&mmd);
+                        match self.view_textures.get(idx).and_then(Option::as_ref) {
+                            Some(Ok(texture)) => {
+                                ui.image(texture);
+                            }
+                            Some(Err(e)) => {
+                                ui.colored_label(
+                                    Color32::from_rgb(220, 80, 80),
+                                    format!("Render error: {e}"),
+                                );
+                            }
+                            None => {
+                                ui.label(egui::RichText::new("Rendering…").italics());
+                            }
+                        }
                     });
                 }
             } else {
