@@ -2,11 +2,13 @@
 
 use crate::model::{ComponentParent, Diagnostic, Model};
 use std::collections::{HashMap, HashSet};
+use tracing::instrument;
 
 /// Run the warning pass over a fully resolved [`Model`].
 ///
 /// Returns a list of non-blocking [`Diagnostic`] values with codes W001–W007.
 /// This function never emits E-codes; errors are produced by the resolution pass.
+#[instrument(skip(model))]
 pub fn validate(model: &Model) -> Vec<Diagnostic> {
     let mut warnings: Vec<Diagnostic> = Vec::new();
 

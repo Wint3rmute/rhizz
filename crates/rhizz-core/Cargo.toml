@@ -7,6 +7,7 @@ edition = "2024"
 hcl-rs  = "0.19.6"
 anyhow  = "1"
 serde   = { version = "1", features = ["derive"] }
+tracing = "0.1"
 
 [dev-dependencies]
 walkdir = "2"

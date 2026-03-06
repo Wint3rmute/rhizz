@@ -5,6 +5,7 @@ use crate::model::{
 };
 use crate::parse::{Labeled, RawComponent, RawFile, RawInterface, RawMessage};
 use std::collections::{HashMap, HashSet};
+use tracing::instrument;
 
 // ── Resolver state ────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ impl Resolver {
 ///
 /// On success returns `Ok((model, warnings))`.
 /// If any hard errors (E-codes) were encountered returns `Err(all_diagnostics)`.
+#[instrument(skip(raw))]
 pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>> {
     let mut r = Resolver::default();
 

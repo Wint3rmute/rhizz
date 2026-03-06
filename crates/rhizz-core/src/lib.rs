@@ -5,6 +5,8 @@
 
 #![deny(clippy::all)]
 
+use tracing::instrument;
+
 pub mod model;
 pub mod parse;
 pub mod resolve;
@@ -47,6 +49,7 @@ pub struct CompileResult {
 /// Returns a [`CompileResult`] with the optional model and all diagnostics.
 /// If any parse errors occur, `model` is `None` and `diagnostics` contains
 /// the error.  If resolution produces hard errors, `model` is also `None`.
+#[instrument(skip(sources), fields(source_count = sources.len()))]
 pub fn compile(sources: &[Source]) -> CompileResult {
     use std::path::Path;
 
