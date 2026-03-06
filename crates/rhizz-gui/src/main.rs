@@ -3,8 +3,10 @@
 //! Usage: `rhizz-gui <project-dir>`
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 
 use egui::Color32;
+use notify::{RecursiveMode, Watcher as _};
 use rhizz_core::{Diagnostic, Model, Source};
 use walkdir::WalkDir;
 
@@ -68,6 +70,18 @@ fn load_and_compile(dir: &Path) -> (Option<Model>, Vec<Diagnostic>) {
     (result.model, result.diagnostics)
 }
 
+// ── File-watch helpers ────────────────────────────────────────────────────────
+
+/// Return `true` if `event` is a create/modify/remove on an `.hcl` file.
+fn is_hcl_event(event: &notify::Event) -> bool {
+    use notify::EventKind::{Create, Modify, Remove};
+    matches!(event.kind, Create(_) | Modify(_) | Remove(_))
+        && event
+            .paths
+            .iter()
+            .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 struct RhizzApp {
@@ -79,24 +93,83 @@ struct RhizzApp {
     /// Cached PNG textures for each view (index matches model.views).
     /// `None` = not yet rendered; `Err(msg)` = render failed.
     view_textures: Vec<Option<Result<egui::TextureHandle, String>>>,
+    /// File-system watcher.  Kept alive here so it isn't dropped.
+    _watcher: Option<notify::RecommendedWatcher>,
+    /// Receiver end of the channel the watcher sends events to.
+    watch_rx: mpsc::Receiver<notify::Result<notify::Event>>,
 }
 
 impl RhizzApp {
     fn new(path: PathBuf) -> Self {
-        let (model, diagnostics) = load_and_compile(&path);
+        let (model, mut diagnostics) = load_and_compile(&path);
         let view_count = model.as_ref().map_or(0, |m| m.views.len());
+
+        // Set up a file-system watcher for the project directory.
+        let (tx, watch_rx) = mpsc::channel::<notify::Result<notify::Event>>();
+        let mut watch_diagnostics: Vec<Diagnostic> = Vec::new();
+        let watcher = match notify::recommended_watcher(tx) {
+            Ok(mut w) => {
+                if let Err(e) = w.watch(&path, RecursiveMode::NonRecursive) {
+                    eprintln!("Warning: cannot watch {}: {e}", path.display());
+                    watch_diagnostics.push(Diagnostic::warning(
+                        "W000",
+                        format!(
+                            "live reload unavailable: cannot watch {}: {e}",
+                            path.display()
+                        ),
+                    ));
+                }
+                Some(w)
+            }
+            Err(e) => {
+                eprintln!("Warning: cannot create file watcher: {e}");
+                watch_diagnostics.push(Diagnostic::warning(
+                    "W000",
+                    format!("live reload unavailable: cannot create file watcher: {e}"),
+                ));
+                None
+            }
+        };
+
+        diagnostics.extend(watch_diagnostics);
+
         Self {
             path,
             model,
             diagnostics,
             selected_view: 0,
             view_textures: vec![None; view_count],
+            _watcher: watcher,
+            watch_rx,
         }
     }
 }
 
 impl eframe::App for RhizzApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // ── Poll the file-watcher channel and reload on .hcl changes ─────────
+        let mut changed = false;
+        loop {
+            match self.watch_rx.try_recv() {
+                Ok(Ok(ref event)) if is_hcl_event(event) => {
+                    changed = true;
+                }
+                Ok(_) => {}
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => break,
+            }
+        }
+        if changed {
+            let (model, diagnostics) = load_and_compile(&self.path);
+            let view_count = model.as_ref().map_or(0, |m| m.views.len());
+            self.model = model;
+            self.diagnostics = diagnostics;
+            // Reset texture cache so views are re-rendered with the new model.
+            self.view_textures = vec![None; view_count];
+            self.selected_view = self.selected_view.min(view_count.saturating_sub(1));
+            ctx.request_repaint();
+        }
+
         // ── Lazy-render PNG texture for the selected view ─────────────────────
         let view_count = self.model.as_ref().map_or(0, |m| m.views.len());
         if view_count > 0 {
@@ -242,5 +315,67 @@ impl eframe::App for RhizzApp {
                 ui.label(egui::RichText::new("(no model loaded)").italics());
             }
         });
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::is_hcl_event;
+    use notify::{Event, EventKind};
+    use std::path::PathBuf;
+
+    fn make_event(kind: EventKind, paths: Vec<PathBuf>) -> Event {
+        Event {
+            kind,
+            paths,
+            attrs: Default::default(),
+        }
+    }
+
+    #[test]
+    fn hcl_modify_is_detected() {
+        let ev = make_event(
+            EventKind::Modify(notify::event::ModifyKind::Any),
+            vec![PathBuf::from("/project/system.hcl")],
+        );
+        assert!(is_hcl_event(&ev));
+    }
+
+    #[test]
+    fn hcl_create_is_detected() {
+        let ev = make_event(
+            EventKind::Create(notify::event::CreateKind::Any),
+            vec![PathBuf::from("/project/new.hcl")],
+        );
+        assert!(is_hcl_event(&ev));
+    }
+
+    #[test]
+    fn hcl_remove_is_detected() {
+        let ev = make_event(
+            EventKind::Remove(notify::event::RemoveKind::Any),
+            vec![PathBuf::from("/project/old.hcl")],
+        );
+        assert!(is_hcl_event(&ev));
+    }
+
+    #[test]
+    fn non_hcl_modify_is_ignored() {
+        let ev = make_event(
+            EventKind::Modify(notify::event::ModifyKind::Any),
+            vec![PathBuf::from("/project/README.md")],
+        );
+        assert!(!is_hcl_event(&ev));
+    }
+
+    #[test]
+    fn access_event_is_ignored() {
+        let ev = make_event(
+            EventKind::Access(notify::event::AccessKind::Any),
+            vec![PathBuf::from("/project/system.hcl")],
+        );
+        assert!(!is_hcl_event(&ev));
     }
 }
