@@ -2,6 +2,7 @@
 
 use crate::model::{ComponentId, Model};
 use std::fmt;
+use tracing::instrument;
 
 // ── Per-entity scoring helpers ────────────────────────────────────────────────
 
@@ -161,6 +162,7 @@ impl ScoreReport {
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /// Compute the completion [`ScoreReport`] for a resolved [`Model`].
+#[instrument(skip(model))]
 pub fn score(model: &Model) -> ScoreReport {
     let comp_scores: Vec<f64> = (0..model.components.len())
         .map(|i| score_component(ComponentId(i), model))

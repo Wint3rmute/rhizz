@@ -11,6 +11,7 @@
 use rhizz_core::{ComponentId, ComponentParent, Direction, InterfaceId, Model, View, ViewFilter};
 use std::collections::HashSet;
 use std::fmt::Write as _;
+use tracing::instrument;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ use std::fmt::Write as _;
 /// Applies the view's filter predicates (tag inclusion/exclusion, `max_level`,
 /// component whitelist, `show_messages`) and emits a complete `digraph { … }`
 /// block ready to be written to a `.dot` file.
+#[instrument(skip(model, view), fields(view = %view.label))]
 pub fn render_view(model: &Model, view: &View) -> String {
     let system = &model.systems[view.system.0];
     let filter = &view.filter;

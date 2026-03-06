@@ -16,6 +16,7 @@
 use rhizz_core::{ComponentId, ComponentParent, Direction, InterfaceId, Model, View, ViewFilter};
 use std::collections::HashSet;
 use std::fmt::Write as _;
+use tracing::instrument;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,7 @@ use std::fmt::Write as _;
 /// Applies the view's filter predicates (tag inclusion/exclusion, `max_level`,
 /// component whitelist, `show_messages`) and emits a complete `flowchart`
 /// block ready to be written to a `.mmd` file or passed to a renderer.
+#[instrument(skip(model, view), fields(view = %view.label))]
 pub fn render_view(model: &Model, view: &View) -> String {
     let system = &model.systems[view.system.0];
     let filter = &view.filter;
@@ -90,6 +92,7 @@ pub fn render_view(model: &Model, view: &View) -> String {
 /// # Errors
 ///
 /// Returns an error if the generated Mermaid source cannot be rendered.
+#[instrument(skip(model, view), fields(view = %view.label))]
 pub fn render_view_svg(model: &Model, view: &View) -> anyhow::Result<String> {
     let mmd = render_view(model, view);
     mermaid_rs_renderer::render(&mmd)
@@ -105,6 +108,7 @@ pub fn render_view_svg(model: &Model, view: &View) -> anyhow::Result<String> {
 /// Returns an error if the generated Mermaid source cannot be rendered or the
 /// SVG cannot be converted to PNG.
 #[cfg(feature = "png")]
+#[instrument(skip(model, view), fields(view = %view.label))]
 pub fn render_view_png(model: &Model, view: &View) -> anyhow::Result<Vec<u8>> {
     use mermaid_rs_renderer::RenderOptions;
 

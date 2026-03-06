@@ -10,6 +10,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
+use tracing::instrument;
 
 // ── Raw model types ──────────────────────────────────────────────────────────
 
@@ -477,6 +478,7 @@ fn parse_view(body: &hcl::Body) -> Result<RawView> {
 
 /// Parse a single `.hcl` source string into a `RawFile`.
 /// `path` is used only for error context messages.
+#[instrument(skip(src), fields(path = %path.display()))]
 pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
     let body = hcl::parse(src).with_context(|| format!("HCL parse error in {}", path.display()))?;
 
@@ -516,6 +518,7 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
 }
 
 /// Merge `src` into `dst`.  Returns an error on E010 (duplicate project block).
+#[instrument(skip(dst, src), fields(path = %path.display()))]
 pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result<()> {
     if let Some(proj) = src.project {
         if dst.project.is_some() {
