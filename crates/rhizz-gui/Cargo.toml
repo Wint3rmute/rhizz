@@ -8,10 +8,11 @@ name = "rhizz-gui"
 path = "src/main.rs"
 
 [dependencies]
-rhizz-core = { path = "../rhizz-core" }
-rhizz-dot  = { path = "../rhizz-dot" }
-eframe     = "0.31"
-egui       = "0.31"
-notify     = "6"
-walkdir    = "2"
-anyhow     = "1"
+rhizz-core    = { path = "../rhizz-core" }
+rhizz-mermaid = { path = "../rhizz-mermaid" }
+eframe        = "0.31"
+egui          = "0.31"
+image         = { version = "0.25", default-features = false, features = ["png"] }
+notify        = "6"
+walkdir       = "2"
+anyhow        = "1"
