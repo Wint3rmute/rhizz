@@ -271,7 +271,8 @@ All references are **name-based within the same parent scope**:
 
 ## 4. Validation Rules
 
-> **Impl:** validation operates on the [resolved `Model`](SPEC/models.md#core-resolved-structs). Errors/warnings are collected as `Diagnostic` values during the [resolution pass](SPEC/models.md#resolution-pass).
+> **Impl:** validation operates on the [resolved `Model`](SPEC/models.md#core-resolved-structs).
+> Errors/warnings are collected as `Diagnostic` values during the [resolution pass](SPEC/models.md#resolution-pass).
 
 ### 4.1 Errors (Halt Compilation)
 
@@ -304,9 +305,12 @@ All references are **name-based within the same parent scope**:
 
 ## 5. Completion Scoring
 
-> **Impl:** scoring iterates over `Model.components`, `Model.interfaces`, and `Model.messages` — see [resolved models](SPEC/models.md#core-resolved-structs). The `leaf`, `children`, `messages`, and `fields` fields on those structs provide all inputs needed.
+> **Impl:** scoring iterates over `Model.components`, `Model.interfaces`, and `Model.messages`,
+> see [resolved models](SPEC/models.md#core-resolved-structs). The `leaf`, `children`,
+> `messages`, and `fields` fields on those structs provide all inputs needed.
 
-The completion score quantifies how fully the system has been decomposed to leaf-level entities. Each entity is scored individually, then aggregated.
+The completion score quantifies how fully the system has been decomposed to
+leaf-level entities. Each entity is scored individually, then aggregated.
 
 ### Per-Entity Completeness
 
@@ -322,7 +326,10 @@ The completion score quantifies how fully the system has been decomposed to leaf
 
 $$\text{Score} = \frac{\sum_{i=1}^{N} s_i}{N} \times 100\%$$
 
-Where $s_i$ is the per-entity completeness (0.0, 0.5, or 1.0) and $N$ is the total number of components, interfaces, and messages. Fields and the system block itself are excluded from scoring (fields are the leaf-level data — their existence *is* the completion).
+Where $s_i$ is the per-entity completeness (0.0, 0.5, or 1.0) and $N$ is the
+total number of components, interfaces, and messages. Fields and the system
+block itself are excluded from scoring (fields are the leaf-level data — their
+existence *is* the completion).
 
 ### Output Format
 
@@ -340,7 +347,11 @@ Overall:     16/29           55.2%
 
 ## 6. View Generation (Graphviz)
 
-> **Impl:** the `View`, `ViewFilter`, and `ViewOutput` structs are defined in [view models](SPEC/models.md#view-models). The renderer reads from the resolved `Model` and applies filter predicates against tags, levels, and component whitelist. DOT string generation is provided by the shared `rhizz-dot` crate (see Section 12) so that any frontend can produce `.dot` output without re-implementing the logic.
+> **Impl:** the `View`, `ViewFilter`, and `ViewOutput` structs are defined in
+> [view models](SPEC/models.md#view-models). The renderer reads from the resolved
+> `Model` and applies filter predicates against tags, levels, and component whitelist.
+> DOT string generation is provided by the shared `rhizz-dot` crate (see Section 12)
+> so that any frontend can produce `.dot` output without re-implementing the logic.
 
 The view renderer applies the filter, then produces a DOT file:
 
@@ -378,9 +389,14 @@ digraph "power-distribution" {
 
 ## 7. CLI Interface
 
-> **Impl:** see [SPEC/cli.md](SPEC/cli.md) — `clap` struct layout, JSON output schema, pipeline stages, and error formatting.
+> **Impl:** see [SPEC/cli.md](SPEC/cli.md) — `clap` struct layout, JSON output schema,
+> pipeline stages, and error formatting.
 
-The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend over `rhizz-core`. It is responsible for file discovery, output formatting, exit codes, and writing generated `.dot` files to disk. All model compilation, validation, scoring, and view rendering logic lives in `rhizz-core` and `rhizz-dot` — `rhizz-cli` contains no model logic of its own.
+The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend
+over `rhizz-core`. It is responsible for file discovery, output formatting,
+exit codes, and writing generated `.dot` files to disk. All model compilation,
+validation, scoring, and view rendering logic lives in `rhizz-core` and
+`rhizz-dot` — `rhizz-cli` contains no model logic of its own.
 
 ```
 rhizz <command> [options] [path]
@@ -652,9 +668,14 @@ view "fc-internals" {
 
 ## 10. Workspace Layout
 
-The repository is organised as a Cargo workspace. The compiler core, the DOT renderer, and each frontend are separate crates. This enforces a hard boundary: model logic lives in the core and shared crates; frontends own only I/O and presentation.
+The repository is organised as a Cargo workspace. The compiler core, the DOT
+renderer, and each frontend are separate crates. This enforces a hard boundary:
+model logic lives in the core and shared crates; frontends own only I/O and
+presentation.
 
-Frontends depend on `rhizz-core` and, when they need to emit DOT output, on `rhizz-dot`. Frontends do not depend on each other. Any number of frontends may coexist in the workspace.
+Frontends depend on `rhizz-core` and, when they need to emit DOT output, on
+`rhizz-dot`. Frontends do not depend on each other. Any number of frontends may
+coexist in the workspace.
 
 > **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for crate layout and dependency graph.
 
@@ -662,17 +683,25 @@ Frontends depend on `rhizz-core` and, when they need to emit DOT output, on `rhi
 
 ## 11. `rhizz-core`
 
-`rhizz-core` is the model compiler. It is a pure library with no filesystem access, no terminal dependencies, and no rendering logic. Frontends supply source text; `rhizz-core` returns a resolved model and a list of diagnostics.
+`rhizz-core` is the model compiler. It is a pure library with no filesystem
+access, no terminal dependencies, and no rendering logic. Frontends supply
+source text; `rhizz-core` returns a resolved model and a list of diagnostics.
 
-All public types are serialisable and cloneable so that any frontend can store, transmit, or display results without additional conversion. Diagnostic codes are part of the public API and must remain stable.
+All public types are serialisable and cloneable so that any frontend can store,
+transmit, or display results without additional conversion. Diagnostic codes are
+part of the public API and must remain stable.
 
-> **Impl:** see [SPEC/architecture.md § rhizz-core](SPEC/architecture.md#rhizz-core) for the full API surface and invariants.
+> **Impl:** see [SPEC/architecture.md § rhizz-core](SPEC/architecture.md#rhizz-core)
+> for the full API surface and invariants.
 
 ---
 
 ## 12. `rhizz-dot`
 
-`rhizz-dot` is a shared library that converts a resolved model and a view definition into a DOT-format string. It encapsulates all view filter logic (tag filtering, level capping, component whitelist, message visibility) so that no frontend needs to re-implement it.
+`rhizz-dot` is a shared library that converts a resolved model and a view
+definition into a DOT-format string. It encapsulates all view filter logic (tag
+filtering, level capping, component whitelist, message visibility) so that no
+frontend needs to re-implement it.
 
 > **Impl:** see [SPEC/architecture.md § rhizz-dot](SPEC/architecture.md#rhizz-dot) for the API.
 
@@ -680,12 +709,16 @@ All public types are serialisable and cloneable so that any frontend can store, 
 
 ## 13. Frontend Contract
 
-A frontend is any crate that consumes `rhizz-core` to present the model to a user or automated process. Frontends must:
+A frontend is any crate that consumes `rhizz-core` to present the model to a
+user or automated process. Frontends must:
 
 - Own all I/O — file discovery, reading, watching, and writing output.
 - Pass source text to `rhizz-core` and receive results; never re-implement parsing, validation, scoring, or view rendering.
 - Render diagnostics and results in a manner appropriate to their medium.
 
-The CLI frontend (`rhizz-cli`) and the desktop GUI frontend (`rhizz-gui`, built with `egui`) are the first two frontends. Additional frontends (web, LSP, etc.) may be added without changes to the core crates.
+The CLI frontend (`rhizz-cli`) and the desktop GUI frontend (`rhizz-gui`, built
+with `egui`) are the first two frontends. Additional frontends (web, LSP, etc.)
+may be added without changes to the core crates.
 
-> **Impl:** see [SPEC/architecture.md § Frontend Contract](SPEC/architecture.md#frontend-contract) and [SPEC/gui.md](SPEC/gui.md) for frontend-specific details.
+> **Impl:** see [SPEC/architecture.md § Frontend Contract](SPEC/architecture.md#frontend-contract)
+> and [SPEC/gui.md](SPEC/gui.md) for frontend-specific details.
