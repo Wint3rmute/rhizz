@@ -8,6 +8,9 @@ use egui::Color32;
 use rhizz_core::{Diagnostic, Model, Source};
 use walkdir::WalkDir;
 
+// Mermaid view renderer (replaces the former rhizz-dot / graphviz path).
+use rhizz_mermaid::render_view;
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
         .nth(1)
@@ -63,6 +66,8 @@ struct RhizzApp {
     path: PathBuf,
     model: Option<Model>,
     diagnostics: Vec<Diagnostic>,
+    /// Index of the currently-selected view tab.
+    selected_view: usize,
 }
 
 impl RhizzApp {
@@ -72,6 +77,7 @@ impl RhizzApp {
             path,
             model,
             diagnostics,
+            selected_view: 0,
         }
     }
 }
@@ -137,10 +143,11 @@ impl eframe::App for RhizzApp {
                 });
             });
 
-        // ── Central panel: project info ───────────────────────────────────────
+        // ── Central panel: view tabs + mermaid source ─────────────────────────
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("rhizz");
             ui.label(format!("Project: {}", self.path.display()));
+
             if let Some(ref model) = self.model {
                 ui.label(format!(
                     "{} system(s), {} component(s), {} interface(s)",
@@ -148,6 +155,38 @@ impl eframe::App for RhizzApp {
                     model.components.len(),
                     model.interfaces.len(),
                 ));
+
+                if model.views.is_empty() {
+                    ui.separator();
+                    ui.label(egui::RichText::new("(no views defined)").italics());
+                } else {
+                    ui.separator();
+
+                    // ── View tabs ─────────────────────────────────────────────
+                    ui.horizontal(|ui| {
+                        for (i, view) in model.views.iter().enumerate() {
+                            let selected = self.selected_view == i;
+                            if ui.selectable_label(selected, &view.label).clicked() {
+                                self.selected_view = i;
+                            }
+                        }
+                    });
+
+                    ui.separator();
+
+                    // ── Mermaid source for the selected view ──────────────────
+                    // Clamp the index in case the model changed (e.g. after a
+                    // future live-reload).
+                    let idx = self.selected_view.min(model.views.len().saturating_sub(1));
+                    let mmd = render_view(model, &model.views[idx]);
+
+                    egui::ScrollArea::both().show(ui, |ui| {
+                        ui.code(&mmd);
+                    });
+                }
+            } else {
+                ui.separator();
+                ui.label(egui::RichText::new("(no model loaded)").italics());
             }
         });
     }

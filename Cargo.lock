@@ -3139,7 +3139,7 @@ dependencies = [
  "egui",
  "notify",
  "rhizz-core",
- "rhizz-dot",
+ "rhizz-mermaid",
  "walkdir",
 ]
 
