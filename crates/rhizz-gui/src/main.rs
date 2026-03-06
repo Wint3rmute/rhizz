@@ -8,6 +8,7 @@ use std::sync::mpsc;
 use egui::Color32;
 use notify::{RecursiveMode, Watcher as _};
 use rhizz_core::{Diagnostic, Model, Source};
+use tracing::{debug, error, info};
 use walkdir::WalkDir;
 
 // Mermaid view renderer (replaces the former rhizz-dot / graphviz path).
@@ -93,7 +94,7 @@ struct RhizzApp {
     /// Cached PNG textures for each view (index matches model.views).
     /// `None` = not yet rendered; `Err(msg)` = render failed.
     view_textures: Vec<Option<Result<egui::TextureHandle, String>>>,
-    /// File-system watcher.  Kept alive here so it isn't dropped.
+    /// File-system watcher. Kept alive here so it isn't dropped.
     _watcher: Option<notify::RecommendedWatcher>,
     /// Receiver end of the channel the watcher sends events to.
     watch_rx: mpsc::Receiver<notify::Result<notify::Event>>,
@@ -110,7 +111,7 @@ impl RhizzApp {
         let watcher = match notify::recommended_watcher(tx) {
             Ok(mut w) => {
                 if let Err(e) = w.watch(&path, RecursiveMode::NonRecursive) {
-                    eprintln!("Warning: cannot watch {}: {e}", path.display());
+                    error!("Warning: cannot watch {}: {e}", path.display());
                     watch_diagnostics.push(Diagnostic::warning(
                         "W000",
                         format!(
@@ -118,11 +119,13 @@ impl RhizzApp {
                             path.display()
                         ),
                     ));
+                } else {
+                    info!("fs watcher for {} created successfully", path.display());
                 }
                 Some(w)
             }
             Err(e) => {
-                eprintln!("Warning: cannot create file watcher: {e}");
+                error!("Warning: cannot create file watcher: {e}");
                 watch_diagnostics.push(Diagnostic::warning(
                     "W000",
                     format!("live reload unavailable: cannot create file watcher: {e}"),
@@ -152,11 +155,16 @@ impl eframe::App for RhizzApp {
         loop {
             match self.watch_rx.try_recv() {
                 Ok(Ok(ref event)) if is_hcl_event(event) => {
+                    info!("Filesystem event received, HCL file changed.");
                     changed = true;
                 }
-                Ok(_) => {}
+                Ok(event) => {
+                    debug!("Filesystem event received: {event:?}");
+                }
                 Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    error!("Filesystem watcher disconnected, this should never happen!");
+                }
             }
         }
         if changed {
@@ -168,6 +176,8 @@ impl eframe::App for RhizzApp {
             self.view_textures = vec![None; view_count];
             self.selected_view = self.selected_view.min(view_count.saturating_sub(1));
             ctx.request_repaint();
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_secs(2));
         }
 
         // ── Lazy-render PNG texture for the selected view ─────────────────────
