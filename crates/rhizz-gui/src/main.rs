@@ -962,21 +962,25 @@ mod tests {
     #[test]
     fn bidirectional_iface_detection() {
         let model = load_example("social-media");
-        // Find a bidirectional interface by scanning the model.
-        let has_bidir = model
+        // social-media has at least one bidirectional interface.
+        let bidir_iface = model
             .interfaces
             .iter()
-            .any(|i| i.direction == rhizz_core::Direction::Bidirectional);
-        if has_bidir {
-            let bidir_label = model
-                .interfaces
-                .iter()
-                .find(|i| i.direction == rhizz_core::Direction::Bidirectional)
-                .map(|i| i.label.as_str())
-                .unwrap_or("");
+            .find(|i| i.direction == rhizz_core::Direction::Bidirectional)
+            .expect("social-media should have at least one bidirectional interface");
+        assert!(
+            is_bidirectional_iface(&bidir_iface.label, &model),
+            "bidirectional interface recognised"
+        );
+        // Unidirectional interfaces must NOT be flagged as bidirectional.
+        if let Some(unidir) = model
+            .interfaces
+            .iter()
+            .find(|i| i.direction != rhizz_core::Direction::Bidirectional)
+        {
             assert!(
-                is_bidirectional_iface(bidir_label, &model),
-                "bidirectional interface recognised"
+                !is_bidirectional_iface(&unidir.label, &model),
+                "unidirectional interface should not be flagged as bidirectional"
             );
         }
     }
