@@ -51,11 +51,12 @@ When `--json` is set, all output is a single JSON object on stdout. Stderr remai
   ],
   // present only if check passed:
   "score": {
-    "system": "consumer-drone",
-    "components": { "complete": 8, "total": 12 },
-    "interfaces": { "complete": 3, "total": 7 },
-    "messages":   { "complete": 5, "total": 10 },
-    "overall":    { "complete": 16, "total": 29, "percent": 55.2 }
+    "system":      "consumer-drone",
+    "components":  { "complete": 8,  "total": 12 },
+    "ports":       { "complete": 4,  "total": 8  },
+    "connections": { "complete": 3,  "total": 7  },
+    "messages":    { "complete": 5,  "total": 10 },
+    "overall":     { "complete": 20, "total": 37, "percent": 54.1 }
   },
   // present only if views were generated:
   "views": [
@@ -134,8 +135,8 @@ The resolved `Model` (see [models.md](models.md#resolved-models)) is the input t
 
 Human-readable (default):
 ```
-✗ E002  interfaces.hcl:14  interface "uart-link" references undefined component "gps-module"
-⚠ W001  fc.hcl:31          component "power-regulator" has no child components (leaf=false)
+✗ E002  connections.hcl:14  connection "uart-link" references undefined component "gps-module"
+⚠ W001  fc.hcl:31           component "power-regulator" has no child components (leaf=false)
 ```
 
 Format: `{icon} {code}  {file}:{line}  {message}`

@@ -50,7 +50,7 @@ struct RawSystem {
     tags: Option<Vec<String>>,
     level: Option<i32>,
     components: Vec<Labeled<RawComponent>>,
-    interfaces: Vec<Labeled<RawInterface>>,
+    connections: Vec<Labeled<RawConnection>>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,21 +59,31 @@ struct RawComponent {
     tags: Option<Vec<String>>,
     level: Option<i32>,
     leaf: Option<bool>,
+    ports: Vec<Labeled<RawPort>>,
     components: Vec<Labeled<RawComponent>>,  // recursive
-    interfaces: Vec<Labeled<RawInterface>>,
+    connections: Vec<Labeled<RawConnection>>,
 }
 
+/// A port declared on a component. Carries protocol schema via `message` children.
 #[derive(Debug, Clone)]
-struct RawInterface {
+struct RawPort {
+    description: Option<String>,
+    protocol: Option<String>,
+    role: Option<String>,   // "provider" | "consumer" | "peer"
+    tags: Option<Vec<String>>,
+    messages: Vec<Labeled<RawMessage>>,
+}
+
+/// A connection wiring two sibling components together.
+/// `from` and `to` are either `"comp"` (bare) or `"comp:port"` (typed).
+#[derive(Debug, Clone)]
+struct RawConnection {
     description: Option<String>,
     tags: Option<Vec<String>>,
     level: Option<i32>,
-    leaf: Option<bool>,
-    direction: Option<String>,
     from: String,
     to: String,
     encapsulates: Option<Vec<String>>,
-    messages: Vec<Labeled<RawMessage>>,
 }
 
 #[derive(Debug, Clone)]
@@ -140,7 +150,10 @@ Interned, cross-referenced. Use arena indices (`usize` newtyped) or `slotmap::Sl
 struct ComponentId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct InterfaceId(usize);
+struct PortId(usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ConnectionId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct MessageId(usize);
@@ -158,11 +171,12 @@ struct SystemId(usize);
 #[derive(Debug)]
 struct Model {
     project: Project,
-    systems: Vec<System>,       // indexed by SystemId
-    components: Vec<Component>, // indexed by ComponentId
-    interfaces: Vec<Interface>, // indexed by InterfaceId
-    messages: Vec<Message>,     // indexed by MessageId
-    fields: Vec<Field>,         // indexed by FieldId
+    systems: Vec<System>,         // indexed by SystemId
+    components: Vec<Component>,   // indexed by ComponentId
+    ports: Vec<Port>,             // indexed by PortId
+    connections: Vec<Connection>, // indexed by ConnectionId
+    messages: Vec<Message>,       // indexed by MessageId
+    fields: Vec<Field>,           // indexed by FieldId
     views: Vec<View>,
 }
 
@@ -179,8 +193,8 @@ struct System {
     description: String,
     tags: Vec<String>,
     level: i32,
-    components: Vec<ComponentId>,   // direct children
-    interfaces: Vec<InterfaceId>,   // direct children
+    components: Vec<ComponentId>,    // direct children
+    connections: Vec<ConnectionId>,  // direct children
 }
 
 #[derive(Debug)]
@@ -198,27 +212,45 @@ struct Component {
     leaf: bool,
     parent: ComponentParent,
     children: Vec<ComponentId>,
-    interfaces: Vec<InterfaceId>,
+    ports: Vec<PortId>,
+    connections: Vec<ConnectionId>,
 }
 
+/// The role a port plays in a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Direction {
-    Unidirectional,
-    Bidirectional,
+enum PortRole {
+    Provider,
+    Consumer,
+    Peer,
 }
 
 #[derive(Debug)]
-struct Interface {
+struct Port {
+    label: String,
+    description: String,
+    protocol: String,
+    role: PortRole,
+    tags: Vec<String>,
+    owner: ComponentId,
+    messages: Vec<MessageId>,
+}
+
+/// One endpoint of a connection — a component and an optional port on that component.
+#[derive(Debug)]
+struct ConnectionEndpoint {
+    component: ComponentId,
+    port: Option<PortId>,   // None when the reference was a bare component label
+}
+
+#[derive(Debug)]
+struct Connection {
     label: String,
     description: String,
     tags: Vec<String>,
     level: i32,
-    leaf: bool,
-    direction: Direction,
-    from: ComponentId,
-    to: ComponentId,
-    encapsulates: Vec<InterfaceId>,
-    messages: Vec<MessageId>,
+    from: ConnectionEndpoint,
+    to: ConnectionEndpoint,
+    encapsulates: Vec<ConnectionId>,
 }
 
 #[derive(Debug)]
@@ -246,12 +278,15 @@ struct Field {
 
 1. Register all systems (allocate `SystemId`).
 2. Walk each system's components depth-first — allocate `ComponentId`, set `parent`, resolve `level` (inherit `parent.level + 1` if unset).
-3. Walk interfaces — resolve `from`/`to` by looking up sibling component labels within the same parent scope. This is a `HashMap<(ParentScope, &str), ComponentId>` lookup.
-4. Resolve `encapsulates` — same-scope interface label lookup.
-5. Walk messages/fields — straightforward, allocate ids.
-6. Resolve views — look up `system` label → `SystemId`.
+3. Walk each component's `port` blocks — allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
+4. Walk `connection` blocks in each scope — parse `from`/`to` strings:
+   - If the string contains `:`, split on the first `:` to get `(comp_label, port_label)`; resolve `comp_label` to a sibling `ComponentId` (E011 if missing), then look up `port_label` on that component (E010 if missing).
+   - If the string is a bare label, resolve to a sibling `ComponentId` (E002 if missing). The `port` field of `ConnectionEndpoint` is `None`.
+5. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
+6. Walk messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
+7. Resolve views — look up `system` label → `SystemId` (E006 if missing).
 
-Collect errors/warnings as `Diagnostic` values. If any errors exist, return `Err`. Warnings are attached to the `Model` or returned alongside it.
+Collect errors/warnings as `Diagnostic` values. If any errors exist, return `Err`. Warnings are returned alongside the model.
 
 ### Scope lookup helper
 
@@ -266,8 +301,10 @@ enum Scope {
 
 /// Built during resolution. Maps (scope, label) → entity id.
 struct ScopeIndex {
-    components: HashMap<(Scope, String), ComponentId>,
-    interfaces: HashMap<(Scope, String), InterfaceId>,
+    components:  HashMap<(Scope, String), ComponentId>,
+    connections: HashMap<(Scope, String), ConnectionId>,
+    /// Maps (component_id, port_label) → PortId for `comp:port` resolution.
+    ports:       HashMap<(ComponentId, String), PortId>,
 }
 ```
 
@@ -310,6 +347,7 @@ struct ViewOutput {
 
 - **No lifetimes in the model** — all data is owned. Avoids borrow complexity for a model that's built once and lives for the program's duration.
 - **Arena-indexed rather than nested** — flattening the tree into indexed vecs makes iteration, filtering, and scoring trivial. Parent/child relationships are explicit via ids.
-- **`Direction` as enum, not string** — parse once during resolution, enforce at the type level.
+- **`PortRole` as enum, not string** — parse once during resolution, enforce at the type level. The `from`/`to` strings in `RawConnection` are parsed into `ConnectionEndpoint` (component id + optional port id) during the resolution pass.
+- **`ConnectionEndpoint.port` is `Option<PortId>`** — `None` means a bare (untyped) reference; `Some` means a fully resolved typed reference. Warnings W007–W009 fire based on the combination.
 - **Defaults applied during resolution**, not during deserialization. The raw layer preserves what the user wrote; the resolved layer is fully populated.
 - **`String` over `&str`** everywhere — the raw HCL source doesn't outlive parsing, so borrowed slices aren't viable without an arena allocator for source text.
