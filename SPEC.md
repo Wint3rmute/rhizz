@@ -455,8 +455,8 @@ rhizz <command> [options] [path]
 ```bash
 $ mbse build ./drone-project/
 
-  Parsing 5 files...
-  ✓ Parsed: project.hcl, systems.hcl, fc.hcl, propulsion.hcl, views.hcl
+  Parsing 6 files...
+  ✓ Parsed: project.hcl, systems.hcl, fc.hcl, propulsion.hcl, connections.hcl, views.hcl
 
   Validation:
   ✗ E002  connections.hcl:14  connection "uart-link" references undefined component "gps-module"
@@ -469,7 +469,7 @@ $ mbse build ./drone-project/
 ```bash
 $ mbse build ./drone-project/   # after fix
 
-  Parsing 5 files... ✓
+  Parsing 6 files... ✓
 
   Validation:
   ⚠ W001  fc.hcl:31           component "power-regulator" has no child components (leaf=false)
@@ -604,6 +604,7 @@ system "mini-drone" {
       protocol    = "dshot600"
       role        = "consumer"
       tags        = ["electronics", "motor", "data"]
+      # no messages yet — W011
     }
 
     port "power-in" {
@@ -611,6 +612,7 @@ system "mini-drone" {
       protocol    = "power-dc"
       role        = "consumer"
       tags        = ["power"]
+      # no messages yet — W011
     }
 
     port "bec-out" {
@@ -618,6 +620,7 @@ system "mini-drone" {
       protocol    = "power-dc"
       role        = "provider"
       tags        = ["power"]
+      # no messages yet — W011
     }
   }
 
@@ -631,6 +634,7 @@ system "mini-drone" {
       protocol    = "power-dc"
       role        = "provider"
       tags        = ["power"]
+      # no messages yet — W011
     }
   }
 
@@ -644,6 +648,7 @@ system "mini-drone" {
       protocol    = "crsf"
       role        = "peer"
       tags        = ["rf", "control", "data"]
+      # no messages yet — W011 (messages defined on flight-controller:crsf)
     }
   }
 
