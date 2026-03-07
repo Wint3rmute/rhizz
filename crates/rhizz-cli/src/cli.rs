@@ -261,8 +261,10 @@ struct JsonScore {
     system: String,
     /// Component scoring.
     components: JsonCategoryScore,
-    /// Interface scoring.
-    interfaces: JsonCategoryScore,
+    /// Port scoring.
+    ports: JsonCategoryScore,
+    /// Connection scoring.
+    connections: JsonCategoryScore,
     /// Message scoring.
     messages: JsonCategoryScore,
     /// Overall scoring.
@@ -412,9 +414,13 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     complete: r.components.complete,
                     total: r.components.total(),
                 },
-                interfaces: JsonCategoryScore {
-                    complete: r.interfaces.complete,
-                    total: r.interfaces.total(),
+                ports: JsonCategoryScore {
+                    complete: r.ports.complete,
+                    total: r.ports.total(),
+                },
+                connections: JsonCategoryScore {
+                    complete: r.connections.complete,
+                    total: r.connections.total(),
                 },
                 messages: JsonCategoryScore {
                     complete: r.messages.complete,

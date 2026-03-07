@@ -8,7 +8,7 @@ use std::sync::mpsc;
 
 use egui::Color32;
 use notify::{RecursiveMode, Watcher as _};
-use rhizz_core::{ComponentId, Diagnostic, Direction, Model, Source};
+use rhizz_core::{ComponentId, Diagnostic, Model, PortRole, Source};
 use tracing::{debug, error, info, warn};
 use walkdir::WalkDir;
 
@@ -321,7 +321,7 @@ fn compute_graph_layout(model: &Model, view: &rhizz_core::View) -> Result<GraphL
     for cmd in &mut cmds {
         if let DrawCmd::Edge { label, head, .. } = cmd {
             let iface_label = label.lines().next().unwrap_or(label.as_str());
-            if is_bidirectional_iface(iface_label, model) {
+            if is_bidirectional_connection(iface_label, model) {
                 *head = (false, false);
             }
         }
@@ -344,12 +344,19 @@ fn compute_graph_layout(model: &Model, view: &rhizz_core::View) -> Result<GraphL
     })
 }
 
-/// Returns `true` if the interface with the given label is bidirectional.
-fn is_bidirectional_iface(label: &str, model: &Model) -> bool {
-    model
-        .interfaces
-        .iter()
-        .any(|i| i.label == label && i.direction == Direction::Bidirectional)
+/// Returns `true` if the connection with the given label is bidirectional
+/// (i.e. both endpoint ports have `Peer` role).
+fn is_bidirectional_connection(label: &str, model: &Model) -> bool {
+    model.connections.iter().any(|c| {
+        c.label == label && {
+            let from_role = c.from.port.map(|pid| model.ports[pid.0].role);
+            let to_role = c.to.port.map(|pid| model.ports[pid.0].role);
+            matches!(
+                (from_role, to_role),
+                (Some(PortRole::Peer), Some(PortRole::Peer))
+            )
+        }
+    })
 }
 
 /// Recursively compute dashed cluster boxes for non-leaf components.
@@ -668,10 +675,10 @@ impl eframe::App for RhizzApp {
                             let c = &model.components[cid.0];
                             ui.label(format!("  ▸ {}", c.label));
                         }
-                        for &iid in &system.interfaces {
-                            let iface = &model.interfaces[iid.0];
+                        for &conn_id in &system.connections {
+                            let conn = &model.connections[conn_id.0];
                             ui.label(
-                                egui::RichText::new(format!("  ⇄ {}", iface.label))
+                                egui::RichText::new(format!("  ⇄ {}", conn.label))
                                     .color(Color32::from_rgb(100, 150, 220)),
                             );
                         }
@@ -736,7 +743,8 @@ impl eframe::App for RhizzApp {
                             ui.end_row();
 
                             score_row(ui, "Components", &report.components);
-                            score_row(ui, "Interfaces", &report.interfaces);
+                            score_row(ui, "Ports", &report.ports);
+                            score_row(ui, "Connections", &report.connections);
                             score_row(ui, "Messages", &report.messages);
                         });
 
@@ -768,10 +776,10 @@ impl eframe::App for RhizzApp {
 
             if let Some(ref model) = self.model {
                 ui.label(format!(
-                    "{} system(s), {} component(s), {} interface(s)",
+                    "{} system(s), {} component(s), {} connection(s)",
                     model.systems.len(),
                     model.components.len(),
-                    model.interfaces.len(),
+                    model.connections.len(),
                 ));
 
                 if model.views.is_empty() {
@@ -838,7 +846,7 @@ fn score_row(ui: &mut egui::Ui, label: &str, cat: &rhizz_core::CategoryScore) {
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawCmd, compute_graph_layout, is_bidirectional_iface, is_hcl_event};
+    use super::{DrawCmd, compute_graph_layout, is_bidirectional_connection, is_hcl_event};
     use notify::{Event, EventKind};
     use std::path::PathBuf;
     use walkdir::WalkDir;
@@ -960,27 +968,43 @@ mod tests {
     }
 
     #[test]
-    fn bidirectional_iface_detection() {
-        let model = load_example("social-media");
-        // social-media has at least one bidirectional interface.
-        let bidir_iface = model
-            .interfaces
+    fn bidirectional_connection_detection() {
+        let model = load_example("drone");
+        // drone has at least one bidirectional connection (both ports are Peer).
+        let bidir_conn = model
+            .connections
             .iter()
-            .find(|i| i.direction == rhizz_core::Direction::Bidirectional)
-            .expect("social-media should have at least one bidirectional interface");
+            .find(|c| {
+                let from_role = c.from.port.map(|pid| model.ports[pid.0].role);
+                let to_role = c.to.port.map(|pid| model.ports[pid.0].role);
+                matches!(
+                    (from_role, to_role),
+                    (
+                        Some(rhizz_core::PortRole::Peer),
+                        Some(rhizz_core::PortRole::Peer)
+                    )
+                )
+            })
+            .expect("drone should have at least one bidirectional connection");
         assert!(
-            is_bidirectional_iface(&bidir_iface.label, &model),
-            "bidirectional interface recognised"
+            is_bidirectional_connection(&bidir_conn.label, &model),
+            "bidirectional connection recognised"
         );
-        // Unidirectional interfaces must NOT be flagged as bidirectional.
-        if let Some(unidir) = model
-            .interfaces
-            .iter()
-            .find(|i| i.direction != rhizz_core::Direction::Bidirectional)
-        {
+        // Non-bidirectional connections must NOT be flagged as bidirectional.
+        if let Some(unidir) = model.connections.iter().find(|c| {
+            let from_role = c.from.port.map(|pid| model.ports[pid.0].role);
+            let to_role = c.to.port.map(|pid| model.ports[pid.0].role);
+            !matches!(
+                (from_role, to_role),
+                (
+                    Some(rhizz_core::PortRole::Peer),
+                    Some(rhizz_core::PortRole::Peer)
+                )
+            )
+        }) {
             assert!(
-                !is_bidirectional_iface(&unidir.label, &model),
-                "unidirectional interface should not be flagged as bidirectional"
+                !is_bidirectional_connection(&unidir.label, &model),
+                "non-bidirectional connection should not be flagged as bidirectional"
             );
         }
     }

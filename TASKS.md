@@ -12,25 +12,6 @@ How to work on this file:
 
 ---
 
-## Task 18 — Spec v0.3: Migrate rhizz-cli and rhizz-gui frontends
-
-### rhizz-cli
-
-- Update `ScoreReport` display: show `Ports` and `Connections` rows instead of `Interfaces`
-- Update JSON output `score` object: replace `"interfaces"` with `"ports"` and `"connections"` keys
-- Update human-readable diagnostic examples if any are hardcoded
-- Update CLI tests (16 tests)
-
-### rhizz-gui
-
-- Sidebar tree: replace interface listing with connections listing; optionally show ports under each component
-- Any references to `model.interfaces` → `model.connections`
-- Update GUI tests (5 tests)
-
-Run: `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, `cargo fmt`
-
----
-
 ## Task 19 — Task template
 
 - When a tab is selected, call `rhizz_dot::render_view` to get the DOT string, then pass it to the `layout` crate to compute node positions.
