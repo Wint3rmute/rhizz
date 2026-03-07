@@ -8,7 +8,7 @@
 
 #![deny(clippy::all)]
 
-use rhizz_core::{ComponentId, ComponentParent, Direction, InterfaceId, Model, View, ViewFilter};
+use rhizz_core::{ComponentId, ComponentParent, ConnectionId, Model, PortRole, View, ViewFilter};
 use std::collections::HashSet;
 use std::fmt::Write as _;
 use tracing::instrument;
@@ -33,28 +33,28 @@ pub fn render_view(model: &Model, view: &View) -> String {
         .filter(|&cid| is_component_visible(cid, model, filter))
         .collect();
 
-    // Pass 2 (tag-filter views only): when `include_tags` is non-empty, interfaces
+    // Pass 2 (tag-filter views only): when `include_tags` is non-empty, connections
     // that match the tag filter implicitly pull in their endpoints even if those
     // components don't carry the matching tag themselves.  This makes filtered
     // views useful — e.g. a "process"-tagged view can show department components
-    // that participate in process interfaces without requiring the departments to
+    // that participate in process connections without requiring the departments to
     // be tagged "process".  Endpoints are still subject to level and whitelist
     // checks; only the tag-inclusion requirement is relaxed for them.
     if !filter.include_tags.is_empty() {
-        let all_ifaces = collect_all_interface_ids(system, model);
-        for iid in all_ifaces {
-            let iface = &model.interfaces[iid.0];
-            // Does this interface match the tag filter?
-            if !iface.tags.iter().any(|t| filter.include_tags.contains(t)) {
+        let all_conns = collect_all_connection_ids(system, model);
+        for cnn_id in all_conns {
+            let conn = &model.connections[cnn_id.0];
+            // Does this connection match the tag filter?
+            if !conn.tags.iter().any(|t| filter.include_tags.contains(t)) {
                 continue;
             }
-            // Level cap for the interface itself.
-            if filter.max_level.is_some_and(|max| iface.level > max) {
+            // Level cap for the connection itself.
+            if filter.max_level.is_some_and(|max| conn.level > max) {
                 continue;
             }
             // Add endpoints if they satisfy level and whitelist (but not the tag
             // filter — that is what we are relaxing here).
-            for &cid in &[iface.from, iface.to] {
+            for &cid in &[conn.from.component, conn.to.component] {
                 if is_component_eligible_as_endpoint(cid, model, filter) {
                     visible.insert(cid);
                 }
@@ -89,8 +89,8 @@ pub fn render_view(model: &Model, view: &View) -> String {
         }
     }
 
-    // ── System-scope interfaces ────────────────────────────────────────────────
-    render_interfaces(&system.interfaces, model, &visible, filter, 1, &mut buf);
+    // ── System-scope connections ────────────────────────────────────────────────
+    render_connections(&system.connections, model, &visible, filter, 1, &mut buf);
 
     let _ = writeln!(buf, "}}");
     buf
@@ -159,23 +159,23 @@ fn is_component_eligible_as_endpoint(cid: ComponentId, model: &Model, filter: &V
     true
 }
 
-/// Collect every [`InterfaceId`] that belongs to `system` or to any component
+/// Collect every [`ConnectionId`] that belongs to `system` or to any component
 /// (recursively) inside it.  Used by the Pass-2 endpoint-inclusion logic.
-fn collect_all_interface_ids(system: &rhizz_core::System, model: &Model) -> Vec<InterfaceId> {
-    let mut result: Vec<InterfaceId> = Vec::new();
-    result.extend_from_slice(&system.interfaces);
+fn collect_all_connection_ids(system: &rhizz_core::System, model: &Model) -> Vec<ConnectionId> {
+    let mut result: Vec<ConnectionId> = Vec::new();
+    result.extend_from_slice(&system.connections);
     for &cid in &system.components {
-        collect_component_interface_ids(cid, model, &mut result);
+        collect_component_connection_ids(cid, model, &mut result);
     }
     result
 }
 
-/// Recursively append interface IDs owned by `cid` and all its descendants.
-fn collect_component_interface_ids(cid: ComponentId, model: &Model, out: &mut Vec<InterfaceId>) {
+/// Recursively append connection IDs owned by `cid` and all its descendants.
+fn collect_component_connection_ids(cid: ComponentId, model: &Model, out: &mut Vec<ConnectionId>) {
     let comp = &model.components[cid.0];
-    out.extend_from_slice(&comp.interfaces);
+    out.extend_from_slice(&comp.connections);
     for &child in &comp.children {
-        collect_component_interface_ids(child, model, out);
+        collect_component_connection_ids(child, model, out);
     }
 }
 
@@ -237,8 +237,8 @@ fn render_component(
             }
         }
 
-        // Interfaces declared inside this component's scope (between children).
-        render_interfaces(&comp.interfaces, model, visible, filter, indent + 1, buf);
+        // Connections declared inside this component's scope (between children).
+        render_connections(&comp.connections, model, visible, filter, indent + 1, buf);
 
         let _ = writeln!(buf, "{}}}", prefix);
     } else {
@@ -247,72 +247,104 @@ fn render_component(
     }
 }
 
-// ── Interface rendering ───────────────────────────────────────────────────────
+// ── Connection rendering ──────────────────────────────────────────────────────
 
-/// Render all interfaces from `iface_ids` whose endpoints are both in `visible`
+/// Render all connections from `conn_ids` whose endpoints are both in `visible`
 /// and that pass the filter predicates.
-fn render_interfaces(
-    iface_ids: &[InterfaceId],
+fn render_connections(
+    conn_ids: &[ConnectionId],
     model: &Model,
     visible: &HashSet<ComponentId>,
     filter: &ViewFilter,
     indent: usize,
     buf: &mut String,
 ) {
-    for &iid in iface_ids {
-        render_interface_edge(iid, model, visible, filter, indent, buf);
+    for &cnn_id in conn_ids {
+        render_connection_edge(cnn_id, model, visible, filter, indent, buf);
     }
 }
 
-/// Render a single interface as a DOT edge, if it passes all predicates.
-fn render_interface_edge(
-    iid: InterfaceId,
+/// Infer the edge style from the port roles at both endpoints.
+///
+/// Returns `(dir_attr, is_dashed)` where `dir_attr` is an optional `dir=…`
+/// attribute string and `is_dashed` signals that `style=dashed` should be set.
+fn infer_edge_style(conn: &rhizz_core::Connection, model: &Model) -> (Option<&'static str>, bool) {
+    let from_role = conn.from.port.map(|pid| model.ports[pid.0].role);
+    let to_role = conn.to.port.map(|pid| model.ports[pid.0].role);
+
+    match (from_role, to_role) {
+        // Provider → Consumer: directed arrow (DOT default, no extra attr needed).
+        (Some(PortRole::Provider), Some(PortRole::Consumer)) => (None, false),
+        // Consumer → Provider: reversed arrow.
+        (Some(PortRole::Consumer), Some(PortRole::Provider)) => (Some("dir=back"), false),
+        // Peer ↔ Peer: undirected.
+        (Some(PortRole::Peer), Some(PortRole::Peer)) => (Some("dir=none"), false),
+        // Either side untyped or roles are ambiguous: dashed line.
+        _ => (None, true),
+    }
+}
+
+/// Render a single connection as a DOT edge, if it passes all predicates.
+fn render_connection_edge(
+    cnn_id: ConnectionId,
     model: &Model,
     visible: &HashSet<ComponentId>,
     filter: &ViewFilter,
     indent: usize,
     buf: &mut String,
 ) {
-    let iface = &model.interfaces[iid.0];
+    let conn = &model.connections[cnn_id.0];
+
+    let from_cid = conn.from.component;
+    let to_cid = conn.to.component;
 
     // Both endpoints must be visible.
-    if !visible.contains(&iface.from) || !visible.contains(&iface.to) {
+    if !visible.contains(&from_cid) || !visible.contains(&to_cid) {
         return;
     }
 
     // Tag inclusion.
-    if !filter.include_tags.is_empty()
-        && !iface.tags.iter().any(|t| filter.include_tags.contains(t))
+    if !filter.include_tags.is_empty() && !conn.tags.iter().any(|t| filter.include_tags.contains(t))
     {
         return;
     }
     // Tag exclusion.
-    if iface.tags.iter().any(|t| filter.exclude_tags.contains(t)) {
+    if conn.tags.iter().any(|t| filter.exclude_tags.contains(t)) {
         return;
     }
     // Level cap.
-    if filter.max_level.is_some_and(|max| iface.level > max) {
+    if filter.max_level.is_some_and(|max| conn.level > max) {
         return;
     }
 
-    let from_cid = iface.from;
-    let to_cid = iface.to;
     let from_is_cluster = has_visible_children(from_cid, model, visible);
     let to_is_cluster = has_visible_children(to_cid, model, visible);
 
-    // Build the edge label.
-    let mut label = iface.label.clone();
-    if filter.show_messages && !iface.messages.is_empty() {
-        for &mid in &iface.messages {
-            label.push('\n');
-            label.push_str(&model.messages[mid.0].label);
+    // Build the edge label: start with connection label, optionally append messages.
+    let mut label = conn.label.clone();
+    if filter.show_messages {
+        // Collect message labels from both typed endpoints, deduplicated by MessageId.
+        let mut seen: HashSet<rhizz_core::MessageId> = HashSet::new();
+        for port_id in [conn.from.port, conn.to.port].into_iter().flatten() {
+            for &mid in &model.ports[port_id.0].messages {
+                if seen.insert(mid) {
+                    label.push('\n');
+                    label.push_str(&model.messages[mid.0].label);
+                }
+            }
         }
     }
 
+    // Infer direction style from port roles.
+    let (dir_attr, is_dashed) = infer_edge_style(conn, model);
+
     // Collect edge attributes.
     let mut attrs: Vec<String> = vec![format!("label={:?}", label)];
-    if iface.direction == Direction::Bidirectional {
-        attrs.push("dir=both".to_owned());
+    if let Some(dir) = dir_attr {
+        attrs.push(dir.to_owned());
+    }
+    if is_dashed {
+        attrs.push("style=dashed".to_owned());
     }
     if from_is_cluster {
         attrs.push(format!("ltail={}", cluster_id(from_cid)));
