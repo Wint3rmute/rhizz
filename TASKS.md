@@ -10,81 +10,9 @@ How to work on this file:
 
 ---
 
-## Task 15 — Spec v0.3: Migrate rhizz-core + examples to ports & connections
-
-This is the core migration from spec v0.2 (interface-centric) to spec v0.3 (port + connection model). After this task, `cargo test -p rhizz-core` must pass. Downstream crates (rhizz-dot, rhizz-mermaid, rhizz-cli, rhizz-gui) will have compile errors until their migration tasks are completed.
-
-### model.rs changes
-
-**Add new types:**
-- `PortId(usize)`, `ConnectionId(usize)` newtypes
-- `PortRole` enum: `Provider`, `Consumer`, `Peer`
-- `Port` struct: `label`, `description`, `protocol`, `role: PortRole`, `tags`, `owner: ComponentId`, `messages: Vec<MessageId>`
-- `ConnectionEndpoint` struct: `component: ComponentId`, `port: Option<PortId>`
-- `Connection` struct: `label`, `description`, `tags`, `level`, `from: ConnectionEndpoint`, `to: ConnectionEndpoint`, `encapsulates: Vec<ConnectionId>`
-- `RawPort` struct: `description`, `protocol`, `role`, `tags`, `messages: Vec<Labeled<RawMessage>>`
-- `RawConnection` struct: `description`, `tags`, `level`, `from`, `to`, `encapsulates`
-
-**Remove:** `Interface`, `InterfaceId`, `Direction`, `RawInterface`
-
-**Update:**
-- `Component`: `interfaces: Vec<InterfaceId>` → `connections: Vec<ConnectionId>`, add `ports: Vec<PortId>`
-- `System`: `interfaces: Vec<InterfaceId>` → `connections: Vec<ConnectionId>`
-- `Model`: `interfaces: Vec<Interface>` → `connections: Vec<Connection>`, add `ports: Vec<Port>`
-- `RawSystem`: `interfaces` → `connections: Vec<Labeled<RawConnection>>`
-- `RawComponent`: `interfaces` → `connections`, add `ports: Vec<Labeled<RawPort>>`
-- `lib.rs`: update public exports
-
-### parse.rs changes
-
-- Parse `port "label" { protocol, role, tags, message... }` inside `component` blocks
-- Parse `connection "label" { from, to, tags, level, encapsulates }` instead of `interface`; no `direction`, `leaf`, or `message` children
-- Messages are parsed inside `port`, not `connection`
-- Update all parse unit tests
-
-### examples/ changes
-
-Rewrite all three example projects (drone, social-media, software-house) `.hcl` files:
-- `interface` blocks → `connection` blocks (remove `direction`, `leaf`; move messages out)
-- Add `port` blocks on components with `protocol`, `role`, and relocated `message`/`field` blocks
-- Use `comp:port` syntax in `connection` `from`/`to` where appropriate
-- Keep some bare `from`/`to` references to exercise W007 (gradual specification)
-
-### resolve.rs changes
-
-- Parse `from`/`to` strings: split on `:` to get `(comp_label, port_label)` or treat as bare component label
-- Build `ScopeIndex.ports: HashMap<(ComponentId, String), PortId>` during component registration
-- Update `ScopeIndex.interfaces` → `ScopeIndex.connections`
-- Resolve `ConnectionEndpoint` with optional `PortId`
-- Error code changes:
-  - E005: leaf component with child components **or connections** (was "or interfaces")
-  - Remove E006 (leaf interface with messages) — no longer applicable
-  - Remove E008 (invalid direction) — no longer applicable
-  - Renumber: E007→E006 (undefined system in view), E009→E007 (field missing type), E010→E008 (duplicate project)
-  - Add E009 (invalid `port.role`), E010 (`comp:port` port not found), E011 (`comp:port` component not found)
-- Update all resolution tests
-
-### validate.rs changes
-
-- Remove W002 (non-leaf interface with no messages)
-- Renumber: W003→W002 (message no fields), W004→W003 (orphan component — check connections now), W005→W004 (missing description), W006→W005 (from==to same component), W007→W006 (level decreases)
-- Add W007 (one side typed, other not), W008 (protocol mismatch between connected ports), W009 (incompatible port roles), W010 (unused port), W011 (port has no messages)
-- Update all validation tests
-
-### score.rs changes
-
-- Remove interface scoring
-- Add port scoring: complete (≥1 message, all complete), partial, incomplete (no messages)
-- Add connection scoring: complete (both sides typed, matching protocol), partial (one side typed), incomplete (both untyped)
-- `ScoreReport`: add `ports` and `connections` categories, remove `interfaces`
-- Leaf component with description and no ports → still Complete (1.0)
-- Update all scoring tests
-
-Run: `cargo test -p rhizz-core`, `cargo clippy -p rhizz-core -- -D warnings`, `cargo fmt`
-
----
-
 ## Task 16 — Spec v0.3: Migrate rhizz-dot renderer
+
+Only `rhizz-core` builds and has passing tests now (`cargo t -p rhizz-core`).
 
 Update DOT rendering to use `Connection` + `Port` instead of `Interface`.
 

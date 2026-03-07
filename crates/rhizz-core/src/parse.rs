@@ -59,8 +59,8 @@ pub struct RawSystem {
     pub level: Option<i32>,
     /// Child component blocks.
     pub components: Vec<Labeled<RawComponent>>,
-    /// Child interface blocks.
-    pub interfaces: Vec<Labeled<RawInterface>>,
+    /// Child connection blocks.
+    pub connections: Vec<Labeled<RawConnection>>,
 }
 
 /// Raw component block before resolution.
@@ -74,33 +74,44 @@ pub struct RawComponent {
     pub level: Option<i32>,
     /// Whether this component is atomic.
     pub leaf: Option<bool>,
+    /// Port blocks declared on this component.
+    pub ports: Vec<Labeled<RawPort>>,
     /// Nested child component blocks.
     pub components: Vec<Labeled<RawComponent>>,
-    /// Nested interface blocks.
-    pub interfaces: Vec<Labeled<RawInterface>>,
+    /// Nested connection blocks.
+    pub connections: Vec<Labeled<RawConnection>>,
 }
 
-/// Raw interface block before resolution.
+/// Raw port block before resolution.
 #[derive(Debug, Clone, Default)]
-pub struct RawInterface {
+pub struct RawPort {
+    /// Optional description text.
+    pub description: Option<String>,
+    /// Free-form protocol name.
+    pub protocol: Option<String>,
+    /// Role string (`"provider"`, `"consumer"`, `"peer"`).
+    pub role: Option<String>,
+    /// Filtering tags.
+    pub tags: Vec<String>,
+    /// Nested message blocks.
+    pub messages: Vec<Labeled<RawMessage>>,
+}
+
+/// Raw connection block before resolution.
+#[derive(Debug, Clone, Default)]
+pub struct RawConnection {
     /// Optional description text.
     pub description: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
     pub level: Option<i32>,
-    /// Whether this interface is atomic.
-    pub leaf: Option<bool>,
-    /// Direction string (`"unidirectional"` or `"bidirectional"`).
-    pub direction: Option<String>,
-    /// Source component label.
+    /// Source reference (`"comp"` or `"comp:port"`).
     pub from: Option<String>,
-    /// Target component label.
+    /// Target reference (`"comp"` or `"comp:port"`).
     pub to: Option<String>,
-    /// Labels of sibling interfaces this one encapsulates.
+    /// Labels of sibling connections this one encapsulates.
     pub encapsulates: Vec<String>,
-    /// Nested message blocks.
-    pub messages: Vec<Labeled<RawMessage>>,
 }
 
 /// Raw message block before resolution.
@@ -169,24 +180,33 @@ struct ComponentAttrs {
     leaf: Option<bool>,
 }
 
-/// Serde helper for deserializing interface attributes.
+/// Serde helper for deserializing port attributes.
 #[derive(Deserialize, Default)]
-struct InterfaceAttrs {
+struct PortAttrs {
+    /// Optional description.
+    description: Option<String>,
+    /// Optional protocol name.
+    protocol: Option<String>,
+    /// Optional role string.
+    role: Option<String>,
+    /// Optional tags list.
+    tags: Option<Vec<String>>,
+}
+
+/// Serde helper for deserializing connection attributes.
+#[derive(Deserialize, Default)]
+struct ConnectionAttrs {
     /// Optional description.
     description: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
     /// Optional abstraction level.
     level: Option<i32>,
-    /// Optional leaf flag.
-    leaf: Option<bool>,
-    /// Direction string.
-    direction: Option<String>,
-    /// Source component label.
+    /// Source reference.
     from: Option<String>,
-    /// Target component label.
+    /// Target reference.
     to: Option<String>,
-    /// Encapsulated interface labels.
+    /// Encapsulated connection labels.
     encapsulates: Option<Vec<String>>,
 }
 
@@ -350,9 +370,9 @@ fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
     })
 }
 
-/// Parse an `interface` block body into a [`RawInterface`].
-fn parse_interface(body: &hcl::Body) -> Result<RawInterface> {
-    let a: InterfaceAttrs = attrs(body)?;
+/// Parse a `port` block body into a [`RawPort`].
+fn parse_port(body: &hcl::Body) -> Result<RawPort> {
+    let a: PortAttrs = attrs(body)?;
     let mut messages = Vec::new();
     for block in body.blocks() {
         if block.identifier() == "message" {
@@ -362,37 +382,53 @@ fn parse_interface(body: &hcl::Body) -> Result<RawInterface> {
             messages.push(Labeled { label, inner });
         }
     }
-    Ok(RawInterface {
+    Ok(RawPort {
+        description: a.description,
+        protocol: a.protocol,
+        role: a.role,
+        tags: a.tags.unwrap_or_default(),
+        messages,
+    })
+}
+
+/// Parse a `connection` block body into a [`RawConnection`].
+fn parse_connection(body: &hcl::Body) -> Result<RawConnection> {
+    let a: ConnectionAttrs = attrs(body)?;
+    Ok(RawConnection {
         description: a.description,
         tags: a.tags.unwrap_or_default(),
         level: a.level,
-        leaf: a.leaf,
-        direction: a.direction,
         from: a.from,
         to: a.to,
         encapsulates: a.encapsulates.unwrap_or_default(),
-        messages,
     })
 }
 
 /// Parse a `component` block body into a [`RawComponent`].
 fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
     let a: ComponentAttrs = attrs(body)?;
+    let mut ports = Vec::new();
     let mut components = Vec::new();
-    let mut interfaces = Vec::new();
+    let mut connections = Vec::new();
     for block in body.blocks() {
         match block.identifier() {
+            "port" => {
+                let label = first_label(block)?;
+                let inner =
+                    parse_port(block.body()).with_context(|| format!("in port '{label}'"))?;
+                ports.push(Labeled { label, inner });
+            }
             "component" => {
                 let label = first_label(block)?;
                 let inner = parse_component(block.body())
                     .with_context(|| format!("in component '{label}'"))?;
                 components.push(Labeled { label, inner });
             }
-            "interface" => {
+            "connection" => {
                 let label = first_label(block)?;
-                let inner = parse_interface(block.body())
-                    .with_context(|| format!("in interface '{label}'"))?;
-                interfaces.push(Labeled { label, inner });
+                let inner = parse_connection(block.body())
+                    .with_context(|| format!("in connection '{label}'"))?;
+                connections.push(Labeled { label, inner });
             }
             _ => {}
         }
@@ -402,8 +438,9 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
         tags: a.tags.unwrap_or_default(),
         level: a.level,
         leaf: a.leaf,
+        ports,
         components,
-        interfaces,
+        connections,
     })
 }
 
@@ -411,7 +448,7 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
 fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
     let a: SystemAttrs = attrs(body)?;
     let mut components = Vec::new();
-    let mut interfaces = Vec::new();
+    let mut connections = Vec::new();
     for block in body.blocks() {
         match block.identifier() {
             "component" => {
@@ -420,11 +457,11 @@ fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
                     .with_context(|| format!("in component '{label}'"))?;
                 components.push(Labeled { label, inner });
             }
-            "interface" => {
+            "connection" => {
                 let label = first_label(block)?;
-                let inner = parse_interface(block.body())
-                    .with_context(|| format!("in interface '{label}'"))?;
-                interfaces.push(Labeled { label, inner });
+                let inner = parse_connection(block.body())
+                    .with_context(|| format!("in connection '{label}'"))?;
+                connections.push(Labeled { label, inner });
             }
             _ => {}
         }
@@ -434,7 +471,7 @@ fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
         tags: a.tags.unwrap_or_default(),
         level: a.level,
         components,
-        interfaces,
+        connections,
     })
 }
 
@@ -581,7 +618,7 @@ mod tests {
         assert!(raw.project.is_some(), "project block expected");
         let proj = raw.project.as_ref().unwrap();
         assert_eq!(proj.name.as_deref(), Some("drone-system"));
-        assert_eq!(proj.version.as_deref(), Some("0.2.0"));
+        assert_eq!(proj.version.as_deref(), Some("0.3.0"));
 
         // Two systems: quadcopter + ground-control
         assert_eq!(raw.systems.len(), 2, "expected 2 systems");
@@ -620,26 +657,32 @@ mod tests {
         assert!(fc_child_labels.contains(&"imu"));
         assert!(fc_child_labels.contains(&"barometer"));
 
-        // Interfaces at system level
-        let iface_labels: Vec<&str> = quad
-            .inner
-            .interfaces
-            .iter()
-            .map(|i| i.label.as_str())
-            .collect();
-        assert!(iface_labels.contains(&"motor-control"));
-        assert!(iface_labels.contains(&"rc-link"));
+        // FC should have ports with messages
+        let fc_port_labels: Vec<&str> = fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
+        assert!(fc_port_labels.contains(&"motor-out"));
+        assert!(fc_port_labels.contains(&"gps-serial"));
+        assert!(fc_port_labels.contains(&"rc-in"));
 
-        // motor-control should have a message
-        let mc = quad
+        // motor-out port should have a message
+        let motor_port = fc
             .inner
-            .interfaces
+            .ports
             .iter()
-            .find(|i| i.label == "motor-control")
+            .find(|p| p.label == "motor-out")
             .unwrap();
-        assert_eq!(mc.inner.messages.len(), 1);
-        assert_eq!(mc.inner.messages[0].label, "throttle");
-        assert_eq!(mc.inner.messages[0].inner.fields.len(), 2);
+        assert_eq!(motor_port.inner.messages.len(), 1);
+        assert_eq!(motor_port.inner.messages[0].label, "throttle");
+        assert_eq!(motor_port.inner.messages[0].inner.fields.len(), 2);
+
+        // Connections at system level
+        let conn_labels: Vec<&str> = quad
+            .inner
+            .connections
+            .iter()
+            .map(|c| c.label.as_str())
+            .collect();
+        assert!(conn_labels.contains(&"motor-control"));
+        assert!(conn_labels.contains(&"rc-link"));
 
         // Views
         assert_eq!(raw.views.len(), 4, "expected 4 views");
@@ -709,14 +752,20 @@ mod tests {
             .unwrap();
         assert!(rec.inner.components.is_empty());
 
-        // client-api should have messages
-        let client_api = bv
+        // mobile-app should have ports with messages
+        let app = bv
             .inner
-            .interfaces
+            .components
             .iter()
-            .find(|i| i.label == "client-api")
-            .expect("client-api interface missing");
-        let msg_labels: Vec<&str> = client_api
+            .find(|c| c.label == "mobile-app")
+            .expect("mobile-app component missing");
+        let api_port = app
+            .inner
+            .ports
+            .iter()
+            .find(|p| p.label == "api")
+            .expect("api port missing");
+        let msg_labels: Vec<&str> = api_port
             .inner
             .messages
             .iter()
@@ -725,14 +774,15 @@ mod tests {
         assert!(msg_labels.contains(&"get-feed"));
         assert!(msg_labels.contains(&"upload-video"));
 
-        // push-notify has no messages (in-progress)
-        let push = bv
+        // Top-level connections
+        let conn_labels: Vec<&str> = bv
             .inner
-            .interfaces
+            .connections
             .iter()
-            .find(|i| i.label == "push-notify")
-            .unwrap();
-        assert!(push.inner.messages.is_empty());
+            .map(|c| c.label.as_str())
+            .collect();
+        assert!(conn_labels.contains(&"client-api"));
+        assert!(conn_labels.contains(&"push-notify"));
 
         assert_eq!(raw.views.len(), 3);
     }
@@ -788,15 +838,31 @@ mod tests {
         assert!(ops.inner.description.is_none());
         assert!(ops.inner.components.is_empty());
 
-        // Cross-department interfaces with messages
-        let sprint = acme
+        // Cross-department connections
+        let conn_labels: Vec<&str> = acme
             .inner
-            .interfaces
+            .connections
             .iter()
-            .find(|i| i.label == "sprint-planning")
-            .expect("sprint-planning interface missing");
-        assert_eq!(sprint.inner.messages.len(), 1);
-        let msg = &sprint.inner.messages[0];
+            .map(|c| c.label.as_str())
+            .collect();
+        assert!(conn_labels.contains(&"sprint-planning"));
+        assert!(conn_labels.contains(&"bug-reports"));
+
+        // Product has ports with messages
+        let product = acme
+            .inner
+            .components
+            .iter()
+            .find(|c| c.label == "product")
+            .unwrap();
+        let sprint_port = product
+            .inner
+            .ports
+            .iter()
+            .find(|p| p.label == "sprint-out")
+            .expect("sprint-out port missing");
+        assert_eq!(sprint_port.inner.messages.len(), 1);
+        let msg = &sprint_port.inner.messages[0];
         assert_eq!(msg.label, "sprint-backlog");
         let field_labels: Vec<&str> = msg.inner.fields.iter().map(|f| f.label.as_str()).collect();
         assert!(field_labels.contains(&"sprint_id"));
@@ -833,10 +899,9 @@ mod tests {
                 level = 0
 
                 component "c1" { leaf = true }
-                interface "i1" {
+                connection "i1" {
                     from = "c1"
                     to   = "c1"
-                    leaf = true
                 }
             }
         "#;
@@ -848,34 +913,36 @@ mod tests {
         assert_eq!(sys.inner.tags, vec!["a", "b"]);
         assert_eq!(sys.inner.level, Some(0));
         assert_eq!(sys.inner.components.len(), 1);
-        assert_eq!(sys.inner.interfaces.len(), 1);
-        let iface = &sys.inner.interfaces[0];
-        assert_eq!(iface.inner.from.as_deref(), Some("c1"));
-        assert_eq!(iface.inner.to.as_deref(), Some("c1"));
+        assert_eq!(sys.inner.connections.len(), 1);
+        let conn = &sys.inner.connections[0];
+        assert_eq!(conn.inner.from.as_deref(), Some("c1"));
+        assert_eq!(conn.inner.to.as_deref(), Some("c1"));
     }
 
     #[test]
     fn parse_field_type_attribute() {
         let src = r#"
             system "s" {
-                interface "i" {
-                    from = "a"
-                    to   = "b"
-                    message "m" {
-                        field "f" {
-                            type        = "uint8"
-                            unit        = "ms"
-                            description = "desc"
+                component "a" {
+                    leaf = true
+                    port "p" {
+                        message "m" {
+                            field "f" {
+                                type        = "uint8"
+                                unit        = "ms"
+                                description = "desc"
+                            }
                         }
                     }
                 }
-                component "a" { leaf = true }
                 component "b" { leaf = true }
             }
         "#;
         let path = PathBuf::from("test.hcl");
         let raw = parse_file(src, &path).unwrap();
-        let field = &raw.systems[0].inner.interfaces[0].inner.messages[0]
+        let field = &raw.systems[0].inner.components[0].inner.ports[0]
+            .inner
+            .messages[0]
             .inner
             .fields[0];
         assert_eq!(field.inner.field_type.as_deref(), Some("uint8"));

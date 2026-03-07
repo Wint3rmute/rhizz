@@ -1,7 +1,7 @@
 # Two systems in one project: the drone itself and the ground control station.
-# Interfaces at the top level of each system connect sibling components.
+# Connections at the top level of each system connect sibling components.
 # The "ground-control" system is deliberately less complete — shows
-# in-progress modeling that still compiles cleanly (W001/W005 warnings only).
+# in-progress modeling that still compiles cleanly (W001/W004 warnings only).
 
 system "quadcopter" {
   description = "Consumer quadcopter drone"
@@ -15,16 +15,100 @@ system "quadcopter" {
     tags        = ["electronics", "compute"]
     leaf        = false
 
+    port "motor-out" {
+      description = "DShot600 motor control output"
+      protocol    = "dshot600"
+      role        = "provider"
+      tags        = ["motor", "data"]
+
+      message "throttle" {
+        description = "Per-motor throttle command"
+        tags        = ["control"]
+
+        field "motor_id" {
+          type        = "uint8"
+          description = "Motor index 1-4"
+        }
+        field "value" {
+          type        = "uint16"
+          description = "Throttle 0-2047"
+        }
+      }
+    }
+
+    port "gps-serial" {
+      description = "UART link for GPS data"
+      protocol    = "uart"
+      role        = "peer"
+      tags        = ["data", "navigation"]
+
+      message "nav-pvt" {
+        description = "Navigation position/velocity/time solution"
+        tags        = ["navigation"]
+
+        field "latitude" {
+          type        = "int32"
+          unit        = "deg*1e7"
+          description = "Latitude"
+        }
+        field "longitude" {
+          type        = "int32"
+          unit        = "deg*1e7"
+          description = "Longitude"
+        }
+        field "altitude" {
+          type        = "int32"
+          unit        = "mm"
+          description = "Altitude above MSL"
+        }
+        field "fix_type" {
+          type        = "uint8"
+          description = "GNSS fix type"
+        }
+      }
+    }
+
+    port "rc-in" {
+      description = "CRSF serial: receiver → FC"
+      protocol    = "crsf"
+      role        = "consumer"
+      tags        = ["rf", "control"]
+
+      message "rc-channels" {
+        description = "16 RC channel values"
+        tags        = ["control"]
+
+        field "channels" {
+          type        = "uint16[16]"
+          description = "Channel values 172-1811"
+        }
+      }
+    }
+
     component "mcu" {
       description = "STM32H7 ARM Cortex-M7"
       tags        = ["electronics", "compute"]
       leaf        = true
+
+      port "spi" {
+        description = "SPI master bus"
+        protocol    = "spi"
+        role        = "provider"
+        tags        = ["data"]
+      }
     }
 
     component "imu" {
       description = "BMI270 6-axis IMU"
       tags        = ["electronics", "sensor"]
       leaf        = true
+
+      port "spi" {
+        description = "SPI slave interface"
+        protocol    = "spi"
+        role        = "consumer"
+        tags        = ["data"]
+      }
     }
 
     component "barometer" {
@@ -33,22 +117,18 @@ system "quadcopter" {
       leaf        = true
     }
 
-    interface "spi-imu" {
+    connection "spi-imu" {
       description = "SPI bus: MCU ↔ IMU"
-      from        = "mcu"
-      to          = "imu"
-      direction   = "bidirectional"
       tags        = ["data"]
-      leaf        = true
+      from        = "mcu:spi"
+      to          = "imu:spi"
     }
 
-    interface "i2c-baro" {
+    connection "i2c-baro" {
       description = "I2C bus: MCU ↔ barometer"
+      tags        = ["data"]
       from        = "mcu"
       to          = "barometer"
-      direction   = "bidirectional"
-      tags        = ["data"]
-      leaf        = true
     }
   }
 
@@ -56,141 +136,136 @@ system "quadcopter" {
     description = "4-in-1 ESC board"
     tags        = ["electronics", "power", "motor"]
     leaf        = true
+
+    port "motor-in" {
+      description = "DShot600 motor control input"
+      protocol    = "dshot600"
+      role        = "consumer"
+      tags        = ["motor", "data"]
+    }
+
+    port "power-in" {
+      description = "Battery main power input"
+      protocol    = "power-dc"
+      role        = "consumer"
+      tags        = ["power"]
+    }
+
+    port "bec-out" {
+      description = "5V BEC regulated output"
+      protocol    = "power-dc"
+      role        = "provider"
+      tags        = ["power"]
+    }
   }
 
   component "gps" {
     description = "u-blox M10 GNSS receiver"
     tags        = ["electronics", "sensor", "navigation"]
     leaf        = true
+
+    port "serial" {
+      description = "UART data port"
+      protocol    = "uart"
+      role        = "peer"
+      tags        = ["data", "navigation"]
+    }
   }
 
   component "battery" {
     description = "4S 1300mAh LiPo"
     tags        = ["power"]
     leaf        = true
+
+    port "power-out" {
+      description = "Main discharge output"
+      protocol    = "power-dc"
+      role        = "provider"
+      tags        = ["power"]
+    }
   }
 
   component "radio-rx" {
     description = "ELRS 868MHz receiver"
     tags        = ["electronics", "rf"]
     leaf        = true
+
+    port "crsf" {
+      description = "CRSF serial output"
+      protocol    = "crsf"
+      role        = "provider"
+      tags        = ["rf", "control"]
+    }
   }
 
   component "vtx" {
     description = "5.8GHz video transmitter"
     tags        = ["electronics", "rf", "video"]
     leaf        = true
+
+    port "video-in" {
+      description = "Analog video input"
+      protocol    = "analog-video"
+      role        = "consumer"
+      tags        = ["video"]
+    }
   }
 
   component "camera" {
     description = "FPV camera (analog)"
     tags        = ["electronics", "video"]
     leaf        = true
+
+    port "video-out" {
+      description = "Analog video output"
+      protocol    = "analog-video"
+      role        = "provider"
+      tags        = ["video"]
+    }
   }
 
-  # ── Interfaces ────────────────────────────
+  # ── Connections ────────────────────────────
 
-  interface "motor-control" {
+  connection "motor-control" {
     description = "DShot600 motor signals"
     tags        = ["motor", "data"]
-    from        = "flight-controller"
-    to          = "esc"
-    direction   = "unidirectional"
-    leaf        = false
-
-    message "throttle" {
-      description = "Per-motor throttle command"
-      tags        = ["control"]
-
-      field "motor_id" {
-        type        = "uint8"
-        description = "Motor index 1-4"
-      }
-      field "value" {
-        type        = "uint16"
-        description = "Throttle 0-2047"
-      }
-    }
+    from        = "flight-controller:motor-out"
+    to          = "esc:motor-in"
   }
 
-  interface "gps-serial" {
+  connection "gps-serial" {
     description = "UART link: FC ↔ GPS"
     tags        = ["data", "navigation"]
-    from        = "flight-controller"
-    to          = "gps"
-    direction   = "bidirectional"
-    leaf        = false
-
-    message "nav-pvt" {
-      description = "Navigation position/velocity/time solution"
-      tags        = ["navigation"]
-
-      field "latitude" {
-        type        = "int32"
-        unit        = "deg*1e7"
-        description = "Latitude"
-      }
-      field "longitude" {
-        type        = "int32"
-        unit        = "deg*1e7"
-        description = "Longitude"
-      }
-      field "altitude" {
-        type        = "int32"
-        unit        = "mm"
-        description = "Altitude above MSL"
-      }
-      field "fix_type" {
-        type        = "uint8"
-        description = "GNSS fix type"
-      }
-    }
+    from        = "flight-controller:gps-serial"
+    to          = "gps:serial"
   }
 
-  interface "rc-link" {
+  connection "rc-link" {
     description = "CRSF serial: receiver → FC"
     tags        = ["rf", "control"]
-    from        = "radio-rx"
-    to          = "flight-controller"
-    direction   = "bidirectional"
-    leaf        = false
-
-    message "rc-channels" {
-      description = "16 RC channel values"
-      tags        = ["control"]
-
-      field "channels" {
-        type        = "uint16[16]"
-        description = "Channel values 172-1811"
-      }
-    }
+    from        = "radio-rx:crsf"
+    to          = "flight-controller:rc-in"
   }
 
-  interface "power-main" {
+  connection "power-main" {
     description = "Battery → ESC main power"
     tags        = ["power"]
-    from        = "battery"
-    to          = "esc"
-    direction   = "unidirectional"
-    leaf        = true
+    from        = "battery:power-out"
+    to          = "esc:power-in"
   }
 
-  interface "power-bec" {
+  connection "power-bec" {
     description = "ESC 5V BEC → flight controller"
     tags        = ["power"]
-    from        = "esc"
+    from        = "esc:bec-out"
     to          = "flight-controller"
-    direction   = "unidirectional"
-    leaf        = true
   }
 
-  interface "video-feed" {
+  connection "video-feed" {
     description = "Analog video: camera → VTX"
     tags        = ["video"]
-    from        = "camera"
-    to          = "vtx"
-    direction   = "unidirectional"
-    leaf        = true
+    from        = "camera:video-out"
+    to          = "vtx:video-in"
   }
 }
 
@@ -198,7 +273,7 @@ system "quadcopter" {
 # Ground control — intentionally incomplete.
 # Shows that a system can be a work-in-progress:
 # non-leaf components without children trigger W001,
-# missing descriptions trigger W005, but no errors.
+# missing descriptions trigger W004, but no errors.
 # ════════════════════════════════════════════
 
 system "ground-control" {
@@ -222,25 +297,21 @@ system "ground-control" {
   component "ground-station-pc" {
     tags = ["compute"]
     leaf = false
-    # description intentionally missing → W005
+    # description intentionally missing → W004
     # children not yet modeled   → W001
   }
 
-  interface "rf-control" {
+  connection "rf-control" {
     description = "868MHz control link: TX → drone"
     tags        = ["rf", "control"]
     from        = "transmitter"
     to          = "ground-station-pc"
-    direction   = "unidirectional"
-    leaf        = true
   }
 
-  interface "video-downlink" {
+  connection "video-downlink" {
     description = "5.8GHz analog video reception"
     tags        = ["video", "rf"]
     from        = "ground-station-pc"
     to          = "goggles"
-    direction   = "unidirectional"
-    leaf        = true
   }
 }
