@@ -18,7 +18,7 @@ struct Resolver {
     scope_index: ScopeIndex,
     /// Accumulated diagnostics (errors and warnings).
     diagnostics: Vec<Diagnostic>,
-    /// Maps system label → SystemId for view resolution.
+    /// Maps system label -> SystemId for view resolution.
     system_label_index: HashMap<String, SystemId>,
 }
 
@@ -55,24 +55,18 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
     // ── Systems ───────────────────────────────────────────────────────────────
     //
-    // Two-phase loop per system so that system-level interfaces can reference
+    // Two-phase loop per system so that system-level connections can reference
     // any direct-child component regardless of declaration order.
     //
     // Phase A: allocate SystemId, register all components (recursive)
-    // Phase B: process system-level interfaces + resolve encapsulates
+    // Phase B: process system-level connections + resolve encapsulates
 
     let mut system_labels_seen: HashSet<String> = HashSet::new();
 
-    // Collected so Phase B can iterate after all systems are in the arena.
-    /// Deferred work for a system’s Phase B (interface processing).
     struct SystemWork {
-        /// The allocated system id.
         sid: SystemId,
-        /// System label (for diagnostics).
         label: String,
-        /// Raw interfaces to resolve in Phase B.
-        interfaces: Vec<Labeled<RawInterface>>,
-        /// The system’s abstraction level.
+        connections: Vec<Labeled<RawConnection>>,
         system_level: i32,
     }
     let mut pending_systems: Vec<SystemWork> = Vec::new();
@@ -93,11 +87,11 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             tags: ls.inner.tags.clone(),
             level: system_level,
             components: vec![],
-            interfaces: vec![],
+            connections: vec![],
         });
 
         // Phase A: register all direct-child components (each one recursively
-        // handles its own children and their nested interfaces).
+        // handles its own children, ports, and their nested connections).
         let scope = Scope::System(sid);
         let mut comp_labels_seen: HashSet<String> = HashSet::new();
         let mut child_ids: Vec<ComponentId> = Vec::new();
@@ -127,23 +121,28 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         pending_systems.push(SystemWork {
             sid,
             label: ls.label,
-            interfaces: ls.inner.interfaces,
+            connections: ls.inner.connections,
             system_level,
         });
     }
 
-    // Phase B: system-level interfaces
+    // Phase B: system-level connections
     for sw in pending_systems {
         let scope = Scope::System(sw.sid);
-        let iface_ids =
-            process_interfaces_in_scope(&mut r, &sw.interfaces, scope, sw.system_level, &sw.label);
+        let conn_ids = process_connections_in_scope(
+            &mut r,
+            &sw.connections,
+            scope,
+            sw.system_level,
+            &sw.label,
+        );
 
-        // Resolve encapsulates now that all sibling interfaces are registered.
-        for (li, iid) in sw.interfaces.iter().zip(iface_ids.iter()) {
-            resolve_encapsulates(&mut r, *iid, &li.inner.encapsulates, scope, &li.label);
+        // Resolve encapsulates now that all sibling connections are registered.
+        for (lc, cid) in sw.connections.iter().zip(conn_ids.iter()) {
+            resolve_encapsulates(&mut r, *cid, &lc.inner.encapsulates, scope, &lc.label);
         }
 
-        r.model.systems[sw.sid.0].interfaces = iface_ids;
+        r.model.systems[sw.sid.0].connections = conn_ids;
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
@@ -175,8 +174,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 /// Order within each scope:
 ///   1. Register the component itself in `parent_scope`.
 ///   2. Register all child components in the component's own scope.
-///   3. Process interfaces in the component's own scope (from/to resolved).
-///   4. Resolve encapsulates for those interfaces.
+///   3. Process ports on the component.
+///   4. Process connections in the component's own scope (from/to resolved).
+///   5. Resolve encapsulates for those connections.
 fn register_component(
     r: &mut Resolver,
     lc: &Labeled<RawComponent>,
@@ -188,25 +188,23 @@ fn register_component(
     let level = lc.inner.level.unwrap_or(parent_level + 1);
     let leaf = lc.inner.leaf.unwrap_or(false);
 
-    // E005 — leaf component with children
-    if leaf && (!lc.inner.components.is_empty() || !lc.inner.interfaces.is_empty()) {
+    // E005 -- leaf component with children or connections
+    if leaf && (!lc.inner.components.is_empty() || !lc.inner.connections.is_empty()) {
         r.push_error(
             "E005",
             format!(
-                "leaf component '{}' contains child components or interfaces",
+                "leaf component '{}' contains child components or connections",
                 lc.label
             ),
         );
     }
-
-    // W007 — level decreasing relative to parent (checked in the validate pass)
 
     // Register in parent scope so siblings can reference it.
     r.scope_index
         .components
         .insert((parent_scope, lc.label.clone()), cid);
 
-    // Push placeholder; children/interfaces filled in below.
+    // Push placeholder; children/ports/connections filled in below.
     r.model.components.push(Component {
         label: lc.label.clone(),
         description: lc.inner.description.clone().unwrap_or_default(),
@@ -215,7 +213,8 @@ fn register_component(
         leaf,
         parent,
         children: vec![],
-        interfaces: vec![],
+        ports: vec![],
+        connections: vec![],
     });
 
     let child_scope = Scope::Component(cid);
@@ -245,228 +244,295 @@ fn register_component(
     }
     r.model.components[cid.0].children = child_ids;
 
-    // Step 2: process interfaces in this component's scope.
-    let iface_ids =
-        process_interfaces_in_scope(r, &lc.inner.interfaces, child_scope, level, &lc.label);
+    // Step 2: process ports on this component.
+    let port_ids = process_ports(r, &lc.inner.ports, cid, level, &lc.label);
+    r.model.components[cid.0].ports = port_ids;
 
-    // Step 3: resolve encapsulates for those interfaces.
-    for (li, iid) in lc.inner.interfaces.iter().zip(iface_ids.iter()) {
-        resolve_encapsulates(r, *iid, &li.inner.encapsulates, child_scope, &li.label);
+    // Step 3: process connections in this component's scope.
+    let conn_ids =
+        process_connections_in_scope(r, &lc.inner.connections, child_scope, level, &lc.label);
+
+    // Step 4: resolve encapsulates for those connections.
+    for (li, conn_id) in lc.inner.connections.iter().zip(conn_ids.iter()) {
+        resolve_encapsulates(r, *conn_id, &li.inner.encapsulates, child_scope, &li.label);
     }
 
-    r.model.components[cid.0].interfaces = iface_ids;
+    r.model.components[cid.0].connections = conn_ids;
 
     cid
 }
 
-// ── Interface processing ──────────────────────────────────────────────────────
+// ── Port processing ───────────────────────────────────────────────────────────
 
-/// Process all interfaces declared in a single scope.
-///
-/// Precondition: all sibling components in `scope` must already be registered
-/// in `r.scope_index.components`.
-///
-/// Returns the `InterfaceId`s in declaration order.
-fn process_interfaces_in_scope(
+/// Process port blocks on a component, returning their `PortId`s.
+fn process_ports(
     r: &mut Resolver,
-    interfaces: &[Labeled<RawInterface>],
-    scope: Scope,
+    ports: &[Labeled<crate::parse::RawPort>],
+    owner: ComponentId,
     parent_level: i32,
-    scope_name: &str,
-) -> Vec<InterfaceId> {
+    comp_label: &str,
+) -> Vec<PortId> {
     let mut label_seen: HashSet<String> = HashSet::new();
-    let mut iface_ids: Vec<InterfaceId> = Vec::new();
+    let mut port_ids: Vec<PortId> = Vec::new();
 
-    for li in interfaces {
-        if !label_seen.insert(li.label.clone()) {
+    for lp in ports {
+        if !label_seen.insert(lp.label.clone()) {
             r.push_error(
                 "E001",
                 format!(
-                    "duplicate interface label '{}' in '{}'",
-                    li.label, scope_name
+                    "duplicate port label '{}' in component '{}'",
+                    lp.label, comp_label
                 ),
             );
             continue;
         }
 
-        let level = li.inner.level.unwrap_or(parent_level + 1);
-        let leaf = li.inner.leaf.unwrap_or(false);
-
-        // W007 — level decreasing relative to parent (checked in the validate pass)
-
-        // E008 — invalid direction
-        let direction = match li.inner.direction.as_deref() {
-            None | Some("unidirectional") => Direction::Unidirectional,
-            Some("bidirectional") => Direction::Bidirectional,
+        // E009 -- invalid port.role
+        let role = match lp.inner.role.as_deref() {
+            None | Some("peer") => PortRole::Peer,
+            Some("provider") => PortRole::Provider,
+            Some("consumer") => PortRole::Consumer,
             Some(other) => {
                 r.push_error(
-                    "E008",
-                    format!("interface '{}' has invalid direction '{}'", li.label, other),
+                    "E009",
+                    format!("port '{}' has invalid role '{}'", lp.label, other),
                 );
-                Direction::Unidirectional // placeholder so we keep going
+                PortRole::Peer // placeholder so we keep going
             }
         };
 
-        // E002 — undefined `from`
-        let from = resolve_component_ref(r, &li.inner.from, scope, &li.label, "from");
+        // Process messages inside this port.
+        let msg_ids = process_messages(r, &lp.inner.messages, parent_level, &lp.label);
 
-        // E002 — undefined `to`
-        let to = resolve_component_ref(r, &li.inner.to, scope, &li.label, "to");
+        let pid = PortId(r.model.ports.len());
+        // Register in scope_index so connection endpoints can find it.
+        r.scope_index.ports.insert((owner, lp.label.clone()), pid);
 
-        // E006 — leaf interface with messages
-        if leaf && !li.inner.messages.is_empty() {
+        r.model.ports.push(Port {
+            label: lp.label.clone(),
+            description: lp.inner.description.clone().unwrap_or_default(),
+            protocol: lp.inner.protocol.clone().unwrap_or_default(),
+            role,
+            tags: lp.inner.tags.clone(),
+            owner,
+            messages: msg_ids,
+        });
+        port_ids.push(pid);
+    }
+
+    port_ids
+}
+
+// ── Connection processing ─────────────────────────────────────────────────────
+
+/// Process all connections declared in a single scope.
+///
+/// Precondition: all sibling components in `scope` must already be registered
+/// in `r.scope_index.components`.
+///
+/// Returns the `ConnectionId`s in declaration order.
+fn process_connections_in_scope(
+    r: &mut Resolver,
+    connections: &[Labeled<RawConnection>],
+    scope: Scope,
+    parent_level: i32,
+    scope_name: &str,
+) -> Vec<ConnectionId> {
+    let mut label_seen: HashSet<String> = HashSet::new();
+    let mut conn_ids: Vec<ConnectionId> = Vec::new();
+
+    for lc in connections {
+        if !label_seen.insert(lc.label.clone()) {
             r.push_error(
-                "E006",
-                format!("leaf interface '{}' contains messages", li.label),
+                "E001",
+                format!(
+                    "duplicate connection label '{}' in '{}'",
+                    lc.label, scope_name
+                ),
             );
+            continue;
         }
 
-        // Process messages (only when not leaf; we skip them on E006 path too).
-        let msg_ids = if !leaf {
-            process_messages(r, &li.inner.messages, level, &li.label)
-        } else {
-            vec![]
-        };
+        let level = lc.inner.level.unwrap_or(parent_level + 1);
 
-        // Allocate InterfaceId and register in scope so encapsulates can find it.
-        let iid = InterfaceId(r.model.interfaces.len());
+        // Resolve `from` endpoint
+        let from = resolve_endpoint(r, &lc.inner.from, scope, &lc.label, "from");
+
+        // Resolve `to` endpoint
+        let to = resolve_endpoint(r, &lc.inner.to, scope, &lc.label, "to");
+
+        // Allocate ConnectionId and register in scope so encapsulates can find it.
+        let conn_id = ConnectionId(r.model.connections.len());
         r.scope_index
-            .interfaces
-            .insert((scope, li.label.clone()), iid);
+            .connections
+            .insert((scope, lc.label.clone()), conn_id);
 
         // Use ComponentId(usize::MAX) as a sentinel when a reference failed; the
         // error has already been recorded above, and the model is never returned
         // in the error case, so this sentinel is never visible to callers.
-        let from_id = from.unwrap_or(ComponentId(usize::MAX));
-        let to_id = to.unwrap_or(ComponentId(usize::MAX));
+        let sentinel = ConnectionEndpoint {
+            component: ComponentId(usize::MAX),
+            port: None,
+        };
+        let from_ep = from.unwrap_or_else(|| sentinel.clone());
+        let to_ep = to.unwrap_or(sentinel);
 
-        r.model.interfaces.push(Interface {
-            label: li.label.clone(),
-            description: li.inner.description.clone().unwrap_or_default(),
-            tags: li.inner.tags.clone(),
+        r.model.connections.push(Connection {
+            label: lc.label.clone(),
+            description: lc.inner.description.clone().unwrap_or_default(),
+            tags: lc.inner.tags.clone(),
             level,
-            leaf,
-            direction,
-            from: from_id,
-            to: to_id,
+            from: from_ep,
+            to: to_ep,
             encapsulates: vec![], // filled by resolve_encapsulates
-            messages: msg_ids,
         });
 
-        iface_ids.push(iid);
+        conn_ids.push(conn_id);
     }
 
-    iface_ids
+    conn_ids
 }
 
-/// Resolve a single component label reference (`from` or `to`) within a scope.
-/// Returns `None` and emits E002 if the label is absent or not found.
-fn resolve_component_ref(
+/// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
+///
+/// Supports two forms:
+/// - `"comp"` -- bare component label (E002 if not found)
+/// - `"comp:port"` -- typed reference (E011 if comp not found, E010 if port not found)
+///
+/// Returns `None` and emits the appropriate error if resolution fails.
+fn resolve_endpoint(
     r: &mut Resolver,
-    label: &Option<String>,
+    ref_str: &Option<String>,
     scope: Scope,
-    iface_label: &str,
+    conn_label: &str,
     field: &str,
-) -> Option<ComponentId> {
-    match label {
+) -> Option<ConnectionEndpoint> {
+    let raw = match ref_str {
         None => {
             r.push_error(
                 "E002",
                 format!(
-                    "interface '{}' is missing required '{}' attribute",
-                    iface_label, field
+                    "connection '{}' is missing required '{}' attribute",
+                    conn_label, field
                 ),
             );
-            None
+            return None;
         }
-        Some(lbl) => match r.scope_index.components.get(&(scope, lbl.clone())) {
-            Some(cid) => Some(*cid),
+        Some(s) => s,
+    };
+
+    if let Some((comp_part, port_part)) = raw.split_once(':') {
+        // Typed reference: comp:port
+        let comp_cid = match r.scope_index.components.get(&(scope, comp_part.to_owned())) {
+            Some(cid) => *cid,
+            None => {
+                r.push_error(
+                    "E011",
+                    format!(
+                        "connection '{}' references undefined component '{}' in '{}' (comp:port)",
+                        conn_label, comp_part, field
+                    ),
+                );
+                return None;
+            }
+        };
+        let port_pid = match r.scope_index.ports.get(&(comp_cid, port_part.to_owned())) {
+            Some(pid) => *pid,
+            None => {
+                r.push_error(
+                    "E010",
+                    format!(
+                        "connection '{}': component '{}' has no port '{}' (in '{}')",
+                        conn_label, comp_part, port_part, field
+                    ),
+                );
+                return None;
+            }
+        };
+        Some(ConnectionEndpoint {
+            component: comp_cid,
+            port: Some(port_pid),
+        })
+    } else {
+        // Bare component reference
+        match r.scope_index.components.get(&(scope, raw.clone())) {
+            Some(cid) => Some(ConnectionEndpoint {
+                component: *cid,
+                port: None,
+            }),
             None => {
                 r.push_error(
                     "E002",
                     format!(
-                        "interface '{}' references undefined component '{}' in '{}'",
-                        iface_label, lbl, field
+                        "connection '{}' references undefined component '{}' in '{}'",
+                        conn_label, raw, field
                     ),
                 );
                 None
             }
-        },
+        }
     }
 }
 
-/// Resolve `encapsulates` labels for an already-allocated interface.
+/// Resolve `encapsulates` labels for an already-allocated connection.
 /// Emits E003 for missing references and detects E004 circular chains.
 fn resolve_encapsulates(
     r: &mut Resolver,
-    iid: InterfaceId,
+    conn_id: ConnectionId,
     encapsulates: &[String],
     scope: Scope,
-    iface_label: &str,
+    conn_label: &str,
 ) {
     if encapsulates.is_empty() {
         return;
     }
-    let mut enc_ids: Vec<InterfaceId> = Vec::new();
+    let mut enc_ids: Vec<ConnectionId> = Vec::new();
     for label in encapsulates {
-        match r.scope_index.interfaces.get(&(scope, label.clone())) {
-            Some(enc_iid) => enc_ids.push(*enc_iid),
+        match r.scope_index.connections.get(&(scope, label.clone())) {
+            Some(enc_cid) => enc_ids.push(*enc_cid),
             None => {
                 r.push_error(
                     "E003",
                     format!(
-                        "interface '{}' encapsulates undefined interface '{}'",
-                        iface_label, label
+                        "connection '{}' encapsulates undefined connection '{}'",
+                        conn_label, label
                     ),
                 );
             }
         }
     }
-    r.model.interfaces[iid.0].encapsulates = enc_ids;
+    r.model.connections[conn_id.0].encapsulates = enc_ids;
 
-    // E004 — detect circular encapsulation by DFS from this interface.
-    if has_encapsulation_cycle(&r.model.interfaces, iid) {
+    // E004 -- detect circular encapsulation by DFS from this connection.
+    if has_encapsulation_cycle(&r.model.connections, conn_id) {
         r.push_error(
             "E004",
             format!(
-                "circular encapsulation chain detected involving interface '{}'",
-                iface_label
+                "circular encapsulation chain detected involving connection '{}'",
+                conn_label
             ),
         );
         // Clear the encapsulates list to break the cycle in the model.
-        r.model.interfaces[iid.0].encapsulates.clear();
+        r.model.connections[conn_id.0].encapsulates.clear();
     }
 }
 
 /// DFS cycle detection in the encapsulates graph starting from `start`.
-///
-/// Uses a three-color (white/gray/black) marking scheme:
-/// - Gray = currently in the DFS stack path
-/// - Black = fully processed (not in any current path)
-///
-/// A cycle is detected only when we re-visit a *gray* node (i.e., a node
-/// already on the current DFS path). Reaching a *black* node is fine — it
-/// just means we have a shared reference (DAG, not a cycle).
-fn has_encapsulation_cycle(interfaces: &[Interface], start: InterfaceId) -> bool {
-    // Iterative DFS with explicit frame stack.
-    // Each frame tracks (node, index into its encapsulates list).
-    let mut gray: HashSet<usize> = HashSet::new(); // in current path
-    let mut black: HashSet<usize> = HashSet::new(); // fully processed
+fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> bool {
+    let mut gray: HashSet<usize> = HashSet::new();
+    let mut black: HashSet<usize> = HashSet::new();
     let mut stack: Vec<(usize, usize)> = vec![(start.0, 0)];
 
     while let Some((node, child_idx)) = stack.last_mut() {
         let node = *node;
-        let children = &interfaces[node].encapsulates;
+        let children = &connections[node].encapsulates;
 
         if *child_idx == 0 {
-            // First visit to this node: mark gray.
             if black.contains(&node) {
-                // Already fully processed in another subtree — safe to skip.
                 stack.pop();
                 continue;
             }
             if gray.contains(&node) {
-                // We've reached a node currently on the path — cycle!
                 return true;
             }
             gray.insert(node);
@@ -478,7 +544,6 @@ fn has_encapsulation_cycle(interfaces: &[Interface], start: InterfaceId) -> bool
             let child = children[idx].0;
             stack.push((child, 0));
         } else {
-            // All children processed — mark black, unmark gray.
             gray.remove(&node);
             black.insert(node);
             stack.pop();
@@ -489,12 +554,12 @@ fn has_encapsulation_cycle(interfaces: &[Interface], start: InterfaceId) -> bool
 
 // ── Message / Field processing ────────────────────────────────────────────────
 
-/// Process message blocks within an interface, returning their [`MessageId`]s.
+/// Process message blocks within a port, returning their `MessageId`s.
 fn process_messages(
     r: &mut Resolver,
     messages: &[Labeled<RawMessage>],
     parent_level: i32,
-    iface_label: &str,
+    port_label: &str,
 ) -> Vec<MessageId> {
     let mut label_seen: HashSet<String> = HashSet::new();
     let mut msg_ids: Vec<MessageId> = Vec::new();
@@ -504,8 +569,8 @@ fn process_messages(
             r.push_error(
                 "E001",
                 format!(
-                    "duplicate message label '{}' in interface '{}'",
-                    lm.label, iface_label
+                    "duplicate message label '{}' in port '{}'",
+                    lm.label, port_label
                 ),
             );
             continue;
@@ -528,7 +593,7 @@ fn process_messages(
     msg_ids
 }
 
-/// Process field blocks within a message, returning their [`FieldId`]s.
+/// Process field blocks within a message, returning their `FieldId`s.
 fn process_fields(
     r: &mut Resolver,
     fields: &[Labeled<crate::parse::RawField>],
@@ -549,12 +614,12 @@ fn process_fields(
             continue;
         }
 
-        // E009 — missing required `type`
+        // E007 -- missing required `type`
         let field_type = match &lf.inner.field_type {
             Some(t) => t.clone(),
             None => {
                 r.push_error(
-                    "E009",
+                    "E007",
                     format!(
                         "field '{}' in message '{}' is missing required 'type'",
                         lf.label, msg_label
@@ -580,13 +645,13 @@ fn process_fields(
 
 // ── View resolution ───────────────────────────────────────────────────────────
 
-/// Resolve a raw view block, emitting E007 for undefined system references.
+/// Resolve a raw view block, emitting E006 for undefined system references.
 fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
-    // E007 — undefined system
+    // E006 -- undefined system
     let system = match &lv.inner.system {
         None => {
             r.push_error(
-                "E007",
+                "E006",
                 format!("view '{}' does not specify a system", lv.label),
             );
             return;
@@ -595,7 +660,7 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
             Some(sid) => *sid,
             None => {
                 r.push_error(
-                    "E007",
+                    "E006",
                     format!(
                         "view '{}' references undefined system '{}'",
                         lv.label, sys_label
@@ -670,11 +735,11 @@ mod tests {
             .map(SystemId)
             .expect("ground-control system");
 
-        // quadcopter has direct children: flight-controller, esc, gps, battery, radio-rx, vtx, camera
+        // quadcopter has direct children
         let quad = &model.systems[quad_sid.0];
         assert!(
             quad.components.len() >= 7,
-            "quadcopter should have ≥7 direct components"
+            "quadcopter should have >=7 direct components"
         );
 
         // flight-controller should be a non-leaf with children (mcu, imu, barometer)
@@ -688,7 +753,7 @@ mod tests {
         assert!(!fc.leaf, "flight-controller should not be a leaf");
         assert!(
             fc.children.len() >= 3,
-            "flight-controller should have ≥3 children"
+            "flight-controller should have >=3 children"
         );
 
         // mcu and imu should be children of flight-controller
@@ -707,28 +772,45 @@ mod tests {
         assert!(model.components[mcu_cid.0].leaf);
         assert!(model.components[imu_cid.0].leaf);
 
-        // spi-imu interface is inside flight-controller scope: from=mcu, to=imu
-        let spi_iid = fc
-            .interfaces
+        // spi-imu connection is inside flight-controller scope: from=mcu:spi, to=imu:spi
+        let spi_conn_id = fc
+            .connections
             .iter()
             .copied()
-            .find(|iid| model.interfaces[iid.0].label == "spi-imu")
-            .expect("spi-imu interface");
-        let spi = &model.interfaces[spi_iid.0];
-        assert_eq!(spi.from, mcu_cid);
-        assert_eq!(spi.to, imu_cid);
-        assert_eq!(spi.direction, Direction::Bidirectional);
+            .find(|cid| model.connections[cid.0].label == "spi-imu")
+            .expect("spi-imu connection");
+        let spi = &model.connections[spi_conn_id.0];
+        assert_eq!(spi.from.component, mcu_cid);
+        assert_eq!(spi.to.component, imu_cid);
+        // Both endpoints should be typed (have port references)
+        assert!(spi.from.port.is_some(), "spi-imu from should have port");
+        assert!(spi.to.port.is_some(), "spi-imu to should have port");
 
-        // motor-control interface at system level: has message "throttle"
-        let mc_iid = quad
-            .interfaces
+        // motor-control connection at system level: has no messages (messages are on ports now)
+        let mc_conn_id = quad
+            .connections
             .iter()
             .copied()
-            .find(|iid| model.interfaces[iid.0].label == "motor-control")
+            .find(|cid| model.connections[cid.0].label == "motor-control")
             .expect("motor-control");
-        let mc = &model.interfaces[mc_iid.0];
-        assert_eq!(mc.messages.len(), 1);
-        let throttle = &model.messages[mc.messages[0].0];
+        let mc = &model.connections[mc_conn_id.0];
+        // from=flight-controller:motor-out, to=esc:motor-in
+        assert_eq!(mc.from.component, fc_cid);
+        assert!(
+            mc.from.port.is_some(),
+            "motor-control from should have port"
+        );
+
+        // Check that the motor-out port on FC has the throttle message
+        let fc_motor_out = fc
+            .ports
+            .iter()
+            .copied()
+            .find(|pid| model.ports[pid.0].label == "motor-out")
+            .expect("motor-out port on FC");
+        let motor_out_port = &model.ports[fc_motor_out.0];
+        assert_eq!(motor_out_port.messages.len(), 1);
+        let throttle = &model.messages[motor_out_port.messages[0].0];
         assert_eq!(throttle.label, "throttle");
         assert_eq!(throttle.fields.len(), 2);
 
@@ -736,7 +818,7 @@ mod tests {
         let gc = &model.systems[gc_sid.0];
         assert!(gc.components.len() >= 3);
 
-        // ground-station-pc: non-leaf, no children → W001; no description → W005
+        // ground-station-pc: non-leaf, no children -> W001; no description -> W004
         let gpc_cid = gc
             .components
             .iter()
@@ -748,7 +830,7 @@ mod tests {
         assert!(gpc.children.is_empty());
         assert!(gpc.description.is_empty());
 
-        // Warnings: W001 for ground-station-pc, W005 for ground-station-pc
+        // Warnings: W001 for ground-station-pc, W004 for ground-station-pc
         let w001_labels: Vec<&str> = warnings
             .iter()
             .filter(|d| d.code == "W001")
@@ -760,15 +842,15 @@ mod tests {
             w001_labels
         );
 
-        let w005_labels: Vec<&str> = warnings
+        let w004_labels: Vec<&str> = warnings
             .iter()
-            .filter(|d| d.code == "W005")
+            .filter(|d| d.code == "W004")
             .map(|d| d.message.as_str())
             .collect();
         assert!(
-            w005_labels.iter().any(|m| m.contains("ground-station-pc")),
-            "expected W005 for ground-station-pc, got: {:?}",
-            w005_labels
+            w004_labels.iter().any(|m| m.contains("ground-station-pc")),
+            "expected W004 for ground-station-pc, got: {:?}",
+            w004_labels
         );
 
         // 4 views should resolve
@@ -798,7 +880,7 @@ mod tests {
         assert!(!backend.leaf);
         assert!(backend.children.len() >= 4);
 
-        // recommendation-engine: non-leaf, no children → W001
+        // recommendation-engine: non-leaf, no children -> W001
         let rec_cid = backend
             .children
             .iter()
@@ -807,46 +889,29 @@ mod tests {
             .expect("recommendation-engine");
         assert!(model.components[rec_cid.0].children.is_empty());
 
-        // rec-to-feed interface: from=recommendation-engine, to=feed-service
+        // rec-to-feed connection: from=recommendation-engine, to=feed-service (bare)
         let feed_service_cid = backend
             .children
             .iter()
             .copied()
             .find(|cid| model.components[cid.0].label == "feed-service")
             .expect("feed-service");
-        let rec_iface = backend
-            .interfaces
+        let rec_conn = backend
+            .connections
             .iter()
             .copied()
-            .find(|iid| model.interfaces[iid.0].label == "rec-to-feed")
+            .find(|cid| model.connections[cid.0].label == "rec-to-feed")
             .expect("rec-to-feed");
-        let rec_iface = &model.interfaces[rec_iface.0];
-        assert_eq!(rec_iface.from, rec_cid);
-        assert_eq!(rec_iface.to, feed_service_cid);
+        let rec_conn = &model.connections[rec_conn.0];
+        assert_eq!(rec_conn.from.component, rec_cid);
+        assert_eq!(rec_conn.to.component, feed_service_cid);
 
-        // push-notify: non-leaf, no messages → W002
-        let push_iid = bv
-            .interfaces
-            .iter()
-            .copied()
-            .find(|iid| model.interfaces[iid.0].label == "push-notify")
-            .expect("push-notify");
-        let push = &model.interfaces[push_iid.0];
-        assert!(!push.leaf);
-        assert!(push.messages.is_empty());
-
-        // Warnings: W001 for recommendation-engine, W002 for push-notify
+        // Warnings: W001 for recommendation-engine
         assert!(
             warnings
                 .iter()
                 .any(|d| d.code == "W001" && d.message.contains("recommendation-engine")),
             "expected W001 for recommendation-engine"
-        );
-        assert!(
-            warnings
-                .iter()
-                .any(|d| d.code == "W002" && d.message.contains("push-notify")),
-            "expected W002 for push-notify"
         );
 
         assert_eq!(model.views.len(), 3);
@@ -875,7 +940,7 @@ mod tests {
         assert!(!eng.leaf);
         assert!(eng.children.len() >= 3);
 
-        // operations: non-leaf, no children → W001; no description → W005
+        // operations: non-leaf, no children -> W001; no description -> W004
         let ops_cid = acme
             .components
             .iter()
@@ -887,24 +952,29 @@ mod tests {
         assert!(ops.children.is_empty());
         assert!(ops.description.is_empty());
 
-        // sprint-planning interface: from=product, to=engineering
+        // sprint-planning connection: from=product:sprint-out, to=engineering:sprint-in
         let product_cid = acme
             .components
             .iter()
             .copied()
             .find(|cid| model.components[cid.0].label == "product")
             .expect("product");
-        let sp_iid = acme
-            .interfaces
+        let sp_conn_id = acme
+            .connections
             .iter()
             .copied()
-            .find(|iid| model.interfaces[iid.0].label == "sprint-planning")
+            .find(|cid| model.connections[cid.0].label == "sprint-planning")
             .expect("sprint-planning");
-        let sp = &model.interfaces[sp_iid.0];
-        assert_eq!(sp.from, product_cid);
-        assert_eq!(sp.to, eng_cid);
+        let sp = &model.connections[sp_conn_id.0];
+        assert_eq!(sp.from.component, product_cid);
+        assert_eq!(sp.to.component, eng_cid);
+        assert!(
+            sp.from.port.is_some(),
+            "sprint-planning from should have port"
+        );
+        assert!(sp.to.port.is_some(), "sprint-planning to should have port");
 
-        // Warnings: W001 + W005 for operations
+        // Warnings: W001 + W004 for operations
         assert!(
             warnings
                 .iter()
@@ -914,8 +984,8 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W005" && d.message.contains("operations")),
-            "expected W005 for operations"
+                .any(|d| d.code == "W004" && d.message.contains("operations")),
+            "expected W004 for operations"
         );
 
         assert_eq!(model.views.len(), 3);
@@ -928,10 +998,9 @@ mod tests {
         let src = r#"
             system "s" {
               component "a" { leaf = true }
-              interface "i" {
+              connection "c" {
                 from = "a"
                 to   = "nonexistent"
-                direction = "unidirectional"
               }
             }
         "#;
@@ -966,7 +1035,7 @@ mod tests {
     }
 
     #[test]
-    fn e007_undefined_system_in_view() {
+    fn e006_undefined_system_in_view() {
         let src = r#"
             system "s" {
               component "a" {
@@ -982,8 +1051,8 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E007"),
-            "expected E007, got: {:?}",
+            diags.iter().any(|d| d.code == "E006"),
+            "expected E006, got: {:?}",
             diags
         );
     }
@@ -1010,15 +1079,14 @@ mod tests {
     }
 
     #[test]
-    fn e008_invalid_direction() {
+    fn e009_invalid_port_role() {
         let src = r#"
             system "s" {
-              component "a" { leaf = true }
-              component "b" { leaf = true }
-              interface "i" {
-                from      = "a"
-                to        = "b"
-                direction = "sideways"
+              component "a" {
+                leaf = true
+                port "p" {
+                  role = "sideways"
+                }
               }
             }
         "#;
@@ -1027,8 +1095,53 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E008"),
-            "expected E008, got: {:?}",
+            diags.iter().any(|d| d.code == "E009"),
+            "expected E009, got: {:?}",
+            diags
+        );
+    }
+
+    #[test]
+    fn e010_port_not_found() {
+        let src = r#"
+            system "s" {
+              component "a" { leaf = true }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a:nonexistent"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(result.is_err());
+        let diags = result.unwrap_err();
+        assert!(
+            diags.iter().any(|d| d.code == "E010"),
+            "expected E010, got: {:?}",
+            diags
+        );
+    }
+
+    #[test]
+    fn e011_comp_not_found_in_typed_ref() {
+        let src = r#"
+            system "s" {
+              component "a" { leaf = true }
+              connection "c" {
+                from = "a"
+                to   = "ghost:port"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(result.is_err());
+        let diags = result.unwrap_err();
+        assert!(
+            diags.iter().any(|d| d.code == "E011"),
+            "expected E011, got: {:?}",
             diags
         );
     }
@@ -1039,7 +1152,7 @@ mod tests {
             system "s" {
               component "a" { leaf = true }
               component "b" { leaf = true }
-              interface "i" {
+              connection "c" {
                 from = "a"
                 to   = "b"
               }
@@ -1048,12 +1161,10 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
 
-        // Default direction = Unidirectional
-        assert_eq!(model.interfaces[0].direction, Direction::Unidirectional);
-        // Default level: system=0, component=1, interface=1 (parent_level+1)
+        // Default level: system=0, component=1, connection=1 (parent_level+1)
         assert_eq!(model.systems[0].level, 0);
         assert_eq!(model.components[0].level, 1);
-        assert_eq!(model.interfaces[0].level, 1);
+        assert_eq!(model.connections[0].level, 1);
         // Default description = ""
         assert_eq!(model.systems[0].description, "");
         assert_eq!(model.components[0].description, "");

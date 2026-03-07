@@ -658,12 +658,7 @@ mod tests {
         assert!(fc_child_labels.contains(&"barometer"));
 
         // FC should have ports with messages
-        let fc_port_labels: Vec<&str> = fc
-            .inner
-            .ports
-            .iter()
-            .map(|p| p.label.as_str())
-            .collect();
+        let fc_port_labels: Vec<&str> = fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
@@ -945,7 +940,9 @@ mod tests {
         "#;
         let path = PathBuf::from("test.hcl");
         let raw = parse_file(src, &path).unwrap();
-        let field = &raw.systems[0].inner.components[0].inner.ports[0].inner.messages[0]
+        let field = &raw.systems[0].inner.components[0].inner.ports[0]
+            .inner
+            .messages[0]
             .inner
             .fields[0];
         assert_eq!(field.inner.field_type.as_deref(), Some("uint8"));

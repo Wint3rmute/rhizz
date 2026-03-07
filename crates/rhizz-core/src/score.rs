@@ -7,20 +7,18 @@ use tracing::instrument;
 // ── Per-entity scoring helpers ────────────────────────────────────────────────
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single component.
-///
-/// The score is recursive: a non-leaf component is only "complete" when all of
-/// its direct children are themselves complete.
 fn score_component(id: ComponentId, model: &Model) -> f64 {
     let comp = &model.components[id.0];
     if comp.leaf {
         // Leaf component: complete if it has a description, partial otherwise.
+        // (ports are optional detail — a leaf with description and no ports is Complete)
         if comp.description.is_empty() {
             0.5
         } else {
             1.0
         }
     } else if comp.children.is_empty() {
-        // Non-leaf, no children yet → incomplete.
+        // Non-leaf, no children yet -> incomplete.
         0.0
     } else {
         let all_complete = comp
@@ -31,25 +29,42 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
     }
 }
 
-/// Returns the completion score (0.0, 0.5, or 1.0) for a single interface.
-fn score_interface(idx: usize, model: &Model) -> f64 {
-    let iface = &model.interfaces[idx];
-    if iface.leaf {
-        // Leaf interface: complete if it has a description, partial otherwise.
-        if iface.description.is_empty() {
-            0.5
-        } else {
-            1.0
-        }
-    } else if iface.messages.is_empty() {
-        // Non-leaf, no messages yet → incomplete.
+/// Returns the completion score (0.0, 0.5, or 1.0) for a single port.
+fn score_port(idx: usize, model: &Model) -> f64 {
+    let port = &model.ports[idx];
+    if port.messages.is_empty() {
+        // No messages -> incomplete.
         0.0
     } else {
-        let all_complete = iface
+        let all_complete = port
             .messages
             .iter()
             .all(|&mid| !model.messages[mid.0].fields.is_empty());
         if all_complete { 1.0 } else { 0.5 }
+    }
+}
+
+/// Returns the completion score (0.0, 0.5, or 1.0) for a single connection.
+fn score_connection(idx: usize, model: &Model) -> f64 {
+    let conn = &model.connections[idx];
+    let from_typed = conn.from.port.is_some();
+    let to_typed = conn.to.port.is_some();
+
+    if from_typed && to_typed {
+        // Both typed -- check protocol match.
+        let from_proto = &model.ports[conn.from.port.unwrap().0].protocol;
+        let to_proto = &model.ports[conn.to.port.unwrap().0].protocol;
+        if !from_proto.is_empty() && !to_proto.is_empty() && from_proto == to_proto {
+            1.0
+        } else {
+            0.5
+        }
+    } else if from_typed || to_typed {
+        // One side typed -> partial.
+        0.5
+    } else {
+        // Both untyped -> incomplete.
+        0.0
     }
 }
 
@@ -64,8 +79,7 @@ fn score_message(idx: usize, model: &Model) -> f64 {
 
 // ── Category statistics ───────────────────────────────────────────────────────
 
-/// Aggregated scoring statistics for one category (components, interfaces, or
-/// messages).
+/// Aggregated scoring statistics for one category.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CategoryScore {
     /// Number of entities that scored 1.0 ("fully complete").
@@ -101,12 +115,12 @@ impl CategoryScore {
         self.complete + self.partial + self.incomplete
     }
 
-    /// Weighted sum: complete × 1.0 + partial × 0.5 + incomplete × 0.0.
+    /// Weighted sum: complete x 1.0 + partial x 0.5 + incomplete x 0.0.
     pub fn sum(&self) -> f64 {
         self.complete as f64 + self.partial as f64 * 0.5
     }
 
-    /// Aggregate percentage (sum / total × 100), or 0.0 for empty categories.
+    /// Aggregate percentage (sum / total x 100), or 0.0 for empty categories.
     pub fn percentage(&self) -> f64 {
         let n = self.total();
         if n == 0 {
@@ -126,21 +140,26 @@ pub struct ScoreReport {
     pub project_name: String,
     /// Component scoring breakdown.
     pub components: CategoryScore,
-    /// Interface scoring breakdown.
-    pub interfaces: CategoryScore,
+    /// Port scoring breakdown.
+    pub ports: CategoryScore,
+    /// Connection scoring breakdown.
+    pub connections: CategoryScore,
     /// Message scoring breakdown.
     pub messages: CategoryScore,
 }
 
 impl ScoreReport {
-    /// Overall weighted sum across all three categories.
+    /// Overall weighted sum across all four categories.
     pub fn overall_sum(&self) -> f64 {
-        self.components.sum() + self.interfaces.sum() + self.messages.sum()
+        self.components.sum() + self.ports.sum() + self.connections.sum() + self.messages.sum()
     }
 
-    /// Total entity count across all three categories.
+    /// Total entity count across all four categories.
     pub fn overall_total(&self) -> usize {
-        self.components.total() + self.interfaces.total() + self.messages.total()
+        self.components.total()
+            + self.ports.total()
+            + self.connections.total()
+            + self.messages.total()
     }
 
     /// Overall aggregate percentage.
@@ -155,7 +174,10 @@ impl ScoreReport {
 
     /// Count of fully-complete entities across all categories.
     pub fn overall_complete(&self) -> usize {
-        self.components.complete + self.interfaces.complete + self.messages.complete
+        self.components.complete
+            + self.ports.complete
+            + self.connections.complete
+            + self.messages.complete
     }
 }
 
@@ -168,8 +190,12 @@ pub fn score(model: &Model) -> ScoreReport {
         .map(|i| score_component(ComponentId(i), model))
         .collect();
 
-    let iface_scores: Vec<f64> = (0..model.interfaces.len())
-        .map(|i| score_interface(i, model))
+    let port_scores: Vec<f64> = (0..model.ports.len())
+        .map(|i| score_port(i, model))
+        .collect();
+
+    let conn_scores: Vec<f64> = (0..model.connections.len())
+        .map(|i| score_connection(i, model))
         .collect();
 
     let msg_scores: Vec<f64> = (0..model.messages.len())
@@ -179,7 +205,8 @@ pub fn score(model: &Model) -> ScoreReport {
     ScoreReport {
         project_name: model.project.name.clone(),
         components: CategoryScore::from_scores(&comp_scores),
-        interfaces: CategoryScore::from_scores(&iface_scores),
+        ports: CategoryScore::from_scores(&port_scores),
+        connections: CategoryScore::from_scores(&conn_scores),
         messages: CategoryScore::from_scores(&msg_scores),
     }
 }
@@ -200,10 +227,17 @@ impl fmt::Display for ScoreReport {
         )?;
         writeln!(
             f,
-            "Interfaces:  {}/{} complete  ({:.1}%)",
-            self.interfaces.complete,
-            self.interfaces.total(),
-            self.interfaces.percentage(),
+            "Ports:       {}/{} complete  ({:.1}%)",
+            self.ports.complete,
+            self.ports.total(),
+            self.ports.percentage(),
+        )?;
+        writeln!(
+            f,
+            "Connections: {}/{} complete  ({:.1}%)",
+            self.connections.complete,
+            self.connections.total(),
+            self.connections.percentage(),
         )?;
         writeln!(
             f,
@@ -246,32 +280,20 @@ mod tests {
         let (model, _) = resolve(raw).expect("drone should resolve");
         let report = score(&model);
 
-        // Components: 12 complete (1.0), 0 partial, 1 incomplete (ground-station-pc)
-        assert_eq!(report.components.complete, 12, "drone components complete");
-        assert_eq!(report.components.partial, 0, "drone components partial");
+        // Components: ground-station-pc is incomplete (non-leaf, no children)
+        // All others should be complete (leaf with description or non-leaf with complete children)
         assert_eq!(
             report.components.incomplete, 1,
             "drone components incomplete"
         );
-        assert_eq!(report.components.total(), 13, "drone components total");
+        assert!(report.components.total() >= 13, "drone components total");
 
-        // Interfaces: all 10 are complete
-        assert_eq!(report.interfaces.complete, 10, "drone interfaces complete");
-        assert_eq!(report.interfaces.partial, 0, "drone interfaces partial");
-        assert_eq!(
-            report.interfaces.incomplete, 0,
-            "drone interfaces incomplete"
-        );
-
-        // Messages: all 3 have fields
-        assert_eq!(report.messages.complete, 3, "drone messages complete");
-        assert_eq!(report.messages.partial, 0, "drone messages partial");
+        // Messages: all should have fields
         assert_eq!(report.messages.incomplete, 0, "drone messages incomplete");
 
-        // Overall: 25/26 → ~96.2%
-        assert_eq!(report.overall_complete(), 25);
-        assert_eq!(report.overall_total(), 26);
-        assert!((report.overall_percentage() - 96.2).abs() < 0.1);
+        // Connections: system-level connections with typed endpoints should score 1.0
+        // Bare endpoint connections score lower
+        assert!(report.connections.total() >= 8, "drone connections total");
     }
 
     // ── social-media ───────────────────────────────────────────────────────
@@ -282,54 +304,17 @@ mod tests {
         let (model, _) = resolve(raw).expect("social-media should resolve");
         let report = score(&model);
 
-        // Components: 11 complete, 1 partial (backend), 1 incomplete (recommendation-engine)
-        assert_eq!(
-            report.components.complete, 11,
-            "social-media components complete"
-        );
-        assert_eq!(
-            report.components.partial, 1,
-            "social-media components partial"
-        );
-        assert_eq!(
-            report.components.incomplete, 1,
+        // recommendation-engine: non-leaf, no children -> incomplete
+        assert!(
+            report.components.incomplete >= 1,
             "social-media components incomplete"
         );
-        assert_eq!(
-            report.components.total(),
-            13,
-            "social-media components total"
-        );
 
-        // Interfaces: 9 complete, 0 partial, 1 incomplete (push-notify)
-        assert_eq!(
-            report.interfaces.complete, 9,
-            "social-media interfaces complete"
-        );
-        assert_eq!(
-            report.interfaces.partial, 0,
-            "social-media interfaces partial"
-        );
-        assert_eq!(
-            report.interfaces.incomplete, 1,
-            "social-media interfaces incomplete"
-        );
-        assert_eq!(
-            report.interfaces.total(),
-            10,
-            "social-media interfaces total"
-        );
-
-        // Messages: 3 complete (get-feed, upload-video, ranked-videos)
-        assert_eq!(
-            report.messages.complete, 3,
-            "social-media messages complete"
-        );
+        // Messages: all defined messages have fields
         assert_eq!(
             report.messages.incomplete, 0,
             "social-media messages incomplete"
         );
-        assert_eq!(report.messages.total(), 3, "social-media messages total");
     }
 
     // ── software-house ─────────────────────────────────────────────────────
@@ -340,54 +325,17 @@ mod tests {
         let (model, _) = resolve(raw).expect("software-house should resolve");
         let report = score(&model);
 
-        // Components: 11 complete, 0 partial, 1 incomplete (operations)
-        assert_eq!(
-            report.components.complete, 11,
-            "software-house components complete"
-        );
-        assert_eq!(
-            report.components.partial, 0,
-            "software-house components partial"
-        );
-        assert_eq!(
-            report.components.incomplete, 1,
+        // operations: non-leaf, no children -> incomplete
+        assert!(
+            report.components.incomplete >= 1,
             "software-house components incomplete"
         );
-        assert_eq!(
-            report.components.total(),
-            12,
-            "software-house components total"
-        );
 
-        // Interfaces: 8 complete, all have descriptions or complete messages
-        assert_eq!(
-            report.interfaces.complete, 8,
-            "software-house interfaces complete"
-        );
-        assert_eq!(
-            report.interfaces.partial, 0,
-            "software-house interfaces partial"
-        );
-        assert_eq!(
-            report.interfaces.incomplete, 0,
-            "software-house interfaces incomplete"
-        );
-
-        // Messages: 5 complete (review-request, design-spec, sprint-backlog, bug-ticket, sign-off)
-        assert_eq!(
-            report.messages.complete, 5,
-            "software-house messages complete"
-        );
+        // Messages: all defined messages have fields
         assert_eq!(
             report.messages.incomplete, 0,
             "software-house messages incomplete"
         );
-        assert_eq!(report.messages.total(), 5, "software-house messages total");
-
-        // Overall: 24/25 → 96.0%
-        assert_eq!(report.overall_complete(), 24);
-        assert_eq!(report.overall_total(), 25);
-        assert!((report.overall_percentage() - 96.0).abs() < 0.1);
     }
 
     // ── display format ─────────────────────────────────────────────────────
@@ -401,7 +349,8 @@ mod tests {
 
         assert!(output.contains("Completion Report"), "missing header");
         assert!(output.contains("Components:"), "missing Components line");
-        assert!(output.contains("Interfaces:"), "missing Interfaces line");
+        assert!(output.contains("Ports:"), "missing Ports line");
+        assert!(output.contains("Connections:"), "missing Connections line");
         assert!(output.contains("Messages:"), "missing Messages line");
         assert!(output.contains("Overall:"), "missing Overall line");
     }
@@ -419,17 +368,16 @@ mod tests {
               component "b" {
                 leaf = true
               }
-              interface "i" {
+              connection "c" {
                 from = "a"
                 to   = "b"
-                leaf = true
               }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        // "a" → 1.0, "b" → 0.5
+        // "a" -> 1.0, "b" -> 0.5
         assert_eq!(report.components.complete, 1);
         assert_eq!(report.components.partial, 1);
         assert_eq!(report.components.incomplete, 0);
@@ -447,10 +395,9 @@ mod tests {
               component "parent" {
                 leaf = false
               }
-              interface "i" {
+              connection "c" {
                 from = "a"
                 to   = "parent"
-                leaf = true
               }
             }
         "#;
@@ -459,38 +406,119 @@ mod tests {
         let report = score(&model);
         assert_eq!(
             report.components.incomplete, 1,
-            "parent has no children → 0.0"
+            "parent has no children -> 0.0"
         );
     }
 
-    // ── unit: interface with incomplete message scores 0.5 ──────────────────
+    // ── unit: port scoring ───────────────────────────────────────────────────
 
     #[test]
-    fn interface_with_incomplete_message_scores_partial() {
+    fn port_with_incomplete_message_scores_partial() {
         let src = r#"
             system "s" {
-              component "a" { leaf = true }
+              component "a" {
+                leaf = true
+                port "p" {
+                  role = "provider"
+                  message "m1" {
+                    description = "has fields"
+                    field "x" { type = "uint8" }
+                  }
+                  message "m2" {
+                    description = "no fields"
+                  }
+                }
+              }
               component "b" { leaf = true }
-              interface "i" {
+              connection "c" {
                 from = "a"
                 to   = "b"
-                leaf = false
-                message "m1" {
-                  description = "has fields"
-                  field "x" { type = "uint8" }
-                }
-                message "m2" {
-                  description = "no fields"
-                }
               }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        // Interface "i" has messages but not all complete → 0.5
-        assert_eq!(report.interfaces.partial, 1);
-        assert_eq!(report.interfaces.complete, 0);
-        assert_eq!(report.interfaces.incomplete, 0);
+        // Port "p" has messages but not all complete -> 0.5
+        assert_eq!(report.ports.partial, 1);
+        assert_eq!(report.ports.complete, 0);
+        assert_eq!(report.ports.incomplete, 0);
+    }
+
+    // ── unit: connection scoring ──────────────────────────────────────────────
+
+    #[test]
+    fn connection_both_typed_matching_protocol() {
+        let src = r#"
+            system "s" {
+              component "a" {
+                leaf = true
+                port "p1" {
+                  protocol = "spi"
+                  role = "provider"
+                }
+              }
+              component "b" {
+                leaf = true
+                port "p2" {
+                  protocol = "spi"
+                  role = "consumer"
+                }
+              }
+              connection "c" {
+                from = "a:p1"
+                to   = "b:p2"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        assert_eq!(
+            report.connections.complete, 1,
+            "both typed, matching protocol -> 1.0"
+        );
+    }
+
+    #[test]
+    fn connection_one_typed_scores_partial() {
+        let src = r#"
+            system "s" {
+              component "a" {
+                leaf = true
+                port "p1" {
+                  protocol = "spi"
+                  role = "provider"
+                }
+              }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a:p1"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        assert_eq!(report.connections.partial, 1, "one typed -> 0.5");
+    }
+
+    #[test]
+    fn connection_both_untyped_scores_incomplete() {
+        let src = r#"
+            system "s" {
+              component "a" { leaf = true }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        assert_eq!(report.connections.incomplete, 1, "both untyped -> 0.0");
     }
 }

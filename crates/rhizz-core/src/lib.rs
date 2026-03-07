@@ -14,9 +14,9 @@ pub mod score;
 pub mod validate;
 
 pub use model::{
-    Component, ComponentId, ComponentParent, Diagnostic, Direction, Field, FieldId, Interface,
-    InterfaceId, Message, MessageId, Model, Project, System, SystemId, View, ViewFilter,
-    ViewOutput,
+    Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
+    Diagnostic, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, System,
+    SystemId, View, ViewFilter, ViewOutput,
 };
 pub use score::{CategoryScore, ScoreReport, score};
 
