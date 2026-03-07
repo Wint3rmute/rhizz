@@ -10,24 +10,6 @@ How to work on this file:
 
 ---
 
-## Task 16 — Spec v0.3: Migrate rhizz-dot renderer
-
-Only `rhizz-core` builds and has passing tests now (`cargo t -p rhizz-core`).
-
-Update DOT rendering to use `Connection` + `Port` instead of `Interface`.
-
-- Replace all `InterfaceId`/`Interface` references with `ConnectionId`/`Connection`
-- Infer edge direction from port roles on `ConnectionEndpoint`:
-  - `provider` → `consumer`: directed arrow
-  - `consumer` → `provider`: reversed arrow
-  - `peer` ↔ `peer`: undirected line (`dir=none`)
-  - Either side untyped or roles ambiguous: dashed line
-- When `show_messages = true`, collect messages from the connected port(s) (both endpoints if both are typed)
-- Edge `ltail`/`lhead` logic uses `ConnectionEndpoint.component` (unchanged concept, new type)
-- Update all DOT rendering tests (14 tests)
-
-Run: `cargo test -p rhizz-dot`, `cargo clippy -p rhizz-dot -- -D warnings`, `cargo fmt`
-
 ## Task 17 — Spec v0.3: Migrate rhizz-mermaid renderer
 
 Same changes as Task 16 but for Mermaid output.
