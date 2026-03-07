@@ -100,7 +100,7 @@ enum DrawCmd {
     },
     /// A non-leaf component cluster (dashed border rectangle).
     Cluster { rect: egui::Rect, label: String },
-    /// An interface edge (arrow or plain line).
+    /// A connection edge (arrow or plain line).
     Edge {
         path: Vec<egui::Pos2>,
         /// (start_arrowhead, end_arrowhead)
@@ -317,7 +317,7 @@ fn compute_graph_layout(model: &Model, view: &rhizz_core::View) -> Result<GraphL
 
     // Fix bidirectional edges: the layout crate treats all directed edges as
     // unidirectional (end arrow only).  Replace head with (false, false) for
-    // bidirectional interfaces so they render as plain lines.
+    // bidirectional connections so they render as plain lines.
     for cmd in &mut cmds {
         if let DrawCmd::Edge { label, head, .. } = cmd {
             let iface_label = label.lines().next().unwrap_or(label.as_str());
@@ -663,7 +663,7 @@ impl eframe::App for RhizzApp {
             }
         }
 
-        // ── Left sidebar: systems / components / interfaces ───────────────────
+        // ── Left sidebar: systems / components / connections ───────────────────
         egui::SidePanel::left("sidebar").show(ctx, |ui| {
             ui.heading("Model");
             ui.separator();

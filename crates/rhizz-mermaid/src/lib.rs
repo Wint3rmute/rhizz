@@ -463,7 +463,7 @@ mod tests {
             "barometer should be hidden at max_level=1"
         );
 
-        // System-scope interfaces should appear.
+        // System-scope connections should appear.
         assert!(mmd.contains("motor-control"), "missing motor-control edge");
         assert!(mmd.contains("gps-serial"), "missing gps-serial edge");
     }

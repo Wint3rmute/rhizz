@@ -632,12 +632,12 @@ mod tests {
     fn format_diagnostic_with_file_and_line() {
         let d = Diagnostic {
             code: "E002".to_owned(),
-            file: Some(PathBuf::from("interfaces.hcl")),
+            file: Some(PathBuf::from("connections.hcl")),
             line: Some(14),
             message: "test message".to_owned(),
         };
         let out = format_diagnostic(&d, false);
-        assert!(out.contains("interfaces.hcl:14"));
+        assert!(out.contains("connections.hcl:14"));
     }
 
     #[test]
