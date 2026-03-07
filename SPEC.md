@@ -1,4 +1,4 @@
-# `rhizz` Specification v0.2
+# `rhizz` Specification v0.3
 
 ## 1. Project Structure
 
@@ -9,7 +9,7 @@ project/
 ├── project.hcl          # optional project metadata
 ├── systems.hcl          # system definitions + top-level components
 ├── subsystem-a.hcl      # deeper component breakdown
-├── interfaces.hcl       # interface & message definitions
+├── connections.hcl      # connection definitions
 └── views.hcl            # view definitions
 ```
 
@@ -43,7 +43,7 @@ project {
 
 ### 2.2 `system` Block
 
-Top-level block. One or more per project. Contains components and interfaces.
+Top-level block. One or more per project. Contains components and connections.
 
 ```hcl
 system "consumer-drone" {
@@ -54,7 +54,7 @@ system "consumer-drone" {
   component "flight-controller" { /* ... */ }
   component "propulsion"        { /* ... */ }
 
-  interface "fc-to-prop" { /* ... */ }
+  connection "fc-to-prop" { /* ... */ }
 }
 ```
 
@@ -65,13 +65,13 @@ system "consumer-drone" {
 | `tags` | list(string) | no | `[]` | Filtering tags |
 | `level` | integer | no | `0` | Abstraction level |
 
-**Children:** `component`, `interface`
+**Children:** `component`, `connection`
 
 ---
 
 ### 2.3 `component` Block
 
-Defined inside a `system` or another `component`. Represents a physical or logical building block.
+Defined inside a `system` or another `component`. Represents a physical or logical building block. Components declare their external interface via `port` blocks; ports are allowed on both leaf and non-leaf components.
 
 ```hcl
 component "flight-controller" {
@@ -80,28 +80,16 @@ component "flight-controller" {
   level       = 1
   leaf        = false
 
-  component "mcu" {
-    description = "STM32H7 microcontroller"
-    tags        = ["electronics", "compute"]
-    level       = 2
-    leaf        = true
+  port "dshot" {
+    protocol = "dshot600"
+    role     = "provider"
+    /* ... */
   }
 
-  component "imu" {
-    description = "6-axis inertial measurement unit"
-    tags        = ["electronics", "sensor"]
-    level       = 2
-    leaf        = true
-  }
+  component "mcu" { /* ... */ }
+  component "imu" { /* ... */ }
 
-  interface "spi-bus" {
-    from      = "mcu"
-    to        = "imu"
-    direction = "bidirectional"
-    tags      = ["electronics", "data"]
-    level     = 2
-    leaf      = true
-  }
+  connection "spi-bus" { /* ... */ }
 }
 ```
 
@@ -111,53 +99,77 @@ component "flight-controller" {
 | `description` | string | no | `""` | Human-readable description |
 | `tags` | list(string) | no | `[]` | Filtering tags |
 | `level` | integer | no | parent level + 1 | Abstraction level |
-| `leaf` | bool | no | `false` | If `true`, component is atomic — no further decomposition |
+| `leaf` | bool | no | `false` | If `true`, component is atomic — may not contain child `component` or `connection` blocks |
 
-**Children:** `component` (if not leaf), `interface` (between child components)
+**Children:** `port` (any), `component` (if not leaf), `connection` (if not leaf, between child components)
 
 ---
 
-### 2.4 `interface` Block
+### 2.4 `port` Block
 
-Defined inside a `system` or `component`. Connects two **sibling** components within the same parent scope.
+Defined inside a `component`. Declares a typed connection point exposed by that component. Ports carry `message` blocks that describe the protocol schema, keeping protocol definitions co-located with the component that owns them.
 
 ```hcl
-interface "telemetry-downlink" {
-  description = "Telemetry data from drone to ground station"
-  tags        = ["rf", "telemetry"]
-  level       = 0
-  leaf        = false
-  direction   = "unidirectional"
+port "spi" {
+  description = "SPI master interface"
+  protocol    = "spi"
+  role        = "provider"
+  tags        = ["electronics", "data"]
 
-  from = "radio-module"
-  to   = "ground-station"
+  message "transaction" {
+    description = "SPI transfer frame"
+    field "cs"   { type = "uint8";  description = "Chip select line" }
+    field "data" { type = "bytes";  description = "Payload"          }
+  }
+}
+```
 
-  encapsulates = ["mavlink-protocol"]
+| Attribute | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| *label* | string | **yes** | — | Unique identifier within the parent component |
+| `protocol` | string | no | `""` | Free-form protocol name; matched against the connected port's `protocol` |
+| `role` | string | no | `"peer"` | `"provider"`, `"consumer"`, or `"peer"` |
+| `description` | string | no | `""` | Human-readable description |
+| `tags` | list(string) | no | `[]` | Filtering tags |
 
-  message "heartbeat"       { /* ... */ }
-  message "position-report" { /* ... */ }
+**Children:** `message`
+
+---
+
+### 2.5 `connection` Block
+
+Defined inside a `system` or `component`. Wires two **sibling** components together. The `from` and `to` fields accept either a bare component label or a `component:port` reference. When a port is named, protocol and role compatibility is validated at resolution time. The connection carries no messages and no direction — both are derived from the connected ports.
+
+```hcl
+connection "spi-bus" {
+  description  = "SPI link between MCU and IMU"
+  tags         = ["electronics", "data"]
+  level        = 2
+  from         = "mcu:spi"   # typed — references port "spi" on component "mcu"
+  to           = "imu"       # untyped — W007 will fire
+  encapsulates = []
 }
 ```
 
 | Attribute | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | *label* | string | **yes** | — | Unique identifier within parent scope |
+| `from` | string | **yes** | — | `"comp"` or `"comp:port"` — source component and optional port |
+| `to` | string | **yes** | — | `"comp"` or `"comp:port"` — target component and optional port |
 | `description` | string | no | `""` | Human-readable description |
 | `tags` | list(string) | no | `[]` | Filtering tags |
 | `level` | integer | no | parent level + 1 | Abstraction level |
-| `leaf` | bool | no | `false` | If `true`, interface is atomic |
-| `from` | string | **yes** | — | Source sibling component label |
-| `to` | string | **yes** | — | Target sibling component label |
-| `direction` | string | no | `"unidirectional"` | `"unidirectional"` or `"bidirectional"` |
-| `encapsulates` | list(string) | no | `[]` | Labels of sibling interfaces this one runs on top of |
+| `encapsulates` | list(string) | no | `[]` | Labels of sibling connections this one runs on top of |
 
-**Children:** `message` (if not leaf)
+**No `direction` attribute** — direction is inferred from the `role` values of the connected ports (see §6).
+
+**No child blocks** — messages belong to `port` blocks, not connections.
 
 ---
 
-### 2.5 `message` Block
+### 2.6 `message` Block
 
-Defined inside an `interface`. Represents a discrete unit of information exchanged.
+Defined inside a `port`. Represents a discrete unit of information exchanged over that port's protocol. Keeping messages on the port ensures the protocol schema travels with the component.
 
 ```hcl
 message "position-report" {
@@ -174,7 +186,7 @@ message "position-report" {
 
 | Attribute | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique identifier within parent interface |
+| *label* | string | **yes** | — | Unique identifier within the parent port |
 | `description` | string | no | `""` | Human-readable description |
 | `tags` | list(string) | no | `[]` | Filtering tags |
 | `level` | integer | no | parent level | Abstraction level |
@@ -183,7 +195,7 @@ message "position-report" {
 
 ---
 
-### 2.6 `field` Block
+### 2.7 `field` Block
 
 Defined inside a `message`. Describes a single data element.
 
@@ -206,7 +218,7 @@ field "altitude" {
 
 ---
 
-### 2.7 `view` Block
+### 2.8 `view` Block
 
 Top-level block (not nested inside a system). Defines a filtered perspective rendered as a Graphviz diagram.
 
@@ -241,7 +253,7 @@ view "power-distribution" {
 | `exclude_tags` | list(string) | no | `[]` | Exclude entities having any of these tags |
 | `max_level` | integer | no | `∞` | Maximum abstraction level to display |
 | `components` | list(string) | no | `[]` (all) | Whitelist of component labels to include |
-| `show_messages` | bool | no | `true` | Whether to list messages on interface edges |
+| `show_messages` | bool | no | `true` | Whether to list messages (from connected ports) as connection edge labels |
 
 **`output` sub-block:**
 
@@ -258,14 +270,14 @@ view "power-distribution" {
 
 All references are **name-based within the same parent scope**:
 
-| Context | `from` / `to` resolves to |
-|---------|---------------------------|
-| Interface inside a `system` | Sibling `component` labels inside that system |
-| Interface inside a `component` | Sibling `component` labels inside that component |
-| `encapsulates` | Sibling `interface` labels inside the same parent |
+| Context | Reference resolves to |
+|---------|----------------------|
+| `connection.from` / `connection.to` (bare label) | Sibling `component` labels in the same parent scope |
+| `connection.from` / `connection.to` (`comp:port`) | Sibling `component` label + named `port` on that component |
+| `encapsulates` | Sibling `connection` labels in the same parent scope |
 | `view.system` | Top-level `system` label |
 
-**No cross-scope or dot-path references in v1.** If a connection spans abstraction levels, model it at the appropriate parent scope.
+**No cross-scope references in v1.** If a connection spans abstraction levels, model it at the appropriate parent scope.
 
 ---
 
@@ -279,68 +291,75 @@ All references are **name-based within the same parent scope**:
 | Code | Condition |
 |------|-----------|
 | `E001` | Duplicate label within the same scope and block type |
-| `E002` | Interface `from`/`to` references an undefined sibling component |
-| `E003` | Interface `encapsulates` references an undefined sibling interface |
+| `E002` | Connection `from`/`to` (bare label) references an undefined sibling component |
+| `E003` | Connection `encapsulates` references an undefined sibling connection |
 | `E004` | Circular encapsulation chain detected |
-| `E005` | Leaf component contains child components or interfaces |
-| `E006` | Leaf interface contains child messages |
-| `E007` | View references an undefined system |
-| `E008` | `direction` value is not `"unidirectional"` or `"bidirectional"` |
-| `E009` | `field` block is missing required `type` attribute |
-| `E010` | More than one `project` block defined across all files |
+| `E005` | Leaf component contains child `component` or `connection` blocks |
+| `E006` | View references an undefined system |
+| `E007` | `field` block is missing required `type` attribute |
+| `E008` | More than one `project` block defined across all files |
+| `E009` | `port.role` value is not `"provider"`, `"consumer"`, or `"peer"` |
+| `E010` | `comp:port` reference — component exists but named port does not |
+| `E011` | `comp:port` reference — component label does not exist |
 
 ### 4.2 Warnings (Non-blocking)
 
 | Code | Condition |
 |------|-----------|
 | `W001` | Non-leaf component has no child components (decomposition pending) |
-| `W002` | Non-leaf interface has no messages defined |
-| `W003` | Message has no fields defined |
-| `W004` | Component is not referenced by any interface (orphan) |
-| `W005` | Entity is missing a `description` |
-| `W006` | Interface `from` and `to` point to the same component |
-| `W007` | `level` value decreases relative to parent (likely a mistake) |
+| `W002` | Message has no fields defined |
+| `W003` | Component is not referenced by any connection (orphan) |
+| `W004` | Entity is missing a `description` |
+| `W005` | Connection `from` and `to` point to the same component |
+| `W006` | `level` value decreases relative to parent (likely a mistake) |
+| `W007` | One side of a connection is typed (`comp:port`), the other is not |
+| `W008` | Both sides of a connection are typed but `protocol` values differ |
+| `W009` | Port roles are incompatible or ambiguous (see §6) |
+| `W010` | Port is defined on a component but referenced by no connection (unused port) |
+| `W011` | Port has no messages defined |
 
 ---
 
 ## 5. Completion Scoring
 
-> **Impl:** scoring iterates over `Model.components`, `Model.interfaces`, and `Model.messages`,
+> **Impl:** scoring iterates over `Model.components`, `Model.ports`, `Model.connections`, and `Model.messages`,
 > see [resolved models](SPEC/models.md#core-resolved-structs). The `leaf`, `children`,
-> `messages`, and `fields` fields on those structs provide all inputs needed.
+> `ports`, `messages`, and `fields` fields on those structs provide all inputs needed.
 
-The completion score quantifies how fully the system has been decomposed to
+The completion score quantifies how fully the system has been decomposed and specified to
 leaf-level entities. Each entity is scored individually, then aggregated.
 
 ### Per-Entity Completeness
 
 | Entity | Complete (1.0) | Partial (0.5) | Incomplete (0.0) |
 |--------|---------------|---------------|-------------------|
-| **Component** (leaf) | Has description | Has no description | — |
+| **Component** (leaf) | Has description AND all defined ports complete | Has description but ≥1 port incomplete | No description |
 | **Component** (non-leaf) | ≥1 child component, all children complete | ≥1 child component, not all children complete | No child components |
-| **Interface** (leaf) | Has description | Has no description | — |
-| **Interface** (non-leaf) | ≥1 message, all messages complete | ≥1 message, not all messages complete | No messages |
+| **Port** | ≥1 message, all messages complete | ≥1 message, not all messages complete | No messages |
+| **Connection** | Both sides typed (`comp:port`) with matching `protocol` | One side typed | Both sides untyped |
 | **Message** | ≥1 field | — | No fields |
+
+A leaf component with a description and no ports scores Complete (1.0) — ports are optional detail.
 
 ### Aggregate Score
 
 $$\text{Score} = \frac{\sum_{i=1}^{N} s_i}{N} \times 100\%$$
 
 Where $s_i$ is the per-entity completeness (0.0, 0.5, or 1.0) and $N$ is the
-total number of components, interfaces, and messages. Fields and the system
-block itself are excluded from scoring (fields are the leaf-level data — their
-existence *is* the completion).
+total number of components, ports, connections, and messages. Fields and the system
+block itself are excluded from scoring.
 
 ### Output Format
 
 ```
 Completion Report — consumer-drone
 ───────────────────────────────────
-Components:  8/12 complete  (66.7%)
-Interfaces:  3/7  complete  (42.9%)
-Messages:    5/10 complete  (50.0%)
+Components:   8/12 complete  (66.7%)
+Ports:        4/8  complete  (50.0%)
+Connections:  3/7  complete  (42.9%)
+Messages:     5/10 complete  (50.0%)
 ───────────────────────────────────
-Overall:     16/29           55.2%
+Overall:      20/37           54.1%
 ```
 
 ---
@@ -353,15 +372,27 @@ Overall:     16/29           55.2%
 > DOT string generation is provided by the shared `rhizz-dot` crate (see Section 12)
 > so that any frontend can produce `.dot` output without re-implementing the logic.
 
+Connection direction is inferred from the `role` values of the connected ports:
+
+| `from` role | `to` role | Inferred direction | DOT representation |
+|---|---|---|---|
+| `provider` | `consumer` | unidirectional (`from` → `to`) | directed arrow |
+| `consumer` | `provider` | unidirectional (`to` → `from`) | directed arrow (reversed) |
+| `peer` | `peer` | bidirectional | undirected line |
+| either side untyped | — | unknown | dashed line |
+| `provider` | `provider` | ambiguous → W009 | dashed line |
+| `consumer` | `consumer` | ambiguous → W009 | dashed line |
+| `peer` | `provider` or `consumer` | ambiguous → W009 | dashed line |
+
 The view renderer applies the filter, then produces a DOT file:
 
 | Model Entity | Graphviz Representation |
 |--------------|------------------------|
 | Component (leaf) | Box node, solid border |
 | Component (non-leaf) | `subgraph cluster_*` containing children |
-| Interface | Edge from `from` → `to` (arrow for unidirectional, line for bidirectional) |
-| Message | Items in edge label (if `show_messages = true`) |
-| Encapsulation | Dashed edge between interfaces, or annotation on label |
+| Connection | Edge with direction inferred from port roles (see table above) |
+| Message | Items in edge label (from connected port(s), if `show_messages = true`) |
+| Encapsulation | Dashed edge between connections, or annotation on label |
 
 Example generated DOT fragment:
 
@@ -380,8 +411,8 @@ digraph "power-distribution" {
     battery    [label="battery\n[LiPo 4S]"];
     esc        [label="esc\n[ESC array]"];
 
-    battery -> flight_controller [label="power-rail\n12V DC"];
-    battery -> esc               [label="motor-power\n12V DC"];
+    battery -> esc               [label="power-main"];
+    esc -> flight_controller     [label="power-bec"];
 }
 ```
 
@@ -424,13 +455,13 @@ rhizz <command> [options] [path]
 ```bash
 $ mbse build ./drone-project/
 
-  Parsing 5 files...
-  ✓ Parsed: project.hcl, systems.hcl, fc.hcl, propulsion.hcl, views.hcl
+  Parsing 6 files...
+  ✓ Parsed: project.hcl, systems.hcl, fc.hcl, propulsion.hcl, connections.hcl, views.hcl
 
   Validation:
-  ✗ E002  interfaces.hcl:14  interface "uart-link" references undefined component "gps-module"
-  ⚠ W001  fc.hcl:31          component "power-regulator" has no child components (leaf=false)
-  ⚠ W005  propulsion.hcl:8   component "motor" is missing a description
+  ✗ E002  connections.hcl:14  connection "uart-link" references undefined component "gps-module"
+  ⚠ W001  fc.hcl:31           component "power-regulator" has no child components (leaf=false)
+  ⚠ W004  propulsion.hcl:8    component "motor" is missing a description
 
   1 error, 2 warnings — aborting (fix errors to continue)
 ```
@@ -438,20 +469,21 @@ $ mbse build ./drone-project/
 ```bash
 $ mbse build ./drone-project/   # after fix
 
-  Parsing 5 files... ✓
+  Parsing 6 files... ✓
 
   Validation:
-  ⚠ W001  fc.hcl:31          component "power-regulator" has no child components (leaf=false)
-  ⚠ W005  propulsion.hcl:8   component "motor" is missing a description
+  ⚠ W001  fc.hcl:31           component "power-regulator" has no child components (leaf=false)
+  ⚠ W004  propulsion.hcl:8    component "motor" is missing a description
   0 errors, 2 warnings
 
   Completion Report — consumer-drone
   ───────────────────────────────────
-  Components:  8/12 complete  (66.7%)
-  Interfaces:  3/7  complete  (42.9%)
-  Messages:    5/10 complete  (50.0%)
+  Components:   8/12 complete  (66.7%)
+  Ports:        4/8  complete  (50.0%)
+  Connections:  3/7  complete  (42.9%)
+  Messages:     5/10 complete  (50.0%)
   ───────────────────────────────────
-  Overall:     16/29           55.2%
+  Overall:      20/37           54.1%
 
   Views:
   ✓ out/power-distribution.dot
@@ -490,25 +522,75 @@ system "mini-drone" {
     tags        = ["electronics", "compute"]
     leaf        = false
 
+    port "dshot" {
+      description = "DShot600 motor control output"
+      protocol    = "dshot600"
+      role        = "provider"
+      tags        = ["electronics", "motor", "data"]
+
+      message "throttle-command" {
+        description = "Per-motor throttle value"
+        tags        = ["motor", "control"]
+
+        field "motor_id" { type = "uint8";  description = "Motor index 1-4"  }
+        field "value"    { type = "uint16"; description = "Throttle 0-2047"  }
+      }
+    }
+
+    port "crsf" {
+      description = "CRSF serial link for RC input and telemetry"
+      protocol    = "crsf"
+      role        = "peer"
+      tags        = ["rf", "control", "data"]
+
+      message "rc-channels" {
+        description = "16-channel RC input values"
+        tags        = ["control"]
+
+        field "channels" { type = "uint16[16]"; description = "Channel values 172-1811" }
+      }
+
+      message "telemetry-frame" {
+        description = "Telemetry sent back to transmitter"
+        tags        = ["telemetry"]
+
+        field "rssi"    { type = "uint8";   unit = "dBm"; description = "Signal strength" }
+        field "battery" { type = "float32"; unit = "V";   description = "Battery voltage"  }
+      }
+    }
+
     component "mcu" {
       description = "STM32H7 ARM Cortex-M7"
       tags        = ["electronics", "compute"]
       leaf        = true
+
+      port "spi" {
+        description = "SPI master bus"
+        protocol    = "spi"
+        role        = "provider"
+        tags        = ["electronics", "data"]
+
+        message "transaction" {
+          description = "SPI transfer frame"
+          field "cs"   { type = "uint8";  description = "Chip select line" }
+          field "data" { type = "bytes";  description = "Payload"          }
+        }
+      }
     }
 
     component "imu" {
       description = "ICM-42688 6-axis IMU"
       tags        = ["electronics", "sensor"]
       leaf        = true
+      # no ports defined yet — W007 fires for the spi-bus connection below
     }
 
-    interface "spi-imu" {
+    connection "spi-bus" {
       description = "SPI link between MCU and IMU"
       tags        = ["electronics", "data"]
-      from        = "mcu"
-      to          = "imu"
-      direction   = "bidirectional"
-      leaf        = true
+      level       = 2
+      from        = "mcu:spi"   # typed
+      to          = "imu"       # untyped — W007
     }
   }
 
@@ -516,79 +598,88 @@ system "mini-drone" {
     description = "4-in-1 electronic speed controller"
     tags        = ["electronics", "power", "motor"]
     leaf        = true
+
+    port "dshot" {
+      description = "DShot600 motor control input"
+      protocol    = "dshot600"
+      role        = "consumer"
+      tags        = ["electronics", "motor", "data"]
+      # no messages yet — W011
+    }
+
+    port "power-in" {
+      description = "Main battery power input"
+      protocol    = "power-dc"
+      role        = "consumer"
+      tags        = ["power"]
+      # no messages yet — W011
+    }
+
+    port "bec-out" {
+      description = "5V BEC regulated output"
+      protocol    = "power-dc"
+      role        = "provider"
+      tags        = ["power"]
+      # no messages yet — W011
+    }
   }
 
   component "battery" {
     description = "4S 1500mAh LiPo"
     tags        = ["power"]
     leaf        = true
+
+    port "power-out" {
+      description = "Main discharge output"
+      protocol    = "power-dc"
+      role        = "provider"
+      tags        = ["power"]
+      # no messages yet — W011
+    }
   }
 
   component "radio-rx" {
     description = "ELRS 2.4GHz receiver"
     tags        = ["electronics", "rf", "control"]
     leaf        = true
+
+    port "crsf" {
+      description = "CRSF serial link to flight controller"
+      protocol    = "crsf"
+      role        = "peer"
+      tags        = ["rf", "control", "data"]
+      # no messages yet — W011 (messages defined on flight-controller:crsf)
+    }
   }
 
-  # ── Interfaces ────────────────────────────
+  # ── Connections ────────────────────────────
 
-  interface "dshot-bus" {
+  connection "dshot-bus" {
     description = "DShot600 motor control signal"
     tags        = ["electronics", "motor", "data"]
-    from        = "flight-controller"
-    to          = "esc"
-    direction   = "unidirectional"
-    leaf        = false
-
-    message "throttle-command" {
-      description = "Per-motor throttle value"
-      tags        = ["motor", "control"]
-
-      field "motor_id" { type = "uint8";  description = "Motor index 1-4" }
-      field "value"    { type = "uint16"; description = "Throttle 0-2047"  }
-    }
+    from        = "flight-controller:dshot"
+    to          = "esc:dshot"
   }
 
-  interface "power-main" {
+  connection "power-main" {
     description = "Main battery power rail"
     tags        = ["power"]
-    from        = "battery"
-    to          = "esc"
-    direction   = "unidirectional"
-    leaf        = true
+    from        = "battery:power-out"
+    to          = "esc:power-in"
   }
 
-  interface "power-bec" {
+  connection "power-bec" {
     description = "5V BEC output to flight controller"
     tags        = ["power"]
-    from        = "esc"
-    to          = "flight-controller"
-    direction   = "unidirectional"
-    leaf        = true
+    from        = "esc:bec-out"
+    to          = "flight-controller"   # untyped — W007
   }
 
-  interface "crsf-link" {
+  connection "crsf-link" {
     description = "Crossfire serial protocol for RC input"
     tags        = ["rf", "control", "data"]
-    from        = "radio-rx"
-    to          = "flight-controller"
-    direction   = "bidirectional"
-    leaf        = false
-
-    message "rc-channels" {
-      description = "16-channel RC input values"
-      tags        = ["control"]
-
-      field "channels" { type = "uint16[16]"; description = "Channel values 172-1811" }
-    }
-
-    message "telemetry-frame" {
-      description = "Telemetry sent back to transmitter"
-      tags        = ["telemetry"]
-
-      field "rssi"    { type = "uint8";   unit = "dBm"; description = "Signal strength" }
-      field "battery" { type = "float32"; unit = "V";   description = "Battery voltage"  }
-    }
+    from        = "radio-rx:crsf"
+    to          = "flight-controller:crsf"
   }
 }
 ```
@@ -647,7 +738,10 @@ view "fc-internals" {
 
 | Decision | Rationale |
 |----------|-----------|
-| Interfaces reference **sibling** components only | Keeps scoping simple; cross-level wiring is modeled at the appropriate parent |
+| Connections reference **sibling** components only | Keeps scoping simple; cross-level wiring is modeled at the appropriate parent |
+| Ports are optional (`comp:port` syntax is additive) | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally |
+| Messages live on ports, not connections | Protocol schema travels with the component; enables genuine component reuse in future |
+| Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable |
 | `type` on fields is a free-form string | Supports gradual specification — no type system to fight during early design |
 | `level` auto-increments from parent | Reduces boilerplate; explicit override still available |
 | Views are top-level blocks | A view can reference any system; decoupled from the model itself |
@@ -658,9 +752,10 @@ view "fc-internals" {
 **Out of scope for v1, currently non-goals. Candidates for v2:**
 
 - Cross-system references and shared component libraries
+- Protocol schema reuse across components (port type definitions)
 - Constraint / requirement blocks linked to components
 - Temporal / sequence diagrams (message ordering)
-- Per-message direction in bidirectional interfaces
+- Per-message direction on bidirectional ports
 - Type-checked fields with a schema language
 - Diffing / changelog between model versions
 

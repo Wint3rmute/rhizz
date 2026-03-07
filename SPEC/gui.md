@@ -15,7 +15,7 @@ The desktop GUI is implemented in the `rhizz-gui` crate using `egui`. It follows
 ## Diagnostic Display
 
 - Errors and warnings are shown in a dedicated pane
-- A sidebar panel lists all interfaces, components, systems
+- A sidebar panel lists all connections, components, systems
 
 ## View Rendering
 

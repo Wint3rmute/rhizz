@@ -59,7 +59,7 @@ pub fn score(model: &Model) -> ScoreReport;
 - **No I/O** — must not perform any filesystem or network access.
 - **`serde` on all public types** — `Model`, `Diagnostic`, `ScoreReport`, and all related structs derive `Serialize` and `Deserialize` so frontends can serialise results (JSON output, IPC, storage) without extra conversion.
 - **`Clone` on all public types** — frontends may need to hold multiple snapshots of the model simultaneously (e.g. the GUI keeping the last valid model while the current edit contains errors).
-- **Stable error codes** — `Diagnostic.code` strings (`E001`–`E010`, `W001`–`W007`) are part of the public API. Changing or renumbering them is a breaking change.
+- **Stable error codes** — `Diagnostic.code` strings (`E001`–`E011`, `W001`–`W011`) are part of the public API. Changing or renumbering them is a breaking change.
 
 ---
 
@@ -75,7 +75,7 @@ Pure library crate. No I/O and no terminal dependencies. Depends on `rhizz-core`
 pub fn render_view(model: &Model, view: &View) -> String;
 ```
 
-All view filter logic — tag inclusion/exclusion, level capping, component whitelist, `show_messages` — is implemented here. No frontend re-implements filtering.
+All view filter logic — tag inclusion/exclusion, level capping, component whitelist, `show_messages`, and connection direction inference from port roles — is implemented here. No frontend re-implements filtering.
 
 ---
 
