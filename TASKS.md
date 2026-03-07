@@ -10,16 +10,13 @@ How to work on this file:
 
 ---
 
-## Task 15 — View tabs with `layout-rs` rendering
+## Task 17 — Task template
 
-For each view in the model, show a tab at the top of the main area.
-
-- When a tab is selected, call `rhizz_dot::render_view` to get the DOT string, then pass it to the `layout` crate to compute node positions.
-- Draw nodes and edges with `egui::Painter` inside a `ScrollArea` (pan via scroll, no zoom required for the prototype).
-- Leaf components → solid-border box; non-leaf components → dashed-border cluster rectangle containing their children; unidirectional interface → arrow; bidirectional → plain line.
-- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
+Use this template when creating new tasks. Keep on increasing the task number!
 
 ---
+
+# FINISHED
 
 ## Task 16 — Score dashboard panel
 
@@ -30,8 +27,11 @@ Add a collapsible right panel showing the completion score.
 - The panel refreshes automatically on every recompile.
 - `cargo build`, `cargo clippy`, `cargo fmt` must all pass.
 
----
+## Task 15 — View tabs with `layout-rs` rendering
 
-## Task 17 — Task template
+For each view in the model, show a tab at the top of the main area.
 
-Use this template when creating new tasks. Keep on increasing the task number!
+- When a tab is selected, call `rhizz_dot::render_view` to get the DOT string, then pass it to the `layout` crate to compute node positions.
+- Draw nodes and edges with `egui::Painter` inside a `ScrollArea` (pan via scroll, no zoom required for the prototype).
+- Leaf components → solid-border box; non-leaf components → dashed-border cluster rectangle containing their children; unidirectional interface → arrow; bidirectional → plain line.
+- `cargo build`, `cargo clippy`, `cargo fmt` must all pass.

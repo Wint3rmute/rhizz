@@ -2027,6 +2027,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "layout-rs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b8b38bc67665e362eb770c6b6ae88b48d040d94a0a10c4904c37bc79d263b95"
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3165,10 +3171,10 @@ dependencies = [
  "anyhow",
  "eframe",
  "egui",
- "image",
+ "layout-rs",
  "notify",
  "rhizz-core",
- "rhizz-mermaid",
+ "rhizz-dot",
  "tracing",
  "tracing-subscriber",
  "walkdir",
