@@ -28,17 +28,6 @@ Update DOT rendering to use `Connection` + `Port` instead of `Interface`.
 
 Run: `cargo test -p rhizz-dot`, `cargo clippy -p rhizz-dot -- -D warnings`, `cargo fmt`
 
-## Task 17 — Spec v0.3: Migrate rhizz-mermaid renderer
-
-Same changes as Task 16 but for Mermaid output.
-
-- Replace `InterfaceId`/`Interface`/`Direction` references with `ConnectionId`/`Connection`
-- Infer arrow style from port roles: `-->` (unidirectional), `<-->` (bidirectional), `-.->` (unknown/ambiguous)
-- Messages from connected ports when rendering edge labels
-- Update all Mermaid rendering tests (14 tests)
-
-Run: `cargo test -p rhizz-mermaid`, `cargo clippy -p rhizz-mermaid -- -D warnings`, `cargo fmt`
-
 ---
 
 ## Task 18 — Spec v0.3: Migrate rhizz-cli and rhizz-gui frontends

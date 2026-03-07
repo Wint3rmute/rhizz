@@ -13,7 +13,7 @@
 
 #![deny(clippy::all)]
 
-use rhizz_core::{ComponentId, ComponentParent, Direction, InterfaceId, Model, View, ViewFilter};
+use rhizz_core::{ComponentId, ComponentParent, ConnectionId, Model, PortRole, View, ViewFilter};
 use std::collections::HashSet;
 use std::fmt::Write as _;
 use tracing::instrument;
@@ -38,22 +38,22 @@ pub fn render_view(model: &Model, view: &View) -> String {
         .filter(|&cid| is_component_visible(cid, model, filter))
         .collect();
 
-    // Pass 2 (tag-filter views only): interfaces that match the tag filter
+    // Pass 2 (tag-filter views only): connections that match the tag filter
     // implicitly pull in their endpoints even if those components don't carry
     // the matching tag themselves.
     if !filter.include_tags.is_empty() {
-        let all_ifaces = collect_all_interface_ids(system, model);
-        for iid in all_ifaces {
-            let iface = &model.interfaces[iid.0];
-            if !iface.tags.iter().any(|t| filter.include_tags.contains(t)) {
+        let all_conns = collect_all_connection_ids(system, model);
+        for cid in all_conns {
+            let conn = &model.connections[cid.0];
+            if !conn.tags.iter().any(|t| filter.include_tags.contains(t)) {
                 continue;
             }
-            if filter.max_level.is_some_and(|max| iface.level > max) {
+            if filter.max_level.is_some_and(|max| conn.level > max) {
                 continue;
             }
-            for &cid in &[iface.from, iface.to] {
-                if is_component_eligible_as_endpoint(cid, model, filter) {
-                    visible.insert(cid);
+            for &comp_id in &[conn.from.component, conn.to.component] {
+                if is_component_eligible_as_endpoint(comp_id, model, filter) {
+                    visible.insert(comp_id);
                 }
             }
         }
@@ -79,7 +79,7 @@ pub fn render_view(model: &Model, view: &View) -> String {
     }
 
     // ── Edges ──────────────────────────────────────────────────────────────────
-    render_interfaces(&system.interfaces, model, &visible, filter, 1, &mut buf);
+    render_connections(&system.connections, model, &visible, filter, 1, &mut buf);
 
     buf
 }
@@ -181,20 +181,20 @@ fn is_component_eligible_as_endpoint(cid: ComponentId, model: &Model, filter: &V
     true
 }
 
-fn collect_all_interface_ids(system: &rhizz_core::System, model: &Model) -> Vec<InterfaceId> {
-    let mut result: Vec<InterfaceId> = Vec::new();
-    result.extend_from_slice(&system.interfaces);
+fn collect_all_connection_ids(system: &rhizz_core::System, model: &Model) -> Vec<ConnectionId> {
+    let mut result: Vec<ConnectionId> = Vec::new();
+    result.extend_from_slice(&system.connections);
     for &cid in &system.components {
-        collect_component_interface_ids(cid, model, &mut result);
+        collect_component_connection_ids(cid, model, &mut result);
     }
     result
 }
 
-fn collect_component_interface_ids(cid: ComponentId, model: &Model, out: &mut Vec<InterfaceId>) {
+fn collect_component_connection_ids(cid: ComponentId, model: &Model, out: &mut Vec<ConnectionId>) {
     let comp = &model.components[cid.0];
-    out.extend_from_slice(&comp.interfaces);
+    out.extend_from_slice(&comp.connections);
     for &child in &comp.children {
-        collect_component_interface_ids(child, model, out);
+        collect_component_connection_ids(child, model, out);
     }
 }
 
@@ -245,8 +245,8 @@ fn render_component(
                 render_component(child, model, visible, filter, indent + 1, buf);
             }
         }
-        // Interfaces declared inside this component's scope.
-        render_interfaces(&comp.interfaces, model, visible, filter, indent + 1, buf);
+        // Connections declared inside this component's scope.
+        render_connections(&comp.connections, model, visible, filter, indent + 1, buf);
         let _ = writeln!(buf, "{}end", prefix);
     } else {
         // Render as a plain rectangular node.
@@ -254,69 +254,122 @@ fn render_component(
     }
 }
 
-// ── Interface rendering ───────────────────────────────────────────────────────
+// ── Connection rendering ──────────────────────────────────────────────────────
 
-fn render_interfaces(
-    iface_ids: &[InterfaceId],
-    model: &Model,
-    visible: &HashSet<ComponentId>,
-    filter: &ViewFilter,
-    indent: usize,
-    buf: &mut String,
-) {
-    for &iid in iface_ids {
-        render_interface_edge(iid, model, visible, filter, indent, buf);
+/// Append the label of every message carried by `port_id` to `label`.
+fn append_port_messages(port_id: rhizz_core::PortId, model: &Model, label: &mut String) {
+    for &mid in &model.ports[port_id.0].messages {
+        label.push('\n');
+        label.push_str(&model.messages[mid.0].label);
     }
 }
 
-fn render_interface_edge(
-    iid: InterfaceId,
+fn render_connections(
+    conn_ids: &[ConnectionId],
     model: &Model,
     visible: &HashSet<ComponentId>,
     filter: &ViewFilter,
     indent: usize,
     buf: &mut String,
 ) {
-    let iface = &model.interfaces[iid.0];
+    for &cid in conn_ids {
+        render_connection_edge(cid, model, visible, filter, indent, buf);
+    }
+}
+
+fn render_connection_edge(
+    conn_id: ConnectionId,
+    model: &Model,
+    visible: &HashSet<ComponentId>,
+    filter: &ViewFilter,
+    indent: usize,
+    buf: &mut String,
+) {
+    let conn = &model.connections[conn_id.0];
+    let from_cid = conn.from.component;
+    let to_cid = conn.to.component;
 
     // Both endpoints must be visible.
-    if !visible.contains(&iface.from) || !visible.contains(&iface.to) {
+    if !visible.contains(&from_cid) || !visible.contains(&to_cid) {
         return;
     }
 
     // Tag inclusion.
-    if !filter.include_tags.is_empty()
-        && !iface.tags.iter().any(|t| filter.include_tags.contains(t))
+    if !filter.include_tags.is_empty() && !conn.tags.iter().any(|t| filter.include_tags.contains(t))
     {
         return;
     }
     // Tag exclusion.
-    if iface.tags.iter().any(|t| filter.exclude_tags.contains(t)) {
+    if conn.tags.iter().any(|t| filter.exclude_tags.contains(t)) {
         return;
     }
     // Level cap.
-    if filter.max_level.is_some_and(|max| iface.level > max) {
+    if filter.max_level.is_some_and(|max| conn.level > max) {
         return;
     }
 
-    // Build the edge label.
-    let mut label = iface.label.clone();
-    if filter.show_messages && !iface.messages.is_empty() {
-        for &mid in &iface.messages {
-            label.push('\n');
-            label.push_str(&model.messages[mid.0].label);
+    // Build the edge label (connection name + optional port messages).
+    let mut label = conn.label.clone();
+    if filter.show_messages {
+        if let Some(pid) = conn.from.port {
+            append_port_messages(pid, model, &mut label);
+        }
+        if let Some(pid) = conn.to.port {
+            append_port_messages(pid, model, &mut label);
         }
     }
     let edge_label = mmd_label(&label);
 
-    let from = node_id(iface.from);
-    let to = node_id(iface.to);
     let prefix = "    ".repeat(indent);
 
-    if iface.direction == Direction::Bidirectional {
-        let _ = writeln!(buf, "{}{} <-->|{}| {}", prefix, from, edge_label, to);
-    } else {
-        let _ = writeln!(buf, "{}{} -->|{}| {}", prefix, from, edge_label, to);
+    // Determine arrow style and endpoint order from port roles.
+    let from_role = conn.from.port.map(|pid| model.ports[pid.0].role);
+    let to_role = conn.to.port.map(|pid| model.ports[pid.0].role);
+
+    match (from_role, to_role) {
+        (Some(PortRole::Provider), Some(PortRole::Consumer)) => {
+            let _ = writeln!(
+                buf,
+                "{}{} -->|{}| {}",
+                prefix,
+                node_id(from_cid),
+                edge_label,
+                node_id(to_cid)
+            );
+        }
+        (Some(PortRole::Consumer), Some(PortRole::Provider)) => {
+            // Swap so the arrow always points from Provider to Consumer.
+            let _ = writeln!(
+                buf,
+                "{}{} -->|{}| {}",
+                prefix,
+                node_id(to_cid),
+                edge_label,
+                node_id(from_cid)
+            );
+        }
+        (Some(PortRole::Peer), Some(PortRole::Peer)) => {
+            let _ = writeln!(
+                buf,
+                "{}{} <-->|{}| {}",
+                prefix,
+                node_id(from_cid),
+                edge_label,
+                node_id(to_cid)
+            );
+        }
+        // Either side has no port (untyped), or roles are ambiguous
+        // (Provider↔Provider, Consumer↔Consumer, Peer↔Provider, Peer↔Consumer, etc.)
+        _ => {
+            let _ = writeln!(
+                buf,
+                "{}{} -.->|{}| {}",
+                prefix,
+                node_id(from_cid),
+                edge_label,
+                node_id(to_cid)
+            );
+        }
     }
 }
 
