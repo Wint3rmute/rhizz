@@ -23,10 +23,17 @@ pub struct ComponentId(
     pub usize,
 );
 
-/// Arena index for an interface.
+/// Arena index for a port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct InterfaceId(
-    /// Inner index into [`Model::interfaces`].
+pub struct PortId(
+    /// Inner index into [`Model::ports`].
+    pub usize,
+);
+
+/// Arena index for a connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ConnectionId(
+    /// Inner index into [`Model::connections`].
     pub usize,
 );
 
@@ -61,19 +68,23 @@ pub(crate) enum Scope {
 pub(crate) struct ScopeIndex {
     /// Component lookup: `(parent_scope, label) → ComponentId`.
     pub(crate) components: HashMap<(Scope, String), ComponentId>,
-    /// Interface lookup: `(parent_scope, label) → InterfaceId`.
-    pub(crate) interfaces: HashMap<(Scope, String), InterfaceId>,
+    /// Connection lookup: `(parent_scope, label) → ConnectionId`.
+    pub(crate) connections: HashMap<(Scope, String), ConnectionId>,
+    /// Port lookup: `(owner_component, label) → PortId`.
+    pub(crate) ports: HashMap<(ComponentId, String), PortId>,
 }
 
-// ── Direction ─────────────────────────────────────────────────────────────────
+// ── PortRole ──────────────────────────────────────────────────────────────────
 
-/// Directionality of an interface connection.
+/// The role a port plays in a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Direction {
-    /// One-way data flow (`from → to`).
-    Unidirectional,
-    /// Two-way data flow.
-    Bidirectional,
+pub enum PortRole {
+    /// Provides data / service.
+    Provider,
+    /// Consumes data / service.
+    Consumer,
+    /// Symmetric peer (bidirectional).
+    Peer,
 }
 
 // ── ComponentParent ───────────────────────────────────────────────────────────
@@ -98,8 +109,10 @@ pub struct Model {
     pub systems: Vec<System>,
     /// All components, indexed by [`ComponentId`].
     pub components: Vec<Component>,
-    /// All interfaces, indexed by [`InterfaceId`].
-    pub interfaces: Vec<Interface>,
+    /// All ports, indexed by [`PortId`].
+    pub ports: Vec<Port>,
+    /// All connections, indexed by [`ConnectionId`].
+    pub connections: Vec<Connection>,
     /// All messages, indexed by [`MessageId`].
     pub messages: Vec<Message>,
     /// All fields, indexed by [`FieldId`].
@@ -118,7 +131,8 @@ impl Default for Model {
             },
             systems: vec![],
             components: vec![],
-            interfaces: vec![],
+            ports: vec![],
+            connections: vec![],
             messages: vec![],
             fields: vec![],
             views: vec![],
@@ -150,8 +164,8 @@ pub struct System {
     pub level: i32,
     /// Direct child components.
     pub components: Vec<ComponentId>,
-    /// Direct child interfaces.
-    pub interfaces: Vec<InterfaceId>,
+    /// Direct child connections.
+    pub connections: Vec<ConnectionId>,
 }
 
 /// A resolved component (physical or logical building block).
@@ -171,13 +185,43 @@ pub struct Component {
     pub parent: ComponentParent,
     /// Direct child components.
     pub children: Vec<ComponentId>,
-    /// Interfaces defined inside this component's scope.
-    pub interfaces: Vec<InterfaceId>,
+    /// Ports declared on this component.
+    pub ports: Vec<PortId>,
+    /// Connections defined inside this component's scope.
+    pub connections: Vec<ConnectionId>,
 }
 
-/// A resolved interface connecting two sibling components.
+/// A resolved port on a component.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Interface {
+pub struct Port {
+    /// Unique label within the parent component.
+    pub label: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Free-form protocol name.
+    pub protocol: String,
+    /// Provider, consumer, or peer.
+    pub role: PortRole,
+    /// Filtering tags.
+    pub tags: Vec<String>,
+    /// The component that owns this port.
+    pub owner: ComponentId,
+    /// Messages carried by this port.
+    pub messages: Vec<MessageId>,
+}
+
+/// One endpoint of a connection — a component and an optional port on that component.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionEndpoint {
+    /// The referenced component.
+    pub component: ComponentId,
+    /// The referenced port, if a `comp:port` reference was used.
+    pub port: Option<PortId>,
+}
+
+/// A resolved connection wiring two sibling components together.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Connection {
     /// Unique label within its parent scope.
     pub label: String,
     /// Human-readable description.
@@ -186,18 +230,12 @@ pub struct Interface {
     pub tags: Vec<String>,
     /// Abstraction level.
     pub level: i32,
-    /// If `true`, the interface is atomic (no messages).
-    pub leaf: bool,
-    /// Unidirectional or bidirectional.
-    pub direction: Direction,
-    /// Source component.
-    pub from: ComponentId,
-    /// Target component.
-    pub to: ComponentId,
-    /// Sibling interfaces this one runs on top of.
-    pub encapsulates: Vec<InterfaceId>,
-    /// Messages carried by this interface.
-    pub messages: Vec<MessageId>,
+    /// Source endpoint.
+    pub from: ConnectionEndpoint,
+    /// Target endpoint.
+    pub to: ConnectionEndpoint,
+    /// Sibling connections this one runs on top of.
+    pub encapsulates: Vec<ConnectionId>,
 }
 
 /// A resolved message exchanged over an interface.

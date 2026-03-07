@@ -1,9 +1,9 @@
 use crate::model::{
-    Component, ComponentId, ComponentParent, Diagnostic, Direction, Field, FieldId, Interface,
-    InterfaceId, Message, MessageId, Model, Project, Scope, ScopeIndex, System, SystemId, View,
-    ViewFilter, ViewOutput,
+    Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
+    Diagnostic, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, Scope,
+    ScopeIndex, System, SystemId, View, ViewFilter, ViewOutput,
 };
-use crate::parse::{Labeled, RawComponent, RawFile, RawInterface, RawMessage};
+use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 

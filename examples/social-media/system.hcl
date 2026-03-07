@@ -2,11 +2,11 @@
 #
 # Demonstrates:
 #  - Software component decomposition (backend broken into services)
-#  - Interface messages with typed fields
+#  - Port/connection model with typed and untyped endpoints
 #  - Leaf vs non-leaf at the software level
 #  - Intentional incompleteness: the "recommendation-engine" service
-#    has no children yet (W001) and the "push-notify" interface has
-#    no messages (W002) — the model compiles but scores < 100%.
+#    has no children yet (W001) and some ports have no messages (W011)
+#    — the model compiles but scores < 100%.
 
 system "buzzvid" {
   description = "Short-video social media platform"
@@ -19,6 +19,56 @@ system "buzzvid" {
     description = "iOS/Android client application"
     tags        = ["client", "mobile"]
     leaf        = false
+
+    port "api" {
+      description = "Client-side API endpoint"
+      protocol    = "https"
+      role        = "consumer"
+      tags        = ["network", "api"]
+
+      message "get-feed" {
+        description = "Request next page of video feed"
+        tags        = ["api"]
+
+        field "cursor" {
+          type        = "string"
+          description = "Pagination cursor"
+        }
+        field "feed_type" {
+          type        = "string"
+          description = "for_you | following"
+        }
+      }
+
+      message "upload-video" {
+        description = "Initiate video upload"
+        tags        = ["api", "video"]
+
+        field "title" {
+          type        = "string"
+          description = "Video title"
+        }
+        field "chunk_size" {
+          type        = "uint32"
+          unit        = "bytes"
+          description = "Upload chunk size"
+        }
+      }
+    }
+
+    port "stream-in" {
+      description = "HLS/DASH video stream input"
+      protocol    = "hls"
+      role        = "consumer"
+      tags        = ["video", "network"]
+    }
+
+    port "push-in" {
+      description = "Push notification receiver"
+      protocol    = "push"
+      role        = "consumer"
+      tags        = ["notification"]
+    }
 
     component "video-player" {
       description = "Adaptive bitrate video player"
@@ -38,13 +88,11 @@ system "buzzvid" {
       leaf        = true
     }
 
-    interface "playback" {
+    connection "playback" {
       description = "Feed UI requests playback from player"
       from        = "feed-ui"
       to          = "video-player"
-      direction   = "unidirectional"
       tags        = ["client"]
-      leaf        = true
     }
   }
 
@@ -52,12 +100,54 @@ system "buzzvid" {
     description = "Edge proxy — rate limiting, auth, routing"
     tags        = ["backend", "infra"]
     leaf        = true
+
+    port "public" {
+      description = "Public-facing API endpoint"
+      protocol    = "https"
+      role        = "provider"
+      tags        = ["network", "api"]
+    }
+
+    port "internal" {
+      description = "Internal RPC to backend"
+      protocol    = "grpc"
+      role        = "consumer"
+      tags        = ["network", "internal"]
+    }
   }
 
   component "backend" {
     description = "Server-side services"
     tags        = ["backend"]
     leaf        = false
+
+    port "rpc" {
+      description = "Internal RPC endpoint"
+      protocol    = "grpc"
+      role        = "provider"
+      tags        = ["network", "internal"]
+    }
+
+    port "db" {
+      description = "Database connection pool"
+      protocol    = "sql"
+      role        = "consumer"
+      tags        = ["data"]
+    }
+
+    port "storage" {
+      description = "Object storage client"
+      protocol    = "s3"
+      role        = "consumer"
+      tags        = ["video", "data"]
+    }
+
+    port "push-out" {
+      description = "Push notification sender"
+      protocol    = "push"
+      role        = "provider"
+      tags        = ["notification"]
+    }
 
     component "user-service" {
       description = "Accounts, profiles, follow graph"
@@ -84,36 +174,18 @@ system "buzzvid" {
       leaf        = false
     }
 
-    interface "rec-to-feed" {
+    connection "rec-to-feed" {
       description = "Recommendation scores fed into feed assembly"
       from        = "recommendation-engine"
       to          = "feed-service"
-      direction   = "unidirectional"
       tags        = ["data"]
-      leaf        = false
-
-      message "ranked-videos" {
-        description = "Ordered list of video IDs with scores"
-        tags        = ["data"]
-
-        field "video_ids" {
-          type        = "string[]"
-          description = "Ordered video IDs"
-        }
-        field "scores" {
-          type        = "float32[]"
-          description = "Relevance scores 0-1"
-        }
-      }
     }
 
-    interface "user-to-feed" {
+    connection "user-to-feed" {
       description = "Follow graph lookup for Following tab"
       from        = "feed-service"
       to          = "user-service"
-      direction   = "unidirectional"
       tags        = ["data"]
-      leaf        = true
     }
   }
 
@@ -121,113 +193,96 @@ system "buzzvid" {
     description = "Content delivery network for video segments"
     tags        = ["infra", "video"]
     leaf        = true
+
+    port "origin" {
+      description = "Origin pull from object store"
+      protocol    = "s3"
+      role        = "consumer"
+      tags        = ["video", "infra"]
+    }
+
+    port "stream-out" {
+      description = "HLS/DASH streaming to clients"
+      protocol    = "hls"
+      role        = "provider"
+      tags        = ["video", "network"]
+    }
   }
 
   component "database" {
     description = "PostgreSQL primary store"
     tags        = ["infra", "data"]
     leaf        = true
+
+    port "sql" {
+      description = "SQL query endpoint"
+      protocol    = "sql"
+      role        = "provider"
+      tags        = ["data"]
+    }
   }
 
   component "object-store" {
     description = "S3-compatible blob storage for raw + transcoded video"
     tags        = ["infra", "video"]
     leaf        = true
+
+    port "s3" {
+      description = "S3-compatible API"
+      protocol    = "s3"
+      role        = "provider"
+      tags        = ["video", "data"]
+    }
   }
 
-  # ── Top-level interfaces ──────────────────
+  # ── Top-level connections ──────────────────
 
-  interface "client-api" {
+  connection "client-api" {
     description = "HTTPS REST/gRPC: mobile app ↔ API gateway"
     tags        = ["network", "api"]
-    from        = "mobile-app"
-    to          = "api-gateway"
-    direction   = "bidirectional"
-    leaf        = false
-
-    message "get-feed" {
-      description = "Request next page of video feed"
-      tags        = ["api"]
-
-      field "cursor" {
-        type        = "string"
-        description = "Pagination cursor"
-      }
-      field "feed_type" {
-        type        = "string"
-        description = "for_you | following"
-      }
-    }
-
-    message "upload-video" {
-      description = "Initiate video upload"
-      tags        = ["api", "video"]
-
-      field "title" {
-        type        = "string"
-        description = "Video title"
-      }
-      field "chunk_size" {
-        type        = "uint32"
-        unit        = "bytes"
-        description = "Upload chunk size"
-      }
-    }
+    from        = "mobile-app:api"
+    to          = "api-gateway:public"
   }
 
-  interface "gateway-to-backend" {
+  connection "gateway-to-backend" {
     description = "Internal RPC: gateway → backend services"
     tags        = ["network", "internal"]
-    from        = "api-gateway"
-    to          = "backend"
-    direction   = "bidirectional"
-    leaf        = true
+    from        = "api-gateway:internal"
+    to          = "backend:rpc"
   }
 
-  interface "backend-to-db" {
+  connection "backend-to-db" {
     description = "SQL queries: backend → database"
     tags        = ["data"]
-    from        = "backend"
-    to          = "database"
-    direction   = "bidirectional"
-    leaf        = true
+    from        = "backend:db"
+    to          = "database:sql"
   }
 
-  interface "backend-to-storage" {
+  connection "backend-to-storage" {
     description = "Object put/get: video service → blob store"
     tags        = ["video", "data"]
-    from        = "backend"
-    to          = "object-store"
-    direction   = "bidirectional"
-    leaf        = true
+    from        = "backend:storage"
+    to          = "object-store:s3"
   }
 
-  interface "cdn-origin" {
+  connection "cdn-origin" {
     description = "CDN pulls transcoded segments from object store"
     tags        = ["video", "infra"]
-    from        = "cdn"
-    to          = "object-store"
-    direction   = "unidirectional"
-    leaf        = true
+    from        = "cdn:origin"
+    to          = "object-store:s3"
   }
 
-  interface "client-streaming" {
+  connection "client-streaming" {
     description = "HLS/DASH video streaming: CDN → mobile app"
     tags        = ["video", "network"]
-    from        = "cdn"
-    to          = "mobile-app"
-    direction   = "unidirectional"
-    leaf        = true
+    from        = "cdn:stream-out"
+    to          = "mobile-app:stream-in"
   }
 
-  # Non-leaf interface with no messages → W002
-  interface "push-notify" {
+  connection "push-notify" {
     description = "Push notifications: backend → mobile app"
     tags        = ["notification"]
-    from        = "backend"
-    to          = "mobile-app"
-    direction   = "unidirectional"
-    leaf        = false
-    # messages not yet defined — triggers W002
+    from        = "backend:push-out"
+    to          = "mobile-app:push-in"
   }
 }
