@@ -1,7 +1,7 @@
 //! Command-line interface: argument parsing, pipeline orchestration, and output
 //! formatting.
 
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
@@ -545,7 +545,10 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
                 // so a single logical save does not trigger multiple rebuilds.
                 drain_debounce(&rx, DEBOUNCE);
                 // Clear the terminal before each rebuild for a clean view.
+                // Flush stdout immediately so the clear fires before any stderr
+                // diagnostic output (stderr is unbuffered; stdout is not).
                 print!("\x1B[2J\x1B[1;1H");
+                let _ = std::io::stdout().flush();
                 run_pipeline(cli, CommandKind::Build, path, color);
             }
             Ok(_) => {}
