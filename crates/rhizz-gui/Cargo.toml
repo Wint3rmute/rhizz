@@ -13,6 +13,8 @@ rhizz-dot           = { path = "../rhizz-dot" }
 eframe              = "0.31"
 egui                = "0.31"
 layout-rs           = "0.1.3"
+resvg               = "0.47"
+tiny-skia           = "0.12"
 notify              = "6"
 walkdir             = "2"
 anyhow              = "1"

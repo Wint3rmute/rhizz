@@ -2,20 +2,16 @@
 //!
 //! Usage: `rhizz-gui <project-dir>`
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use egui::Color32;
+use layout::backends::svg::SVGWriter;
+use layout::gv::{DotParser, GraphBuilder};
 use notify::{RecursiveMode, Watcher as _};
-use rhizz_core::{ComponentId, Diagnostic, Model, PortRole, Source};
+use rhizz_core::{Diagnostic, Model, Source};
 use tracing::{debug, error, info, warn};
 use walkdir::WalkDir;
-
-use layout::core::format::{ClipHandle, RenderBackend};
-use layout::core::geometry::Point as LP;
-use layout::core::style::StyleAttr;
-use layout::gv::{DotParser, GraphBuilder};
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -86,267 +82,64 @@ fn is_hcl_event(event: &notify::Event) -> bool {
             .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
 }
 
-// ── Graph layout types ────────────────────────────────────────────────────────
+// ── Graph rendering ────────────────────────────────────────────────────────────
 
-/// A single drawable command collected from the layout engine.
-#[derive(Clone)]
-enum DrawCmd {
-    /// A leaf component node (solid border box).
-    Node {
-        rect: egui::Rect,
-        fill: Color32,
-        stroke: egui::Stroke,
-        label: String,
-    },
-    /// A non-leaf component cluster (dashed border rectangle).
-    Cluster { rect: egui::Rect, label: String },
-    /// A connection edge (arrow or plain line).
-    Edge {
-        path: Vec<egui::Pos2>,
-        /// (start_arrowhead, end_arrowhead)
-        head: (bool, bool),
-        dashed: bool,
-        stroke: egui::Stroke,
-        label: String,
-    },
-}
-
-/// Computed layout for a single view, ready to be drawn by egui::Painter.
-#[derive(Clone)]
-struct GraphLayout {
-    cmds: Vec<DrawCmd>,
-    canvas: egui::Vec2,
-}
-
-/// A collecting render backend that converts layout-rs draw calls into
-/// egui-compatible draw commands.
-struct EguiBackend {
-    cmds: Vec<DrawCmd>,
-    /// Pending rect waiting for its label text (draw_rect → draw_text pair).
-    pending: Option<(egui::Rect, egui::Stroke, Color32)>,
-    canvas: egui::Vec2,
-    /// Map from component label → rect, used for cluster bounding boxes.
-    label_to_rect: HashMap<String, egui::Rect>,
-}
-
-impl EguiBackend {
-    fn new() -> Self {
-        Self {
-            cmds: Vec::new(),
-            pending: None,
-            canvas: egui::Vec2::ZERO,
-            label_to_rect: HashMap::new(),
-        }
-    }
-
-    fn lp_to_pos(p: LP) -> egui::Pos2 {
-        egui::pos2(p.x as f32, p.y as f32)
-    }
-
-    /// Convert a layout-rs color to egui Color32.
-    fn layout_color(c: &layout::core::color::Color) -> Color32 {
-        let hex = c.to_web_color();
-        let h = hex.trim_start_matches('#');
-        if h.len() == 8 {
-            let r = u8::from_str_radix(&h[0..2], 16).unwrap_or(0);
-            let g = u8::from_str_radix(&h[2..4], 16).unwrap_or(0);
-            let b = u8::from_str_radix(&h[4..6], 16).unwrap_or(0);
-            let a = u8::from_str_radix(&h[6..8], 16).unwrap_or(255);
-            Color32::from_rgba_unmultiplied(r, g, b, a)
-        } else {
-            Color32::BLACK
-        }
-    }
-
-    /// Expand the canvas to include the rectangle defined by (xy, size).
-    fn update_canvas(&mut self, xy: LP, size: LP) {
-        let max_x = (xy.x + size.x + 20.0) as f32;
-        let max_y = (xy.y + size.y + 20.0) as f32;
-        self.canvas.x = self.canvas.x.max(max_x);
-        self.canvas.y = self.canvas.y.max(max_y);
-    }
-
-    /// Consume the backend and return the collected draw commands, canvas size,
-    /// and label→rect map.
-    fn finish(self) -> (Vec<DrawCmd>, egui::Vec2, HashMap<String, egui::Rect>) {
-        (self.cmds, self.canvas, self.label_to_rect)
-    }
-}
-
-impl RenderBackend for EguiBackend {
-    fn draw_rect(
-        &mut self,
-        xy: LP,
-        size: LP,
-        look: &StyleAttr,
-        _properties: Option<String>,
-        _clip: Option<ClipHandle>,
-    ) {
-        self.update_canvas(xy, size);
-        let rect = egui::Rect::from_min_size(
-            Self::lp_to_pos(xy),
-            egui::vec2(size.x as f32, size.y as f32),
-        );
-        let fill = look
-            .fill_color
-            .as_ref()
-            .map(Self::layout_color)
-            .unwrap_or(Color32::TRANSPARENT);
-        let stroke = egui::Stroke::new(
-            (look.line_width as f32).max(1.0),
-            Self::layout_color(&look.line_color),
-        );
-        self.pending = Some((rect, stroke, fill));
-    }
-
-    fn draw_line(&mut self, start: LP, stop: LP, look: &StyleAttr, _properties: Option<String>) {
-        let stroke = egui::Stroke::new(
-            (look.line_width as f32).max(1.0),
-            Self::layout_color(&look.line_color),
-        );
-        self.cmds.push(DrawCmd::Edge {
-            path: vec![Self::lp_to_pos(start), Self::lp_to_pos(stop)],
-            head: (false, false),
-            dashed: false,
-            stroke,
-            label: String::new(),
-        });
-    }
-
-    fn draw_circle(&mut self, xy: LP, size: LP, look: &StyleAttr, _properties: Option<String>) {
-        // xy is the center for circles; convert to top-left for Rect.
-        let tl = LP::new(xy.x - size.x / 2.0, xy.y - size.y / 2.0);
-        self.update_canvas(tl, size);
-        let rect = egui::Rect::from_center_size(
-            Self::lp_to_pos(xy),
-            egui::vec2(size.x as f32, size.y as f32),
-        );
-        let fill = look
-            .fill_color
-            .as_ref()
-            .map(Self::layout_color)
-            .unwrap_or(Color32::TRANSPARENT);
-        let stroke = egui::Stroke::new(
-            (look.line_width as f32).max(1.0),
-            Self::layout_color(&look.line_color),
-        );
-        self.pending = Some((rect, stroke, fill));
-    }
-
-    fn draw_text(&mut self, _xy: LP, text: &str, _look: &StyleAttr) {
-        if let Some((rect, stroke, fill)) = self.pending.take()
-            && !text.is_empty()
-        {
-            self.label_to_rect.insert(text.to_owned(), rect);
-            self.cmds.push(DrawCmd::Node {
-                rect,
-                fill,
-                stroke,
-                label: text.to_owned(),
-            });
-        }
-        // Empty text → invisible proxy node → discard.
-        // No pending rect → standalone connector label → ignore.
-    }
-
-    fn draw_arrow(
-        &mut self,
-        path: &[(LP, LP)],
-        dashed: bool,
-        head: (bool, bool),
-        look: &StyleAttr,
-        _properties: Option<String>,
-        text: &str,
-    ) {
-        if path.len() < 2 {
-            return;
-        }
-        let stroke = egui::Stroke::new(
-            (look.line_width as f32).max(1.0),
-            Self::layout_color(&look.line_color),
-        );
-        // Build a polyline from the bezier anchor points: path[0].0 is the
-        // start; each subsequent path[n].1 is the next anchor.
-        let mut pts = vec![Self::lp_to_pos(path[0].0)];
-        for seg in path.iter().skip(1) {
-            let p = Self::lp_to_pos(seg.1);
-            self.canvas.x = self.canvas.x.max(p.x + 10.0);
-            self.canvas.y = self.canvas.y.max(p.y + 10.0);
-            pts.push(p);
-        }
-        self.canvas.x = self.canvas.x.max(pts[0].x + 10.0);
-        self.canvas.y = self.canvas.y.max(pts[0].y + 10.0);
-        self.cmds.push(DrawCmd::Edge {
-            path: pts,
-            head,
-            dashed,
-            stroke,
-            label: text.to_owned(),
-        });
-    }
-
-    fn create_clip(&mut self, _xy: LP, _size: LP, _rounded_px: usize) -> ClipHandle {
-        // This renderer does not use clip regions; return the zero handle.
-        0
-    }
-}
-
-// ── Graph layout computation ──────────────────────────────────────────────────
-
-/// Compute and return the egui draw list for `view` in `model`.
+/// Render `view` in `model` to an egui `ColorImage` at the given pixel size.
 ///
-/// Calls `rhizz_dot::render_view` to obtain the DOT representation, passes it
-/// to the `layout` crate for node placement, then post-processes the result
-/// to add cluster bounding boxes and fix bidirectional edge directions.
-fn compute_graph_layout(model: &Model, view: &rhizz_core::View) -> Result<GraphLayout, String> {
+/// Steps:
+/// 1. Calls `rhizz_dot::render_view` to get the DOT string.
+/// 2. Passes it to `layout-rs` SVG backend to get an SVG string.
+/// 3. Rasterizes the SVG at the given pixel dimensions using `resvg`.
+/// 4. Returns an `egui::ColorImage` (RGBA).
+fn render_view_to_image(
+    model: &Model,
+    view: &rhizz_core::View,
+    size: egui::Vec2,
+) -> Result<egui::ColorImage, String> {
     let dot = rhizz_dot::render_view(model, view);
 
     let mut parser = DotParser::new(&dot);
     let tree = parser
         .process()
         .map_err(|e| format!("layout parse error: {e}"))?;
-
     let mut gb = GraphBuilder::new();
     gb.visit_graph(&tree);
     let mut vg = gb.get();
 
-    let mut backend = EguiBackend::new();
-    vg.do_it(false, false, false, &mut backend);
+    let mut svg_backend = SVGWriter::new();
+    vg.do_it(false, false, false, &mut svg_backend);
+    let svg_str = svg_backend.finalize();
 
-    let (mut cmds, canvas, label_to_rect) = backend.finish();
+    let opt = resvg::usvg::Options::default();
+    let rtree =
+        resvg::usvg::Tree::from_str(&svg_str, &opt).map_err(|e| format!("SVG parse error: {e}"))?;
 
-    // Fix bidirectional edges: the layout crate treats all directed edges as
-    // unidirectional (end arrow only).  Replace head with (false, false) for
-    // bidirectional connections so they render as plain lines.
-    for cmd in &mut cmds {
-        if let DrawCmd::Edge { label, head, .. } = cmd {
-            let iface_label = label.lines().next().unwrap_or(label.as_str());
-            if is_bidirectional_connection(iface_label, model) {
-                *head = (false, false);
-            }
-        }
-    }
+    let width = (size.x as u32).max(1);
+    let height = (size.y as u32).max(1);
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)
+        .ok_or_else(|| "failed to create pixmap".to_string())?;
 
-    // Compute cluster bounding boxes (inserted before nodes so they render as
-    // background rectangles).
-    let mut cluster_cmds = Vec::new();
-    let system = &model.systems[view.system.0];
-    for &cid in &system.components {
-        collect_cluster_cmds(cid, model, &label_to_rect, &mut cluster_cmds);
-    }
+    pixmap.fill(resvg::tiny_skia::Color::WHITE);
 
-    let mut all_cmds = cluster_cmds;
-    all_cmds.extend(cmds);
+    let svg_size = rtree.size();
+    let scale_x = width as f32 / svg_size.width();
+    let scale_y = height as f32 / svg_size.height();
+    let scale = scale_x.min(scale_y);
+    let transform = resvg::tiny_skia::Transform::from_scale(scale, scale);
+    resvg::render(&rtree, transform, &mut pixmap.as_mut());
 
-    Ok(GraphLayout {
-        cmds: all_cmds,
-        canvas,
-    })
+    let pixels = pixmap.take_demultiplied();
+    Ok(egui::ColorImage::from_rgba_unmultiplied(
+        [width as usize, height as usize],
+        &pixels,
+    ))
 }
 
 /// Returns `true` if the connection with the given label is bidirectional
 /// (i.e. both endpoint ports have `Peer` role).
+#[cfg(test)]
 fn is_bidirectional_connection(label: &str, model: &Model) -> bool {
+    use rhizz_core::PortRole;
     model.connections.iter().any(|c| {
         c.label == label && {
             let from_role = c.from.port.map(|pid| model.ports[pid.0].role);
@@ -359,220 +152,6 @@ fn is_bidirectional_connection(label: &str, model: &Model) -> bool {
     })
 }
 
-/// Recursively compute dashed cluster boxes for non-leaf components.
-/// Inner clusters are inserted first so they are drawn on top of outer ones.
-fn collect_cluster_cmds(
-    cid: ComponentId,
-    model: &Model,
-    label_to_rect: &HashMap<String, egui::Rect>,
-    out: &mut Vec<DrawCmd>,
-) {
-    let comp = &model.components[cid.0];
-    if comp.children.is_empty() {
-        return;
-    }
-
-    // Process children recursively first (inner clusters drawn on top).
-    for &child in &comp.children {
-        collect_cluster_cmds(child, model, label_to_rect, out);
-    }
-
-    // Compute bounding box from all children that have a known position.
-    let padding = 15.0_f32;
-    let child_rects: Vec<egui::Rect> = comp
-        .children
-        .iter()
-        .filter_map(|&c| label_to_rect.get(&model.components[c.0].label).copied())
-        .collect();
-
-    if child_rects.is_empty() {
-        return;
-    }
-
-    let min_x = child_rects.iter().map(|r| r.min.x).fold(f32::MAX, f32::min) - padding;
-    let min_y = child_rects.iter().map(|r| r.min.y).fold(f32::MAX, f32::min) - padding;
-    let max_x = child_rects.iter().map(|r| r.max.x).fold(f32::MIN, f32::max) + padding;
-    let max_y = child_rects.iter().map(|r| r.max.y).fold(f32::MIN, f32::max) + padding;
-
-    out.push(DrawCmd::Cluster {
-        rect: egui::Rect::from_min_max(egui::pos2(min_x, min_y), egui::pos2(max_x, max_y)),
-        label: comp.label.clone(),
-    });
-}
-
-// ── Graph rendering helpers ───────────────────────────────────────────────────
-
-/// Draw the full graph layout via `painter`.  All coordinates are offset by
-/// `origin` (the top-left of the allocated canvas rect inside the ScrollArea)
-/// and scaled uniformly by `scale`.
-fn draw_graph_layout(
-    painter: &egui::Painter,
-    origin: egui::Pos2,
-    layout: &GraphLayout,
-    scale: f32,
-) {
-    for cmd in &layout.cmds {
-        match cmd {
-            DrawCmd::Cluster { rect, label } => {
-                let r = scale_and_offset_rect(*rect, origin, scale);
-                draw_dashed_rect(painter, r, Color32::from_rgb(80, 100, 200), scale);
-                painter.text(
-                    r.min + egui::vec2(6.0, 3.0) * scale,
-                    egui::Align2::LEFT_TOP,
-                    label,
-                    egui::FontId::proportional(12.0 * scale),
-                    Color32::from_rgb(80, 100, 200),
-                );
-            }
-            DrawCmd::Node {
-                rect,
-                fill,
-                stroke,
-                label,
-            } => {
-                let r = scale_and_offset_rect(*rect, origin, scale);
-                let scaled_stroke = egui::Stroke::new(stroke.width * scale, stroke.color);
-                painter.rect_filled(r, 2.0 * scale, *fill);
-                painter.rect_stroke(r, 2.0 * scale, scaled_stroke, egui::StrokeKind::Middle);
-                painter.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    label,
-                    egui::FontId::proportional(12.0 * scale),
-                    Color32::BLACK,
-                );
-            }
-            DrawCmd::Edge {
-                path,
-                head,
-                dashed,
-                stroke,
-                label,
-            } => {
-                let pts: Vec<egui::Pos2> = path
-                    .iter()
-                    .map(|p| origin + egui::vec2(p.x * scale, p.y * scale))
-                    .collect();
-                let scaled_stroke = egui::Stroke::new(stroke.width * scale, stroke.color);
-                draw_edge(painter, &pts, *head, *dashed, scaled_stroke, label, scale);
-            }
-        }
-    }
-}
-
-fn scale_and_offset_rect(rect: egui::Rect, origin: egui::Pos2, scale: f32) -> egui::Rect {
-    let min = origin + egui::vec2(rect.min.x * scale, rect.min.y * scale);
-    let max = origin + egui::vec2(rect.max.x * scale, rect.max.y * scale);
-    egui::Rect::from_min_max(min, max)
-}
-
-fn draw_edge(
-    painter: &egui::Painter,
-    pts: &[egui::Pos2],
-    head: (bool, bool),
-    dashed: bool,
-    stroke: egui::Stroke,
-    label: &str,
-    scale: f32,
-) {
-    if pts.len() < 2 {
-        return;
-    }
-
-    // Draw line segments.
-    for i in 0..pts.len().saturating_sub(1) {
-        if dashed {
-            draw_dashed_line(painter, pts[i], pts[i + 1], stroke, scale);
-        } else {
-            painter.line_segment([pts[i], pts[i + 1]], stroke);
-        }
-    }
-
-    // End arrowhead.
-    if head.1 {
-        let tip = pts[pts.len() - 1];
-        let prev = pts[pts.len() - 2];
-        draw_arrowhead(painter, prev, tip, stroke.color, scale);
-    }
-    // Start arrowhead.
-    if head.0 {
-        let tip = pts[0];
-        let next = pts[1];
-        draw_arrowhead(painter, next, tip, stroke.color, scale);
-    }
-
-    // Edge label (first line only, drawn near the midpoint).
-    let first_line = label.lines().next().unwrap_or_default();
-    if !first_line.is_empty() {
-        let mid = pts[pts.len() / 2];
-        painter.text(
-            mid + egui::vec2(4.0, -8.0) * scale,
-            egui::Align2::LEFT_BOTTOM,
-            first_line,
-            egui::FontId::proportional(11.0 * scale),
-            Color32::DARK_GRAY,
-        );
-    }
-}
-
-fn draw_arrowhead(
-    painter: &egui::Painter,
-    from: egui::Pos2,
-    tip: egui::Pos2,
-    color: Color32,
-    scale: f32,
-) {
-    let delta = tip - from;
-    if delta.length() < 0.01 {
-        return;
-    }
-    let dir = delta.normalized();
-    let perp = egui::vec2(-dir.y, dir.x);
-    let size = 8.0_f32 * scale;
-    let half_w = 4.5_f32 * scale;
-    let base = tip - dir * size;
-    painter.add(egui::Shape::convex_polygon(
-        vec![tip, base + perp * half_w, base - perp * half_w],
-        color,
-        egui::Stroke::NONE,
-    ));
-}
-
-fn draw_dashed_line(
-    painter: &egui::Painter,
-    a: egui::Pos2,
-    b: egui::Pos2,
-    stroke: egui::Stroke,
-    scale: f32,
-) {
-    let total = (b - a).length();
-    if total < 0.01 {
-        return;
-    }
-    let dir = (b - a) / total;
-    let dash = 6.0_f32 * scale;
-    let gap = 4.0_f32 * scale;
-    let mut pos = 0.0_f32;
-    while pos < total {
-        let start = a + dir * pos;
-        let end = a + dir * (pos + dash).min(total);
-        painter.line_segment([start, end], stroke);
-        pos += dash + gap;
-    }
-}
-
-fn draw_dashed_rect(painter: &egui::Painter, rect: egui::Rect, color: Color32, scale: f32) {
-    let s = egui::Stroke::new(1.5 * scale, color);
-    let tl = rect.min;
-    let tr = egui::pos2(rect.max.x, rect.min.y);
-    let bl = egui::pos2(rect.min.x, rect.max.y);
-    let br = rect.max;
-    draw_dashed_line(painter, tl, tr, s, scale);
-    draw_dashed_line(painter, tr, br, s, scale);
-    draw_dashed_line(painter, br, bl, s, scale);
-    draw_dashed_line(painter, bl, tl, s, scale);
-}
-
 // ── App ───────────────────────────────────────────────────────────────────────
 
 struct RhizzApp {
@@ -581,8 +160,9 @@ struct RhizzApp {
     diagnostics: Vec<Diagnostic>,
     /// Index of the currently-selected view tab.
     selected_view: usize,
-    /// Cached layout for each view (None = not yet computed).
-    view_layouts: Vec<Option<Result<GraphLayout, String>>>,
+    /// Cached texture for each view (None = not yet rendered).
+    /// The `egui::Vec2` is the panel size at which the texture was last rendered.
+    view_textures: Vec<Option<(egui::TextureHandle, egui::Vec2)>>,
     /// Whether the score dashboard panel is open.
     score_panel_open: bool,
     /// File-system watcher (kept alive so it is not dropped).
@@ -631,7 +211,7 @@ impl RhizzApp {
             model,
             diagnostics,
             selected_view: 0,
-            view_layouts: vec![None; view_count],
+            view_textures: vec![None; view_count],
             score_panel_open: false,
             _watcher: watcher,
             watch_rx,
@@ -664,29 +244,11 @@ impl eframe::App for RhizzApp {
             let view_count = model.as_ref().map_or(0, |m| m.views.len());
             self.model = model;
             self.diagnostics = diagnostics;
-            self.view_layouts = vec![None; view_count];
+            self.view_textures = vec![None; view_count];
             self.selected_view = self.selected_view.min(view_count.saturating_sub(1));
             ctx.request_repaint();
         } else {
             ctx.request_repaint_after(std::time::Duration::from_secs(2));
-        }
-
-        // ── Lazy-compute layout for the selected view ─────────────────────────
-        let view_count = self.model.as_ref().map_or(0, |m| m.views.len());
-        if view_count > 0 {
-            let idx = self.selected_view.min(view_count - 1);
-            if let Some(model) = &self.model
-                && let Some(slot) = self.view_layouts.get_mut(idx)
-                && slot.is_none()
-            {
-                let result = compute_graph_layout(model, &model.views[idx]);
-                if let Err(ref e) = result {
-                    warn!("Failed to compute layout for view {idx}: {e}");
-                } else {
-                    debug!("View {idx} layout computed successfully");
-                }
-                *slot = Some(result);
-            }
         }
 
         // ── Left sidebar: systems / components / connections ───────────────────
@@ -827,30 +389,52 @@ impl eframe::App for RhizzApp {
                     ui.separator();
 
                     let idx = self.selected_view.min(model.views.len() - 1);
+                    let available_size = ui.available_size().max(egui::vec2(1.0, 1.0));
+
+                    // Re-rasterize if panel size changed by more than 4 px on either axis.
+                    let needs_render = match self.view_textures.get(idx).and_then(Option::as_ref) {
+                        Some((_, stored)) => {
+                            (stored.x - available_size.x).abs() > 4.0
+                                || (stored.y - available_size.y).abs() > 4.0
+                        }
+                        None => true,
+                    };
+
+                    if needs_render {
+                        // Borrow model immutably; result is owned so borrow ends before mutation.
+                        let render_result = model
+                            .views
+                            .get(idx)
+                            .map(|view| render_view_to_image(model, view, available_size));
+                        match render_result {
+                            Some(Ok(image)) => {
+                                let handle = ctx.load_texture(
+                                    format!("view_{idx}"),
+                                    image,
+                                    egui::TextureOptions::default(),
+                                );
+                                if let Some(slot) = self.view_textures.get_mut(idx) {
+                                    *slot = Some((handle, available_size));
+                                }
+                                debug!("View {idx} rasterized at {available_size:?}");
+                            }
+                            Some(Err(ref e)) => {
+                                warn!("render_view_to_image failed for view {idx}: {e}");
+                            }
+                            None => {}
+                        }
+                    }
 
                     egui::ScrollArea::both().show(ui, |ui| {
-                        match self.view_layouts.get(idx).and_then(Option::as_ref) {
-                            Some(Ok(layout)) => {
-                                // Compute uniform scale to fit the canvas into the
-                                // available space, never exceeding 1:1.
-                                let avail = ui.available_size().max(egui::vec2(1.0, 1.0));
-                                let canvas = layout.canvas.max(egui::vec2(1.0, 1.0));
-                                let scale = (avail.x / canvas.x).min(avail.y / canvas.y).min(1.0);
-                                let canvas_size = canvas * scale;
-                                let (rect, _) =
-                                    ui.allocate_exact_size(canvas_size, egui::Sense::hover());
-                                if ui.is_rect_visible(rect) {
-                                    draw_graph_layout(ui.painter(), rect.min, layout, scale);
-                                }
-                            }
-                            Some(Err(e)) => {
-                                ui.colored_label(
-                                    Color32::from_rgb(220, 80, 80),
-                                    format!("Layout error: {e}"),
-                                );
+                        match self.view_textures.get(idx).and_then(Option::as_ref) {
+                            Some((handle, _)) => {
+                                ui.image(egui::load::SizedTexture::new(
+                                    handle.id(),
+                                    available_size,
+                                ));
                             }
                             None => {
-                                ui.label(egui::RichText::new("Computing layout…").italics());
+                                ui.label(egui::RichText::new("Rendering…").italics());
                             }
                         }
                     });
@@ -876,7 +460,7 @@ fn score_row(ui: &mut egui::Ui, label: &str, cat: &rhizz_core::CategoryScore) {
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawCmd, compute_graph_layout, is_bidirectional_connection, is_hcl_event};
+    use super::{is_bidirectional_connection, is_hcl_event, render_view_to_image};
     use notify::{Event, EventKind};
     use std::path::PathBuf;
     use walkdir::WalkDir;
@@ -964,10 +548,10 @@ mod tests {
         assert!(!is_hcl_event(&ev));
     }
 
-    // ── Task 15: graph layout tests ───────────────────────────────────────────
+    // ── Task 19: render_view_to_image tests ──────────────────────────────────
 
     #[test]
-    fn drone_overview_layout_produces_nodes_and_edges() {
+    fn drone_overview_renders_non_empty_image() {
         let model = load_example("drone");
         let view = model
             .views
@@ -975,26 +559,15 @@ mod tests {
             .find(|v| v.label == "drone-overview")
             .expect("drone-overview view");
 
-        let layout =
-            compute_graph_layout(&model, view).expect("layout should succeed for drone-overview");
+        let img = render_view_to_image(&model, view, egui::vec2(800.0, 600.0))
+            .expect("render_view_to_image should succeed for drone-overview");
 
-        // Canvas must have non-zero area.
-        assert!(layout.canvas.x > 0.0, "canvas width > 0");
-        assert!(layout.canvas.y > 0.0, "canvas height > 0");
-
-        // Must have at least one node and one edge in the draw list.
-        let node_count = layout
-            .cmds
-            .iter()
-            .filter(|c| matches!(c, DrawCmd::Node { .. }))
-            .count();
-        let edge_count = layout
-            .cmds
-            .iter()
-            .filter(|c| matches!(c, DrawCmd::Edge { .. }))
-            .count();
-        assert!(node_count > 0, "at least one node drawn");
-        assert!(edge_count > 0, "at least one edge drawn");
+        assert_eq!(
+            img.size,
+            [800, 600],
+            "image dimensions match requested size"
+        );
+        assert!(!img.pixels.is_empty(), "image has pixels");
     }
 
     #[test]
@@ -1040,12 +613,12 @@ mod tests {
     }
 
     #[test]
-    fn all_example_views_layout_without_error() {
+    fn all_example_views_render_without_error() {
         for example in ["drone", "social-media", "software-house"] {
             let model = load_example(example);
             for view in &model.views {
-                compute_graph_layout(&model, view).unwrap_or_else(|e| {
-                    panic!("layout failed for {}/{}: {e}", example, view.label)
+                render_view_to_image(&model, view, egui::vec2(800.0, 600.0)).unwrap_or_else(|e| {
+                    panic!("render failed for {}/{}: {e}", example, view.label)
                 });
             }
         }
