@@ -311,13 +311,160 @@ pub struct ViewOutput {
     pub rankdir: String,
 }
 
+// ── DiagnosticCode ────────────────────────────────────────────────────────────
+
+/// Every diagnostic code the rhizz compiler can emit.
+///
+/// Error codes (`E…`) are blocking — they prevent a model from being produced.
+/// Warning codes (`W…`) are non-blocking — compilation succeeds and a model is
+/// returned alongside the warnings.
+///
+/// The string representation of each variant (e.g. `"E001"`) is stable and
+/// forms part of the public API.  Renumbering is a breaking change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DiagnosticCode {
+    // ── Errors ────────────────────────────────────────────────────────────────
+    /// HCL parse failure, or an internal structural error forwarded by the frontend.
+    E000,
+    /// Duplicate label within the same scope and block type.
+    E001,
+    /// Connection `from`/`to` (bare label) references an undefined sibling component.
+    E002,
+    /// Connection `encapsulates` references an undefined sibling connection.
+    E003,
+    /// Circular encapsulation chain detected.
+    E004,
+    /// Leaf component contains child `component` or `connection` blocks.
+    E005,
+    /// `view` block references an undefined system.
+    E006,
+    /// `field` block is missing the required `type` attribute.
+    E007,
+    /// More than one `project` block defined across all source files.
+    E008,
+    /// `port.role` value is not `"provider"`, `"consumer"`, or `"peer"`.
+    E009,
+    /// `comp:port` reference — component exists but the named port does not.
+    E010,
+    /// `comp:port` reference — component label does not exist in the current scope.
+    E011,
+
+    // ── Warnings ──────────────────────────────────────────────────────────────
+    /// Non-blocking frontend or runtime warning (e.g. live-reload unavailable).
+    /// Used as an escape hatch by frontends for warnings that don't correspond
+    /// to a specific model diagnostic.
+    W000,
+    /// Non-leaf component has no child components (decomposition pending).
+    W001,
+    /// Message has no fields defined.
+    W002,
+    /// Component is not referenced by any connection (orphan component).
+    W003,
+    /// Entity is missing a `description`.
+    W004,
+    /// Connection `from` and `to` point to the same component.
+    W005,
+    /// `level` value decreases relative to the parent (likely a mistake).
+    W006,
+    /// One side of a connection is typed (`comp:port`), the other is a bare label.
+    W007,
+    /// Both sides of a connection are typed but their `protocol` values differ.
+    W008,
+    /// Port roles are incompatible or ambiguous (see the role compatibility table in the spec).
+    W009,
+    /// Port is defined on a component but not referenced by any connection.
+    W010,
+    /// Port has no messages defined.
+    W011,
+}
+
+impl DiagnosticCode {
+    /// Returns `true` for error-level codes (`E…`).
+    pub fn is_error(self) -> bool {
+        matches!(
+            self,
+            Self::E000
+                | Self::E001
+                | Self::E002
+                | Self::E003
+                | Self::E004
+                | Self::E005
+                | Self::E006
+                | Self::E007
+                | Self::E008
+                | Self::E009
+                | Self::E010
+                | Self::E011
+        )
+    }
+
+    /// Returns `true` for warning-level codes (`W…`).
+    pub fn is_warning(self) -> bool {
+        !self.is_error()
+    }
+}
+
+impl std::fmt::Display for DiagnosticCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The Debug representation of each variant is its string code (e.g. "E001").
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::str::FromStr for DiagnosticCode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "E000" => Ok(Self::E000),
+            "E001" => Ok(Self::E001),
+            "E002" => Ok(Self::E002),
+            "E003" => Ok(Self::E003),
+            "E004" => Ok(Self::E004),
+            "E005" => Ok(Self::E005),
+            "E006" => Ok(Self::E006),
+            "E007" => Ok(Self::E007),
+            "E008" => Ok(Self::E008),
+            "E009" => Ok(Self::E009),
+            "E010" => Ok(Self::E010),
+            "E011" => Ok(Self::E011),
+            "W000" => Ok(Self::W000),
+            "W001" => Ok(Self::W001),
+            "W002" => Ok(Self::W002),
+            "W003" => Ok(Self::W003),
+            "W004" => Ok(Self::W004),
+            "W005" => Ok(Self::W005),
+            "W006" => Ok(Self::W006),
+            "W007" => Ok(Self::W007),
+            "W008" => Ok(Self::W008),
+            "W009" => Ok(Self::W009),
+            "W010" => Ok(Self::W010),
+            "W011" => Ok(Self::W011),
+            other => Err(format!("unknown diagnostic code: {other}")),
+        }
+    }
+}
+
+impl serde::Serialize for DiagnosticCode {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DiagnosticCode {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
 // ── Diagnostic ────────────────────────────────────────────────────────────────
 
 /// A diagnostic message emitted during parsing, resolution, or validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diagnostic {
-    /// Diagnostic code (e.g. `"E001"`, `"W003"`).
-    pub code: String,
+    /// Diagnostic code identifying the class of error or warning.
+    pub code: DiagnosticCode,
     /// Source file path, if known.
     pub file: Option<std::path::PathBuf>,
     /// Source line number, if known.
@@ -327,20 +474,20 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    /// Create an error-level diagnostic (code starts with `E`).
-    pub fn error(code: &str, message: impl Into<String>) -> Self {
+    /// Create an error-level diagnostic.
+    pub fn error(code: DiagnosticCode, message: impl Into<String>) -> Self {
         Diagnostic {
-            code: code.to_owned(),
+            code,
             file: None,
             line: None,
             message: message.into(),
         }
     }
 
-    /// Create a warning-level diagnostic (code starts with `W`).
-    pub fn warning(code: &str, message: impl Into<String>) -> Self {
+    /// Create a warning-level diagnostic.
+    pub fn warning(code: DiagnosticCode, message: impl Into<String>) -> Self {
         Diagnostic {
-            code: code.to_owned(),
+            code,
             file: None,
             line: None,
             message: message.into(),
@@ -349,11 +496,11 @@ impl Diagnostic {
 
     /// Returns `true` if this is an error diagnostic.
     pub fn is_error(&self) -> bool {
-        self.code.starts_with('E')
+        self.code.is_error()
     }
 
     /// Returns `true` if this is a warning diagnostic.
     pub fn is_warning(&self) -> bool {
-        self.code.starts_with('W')
+        self.code.is_warning()
     }
 }

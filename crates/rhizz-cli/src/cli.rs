@@ -11,7 +11,7 @@ use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use walkdir::WalkDir;
 
-use rhizz_core::{Diagnostic, Source};
+use rhizz_core::{Diagnostic, DiagnosticCode, Source};
 
 // ── CLI argument types ───────────────────────────────────────────────────────
 
@@ -298,7 +298,7 @@ struct JsonOutput {
 /// Convert a [`Diagnostic`] to its JSON representation.
 fn to_json_diagnostic(d: &Diagnostic) -> JsonDiagnostic {
     JsonDiagnostic {
-        code: d.code.clone(),
+        code: d.code.to_string(),
         file: d
             .file
             .as_ref()
@@ -334,7 +334,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     serde_json::to_string_pretty(&out).expect("JSON serialisation")
                 );
             } else {
-                let d = Diagnostic::error("E000", format!("{e:#}"));
+                let d = Diagnostic::error(DiagnosticCode::E000, format!("{e:#}"));
                 eprintln!("{}", format_diagnostic(&d, color));
                 eprintln!("{}", format_summary(1, 0, true));
             }
@@ -383,7 +383,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
             if let Some(parent) = out_path.parent()
                 && let Err(e) = std::fs::create_dir_all(parent)
             {
-                let d = Diagnostic::error("E000", format!("cannot create output directory: {e}"));
+                let d = Diagnostic::error(DiagnosticCode::E000, format!("cannot create output directory: {e}"));
                 if !cli.json {
                     eprintln!("{}", format_diagnostic(&d, color));
                 }
@@ -392,7 +392,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
 
             if let Err(e) = std::fs::write(&out_path, dot_content) {
                 let d =
-                    Diagnostic::error("E000", format!("cannot write {}: {e}", out_path.display()));
+                    Diagnostic::error(DiagnosticCode::E000, format!("cannot write {}: {e}", out_path.display()));
                 if !cli.json {
                     eprintln!("{}", format_diagnostic(&d, color));
                 }
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn format_error_no_color() {
-        let d = Diagnostic::error("E002", "test error message");
+        let d = Diagnostic::error(DiagnosticCode::E002, "test error message");
         let out = format_diagnostic(&d, false);
         assert!(out.contains("✗"));
         assert!(out.contains("E002"));
@@ -621,7 +621,7 @@ mod tests {
 
     #[test]
     fn format_warning_no_color() {
-        let d = Diagnostic::warning("W001", "test warning");
+        let d = Diagnostic::warning(DiagnosticCode::W001, "test warning");
         let out = format_diagnostic(&d, false);
         assert!(out.contains("⚠"));
         assert!(out.contains("W001"));
@@ -631,7 +631,7 @@ mod tests {
     #[test]
     fn format_diagnostic_with_file_and_line() {
         let d = Diagnostic {
-            code: "E002".to_owned(),
+            code: DiagnosticCode::E002,
             file: Some(PathBuf::from("connections.hcl")),
             line: Some(14),
             message: "test message".to_owned(),

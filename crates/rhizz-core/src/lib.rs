@@ -15,8 +15,8 @@ pub mod validate;
 
 pub use model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
-    Diagnostic, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, System,
-    SystemId, View, ViewFilter, ViewOutput,
+    Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole,
+    Project, System, SystemId, View, ViewFilter, ViewOutput,
 };
 pub use score::{CategoryScore, ScoreReport, score};
 
@@ -62,14 +62,14 @@ pub fn compile(sources: &[Source]) -> CompileResult {
             Err(e) => {
                 return CompileResult {
                     model: None,
-                    diagnostics: vec![Diagnostic::error("E000", e.to_string())],
+                    diagnostics: vec![Diagnostic::error(DiagnosticCode::E000, e.to_string())],
                 };
             }
         };
         if let Err(e) = parse::merge_into(&mut merged, file, path) {
             return CompileResult {
                 model: None,
-                diagnostics: vec![Diagnostic::error("E010", e.to_string())],
+                diagnostics: vec![Diagnostic::error(DiagnosticCode::E010, e.to_string())],
             };
         }
     }
