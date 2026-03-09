@@ -3136,6 +3136,7 @@ dependencies = [
  "owo-colors",
  "rhizz-core",
  "rhizz-dot",
+ "rhizz-mermaid",
  "serde",
  "serde_json",
  "tempfile",

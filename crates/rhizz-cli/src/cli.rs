@@ -376,35 +376,70 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                 continue;
             }
 
-            let dot_content = rhizz_dot::render_view(m, view);
-            let out_path = cli.output_dir.join(&view.output.filename);
+            // Dispatch to the appropriate renderer based on the output file
+            // extension:
+            //   .mmd  → Mermaid flowchart source (text) + PNG raster bytes
+            //   *     → Graphviz DOT source (text)
+            // Note: `rankdir` is ignored for Mermaid output (prototype limitation).
+            // For .mmd views, both the .mmd source and a .png are written automatically.
+            let is_mermaid = view.output.filename.ends_with(".mmd");
 
-            // Ensure output directory exists.
-            if let Some(parent) = out_path.parent()
-                && let Err(e) = std::fs::create_dir_all(parent)
-            {
-                let d = Diagnostic::error(
-                    DiagnosticCode::E000,
-                    format!("cannot create output directory: {e}"),
-                );
-                if !cli.json {
-                    eprintln!("{}", format_diagnostic(&d, color));
+            // Build the list of (path, bytes) pairs to write for this view.
+            let mut outputs: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+
+            if is_mermaid {
+                let mmd_path = cli.output_dir.join(&view.output.filename);
+                outputs.push((mmd_path, rhizz_mermaid::render_view(m, view).into_bytes()));
+
+                let png_filename =
+                    view.output.filename.trim_end_matches(".mmd").to_owned() + ".png";
+                let png_path = cli.output_dir.join(&png_filename);
+                match rhizz_mermaid::render_view_png(m, view) {
+                    Ok(bytes) => outputs.push((png_path, bytes)),
+                    Err(e) => {
+                        let d = Diagnostic::error(
+                            DiagnosticCode::E000,
+                            format!("PNG rendering failed for '{}': {e}", view.label),
+                        );
+                        if !cli.json {
+                            eprintln!("{}", format_diagnostic(&d, color));
+                        }
+                        return 1;
+                    }
                 }
-                return 1;
+            } else {
+                let out_path = cli.output_dir.join(&view.output.filename);
+                outputs.push((out_path, rhizz_dot::render_view(m, view).into_bytes()));
             }
 
-            if let Err(e) = std::fs::write(&out_path, dot_content) {
-                let d = Diagnostic::error(
-                    DiagnosticCode::E000,
-                    format!("cannot write {}: {e}", out_path.display()),
-                );
-                if !cli.json {
-                    eprintln!("{}", format_diagnostic(&d, color));
+            for (out_path, content) in outputs {
+                // Ensure output directory exists.
+                if let Some(parent) = out_path.parent()
+                    && let Err(e) = std::fs::create_dir_all(parent)
+                {
+                    let d = Diagnostic::error(
+                        DiagnosticCode::E000,
+                        format!("cannot create output directory: {e}"),
+                    );
+                    if !cli.json {
+                        eprintln!("{}", format_diagnostic(&d, color));
+                    }
+                    return 1;
                 }
-                return 1;
-            }
 
-            generated_views.push((view.label.clone(), out_path));
+                if let Err(e) = std::fs::write(&out_path, content) {
+                    let d = Diagnostic::error(
+                        DiagnosticCode::E000,
+                        format!("cannot write {}: {e}", out_path.display()),
+                    );
+                    if !cli.json {
+                        eprintln!("{}", format_diagnostic(&d, color));
+                    }
+                    return 1;
+                }
+
+                generated_views.push((view.label.clone(), out_path));
+            }
         }
     }
 
