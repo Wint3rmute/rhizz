@@ -2170,12 +2170,12 @@ dependencies = [
  "json5",
  "once_cell",
  "regex",
- "resvg 0.46.0",
+ "resvg",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "ttf-parser 0.20.0",
- "usvg 0.46.0",
+ "usvg",
 ]
 
 [[package]]
@@ -3112,24 +3112,7 @@ dependencies = [
  "rgb",
  "svgtypes",
  "tiny-skia 0.11.4",
- "usvg 0.46.0",
- "zune-jpeg 0.5.12",
-]
-
-[[package]]
-name = "resvg"
-version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9be183ad6a216aa96f33e4c8033b0988b8b3ea6fd2359d19af5bac4643fd8e81"
-dependencies = [
- "gif",
- "image-webp",
- "log",
- "pico-args",
- "rgb",
- "svgtypes",
- "tiny-skia 0.12.0",
- "usvg 0.47.0",
+ "usvg",
  "zune-jpeg 0.5.12",
 ]
 
@@ -3190,7 +3173,7 @@ dependencies = [
  "egui",
  "layout-rs",
  "notify",
- "resvg 0.47.0",
+ "resvg",
  "rhizz-core",
  "rhizz-dot",
  "tiny-skia 0.12.0",
@@ -3205,10 +3188,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "mermaid-rs-renderer",
- "resvg 0.46.0",
+ "resvg",
  "rhizz-core",
  "tracing",
- "usvg 0.46.0",
+ "usvg",
  "walkdir",
 ]
 
@@ -4034,34 +4017,6 @@ dependencies = [
  "strict-num",
  "svgtypes",
  "tiny-skia-path 0.11.4",
- "unicode-bidi",
- "unicode-script",
- "unicode-vo",
- "xmlwriter",
-]
-
-[[package]]
-name = "usvg"
-version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d46cf96c5f498d36b7a9693bc6a7075c0bb9303189d61b2249b0dc3d309c07de"
-dependencies = [
- "base64",
- "data-url",
- "flate2",
- "fontdb 0.23.0",
- "imagesize",
- "kurbo",
- "log",
- "pico-args",
- "roxmltree 0.21.1",
- "rustybuzz",
- "simplecss",
- "siphasher",
- "strict-num",
- "svgtypes",
- "tiny-skia-path 0.12.0",
- "ttf-parser 0.25.1",
  "unicode-bidi",
  "unicode-script",
  "unicode-vo",
