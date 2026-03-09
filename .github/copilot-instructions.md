@@ -10,21 +10,22 @@ the full specification, and `examples/` for examples of systems defined with `rh
 ## Repository Layout
 
 ```
-src/ .          – source code
-examples/       – example systems
-SPEC.md         – full specification (single file)
-SPEC/           – specification split by topic (cli.md, models.md, …)
-TASKS.md        – ordered implementation tasks
+crates/              – source, split into subcrates
+examples/            – example systems
+SPEC.md              – full specification (single file)
+SPEC/                – specification split by topic (cli.md, models.md, …)
+TASKS.md             – ordered implementation tasks
+FINISHED_TASKS.md    – completed tasks (most recent first)
 ```
 
 ## Development Workflow
 
-1. Read the next task from the `# TODO` section of `TASKS.md` (first level-2 header).
-2. Get extra context from recently finished tasks in the `# FINISHED` section of `TASKS.md`.
+1. Read the next task from `TASKS.md`.
+2. Get extra context from recently finished tasks (read the first 50 lines of `FINISHED_TASKS.md`).
 3. Implement it using red/green TDD.
 4. Run `cargo test`, `cargo clippy`, `cargo doc` and `cargo build` until everything passes.
 5. Run `cargo fmt` to format the code.
-6. Move the completed task to the top of the `# FINISHED` section in `TASKS.md` and report that you are finished.
+6. Move the completed task to `FINISHED_TASKS.md` and report that you are finished.
 
 ## Build, Test & Lint Commands
 
