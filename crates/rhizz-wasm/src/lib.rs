@@ -1,31 +1,27 @@
 //! `rhizz-wasm` — WebAssembly bindings for `rhizz-core`.
 //!
-//! Exposes a single [`compile_sources`] function that accepts a JSON array of
-//! `{ "filename": "...", "content": "..." }` objects and returns a
-//! JSON-serialised [`rhizz_core::CompileResult`].
+//! Exposes a single [`compile_sources`] function that accepts a JS array of
+//! `{ filename, content }` source objects and returns a [`rhizz_core::CompileResult`]
+//! as a native JS object — no JSON stringification required on either side.
 
 #![deny(clippy::all)]
 
 use wasm_bindgen::prelude::*;
 
-/// Compile one or more HCL sources and return the result as JSON.
+/// Compile one or more HCL sources.
 ///
 /// # Arguments
-/// * `sources_json` – a JSON array of objects with `filename` and `content` fields.
+/// * `sources` – a JS array of `{ filename: string, content: string }` objects.
 ///
 /// # Returns
-/// A JSON string of the form:
-/// ```json
-/// { "model": <Model | null>, "diagnostics": [...] }
-/// ```
+/// A JS object of the form `{ model: Model | null, diagnostics: Diagnostic[] }`.
 ///
 /// # Errors
-/// Returns a [`JsError`] if `sources_json` is not valid JSON or cannot be
-/// deserialised into `Vec<Source>`.
+/// Returns a [`JsError`] if `sources` cannot be deserialised into `Vec<Source>`.
 #[wasm_bindgen]
-pub fn compile_sources(sources_json: &str) -> Result<String, JsError> {
+pub fn compile_sources(sources: JsValue) -> Result<JsValue, JsError> {
     let sources: Vec<rhizz_core::Source> =
-        serde_json::from_str(sources_json).map_err(|e| JsError::new(&e.to_string()))?;
+        serde_wasm_bindgen::from_value(sources).map_err(|e| JsError::new(&e.to_string()))?;
     let result = rhizz_core::compile(&sources);
-    serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsError::new(&e.to_string()))
 }
