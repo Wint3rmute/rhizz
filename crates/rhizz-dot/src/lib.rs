@@ -205,7 +205,7 @@ fn cluster_id(cid: ComponentId) -> String {
 ///
 /// * Components with at least one visible child → `subgraph cluster_*`
 ///   containing an invisible proxy node (edge anchor) plus all visible
-///   children and their internal interfaces.
+///   children and their internal connections.
 /// * All other components → plain `[shape=box]` node.
 fn render_component(
     cid: ComponentId,
@@ -455,7 +455,7 @@ mod tests {
             "barometer hidden at max_level=1"
         );
 
-        // System-scope interfaces should appear.
+        // System-scope connections should appear.
         assert!(dot.contains("motor-control"), "missing motor-control edge");
         assert!(dot.contains("gps-serial"), "missing gps-serial edge");
     }
@@ -504,7 +504,7 @@ mod tests {
             "gps should be hidden by whitelist"
         );
 
-        // Internal interfaces should appear.
+        // Internal connections should appear.
         assert!(dot.contains("spi-imu"), "spi-imu edge missing");
         assert!(dot.contains("i2c-baro"), "i2c-baro edge missing");
     }
@@ -519,7 +519,7 @@ mod tests {
             .expect("power-paths view");
         let dot = render_view(&model, view);
 
-        // Components/interfaces with "power" tag should appear.
+        // Components/connections with "power" tag should appear.
         assert!(dot.contains("battery"), "battery should be visible");
         assert!(dot.contains("esc"), "esc should be visible");
         assert!(dot.contains("power-main"), "power-main edge missing");
@@ -590,7 +590,7 @@ mod tests {
         assert!(dot.contains("user-service"), "user-service missing");
         assert!(dot.contains("feed-service"), "feed-service missing");
         assert!(dot.contains("recommendation-engine"), "rec-engine missing");
-        // rec-to-feed internal interface.
+        // rec-to-feed internal connection.
         assert!(dot.contains("rec-to-feed"), "rec-to-feed edge missing");
     }
 
@@ -667,7 +667,7 @@ mod tests {
             .expect("processes-only view");
         let dot = render_view(&model, view);
 
-        // "process"-tagged interfaces should appear.
+        // "process"-tagged connections should appear.
         assert!(
             dot.contains("sprint-planning"),
             "sprint-planning edge missing"
@@ -689,7 +689,7 @@ mod tests {
             "sprint-backlog message missing"
         );
         assert!(dot.contains("bug-ticket"), "bug-ticket message missing");
-        // "review-request" is a message inside the "code-review" interface.
+        // "review-request" is a message inside the "code-review" connection.
         assert!(
             dot.contains("review-request"),
             "review-request message missing"

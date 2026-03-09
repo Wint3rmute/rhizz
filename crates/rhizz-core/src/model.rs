@@ -238,10 +238,10 @@ pub struct Connection {
     pub encapsulates: Vec<ConnectionId>,
 }
 
-/// A resolved message exchanged over an interface.
+/// A resolved message carried by a port.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
-    /// Unique label within its parent interface.
+    /// Unique label within its parent port.
     pub label: String,
     /// Human-readable description.
     pub description: String,
@@ -298,7 +298,7 @@ pub struct ViewFilter {
     pub max_level: Option<i32>,
     /// Whitelist of component labels (empty = all).
     pub components: Vec<String>,
-    /// Whether to list messages on interface edges.
+    /// Whether to list messages on connection edges.
     pub show_messages: bool,
 }
 
