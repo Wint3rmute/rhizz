@@ -4,6 +4,26 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 19 — Replace custom RenderBackend with SVG rasterization in rhizz-gui
+
+- Added `resvg = "0.47"` and `tiny-skia = "0.12"` to `rhizz-gui/Cargo.toml`.
+- Removed `EguiBackend`, `DrawCmd`, `GraphLayout`, `draw_graph_layout`,
+  `scale_and_offset_rect`, `draw_edge`, `draw_arrowhead`, `draw_dashed_line`,
+  `draw_dashed_rect`, `collect_cluster_cmds`, `compute_graph_layout`.
+- Added `render_view_to_image(model, view, size: Vec2) -> Result<egui::ColorImage, String>`:
+  uses `rhizz_dot::render_view` → layout-rs `SVGWriter` → `resvg`/`usvg` rasterization.
+- `RhizzApp` now stores `Vec<Option<(egui::TextureHandle, egui::Vec2)>>` (`view_textures`)
+  instead of `view_layouts`.
+- In `update`: re-rasterize when panel size changes by >4 px on either axis;
+  display with `ui.image(SizedTexture)` inside a `ScrollArea`.
+- Tests updated: old `DrawCmd`-based layout smoke tests replaced by
+  `render_view_to_image` tests (drone overview + all three example projects).
+
+Run: `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
+`cargo doc`, `cargo build`, `cargo fmt`
+
+---
+
 ## Task 18 — Spec v0.3: Migrate rhizz-cli and rhizz-gui frontends
 
 ### rhizz-cli
