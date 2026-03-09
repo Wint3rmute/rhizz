@@ -47,7 +47,7 @@ Top-level block. One or more per project. Contains components and connections.
 
 ```hcl
 system "consumer-drone" {
-  description = "Consumer quadcopter drone, flight-ready configuration"
+  description = "Consumer quadcopter drone"
   tags        = ["product", "drone", "v1"]
   level       = 0
 
@@ -761,59 +761,8 @@ view "fc-internals" {
 
 ---
 
-## 10. Workspace Layout
+## 10. Frontends
 
-The repository is organised as a Cargo workspace. The compiler core, the DOT
-renderer, and each frontend are separate crates. This enforces a hard boundary:
-model logic lives in the core and shared crates; frontends own only I/O and
-presentation.
+`rhizz` is available as both a **command-line tool** (`rhizz-cli`) and a **desktop GUI application** (`rhizz-gui`). Both frontends share the same underlying model compiler and produce identical results; the choice of frontend is purely a matter of workflow preference.
 
-Frontends depend on `rhizz-core` and, when they need to emit DOT output, on
-`rhizz-dot`. Frontends do not depend on each other. Any number of frontends may
-coexist in the workspace.
-
-> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for crate layout and dependency graph.
-
----
-
-## 11. `rhizz-core`
-
-`rhizz-core` is the model compiler. It is a pure library with no filesystem
-access, no terminal dependencies, and no rendering logic. Frontends supply
-source text; `rhizz-core` returns a resolved model and a list of diagnostics.
-
-All public types are serialisable and cloneable so that any frontend can store,
-transmit, or display results without additional conversion. Diagnostic codes are
-part of the public API and must remain stable.
-
-> **Impl:** see [SPEC/architecture.md § rhizz-core](SPEC/architecture.md#rhizz-core)
-> for the full API surface and invariants.
-
----
-
-## 12. `rhizz-dot`
-
-`rhizz-dot` is a shared library that converts a resolved model and a view
-definition into a DOT-format string. It encapsulates all view filter logic (tag
-filtering, level capping, component whitelist, message visibility) so that no
-frontend needs to re-implement it.
-
-> **Impl:** see [SPEC/architecture.md § rhizz-dot](SPEC/architecture.md#rhizz-dot) for the API.
-
----
-
-## 13. Frontend Contract
-
-A frontend is any crate that consumes `rhizz-core` to present the model to a
-user or automated process. Frontends must:
-
-- Own all I/O — file discovery, reading, watching, and writing output.
-- Pass source text to `rhizz-core` and receive results; never re-implement parsing, validation, scoring, or view rendering.
-- Render diagnostics and results in a manner appropriate to their medium.
-
-The CLI frontend (`rhizz-cli`) and the desktop GUI frontend (`rhizz-gui`, built
-with `egui`) are the first two frontends. Additional frontends (web, LSP, etc.)
-may be added without changes to the core crates.
-
-> **Impl:** see [SPEC/architecture.md § Frontend Contract](SPEC/architecture.md#frontend-contract)
-> and [SPEC/gui.md](SPEC/gui.md) for frontend-specific details.
+> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for crate structure, dependency rules, and frontend contract.
