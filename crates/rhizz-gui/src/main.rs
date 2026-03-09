@@ -52,7 +52,10 @@ fn load_and_compile(dir: &Path) -> (Option<Model>, Vec<Diagnostic>) {
     hcl_files.sort();
 
     if hcl_files.is_empty() {
-        let d = Diagnostic::error(DiagnosticCode::E000, format!("no .hcl files found in {}", dir.display()));
+        let d = Diagnostic::error(
+            DiagnosticCode::E000,
+            format!("no .hcl files found in {}", dir.display()),
+        );
         return (None, vec![d]);
     }
 
@@ -64,7 +67,10 @@ fn load_and_compile(dir: &Path) -> (Option<Model>, Vec<Diagnostic>) {
                 content,
             }),
             Err(e) => {
-                let d = Diagnostic::error(DiagnosticCode::E000, format!("cannot read {}: {e}", path.display()));
+                let d = Diagnostic::error(
+                    DiagnosticCode::E000,
+                    format!("cannot read {}: {e}", path.display()),
+                );
                 return (None, vec![d]);
             }
         }

@@ -73,7 +73,10 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
     for ls in raw.systems {
         if !system_labels_seen.insert(ls.label.clone()) {
-            r.push_error(DiagnosticCode::E001, format!("duplicate system label '{}'", ls.label));
+            r.push_error(
+                DiagnosticCode::E001,
+                format!("duplicate system label '{}'", ls.label),
+            );
             continue;
         }
 
@@ -98,7 +101,8 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
         for lc in &ls.inner.components {
             if !comp_labels_seen.insert(lc.label.clone()) {
-                r.push_error(DiagnosticCode::E001,
+                r.push_error(
+                    DiagnosticCode::E001,
                     format!(
                         "duplicate component label '{}' in system '{}'",
                         lc.label, ls.label
@@ -189,7 +193,8 @@ fn register_component(
 
     // E005 -- leaf component with children or connections
     if leaf && (!lc.inner.components.is_empty() || !lc.inner.connections.is_empty()) {
-        r.push_error(DiagnosticCode::E005,
+        r.push_error(
+            DiagnosticCode::E005,
             format!(
                 "leaf component '{}' contains child components or connections",
                 lc.label
@@ -222,7 +227,8 @@ fn register_component(
     let mut child_ids: Vec<ComponentId> = Vec::new();
     for child_lc in &lc.inner.components {
         if !child_label_seen.insert(child_lc.label.clone()) {
-            r.push_error(DiagnosticCode::E001,
+            r.push_error(
+                DiagnosticCode::E001,
                 format!(
                     "duplicate component label '{}' in component '{}'",
                     child_lc.label, lc.label
@@ -274,7 +280,8 @@ fn process_ports(
 
     for lp in ports {
         if !label_seen.insert(lp.label.clone()) {
-            r.push_error(DiagnosticCode::E001,
+            r.push_error(
+                DiagnosticCode::E001,
                 format!(
                     "duplicate port label '{}' in component '{}'",
                     lp.label, comp_label
@@ -289,7 +296,8 @@ fn process_ports(
             Some("provider") => PortRole::Provider,
             Some("consumer") => PortRole::Consumer,
             Some(other) => {
-                r.push_error(DiagnosticCode::E009,
+                r.push_error(
+                    DiagnosticCode::E009,
                     format!("port '{}' has invalid role '{}'", lp.label, other),
                 );
                 PortRole::Peer // placeholder so we keep going
@@ -338,7 +346,8 @@ fn process_connections_in_scope(
 
     for lc in connections {
         if !label_seen.insert(lc.label.clone()) {
-            r.push_error(DiagnosticCode::E001,
+            r.push_error(
+                DiagnosticCode::E001,
                 format!(
                     "duplicate connection label '{}' in '{}'",
                     lc.label, scope_name
@@ -403,7 +412,8 @@ fn resolve_endpoint(
 ) -> Option<ConnectionEndpoint> {
     let raw = match ref_str {
         None => {
-            r.push_error(DiagnosticCode::E002,
+            r.push_error(
+                DiagnosticCode::E002,
                 format!(
                     "connection '{}' is missing required '{}' attribute",
                     conn_label, field
@@ -419,7 +429,8 @@ fn resolve_endpoint(
         let comp_cid = match r.scope_index.components.get(&(scope, comp_part.to_owned())) {
             Some(cid) => *cid,
             None => {
-                r.push_error(DiagnosticCode::E011,
+                r.push_error(
+                    DiagnosticCode::E011,
                     format!(
                         "connection '{}' references undefined component '{}' in '{}' (comp:port)",
                         conn_label, comp_part, field
@@ -431,7 +442,8 @@ fn resolve_endpoint(
         let port_pid = match r.scope_index.ports.get(&(comp_cid, port_part.to_owned())) {
             Some(pid) => *pid,
             None => {
-                r.push_error(DiagnosticCode::E010,
+                r.push_error(
+                    DiagnosticCode::E010,
                     format!(
                         "connection '{}': component '{}' has no port '{}' (in '{}')",
                         conn_label, comp_part, port_part, field
@@ -452,7 +464,8 @@ fn resolve_endpoint(
                 port: None,
             }),
             None => {
-                r.push_error(DiagnosticCode::E002,
+                r.push_error(
+                    DiagnosticCode::E002,
                     format!(
                         "connection '{}' references undefined component '{}' in '{}'",
                         conn_label, raw, field
@@ -481,7 +494,8 @@ fn resolve_encapsulates(
         match r.scope_index.connections.get(&(scope, label.clone())) {
             Some(enc_cid) => enc_ids.push(*enc_cid),
             None => {
-                r.push_error(DiagnosticCode::E003,
+                r.push_error(
+                    DiagnosticCode::E003,
                     format!(
                         "connection '{}' encapsulates undefined connection '{}'",
                         conn_label, label
@@ -494,7 +508,8 @@ fn resolve_encapsulates(
 
     // E004 -- detect circular encapsulation by DFS from this connection.
     if has_encapsulation_cycle(&r.model.connections, conn_id) {
-        r.push_error(DiagnosticCode::E004,
+        r.push_error(
+            DiagnosticCode::E004,
             format!(
                 "circular encapsulation chain detected involving connection '{}'",
                 conn_label
@@ -554,7 +569,8 @@ fn process_messages(
 
     for lm in messages {
         if !label_seen.insert(lm.label.clone()) {
-            r.push_error(DiagnosticCode::E001,
+            r.push_error(
+                DiagnosticCode::E001,
                 format!(
                     "duplicate message label '{}' in port '{}'",
                     lm.label, port_label
@@ -591,7 +607,8 @@ fn process_fields(
 
     for lf in fields {
         if !label_seen.insert(lf.label.clone()) {
-            r.push_error(DiagnosticCode::E001,
+            r.push_error(
+                DiagnosticCode::E001,
                 format!(
                     "duplicate field label '{}' in message '{}'",
                     lf.label, msg_label
@@ -604,7 +621,8 @@ fn process_fields(
         let field_type = match &lf.inner.field_type {
             Some(t) => t.clone(),
             None => {
-                r.push_error(DiagnosticCode::E007,
+                r.push_error(
+                    DiagnosticCode::E007,
                     format!(
                         "field '{}' in message '{}' is missing required 'type'",
                         lf.label, msg_label
@@ -635,7 +653,8 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
     // E006 -- undefined system
     let system = match &lv.inner.system {
         None => {
-            r.push_error(DiagnosticCode::E006,
+            r.push_error(
+                DiagnosticCode::E006,
                 format!("view '{}' does not specify a system", lv.label),
             );
             return;
@@ -643,7 +662,8 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
         Some(sys_label) => match r.system_label_index.get(sys_label) {
             Some(sid) => *sid,
             None => {
-                r.push_error(DiagnosticCode::E006,
+                r.push_error(
+                    DiagnosticCode::E006,
                     format!(
                         "view '{}' references undefined system '{}'",
                         lv.label, sys_label
@@ -894,7 +914,8 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == DiagnosticCode::W001 && d.message.contains("recommendation-engine")),
+                .any(|d| d.code == DiagnosticCode::W001
+                    && d.message.contains("recommendation-engine")),
             "expected W001 for recommendation-engine"
         );
 

@@ -15,7 +15,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W001 -- non-leaf component with no child components (decomposition pending)
     for comp in &model.components {
         if !comp.leaf && comp.children.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W001,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W001,
                 format!(
                     "component '{}' is non-leaf but has no child components",
                     comp.label
@@ -27,7 +28,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W002 -- message has no fields defined
     for msg in &model.messages {
         if msg.fields.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W002,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W002,
                 format!("message '{}' has no fields", msg.label),
             ));
         }
@@ -41,7 +43,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     }
     for (cid, comp) in model.components.iter().enumerate() {
         if !referenced.contains(&cid) {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W003,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W003,
                 format!(
                     "component '{}' is not referenced by any connection",
                     comp.label
@@ -53,28 +56,32 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W004 -- entity is missing a description
     for sys in &model.systems {
         if sys.description.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W004,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W004,
                 format!("system '{}' is missing a description", sys.label),
             ));
         }
     }
     for comp in &model.components {
         if comp.description.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W004,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W004,
                 format!("component '{}' is missing a description", comp.label),
             ));
         }
     }
     for conn in &model.connections {
         if conn.description.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W004,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W004,
                 format!("connection '{}' is missing a description", conn.label),
             ));
         }
     }
     for msg in &model.messages {
         if msg.description.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W004,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W004,
                 format!("message '{}' is missing a description", msg.label),
             ));
         }
@@ -83,7 +90,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W005 -- connection `from` and `to` point to the same component
     for conn in &model.connections {
         if conn.from.component == conn.to.component {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W005,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W005,
                 format!(
                     "connection '{}' has 'from' and 'to' pointing to the same component",
                     conn.label
@@ -99,7 +107,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             ComponentParent::Component(pid) => model.components[pid.0].level,
         };
         if comp.level < parent_level {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W006,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W006,
                 format!(
                     "component '{}' has level {} which is less than parent level {}",
                     comp.label, comp.level, parent_level
@@ -124,7 +133,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if let Some(&parent_level) = conn_parent_level.get(&idx)
             && conn.level < parent_level
         {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W006,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W006,
                 format!(
                     "connection '{}' has level {} which is less than parent level {}",
                     conn.label, conn.level, parent_level
@@ -138,7 +148,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         let from_typed = conn.from.port.is_some();
         let to_typed = conn.to.port.is_some();
         if from_typed != to_typed {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W007,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W007,
                 format!(
                     "connection '{}': one side is typed (comp:port) but the other is bare",
                     conn.label
@@ -153,7 +164,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             let from_proto = &model.ports[from_pid.0].protocol;
             let to_proto = &model.ports[to_pid.0].protocol;
             if !from_proto.is_empty() && !to_proto.is_empty() && from_proto != to_proto {
-                warnings.push(Diagnostic::warning(DiagnosticCode::W008,
+                warnings.push(Diagnostic::warning(
+                    DiagnosticCode::W008,
                     format!(
                         "connection '{}': protocol mismatch ('{}' vs '{}')",
                         conn.label, from_proto, to_proto
@@ -177,7 +189,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
                     | (PortRole::Peer, PortRole::Peer)
             );
             if !compatible {
-                warnings.push(Diagnostic::warning(DiagnosticCode::W009,
+                warnings.push(Diagnostic::warning(
+                    DiagnosticCode::W009,
                     format!(
                         "connection '{}': port roles are incompatible ({:?} <-> {:?})",
                         conn.label, from_role, to_role
@@ -199,7 +212,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     }
     for (idx, port) in model.ports.iter().enumerate() {
         if !used_ports.contains(&idx) {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W010,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W010,
                 format!("port '{}' is not referenced by any connection", port.label),
             ));
         }
@@ -208,7 +222,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W011 -- port has no messages defined
     for port in &model.ports {
         if port.messages.is_empty() {
-            warnings.push(Diagnostic::warning(DiagnosticCode::W011,
+            warnings.push(Diagnostic::warning(
+                DiagnosticCode::W011,
                 format!("port '{}' has no messages defined", port.label),
             ));
         }
@@ -297,7 +312,8 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == DiagnosticCode::W001 && d.message.contains("recommendation-engine")),
+                .any(|d| d.code == DiagnosticCode::W001
+                    && d.message.contains("recommendation-engine")),
             "expected W001 for recommendation-engine, got: {:?}",
             warning_codes(&warnings)
         );

@@ -383,7 +383,10 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
             if let Some(parent) = out_path.parent()
                 && let Err(e) = std::fs::create_dir_all(parent)
             {
-                let d = Diagnostic::error(DiagnosticCode::E000, format!("cannot create output directory: {e}"));
+                let d = Diagnostic::error(
+                    DiagnosticCode::E000,
+                    format!("cannot create output directory: {e}"),
+                );
                 if !cli.json {
                     eprintln!("{}", format_diagnostic(&d, color));
                 }
@@ -391,8 +394,10 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
             }
 
             if let Err(e) = std::fs::write(&out_path, dot_content) {
-                let d =
-                    Diagnostic::error(DiagnosticCode::E000, format!("cannot write {}: {e}", out_path.display()));
+                let d = Diagnostic::error(
+                    DiagnosticCode::E000,
+                    format!("cannot write {}: {e}", out_path.display()),
+                );
                 if !cli.json {
                     eprintln!("{}", format_diagnostic(&d, color));
                 }
