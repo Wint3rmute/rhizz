@@ -10,7 +10,7 @@ view "architect-overview" {
   }
 
   output {
-    filename = "architect-overview.dot"
+    filename = "architect-overview.mmd"
     rankdir  = "TB"
   }
 }
@@ -29,7 +29,7 @@ view "frontend-internals" {
   }
 
   output {
-    filename = "frontend-internals.dot"
+    filename = "frontend-internals.mmd"
     rankdir  = "TB"
   }
 }
@@ -47,8 +47,8 @@ view "backend-internals" {
   }
 
   output {
-    filename = "backend-internals.dot"
-    rankdir  = "LR"
+    filename = "backend-internals.mmd"
+    rankdir  = "TB"
   }
 }
 
@@ -65,8 +65,8 @@ view "data-layer" {
   }
 
   output {
-    filename = "data-layer.dot"
-    rankdir  = "LR"
+    filename = "data-layer.mmd"
+    rankdir  = "TB"
   }
 }
 
@@ -84,8 +84,8 @@ view "devops-topology" {
   }
 
   output {
-    filename = "devops-topology.dot"
-    rankdir  = "LR"
+    filename = "devops-topology.mmd"
+    rankdir  = "TB"
   }
 }
 
@@ -103,7 +103,7 @@ view "product-overview" {
   }
 
   output {
-    filename = "product-overview.dot"
+    filename = "product-overview.mmd"
     rankdir  = "TB"
   }
 }

@@ -391,7 +391,8 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                 let mmd_path = cli.output_dir.join(&view.output.filename);
                 outputs.push((mmd_path, rhizz_mermaid::render_view(m, view).into_bytes()));
 
-                let png_filename = view.output.filename.trim_end_matches(".mmd").to_owned() + ".png";
+                let png_filename =
+                    view.output.filename.trim_end_matches(".mmd").to_owned() + ".png";
                 let png_path = cli.output_dir.join(&png_filename);
                 match rhizz_mermaid::render_view_png(m, view) {
                     Ok(bytes) => outputs.push((png_path, bytes)),
@@ -742,8 +743,8 @@ mod tests {
         let code = run(&cli);
         assert_eq!(code, 0, "drone build should exit 0");
         assert!(
-            out_dir.path().join("drone-overview.mmd").exists(),
-            "drone-overview.mmd should be generated"
+            out_dir.path().join("drone-overview.dot").exists(),
+            "drone-overview.dot should be generated"
         );
     }
 
