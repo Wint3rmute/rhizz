@@ -1,7 +1,7 @@
 use crate::model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
-    Diagnostic, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, Scope,
-    ScopeIndex, System, SystemId, View, ViewFilter, ViewOutput,
+    Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole,
+    Project, Scope, ScopeIndex, System, SystemId, View, ViewFilter, ViewOutput,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
@@ -24,13 +24,13 @@ struct Resolver {
 
 impl Resolver {
     /// Record an error diagnostic.
-    fn push_error(&mut self, code: &str, msg: impl Into<String>) {
+    fn push_error(&mut self, code: DiagnosticCode, msg: impl Into<String>) {
         self.diagnostics.push(Diagnostic::error(code, msg));
     }
 
     /// Record a warning diagnostic.
     #[allow(dead_code)]
-    fn push_warning(&mut self, code: &str, msg: impl Into<String>) {
+    fn push_warning(&mut self, code: DiagnosticCode, msg: impl Into<String>) {
         self.diagnostics.push(Diagnostic::warning(code, msg));
     }
 }
@@ -73,7 +73,10 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
     for ls in raw.systems {
         if !system_labels_seen.insert(ls.label.clone()) {
-            r.push_error("E001", format!("duplicate system label '{}'", ls.label));
+            r.push_error(
+                DiagnosticCode::E001,
+                format!("duplicate system label '{}'", ls.label),
+            );
             continue;
         }
 
@@ -99,7 +102,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         for lc in &ls.inner.components {
             if !comp_labels_seen.insert(lc.label.clone()) {
                 r.push_error(
-                    "E001",
+                    DiagnosticCode::E001,
                     format!(
                         "duplicate component label '{}' in system '{}'",
                         lc.label, ls.label
@@ -191,7 +194,7 @@ fn register_component(
     // E005 -- leaf component with children or connections
     if leaf && (!lc.inner.components.is_empty() || !lc.inner.connections.is_empty()) {
         r.push_error(
-            "E005",
+            DiagnosticCode::E005,
             format!(
                 "leaf component '{}' contains child components or connections",
                 lc.label
@@ -225,7 +228,7 @@ fn register_component(
     for child_lc in &lc.inner.components {
         if !child_label_seen.insert(child_lc.label.clone()) {
             r.push_error(
-                "E001",
+                DiagnosticCode::E001,
                 format!(
                     "duplicate component label '{}' in component '{}'",
                     child_lc.label, lc.label
@@ -278,7 +281,7 @@ fn process_ports(
     for lp in ports {
         if !label_seen.insert(lp.label.clone()) {
             r.push_error(
-                "E001",
+                DiagnosticCode::E001,
                 format!(
                     "duplicate port label '{}' in component '{}'",
                     lp.label, comp_label
@@ -294,7 +297,7 @@ fn process_ports(
             Some("consumer") => PortRole::Consumer,
             Some(other) => {
                 r.push_error(
-                    "E009",
+                    DiagnosticCode::E009,
                     format!("port '{}' has invalid role '{}'", lp.label, other),
                 );
                 PortRole::Peer // placeholder so we keep going
@@ -344,7 +347,7 @@ fn process_connections_in_scope(
     for lc in connections {
         if !label_seen.insert(lc.label.clone()) {
             r.push_error(
-                "E001",
+                DiagnosticCode::E001,
                 format!(
                     "duplicate connection label '{}' in '{}'",
                     lc.label, scope_name
@@ -410,7 +413,7 @@ fn resolve_endpoint(
     let raw = match ref_str {
         None => {
             r.push_error(
-                "E002",
+                DiagnosticCode::E002,
                 format!(
                     "connection '{}' is missing required '{}' attribute",
                     conn_label, field
@@ -427,7 +430,7 @@ fn resolve_endpoint(
             Some(cid) => *cid,
             None => {
                 r.push_error(
-                    "E011",
+                    DiagnosticCode::E011,
                     format!(
                         "connection '{}' references undefined component '{}' in '{}' (comp:port)",
                         conn_label, comp_part, field
@@ -440,7 +443,7 @@ fn resolve_endpoint(
             Some(pid) => *pid,
             None => {
                 r.push_error(
-                    "E010",
+                    DiagnosticCode::E010,
                     format!(
                         "connection '{}': component '{}' has no port '{}' (in '{}')",
                         conn_label, comp_part, port_part, field
@@ -462,7 +465,7 @@ fn resolve_endpoint(
             }),
             None => {
                 r.push_error(
-                    "E002",
+                    DiagnosticCode::E002,
                     format!(
                         "connection '{}' references undefined component '{}' in '{}'",
                         conn_label, raw, field
@@ -492,7 +495,7 @@ fn resolve_encapsulates(
             Some(enc_cid) => enc_ids.push(*enc_cid),
             None => {
                 r.push_error(
-                    "E003",
+                    DiagnosticCode::E003,
                     format!(
                         "connection '{}' encapsulates undefined connection '{}'",
                         conn_label, label
@@ -506,7 +509,7 @@ fn resolve_encapsulates(
     // E004 -- detect circular encapsulation by DFS from this connection.
     if has_encapsulation_cycle(&r.model.connections, conn_id) {
         r.push_error(
-            "E004",
+            DiagnosticCode::E004,
             format!(
                 "circular encapsulation chain detected involving connection '{}'",
                 conn_label
@@ -567,7 +570,7 @@ fn process_messages(
     for lm in messages {
         if !label_seen.insert(lm.label.clone()) {
             r.push_error(
-                "E001",
+                DiagnosticCode::E001,
                 format!(
                     "duplicate message label '{}' in port '{}'",
                     lm.label, port_label
@@ -605,7 +608,7 @@ fn process_fields(
     for lf in fields {
         if !label_seen.insert(lf.label.clone()) {
             r.push_error(
-                "E001",
+                DiagnosticCode::E001,
                 format!(
                     "duplicate field label '{}' in message '{}'",
                     lf.label, msg_label
@@ -619,7 +622,7 @@ fn process_fields(
             Some(t) => t.clone(),
             None => {
                 r.push_error(
-                    "E007",
+                    DiagnosticCode::E007,
                     format!(
                         "field '{}' in message '{}' is missing required 'type'",
                         lf.label, msg_label
@@ -651,7 +654,7 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
     let system = match &lv.inner.system {
         None => {
             r.push_error(
-                "E006",
+                DiagnosticCode::E006,
                 format!("view '{}' does not specify a system", lv.label),
             );
             return;
@@ -660,7 +663,7 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
             Some(sid) => *sid,
             None => {
                 r.push_error(
-                    "E006",
+                    DiagnosticCode::E006,
                     format!(
                         "view '{}' references undefined system '{}'",
                         lv.label, sys_label
@@ -704,6 +707,7 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::DiagnosticCode;
     use crate::parse::parse_dir;
     use std::path::PathBuf;
 
@@ -833,7 +837,7 @@ mod tests {
         // Warnings: W001 for ground-station-pc, W004 for ground-station-pc
         let w001_labels: Vec<&str> = warnings
             .iter()
-            .filter(|d| d.code == "W001")
+            .filter(|d| d.code == DiagnosticCode::W001)
             .map(|d| d.message.as_str())
             .collect();
         assert!(
@@ -844,7 +848,7 @@ mod tests {
 
         let w004_labels: Vec<&str> = warnings
             .iter()
-            .filter(|d| d.code == "W004")
+            .filter(|d| d.code == DiagnosticCode::W004)
             .map(|d| d.message.as_str())
             .collect();
         assert!(
@@ -910,7 +914,8 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W001" && d.message.contains("recommendation-engine")),
+                .any(|d| d.code == DiagnosticCode::W001
+                    && d.message.contains("recommendation-engine")),
             "expected W001 for recommendation-engine"
         );
 
@@ -978,13 +983,13 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W001" && d.message.contains("operations")),
+                .any(|d| d.code == DiagnosticCode::W001 && d.message.contains("operations")),
             "expected W001 for operations"
         );
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W004" && d.message.contains("operations")),
+                .any(|d| d.code == DiagnosticCode::W004 && d.message.contains("operations")),
             "expected W004 for operations"
         );
 
@@ -1009,7 +1014,7 @@ mod tests {
         assert!(result.is_err(), "expected Err for undefined component ref");
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E002"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E002),
             "expected E002, got: {:?}",
             diags
         );
@@ -1028,7 +1033,7 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E001"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E001),
             "expected E001, got: {:?}",
             diags
         );
@@ -1051,7 +1056,7 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E006"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E006),
             "expected E006, got: {:?}",
             diags
         );
@@ -1072,7 +1077,7 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E005"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E005),
             "expected E005, got: {:?}",
             diags
         );
@@ -1095,7 +1100,7 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E009"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E009),
             "expected E009, got: {:?}",
             diags
         );
@@ -1118,7 +1123,7 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E010"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E010),
             "expected E010, got: {:?}",
             diags
         );
@@ -1140,7 +1145,7 @@ mod tests {
         assert!(result.is_err());
         let diags = result.unwrap_err();
         assert!(
-            diags.iter().any(|d| d.code == "E011"),
+            diags.iter().any(|d| d.code == DiagnosticCode::E011),
             "expected E011, got: {:?}",
             diags
         );

@@ -1,6 +1,6 @@
 //! Validation pass -- warning pass over the resolved Model.
 
-use crate::model::{ComponentParent, Diagnostic, Model, PortRole};
+use crate::model::{ComponentParent, Diagnostic, DiagnosticCode, Model, PortRole};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -16,7 +16,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for comp in &model.components {
         if !comp.leaf && comp.children.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W001",
+                DiagnosticCode::W001,
                 format!(
                     "component '{}' is non-leaf but has no child components",
                     comp.label
@@ -29,7 +29,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for msg in &model.messages {
         if msg.fields.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W002",
+                DiagnosticCode::W002,
                 format!("message '{}' has no fields", msg.label),
             ));
         }
@@ -44,7 +44,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for (cid, comp) in model.components.iter().enumerate() {
         if !referenced.contains(&cid) {
             warnings.push(Diagnostic::warning(
-                "W003",
+                DiagnosticCode::W003,
                 format!(
                     "component '{}' is not referenced by any connection",
                     comp.label
@@ -57,7 +57,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for sys in &model.systems {
         if sys.description.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W004",
+                DiagnosticCode::W004,
                 format!("system '{}' is missing a description", sys.label),
             ));
         }
@@ -65,7 +65,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for comp in &model.components {
         if comp.description.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W004",
+                DiagnosticCode::W004,
                 format!("component '{}' is missing a description", comp.label),
             ));
         }
@@ -73,7 +73,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for conn in &model.connections {
         if conn.description.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W004",
+                DiagnosticCode::W004,
                 format!("connection '{}' is missing a description", conn.label),
             ));
         }
@@ -81,7 +81,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for msg in &model.messages {
         if msg.description.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W004",
+                DiagnosticCode::W004,
                 format!("message '{}' is missing a description", msg.label),
             ));
         }
@@ -91,7 +91,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for conn in &model.connections {
         if conn.from.component == conn.to.component {
             warnings.push(Diagnostic::warning(
-                "W005",
+                DiagnosticCode::W005,
                 format!(
                     "connection '{}' has 'from' and 'to' pointing to the same component",
                     conn.label
@@ -108,7 +108,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         };
         if comp.level < parent_level {
             warnings.push(Diagnostic::warning(
-                "W006",
+                DiagnosticCode::W006,
                 format!(
                     "component '{}' has level {} which is less than parent level {}",
                     comp.label, comp.level, parent_level
@@ -134,7 +134,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             && conn.level < parent_level
         {
             warnings.push(Diagnostic::warning(
-                "W006",
+                DiagnosticCode::W006,
                 format!(
                     "connection '{}' has level {} which is less than parent level {}",
                     conn.label, conn.level, parent_level
@@ -149,7 +149,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         let to_typed = conn.to.port.is_some();
         if from_typed != to_typed {
             warnings.push(Diagnostic::warning(
-                "W007",
+                DiagnosticCode::W007,
                 format!(
                     "connection '{}': one side is typed (comp:port) but the other is bare",
                     conn.label
@@ -165,7 +165,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             let to_proto = &model.ports[to_pid.0].protocol;
             if !from_proto.is_empty() && !to_proto.is_empty() && from_proto != to_proto {
                 warnings.push(Diagnostic::warning(
-                    "W008",
+                    DiagnosticCode::W008,
                     format!(
                         "connection '{}': protocol mismatch ('{}' vs '{}')",
                         conn.label, from_proto, to_proto
@@ -190,7 +190,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             );
             if !compatible {
                 warnings.push(Diagnostic::warning(
-                    "W009",
+                    DiagnosticCode::W009,
                     format!(
                         "connection '{}': port roles are incompatible ({:?} <-> {:?})",
                         conn.label, from_role, to_role
@@ -213,7 +213,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for (idx, port) in model.ports.iter().enumerate() {
         if !used_ports.contains(&idx) {
             warnings.push(Diagnostic::warning(
-                "W010",
+                DiagnosticCode::W010,
                 format!("port '{}' is not referenced by any connection", port.label),
             ));
         }
@@ -223,7 +223,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     for port in &model.ports {
         if port.messages.is_empty() {
             warnings.push(Diagnostic::warning(
-                "W011",
+                DiagnosticCode::W011,
                 format!("port '{}' has no messages defined", port.label),
             ));
         }
@@ -237,6 +237,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::DiagnosticCode;
     use crate::parse::parse_dir;
     use crate::resolve::resolve;
     use std::path::PathBuf;
@@ -247,8 +248,8 @@ mod tests {
             .join(name)
     }
 
-    fn warning_codes(warnings: &[Diagnostic]) -> Vec<&str> {
-        warnings.iter().map(|d| d.code.as_str()).collect()
+    fn warning_codes(warnings: &[Diagnostic]) -> Vec<String> {
+        warnings.iter().map(|d| d.code.to_string()).collect()
     }
 
     // ── drone ──────────────────────────────────────────────────────────────
@@ -270,7 +271,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W001" && d.message.contains("ground-station-pc")),
+                .any(|d| d.code == DiagnosticCode::W001 && d.message.contains("ground-station-pc")),
             "expected W001 for ground-station-pc, got: {:?}",
             warning_codes(&warnings)
         );
@@ -279,7 +280,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W004" && d.message.contains("ground-station-pc")),
+                .any(|d| d.code == DiagnosticCode::W004 && d.message.contains("ground-station-pc")),
             "expected W004 for ground-station-pc, got: {:?}",
             warning_codes(&warnings)
         );
@@ -311,7 +312,8 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W001" && d.message.contains("recommendation-engine")),
+                .any(|d| d.code == DiagnosticCode::W001
+                    && d.message.contains("recommendation-engine")),
             "expected W001 for recommendation-engine, got: {:?}",
             warning_codes(&warnings)
         );
@@ -336,7 +338,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W001" && d.message.contains("operations")),
+                .any(|d| d.code == DiagnosticCode::W001 && d.message.contains("operations")),
             "expected W001 for operations, got: {:?}",
             warning_codes(&warnings)
         );
@@ -345,7 +347,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W003" && d.message.contains("operations")),
+                .any(|d| d.code == DiagnosticCode::W003 && d.message.contains("operations")),
             "expected W003 for operations, got: {:?}",
             warning_codes(&warnings)
         );
@@ -354,7 +356,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W004" && d.message.contains("operations")),
+                .any(|d| d.code == DiagnosticCode::W004 && d.message.contains("operations")),
             "expected W004 for operations, got: {:?}",
             warning_codes(&warnings)
         );
@@ -388,7 +390,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W002" && d.message.contains("empty-msg")),
+                .any(|d| d.code == DiagnosticCode::W002 && d.message.contains("empty-msg")),
             "expected W002 for empty-msg, got: {:?}",
             warning_codes(&warnings)
         );
@@ -413,7 +415,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W005" && d.message.contains("self-loop")),
+                .any(|d| d.code == DiagnosticCode::W005 && d.message.contains("self-loop")),
             "expected W005 for self-loop, got: {:?}",
             warning_codes(&warnings)
         );
@@ -438,7 +440,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W006" && d.message.contains("c")),
+                .any(|d| d.code == DiagnosticCode::W006 && d.message.contains("c")),
             "expected W006 for component 'c', got: {:?}",
             warning_codes(&warnings)
         );
@@ -467,7 +469,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W007" && d.message.contains("mixed")),
+                .any(|d| d.code == DiagnosticCode::W007 && d.message.contains("mixed")),
             "expected W007 for mixed, got: {:?}",
             warning_codes(&warnings)
         );
@@ -505,7 +507,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W008" && d.message.contains("mismatch")),
+                .any(|d| d.code == DiagnosticCode::W008 && d.message.contains("mismatch")),
             "expected W008 for mismatch, got: {:?}",
             warning_codes(&warnings)
         );
@@ -543,7 +545,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == "W009" && d.message.contains("clash")),
+                .any(|d| d.code == DiagnosticCode::W009 && d.message.contains("clash")),
             "expected W009 for clash, got: {:?}",
             warning_codes(&warnings)
         );

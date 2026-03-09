@@ -8,7 +8,7 @@ use std::sync::mpsc;
 
 use egui::Color32;
 use notify::{RecursiveMode, Watcher as _};
-use rhizz_core::{ComponentId, Diagnostic, Model, PortRole, Source};
+use rhizz_core::{ComponentId, Diagnostic, DiagnosticCode, Model, PortRole, Source};
 use tracing::{debug, error, info, warn};
 use walkdir::WalkDir;
 
@@ -52,7 +52,10 @@ fn load_and_compile(dir: &Path) -> (Option<Model>, Vec<Diagnostic>) {
     hcl_files.sort();
 
     if hcl_files.is_empty() {
-        let d = Diagnostic::error("E000", format!("no .hcl files found in {}", dir.display()));
+        let d = Diagnostic::error(
+            DiagnosticCode::E000,
+            format!("no .hcl files found in {}", dir.display()),
+        );
         return (None, vec![d]);
     }
 
@@ -64,7 +67,10 @@ fn load_and_compile(dir: &Path) -> (Option<Model>, Vec<Diagnostic>) {
                 content,
             }),
             Err(e) => {
-                let d = Diagnostic::error("E000", format!("cannot read {}: {e}", path.display()));
+                let d = Diagnostic::error(
+                    DiagnosticCode::E000,
+                    format!("cannot read {}: {e}", path.display()),
+                );
                 return (None, vec![d]);
             }
         }
@@ -603,7 +609,7 @@ impl RhizzApp {
                 if let Err(e) = w.watch(&path, RecursiveMode::NonRecursive) {
                     error!("Warning: cannot watch {}: {e}", path.display());
                     watch_diagnostics.push(Diagnostic::warning(
-                        "W000",
+                        DiagnosticCode::W000,
                         format!(
                             "live reload unavailable: cannot watch {}: {e}",
                             path.display()
@@ -617,7 +623,7 @@ impl RhizzApp {
             Err(e) => {
                 error!("Warning: cannot create file watcher: {e}");
                 watch_diagnostics.push(Diagnostic::warning(
-                    "W000",
+                    DiagnosticCode::W000,
                     format!("live reload unavailable: cannot create file watcher: {e}"),
                 ));
                 None

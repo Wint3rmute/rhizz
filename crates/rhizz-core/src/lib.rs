@@ -7,25 +7,27 @@
 
 use tracing::instrument;
 
+pub mod diagnostics;
 pub mod model;
 pub mod parse;
 pub mod resolve;
 pub mod score;
 pub mod validate;
 
+pub use diagnostics::{Diagnostic, DiagnosticCode, Level};
 pub use model::{
-    Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
-    Diagnostic, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, System,
-    SystemId, View, ViewFilter, ViewOutput,
+    Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId, Field,
+    FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, System, SystemId, View,
+    ViewFilter, ViewOutput,
 };
 pub use score::{CategoryScore, ScoreReport, score};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
 /// A single named source file to compile.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Source {
     /// The filename (used in diagnostics).
     pub filename: String,
@@ -34,7 +36,7 @@ pub struct Source {
 }
 
 /// The result of compiling one or more [`Source`] files.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CompileResult {
     /// The fully-resolved model, if no hard errors were encountered.
     pub model: Option<Model>,
@@ -62,14 +64,14 @@ pub fn compile(sources: &[Source]) -> CompileResult {
             Err(e) => {
                 return CompileResult {
                     model: None,
-                    diagnostics: vec![Diagnostic::error("E000", e.to_string())],
+                    diagnostics: vec![Diagnostic::error(DiagnosticCode::E000, e.to_string())],
                 };
             }
         };
         if let Err(e) = parse::merge_into(&mut merged, file, path) {
             return CompileResult {
                 model: None,
-                diagnostics: vec![Diagnostic::error("E010", e.to_string())],
+                diagnostics: vec![Diagnostic::error(DiagnosticCode::E010, e.to_string())],
             };
         }
     }

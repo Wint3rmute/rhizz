@@ -311,49 +311,6 @@ pub struct ViewOutput {
     pub rankdir: String,
 }
 
-// ── Diagnostic ────────────────────────────────────────────────────────────────
-
-/// A diagnostic message emitted during parsing, resolution, or validation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Diagnostic {
-    /// Diagnostic code (e.g. `"E001"`, `"W003"`).
-    pub code: String,
-    /// Source file path, if known.
-    pub file: Option<std::path::PathBuf>,
-    /// Source line number, if known.
-    pub line: Option<u32>,
-    /// Human-readable diagnostic message.
-    pub message: String,
-}
-
-impl Diagnostic {
-    /// Create an error-level diagnostic (code starts with `E`).
-    pub fn error(code: &str, message: impl Into<String>) -> Self {
-        Diagnostic {
-            code: code.to_owned(),
-            file: None,
-            line: None,
-            message: message.into(),
-        }
-    }
-
-    /// Create a warning-level diagnostic (code starts with `W`).
-    pub fn warning(code: &str, message: impl Into<String>) -> Self {
-        Diagnostic {
-            code: code.to_owned(),
-            file: None,
-            line: None,
-            message: message.into(),
-        }
-    }
-
-    /// Returns `true` if this is an error diagnostic.
-    pub fn is_error(&self) -> bool {
-        self.code.starts_with('E')
-    }
-
-    /// Returns `true` if this is a warning diagnostic.
-    pub fn is_warning(&self) -> bool {
-        self.code.starts_with('W')
-    }
-}
+// Diagnostic types live in their own module; re-export here so existing
+// intra-crate imports (e.g. `use crate::model::Diagnostic`) keep working.
+pub use crate::diagnostics::{Diagnostic, DiagnosticCode};
