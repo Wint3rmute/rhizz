@@ -403,18 +403,24 @@ fn collect_cluster_cmds(
 // ── Graph rendering helpers ───────────────────────────────────────────────────
 
 /// Draw the full graph layout via `painter`.  All coordinates are offset by
-/// `origin` (the top-left of the allocated canvas rect inside the ScrollArea).
-fn draw_graph_layout(painter: &egui::Painter, origin: egui::Pos2, layout: &GraphLayout) {
+/// `origin` (the top-left of the allocated canvas rect inside the ScrollArea)
+/// and scaled uniformly by `scale`.
+fn draw_graph_layout(
+    painter: &egui::Painter,
+    origin: egui::Pos2,
+    layout: &GraphLayout,
+    scale: f32,
+) {
     for cmd in &layout.cmds {
         match cmd {
             DrawCmd::Cluster { rect, label } => {
-                let r = offset_rect(*rect, origin);
-                draw_dashed_rect(painter, r, Color32::from_rgb(80, 100, 200));
+                let r = scale_and_offset_rect(*rect, origin, scale);
+                draw_dashed_rect(painter, r, Color32::from_rgb(80, 100, 200), scale);
                 painter.text(
-                    r.min + egui::vec2(6.0, 3.0),
+                    r.min + egui::vec2(6.0, 3.0) * scale,
                     egui::Align2::LEFT_TOP,
                     label,
-                    egui::FontId::proportional(12.0),
+                    egui::FontId::proportional(12.0 * scale),
                     Color32::from_rgb(80, 100, 200),
                 );
             }
@@ -424,14 +430,15 @@ fn draw_graph_layout(painter: &egui::Painter, origin: egui::Pos2, layout: &Graph
                 stroke,
                 label,
             } => {
-                let r = offset_rect(*rect, origin);
-                painter.rect_filled(r, 2.0, *fill);
-                painter.rect_stroke(r, 2.0, *stroke, egui::StrokeKind::Middle);
+                let r = scale_and_offset_rect(*rect, origin, scale);
+                let scaled_stroke = egui::Stroke::new(stroke.width * scale, stroke.color);
+                painter.rect_filled(r, 2.0 * scale, *fill);
+                painter.rect_stroke(r, 2.0 * scale, scaled_stroke, egui::StrokeKind::Middle);
                 painter.text(
                     r.center(),
                     egui::Align2::CENTER_CENTER,
                     label,
-                    egui::FontId::proportional(12.0),
+                    egui::FontId::proportional(12.0 * scale),
                     Color32::BLACK,
                 );
             }
@@ -442,15 +449,21 @@ fn draw_graph_layout(painter: &egui::Painter, origin: egui::Pos2, layout: &Graph
                 stroke,
                 label,
             } => {
-                let pts: Vec<egui::Pos2> = path.iter().map(|p| *p + origin.to_vec2()).collect();
-                draw_edge(painter, &pts, *head, *dashed, *stroke, label);
+                let pts: Vec<egui::Pos2> = path
+                    .iter()
+                    .map(|p| origin + egui::vec2(p.x * scale, p.y * scale))
+                    .collect();
+                let scaled_stroke = egui::Stroke::new(stroke.width * scale, stroke.color);
+                draw_edge(painter, &pts, *head, *dashed, scaled_stroke, label, scale);
             }
         }
     }
 }
 
-fn offset_rect(rect: egui::Rect, origin: egui::Pos2) -> egui::Rect {
-    egui::Rect::from_min_max(rect.min + origin.to_vec2(), rect.max + origin.to_vec2())
+fn scale_and_offset_rect(rect: egui::Rect, origin: egui::Pos2, scale: f32) -> egui::Rect {
+    let min = origin + egui::vec2(rect.min.x * scale, rect.min.y * scale);
+    let max = origin + egui::vec2(rect.max.x * scale, rect.max.y * scale);
+    egui::Rect::from_min_max(min, max)
 }
 
 fn draw_edge(
@@ -460,6 +473,7 @@ fn draw_edge(
     dashed: bool,
     stroke: egui::Stroke,
     label: &str,
+    scale: f32,
 ) {
     if pts.len() < 2 {
         return;
@@ -468,7 +482,7 @@ fn draw_edge(
     // Draw line segments.
     for i in 0..pts.len().saturating_sub(1) {
         if dashed {
-            draw_dashed_line(painter, pts[i], pts[i + 1], stroke);
+            draw_dashed_line(painter, pts[i], pts[i + 1], stroke, scale);
         } else {
             painter.line_segment([pts[i], pts[i + 1]], stroke);
         }
@@ -478,13 +492,13 @@ fn draw_edge(
     if head.1 {
         let tip = pts[pts.len() - 1];
         let prev = pts[pts.len() - 2];
-        draw_arrowhead(painter, prev, tip, stroke.color);
+        draw_arrowhead(painter, prev, tip, stroke.color, scale);
     }
     // Start arrowhead.
     if head.0 {
         let tip = pts[0];
         let next = pts[1];
-        draw_arrowhead(painter, next, tip, stroke.color);
+        draw_arrowhead(painter, next, tip, stroke.color, scale);
     }
 
     // Edge label (first line only, drawn near the midpoint).
@@ -492,24 +506,30 @@ fn draw_edge(
     if !first_line.is_empty() {
         let mid = pts[pts.len() / 2];
         painter.text(
-            mid + egui::vec2(4.0, -8.0),
+            mid + egui::vec2(4.0, -8.0) * scale,
             egui::Align2::LEFT_BOTTOM,
             first_line,
-            egui::FontId::proportional(11.0),
+            egui::FontId::proportional(11.0 * scale),
             Color32::DARK_GRAY,
         );
     }
 }
 
-fn draw_arrowhead(painter: &egui::Painter, from: egui::Pos2, tip: egui::Pos2, color: Color32) {
+fn draw_arrowhead(
+    painter: &egui::Painter,
+    from: egui::Pos2,
+    tip: egui::Pos2,
+    color: Color32,
+    scale: f32,
+) {
     let delta = tip - from;
     if delta.length() < 0.01 {
         return;
     }
     let dir = delta.normalized();
     let perp = egui::vec2(-dir.y, dir.x);
-    let size = 8.0_f32;
-    let half_w = 4.5_f32;
+    let size = 8.0_f32 * scale;
+    let half_w = 4.5_f32 * scale;
     let base = tip - dir * size;
     painter.add(egui::Shape::convex_polygon(
         vec![tip, base + perp * half_w, base - perp * half_w],
@@ -518,14 +538,20 @@ fn draw_arrowhead(painter: &egui::Painter, from: egui::Pos2, tip: egui::Pos2, co
     ));
 }
 
-fn draw_dashed_line(painter: &egui::Painter, a: egui::Pos2, b: egui::Pos2, stroke: egui::Stroke) {
+fn draw_dashed_line(
+    painter: &egui::Painter,
+    a: egui::Pos2,
+    b: egui::Pos2,
+    stroke: egui::Stroke,
+    scale: f32,
+) {
     let total = (b - a).length();
     if total < 0.01 {
         return;
     }
     let dir = (b - a) / total;
-    let dash = 6.0_f32;
-    let gap = 4.0_f32;
+    let dash = 6.0_f32 * scale;
+    let gap = 4.0_f32 * scale;
     let mut pos = 0.0_f32;
     while pos < total {
         let start = a + dir * pos;
@@ -535,16 +561,16 @@ fn draw_dashed_line(painter: &egui::Painter, a: egui::Pos2, b: egui::Pos2, strok
     }
 }
 
-fn draw_dashed_rect(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
-    let s = egui::Stroke::new(1.5, color);
+fn draw_dashed_rect(painter: &egui::Painter, rect: egui::Rect, color: Color32, scale: f32) {
+    let s = egui::Stroke::new(1.5 * scale, color);
     let tl = rect.min;
     let tr = egui::pos2(rect.max.x, rect.min.y);
     let bl = egui::pos2(rect.min.x, rect.max.y);
     let br = rect.max;
-    draw_dashed_line(painter, tl, tr, s);
-    draw_dashed_line(painter, tr, br, s);
-    draw_dashed_line(painter, br, bl, s);
-    draw_dashed_line(painter, bl, tl, s);
+    draw_dashed_line(painter, tl, tr, s, scale);
+    draw_dashed_line(painter, tr, br, s, scale);
+    draw_dashed_line(painter, br, bl, s, scale);
+    draw_dashed_line(painter, bl, tl, s, scale);
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -805,12 +831,16 @@ impl eframe::App for RhizzApp {
                     egui::ScrollArea::both().show(ui, |ui| {
                         match self.view_layouts.get(idx).and_then(Option::as_ref) {
                             Some(Ok(layout)) => {
-                                // Allocate the canvas area and draw the layout.
-                                let canvas_size = layout.canvas.max(egui::vec2(1.0, 1.0));
+                                // Compute uniform scale to fit the canvas into the
+                                // available space, never exceeding 1:1.
+                                let avail = ui.available_size().max(egui::vec2(1.0, 1.0));
+                                let canvas = layout.canvas.max(egui::vec2(1.0, 1.0));
+                                let scale = (avail.x / canvas.x).min(avail.y / canvas.y).min(1.0);
+                                let canvas_size = canvas * scale;
                                 let (rect, _) =
                                     ui.allocate_exact_size(canvas_size, egui::Sense::hover());
                                 if ui.is_rect_visible(rect) {
-                                    draw_graph_layout(ui.painter(), rect.min, layout);
+                                    draw_graph_layout(ui.painter(), rect.min, layout, scale);
                                 }
                             }
                             Some(Err(e)) => {
