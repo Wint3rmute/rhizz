@@ -4,6 +4,15 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 19 — Replace custom RenderBackend with SVG rasterization in rhizz-gui
+
+**Note:** this task has been cancelled, rendering quality & performance were unsatisfactory. No code changes were made.
+
+The current `EguiBackend` (`RenderBackend` impl, ~300 lines) re-implements primitive
+drawing on top of `layout-rs` internals. Replace it with `layout-rs`'s built-in SVG
+output rasterized by `resvg` + `tiny-skia`, displayed as an `egui::ColorImage` texture.
+
+
 ## Task 18 — Spec v0.3: Migrate rhizz-cli and rhizz-gui frontends
 
 ### rhizz-cli
