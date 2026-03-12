@@ -13,6 +13,9 @@ A two-system project modeling a consumer quadcopter and its pilot ground station
 - **In-progress modeling** — the `ground-station-pc` component is non-leaf with
   no children and no description, triggering W001 and W005 warnings while still
   compiling cleanly
+- **`source` references** — the `flight-controller` component in `systems.hcl`
+  uses `source = "flight-controller"` to pull its full definition from
+  `components/flight-controller.hcl`, demonstrating reusable top-level components
 - **Views** — four perspectives: top-level overview, power distribution, FC
   internals, and ground station layout
 
@@ -23,3 +26,4 @@ A two-system project modeling a consumer quadcopter and its pilot ground station
 | `project.hcl` | Project metadata |
 | `systems.hcl` | Both systems: `quadcopter` (complete) and `ground-control` (in-progress) |
 | `views.hcl` | Four view definitions with different filters |
+| `components/flight-controller.hcl` | Top-level `flight-controller` component definition, referenced via `source` |

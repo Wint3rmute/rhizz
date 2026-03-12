@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 23 — Update drone example to use `source`
+
+Now that all the infrastructure is in place (Tasks 20–22), update the drone
+example to demonstrate the feature end-to-end.
+
+**Spec reference:** SPEC.md §2.3.
+
+### Acceptance criteria
+
+- In `examples/drone/systems.hcl`, replace the inline `flight-controller`
+  component (approx 120 lines of ports, children, connections) with:
+  ```hcl
+  component "flight-controller" {
+    source = "flight-controller"
+  }
+  ```
+- `examples/drone/components/flight-controller.hcl` already exists as a
+  top-level `component "flight-controller" { … }` with the full body. Verify
+  it matches the removed inline definition (same ports, children, connections).
+- `examples/drone/README.md` is updated to mention the `source` feature and
+  list the `components/flight-controller.hcl` file.
+- All integration tests that compile the drone example pass — the resolved
+  model must be identical (same components, ports, connections, messages,
+  scores, views) to the previous inline version.
+- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `cargo doc`, `cargo build`, `cargo fmt` all pass.
+
+---
+
 ## Task 22 — Add `source` attribute and resolve component references
 
 Add the `source` attribute to `RawComponent` and implement resolution: when a
