@@ -11,39 +11,6 @@ How to work on this file:
 
 ---
 
-## Task 20 — Parse top-level `component` blocks
-
-Allow `component` as a top-level block in `.hcl` files, alongside `system`,
-`view`, and `project`. After this task, top-level components are parsed and
-merged but otherwise ignored — no resolution or `source` logic yet.
-
-**Spec reference:** SPEC.md §2.3, SPEC/models.md (RawFile, parse_file, merge).
-
-**Important:** do NOT modify any example `.hcl` files in this task. The existing
-examples have no top-level `component` blocks and must continue to work
-unchanged. The drone example `examples/drone/components/flight-controller.hcl`
-already exists as a top-level component file but is not yet discoverable (the
-CLI currently scans depth 1 only), so it has no effect on tests.
-
-### Acceptance criteria
-
-- `RawFile` gains a `components: Vec<Labeled<RawComponent>>` field.
-- `parse_file` handles `"component"` as a top-level block identifier (calls
-  the existing `parse_component` + `first_label`).
-- `merge_into` concatenates `components` vecs from all files.
-- A top-level `component` block in an `.hcl` file no longer produces an
-  "unknown top-level block" error.
-- Unit tests:
-  - A file with a top-level `component` block parses successfully.
-  - A file mixing `system`, `component`, and `view` blocks parses correctly.
-  - `RawFile.components` contains the parsed components with correct labels.
-- All existing tests continue to pass (no behaviour change for files without
-  top-level components).
-- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
-  `cargo doc`, `cargo build`, `cargo fmt` all pass.
-
----
-
 ## Task 21 — Recursive file discovery
 
 The CLI's `load_sources` and the test helper `parse_dir` currently scan only

@@ -33,6 +33,8 @@ pub struct RawFile {
     pub project: Option<RawProject>,
     /// All parsed system blocks.
     pub systems: Vec<Labeled<RawSystem>>,
+    /// All parsed top-level component blocks.
+    pub components: Vec<Labeled<RawComponent>>,
     /// All parsed view blocks.
     pub views: Vec<Labeled<RawView>>,
 }
@@ -539,6 +541,12 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
                     parse_system(block.body()).with_context(|| format!("in system '{label}'"))?;
                 file.systems.push(Labeled { label, inner });
             }
+            "component" => {
+                let label = first_label(block)?;
+                let inner = parse_component(block.body())
+                    .with_context(|| format!("in component '{label}'"))?;
+                file.components.push(Labeled { label, inner });
+            }
             "view" => {
                 let label = first_label(block)?;
                 let inner =
@@ -568,6 +576,7 @@ pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result
         dst.project_source = src.project_source;
     }
     dst.systems.extend(src.systems);
+    dst.components.extend(src.components);
     dst.views.extend(src.views);
     Ok(())
 }
@@ -947,5 +956,87 @@ mod tests {
             .fields[0];
         assert_eq!(field.inner.field_type.as_deref(), Some("uint8"));
         assert_eq!(field.inner.unit.as_deref(), Some("ms"));
+    }
+
+    // ── Top-level component parsing ─────────────────────────────────────────
+
+    #[test]
+    fn parse_top_level_component_block() {
+        let src = r#"
+            component "my-comp" {
+                description = "a standalone component"
+                tags        = ["x"]
+                level       = 2
+                leaf        = true
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let raw = parse_file(src, &path).unwrap();
+        assert_eq!(raw.components.len(), 1);
+        let comp = &raw.components[0];
+        assert_eq!(comp.label, "my-comp");
+        assert_eq!(
+            comp.inner.description.as_deref(),
+            Some("a standalone component")
+        );
+        assert_eq!(comp.inner.tags, vec!["x"]);
+        assert_eq!(comp.inner.level, Some(2));
+        assert_eq!(comp.inner.leaf, Some(true));
+    }
+
+    #[test]
+    fn parse_mixed_system_component_view_blocks() {
+        let src = r#"
+            system "sys-a" {
+                component "inline-comp" { leaf = true }
+            }
+
+            component "shared-comp" {
+                description = "top-level component"
+                port "p1" { role = "provider" }
+            }
+
+            view "v1" {
+                system = "sys-a"
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let raw = parse_file(src, &path).unwrap();
+
+        assert_eq!(raw.systems.len(), 1);
+        assert_eq!(raw.systems[0].label, "sys-a");
+
+        assert_eq!(raw.components.len(), 1);
+        let comp = &raw.components[0];
+        assert_eq!(comp.label, "shared-comp");
+        assert_eq!(
+            comp.inner.description.as_deref(),
+            Some("top-level component")
+        );
+        assert_eq!(comp.inner.ports.len(), 1);
+        assert_eq!(comp.inner.ports[0].label, "p1");
+
+        assert_eq!(raw.views.len(), 1);
+        assert_eq!(raw.views[0].label, "v1");
+    }
+
+    #[test]
+    fn merge_top_level_components_from_multiple_files() {
+        let src1 = r#"component "comp-a" { description = "first" }"#;
+        let src2 = r#"component "comp-b" { description = "second" }"#;
+        let path1 = PathBuf::from("file1.hcl");
+        let path2 = PathBuf::from("file2.hcl");
+
+        let file1 = parse_file(src1, &path1).unwrap();
+        let file2 = parse_file(src2, &path2).unwrap();
+
+        let mut merged = RawFile::default();
+        merge_into(&mut merged, file1, &path1).unwrap();
+        merge_into(&mut merged, file2, &path2).unwrap();
+
+        assert_eq!(merged.components.len(), 2);
+        let labels: Vec<&str> = merged.components.iter().map(|c| c.label.as_str()).collect();
+        assert!(labels.contains(&"comp-a"));
+        assert!(labels.contains(&"comp-b"));
     }
 }

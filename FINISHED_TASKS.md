@@ -4,6 +4,15 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 20 — Parse top-level `component` blocks
+
+- Added `components: Vec<Labeled<RawComponent>>` field to `RawFile`.
+- `parse_file` now handles `"component"` as a top-level block identifier.
+- `merge_into` concatenates `components` vecs from all files.
+- Unit tests: top-level component parses, mixed blocks parse, merge across files.
+
+---
+
 ## Task 19 — Replace custom RenderBackend with SVG rasterization in rhizz-gui
 
 **Note:** this task has been cancelled, rendering quality & performance were unsatisfactory. No code changes were made.
