@@ -43,7 +43,122 @@ output rasterized by `resvg` + `tiny-skia`, displayed as an `egui::ColorImage` t
 
 ---
 
-## Task 20 — Task template
+## Task 20 — Recursive file discovery
+
+The CLI's `load_sources` and the test helper `parse_dir` currently scan only
+`max_depth(1)`. Change them to recursively discover all `.hcl` files in the
+project directory tree, so that files in subdirectories (e.g.
+`components/flight-controller.hcl`) are parsed and merged like any other file.
+
+**Spec reference:** SPEC.md §1 (project structure).
+
+### Acceptance criteria
+
+- `load_sources` in `rhizz-cli/src/cli.rs` uses `WalkDir::new(dir)` without
+  `max_depth(1)` — all `.hcl` files at any depth are collected and returned.
+- `parse_dir` test helper in `rhizz-core/src/parse.rs` is updated the same way.
+- `rhizz-gui` file discovery is updated the same way.
+- Existing tests and examples pass unchanged (no `.hcl` files in subdirectories
+  exist yet in the other examples, so behaviour is identical).
+- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `cargo doc`, `cargo build`, `cargo fmt` all pass.
+
+---
+
+## Task 21 — Parse top-level `component` blocks
+
+Allow `component` as a top-level block in `.hcl` files, alongside `system`,
+`view`, and `project`. After this task, top-level components are parsed and
+merged but not yet resolvable via `source`.
+
+**Spec reference:** SPEC.md §2.3, SPEC/models.md (RawFile, parse_file, merge).
+
+### Acceptance criteria
+
+- `RawFile` gains a `components: Vec<Labeled<RawComponent>>` field.
+- `parse_file` handles `"component"` as a top-level block identifier (calls
+  the existing `parse_component` + `first_label`).
+- `merge_into` concatenates `components` vecs from all files.
+- A top-level `component` block in an `.hcl` file no longer produces an
+  "unknown top-level block" error.
+- Unit tests:
+  - A file with a top-level `component` block parses successfully.
+  - A file mixing `system`, `component`, and `view` blocks parses correctly.
+- All existing tests pass unchanged.
+- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `cargo doc`, `cargo build`, `cargo fmt` all pass.
+
+---
+
+## Task 22 — Add `source` attribute and resolve component references
+
+Add the `source` attribute to `RawComponent` and implement resolution: when a
+component inside a system (or parent component) has `source = "some-label"`,
+the resolver looks up the top-level component with that label, validates
+exclusivity, detects cycles, and clones the body into the sourced component
+slot.
+
+**Spec reference:** SPEC.md §2.3 (source rules), SPEC/models.md (source
+resolution during resolution pass).
+
+### Acceptance criteria
+
+- `RawComponent` gains `source: Option<String>`.
+- `ComponentAttrs` serde helper gains `source: Option<String>`.
+- `parse_component` reads the `source` attribute from HCL.
+- New `DiagnosticCode` variants: `E012`, `E013`, `E014` are defined and emitted:
+  - E012: component with `source` has other attributes or child blocks.
+  - E013: circular `source` chain detected.
+  - E014: `source` references an undefined top-level component.
+- During resolution, before walking a system's component tree, the resolver
+  builds a `HashMap<String, RawComponent>` from `RawFile.components`.
+  Duplicate top-level component labels → E001.
+- When a component has `source`:
+  1. Check exclusivity (E012).
+  2. Look up the label in the top-level component map (E014 if missing).
+  3. Check the ancestor set for cycles (E013).
+  4. Clone the top-level component's body (description, tags, level, leaf,
+     ports, children, connections) into the sourced slot. The label at the
+     usage site is kept.
+  5. Recurse into the cloned children for nested `source` references.
+- Unit tests:
+  - Component with `source` pointing to a valid top-level component → body
+    cloned correctly, resolved model is identical to inline definition.
+  - Component with `source` + inline `description` → E012.
+  - Component with `source` pointing to undefined label → E014.
+  - Circular `source` (A sources B, B sources A) → E013.
+  - Nested `source` (A sources B, B has child that sources C) → works.
+  - Same top-level component sourced into two different systems → works.
+- The drone example (`examples/drone/`) compiles correctly with the
+  `flight-controller` sourced from `components/flight-controller.hcl`.
+- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `cargo doc`, `cargo build`, `cargo fmt` all pass.
+
+---
+
+## Task 23 — W012: orphan top-level component warning
+
+Detect top-level components that are not referenced by any `source` attribute
+anywhere in the model and emit warning W012.
+
+**Spec reference:** SPEC.md §4.2 (W012).
+
+### Acceptance criteria
+
+- New `DiagnosticCode::W012` is defined.
+- After resolving all systems and expanding all `source` references, the
+  resolver tracks which top-level component labels were actually used.
+  Any unused labels produce W012.
+- Unit tests:
+  - A top-level component referenced by `source` → no W012.
+  - A top-level component not referenced by any `source` → W012.
+  - A top-level component referenced multiple times → no W012.
+- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `cargo doc`, `cargo build`, `cargo fmt` all pass.
+
+---
+
+## Task 24 — Task template
 
 - Task description here
 - Requirements, spec, acceptance criteria as bullet points

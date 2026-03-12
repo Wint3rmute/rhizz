@@ -1,19 +1,22 @@
-# `rhizz` Specification v0.3
+# `rhizz` Specification v0.4
 
 ## 1. Project Structure
 
-All `.hcl` files in a project directory are merged into a single model (flat merge, similar to Terraform). No import or namespace mechanism is required for v1.
+All `.hcl` files in a project directory (recursively) are merged into a single model (flat merge, similar to Terraform).
 
 ```
 project/
 ├── project.hcl          # optional project metadata
-├── systems.hcl          # system definitions + top-level components
-├── subsystem-a.hcl      # deeper component breakdown
-├── connections.hcl      # connection definitions
-└── views.hcl            # view definitions
+├── systems.hcl          # system definitions
+├── views.hcl            # view definitions
+├── components/          # top-level (reusable) component definitions
+│   ├── flight-controller.hcl
+│   └── esc.hcl
+└── lib/                 # more components — directory layout is free-form
+    └── sensors.hcl
 ```
 
-File organization is a convention — the tooling treats all `.hcl` files equally.
+File organization is a convention — the tooling treats all `.hcl` files equally regardless of directory depth. All files are parsed and merged into a single `RawFile`.
 
 The merge strategy is described in [SPEC/models.md § Merge](SPEC/models.md#merge).
 
@@ -71,7 +74,7 @@ system "consumer-drone" {
 
 ### 2.3 `component` Block
 
-Defined inside a `system` or another `component`. Represents a physical or logical building block. Components declare their external interface via `port` blocks; ports are allowed on both leaf and non-leaf components.
+Defined inside a `system`, another `component`, **or at the top level**. Represents a physical or logical building block. Components declare their external interface via `port` blocks; ports are allowed on both leaf and non-leaf components.
 
 ```hcl
 component "flight-controller" {
@@ -93,9 +96,58 @@ component "flight-controller" {
 }
 ```
 
+#### Top-level components and `source`
+
+A `component` block may appear at the **top level** of any `.hcl` file (alongside `system`, `view`, and `project`). Top-level components are not part of any system by themselves — they serve as reusable definitions that can be pulled into a system or parent component via the `source` attribute.
+
+```hcl
+# components/flight-controller.hcl — a normal rhizz file
+component "flight-controller" {
+  description = "Main flight computer"
+  tags        = ["electronics", "compute"]
+  leaf        = false
+
+  port "motor-out" { protocol = "dshot600"; role = "provider" }
+  component "mcu"  { /* ... */ }
+  connection "spi-bus" { /* ... */ }
+}
+```
+
+Inside a system (or parent component), reference it by label:
+
+```hcl
+system "quadcopter" {
+  # Instantiate the top-level component by label.
+  # The label at the usage site ("fc") becomes the component's name in this system.
+  component "fc" {
+    source = "flight-controller"
+  }
+
+  # Or keep the same name:
+  component "flight-controller" {
+    source = "flight-controller"
+  }
+}
+```
+
+**Rules:**
+
+- `source` is a **label reference** to a top-level `component`, not a file path. Resolution happens during the resolution pass (after merge), using the same label lookup mechanism as `view.system`.
+- When `source` is present, **no other attributes or child blocks** may appear on the component (error E012). The label at the usage site is the only locally-defined property.
+- Nested `source` is supported: a top-level component may itself contain children with `source` references to other top-level components.
+- Circular `source` chains are detected and produce error E013.
+- `source` references an undefined top-level component → error E014.
+- **Top-level components may not contain `connection` blocks that reference siblings outside their own tree.** Connections inside a top-level component wire its own children — they cannot reference components from the system that sources them. (Connections at the system level wire sourced components together.)
+- Top-level components that are not referenced by any `source` in any system produce warning W012 (orphan top-level component).
+- Duplicate top-level component labels across files are an error (E001 — same scope, same block type).
+- Top-level components are **not** included in scoring or view rendering unless they are sourced into a system.
+
+#### Attributes
+
 | Attribute | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique identifier within parent scope |
+| *label* | string | **yes** | — | Unique identifier within parent scope (or unique top-level label) |
+| `source` | string | no | — | Label of a top-level `component` to use as this component's body. Mutually exclusive with all other attributes and children (E012). |
 | `description` | string | no | `""` | Human-readable description |
 | `tags` | list(string) | no | `[]` | Filtering tags |
 | `level` | integer | no | parent level + 1 | Abstraction level |
@@ -275,6 +327,7 @@ All references are **name-based within the same parent scope**:
 | `connection.from` / `connection.to` (bare label) | Sibling `component` labels in the same parent scope |
 | `connection.from` / `connection.to` (`comp:port`) | Sibling `component` label + named `port` on that component |
 | `encapsulates` | Sibling `connection` labels in the same parent scope |
+| `component.source` | Top-level `component` label |
 | `view.system` | Top-level `system` label |
 
 **No cross-scope references in v1.** If a connection spans abstraction levels, model it at the appropriate parent scope.
@@ -301,6 +354,9 @@ All references are **name-based within the same parent scope**:
 | `E009` | `port.role` value is not `"provider"`, `"consumer"`, or `"peer"` |
 | `E010` | `comp:port` reference — component exists but named port does not |
 | `E011` | `comp:port` reference — component label does not exist |
+| `E012` | Component with `source` has other attributes or child blocks |
+| `E013` | Circular `source` chain detected |
+| `E014` | `source` references an undefined top-level component |
 
 ### 4.2 Warnings (Non-blocking)
 
@@ -317,6 +373,7 @@ All references are **name-based within the same parent scope**:
 | `W009` | Port roles are incompatible or ambiguous (see §6) |
 | `W010` | Port is defined on a component but referenced by no connection (unused port) |
 | `W011` | Port has no messages defined |
+| `W012` | Top-level component is not referenced by any `source` (orphan) |
 
 ---
 
@@ -741,6 +798,7 @@ view "fc-internals" {
 | Connections reference **sibling** components only | Keeps scoping simple; cross-level wiring is modeled at the appropriate parent |
 | Ports are optional (`comp:port` syntax is additive) | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally |
 | Messages live on ports, not connections | Protocol schema travels with the component; enables genuine component reuse in future |
+| Top-level components + `source` label reference | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
 | Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable |
 | `type` on fields is a free-form string | Supports gradual specification — no type system to fight during early design |
 | `level` auto-increments from parent | Reduces boilerplate; explicit override still available |
@@ -751,7 +809,8 @@ view "fc-internals" {
 
 **Out of scope for v1, currently non-goals. Candidates for v2:**
 
-- Cross-system references and shared component libraries
+- Cross-system references and shared component libraries (cross-project imports)
+- Component templates with attribute overriding at instantiation sites
 - Protocol schema reuse across components (port type definitions)
 - Constraint / requirement blocks linked to components
 - Temporal / sequence diagrams (message ordering)
