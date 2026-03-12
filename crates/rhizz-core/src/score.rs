@@ -244,9 +244,9 @@ impl fmt::Display for ScoreReport {
             self.messages.total(),
             self.messages.percentage(),
         )?;
-        write!(
+        writeln!(
             f,
-            "   - Overall:     {}/{}           {:.1}%\n",
+            "   - Overall:     {}/{}           {:.1}%",
             self.overall_complete(),
             self.overall_total(),
             self.overall_percentage(),
