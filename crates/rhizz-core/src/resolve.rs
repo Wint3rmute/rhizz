@@ -61,6 +61,22 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     // Phase A: allocate SystemId, register all components (recursive)
     // Phase B: process system-level connections + resolve encapsulates
 
+    // Build top-level component map for source resolution.
+    let mut top_level_components: HashMap<String, RawComponent> = HashMap::new();
+    {
+        let mut tl_seen: HashSet<String> = HashSet::new();
+        for lc in raw.components {
+            if !tl_seen.insert(lc.label.clone()) {
+                r.push_error(
+                    DiagnosticCode::E001,
+                    format!("duplicate top-level component label '{}'", lc.label),
+                );
+                continue;
+            }
+            top_level_components.insert(lc.label, lc.inner);
+        }
+    }
+
     let mut system_labels_seen: HashSet<String> = HashSet::new();
 
     struct SystemWork {
@@ -98,6 +114,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         let scope = Scope::System(sid);
         let mut comp_labels_seen: HashSet<String> = HashSet::new();
         let mut child_ids: Vec<ComponentId> = Vec::new();
+        let mut ancestors: Vec<String> = Vec::new();
 
         for lc in &ls.inner.components {
             if !comp_labels_seen.insert(lc.label.clone()) {
@@ -116,6 +133,8 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
                 scope,
                 ComponentParent::System(sid),
                 system_level,
+                &top_level_components,
+                &mut ancestors,
             );
             child_ids.push(cid);
         }
@@ -180,19 +199,123 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 ///   3. Process ports on the component.
 ///   4. Process connections in the component's own scope (from/to resolved).
 ///   5. Resolve encapsulates for those connections.
+///
+/// When `lc.inner.source` is set the body is taken from the top-level
+/// component map instead of from `lc.inner`.  The `ancestors` stack is used
+/// for cycle detection (E013).
 fn register_component(
     r: &mut Resolver,
     lc: &Labeled<RawComponent>,
     parent_scope: Scope,
     parent: ComponentParent,
     parent_level: i32,
+    top_level: &HashMap<String, RawComponent>,
+    ancestors: &mut Vec<String>,
 ) -> ComponentId {
+    let initial_depth = ancestors.len();
+
+    // Resolve source if present, following the chain with cycle detection.
+    // Returns Some(body) when source resolves successfully, or early-returns
+    // (with a placeholder ComponentId) on E013/E014.  Returns None when no
+    // source attribute is set.
+    let source_body: Option<RawComponent> = if let Some(ref src_label) = lc.inner.source {
+        // E012: source must be exclusive — no other attrs or child blocks.
+        let has_other = lc.inner.description.is_some()
+            || !lc.inner.tags.is_empty()
+            || lc.inner.level.is_some()
+            || lc.inner.leaf.is_some()
+            || !lc.inner.ports.is_empty()
+            || !lc.inner.components.is_empty()
+            || !lc.inner.connections.is_empty();
+        if has_other {
+            r.push_error(
+                DiagnosticCode::E012,
+                format!(
+                    "component '{}' has 'source' together with other attributes or blocks",
+                    lc.label
+                ),
+            );
+        }
+
+        // Follow source chain: push each label and look up the final concrete body.
+        let mut current_label = src_label.clone();
+        let resolved = loop {
+            // E013: cycle detection.
+            if ancestors.iter().any(|a| a == &current_label) {
+                r.push_error(
+                    DiagnosticCode::E013,
+                    format!(
+                        "circular 'source' chain detected involving '{}' (at component '{}')",
+                        current_label, lc.label
+                    ),
+                );
+                let cid = ComponentId(r.model.components.len());
+                r.scope_index
+                    .components
+                    .insert((parent_scope, lc.label.clone()), cid);
+                r.model.components.push(Component {
+                    label: lc.label.clone(),
+                    description: String::new(),
+                    tags: vec![],
+                    level: parent_level + 1,
+                    leaf: false,
+                    parent,
+                    children: vec![],
+                    ports: vec![],
+                    connections: vec![],
+                });
+                ancestors.truncate(initial_depth);
+                return cid;
+            }
+            ancestors.push(current_label.clone());
+
+            match top_level.get(&current_label) {
+                None => {
+                    // E014: undefined source label.
+                    r.push_error(
+                        DiagnosticCode::E014,
+                        format!(
+                            "component '{}' sources undefined top-level component '{}'",
+                            lc.label, current_label
+                        ),
+                    );
+                    let cid = ComponentId(r.model.components.len());
+                    r.scope_index
+                        .components
+                        .insert((parent_scope, lc.label.clone()), cid);
+                    r.model.components.push(Component {
+                        label: lc.label.clone(),
+                        description: String::new(),
+                        tags: vec![],
+                        level: parent_level + 1,
+                        leaf: false,
+                        parent,
+                        children: vec![],
+                        ports: vec![],
+                        connections: vec![],
+                    });
+                    ancestors.truncate(initial_depth);
+                    return cid;
+                }
+                Some(found_body) => match &found_body.source {
+                    None => break found_body.clone(),
+                    Some(next) => current_label = next.clone(),
+                },
+            }
+        };
+        Some(resolved)
+    } else {
+        None
+    };
+
+    let body: &RawComponent = source_body.as_ref().unwrap_or(&lc.inner);
+
     let cid = ComponentId(r.model.components.len());
-    let level = lc.inner.level.unwrap_or(parent_level + 1);
-    let leaf = lc.inner.leaf.unwrap_or(false);
+    let level = body.level.unwrap_or(parent_level + 1);
+    let leaf = body.leaf.unwrap_or(false);
 
     // E005 -- leaf component with children or connections
-    if leaf && (!lc.inner.components.is_empty() || !lc.inner.connections.is_empty()) {
+    if leaf && (!body.components.is_empty() || !body.connections.is_empty()) {
         r.push_error(
             DiagnosticCode::E005,
             format!(
@@ -210,8 +333,8 @@ fn register_component(
     // Push placeholder; children/ports/connections filled in below.
     r.model.components.push(Component {
         label: lc.label.clone(),
-        description: lc.inner.description.clone().unwrap_or_default(),
-        tags: lc.inner.tags.clone(),
+        description: body.description.clone().unwrap_or_default(),
+        tags: body.tags.clone(),
         level,
         leaf,
         parent,
@@ -225,7 +348,7 @@ fn register_component(
     // Step 1: register child components in this component's scope.
     let mut child_label_seen: HashSet<String> = HashSet::new();
     let mut child_ids: Vec<ComponentId> = Vec::new();
-    for child_lc in &lc.inner.components {
+    for child_lc in &body.components {
         if !child_label_seen.insert(child_lc.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -242,25 +365,30 @@ fn register_component(
             child_scope,
             ComponentParent::Component(cid),
             level,
+            top_level,
+            ancestors,
         );
         child_ids.push(child_cid);
     }
     r.model.components[cid.0].children = child_ids;
 
     // Step 2: process ports on this component.
-    let port_ids = process_ports(r, &lc.inner.ports, cid, level, &lc.label);
+    let port_ids = process_ports(r, &body.ports, cid, level, &lc.label);
     r.model.components[cid.0].ports = port_ids;
 
     // Step 3: process connections in this component's scope.
     let conn_ids =
-        process_connections_in_scope(r, &lc.inner.connections, child_scope, level, &lc.label);
+        process_connections_in_scope(r, &body.connections, child_scope, level, &lc.label);
 
     // Step 4: resolve encapsulates for those connections.
-    for (li, conn_id) in lc.inner.connections.iter().zip(conn_ids.iter()) {
+    for (li, conn_id) in body.connections.iter().zip(conn_ids.iter()) {
         resolve_encapsulates(r, *conn_id, &li.inner.encapsulates, child_scope, &li.label);
     }
 
     r.model.components[cid.0].connections = conn_ids;
+
+    // Restore ancestors to where they were before this call.
+    ancestors.truncate(initial_depth);
 
     cid
 }
@@ -1173,5 +1301,164 @@ mod tests {
         // Default description = ""
         assert_eq!(model.systems[0].description, "");
         assert_eq!(model.components[0].description, "");
+    }
+
+    // ── source resolution ──────────────────────────────────────────────────────
+
+    #[test]
+    fn source_basic_clones_body() {
+        let src = r#"
+component "sensor" {
+    description = "a temperature sensor"
+    leaf = true
+    port "data-out" {
+        role = "provider"
+    }
+}
+system "sys" {
+    component "temp-sensor" {
+        source = "sensor"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("should resolve");
+        let tc_cid = model.systems[0].components[0];
+        let tc = &model.components[tc_cid.0];
+        assert_eq!(tc.label, "temp-sensor");
+        assert_eq!(tc.description, "a temperature sensor");
+        assert!(tc.leaf);
+        assert_eq!(tc.ports.len(), 1);
+        assert_eq!(model.ports[tc.ports[0].0].label, "data-out");
+    }
+
+    #[test]
+    fn source_exclusivity_e012() {
+        let src = r#"
+component "sensor" {
+    description = "sensor"
+    leaf = true
+}
+system "sys" {
+    component "temp-sensor" {
+        source = "sensor"
+        description = "extra"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let errs = resolve(raw).unwrap_err();
+        assert!(
+            errs.iter().any(|d| d.code == DiagnosticCode::E012),
+            "expected E012, got: {:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn source_undefined_label_e014() {
+        let src = r#"
+system "sys" {
+    component "mystery" {
+        source = "nonexistent"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let errs = resolve(raw).unwrap_err();
+        assert!(
+            errs.iter().any(|d| d.code == DiagnosticCode::E014),
+            "expected E014, got: {:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn source_circular_e013() {
+        let src = r#"
+component "a" {
+    source = "b"
+}
+component "b" {
+    source = "a"
+}
+system "sys" {
+    component "comp-a" {
+        source = "a"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let errs = resolve(raw).unwrap_err();
+        assert!(
+            errs.iter().any(|d| d.code == DiagnosticCode::E013),
+            "expected E013, got: {:?}",
+            errs
+        );
+    }
+
+    #[test]
+    fn source_nested_works() {
+        let src = r#"
+component "c-comp" {
+    description = "component C"
+    leaf = true
+}
+component "b-comp" {
+    description = "component B"
+    component "child" {
+        source = "c-comp"
+    }
+}
+system "sys" {
+    component "a" {
+        source = "b-comp"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("nested source should resolve");
+        let a_cid = model.systems[0].components[0];
+        let a = &model.components[a_cid.0];
+        assert_eq!(a.label, "a");
+        assert_eq!(a.description, "component B");
+        assert_eq!(a.children.len(), 1);
+        let child = &model.components[a.children[0].0];
+        assert_eq!(child.label, "child");
+        assert_eq!(child.description, "component C");
+        assert!(child.leaf);
+    }
+
+    #[test]
+    fn source_same_component_two_systems() {
+        let src = r#"
+component "sensor" {
+    description = "sensor"
+    leaf = true
+}
+system "sys1" {
+    component "s1" {
+        source = "sensor"
+    }
+}
+system "sys2" {
+    component "s2" {
+        source = "sensor"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("reuse should work");
+        assert_eq!(model.systems.len(), 2);
+        let s1 = &model.components[model.systems[0].components[0].0];
+        let s2 = &model.components[model.systems[1].components[0].0];
+        assert_eq!(s1.description, "sensor");
+        assert_eq!(s2.description, "sensor");
     }
 }

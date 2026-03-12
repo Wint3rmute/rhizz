@@ -104,6 +104,21 @@ impl DiagnosticCode {
         code: "E011",
         level: Level::Error,
     };
+    /// Component with `source` attribute also has other attributes or child blocks (exclusivity violation).
+    pub const E012: Self = Self {
+        code: "E012",
+        level: Level::Error,
+    };
+    /// Circular `source` chain detected.
+    pub const E013: Self = Self {
+        code: "E013",
+        level: Level::Error,
+    };
+    /// `source` references an undefined top-level component.
+    pub const E014: Self = Self {
+        code: "E014",
+        level: Level::Error,
+    };
 
     // ── Warnings ──────────────────────────────────────────────────────────────
     /// Non-blocking frontend or runtime warning (e.g. live-reload unavailable).
