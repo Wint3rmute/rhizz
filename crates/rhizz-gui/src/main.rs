@@ -43,7 +43,6 @@ fn main() -> anyhow::Result<()> {
 
 fn load_and_compile(dir: &Path) -> (Option<Model>, Vec<Diagnostic>) {
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
-        .max_depth(1)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|x| x == "hcl"))
@@ -901,7 +900,6 @@ mod tests {
             .join("../../examples")
             .join(name);
         let mut hcl_files: Vec<PathBuf> = WalkDir::new(&dir)
-            .max_depth(1)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| {
