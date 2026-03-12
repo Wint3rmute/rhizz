@@ -1,0 +1,31 @@
+name: Build WASM
+
+on:
+  workflow_call:
+
+jobs:
+  build-wasm:
+    name: Build rhizz-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build wasm package
+        run: wasm-pack build crates/rhizz-wasm --target web --release
+
+      - name: Upload wasm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
