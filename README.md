@@ -43,3 +43,9 @@ rhizz build [path]   # all of the above (default)
 
 See `SPEC.md`, `SPEC/`, and `examples/` for the full specification and worked
 examples.
+
+# Development commands
+
+```bash
+~/.cargo/bin/wasm-pack build crates/rhizz-wasm --target web
+```
