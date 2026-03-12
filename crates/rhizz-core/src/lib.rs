@@ -107,14 +107,18 @@ fn default_project_name(sources: &[Source]) -> Option<String> {
         shared_path_prefix(&prefix, path)
     });
     let project_dir = if rest.is_empty() || rest.iter().all(|path| *path == *first) {
+        // A single source file gives a file path, so prefer its parent directory.
+        // If the path has no parent (for example, a bare relative filename), fall
+        // back to the path itself and let the basename helper decide what to use.
         common.parent().unwrap_or(common.as_path())
     } else {
         common.as_path()
     };
 
-    project_dir
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
+    // If the computed common directory has no basename (for example, the root
+    // directory), fall back to the first source's parent directory or the first
+    // path itself as a last resort.
+    path_basename(project_dir).or_else(|| path_basename(first.parent().unwrap_or(first)))
 }
 
 fn shared_path_prefix(lhs: &Path, rhs: &Path) -> PathBuf {
@@ -125,6 +129,11 @@ fn shared_path_prefix(lhs: &Path, rhs: &Path) -> PathBuf {
             prefix.push(component.as_os_str());
             prefix
         })
+}
+
+fn path_basename(path: &Path) -> Option<String> {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
@@ -173,11 +182,29 @@ mod tests {
         dir
     }
 
+    struct TempProjectDir(PathBuf);
+
+    impl TempProjectDir {
+        fn new(test_name: &str) -> Self {
+            Self(unique_temp_dir(test_name))
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempProjectDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn missing_project_name_defaults_to_directory_name() {
-        let dir = unique_temp_dir("missing-project-name");
+        let dir = TempProjectDir::new("missing-project-name");
         write_hcl(
-            &dir.join("project.hcl"),
+            &dir.path().join("project.hcl"),
             r#"
 project {
   version = "1.2.3"
@@ -185,13 +212,13 @@ project {
 "#,
         );
         write_hcl(
-            &dir.join("systems.hcl"),
+            &dir.path().join("systems.hcl"),
             r#"
 system "demo" {}
 "#,
         );
 
-        let result = compile_dir(&dir);
+        let result = compile_dir(dir.path());
         let model = result.model.expect("compilation should succeed");
         assert!(
             result
@@ -203,24 +230,22 @@ system "demo" {}
         );
         assert_eq!(
             model.project.name,
-            dir.file_name().unwrap().to_string_lossy()
+            dir.path().file_name().unwrap().to_string_lossy()
         );
         assert_eq!(model.project.version, "1.2.3");
-
-        fs::remove_dir_all(dir).expect("should clean up temp directory");
     }
 
     #[test]
     fn missing_project_block_defaults_to_common_source_directory_name() {
-        let dir = unique_temp_dir("missing-project-block");
+        let dir = TempProjectDir::new("missing-project-block");
         write_hcl(
-            &dir.join("systems.hcl"),
+            &dir.path().join("systems.hcl"),
             r#"
 system "demo" {}
 "#,
         );
         write_hcl(
-            &dir.join("components").join("sensor.hcl"),
+            &dir.path().join("components").join("sensor.hcl"),
             r#"
 component "sensor" {
   leaf = true
@@ -228,7 +253,7 @@ component "sensor" {
 "#,
         );
 
-        let result = compile_dir(&dir);
+        let result = compile_dir(dir.path());
         let model = result.model.expect("compilation should succeed");
         assert!(
             result
@@ -240,18 +265,16 @@ component "sensor" {
         );
         assert_eq!(
             model.project.name,
-            dir.file_name().unwrap().to_string_lossy()
+            dir.path().file_name().unwrap().to_string_lossy()
         );
         assert_eq!(model.project.version, "0.0.0");
-
-        fs::remove_dir_all(dir).expect("should clean up temp directory");
     }
 
     #[test]
     fn explicit_project_name_overrides_directory_default() {
-        let dir = unique_temp_dir("explicit-project-name");
+        let dir = TempProjectDir::new("explicit-project-name");
         write_hcl(
-            &dir.join("project.hcl"),
+            &dir.path().join("project.hcl"),
             r#"
 project {
   name = "explicit-name"
@@ -259,13 +282,13 @@ project {
 "#,
         );
         write_hcl(
-            &dir.join("systems.hcl"),
+            &dir.path().join("systems.hcl"),
             r#"
 system "demo" {}
 "#,
         );
 
-        let result = compile_dir(&dir);
+        let result = compile_dir(dir.path());
         let model = result.model.expect("compilation should succeed");
         assert!(
             result
@@ -276,7 +299,5 @@ system "demo" {}
             result.diagnostics
         );
         assert_eq!(model.project.name, "explicit-name");
-
-        fs::remove_dir_all(dir).expect("should clean up temp directory");
     }
 }
