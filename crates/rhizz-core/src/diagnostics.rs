@@ -183,6 +183,11 @@ impl DiagnosticCode {
         code: "W011",
         level: Level::Warning,
     };
+    /// Top-level component is not referenced by any `source` attribute.
+    pub const W012: Self = Self {
+        code: "W012",
+        level: Level::Warning,
+    };
 
     /// Returns `true` if this code is error-level.
     pub fn is_error(self) -> bool {

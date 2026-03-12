@@ -11,30 +11,6 @@ How to work on this file:
 
 ---
 
-## Task 24 — W012: orphan top-level component warning
-
-Detect top-level components that are not referenced by any `source` attribute
-anywhere in the model and emit warning W012.
-
-**Spec reference:** SPEC.md §4.2 (W012).
-
-### Acceptance criteria
-
-- New `DiagnosticCode::W012` is defined.
-- After resolving all systems and expanding all `source` references, the
-  resolver tracks which top-level component labels were actually used.
-  Any unused labels produce W012.
-- Unit tests:
-  - A top-level component referenced by `source` → no W012.
-  - A top-level component not referenced by any `source` → W012.
-  - A top-level component referenced multiple times → no W012.
-- All existing tests continue to pass (no orphan top-level components exist
-  in the examples after Task 23).
-- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
-  `cargo doc`, `cargo build`, `cargo fmt` all pass.
-
----
-
 ## Task 25 — Attach diagnostic Markdown to `DiagnosticCode` via `include_str!`
 
 Use `#[doc = include_str!(...)]` on each `DiagnosticCode` const to pull the

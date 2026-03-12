@@ -20,6 +20,8 @@ struct Resolver {
     diagnostics: Vec<Diagnostic>,
     /// Maps system label -> SystemId for view resolution.
     system_label_index: HashMap<String, SystemId>,
+    /// Top-level component labels that were referenced by at least one `source` attribute.
+    used_top_level_labels: HashSet<String>,
 }
 
 impl Resolver {
@@ -29,7 +31,6 @@ impl Resolver {
     }
 
     /// Record a warning diagnostic.
-    #[allow(dead_code)]
     fn push_warning(&mut self, code: DiagnosticCode, msg: impl Into<String>) {
         self.diagnostics.push(Diagnostic::warning(code, msg));
     }
@@ -172,6 +173,25 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         resolve_view(&mut r, lv);
     }
 
+    // ── W012: orphan top-level components ─────────────────────────────────────
+    {
+        let mut orphan_labels: Vec<&str> = top_level_components
+            .keys()
+            .filter(|label| !r.used_top_level_labels.contains(*label))
+            .map(|s| s.as_str())
+            .collect();
+        orphan_labels.sort();
+        for label in orphan_labels {
+            r.push_warning(
+                DiagnosticCode::W012,
+                format!(
+                    "top-level component '{}' is not referenced by any 'source'",
+                    label
+                ),
+            );
+        }
+    }
+
     // ── Warnings ──────────────────────────────────────────────────────────────
     r.diagnostics.extend(crate::validate::validate(&r.model));
 
@@ -268,6 +288,7 @@ fn register_component(
                 return cid;
             }
             ancestors.push(current_label.clone());
+            r.used_top_level_labels.insert(current_label.clone());
 
             match top_level.get(&current_label) {
                 None => {
@@ -1460,5 +1481,88 @@ system "sys2" {
         let s2 = &model.components[model.systems[1].components[0].0];
         assert_eq!(s1.description, "sensor");
         assert_eq!(s2.description, "sensor");
+    }
+
+    // ── W012: orphan top-level component ──────────────────────────────────────
+
+    #[test]
+    fn w012_referenced_top_level_no_warning() {
+        let src = r#"
+component "sensor" {
+    description = "sensor"
+    leaf = true
+}
+system "sys" {
+    component "s" {
+        source = "sensor"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (_model, warnings) = resolve(raw).expect("should resolve");
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
+            "expected no W012 when top-level component is referenced, got: {:?}",
+            warnings
+        );
+    }
+
+    #[test]
+    fn w012_unreferenced_top_level_emits_warning() {
+        let src = r#"
+component "unused" {
+    description = "never referenced"
+    leaf = true
+}
+system "sys" {
+    component "a" { leaf = true }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (_model, warnings) = resolve(raw).expect("should resolve");
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W012),
+            "expected W012 for unreferenced top-level component, got: {:?}",
+            warnings
+        );
+        let w = warnings
+            .iter()
+            .find(|d| d.code == DiagnosticCode::W012)
+            .unwrap();
+        assert!(
+            w.message.contains("unused"),
+            "W012 message should mention the label, got: {}",
+            w.message
+        );
+    }
+
+    #[test]
+    fn w012_referenced_multiple_times_no_warning() {
+        let src = r#"
+component "sensor" {
+    description = "sensor"
+    leaf = true
+}
+system "sys1" {
+    component "s1" {
+        source = "sensor"
+    }
+}
+system "sys2" {
+    component "s2" {
+        source = "sensor"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (_model, warnings) = resolve(raw).expect("should resolve");
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
+            "expected no W012 when top-level component referenced multiple times, got: {:?}",
+            warnings
+        );
     }
 }
