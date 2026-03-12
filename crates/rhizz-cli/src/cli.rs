@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
+use tracing::info;
 use walkdir::WalkDir;
 
 use rhizz_core::{Diagnostic, DiagnosticCode, Source};
@@ -444,6 +445,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     return 1;
                 }
 
+                info!(view = %view.label, path = %out_path.display(), "rendered output file");
                 generated_views.push((view.label.clone(), out_path));
             }
         }
@@ -518,9 +520,16 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
 
         // Views generated.
         if !generated_views.is_empty() {
-            for (name, path) in &generated_views {
-                println!("  view '{}' → {}", name, path.display());
-            }
+            let unique_views: std::collections::HashSet<&str> = generated_views
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect();
+            let n = unique_views.len();
+            let out_dir = cli.output_dir.display();
+            println!(
+                "🖼️ Rendered {n} diagram{} → {out_dir}",
+                if n == 1 { "" } else { "s" }
+            );
         }
     }
 
