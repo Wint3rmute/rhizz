@@ -44,146 +44,144 @@ pub struct DiagnosticCode {
 
 impl DiagnosticCode {
     // ── Errors ────────────────────────────────────────────────────────────────
-    /// HCL parse failure, or an internal structural error forwarded by the frontend.
+    #[doc = include_str!("../../../SPEC/diagnostics/E000.md")]
     pub const E000: Self = Self {
         code: "E000",
         level: Level::Error,
     };
-    /// Duplicate label within the same scope and block type.
+    #[doc = include_str!("../../../SPEC/diagnostics/E001.md")]
     pub const E001: Self = Self {
         code: "E001",
         level: Level::Error,
     };
-    /// Connection `from`/`to` (bare label) references an undefined sibling component.
+    #[doc = include_str!("../../../SPEC/diagnostics/E002.md")]
     pub const E002: Self = Self {
         code: "E002",
         level: Level::Error,
     };
-    /// Connection `encapsulates` references an undefined sibling connection.
+    #[doc = include_str!("../../../SPEC/diagnostics/E003.md")]
     pub const E003: Self = Self {
         code: "E003",
         level: Level::Error,
     };
-    /// Circular encapsulation chain detected.
+    #[doc = include_str!("../../../SPEC/diagnostics/E004.md")]
     pub const E004: Self = Self {
         code: "E004",
         level: Level::Error,
     };
-    /// Leaf component contains child `component` or `connection` blocks.
+    #[doc = include_str!("../../../SPEC/diagnostics/E005.md")]
     pub const E005: Self = Self {
         code: "E005",
         level: Level::Error,
     };
-    /// `view` block references an undefined system.
+    #[doc = include_str!("../../../SPEC/diagnostics/E006.md")]
     pub const E006: Self = Self {
         code: "E006",
         level: Level::Error,
     };
-    /// `field` block is missing the required `type` attribute.
+    #[doc = include_str!("../../../SPEC/diagnostics/E007.md")]
     pub const E007: Self = Self {
         code: "E007",
         level: Level::Error,
     };
-    /// More than one `project` block defined across all source files.
+    #[doc = include_str!("../../../SPEC/diagnostics/E008.md")]
     pub const E008: Self = Self {
         code: "E008",
         level: Level::Error,
     };
-    /// `port.role` value is not `"provider"`, `"consumer"`, or `"peer"`.
+    #[doc = include_str!("../../../SPEC/diagnostics/E009.md")]
     pub const E009: Self = Self {
         code: "E009",
         level: Level::Error,
     };
-    /// `comp:port` reference — component exists but the named port does not.
+    #[doc = include_str!("../../../SPEC/diagnostics/E010.md")]
     pub const E010: Self = Self {
         code: "E010",
         level: Level::Error,
     };
-    /// `comp:port` reference — component label does not exist in the current scope.
+    #[doc = include_str!("../../../SPEC/diagnostics/E011.md")]
     pub const E011: Self = Self {
         code: "E011",
         level: Level::Error,
     };
-    /// Component with `source` attribute also has other attributes or child blocks (exclusivity violation).
+    #[doc = include_str!("../../../SPEC/diagnostics/E012.md")]
     pub const E012: Self = Self {
         code: "E012",
         level: Level::Error,
     };
-    /// Circular `source` chain detected.
+    #[doc = include_str!("../../../SPEC/diagnostics/E013.md")]
     pub const E013: Self = Self {
         code: "E013",
         level: Level::Error,
     };
-    /// `source` references an undefined top-level component.
+    #[doc = include_str!("../../../SPEC/diagnostics/E014.md")]
     pub const E014: Self = Self {
         code: "E014",
         level: Level::Error,
     };
 
     // ── Warnings ──────────────────────────────────────────────────────────────
-    /// Non-blocking frontend or runtime warning (e.g. live-reload unavailable).
-    /// Used as an escape hatch by frontends for warnings that don't correspond
-    /// to a specific model diagnostic.
+    #[doc = include_str!("../../../SPEC/diagnostics/W000.md")]
     pub const W000: Self = Self {
         code: "W000",
         level: Level::Warning,
     };
-    /// Non-leaf component has no child components (decomposition pending).
+    #[doc = include_str!("../../../SPEC/diagnostics/W001.md")]
     pub const W001: Self = Self {
         code: "W001",
         level: Level::Warning,
     };
-    /// Message has no fields defined.
+    #[doc = include_str!("../../../SPEC/diagnostics/W002.md")]
     pub const W002: Self = Self {
         code: "W002",
         level: Level::Warning,
     };
-    /// Component is not referenced by any connection (orphan component).
+    #[doc = include_str!("../../../SPEC/diagnostics/W003.md")]
     pub const W003: Self = Self {
         code: "W003",
         level: Level::Warning,
     };
-    /// Entity is missing a `description`.
+    #[doc = include_str!("../../../SPEC/diagnostics/W004.md")]
     pub const W004: Self = Self {
         code: "W004",
         level: Level::Warning,
     };
-    /// Connection `from` and `to` point to the same component.
+    #[doc = include_str!("../../../SPEC/diagnostics/W005.md")]
     pub const W005: Self = Self {
         code: "W005",
         level: Level::Warning,
     };
-    /// `level` value decreases relative to the parent (likely a mistake).
+    #[doc = include_str!("../../../SPEC/diagnostics/W006.md")]
     pub const W006: Self = Self {
         code: "W006",
         level: Level::Warning,
     };
-    /// One side of a connection is typed (`comp:port`), the other is a bare label.
+    #[doc = include_str!("../../../SPEC/diagnostics/W007.md")]
     pub const W007: Self = Self {
         code: "W007",
         level: Level::Warning,
     };
-    /// Both sides of a connection are typed but their `protocol` values differ.
+    #[doc = include_str!("../../../SPEC/diagnostics/W008.md")]
     pub const W008: Self = Self {
         code: "W008",
         level: Level::Warning,
     };
-    /// Port roles are incompatible or ambiguous (see the role compatibility table in the spec).
+    #[doc = include_str!("../../../SPEC/diagnostics/W009.md")]
     pub const W009: Self = Self {
         code: "W009",
         level: Level::Warning,
     };
-    /// Port is defined on a component but not referenced by any connection.
+    #[doc = include_str!("../../../SPEC/diagnostics/W010.md")]
     pub const W010: Self = Self {
         code: "W010",
         level: Level::Warning,
     };
-    /// Port has no messages defined.
+    #[doc = include_str!("../../../SPEC/diagnostics/W011.md")]
     pub const W011: Self = Self {
         code: "W011",
         level: Level::Warning,
     };
-    /// Top-level component is not referenced by any `source` attribute.
+    #[doc = include_str!("../../../SPEC/diagnostics/W012.md")]
     pub const W012: Self = Self {
         code: "W012",
         level: Level::Warning,
