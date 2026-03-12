@@ -653,31 +653,48 @@ mod tests {
         assert!(comp_labels.contains(&"esc"));
         assert!(comp_labels.contains(&"battery"));
 
-        // flight-controller should have nested children
+        // flight-controller uses source = "flight-controller"; no inline body at parse time
         let fc = quad
             .inner
             .components
             .iter()
             .find(|c| c.label == "flight-controller")
             .unwrap();
-        let fc_child_labels: Vec<&str> = fc
+        assert_eq!(
+            fc.inner.source.as_deref(),
+            Some("flight-controller"),
+            "flight-controller component should have source attribute"
+        );
+        assert!(
+            fc.inner.components.is_empty(),
+            "sourced component should have no inline children at parse time"
+        );
+
+        // The full definition lives in the top-level components map
+        let tl_fc = raw
+            .components
+            .iter()
+            .find(|c| c.label == "flight-controller")
+            .expect("top-level flight-controller component missing");
+        let tl_fc_child_labels: Vec<&str> = tl_fc
             .inner
             .components
             .iter()
             .map(|c| c.label.as_str())
             .collect();
-        assert!(fc_child_labels.contains(&"mcu"));
-        assert!(fc_child_labels.contains(&"imu"));
-        assert!(fc_child_labels.contains(&"barometer"));
+        assert!(tl_fc_child_labels.contains(&"mcu"));
+        assert!(tl_fc_child_labels.contains(&"imu"));
+        assert!(tl_fc_child_labels.contains(&"barometer"));
 
-        // FC should have ports with messages
-        let fc_port_labels: Vec<&str> = fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
+        // FC top-level definition should have ports with messages
+        let fc_port_labels: Vec<&str> =
+            tl_fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
 
         // motor-out port should have a message
-        let motor_port = fc
+        let motor_port = tl_fc
             .inner
             .ports
             .iter()
