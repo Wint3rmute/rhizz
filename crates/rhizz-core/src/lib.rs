@@ -23,6 +23,7 @@ pub use model::{
 pub use score::{CategoryScore, ScoreReport, score};
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -53,8 +54,6 @@ pub struct CompileResult {
 /// the error.  If resolution produces hard errors, `model` is also `None`.
 #[instrument(skip(sources), fields(source_count = sources.len()))]
 pub fn compile(sources: &[Source]) -> CompileResult {
-    use std::path::Path;
-
     let mut merged = parse::RawFile::default();
 
     for source in sources {
@@ -76,6 +75,15 @@ pub fn compile(sources: &[Source]) -> CompileResult {
         }
     }
 
+    if let Some(project_name) = default_project_name(sources) {
+        let project = merged
+            .project
+            .get_or_insert_with(parse::RawProject::default);
+        if project.name.is_none() {
+            project.name = Some(project_name);
+        }
+    }
+
     match resolve::resolve(merged) {
         Ok((model, diagnostics)) => CompileResult {
             model: Some(model),
@@ -85,5 +93,190 @@ pub fn compile(sources: &[Source]) -> CompileResult {
             model: None,
             diagnostics,
         },
+    }
+}
+
+fn default_project_name(sources: &[Source]) -> Option<String> {
+    let paths: Vec<&Path> = sources
+        .iter()
+        .map(|source| Path::new(&source.filename))
+        .collect();
+    let (first, rest) = paths.split_first()?;
+
+    let common = rest.iter().fold(PathBuf::from(first), |prefix, path| {
+        shared_path_prefix(&prefix, path)
+    });
+    let project_dir = if rest.is_empty() || rest.iter().all(|path| *path == *first) {
+        common.parent().unwrap_or(common.as_path())
+    } else {
+        common.as_path()
+    };
+
+    project_dir
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+}
+
+fn shared_path_prefix(lhs: &Path, rhs: &Path) -> PathBuf {
+    lhs.components()
+        .zip(rhs.components())
+        .take_while(|(left, right)| left == right)
+        .fold(PathBuf::new(), |mut prefix, (component, _)| {
+            prefix.push(component.as_os_str());
+            prefix
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use walkdir::WalkDir;
+
+    fn write_hcl(path: &Path, content: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("should create parent directories");
+        }
+        fs::write(path, content).expect("should write test HCL");
+    }
+
+    fn compile_dir(dir: &Path) -> CompileResult {
+        let mut sources: Vec<Source> = WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry.file_type().is_file()
+                    && entry.path().extension().is_some_and(|ext| ext == "hcl")
+            })
+            .map(|entry| Source {
+                filename: entry.path().to_string_lossy().into_owned(),
+                content: fs::read_to_string(entry.path()).expect("should read test HCL"),
+            })
+            .collect();
+        sources.sort_by(|left, right| left.filename.cmp(&right.filename));
+        compile(&sources)
+    }
+
+    fn unique_temp_dir(test_name: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+        let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after epoch")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("rhizz-core-{test_name}-{nanos}-{unique}"));
+        fs::create_dir_all(&dir).expect("should create temp test directory");
+        dir
+    }
+
+    #[test]
+    fn missing_project_name_defaults_to_directory_name() {
+        let dir = unique_temp_dir("missing-project-name");
+        write_hcl(
+            &dir.join("project.hcl"),
+            r#"
+project {
+  version = "1.2.3"
+}
+"#,
+        );
+        write_hcl(
+            &dir.join("systems.hcl"),
+            r#"
+system "demo" {}
+"#,
+        );
+
+        let result = compile_dir(&dir);
+        let model = result.model.expect("compilation should succeed");
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.is_error()),
+            "unexpected errors: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(
+            model.project.name,
+            dir.file_name().unwrap().to_string_lossy()
+        );
+        assert_eq!(model.project.version, "1.2.3");
+
+        fs::remove_dir_all(dir).expect("should clean up temp directory");
+    }
+
+    #[test]
+    fn missing_project_block_defaults_to_common_source_directory_name() {
+        let dir = unique_temp_dir("missing-project-block");
+        write_hcl(
+            &dir.join("systems.hcl"),
+            r#"
+system "demo" {}
+"#,
+        );
+        write_hcl(
+            &dir.join("components").join("sensor.hcl"),
+            r#"
+component "sensor" {
+  leaf = true
+}
+"#,
+        );
+
+        let result = compile_dir(&dir);
+        let model = result.model.expect("compilation should succeed");
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.is_error()),
+            "unexpected errors: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(
+            model.project.name,
+            dir.file_name().unwrap().to_string_lossy()
+        );
+        assert_eq!(model.project.version, "0.0.0");
+
+        fs::remove_dir_all(dir).expect("should clean up temp directory");
+    }
+
+    #[test]
+    fn explicit_project_name_overrides_directory_default() {
+        let dir = unique_temp_dir("explicit-project-name");
+        write_hcl(
+            &dir.join("project.hcl"),
+            r#"
+project {
+  name = "explicit-name"
+}
+"#,
+        );
+        write_hcl(
+            &dir.join("systems.hcl"),
+            r#"
+system "demo" {}
+"#,
+        );
+
+        let result = compile_dir(&dir);
+        let model = result.model.expect("compilation should succeed");
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.is_error()),
+            "unexpected errors: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(model.project.name, "explicit-name");
+
+        fs::remove_dir_all(dir).expect("should clean up temp directory");
     }
 }
