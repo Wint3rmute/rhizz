@@ -31,3 +31,8 @@ jobs:
 
       - name: Build release
         run: cargo build --release --quiet
+
+  build-wasm:
+    name: Build rhizz-wasm
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/build-wasm.yml
