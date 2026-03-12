@@ -11,36 +11,6 @@ How to work on this file:
 
 ---
 
-## Task 21 — Recursive file discovery
-
-The CLI's `load_sources` and the test helper `parse_dir` currently scan only
-`max_depth(1)`. Change them to recursively discover all `.hcl` files in the
-project directory tree so that files in subdirectories are parsed and merged
-like any other file.
-
-**Spec reference:** SPEC.md §1 (project structure).
-
-**Why this is safe now:** Task 20 already taught the parser to accept
-top-level `component` blocks. After this task, the drone example's
-`components/flight-controller.hcl` will be discovered and parsed, but since it
-only adds entries to `RawFile.components` (which the resolver currently
-ignores), no tests break.
-
-**Important:** do NOT modify any example `.hcl` files in this task. Existing
-tests should pass as-is.
-
-### Acceptance criteria
-
-- `load_sources` in `rhizz-cli/src/cli.rs` uses `WalkDir::new(dir)` without
-  `max_depth(1)` — all `.hcl` files at any depth are collected and returned.
-- `parse_dir` test helper in `rhizz-core/src/parse.rs` is updated the same way.
-- `rhizz-gui` file discovery is updated the same way.
-- All existing tests and examples pass unchanged.
-- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
-  `cargo doc`, `cargo build`, `cargo fmt` all pass.
-
----
-
 ## Task 22 — Add `source` attribute and resolve component references
 
 Add the `source` attribute to `RawComponent` and implement resolution: when a

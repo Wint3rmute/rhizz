@@ -119,12 +119,11 @@ impl Cli {
 
 // ── I/O helpers ───────────────────────────────────────────────────────────────
 
-/// Walk `dir` (depth 1) and return a [`Source`] for every `.hcl` file found.
+/// Recursively walk `dir` and return a [`Source`] for every `.hcl` file found.
 ///
 /// Files are sorted by path so that the compilation order is deterministic.
 fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
-        .max_depth(1)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))

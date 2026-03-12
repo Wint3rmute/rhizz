@@ -382,7 +382,6 @@ mod tests {
     fn load(name: &str) -> Model {
         let dir = example_dir(name);
         let mut hcl_files: Vec<PathBuf> = WalkDir::new(&dir)
-            .max_depth(1)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| {

@@ -588,7 +588,6 @@ pub(crate) fn parse_dir(dir: &std::path::Path) -> anyhow::Result<RawFile> {
     use walkdir::WalkDir;
     let mut merged = RawFile::default();
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
-        .max_depth(1)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
