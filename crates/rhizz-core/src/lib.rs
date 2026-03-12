@@ -22,12 +22,12 @@ pub use model::{
 };
 pub use score::{CategoryScore, ScoreReport, score};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
 /// A single named source file to compile.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Source {
     /// The filename (used in diagnostics).
     pub filename: String,

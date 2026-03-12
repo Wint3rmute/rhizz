@@ -12,7 +12,8 @@ rhizz/
     rhizz-dot/        # Graphviz DOT renderer — pure text transform
     rhizz-cli/        # CLI frontend
     rhizz-gui/        # egui desktop GUI frontend
-    …                 # additional frontends (web, LSP, …) may be added here
+    rhizz-wasm/       # WebAssembly bindings (browser / Node.js frontend)
+    …                 # additional frontends (LSP, …) may be added here
   examples/
   SPEC.md
   TASKS.md
@@ -98,3 +99,50 @@ A frontend is any crate that consumes `rhizz-core` to expose the model to a user
 - All model logic is delegated; `rhizz-cli` contains no parsing, validation, scoring, or rendering logic of its own.
 
 See [gui.md](gui.md) for GUI-frontend-specific notes.
+
+**Wasm-specific notes** (`rhizz-wasm`):
+
+- A thin `cdylib` crate that wraps `rhizz-core` with [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/) bindings.
+- Exposes a single function — `compile_sources(sources: JsValue) -> Result<JsValue, JsError>` — that accepts a JS array of `{ filename, content }` objects and returns a native JS object matching `CompileResult`.
+- Serialisation between Rust and JS is handled by `serde-wasm-bindgen`; no JSON stringification is required on the JavaScript side.
+- Built with `wasm-pack build --target web` (ES modules for browsers/Deno) or `--target nodejs` (CommonJS). The `pkg/` output is a self-contained npm package including `.wasm`, JS bindings, and TypeScript type declarations.
+- Contains no I/O of its own; callers supply HCL content as strings (read from disk, a text editor, etc.) and receive the compiled result back as a plain JS object.
+
+---
+
+## `rhizz-wasm`
+
+WebAssembly frontend crate. Depends on `rhizz-core`. No I/O, no filesystem access.
+
+### Public API (JavaScript)
+
+```ts
+// ES module import after wasm-pack build --target web
+import init, { compile_sources } from "./rhizz_wasm.js";
+
+await init(); // loads and initialises the .wasm binary (--target web only)
+
+const result = compile_sources([
+  { filename: "project.hcl", content: "..." },
+  { filename: "system.hcl",  content: "..." },
+]);
+// result: { model: Model | null, diagnostics: Diagnostic[] }
+```
+
+### Building
+
+```bash
+# Browser / Deno (ES modules)
+wasm-pack build crates/rhizz-wasm --target web
+
+# Node.js (CommonJS)
+wasm-pack build crates/rhizz-wasm --target nodejs
+```
+
+Output lands in `crates/rhizz-wasm/pkg/` as a ready-to-publish npm package.
+
+### Wasm-pack tests
+
+```bash
+wasm-pack test --node crates/rhizz-wasm
+```

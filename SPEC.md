@@ -763,6 +763,10 @@ view "fc-internals" {
 
 ## 10. Frontends
 
-`rhizz` is available as both a **command-line tool** (`rhizz-cli`) and a **desktop GUI application** (`rhizz-gui`). Both frontends share the same underlying model compiler and produce identical results; the choice of frontend is purely a matter of workflow preference.
+`rhizz` is available as a **command-line tool** (`rhizz-cli`), a **desktop GUI application** (`rhizz-gui`), and a **WebAssembly module** (`rhizz-wasm`). All frontends share the same underlying model compiler and produce identical results; the choice of frontend is purely a matter of workflow preference.
 
-> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for crate structure, dependency rules, and frontend contract.
+### `rhizz-wasm`
+
+A WebAssembly frontend that exposes the same compile pipeline to JavaScript environments (browsers, Deno, Node.js). Callers supply HCL source content as strings and receive back a compiled model and diagnostics — identical in structure to what the CLI and GUI produce.
+
+> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for build instructions, JS API, and crate details.
