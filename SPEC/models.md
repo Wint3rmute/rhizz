@@ -24,6 +24,7 @@ HCL body blocks with labels (e.g. `component "foo" { ... }`) don't deserialize d
 struct RawFile {
     project: Option<RawProject>,
     systems: Vec<Labeled<RawSystem>>,
+    components: Vec<Labeled<RawComponent>>,  // top-level (reusable) components
     views: Vec<Labeled<RawView>>,
 }
 
@@ -55,6 +56,7 @@ struct RawSystem {
 
 #[derive(Debug, Clone)]
 struct RawComponent {
+    source: Option<String>,          // label reference to a top-level component — mutually exclusive with all other fields
     description: Option<String>,
     tags: Option<Vec<String>>,
     level: Option<i32>,
@@ -113,10 +115,11 @@ fn parse_file(src: &str) -> Result<RawFile> {
     let mut file = RawFile::default();
     for block in body.blocks() {
         match block.identifier() {
-            "project" => file.project = Some(parse_project(block)?),
-            "system"  => file.systems.push(parse_labeled_system(block)?),
-            "view"    => file.views.push(parse_labeled_view(block)?),
-            other     => return Err(/* unknown top-level block */),
+            "project"   => file.project = Some(parse_project(block)?),
+            "system"    => file.systems.push(parse_labeled_system(block)?),
+            "component" => file.components.push(parse_labeled_component(block)?),
+            "view"      => file.views.push(parse_labeled_view(block)?),
+            other       => return Err(/* unknown top-level block */),
         }
     }
     Ok(file)
@@ -125,6 +128,24 @@ fn parse_file(src: &str) -> Result<RawFile> {
 
 Each `parse_*` function extracts attributes via `block.body().attributes()` and recurses into child blocks. Wrap this in a trait or macro if the boilerplate becomes excessive.
 
+### Source resolution (during the resolution pass)
+
+The `source` attribute on a component is a **label reference** to a top-level component. It is resolved during the resolution pass (not during parsing), after all files have been merged.
+
+When the resolver encounters a component with `source`:
+
+1. **Validate exclusivity** — if any other attribute (`description`, `tags`, `level`, `leaf`) or child block (`port`, `component`, `connection`) is present alongside `source`, emit E012.
+2. **Look up the label** — find the top-level component with the matching label in `RawFile.components`. If not found, emit E014.
+3. **Detect cycles** — maintain an ancestor set of source labels currently being expanded. If the label is already in the set, emit E013.
+4. **Clone the body** — copy the top-level component's attributes and children into the sourced component slot. The label at the usage site replaces the top-level label.
+5. **Recurse** — the cloned body may itself contain children with `source`, which are resolved depth-first.
+
+This approach keeps `rhizz-core` free of I/O dependencies — no `FileLoader` trait needed. The `compile` signature remains unchanged:
+
+```rust
+pub fn compile(sources: &[Source]) -> CompileResult
+```
+
 ---
 
 ## Merge
@@ -132,7 +153,7 @@ Each `parse_*` function extracts attributes via `block.body().attributes()` and 
 Straightforward: accumulate all `RawFile`s into a single `RawFile`.
 
 - `project`: at most one across all files (error E010 if >1).
-- `systems`, `views`: concatenate vecs.
+- `systems`, `components`, `views`: concatenate vecs.
 
 No deduplication logic — duplicate detection happens during resolution/validation.
 
@@ -276,15 +297,19 @@ struct Field {
 
 `fn resolve(raw: RawFile) -> Result<Model, Vec<Diagnostic>>`
 
-1. Register all systems (allocate `SystemId`).
-2. Walk each system's components depth-first — allocate `ComponentId`, set `parent`, resolve `level` (inherit `parent.level + 1` if unset).
-3. Walk each component's `port` blocks — allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
-4. Walk `connection` blocks in each scope — parse `from`/`to` strings:
+1. Index top-level components by label. Detect duplicate labels (E001).
+2. Register all systems (allocate `SystemId`). Detect duplicate labels (E001).
+3. Walk each system's components depth-first:
+   - If a component has `source`, validate exclusivity (E012), look up the top-level component (E014 if missing), check for cycles (E013), and clone its body.
+   - Allocate `ComponentId`, set `parent`, resolve `level` (inherit `parent.level + 1` if unset).
+4. Walk each component's `port` blocks — allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
+5. Walk `connection` blocks in each scope — parse `from`/`to` strings:
    - If the string contains `:`, split on the first `:` to get `(comp_label, port_label)`; resolve `comp_label` to a sibling `ComponentId` (E011 if missing), then look up `port_label` on that component (E010 if missing).
    - If the string is a bare label, resolve to a sibling `ComponentId` (E002 if missing). The `port` field of `ConnectionEndpoint` is `None`.
-5. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
-6. Walk messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
-7. Resolve views — look up `system` label → `SystemId` (E006 if missing).
+6. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
+7. Walk messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
+8. Resolve views — look up `system` label → `SystemId` (E006 if missing).
+9. Detect orphan top-level components — any top-level component not referenced by `source` in any system → W012.
 
 Collect errors/warnings as `Diagnostic` values. If any errors exist, return `Err`. Warnings are returned alongside the model.
 
