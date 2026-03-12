@@ -339,41 +339,9 @@ All references are **name-based within the same parent scope**:
 > **Impl:** validation operates on the [resolved `Model`](SPEC/models.md#core-resolved-structs).
 > Errors/warnings are collected as `Diagnostic` values during the [resolution pass](SPEC/models.md#resolution-pass).
 
-### 4.1 Errors (Halt Compilation)
-
-| Code | Condition |
-|------|-----------|
-| `E001` | Duplicate label within the same scope and block type |
-| `E002` | Connection `from`/`to` (bare label) references an undefined sibling component |
-| `E003` | Connection `encapsulates` references an undefined sibling connection |
-| `E004` | Circular encapsulation chain detected |
-| `E005` | Leaf component contains child `component` or `connection` blocks |
-| `E006` | View references an undefined system |
-| `E007` | `field` block is missing required `type` attribute |
-| `E008` | More than one `project` block defined across all files |
-| `E009` | `port.role` value is not `"provider"`, `"consumer"`, or `"peer"` |
-| `E010` | `comp:port` reference — component exists but named port does not |
-| `E011` | `comp:port` reference — component label does not exist |
-| `E012` | Component with `source` has other attributes or child blocks |
-| `E013` | Circular `source` chain detected |
-| `E014` | `source` references an undefined top-level component |
-
-### 4.2 Warnings (Non-blocking)
-
-| Code | Condition |
-|------|-----------|
-| `W001` | Non-leaf component has no child components (decomposition pending) |
-| `W002` | Message has no fields defined |
-| `W003` | Component is not referenced by any connection (orphan) |
-| `W004` | Entity is missing a `description` |
-| `W005` | Connection `from` and `to` point to the same component |
-| `W006` | `level` value decreases relative to parent (likely a mistake) |
-| `W007` | One side of a connection is typed (`comp:port`), the other is not |
-| `W008` | Both sides of a connection are typed but `protocol` values differ |
-| `W009` | Port roles are incompatible or ambiguous (see §6) |
-| `W010` | Port is defined on a component but referenced by no connection (unused port) |
-| `W011` | Port has no messages defined |
-| `W012` | Top-level component is not referenced by any `source` (orphan) |
+Each diagnostic code is documented in its own file under
+[`SPEC/diagnostics/`](SPEC/diagnostics/) (e.g. `E001.md`, `W003.md`).
+Error codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
 
 ---
 
