@@ -215,41 +215,38 @@ pub fn score(model: &Model) -> ScoreReport {
 
 impl fmt::Display for ScoreReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let sep = "───────────────────────────────────";
-        writeln!(f, "Completion Report — {}", self.project_name)?;
-        writeln!(f, "{sep}")?;
+        writeln!(f, "📊 Completion Report — {}\n", self.project_name)?;
         writeln!(
             f,
-            "Components:  {}/{} complete  ({:.1}%)",
+            "   - Components:  {}/{} complete  ({:.1}%)",
             self.components.complete,
             self.components.total(),
             self.components.percentage(),
         )?;
         writeln!(
             f,
-            "Ports:       {}/{} complete  ({:.1}%)",
+            "   - Ports:       {}/{} complete  ({:.1}%)",
             self.ports.complete,
             self.ports.total(),
             self.ports.percentage(),
         )?;
         writeln!(
             f,
-            "Connections: {}/{} complete  ({:.1}%)",
+            "   - Connections: {}/{} complete  ({:.1}%)",
             self.connections.complete,
             self.connections.total(),
             self.connections.percentage(),
         )?;
         writeln!(
             f,
-            "Messages:    {}/{} complete  ({:.1}%)",
+            "   - Messages:    {}/{} complete  ({:.1}%)",
             self.messages.complete,
             self.messages.total(),
             self.messages.percentage(),
         )?;
-        writeln!(f, "{sep}")?;
         write!(
             f,
-            "Overall:     {}/{}           {:.1}%",
+            "   - Overall:     {}/{}           {:.1}%\n",
             self.overall_complete(),
             self.overall_total(),
             self.overall_percentage(),
