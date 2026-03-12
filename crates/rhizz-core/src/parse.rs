@@ -68,6 +68,8 @@ pub struct RawSystem {
 /// Raw component block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawComponent {
+    /// Optional source label referring to a top-level component definition.
+    pub source: Option<String>,
     /// Optional description text.
     pub description: Option<String>,
     /// Filtering tags.
@@ -172,6 +174,8 @@ struct SystemAttrs {
 /// Serde helper for deserializing component attributes.
 #[derive(Deserialize, Default)]
 struct ComponentAttrs {
+    /// Optional source reference.
+    source: Option<String>,
     /// Optional description.
     description: Option<String>,
     /// Optional tags list.
@@ -436,6 +440,7 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
         }
     }
     Ok(RawComponent {
+        source: a.source,
         description: a.description,
         tags: a.tags.unwrap_or_default(),
         level: a.level,

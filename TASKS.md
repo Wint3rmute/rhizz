@@ -11,55 +11,6 @@ How to work on this file:
 
 ---
 
-## Task 22 — Add `source` attribute and resolve component references
-
-Add the `source` attribute to `RawComponent` and implement resolution: when a
-component inside a system (or parent component) has `source = "some-label"`,
-the resolver looks up the top-level component with that label, validates
-exclusivity, detects cycles, and clones the body into the sourced component
-slot.
-
-**Spec reference:** SPEC.md §2.3 (source rules), SPEC/models.md (source
-resolution during resolution pass).
-
-**Important:** do NOT modify any existing example `.hcl` files in this task.
-Write unit tests that exercise `source` with inline HCL strings. The drone
-example update is Task 23.
-
-### Acceptance criteria
-
-- `RawComponent` gains `source: Option<String>`.
-- `ComponentAttrs` serde helper gains `source: Option<String>`.
-- `parse_component` reads the `source` attribute from HCL.
-- New `DiagnosticCode` variants: `E012`, `E013`, `E014` are defined and emitted:
-  - E012: component with `source` has other attributes or child blocks.
-  - E013: circular `source` chain detected.
-  - E014: `source` references an undefined top-level component.
-- During resolution, before walking a system's component tree, the resolver
-  builds a `HashMap<String, RawComponent>` from `RawFile.components`.
-  Duplicate top-level component labels → E001.
-- When a component has `source`:
-  1. Check exclusivity (E012).
-  2. Look up the label in the top-level component map (E014 if missing).
-  3. Check the ancestor set for cycles (E013).
-  4. Clone the top-level component's body (description, tags, level, leaf,
-     ports, children, connections) into the sourced slot. The label at the
-     usage site is kept.
-  5. Recurse into the cloned children for nested `source` references.
-- Unit tests (all using inline HCL strings — no example file changes):
-  - Component with `source` pointing to a valid top-level component → body
-    cloned correctly, resolved model is identical to inline definition.
-  - Component with `source` + inline `description` → E012.
-  - Component with `source` pointing to undefined label → E014.
-  - Circular `source` (A sources B, B sources A) → E013.
-  - Nested `source` (A sources B, B has child that sources C) → works.
-  - Same top-level component sourced into two different systems → works.
-- All existing tests continue to pass.
-- `cargo test --all`, `cargo clippy --all-targets --all-features -- -D warnings`,
-  `cargo doc`, `cargo build`, `cargo fmt` all pass.
-
----
-
 ## Task 23 — Update drone example to use `source`
 
 Now that all the infrastructure is in place (Tasks 20–22), update the drone
