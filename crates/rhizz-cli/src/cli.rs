@@ -389,7 +389,13 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
 
             if is_mermaid {
                 let mmd_path = cli.output_dir.join(&view.output.filename);
-                outputs.push((mmd_path, rhizz_mermaid::render_view(m, view).into_bytes()));
+                let mmd_source = rhizz_mermaid::render_view(m, view);
+                outputs.push((mmd_path, mmd_source.clone().into_bytes()));
+
+                let md_filename = view.output.filename.trim_end_matches(".mmd").to_owned() + ".md";
+                let md_path = cli.output_dir.join(&md_filename);
+                let md_content = format!("# {}\n\n```mermaid\n{}```\n", view.label, mmd_source);
+                outputs.push((md_path, md_content.into_bytes()));
 
                 let png_filename =
                     view.output.filename.trim_end_matches(".mmd").to_owned() + ".png";

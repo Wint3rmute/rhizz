@@ -259,7 +259,7 @@ fn render_component(
 /// Append the label of every message carried by `port_id` to `label`.
 fn append_port_messages(port_id: rhizz_core::PortId, model: &Model, label: &mut String) {
     for &mid in &model.ports[port_id.0].messages {
-        label.push('\n');
+        label.push_str("<br/>");
         label.push_str(&model.messages[mid.0].label);
     }
 }
@@ -688,6 +688,17 @@ mod tests {
         assert!(
             mmd.contains("review-request"),
             "review-request message missing"
+        );
+
+        // Message names must be separated by <br/> (not a raw newline) so that
+        // Mermaid can parse the edge label without breaking the flowchart syntax.
+        assert!(
+            mmd.contains("<br/>"),
+            "message separator must be <br/>, not a raw newline"
+        );
+        assert!(
+            !mmd.contains("|\"\n") && !mmd.contains("\n\""),
+            "edge label must not contain a raw newline inside the quoted label"
         );
     }
 
