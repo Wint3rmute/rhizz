@@ -1,11 +1,13 @@
-<div class="min-h-screen flex items-center justify-center">
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body items-center text-center">
-      <h1 class="card-title text-3xl">rhizz</h1>
-      <p>System Model Explorer</p>
-      <div class="card-actions">
-        <button class="btn btn-primary">Get Started</button>
-      </div>
-    </div>
-  </div>
-</div>
+<script lang="ts">
+  import Home from "./pages/Home.svelte";
+  import Playground from "./pages/Playground.svelte";
+
+  let hash = $state(window.location.hash);
+  window.addEventListener("hashchange", () => (hash = window.location.hash));
+</script>
+
+{#if hash === "#/playground"}
+  <Playground />
+{:else}
+  <Home />
+{/if}
