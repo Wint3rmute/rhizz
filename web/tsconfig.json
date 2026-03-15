@@ -9,5 +9,6 @@
     "types": ["svelte"],
     "lib": ["dom", "dom.iterable", "esnext"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  // "extends": "./.svelte-kit/tsconfig.json"
 }
