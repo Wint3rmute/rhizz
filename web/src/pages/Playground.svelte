@@ -2,11 +2,13 @@
   import { onMount } from "svelte";
   import SvgRect from "./SvgRect.svelte";
 
+  let root_svg: SVGElement;
+
   let state: "normal" | "dragging" | "dragging_element" | "drawing_path" = $state("normal");
 
-  let path_start: string | null = null;
-  let path_end_x: number | null = null;
-  let path_end_y: number | null = null;
+  let path_start: string | null = $state(null);
+  let path_end_x: number | null = $state(null);
+  let path_end_y: number | null = $state(null);
 
   let viewBoxX: number = $state(0);
   let viewBoxY: number = $state(0);
@@ -24,11 +26,21 @@
   ]);
 
   function mouse_down() {
-    state = "dragging";
+    if (state == "normal") {
+        state = "dragging";
+    }
   }
 
   function mouse_up() {
-    state = "normal";
+    if (state == "dragging") {
+        state = "normal";
+    }
+  }
+
+  function mouse_event_to_svg_coords(event: MouseEvent) {
+    const point = new DOMPoint(event.clientX, event.clientY);
+    const ctm = root_svg.getScreenCTM().inverse();
+    return point.matrixTransform(ctm);
   }
 
   function mouse_move(event: MouseEvent) {
@@ -36,10 +48,10 @@
         viewBoxX -= event.movementX;
         viewBoxY -= event.movementY;
     } else if (state == "drawing_path") {
-        path_end_x = event.clientX;
-        path_end_y = event.clientY;
+        const svg_point = mouse_event_to_svg_coords(event);
+        path_end_x = svg_point.x;
+        path_end_y = svg_point.y;
     }
-
   }
 
   function mouse_down_on_component() {
@@ -59,9 +71,22 @@
     elements_dict[id].y += event.movementY;
   }
 
-  function handle_clicked_on_component(id: string) {
-    state = "drawing_path";
-    path_start = id;
+  function handle_clicked_on_component(id: string, event: MouseEvent) {
+    event.stopPropagation();
+
+    if (state == "normal") {
+        path_start = id;
+        const svg_point = mouse_event_to_svg_coords(event);
+        path_end_x = svg_point.x;
+        path_end_y = svg_point.y;
+        state = "drawing_path";
+    } else if (state == "drawing_path") {
+        paths.push({
+            from: "flight-controller",
+            to: "engine"
+        });
+        state = "normal";
+    }
   }
 
 </script>
@@ -74,13 +99,15 @@
   <div class="flex-1 w-full bg-[#0a0a14]">
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<svg version="1.1"
-     width="1000" height="600"
-     xmlns="http://www.w3.org/2000/svg"
-     onmousedown={mouse_down}
-     onmouseup={mouse_up}
-     onmousemove={mouse_move}
-     viewBox="{viewBoxX} {viewBoxY} 600 400"
+<svg 
+    bind:this={root_svg}
+    version="1.1"
+    width="1000" height="600"
+    xmlns="http://www.w3.org/2000/svg"
+    onmousedown={mouse_down}
+    onmouseup={mouse_up}
+    onmousemove={mouse_move}
+    viewBox="{viewBoxX} {viewBoxY} 600 400"
      >
   <defs>
     <pattern id="Pattern" x="0" y="0" width=".1" height=".1">
@@ -94,15 +121,22 @@
   </defs>
   <rect fill="url(#Pattern)" stroke="black" x="-100%" y="-100%" width="300%" height="300%" />
   	{#each paths as path}
-        <path
-        d="M { elements_dict[path.from].x + 70} {elements_dict[path.from].y + 40} L {elements_dict[path.to].x + 70} {elements_dict[path.to].y + 40}"
+    <line
+        x1="{elements_dict[path.from].x + 70}"
+        y1="{elements_dict[path.from].y + 40}"
+        x2="{elements_dict[path.to].x + 70}"
+        y2="{elements_dict[path.to].y + 40}"
         stroke="white"
-        fill="transparent"
+    />
+
     {/each}
 
     {#if state == "drawing_path"}
-        <path
-        d="M { elements_dict[path_start].x + 70} {elements_dict[path_start].y + 40} L {path_end_x} {path_end_y}"
+        <line
+        x1="{ elements_dict[path_start].x + 70}"
+        y1="{elements_dict[path_start].y + 40}"
+        x2="{path_end_x}"
+        y2="{path_end_y}"
         stroke="white"
         fill="transparent"
     />

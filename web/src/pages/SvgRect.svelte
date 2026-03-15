@@ -18,7 +18,7 @@ function mouse_move(e: MouseEvent) {
 
 function handle_clicked(event: MouseEvent) {
     event.stopPropagation();
-    handle_clicked_on_component(id);
+    handle_clicked_on_component(id, event);
 }
 </script>
 
