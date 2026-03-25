@@ -71,6 +71,13 @@
     elements_dict[id].y += event.movementY;
   }
 
+  function on_key_down(event: KeyboardEvent) {
+    if (event.key != "Escape") {
+      return;
+    }
+    state = "normal";
+  }
+
   function handle_clicked_on_component(id: string, event: MouseEvent) {
     event.stopPropagation();
 
@@ -131,7 +138,7 @@
 
     {/each}
 
-    {#if state == "drawing_path"}
+    {#if state == "drawing_path" && path_start !== null}
         <line
         x1="{ elements_dict[path_start].x + 70}"
         y1="{elements_dict[path_start].y + 40}"
@@ -157,3 +164,5 @@
 
   </div>
 </div>
+
+<svelte:window onkeydown={on_key_down} />
