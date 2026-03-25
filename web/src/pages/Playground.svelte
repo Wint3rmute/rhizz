@@ -96,6 +96,14 @@
     }
   }
 
+  function on_wheel(event: WheelEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    viewBoxX += event.deltaX;
+    viewBoxY += event.deltaY;
+  }
+
 </script>
 
 <div class="h-screen w-screen flex flex-col">
@@ -114,6 +122,7 @@
     onmousedown={mouse_down}
     onmouseup={mouse_up}
     onmousemove={mouse_move}
+    onwheel={on_wheel}
     viewBox="{viewBoxX} {viewBoxY} 600 400"
      >
   <defs>
@@ -166,3 +175,4 @@
 </div>
 
 <svelte:window onkeydown={on_key_down} />
+

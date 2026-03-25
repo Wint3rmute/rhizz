@@ -33,7 +33,7 @@ function handle_clicked(event: MouseEvent) {
         onmousemove={mouse_move}
     />
     <text x="70" y="45" text-anchor="middle" dominant-baseline="middle"
-          fill="white" font-size="14">{id}</text>
+          fill="white" font-size="14" style="user-select: none">{id}</text>
 
     <!-- Top (centered horizontally, sticking out above) -->
     <rect x="55" y="-15" width="30" height="15" rx="2" class="resize_handle" onclick={handle_clicked} />
