@@ -1,20 +1,12 @@
-<script lang="ts">
-import init, { compile_sources } from "rhizz-wasm/rhizz_wasm.js";
-await init();
-
-let input = $state('# Your input goes here');
-
-let output = $derived.by(() => {
-  let a = compile_sources([{"filename": "all.hcl", "content": input}]);
-  console.log(a);
-  return JSON.stringify(a, null, 2);
-});
+<script>
+	export let title = 'Dashboard';
 </script>
+
 
 <div class="h-screen w-screen flex flex-col bg-gray-900 text-gray-100">
 	<div class="navbar bg-gray-900 text-gray-100 border-b border-gray-800">
  		<a href="#/" class="btn btn-ghost text-xl text-white">← rhizz</a>
- 		<span class="ml-2 text-sm opacity-70">Rhizz</span>
+ 		<span class="ml-2 text-sm opacity-70">{title}</span>
  		<div class="ml-auto flex items-center space-x-3">
  			<input placeholder="Search" class="hidden sm:block input input-sm bg-gray-800 text-gray-100 placeholder-gray-400 border-gray-700" />
  			<button class="btn btn-primary btn-sm">New</button>
@@ -37,8 +29,8 @@ let output = $derived.by(() => {
 			<!-- Main content (center) -->
 			<main class="md:col-span-6 lg:col-span-8 flex">
 				<div class="w-full bg-gray-800 p-6 rounded shadow flex flex-col h-full text-gray-100">
-					<h1 class="text-2xl font-semibold mb-4 text-white">Rhizz</h1>
-					<textarea bind:value={input} class="flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400" placeholder="Write something..."></textarea>
+					<h1 class="text-2xl font-semibold mb-4 text-white">{title}</h1>
+					<textarea class="flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400" placeholder="Write something..."></textarea>
 					<slot />
 				</div>
 			</main>
@@ -49,12 +41,11 @@ let output = $derived.by(() => {
 				<div class="text-sm text-gray-300 space-y-2">
 					<div class="p-2 bg-gray-800 rounded">Status: <span class="font-medium text-white">OK</span></div>
 					<div class="p-2 bg-gray-800 rounded">Recent changes</div>
-					<div class="p-2 bg-gray-800 rounded">{output}</div>
+					<div class="p-2 bg-gray-800 rounded">Activity</div>
 				</div>
 			</aside>
 		</div>
 	</div>
 </div>
-
 
 
