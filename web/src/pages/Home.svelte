@@ -5,6 +5,7 @@
       <p>System Model Explorer</p>
       <div class="card-actions">
         <a href="#/playground" class="btn btn-primary">Playground</a>
+        <a href="#/wasm" class="btn btn-primary">WASM Test</a>
       </div>
     </div>
   </div>
