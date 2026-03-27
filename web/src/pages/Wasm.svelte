@@ -6,9 +6,12 @@ let input = $state('# Your input goes here');
 
 let output = $derived.by(() => {
   let a = compile_sources([{"filename": "all.hcl", "content": input}]);
+  // console.log(a.diagnostics);
   console.log(a);
-  return JSON.stringify(a, null, 2);
+  // return JSON.stringify(a, null, 2);
+  return a;
 });
+
 </script>
 
 <div class="h-screen w-screen flex flex-col bg-gray-900 text-gray-100">
@@ -38,7 +41,7 @@ let output = $derived.by(() => {
 			<main class="md:col-span-6 lg:col-span-8 flex">
 				<div class="w-full bg-gray-800 p-6 rounded shadow flex flex-col h-full text-gray-100">
 					<h1 class="text-2xl font-semibold mb-4 text-white">Rhizz</h1>
-					<textarea bind:value={input} class="flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400" placeholder="Write something..."></textarea>
+					<textarea bind:value={input} class="font-mono flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400"></textarea>
 					<slot />
 				</div>
 			</main>
@@ -47,9 +50,19 @@ let output = $derived.by(() => {
 			<aside class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow">
 				<h3 class="font-semibold mb-3 text-gray-100">Details</h3>
 				<div class="text-sm text-gray-300 space-y-2">
-					<div class="p-2 bg-gray-800 rounded">Status: <span class="font-medium text-white">OK</span></div>
-					<div class="p-2 bg-gray-800 rounded">Recent changes</div>
-					<div class="p-2 bg-gray-800 rounded">{output}</div>
+					{#each output.diagnostics as diagnostic}
+							{#if diagnostic.code.startsWith("E")}
+								<div role="alert" class="alert alert-error alert-soft">
+									{diagnostic.code} - {diagnostic.message}
+								</div>
+							{:else}
+								<div role="alert" class="alert alert-warning alert-soft">
+									{diagnostic.code} - {diagnostic.message}
+								</div>
+							{/if}
+					{/each}
+
+					<pre class="p-2 bg-gray-800 rounded font-mono">{JSON.stringify(output, null, 2)}</pre>
 				</div>
 			</aside>
 		</div>
