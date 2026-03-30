@@ -1,4 +1,5 @@
 <script lang="ts">
+// @ts-nocheck
 import init, { compile_sources } from "rhizz-wasm/rhizz_wasm.js";
 await init();
 
@@ -30,10 +31,10 @@ let output = $derived.by(() => {
 			<aside class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow">
 				<h3 class="font-semibold mb-3 text-gray-100">Navigation</h3>
 				<ul class="space-y-2 text-sm text-gray-300">
-					<li><a href="#" class="block hover:text-white">Overview</a></li>
-					<li><a href="#" class="block hover:text-white">Components</a></li>
-					<li><a href="#" class="block hover:text-white">Systems</a></li>
-					<li><a href="#" class="block hover:text-white">Settings</a></li>
+					<li><a href="#/" class="block hover:text-white">Overview</a></li>
+					<li><a href="#/" class="block hover:text-white">Components</a></li>
+					<li><a href="#/" class="block hover:text-white">Systems</a></li>
+					<li><a href="#/" class="block hover:text-white">Settings</a></li>
 				</ul>
 			</aside>
 
@@ -42,7 +43,7 @@ let output = $derived.by(() => {
 				<div class="w-full bg-gray-800 p-6 rounded shadow flex flex-col h-full text-gray-100">
 					<h1 class="text-2xl font-semibold mb-4 text-white">Rhizz</h1>
 					<textarea bind:value={input} class="font-mono flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400"></textarea>
-					<slot />
+					TODO: render here
 				</div>
 			</main>
 
