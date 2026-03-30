@@ -5,15 +5,18 @@
   import Editor from "./pages/Editor.svelte";
 
   let hash = $state(window.location.hash);
-  window.addEventListener("hashchange", () => (hash = window.location.hash));
+  window.addEventListener(
+    "hashchange",
+    () => (hash = window.location.hash),
+  );
 </script>
 
 {#if hash === "#/wasm"}
-  <Wasm/>
+  <Wasm />
 {:else if hash === "#/layout"}
-  <Layout/>
+  <Layout />
 {:else if hash === "#/editor"}
-  <Editor/>
+  <Editor />
 {:else}
   <Home />
 {/if}
