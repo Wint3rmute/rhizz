@@ -10,6 +10,10 @@
 <button onclick={switch_state_zooming} class="btn btn-primary btn-sm">New</button>
 {JSON.stringify(editor_state)}
 
+{#snippet ViewNode(name, x, y)}
+  <rect x="{x}" y="{y}" width="100" height="100" rx="5" stroke="white"/>
+  <text x="{x+50}" y="{y+50}" fill="white" text-anchor="middle" dominant-baseline="middle"> {name} </text>
+{/snippet}
 
 <div class="h-screen w-screen flex flex-col">
   <div class="navbar bg-base-200">
@@ -38,6 +42,7 @@
   </defs>
   <rect fill="url(#Pattern)" stroke="black" x="-100%" y="-100%" width="300%" height="300%" />
 
+  {@render ViewNode("TestNode", 0, 0)}
   
 </svg>
 
