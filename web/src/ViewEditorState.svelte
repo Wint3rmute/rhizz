@@ -12,12 +12,14 @@
   // | { type: "dragging_element"; elementId: string; offsetX: number; offsetY: number }
   // | { type: "adding_element"; query: string; candidateType: string | null };
 
-  const editor_state = $state<{ current: EditorState }>({
+  const editor_state = $state<
+    { current: EditorState; view_box: { x: number; y: number } }
+  >({
     current: { type: "idle" },
     view_box: {
       x: 0,
-      y: 0
-    }
+      y: 0,
+    },
   });
 
   export function get_editor_state() {

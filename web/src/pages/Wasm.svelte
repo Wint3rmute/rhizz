@@ -1,16 +1,15 @@
 <script lang="ts">
-  // @ts-nocheck
-  import init, { compile_sources } from "rhizz-wasm/rhizz_wasm.js";
-  await init();
+  import { compile_system } from "../rhizz_wasm_wrapper";
 
   let input = $state("# Your input goes here");
 
   let output = $derived.by(() => {
-    let a = compile_sources([{ "filename": "all.hcl", "content": input }]);
-    // console.log(a.diagnostics);
-    console.log(a);
-    // return JSON.stringify(a, null, 2);
-    return a;
+    let compilation_result = compile_system([{
+      "filename": "all.hcl",
+      "content": input,
+    }]);
+    console.log(compilation_result);
+    return compilation_result;
   });
 </script>
 
