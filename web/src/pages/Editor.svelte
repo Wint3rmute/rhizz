@@ -13,7 +13,7 @@
 </button>
 {JSON.stringify(editor_state)}
 
-{#snippet ViewNode(name, x, y)}
+{#snippet ViewNode(name: string, x: number, y: number)}
   <rect {x} {y} width="100" height="100" rx="5" stroke="white" />
   <text
     x={x + 50}

@@ -7,6 +7,6 @@
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"]
   },
-  "nodeModulesDir": "auto",
+  "nodeModulesDir": "manual",
   "unstable": ["fmt-component"]
 }
