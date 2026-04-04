@@ -39,8 +39,9 @@ fn compile_valid_sources_returns_no_errors() {
     ];
 
     let result = result_to_json(
-        rhizz_wasm::compile_sources(sources_to_js(&sources))
-            .expect("compile_sources should not return a JsError"),
+        rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
+            .expect("compile_sources should not return a JsError")
+            .into(),
     );
 
     let diagnostics = result["diagnostics"].as_array().expect("diagnostics array");
@@ -64,8 +65,9 @@ fn compile_invalid_hcl_returns_error_diagnostic() {
     }];
 
     let result = result_to_json(
-        rhizz_wasm::compile_sources(sources_to_js(&sources))
-            .expect("compile_sources should not panic on bad input"),
+        rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
+            .expect("compile_sources should not return a JsError")
+            .into(),
     );
 
     let diagnostics = result["diagnostics"].as_array().unwrap();
@@ -79,6 +81,7 @@ fn compile_invalid_hcl_returns_error_diagnostic() {
 #[wasm_bindgen_test]
 fn compile_sources_rejects_non_array_input() {
     let bad = JsValue::from_str("not an array");
-    let err = rhizz_wasm::compile_sources(bad);
+
+    let err = rhizz_wasm::CompileResultJS::compile(bad);
     assert!(err.is_err(), "should return a JsError for non-array input");
 }
