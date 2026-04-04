@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "svelte-check": "npm:svelte-check@^4.4.5"
+  }
+}

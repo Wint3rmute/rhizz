@@ -1,19 +1,22 @@
 <script lang="ts">
   import Home from "./pages/Home.svelte";
-  import Playground from "./pages/Playground.svelte";
   import Wasm from "./pages/Wasm.svelte";
   import Layout from "./pages/Layout.svelte";
+  import Editor from "./pages/Editor.svelte";
 
   let hash = $state(window.location.hash);
-  window.addEventListener("hashchange", () => (hash = window.location.hash));
+  window.addEventListener(
+    "hashchange",
+    () => (hash = window.location.hash),
+  );
 </script>
 
-{#if hash === "#/playground"}
-  <Playground />
-{:else if hash === "#/wasm"}
-  <Wasm/>
+{#if hash === "#/wasm"}
+  <Wasm />
 {:else if hash === "#/layout"}
-  <Layout/>
+  <Layout />
+{:else if hash === "#/editor"}
+  <Editor />
 {:else}
   <Home />
 {/if}
