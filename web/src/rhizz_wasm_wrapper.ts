@@ -1,4 +1,3 @@
-// @ts-nocheck
 import init, { compile_sources } from "rhizz";
 await init();
 
