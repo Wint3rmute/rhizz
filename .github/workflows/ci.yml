@@ -16,12 +16,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: x86_64-unknown-linux-gnu, wasm32-unknown-unknown
 
-      - name: Cache dependencies
+      - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Formatting check
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: lts
+          cache-hash: ${{ hashFiles('**/deno.json') }}
+
+      - name: Rust Formatting check
         run: cargo fmt --all -- --check
+
+      - name: Typescript Formatting check
+        run: deno fmt --check
+        working-directory: ./web
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -29,7 +40,25 @@ jobs:
       - name: Run tests
         run: cargo test --all --quiet
 
-      - name: Build release
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build wasm package
+        run: wasm-pack build crates/rhizz-wasm --target web --release
+
+      - name: Deno Install
+        run: deno install
+        working-directory: ./web
+
+      - name: Check Frontend
+        run: deno check && deno run check
+        working-directory: ./web
+
+      - name: Build Frontend
+        run: deno run build
+        working-directory: ./web
+
+      - name: Build Rust release
         run: cargo build --release --quiet
 
   build-wasm:
