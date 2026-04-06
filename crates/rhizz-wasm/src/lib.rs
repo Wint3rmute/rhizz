@@ -22,6 +22,58 @@ pub struct CompileResultJS {
     inner: rhizz_core::CompileResult,
 }
 
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct InnerStruct {
+    code: String,
+    message: String,
+}
+
+#[wasm_bindgen]
+impl InnerStruct {
+    #[wasm_bindgen(getter)]
+    pub fn code(&self) -> String {
+        self.code.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn message(&self) -> String {
+        self.message.clone()
+    }
+}
+
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct TestStruct {
+    a: bool,
+    b: usize,
+    c: Vec<usize>,
+    d: InnerStruct,
+}
+
+#[wasm_bindgen]
+impl TestStruct {
+    #[wasm_bindgen(getter)]
+    pub fn a(&self) -> bool {
+        self.a
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn b(&self) -> usize {
+        self.b
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn c(&self) -> Vec<usize> {
+        self.c.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn d(&self) -> InnerStruct {
+        self.d.clone()
+    }
+}
+
 #[wasm_bindgen]
 impl CompileResultJS {
     /// Compile one or more HCL sources and return a [`CompileResultJS`].
@@ -37,6 +89,18 @@ impl CompileResultJS {
         Ok(CompileResultJS {
             inner: rhizz_core::compile(&sources),
         })
+    }
+
+    pub fn get_test_struct() -> TestStruct {
+        TestStruct {
+            a: true,
+            b: 200,
+            c: vec![10, 20, 30],
+            d: InnerStruct {
+                code: String::from("E001"),
+                message: String::from("Test test"),
+            },
+        }
     }
 
     /// Returns `true` if compilation produced a model (i.e. no hard errors).

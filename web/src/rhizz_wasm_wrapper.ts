@@ -1,4 +1,4 @@
-import init, { compile_sources } from "rhizz";
+import init, { CompileResultJS } from "rhizz";
 await init();
 
 interface CompilationError {
@@ -31,6 +31,11 @@ interface CompiledSystem {
 
 export function compile_system(
   sources: { filename: string; content: string }[],
-): CompilationError | CompiledSystem {
-  return compile_sources(sources);
+): CompileResultJS {
+  const compilation_result = CompileResultJS.compile(sources);
+
+  let test_struct = CompileResultJS.get_test_struct();
+  console.log(test_struct);
+
+  return compilation_result;
 }
