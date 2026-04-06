@@ -215,6 +215,10 @@ pub struct ComponentJS {
     tags: Vec<String>,
     level: i32,
     leaf: bool,
+    /// Set when the parent is another component; `None` when the parent is a system.
+    parent_component_index: Option<usize>,
+    /// Set when the parent is a top-level system; `None` when the parent is a component.
+    parent_system_index: Option<usize>,
 }
 
 #[wasm_bindgen]
@@ -248,16 +252,34 @@ impl ComponentJS {
     pub fn leaf(&self) -> bool {
         self.leaf
     }
+
+    /// Arena index into `model.components()` for the parent component, or `undefined` if the parent is a system.
+    #[wasm_bindgen(getter)]
+    pub fn parent_component_index(&self) -> Option<usize> {
+        self.parent_component_index
+    }
+
+    /// Arena index into `model.systems()` for the parent system, or `undefined` if the parent is a component.
+    #[wasm_bindgen(getter)]
+    pub fn parent_system_index(&self) -> Option<usize> {
+        self.parent_system_index
+    }
 }
 
 impl From<&rhizz_core::Component> for ComponentJS {
     fn from(c: &rhizz_core::Component) -> Self {
+        let (parent_component_index, parent_system_index) = match c.parent {
+            rhizz_core::ComponentParent::Component(id) => (Some(id.0), None),
+            rhizz_core::ComponentParent::System(id) => (None, Some(id.0)),
+        };
         Self {
             label: c.label.clone(),
             description: c.description.clone(),
             tags: c.tags.clone(),
             level: c.level,
             leaf: c.leaf,
+            parent_component_index,
+            parent_system_index,
         }
     }
 }
@@ -281,7 +303,20 @@ impl ModelJS {
 
     /// Returns all components as typed wrappers.
     pub fn components(&self) -> Vec<ComponentJS> {
-        self.inner.components.iter().map(ComponentJS::from).collect()
+        self.inner
+            .components
+            .iter()
+            .map(ComponentJS::from)
+            .collect()
+    }
+
+    /// Returns the component with the given label, or `undefined` if not found.
+    pub fn component_by_name(&self, name: &str) -> Option<ComponentJS> {
+        self.inner
+            .components
+            .iter()
+            .find(|c| c.label == name)
+            .map(ComponentJS::from)
     }
 
     /// Computes and returns the completion score report.
@@ -350,8 +385,6 @@ impl CompileResultJS {
     ///
     /// Clones the model on each call; cache the result in JS if calling repeatedly.
     pub fn model(&self) -> Option<ModelJS> {
-        self.model
-            .as_ref()
-            .map(|m| ModelJS { inner: m.clone() })
+        self.model.as_ref().map(|m| ModelJS { inner: m.clone() })
     }
 }
