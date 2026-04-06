@@ -1,5 +1,4 @@
-import init, { CompileResultJS } from "rhizz";
-await init();
+import { CompileResultJS } from "rhizz";
 
 interface CompilationError {
   diagnostics: {

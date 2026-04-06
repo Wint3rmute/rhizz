@@ -1,6 +1,6 @@
 <script lang="ts">
-import { ModelJS } from "rhizz";
-	let { model }: { model: ModelJS } = $props();
+  import { ModelJS } from "rhizz";
+  let { model }: { model: ModelJS } = $props();
   let components = $derived(model.components());
 </script>
 
