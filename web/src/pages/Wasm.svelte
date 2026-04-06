@@ -70,11 +70,11 @@
       <aside
         class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow"
       >
-        {#if model !== undefined }
-          <ModelComponentsOutline model={model}/>
+        {#if model !== undefined}
+          <ModelComponentsOutline {model} />
         {/if}
 
-        <CompilationDiagnosticsOutline diagnostics={diagnostics}/>
+        <CompilationDiagnosticsOutline {diagnostics} />
       </aside>
     </div>
   </div>

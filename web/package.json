@@ -12,6 +12,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
     "@tailwindcss/vite": "^4.2.2",
     "daisyui": "^5.5.19",
     "tailwindcss": "^4.2.2",

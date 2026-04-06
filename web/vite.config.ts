@@ -1,10 +1,9 @@
 import { defineConfig } from "vite";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
-import { resolve } from "node:path";
 
 export default defineConfig({
-  plugins: [tailwindcss(), svelte()],
+  plugins: [tailwindcss(), sveltekit()],
   server: {
     fs: {
       allow: [".", "../crates/rhizz-wasm/pkg"],
