@@ -2,7 +2,8 @@
 
 ## 1. Project Structure
 
-All `.hcl` files in a project directory (recursively) are merged into a single model (flat merge, similar to Terraform).
+All `.hcl` files in a project directory (recursively) are merged into a single
+model (flat merge, similar to Terraform).
 
 ```
 project/
@@ -16,15 +17,19 @@ project/
     └── sensors.hcl
 ```
 
-File organization is a convention — the tooling treats all `.hcl` files equally regardless of directory depth. All files are parsed and merged into a single `RawFile`.
+File organization is a convention — the tooling treats all `.hcl` files equally
+regardless of directory depth. All files are parsed and merged into a single
+`RawFile`.
 
-The merge strategy is described in [SPEC/models.md § Merge](SPEC/models.md#merge).
+The merge strategy is described in
+[SPEC/models.md § Merge](SPEC/models.md#merge).
 
 ---
 
 ## 2. HCL Schema
 
-> **Impl:** see [SPEC/models.md](SPEC/models.md) — raw deserialization structs, HCL parsing strategy, and resolved model types.
+> **Impl:** see [SPEC/models.md](SPEC/models.md) — raw deserialization structs,
+> HCL parsing strategy, and resolved model types.
 
 ### 2.1 `project` Block (Optional, Singleton)
 
@@ -36,11 +41,11 @@ project {
 }
 ```
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `name` | string | no | directory name | Human-readable project name |
-| `version` | string | no | `"0.0.0"` | Semantic version |
-| `authors` | list(string) | no | `[]` | List of authors |
+| Attribute | Type         | Required | Default        | Description                 |
+| --------- | ------------ | -------- | -------------- | --------------------------- |
+| `name`    | string       | no       | directory name | Human-readable project name |
+| `version` | string       | no       | `"0.0.0"`      | Semantic version            |
+| `authors` | list(string) | no       | `[]`           | List of authors             |
 
 ---
 
@@ -61,12 +66,12 @@ system "consumer-drone" {
 }
 ```
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique system identifier |
-| `description` | string | no | `""` | Human-readable description |
-| `tags` | list(string) | no | `[]` | Filtering tags |
-| `level` | integer | no | `0` | Abstraction level |
+| Attribute     | Type         | Required | Default | Description                |
+| ------------- | ------------ | -------- | ------- | -------------------------- |
+| _label_       | string       | **yes**  | —       | Unique system identifier   |
+| `description` | string       | no       | `""`    | Human-readable description |
+| `tags`        | list(string) | no       | `[]`    | Filtering tags             |
+| `level`       | integer      | no       | `0`     | Abstraction level          |
 
 **Children:** `component`, `connection`
 
@@ -74,7 +79,10 @@ system "consumer-drone" {
 
 ### 2.3 `component` Block
 
-Defined inside a `system`, another `component`, **or at the top level**. Represents a physical or logical building block. Components declare their external interface via `port` blocks; ports are allowed on both leaf and non-leaf components.
+Defined inside a `system`, another `component`, **or at the top level**.
+Represents a physical or logical building block. Components declare their
+external interface via `port` blocks; ports are allowed on both leaf and
+non-leaf components.
 
 ```hcl
 component "flight-controller" {
@@ -98,7 +106,10 @@ component "flight-controller" {
 
 #### Top-level components and `source`
 
-A `component` block may appear at the **top level** of any `.hcl` file (alongside `system`, `view`, and `project`). Top-level components are not part of any system by themselves — they serve as reusable definitions that can be pulled into a system or parent component via the `source` attribute.
+A `component` block may appear at the **top level** of any `.hcl` file
+(alongside `system`, `view`, and `project`). Top-level components are not part
+of any system by themselves — they serve as reusable definitions that can be
+pulled into a system or parent component via the `source` attribute.
 
 ```hcl
 # components/flight-controller.hcl — a normal rhizz file
@@ -132,34 +143,49 @@ system "quadcopter" {
 
 **Rules:**
 
-- `source` is a **label reference** to a top-level `component`, not a file path. Resolution happens during the resolution pass (after merge), using the same label lookup mechanism as `view.system`.
-- When `source` is present, **no other attributes or child blocks** may appear on the component (error E012). The label at the usage site is the only locally-defined property.
-- Nested `source` is supported: a top-level component may itself contain children with `source` references to other top-level components.
+- `source` is a **label reference** to a top-level `component`, not a file path.
+  Resolution happens during the resolution pass (after merge), using the same
+  label lookup mechanism as `view.system`.
+- When `source` is present, **no other attributes or child blocks** may appear
+  on the component (error E012). The label at the usage site is the only
+  locally-defined property.
+- Nested `source` is supported: a top-level component may itself contain
+  children with `source` references to other top-level components.
 - Circular `source` chains are detected and produce error E013.
 - `source` references an undefined top-level component → error E014.
-- **Top-level components may not contain `connection` blocks that reference siblings outside their own tree.** Connections inside a top-level component wire its own children — they cannot reference components from the system that sources them. (Connections at the system level wire sourced components together.)
-- Top-level components that are not referenced by any `source` in any system produce warning W012 (orphan top-level component).
-- Duplicate top-level component labels across files are an error (E001 — same scope, same block type).
-- Top-level components are **not** included in scoring or view rendering unless they are sourced into a system.
+- **Top-level components may not contain `connection` blocks that reference
+  siblings outside their own tree.** Connections inside a top-level component
+  wire its own children — they cannot reference components from the system that
+  sources them. (Connections at the system level wire sourced components
+  together.)
+- Top-level components that are not referenced by any `source` in any system
+  produce warning W012 (orphan top-level component).
+- Duplicate top-level component labels across files are an error (E001 — same
+  scope, same block type).
+- Top-level components are **not** included in scoring or view rendering unless
+  they are sourced into a system.
 
 #### Attributes
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique identifier within parent scope (or unique top-level label) |
-| `source` | string | no | — | Label of a top-level `component` to use as this component's body. Mutually exclusive with all other attributes and children (E012). |
-| `description` | string | no | `""` | Human-readable description |
-| `tags` | list(string) | no | `[]` | Filtering tags |
-| `level` | integer | no | parent level + 1 | Abstraction level |
-| `leaf` | bool | no | `false` | If `true`, component is atomic — may not contain child `component` or `connection` blocks |
+| Attribute     | Type         | Required | Default          | Description                                                                                                                         |
+| ------------- | ------------ | -------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)                                                                   |
+| `source`      | string       | no       | —                | Label of a top-level `component` to use as this component's body. Mutually exclusive with all other attributes and children (E012). |
+| `description` | string       | no       | `""`             | Human-readable description                                                                                                          |
+| `tags`        | list(string) | no       | `[]`             | Filtering tags                                                                                                                      |
+| `level`       | integer      | no       | parent level + 1 | Abstraction level                                                                                                                   |
+| `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `component` or `connection` blocks                                           |
 
-**Children:** `port` (any), `component` (if not leaf), `connection` (if not leaf, between child components)
+**Children:** `port` (any), `component` (if not leaf), `connection` (if not
+leaf, between child components)
 
 ---
 
 ### 2.4 `port` Block
 
-Defined inside a `component`. Declares a typed connection point exposed by that component. Ports carry `message` blocks that describe the protocol schema, keeping protocol definitions co-located with the component that owns them.
+Defined inside a `component`. Declares a typed connection point exposed by that
+component. Ports carry `message` blocks that describe the protocol schema,
+keeping protocol definitions co-located with the component that owns them.
 
 ```hcl
 port "spi" {
@@ -176,13 +202,13 @@ port "spi" {
 }
 ```
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique identifier within the parent component |
-| `protocol` | string | no | `""` | Free-form protocol name; matched against the connected port's `protocol` |
-| `role` | string | no | `"peer"` | `"provider"`, `"consumer"`, or `"peer"` |
-| `description` | string | no | `""` | Human-readable description |
-| `tags` | list(string) | no | `[]` | Filtering tags |
+| Attribute     | Type         | Required | Default  | Description                                                              |
+| ------------- | ------------ | -------- | -------- | ------------------------------------------------------------------------ |
+| _label_       | string       | **yes**  | —        | Unique identifier within the parent component                            |
+| `protocol`    | string       | no       | `""`     | Free-form protocol name; matched against the connected port's `protocol` |
+| `role`        | string       | no       | `"peer"` | `"provider"`, `"consumer"`, or `"peer"`                                  |
+| `description` | string       | no       | `""`     | Human-readable description                                               |
+| `tags`        | list(string) | no       | `[]`     | Filtering tags                                                           |
 
 **Children:** `message`
 
@@ -190,7 +216,11 @@ port "spi" {
 
 ### 2.5 `connection` Block
 
-Defined inside a `system` or `component`. Wires two **sibling** components together. The `from` and `to` fields accept either a bare component label or a `component:port` reference. When a port is named, protocol and role compatibility is validated at resolution time. The connection carries no messages and no direction — both are derived from the connected ports.
+Defined inside a `system` or `component`. Wires two **sibling** components
+together. The `from` and `to` fields accept either a bare component label or a
+`component:port` reference. When a port is named, protocol and role
+compatibility is validated at resolution time. The connection carries no
+messages and no direction — both are derived from the connected ports.
 
 ```hcl
 connection "spi-bus" {
@@ -203,17 +233,18 @@ connection "spi-bus" {
 }
 ```
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique identifier within parent scope |
-| `from` | string | **yes** | — | `"comp"` or `"comp:port"` — source component and optional port |
-| `to` | string | **yes** | — | `"comp"` or `"comp:port"` — target component and optional port |
-| `description` | string | no | `""` | Human-readable description |
-| `tags` | list(string) | no | `[]` | Filtering tags |
-| `level` | integer | no | parent level + 1 | Abstraction level |
-| `encapsulates` | list(string) | no | `[]` | Labels of sibling connections this one runs on top of |
+| Attribute      | Type         | Required | Default          | Description                                                    |
+| -------------- | ------------ | -------- | ---------------- | -------------------------------------------------------------- |
+| _label_        | string       | **yes**  | —                | Unique identifier within parent scope                          |
+| `from`         | string       | **yes**  | —                | `"comp"` or `"comp:port"` — source component and optional port |
+| `to`           | string       | **yes**  | —                | `"comp"` or `"comp:port"` — target component and optional port |
+| `description`  | string       | no       | `""`             | Human-readable description                                     |
+| `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
+| `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
+| `encapsulates` | list(string) | no       | `[]`             | Labels of sibling connections this one runs on top of          |
 
-**No `direction` attribute** — direction is inferred from the `role` values of the connected ports (see §6).
+**No `direction` attribute** — direction is inferred from the `role` values of
+the connected ports (see §6).
 
 **No child blocks** — messages belong to `port` blocks, not connections.
 
@@ -221,7 +252,9 @@ connection "spi-bus" {
 
 ### 2.6 `message` Block
 
-Defined inside a `port`. Represents a discrete unit of information exchanged over that port's protocol. Keeping messages on the port ensures the protocol schema travels with the component.
+Defined inside a `port`. Represents a discrete unit of information exchanged
+over that port's protocol. Keeping messages on the port ensures the protocol
+schema travels with the component.
 
 ```hcl
 message "position-report" {
@@ -236,12 +269,12 @@ message "position-report" {
 }
 ```
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique identifier within the parent port |
-| `description` | string | no | `""` | Human-readable description |
-| `tags` | list(string) | no | `[]` | Filtering tags |
-| `level` | integer | no | parent level | Abstraction level |
+| Attribute     | Type         | Required | Default      | Description                              |
+| ------------- | ------------ | -------- | ------------ | ---------------------------------------- |
+| _label_       | string       | **yes**  | —            | Unique identifier within the parent port |
+| `description` | string       | no       | `""`         | Human-readable description               |
+| `tags`        | list(string) | no       | `[]`         | Filtering tags                           |
+| `level`       | integer      | no       | parent level | Abstraction level                        |
 
 **Children:** `field`
 
@@ -260,19 +293,20 @@ field "altitude" {
 }
 ```
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| *label* | string | **yes** | — | Unique field name within parent message |
-| `type` | string | **yes** | — | Free-form type string (e.g. `"uint8"`, `"string"`, `"bool"`, `"enum(A,B,C)"`) |
-| `description` | string | no | `""` | Human-readable description |
-| `unit` | string | no | `""` | Physical unit (e.g. `"m"`, `"Hz"`, `"V"`) |
-| `required` | bool | no | `true` | Whether the field is mandatory in the message |
+| Attribute     | Type   | Required | Default | Description                                                                   |
+| ------------- | ------ | -------- | ------- | ----------------------------------------------------------------------------- |
+| _label_       | string | **yes**  | —       | Unique field name within parent message                                       |
+| `type`        | string | **yes**  | —       | Free-form type string (e.g. `"uint8"`, `"string"`, `"bool"`, `"enum(A,B,C)"`) |
+| `description` | string | no       | `""`    | Human-readable description                                                    |
+| `unit`        | string | no       | `""`    | Physical unit (e.g. `"m"`, `"Hz"`, `"V"`)                                     |
+| `required`    | bool   | no       | `true`  | Whether the field is mandatory in the message                                 |
 
 ---
 
 ### 2.8 `view` Block
 
-Top-level block (not nested inside a system). Defines a filtered perspective rendered as a Graphviz diagram.
+Top-level block (not nested inside a system). Defines a filtered perspective
+rendered as a Graphviz diagram.
 
 ```hcl
 view "power-distribution" {
@@ -299,80 +333,88 @@ view "power-distribution" {
 
 **`filter` sub-block:**
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `include_tags` | list(string) | no | `[]` (match all) | Only include entities having ≥1 of these tags |
-| `exclude_tags` | list(string) | no | `[]` | Exclude entities having any of these tags |
-| `max_level` | integer | no | `∞` | Maximum abstraction level to display |
-| `components` | list(string) | no | `[]` (all) | Whitelist of component labels to include |
-| `show_messages` | bool | no | `true` | Whether to list messages (from connected ports) as connection edge labels |
+| Attribute       | Type         | Required | Default          | Description                                                               |
+| --------------- | ------------ | -------- | ---------------- | ------------------------------------------------------------------------- |
+| `include_tags`  | list(string) | no       | `[]` (match all) | Only include entities having ≥1 of these tags                             |
+| `exclude_tags`  | list(string) | no       | `[]`             | Exclude entities having any of these tags                                 |
+| `max_level`     | integer      | no       | `∞`              | Maximum abstraction level to display                                      |
+| `components`    | list(string) | no       | `[]` (all)       | Whitelist of component labels to include                                  |
+| `show_messages` | bool         | no       | `true`           | Whether to list messages (from connected ports) as connection edge labels |
 
 **`output` sub-block:**
 
-| Attribute | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `filename` | string | no | `"{view-label}.dot"` | Output file path |
-| `rankdir` | string | no | `"TB"` | Graphviz layout direction |
+| Attribute  | Type   | Required | Default              | Description               |
+| ---------- | ------ | -------- | -------------------- | ------------------------- |
+| `filename` | string | no       | `"{view-label}.dot"` | Output file path          |
+| `rankdir`  | string | no       | `"TB"`               | Graphviz layout direction |
 
 ---
 
 ## 3. Reference Resolution
 
-> **Impl:** see [Scope lookup helper](SPEC/models.md#scope-lookup-helper) and [Resolution pass](SPEC/models.md#resolution-pass) in models.md.
+> **Impl:** see [Scope lookup helper](SPEC/models.md#scope-lookup-helper) and
+> [Resolution pass](SPEC/models.md#resolution-pass) in models.md.
 
 All references are **name-based within the same parent scope**:
 
-| Context | Reference resolves to |
-|---------|----------------------|
-| `connection.from` / `connection.to` (bare label) | Sibling `component` labels in the same parent scope |
+| Context                                           | Reference resolves to                                      |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `connection.from` / `connection.to` (bare label)  | Sibling `component` labels in the same parent scope        |
 | `connection.from` / `connection.to` (`comp:port`) | Sibling `component` label + named `port` on that component |
-| `encapsulates` | Sibling `connection` labels in the same parent scope |
-| `component.source` | Top-level `component` label |
-| `view.system` | Top-level `system` label |
+| `encapsulates`                                    | Sibling `connection` labels in the same parent scope       |
+| `component.source`                                | Top-level `component` label                                |
+| `view.system`                                     | Top-level `system` label                                   |
 
-**No cross-scope references in v1.** If a connection spans abstraction levels, model it at the appropriate parent scope.
+**No cross-scope references in v1.** If a connection spans abstraction levels,
+model it at the appropriate parent scope.
 
 ---
 
 ## 4. Validation Rules
 
-> **Impl:** validation operates on the [resolved `Model`](SPEC/models.md#core-resolved-structs).
-> Errors/warnings are collected as `Diagnostic` values during the [resolution pass](SPEC/models.md#resolution-pass).
+> **Impl:** validation operates on the
+> [resolved `Model`](SPEC/models.md#core-resolved-structs). Errors/warnings are
+> collected as `Diagnostic` values during the
+> [resolution pass](SPEC/models.md#resolution-pass).
 
 Each diagnostic code is documented in its own file under
-[`SPEC/diagnostics/`](SPEC/diagnostics/) (e.g. `E001.md`, `W003.md`).
-Error codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
+[`SPEC/diagnostics/`](SPEC/diagnostics/) (e.g. `E001.md`, `W003.md`). Error
+codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
 
 ---
 
 ## 5. Completion Scoring
 
-> **Impl:** scoring iterates over `Model.components`, `Model.ports`, `Model.connections`, and `Model.messages`,
-> see [resolved models](SPEC/models.md#core-resolved-structs). The `leaf`, `children`,
-> `ports`, `messages`, and `fields` fields on those structs provide all inputs needed.
+> **Impl:** scoring iterates over `Model.components`, `Model.ports`,
+> `Model.connections`, and `Model.messages`, see
+> [resolved models](SPEC/models.md#core-resolved-structs). The `leaf`,
+> `children`, `ports`, `messages`, and `fields` fields on those structs provide
+> all inputs needed.
 
-The completion score quantifies how fully the system has been decomposed and specified to
-leaf-level entities. Each entity is scored individually, then aggregated.
+The completion score quantifies how fully the system has been decomposed and
+specified to leaf-level entities. Each entity is scored individually, then
+aggregated.
 
 ### Per-Entity Completeness
 
-| Entity | Complete (1.0) | Partial (0.5) | Incomplete (0.0) |
-|--------|---------------|---------------|-------------------|
-| **Component** (leaf) | Has description AND all defined ports complete | Has description but ≥1 port incomplete | No description |
-| **Component** (non-leaf) | ≥1 child component, all children complete | ≥1 child component, not all children complete | No child components |
-| **Port** | ≥1 message, all messages complete | ≥1 message, not all messages complete | No messages |
-| **Connection** | Both sides typed (`comp:port`) with matching `protocol` | One side typed | Both sides untyped |
-| **Message** | ≥1 field | — | No fields |
+| Entity                   | Complete (1.0)                                          | Partial (0.5)                                 | Incomplete (0.0)    |
+| ------------------------ | ------------------------------------------------------- | --------------------------------------------- | ------------------- |
+| **Component** (leaf)     | Has description AND all defined ports complete          | Has description but ≥1 port incomplete        | No description      |
+| **Component** (non-leaf) | ≥1 child component, all children complete               | ≥1 child component, not all children complete | No child components |
+| **Port**                 | ≥1 message, all messages complete                       | ≥1 message, not all messages complete         | No messages         |
+| **Connection**           | Both sides typed (`comp:port`) with matching `protocol` | One side typed                                | Both sides untyped  |
+| **Message**              | ≥1 field                                                | —                                             | No fields           |
 
-A leaf component with a description and no ports scores Complete (1.0) — ports are optional detail.
+A leaf component with a description and no ports scores Complete (1.0) — ports
+are optional detail.
 
 ### Aggregate Score
 
 $$\text{Score} = \frac{\sum_{i=1}^{N} s_i}{N} \times 100\%$$
 
 Where $s_i$ is the per-entity completeness (0.0, 0.5, or 1.0) and $N$ is the
-total number of components, ports, connections, and messages. Fields and the system
-block itself are excluded from scoring.
+total number of components, ports, connections, and messages. Fields and the
+system block itself are excluded from scoring.
 
 ### Output Format
 
@@ -392,32 +434,33 @@ Overall:      20/37           54.1%
 ## 6. View Generation (Graphviz)
 
 > **Impl:** the `View`, `ViewFilter`, and `ViewOutput` structs are defined in
-> [view models](SPEC/models.md#view-models). The renderer reads from the resolved
-> `Model` and applies filter predicates against tags, levels, and component whitelist.
-> DOT string generation is provided by the shared `rhizz-dot` crate (see Section 12)
-> so that any frontend can produce `.dot` output without re-implementing the logic.
+> [view models](SPEC/models.md#view-models). The renderer reads from the
+> resolved `Model` and applies filter predicates against tags, levels, and
+> component whitelist. DOT string generation is provided by the shared
+> `rhizz-dot` crate (see Section 12) so that any frontend can produce `.dot`
+> output without re-implementing the logic.
 
 Connection direction is inferred from the `role` values of the connected ports:
 
-| `from` role | `to` role | Inferred direction | DOT representation |
-|---|---|---|---|
-| `provider` | `consumer` | unidirectional (`from` → `to`) | directed arrow |
-| `consumer` | `provider` | unidirectional (`to` → `from`) | directed arrow (reversed) |
-| `peer` | `peer` | bidirectional | undirected line |
-| either side untyped | — | unknown | dashed line |
-| `provider` | `provider` | ambiguous → W009 | dashed line |
-| `consumer` | `consumer` | ambiguous → W009 | dashed line |
-| `peer` | `provider` or `consumer` | ambiguous → W009 | dashed line |
+| `from` role         | `to` role                | Inferred direction             | DOT representation        |
+| ------------------- | ------------------------ | ------------------------------ | ------------------------- |
+| `provider`          | `consumer`               | unidirectional (`from` → `to`) | directed arrow            |
+| `consumer`          | `provider`               | unidirectional (`to` → `from`) | directed arrow (reversed) |
+| `peer`              | `peer`                   | bidirectional                  | undirected line           |
+| either side untyped | —                        | unknown                        | dashed line               |
+| `provider`          | `provider`               | ambiguous → W009               | dashed line               |
+| `consumer`          | `consumer`               | ambiguous → W009               | dashed line               |
+| `peer`              | `provider` or `consumer` | ambiguous → W009               | dashed line               |
 
 The view renderer applies the filter, then produces a DOT file:
 
-| Model Entity | Graphviz Representation |
-|--------------|------------------------|
-| Component (leaf) | Box node, solid border |
-| Component (non-leaf) | `subgraph cluster_*` containing children |
-| Connection | Edge with direction inferred from port roles (see table above) |
-| Message | Items in edge label (from connected port(s), if `show_messages = true`) |
-| Encapsulation | Dashed edge between connections, or annotation on label |
+| Model Entity         | Graphviz Representation                                                 |
+| -------------------- | ----------------------------------------------------------------------- |
+| Component (leaf)     | Box node, solid border                                                  |
+| Component (non-leaf) | `subgraph cluster_*` containing children                                |
+| Connection           | Edge with direction inferred from port roles (see table above)          |
+| Message              | Items in edge label (from connected port(s), if `show_messages = true`) |
+| Encapsulation        | Dashed edge between connections, or annotation on label                 |
 
 Example generated DOT fragment:
 
@@ -445,12 +488,12 @@ digraph "power-distribution" {
 
 ## 7. CLI Interface
 
-> **Impl:** see [SPEC/cli.md](SPEC/cli.md) — `clap` struct layout, JSON output schema,
-> pipeline stages, and error formatting.
+> **Impl:** see [SPEC/cli.md](SPEC/cli.md) — `clap` struct layout, JSON output
+> schema, pipeline stages, and error formatting.
 
-The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend
-over `rhizz-core`. It is responsible for file discovery, output formatting,
-exit codes, and writing generated `.dot` files to disk. All model compilation,
+The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend over
+`rhizz-core`. It is responsible for file discovery, output formatting, exit
+codes, and writing generated `.dot` files to disk. All model compilation,
 validation, scoring, and view rendering logic lives in `rhizz-core` and
 `rhizz-dot` — `rhizz-cli` contains no model logic of its own.
 
@@ -458,22 +501,22 @@ validation, scoring, and view rendering logic lives in `rhizz-core` and
 rhizz <command> [options] [path]
 ```
 
-| Command | Description |
-|---------|-------------|
+| Command             | Description                                                            |
+| ------------------- | ---------------------------------------------------------------------- |
 | `mbse check <path>` | Parse, validate, and report errors/warnings. Exit code 0 if no errors. |
-| `mbse score <path>` | Run `check`, then print the completion report. |
-| `mbse views <path>` | Run `check`, then generate all defined views as `.dot` files. |
-| `mbse build <path>` | Run all of the above in sequence (default command). |
+| `mbse score <path>` | Run `check`, then print the completion report.                         |
+| `mbse views <path>` | Run `check`, then generate all defined views as `.dot` files.          |
+| `mbse build <path>` | Run all of the above in sequence (default command).                    |
 
 ### Options
 
-| Flag | Description |
-|------|-------------|
+| Flag                 | Description                                              |
+| -------------------- | -------------------------------------------------------- |
 | `--output-dir`, `-o` | Directory for generated `.dot` files (default: `./out/`) |
-| `--strict` | Treat warnings as errors |
-| `--json` | Output report in JSON format (for CI/CD integration) |
-| `--view <name>` | Only generate a specific view (with `views`/`build`) |
-| `--no-color` | Disable colored terminal output |
+| `--strict`           | Treat warnings as errors                                 |
+| `--json`             | Output report in JSON format (for CI/CD integration)     |
+| `--view <name>`      | Only generate a specific view (with `views`/`build`)     |
+| `--no-color`         | Disable colored terminal output                          |
 
 ### Example Session
 
@@ -761,19 +804,19 @@ view "fc-internals" {
 
 ## 9. Design Decisions & Future Considerations
 
-| Decision | Rationale |
-|----------|-----------|
-| Connections reference **sibling** components only | Keeps scoping simple; cross-level wiring is modeled at the appropriate parent |
-| Ports are optional (`comp:port` syntax is additive) | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally |
-| Messages live on ports, not connections | Protocol schema travels with the component; enables genuine component reuse in future |
-| Top-level components + `source` label reference | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
-| Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable |
-| `type` on fields is a free-form string | Supports gradual specification — no type system to fight during early design |
-| `level` auto-increments from parent | Reduces boilerplate; explicit override still available |
-| Views are top-level blocks | A view can reference any system; decoupled from the model itself |
-| `encapsulates` is a name-based reference | Captures protocol layering (HTTP → TCP → Ethernet) without deep nesting |
-| Multiple frontends share one compiler core | Keeps all model semantics in one tested place; frontends own only I/O and presentation |
-| DOT rendering in `rhizz-dot` | Pure text transform useful to every frontend; extracted so neither CLI nor GUI re-implements it |
+| Decision                                                        | Rationale                                                                                                                                                                                                               |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections reference **sibling** components only               | Keeps scoping simple; cross-level wiring is modeled at the appropriate parent                                                                                                                                           |
+| Ports are optional (`comp:port` syntax is additive)             | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally                                                                                                        |
+| Messages live on ports, not connections                         | Protocol schema travels with the component; enables genuine component reuse in future                                                                                                                                   |
+| Top-level components + `source` label reference                 | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
+| Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable                                                                                                                                         |
+| `type` on fields is a free-form string                          | Supports gradual specification — no type system to fight during early design                                                                                                                                            |
+| `level` auto-increments from parent                             | Reduces boilerplate; explicit override still available                                                                                                                                                                  |
+| Views are top-level blocks                                      | A view can reference any system; decoupled from the model itself                                                                                                                                                        |
+| `encapsulates` is a name-based reference                        | Captures protocol layering (HTTP → TCP → Ethernet) without deep nesting                                                                                                                                                 |
+| Multiple frontends share one compiler core                      | Keeps all model semantics in one tested place; frontends own only I/O and presentation                                                                                                                                  |
+| DOT rendering in `rhizz-dot`                                    | Pure text transform useful to every frontend; extracted so neither CLI nor GUI re-implements it                                                                                                                         |
 
 **Out of scope for v1, currently non-goals. Candidates for v2:**
 
@@ -790,10 +833,17 @@ view "fc-internals" {
 
 ## 10. Frontends
 
-`rhizz` is available as a **command-line tool** (`rhizz-cli`), a **desktop GUI application** (`rhizz-gui`), and a **WebAssembly module** (`rhizz-wasm`). All frontends share the same underlying model compiler and produce identical results; the choice of frontend is purely a matter of workflow preference.
+`rhizz` is available as a **command-line tool** (`rhizz-cli`), a **desktop GUI
+application** (`rhizz-gui`), and a **WebAssembly module** (`rhizz-wasm`). All
+frontends share the same underlying model compiler and produce identical
+results; the choice of frontend is purely a matter of workflow preference.
 
 ### `rhizz-wasm`
 
-A WebAssembly frontend that exposes the same compile pipeline to JavaScript environments (browsers, Deno, Node.js). Callers supply HCL source content as strings and receive back a compiled model and diagnostics — identical in structure to what the CLI and GUI produce.
+A WebAssembly frontend that exposes the same compile pipeline to JavaScript
+environments (browsers, Deno, Node.js). Callers supply HCL source content as
+strings and receive back a compiled model and diagnostics — identical in
+structure to what the CLI and GUI produce.
 
-> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for build instructions, JS API, and crate details.
+> **Impl:** see [SPEC/architecture.md](SPEC/architecture.md) for build
+> instructions, JS API, and crate details.

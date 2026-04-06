@@ -3,6 +3,7 @@
   import Wasm from "./pages/Wasm.svelte";
   import Layout from "./pages/Layout.svelte";
   import Editor from "./pages/Editor.svelte";
+  import Overview from "./pages/Overview.svelte";
 
   let hash = $state(window.location.hash);
   window.addEventListener(
@@ -15,6 +16,8 @@
   <Wasm />
 {:else if hash === "#/layout"}
   <Layout />
+{:else if hash === "#/overview"}
+  <Overview />
 {:else if hash === "#/editor"}
   <Editor />
 {:else}

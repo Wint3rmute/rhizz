@@ -2,11 +2,11 @@ name: Security Audit
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
       - Cargo.lock
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
       - Cargo.lock
 

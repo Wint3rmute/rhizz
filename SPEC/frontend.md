@@ -4,18 +4,20 @@ Browser-based system model explorer. Pure SPA — no API, no external backend.
 
 ## Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Deno |
-| Language | TypeScript |
-| UI framework | Svelte 5 |
-| Build tool | Vite |
-| Visualisation | Custom SVG renderer |
+| Layer          | Technology                                |
+| -------------- | ----------------------------------------- |
+| Runtime        | Deno                                      |
+| Language       | TypeScript                                |
+| UI framework   | Svelte 5                                  |
+| Build tool     | Vite                                      |
+| Visualisation  | Custom SVG renderer                       |
 | Model compiler | `rhizz-wasm` (WASM build of `rhizz-core`) |
 
 ## Architecture
 
-The frontend follows the same [frontend contract](architecture.md#frontend-contract) as the CLI and GUI: all model logic lives in `rhizz-core`, the frontend owns only I/O and presentation.
+The frontend follows the same
+[frontend contract](architecture.md#frontend-contract) as the CLI and GUI: all
+model logic lives in `rhizz-core`, the frontend owns only I/O and presentation.
 
 ```
 web/
@@ -28,11 +30,15 @@ web/
 
 ## WASM Integration
 
-The `rhizz-wasm` package (built with `wasm-pack --target web`) is resolved via a Vite alias pointing at `../crates/rhizz-wasm/pkg`.
+The `rhizz-wasm` package (built with `wasm-pack --target web`) is resolved via a
+Vite alias pointing at `../crates/rhizz-wasm/pkg`.
 
 ### Typed bindings via wrapper structs
 
-`rhizz-wasm` exposes **`#[wasm_bindgen]` wrapper structs** that convert from `rhizz-core` types. Each wrapper has `#[wasm_bindgen(getter)]` methods for its fields, so `wasm-pack` generates matching TypeScript class definitions with full autocompletion — no manual `.d.ts` files needed.
+`rhizz-wasm` exposes **`#[wasm_bindgen]` wrapper structs** that convert from
+`rhizz-core` types. Each wrapper has `#[wasm_bindgen(getter)]` methods for its
+fields, so `wasm-pack` generates matching TypeScript class definitions with full
+autocompletion — no manual `.d.ts` files needed.
 
 Example — wrapping `rhizz_core::Diagnostic`:
 
@@ -68,9 +74,9 @@ impl From<&rhizz_core::Diagnostic> for DiagnosticJS {
 ```typescript
 // rhizz_wasm.d.ts (auto-generated)
 export class DiagnosticJS {
-    free(): void;
-    readonly code: string;
-    readonly message: string;
+  free(): void;
+  readonly code: string;
+  readonly message: string;
 }
 ```
 
@@ -83,7 +89,8 @@ ScoreReport         ──From──▸  ScoreReportJS                class Scor
 CategoryScore       ──From──▸  CategoryScoreJS              class CategoryScoreJS { complete, partial, … }
 ```
 
-`CompileResultJS` is the main entry point — an opaque class that holds the compiled state and returns typed wrappers from its methods:
+`CompileResultJS` is the main entry point — an opaque class that holds the
+compiled state and returns typed wrappers from its methods:
 
 ```rust
 #[wasm_bindgen]
@@ -100,25 +107,32 @@ impl CompileResultJS {
 
 ### Design principles
 
-- **`rhizz-core` has no wasm dependency** — all wasm-bindgen concerns stay in `rhizz-wasm`.
+- **`rhizz-core` has no wasm dependency** — all wasm-bindgen concerns stay in
+  `rhizz-wasm`.
 - **Wrappers use `From` conversions** — mechanical mapping, easy to extend.
-- **Expose only what the frontend needs** — complex enums and internal IDs are flattened or omitted; more accessors are added as the frontend grows.
-- **Arena IDs are plain `number` indices** — `ComponentId(3)` becomes `3` in TS, indexable into the corresponding array.
+- **Expose only what the frontend needs** — complex enums and internal IDs are
+  flattened or omitted; more accessors are added as the frontend grows.
+- **Arena IDs are plain `number` indices** — `ComponentId(3)` becomes `3` in TS,
+  indexable into the corresponding array.
 
 ## Rendering Pipeline
 
 1. User selects an example system (hardcoded HCL sources).
 2. Sources are compiled via `rhizz-wasm` → `CompileResult`.
-3. The resolved `Model` is fed to the layout engine, which positions components in a grid (non-leaf components expand to contain children).
-4. Three.js `SVGRenderer` draws the scene: rectangles for components, lines with arrowheads for connections.
+3. The resolved `Model` is fed to the layout engine, which positions components
+   in a grid (non-leaf components expand to contain children).
+4. Three.js `SVGRenderer` draws the scene: rectangles for components, lines with
+   arrowheads for connections.
 5. Pan/zoom via mouse drag and scroll wheel.
-6. Hover hit-testing shows component details (description, tags, ports) in an overlay panel.
+6. Hover hit-testing shows component details (description, tags, ports) in an
+   overlay panel.
 7. "Export SVG" serialises the current SVG DOM to a downloadable file.
 
 ## Current Scope (Prototype)
 
 - **Read-only** — no editing capabilities.
-- **Hardcoded examples** — drone system and BuzzVid social-media platform, embedded as HCL string literals.
+- **Hardcoded examples** — drone system and BuzzVid social-media platform,
+  embedded as HCL string literals.
 - **No backend** — everything runs client-side in the browser.
 - **No file I/O** — sources are compiled from in-memory strings.
 
@@ -140,4 +154,5 @@ deno task build
 deno task preview
 ```
 
-The WASM binary must exist before building (`wasm-pack build crates/rhizz-wasm --target web --release`).
+The WASM binary must exist before building
+(`wasm-pack build crates/rhizz-wasm --target web --release`).

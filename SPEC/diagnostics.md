@@ -4,8 +4,8 @@
 
 Diagnostic codes in rhizz follow a simplified version of the approach used by
 the Rust compiler (`rustc_error_codes`). Each code has a single source of truth
-in a dedicated Markdown file, eliminating duplication across the spec,
-doc comments, and error messages.
+in a dedicated Markdown file, eliminating duplication across the spec, doc
+comments, and error messages.
 
 ## File layout
 
@@ -26,30 +26,26 @@ Error codes (`Exxx`) halt compilation. Warning codes (`Wxxx`) are non-blocking.
 
 Every diagnostic file follows this structure:
 
-```markdown
+````markdown
 # E001 — Short title
 
 Prose description of the condition.
 
 ## Example (error)
 
-\```hcl
-// HCL snippet that triggers the diagnostic
-\```
+\```hcl // HCL snippet that triggers the diagnostic \```
 
 ## Fix
 
-\```hcl
-// Corrected HCL snippet
-\```
-```
+\```hcl // Corrected HCL snippet \```
+````
 
 ## How the files are used
 
 ### 1. Rust doc comments (`include_str!`)
 
-Each `DiagnosticCode` const in `diagnostics.rs` pulls its documentation from
-the corresponding Markdown file at compile time:
+Each `DiagnosticCode` const in `diagnostics.rs` pulls its documentation from the
+corresponding Markdown file at compile time:
 
 ```rust
 #[doc = include_str!("../../../../SPEC/diagnostics/E001.md")]
@@ -62,12 +58,12 @@ guidance for every code — with zero hand-written doc comments to keep in sync.
 ### 2. Spec reference
 
 SPEC.md §4 points to the `SPEC/diagnostics/` directory rather than maintaining
-inline tables. The Markdown files *are* the spec for each code.
+inline tables. The Markdown files _are_ the spec for each code.
 
 ### 3. Future: `rhizz explain E001`
 
-A CLI subcommand can surface the same `include_str!` content at runtime,
-giving users offline access to the full explanation and example — identical to
+A CLI subcommand can surface the same `include_str!` content at runtime, giving
+users offline access to the full explanation and example — identical to
 `rustc --explain E0001`.
 
 ## What stays at the call site
@@ -83,8 +79,8 @@ Diagnostic::error(
 )
 ```
 
-This is not duplication — the Markdown file explains the *class* of error,
-while the call-site message describes the *specific instance*.
+This is not duplication — the Markdown file explains the _class_ of error, while
+the call-site message describes the _specific instance_.
 
 ## Adding a new diagnostic code
 
@@ -93,5 +89,5 @@ while the call-site message describes the *specific instance*.
    `#[doc = include_str!(...)]`.
 3. Emit it via `Diagnostic::error()` or `Diagnostic::warning()` at the
    appropriate point in parsing, resolution, or validation.
-4. Update the code range in `SPEC/architecture.md` if the new code extends
-   the current range.
+4. Update the code range in `SPEC/architecture.md` if the new code extends the
+   current range.
