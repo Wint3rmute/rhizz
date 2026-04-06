@@ -9,12 +9,7 @@
       "content": input,
     }]);
     // console.log(compilation_result.try_get_model().diagnostics);
-    console.log(compilation_result.has_model());
     console.log(JSON.stringify(compilation_result.diagnostics(), null, 2));
-    // compilation_result
-
-    // compilation_result.try_get_model();
-    // if (compilation_result.)
     return compilation_result;
   });
 </script>

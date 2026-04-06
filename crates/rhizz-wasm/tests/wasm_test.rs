@@ -40,7 +40,7 @@ fn compile_valid_sources_returns_no_errors() {
         .expect("compile_sources should not return a JsError");
 
     assert_eq!(result.error_count(), 0, "expected no errors");
-    assert!(result.has_model(), "expected a model to be present");
+    assert!(result.model().is_some(), "expected a model to be present");
 }
 
 #[wasm_bindgen_test]
@@ -60,9 +60,12 @@ fn components_returns_typed_wrappers() {
     let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
         .expect("compile_sources should not return a JsError");
 
-    let comps = result.components();
+    let model = result.model().expect("expected a model to be present");
+    let comps = model.components();
     assert!(!comps.is_empty(), "expected at least one component");
-    let server = comps.iter().find(|c| c.label() == "server");
+    let server = comps
+        .iter()
+        .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "server");
     assert!(server.is_some(), "expected component 'server'");
     let server = server.unwrap();
     assert!(server.leaf(), "server should be a leaf component");
@@ -74,9 +77,8 @@ fn score_returns_typed_wrapper() {
     let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
         .expect("compile_sources should not return a JsError");
 
-    let score = result
-        .score()
-        .expect("score should be present for valid model");
+    let model = result.model().expect("expected a model to be present");
+    let score = model.score();
     assert_eq!(score.project_name(), "test");
     // overall_percentage is a f64 in [0, 100]
     let pct = score.overall_percentage();
@@ -91,15 +93,14 @@ fn project_returns_typed_wrapper() {
     let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
         .expect("compile_sources should not return a JsError");
 
-    let project = result
-        .project()
-        .expect("project should be present for valid model");
+    let model = result.model().expect("expected a model to be present");
+    let project = model.project();
     assert_eq!(project.name(), "test");
     assert_eq!(project.version(), "0.1.0");
 }
 
 #[wasm_bindgen_test]
-fn components_returns_empty_vec_on_error() {
+fn model_is_none_on_error() {
     let sources = vec![rhizz_core::Source {
         filename: "bad.hcl".to_string(),
         content: "this is not valid HCL {{{{".to_string(),
@@ -108,18 +109,9 @@ fn components_returns_empty_vec_on_error() {
     let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
         .expect("compile_sources should not return a JsError");
 
-    assert!(!result.has_model());
     assert!(
-        result.components().is_empty(),
-        "expected empty components when model is absent"
-    );
-    assert!(
-        result.score().is_none(),
-        "expected no score when model is absent"
-    );
-    assert!(
-        result.project().is_none(),
-        "expected no project when model is absent"
+        result.model().is_none(),
+        "expected no model when compilation failed"
     );
 }
 
@@ -137,7 +129,7 @@ fn compile_invalid_hcl_returns_error_diagnostic() {
         result.error_count() > 0,
         "expected at least one error diagnostic"
     );
-    assert!(!result.has_model());
+    assert!(result.model().is_none());
 }
 
 #[wasm_bindgen_test]

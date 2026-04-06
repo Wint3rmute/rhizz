@@ -215,6 +215,10 @@ pub struct ComponentJS {
     tags: Vec<String>,
     level: i32,
     leaf: bool,
+    /// Set when the parent is another component; `None` when the parent is a system.
+    parent_component_index: Option<usize>,
+    /// Set when the parent is a top-level system; `None` when the parent is a component.
+    parent_system_index: Option<usize>,
 }
 
 #[wasm_bindgen]
@@ -248,17 +252,76 @@ impl ComponentJS {
     pub fn leaf(&self) -> bool {
         self.leaf
     }
+
+    /// Arena index into `model.components()` for the parent component, or `undefined` if the parent is a system.
+    #[wasm_bindgen(getter)]
+    pub fn parent_component_index(&self) -> Option<usize> {
+        self.parent_component_index
+    }
+
+    /// Arena index into `model.systems()` for the parent system, or `undefined` if the parent is a component.
+    #[wasm_bindgen(getter)]
+    pub fn parent_system_index(&self) -> Option<usize> {
+        self.parent_system_index
+    }
 }
 
 impl From<&rhizz_core::Component> for ComponentJS {
     fn from(c: &rhizz_core::Component) -> Self {
+        let (parent_component_index, parent_system_index) = match c.parent {
+            rhizz_core::ComponentParent::Component(id) => (Some(id.0), None),
+            rhizz_core::ComponentParent::System(id) => (None, Some(id.0)),
+        };
         Self {
             label: c.label.clone(),
             description: c.description.clone(),
             tags: c.tags.clone(),
             level: c.level,
             leaf: c.leaf,
+            parent_component_index,
+            parent_system_index,
         }
+    }
+}
+
+// ── ModelJS ───────────────────────────────────────────────────────────────────
+
+/// The fully-resolved model, returned by [`CompileResultJS::model`].
+///
+/// Only available when compilation succeeded (no hard errors).
+#[wasm_bindgen]
+pub struct ModelJS {
+    inner: rhizz_core::Model,
+}
+
+#[wasm_bindgen]
+impl ModelJS {
+    /// Returns the project metadata.
+    pub fn project(&self) -> ProjectJS {
+        ProjectJS::from(&self.inner.project)
+    }
+
+    /// Returns all components as typed wrappers.
+    pub fn components(&self) -> Vec<ComponentJS> {
+        self.inner
+            .components
+            .iter()
+            .map(ComponentJS::from)
+            .collect()
+    }
+
+    /// Returns the component with the given label, or `undefined` if not found.
+    pub fn component_by_name(&self, name: &str) -> Option<ComponentJS> {
+        self.inner
+            .components
+            .iter()
+            .find(|c| c.label == name)
+            .map(ComponentJS::from)
+    }
+
+    /// Computes and returns the completion score report.
+    pub fn score(&self) -> ScoreReportJS {
+        ScoreReportJS::from(&rhizz_core::score(&self.inner))
     }
 }
 
@@ -266,20 +329,22 @@ impl From<&rhizz_core::Component> for ComponentJS {
 
 /// A compiled result exposed as a JS class with callable Rust methods.
 ///
-/// Construct with [`CompileResultJS::compile`], then query the model via the
-/// typed accessor methods directly from JavaScript.
+/// Construct with [`CompileResultJS::compile`], then inspect diagnostics and
+/// optionally access the model via [`CompileResultJS::model`].
 ///
 /// ```js
 /// const result = CompileResultJS.compile(sources);
-/// if (result.has_model()) {
-///     const comps = result.components();
-///     const score = result.score();
-/// }
 /// const diags = result.diagnostics();
+/// const model = result.model();   // ModelJS | undefined
+/// if (model) {
+///     const comps = model.components();
+///     const score = model.score();
+/// }
 /// ```
 #[wasm_bindgen]
 pub struct CompileResultJS {
-    inner: rhizz_core::CompileResult,
+    diagnostics: Vec<rhizz_core::Diagnostic>,
+    model: Option<rhizz_core::Model>,
 }
 
 #[wasm_bindgen]
@@ -294,64 +359,32 @@ impl CompileResultJS {
     pub fn compile(sources: JsValue) -> Result<CompileResultJS, JsError> {
         let sources: Vec<rhizz_core::Source> =
             serde_wasm_bindgen::from_value(sources).map_err(|e| JsError::new(&e.to_string()))?;
+        let result = rhizz_core::compile(&sources);
         Ok(CompileResultJS {
-            inner: rhizz_core::compile(&sources),
+            diagnostics: result.diagnostics,
+            model: result.model,
         })
-    }
-
-    /// Returns `true` if compilation produced a model (i.e. no hard errors).
-    pub fn has_model(&self) -> bool {
-        self.inner.model.is_some()
     }
 
     /// Returns all diagnostics (errors and warnings) as typed wrappers.
     pub fn diagnostics(&self) -> Vec<DiagnosticJS> {
-        self.inner
-            .diagnostics
-            .iter()
-            .map(DiagnosticJS::from)
-            .collect()
+        self.diagnostics.iter().map(DiagnosticJS::from).collect()
     }
 
     /// Returns the number of error-level diagnostics.
     pub fn error_count(&self) -> usize {
-        self.inner
-            .diagnostics
-            .iter()
-            .filter(|d| d.is_error())
-            .count()
+        self.diagnostics.iter().filter(|d| d.is_error()).count()
     }
 
     /// Returns the number of warning-level diagnostics.
     pub fn warning_count(&self) -> usize {
-        self.inner
-            .diagnostics
-            .iter()
-            .filter(|d| !d.is_error())
-            .count()
+        self.diagnostics.iter().filter(|d| !d.is_error()).count()
     }
 
-    /// Returns all components as typed wrappers, or an empty vec when there is no model.
-    pub fn components(&self) -> Vec<ComponentJS> {
-        match &self.inner.model {
-            Some(model) => model.components.iter().map(ComponentJS::from).collect(),
-            None => vec![],
-        }
-    }
-
-    /// Computes and returns the completion score, or `None` when there is no model.
-    pub fn score(&self) -> Option<ScoreReportJS> {
-        self.inner
-            .model
-            .as_ref()
-            .map(|model| ScoreReportJS::from(&rhizz_core::score(model)))
-    }
-
-    /// Returns the project metadata, or `None` when there is no model.
-    pub fn project(&self) -> Option<ProjectJS> {
-        self.inner
-            .model
-            .as_ref()
-            .map(|model| ProjectJS::from(&model.project))
+    /// Returns the resolved model, or `undefined` if there were hard errors.
+    ///
+    /// Clones the model on each call; cache the result in JS if calling repeatedly.
+    pub fn model(&self) -> Option<ModelJS> {
+        self.model.as_ref().map(|m| ModelJS { inner: m.clone() })
     }
 }

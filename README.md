@@ -44,8 +44,12 @@ rhizz build [path]   # all of the above (default)
 See `SPEC.md`, `SPEC/`, and `examples/` for the full specification and worked
 examples.
 
-# Development commands
+## Development commands
 
 ```bash
 ~/.cargo/bin/wasm-pack build crates/rhizz-wasm --target web
 ```
+
+## Links
+
+- [WASM Bindgen Guide](https://wasm-bindgen.github.io/wasm-bindgen/introduction.html) - search engines are not finding it for some reason...

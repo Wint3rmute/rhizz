@@ -34,8 +34,13 @@ export function compile_system(
 ): CompileResultJS {
   const compilation_result = CompileResultJS.compile(sources);
 
-  let test_struct = CompileResultJS.get_test_struct();
-  console.log(test_struct);
+  const model = compilation_result.model();
+
+  if (model !== undefined) {
+    const c = model.component_by_name("test");
+    if (c !== undefined) {
+    }
+  }
 
   return compilation_result;
 }
