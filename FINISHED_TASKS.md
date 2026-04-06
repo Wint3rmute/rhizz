@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 27 — Typed WASM wrappers for rhizz-core structs
+
+Implement `#[wasm_bindgen]` wrapper structs in `rhizz-wasm` for the core types
+the web frontend needs. Each wrapper converts from its `rhizz-core` counterpart
+via a `From` impl and exposes fields as `#[wasm_bindgen(getter)]` methods so
+that `wasm-pack` generates typed TypeScript class definitions.
+
+- Removed the `TestStruct` / `InnerStruct` scaffolding.
+- Added wrapper structs: `DiagnosticJS`, `ComponentJS`, `ScoreReportJS`,
+  `CategoryScoreJS`, `ProjectJS`.
+- Each wrapper derives `Clone` and implements `From<&rhizz_core::T>`.
+- Exposed all fields relevant to the frontend as `#[wasm_bindgen(getter)]`
+  methods (strings, numbers, booleans, `Vec<primitive>`). For nested wasm_bindgen
+  structs, return the wrapper type directly.
+- Updated `CompileResultJS` methods:
+  - `diagnostics() -> Vec<DiagnosticJS>` (typed, replaces `JsValue` version)
+  - `error_count() -> usize`
+  - `warning_count() -> usize`
+  - `components() -> Vec<ComponentJS>` (returns empty vec when model is `None`)
+  - `score() -> Option<ScoreReportJS>` (calls `rhizz_core::score()`, returns
+    `None` when model is `None`)
+  - `project() -> Option<ProjectJS>`
+- Updated `tests/wasm_test.rs` to exercise the new typed API.
+- Spec reference: `SPEC/frontend.md` § WASM Integration.
+
+---
+
 ## Task 26 — Replace SPEC.md §4 tables with a pointer to `SPEC/diagnostics/`
 
 Remove the error and warning tables from SPEC.md §4.1 and §4.2 and replace
