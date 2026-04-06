@@ -52,4 +52,5 @@ examples.
 
 ## Links
 
-- [WASM Bindgen Guide](https://wasm-bindgen.github.io/wasm-bindgen/introduction.html) - search engines are not finding it for some reason...
+- [WASM Bindgen Guide](https://wasm-bindgen.github.io/wasm-bindgen/introduction.html) -
+  search engines are not finding it for some reason...

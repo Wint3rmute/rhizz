@@ -4,18 +4,27 @@
 
 Two model layers:
 
-1. **Raw (deserialization) models** — `serde::Deserialize` structs mirroring HCL structure. Used for parsing only.
-2. **Resolved models** — validated, cross-referenced IR used by all downstream passes (validation, scoring, view generation).
+1. **Raw (deserialization) models** — `serde::Deserialize` structs mirroring HCL
+   structure. Used for parsing only.
+2. **Resolved models** — validated, cross-referenced IR used by all downstream
+   passes (validation, scoring, view generation).
 
-Parsing pipeline: `.hcl` files → `hcl::from_str` → raw models → merge → resolve → resolved models.
+Parsing pipeline: `.hcl` files → `hcl::from_str` → raw models → merge → resolve
+→ resolved models.
 
 ---
 
 ## Raw Models
 
-These map 1:1 to the HCL schema. All fields `Option` or defaulted. Block labels become the key in a `BTreeMap` (or `Vec` of labeled items — see below).
+These map 1:1 to the HCL schema. All fields `Option` or defaulted. Block labels
+become the key in a `BTreeMap` (or `Vec` of labeled items — see below).
 
-HCL body blocks with labels (e.g. `component "foo" { ... }`) don't deserialize directly into a `HashMap<String, T>` with the `hcl` crate. Use the `hcl::Body` type and walk blocks manually, **or** use `hcl-rs`'s labeled block support via `#[serde(rename = "component")]` on a wrapper. The pragmatic approach: deserialize into `hcl::Body`, then extract blocks by type into typed structs with a thin conversion layer.
+HCL body blocks with labels (e.g. `component "foo" { ... }`) don't deserialize
+directly into a `HashMap<String, T>` with the `hcl` crate. Use the `hcl::Body`
+type and walk blocks manually, **or** use `hcl-rs`'s labeled block support via
+`#[serde(rename = "component")]` on a wrapper. The pragmatic approach:
+deserialize into `hcl::Body`, then extract blocks by type into typed structs
+with a thin conversion layer.
 
 ```rust
 /// Top-level file content — the result of parsing one .hcl file.
@@ -126,21 +135,33 @@ fn parse_file(src: &str) -> Result<RawFile> {
 }
 ```
 
-Each `parse_*` function extracts attributes via `block.body().attributes()` and recurses into child blocks. Wrap this in a trait or macro if the boilerplate becomes excessive.
+Each `parse_*` function extracts attributes via `block.body().attributes()` and
+recurses into child blocks. Wrap this in a trait or macro if the boilerplate
+becomes excessive.
 
 ### Source resolution (during the resolution pass)
 
-The `source` attribute on a component is a **label reference** to a top-level component. It is resolved during the resolution pass (not during parsing), after all files have been merged.
+The `source` attribute on a component is a **label reference** to a top-level
+component. It is resolved during the resolution pass (not during parsing), after
+all files have been merged.
 
 When the resolver encounters a component with `source`:
 
-1. **Validate exclusivity** — if any other attribute (`description`, `tags`, `level`, `leaf`) or child block (`port`, `component`, `connection`) is present alongside `source`, emit E012.
-2. **Look up the label** — find the top-level component with the matching label in `RawFile.components`. If not found, emit E014.
-3. **Detect cycles** — maintain an ancestor set of source labels currently being expanded. If the label is already in the set, emit E013.
-4. **Clone the body** — copy the top-level component's attributes and children into the sourced component slot. The label at the usage site replaces the top-level label.
-5. **Recurse** — the cloned body may itself contain children with `source`, which are resolved depth-first.
+1. **Validate exclusivity** — if any other attribute (`description`, `tags`,
+   `level`, `leaf`) or child block (`port`, `component`, `connection`) is
+   present alongside `source`, emit E012.
+2. **Look up the label** — find the top-level component with the matching label
+   in `RawFile.components`. If not found, emit E014.
+3. **Detect cycles** — maintain an ancestor set of source labels currently being
+   expanded. If the label is already in the set, emit E013.
+4. **Clone the body** — copy the top-level component's attributes and children
+   into the sourced component slot. The label at the usage site replaces the
+   top-level label.
+5. **Recurse** — the cloned body may itself contain children with `source`,
+   which are resolved depth-first.
 
-This approach keeps `rhizz-core` free of I/O dependencies — no `FileLoader` trait needed. The `compile` signature remains unchanged:
+This approach keeps `rhizz-core` free of I/O dependencies — no `FileLoader`
+trait needed. The `compile` signature remains unchanged:
 
 ```rust
 pub fn compile(sources: &[Source]) -> CompileResult
@@ -155,13 +176,16 @@ Straightforward: accumulate all `RawFile`s into a single `RawFile`.
 - `project`: at most one across all files (error E010 if >1).
 - `systems`, `components`, `views`: concatenate vecs.
 
-No deduplication logic — duplicate detection happens during resolution/validation.
+No deduplication logic — duplicate detection happens during
+resolution/validation.
 
 ---
 
 ## Resolved Models
 
-Interned, cross-referenced. Use arena indices (`usize` newtyped) or `slotmap::SlotMap` keys for relationships. Avoid `Rc`/`Arc` — the model is built once and then read.
+Interned, cross-referenced. Use arena indices (`usize` newtyped) or
+`slotmap::SlotMap` keys for relationships. Avoid `Rc`/`Arc` — the model is built
+once and then read.
 
 ### Identity
 
@@ -300,18 +324,30 @@ struct Field {
 1. Index top-level components by label. Detect duplicate labels (E001).
 2. Register all systems (allocate `SystemId`). Detect duplicate labels (E001).
 3. Walk each system's components depth-first:
-   - If a component has `source`, validate exclusivity (E012), look up the top-level component (E014 if missing), check for cycles (E013), and clone its body.
-   - Allocate `ComponentId`, set `parent`, resolve `level` (inherit `parent.level + 1` if unset).
-4. Walk each component's `port` blocks — allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
+   - If a component has `source`, validate exclusivity (E012), look up the
+     top-level component (E014 if missing), check for cycles (E013), and clone
+     its body.
+   - Allocate `ComponentId`, set `parent`, resolve `level` (inherit
+     `parent.level + 1` if unset).
+4. Walk each component's `port` blocks — allocate `PortId`, validate `role`
+   string (E009), link to owner `ComponentId`.
 5. Walk `connection` blocks in each scope — parse `from`/`to` strings:
-   - If the string contains `:`, split on the first `:` to get `(comp_label, port_label)`; resolve `comp_label` to a sibling `ComponentId` (E011 if missing), then look up `port_label` on that component (E010 if missing).
-   - If the string is a bare label, resolve to a sibling `ComponentId` (E002 if missing). The `port` field of `ConnectionEndpoint` is `None`.
-6. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
-7. Walk messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
+   - If the string contains `:`, split on the first `:` to get
+     `(comp_label, port_label)`; resolve `comp_label` to a sibling `ComponentId`
+     (E011 if missing), then look up `port_label` on that component (E010 if
+     missing).
+   - If the string is a bare label, resolve to a sibling `ComponentId` (E002 if
+     missing). The `port` field of `ConnectionEndpoint` is `None`.
+6. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for
+   cycles).
+7. Walk messages/fields inside ports — allocate ids. Validate `field.type`
+   presence (E007).
 8. Resolve views — look up `system` label → `SystemId` (E006 if missing).
-9. Detect orphan top-level components — any top-level component not referenced by `source` in any system → W012.
+9. Detect orphan top-level components — any top-level component not referenced
+   by `source` in any system → W012.
 
-Collect errors/warnings as `Diagnostic` values. If any errors exist, return `Err`. Warnings are returned alongside the model.
+Collect errors/warnings as `Diagnostic` values. If any errors exist, return
+`Err`. Warnings are returned alongside the model.
 
 ### Scope lookup helper
 
@@ -337,7 +373,8 @@ struct ScopeIndex {
 
 ## View models
 
-Views don't need their own arena — they're lightweight config referencing into the `Model`:
+Views don't need their own arena — they're lightweight config referencing into
+the `Model`:
 
 ```rust
 #[derive(Debug)]
@@ -370,9 +407,20 @@ struct ViewOutput {
 
 ## Design Notes
 
-- **No lifetimes in the model** — all data is owned. Avoids borrow complexity for a model that's built once and lives for the program's duration.
-- **Arena-indexed rather than nested** — flattening the tree into indexed vecs makes iteration, filtering, and scoring trivial. Parent/child relationships are explicit via ids.
-- **`PortRole` as enum, not string** — parse once during resolution, enforce at the type level. The `from`/`to` strings in `RawConnection` are parsed into `ConnectionEndpoint` (component id + optional port id) during the resolution pass.
-- **`ConnectionEndpoint.port` is `Option<PortId>`** — `None` means a bare (untyped) reference; `Some` means a fully resolved typed reference. Warnings W007–W009 fire based on the combination.
-- **Defaults applied during resolution**, not during deserialization. The raw layer preserves what the user wrote; the resolved layer is fully populated.
-- **`String` over `&str`** everywhere — the raw HCL source doesn't outlive parsing, so borrowed slices aren't viable without an arena allocator for source text.
+- **No lifetimes in the model** — all data is owned. Avoids borrow complexity
+  for a model that's built once and lives for the program's duration.
+- **Arena-indexed rather than nested** — flattening the tree into indexed vecs
+  makes iteration, filtering, and scoring trivial. Parent/child relationships
+  are explicit via ids.
+- **`PortRole` as enum, not string** — parse once during resolution, enforce at
+  the type level. The `from`/`to` strings in `RawConnection` are parsed into
+  `ConnectionEndpoint` (component id + optional port id) during the resolution
+  pass.
+- **`ConnectionEndpoint.port` is `Option<PortId>`** — `None` means a bare
+  (untyped) reference; `Some` means a fully resolved typed reference. Warnings
+  W007–W009 fire based on the combination.
+- **Defaults applied during resolution**, not during deserialization. The raw
+  layer preserves what the user wrote; the resolved layer is fully populated.
+- **`String` over `&str`** everywhere — the raw HCL source doesn't outlive
+  parsing, so borrowed slices aren't viable without an arena allocator for
+  source text.

@@ -1,17 +1,25 @@
 <script lang="ts">
   import { compile_system } from "../rhizz_wasm_wrapper";
+  import ModelComponentsOutline from "../components/ModelComponentsOutline.svelte";
+  import CompilationDiagnosticsOutline from "../components/CompilationDiagnosticsOutline.svelte";
+  import persisted from "../Persisted.svelte";
 
-  let input = $state("# Your input goes here");
+  let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
 
   let output = $derived.by(() => {
     let compilation_result = compile_system([{
       "filename": "all.hcl",
-      "content": input,
+      "content": input.value,
     }]);
-    // console.log(compilation_result.try_get_model().diagnostics);
-    console.log(JSON.stringify(compilation_result.diagnostics(), null, 2));
+    // console.log(JSON.stringify(compilation_result.diagnostics(), null, 2));
     return compilation_result;
   });
+
+  let model = $derived.by(() => {
+    return output.model();
+  });
+
+  let diagnostics = $derived(output.diagnostics());
 </script>
 
 <div class="h-screen w-screen flex flex-col bg-gray-900 text-gray-100">
@@ -51,7 +59,7 @@
         >
           <h1 class="text-2xl font-semibold mb-4 text-white">Rhizz</h1>
           <textarea
-            bind:value={input}
+            bind:value={input.value}
             class="font-mono flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400"
           ></textarea>
           TODO: render here
@@ -62,24 +70,11 @@
       <aside
         class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow"
       >
-        <h3 class="font-semibold mb-3 text-gray-100">Details</h3>
-        <div class="text-sm text-gray-300 space-y-2">
-          {#each output.diagnostics as diagnostic}
-            {#if diagnostic.code.startsWith("E")}
-              <div role="alert" class="alert alert-error alert-soft">
-                {diagnostic.code} - {diagnostic.message}
-              </div>
-            {:else}
-              <div role="alert" class="alert alert-warning alert-soft">
-                {diagnostic.code} - {diagnostic.message}
-              </div>
-            {/if}
-          {/each}
+        {#if model !== undefined }
+          <ModelComponentsOutline model={model}/>
+        {/if}
 
-          <pre
-            class="p-2 bg-gray-800 rounded font-mono"
-          >{JSON.stringify(output, null, 2)}</pre>
-        </div>
+        <CompilationDiagnosticsOutline diagnostics={diagnostics}/>
       </aside>
     </div>
   </div>

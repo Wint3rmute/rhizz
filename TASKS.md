@@ -3,9 +3,11 @@
 How to work on this file:
 
 - Read the next task from this file
-- Get extra context from recently finished tasks - read the first 50 lines of `FINISHED_TASKS.md`
+- Get extra context from recently finished tasks - read the first 50 lines of
+  `FINISHED_TASKS.md`
 - Implement the task, use red/green TDD
-- Run tests & linters (`cargo test`, `cargo clippy`, `cargo doc`, `cargo build`) until it's all working
+- Run tests & linters (`cargo test`, `cargo clippy`, `cargo doc`, `cargo build`)
+  until it's all working
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Move the completed task to `FINISHED_TASKS.md` and report that you're finished
 

@@ -8,6 +8,7 @@
       <div class="card-actions">
         <a href="#/wasm" class="btn btn-primary">WASM Test</a>
         <a href="#/editor" class="btn btn-primary">Editor Test</a>
+        <a href="#/overview" class="btn btn-primary">System Overview</a>
       </div>
     </div>
   </div>

@@ -22,7 +22,8 @@ rhizz/
 **Dependency rules:**
 
 - `rhizz-dot` depends on `rhizz-core` (needs `Model` and `View` types).
-- Frontends depend on `rhizz-core`. Frontends that emit DOT output also depend on `rhizz-dot`.
+- Frontends depend on `rhizz-core`. Frontends that emit DOT output also depend
+  on `rhizz-dot`.
 - Frontends do **not** depend on each other.
 - Nothing depends on a frontend crate.
 
@@ -30,7 +31,8 @@ rhizz/
 
 ## `rhizz-core`
 
-Pure library crate. No `std::fs`, no `std::env`, no terminal or rendering dependencies.
+Pure library crate. No `std::fs`, no `std::env`, no terminal or rendering
+dependencies.
 
 ### Public API
 
@@ -58,15 +60,22 @@ pub fn score(model: &Model) -> ScoreReport;
 ### Invariants
 
 - **No I/O** — must not perform any filesystem or network access.
-- **`serde` on all public types** — `Model`, `Diagnostic`, `ScoreReport`, and all related structs derive `Serialize` and `Deserialize` so frontends can serialise results (JSON output, IPC, storage) without extra conversion.
-- **`Clone` on all public types** — frontends may need to hold multiple snapshots of the model simultaneously (e.g. the GUI keeping the last valid model while the current edit contains errors).
-- **Stable error codes** — `Diagnostic.code` strings (`E001`–`E014`, `W001`–`W012`) are part of the public API. Changing or renumbering them is a breaking change.
+- **`serde` on all public types** — `Model`, `Diagnostic`, `ScoreReport`, and
+  all related structs derive `Serialize` and `Deserialize` so frontends can
+  serialise results (JSON output, IPC, storage) without extra conversion.
+- **`Clone` on all public types** — frontends may need to hold multiple
+  snapshots of the model simultaneously (e.g. the GUI keeping the last valid
+  model while the current edit contains errors).
+- **Stable error codes** — `Diagnostic.code` strings (`E001`–`E014`,
+  `W001`–`W012`) are part of the public API. Changing or renumbering them is a
+  breaking change.
 
 ---
 
 ## `rhizz-dot`
 
-Pure library crate. No I/O and no terminal dependencies. Depends on `rhizz-core` for the `Model` and `View` types.
+Pure library crate. No I/O and no terminal dependencies. Depends on `rhizz-core`
+for the `Model` and `View` types.
 
 ### Public API
 
@@ -76,43 +85,66 @@ Pure library crate. No I/O and no terminal dependencies. Depends on `rhizz-core`
 pub fn render_view(model: &Model, view: &View) -> String;
 ```
 
-All view filter logic — tag inclusion/exclusion, level capping, component whitelist, `show_messages`, and connection direction inference from port roles — is implemented here. No frontend re-implements filtering.
+All view filter logic — tag inclusion/exclusion, level capping, component
+whitelist, `show_messages`, and connection direction inference from port roles —
+is implemented here. No frontend re-implements filtering.
 
 ---
 
 ## Frontend Contract
 
-A frontend is any crate that consumes `rhizz-core` to expose the model to a user or automated process.
+A frontend is any crate that consumes `rhizz-core` to expose the model to a user
+or automated process.
 
 **Required behaviour:**
 
-1. **Own all I/O** — discover, read, and (optionally) watch source files; write any generated output; manage stdin/stdout/stderr or a GUI window.
-2. **Supply sources** — assemble `Vec<Source>` and call `rhizz_core::compile`. Do not parse or validate HCL independently.
-3. **Render diagnostics** — present `Vec<Diagnostic>` in a medium-appropriate form (coloured terminal lines, inline editor annotations, notifications, etc.).
-4. **Do not duplicate logic** — if behaviour needed by a frontend is missing from `rhizz-core` or `rhizz-dot`, add it there instead of implementing it in the frontend.
+1. **Own all I/O** — discover, read, and (optionally) watch source files; write
+   any generated output; manage stdin/stdout/stderr or a GUI window.
+2. **Supply sources** — assemble `Vec<Source>` and call `rhizz_core::compile`.
+   Do not parse or validate HCL independently.
+3. **Render diagnostics** — present `Vec<Diagnostic>` in a medium-appropriate
+   form (coloured terminal lines, inline editor annotations, notifications,
+   etc.).
+4. **Do not duplicate logic** — if behaviour needed by a frontend is missing
+   from `rhizz-core` or `rhizz-dot`, add it there instead of implementing it in
+   the frontend.
 
 **CLI-specific notes** (`rhizz-cli`):
 
-- Discovers `.hcl` files via `walkdir`, reads them, calls `compile`, then formats and prints diagnostics.
-- Calls `rhizz-dot::render_view` for each view and writes the resulting string to the configured output directory.
-- Exit code 0 when no errors; non-zero otherwise. With `--strict`, warnings also produce a non-zero exit.
-- All model logic is delegated; `rhizz-cli` contains no parsing, validation, scoring, or rendering logic of its own.
+- Discovers `.hcl` files via `walkdir`, reads them, calls `compile`, then
+  formats and prints diagnostics.
+- Calls `rhizz-dot::render_view` for each view and writes the resulting string
+  to the configured output directory.
+- Exit code 0 when no errors; non-zero otherwise. With `--strict`, warnings also
+  produce a non-zero exit.
+- All model logic is delegated; `rhizz-cli` contains no parsing, validation,
+  scoring, or rendering logic of its own.
 
 See [gui.md](gui.md) for GUI-frontend-specific notes.
 
 **Wasm-specific notes** (`rhizz-wasm`):
 
-- A thin `cdylib` crate that wraps `rhizz-core` with [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/) bindings.
-- Exposes a single function — `compile_sources(sources: JsValue) -> Result<JsValue, JsError>` — that accepts a JS array of `{ filename, content }` objects and returns a native JS object matching `CompileResult`.
-- Serialisation between Rust and JS is handled by `serde-wasm-bindgen`; no JSON stringification is required on the JavaScript side.
-- Built with `wasm-pack build --target web` (ES modules for browsers/Deno) or `--target nodejs` (CommonJS). The `pkg/` output is a self-contained npm package including `.wasm`, JS bindings, and TypeScript type declarations.
-- Contains no I/O of its own; callers supply HCL content as strings (read from disk, a text editor, etc.) and receive the compiled result back as a plain JS object.
+- A thin `cdylib` crate that wraps `rhizz-core` with
+  [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/) bindings.
+- Exposes a single function —
+  `compile_sources(sources: JsValue) -> Result<JsValue, JsError>` — that accepts
+  a JS array of `{ filename, content }` objects and returns a native JS object
+  matching `CompileResult`.
+- Serialisation between Rust and JS is handled by `serde-wasm-bindgen`; no JSON
+  stringification is required on the JavaScript side.
+- Built with `wasm-pack build --target web` (ES modules for browsers/Deno) or
+  `--target nodejs` (CommonJS). The `pkg/` output is a self-contained npm
+  package including `.wasm`, JS bindings, and TypeScript type declarations.
+- Contains no I/O of its own; callers supply HCL content as strings (read from
+  disk, a text editor, etc.) and receive the compiled result back as a plain JS
+  object.
 
 ---
 
 ## `rhizz-wasm`
 
-WebAssembly frontend crate. Depends on `rhizz-core`. No I/O, no filesystem access.
+WebAssembly frontend crate. Depends on `rhizz-core`. No I/O, no filesystem
+access.
 
 ### Public API (JavaScript)
 
@@ -124,7 +156,7 @@ await init(); // loads and initialises the .wasm binary (--target web only)
 
 const result = compile_sources([
   { filename: "project.hcl", content: "..." },
-  { filename: "system.hcl",  content: "..." },
+  { filename: "system.hcl", content: "..." },
 ]);
 // result: { model: Model | null, diagnostics: Diagnostic[] }
 ```
