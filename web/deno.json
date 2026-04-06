@@ -8,5 +8,11 @@
     "lib": ["dom", "dom.iterable", "esnext"]
   },
   "nodeModulesDir": "manual",
-  "unstable": ["fmt-component"]
+  "unstable": ["fmt-component"],
+  "imports": {
+    "svelte-check": "npm:svelte-check@^4.4.5"
+  },
+  "lint": {
+    "exclude": [".svelte-kit/generated/"]
+  }
 }

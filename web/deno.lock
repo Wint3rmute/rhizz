@@ -850,6 +850,9 @@
     }
   },
   "workspace": {
+    "dependencies": [
+      "npm:svelte-check@^4.4.5"
+    ],
     "packageJson": {
       "dependencies": [
         "npm:@sveltejs/adapter-auto@^7.0.1",
