@@ -8,13 +8,8 @@ fn sources_to_js(sources: &[rhizz_core::Source]) -> JsValue {
     serde_wasm_bindgen::to_value(sources).expect("sources serialization should not fail")
 }
 
-fn result_to_json(val: JsValue) -> serde_json::Value {
-    serde_wasm_bindgen::from_value(val).expect("result deserialization should not fail")
-}
-
-#[wasm_bindgen_test]
-fn compile_valid_sources_returns_no_errors() {
-    let sources = vec![
+fn valid_sources() -> Vec<rhizz_core::Source> {
+    vec![
         rhizz_core::Source {
             filename: "project.hcl".to_string(),
             content: r#"project { name = "test" version = "0.1.0" authors = [] }"#.to_string(),
@@ -36,24 +31,95 @@ fn compile_valid_sources_returns_no_errors() {
             "#
             .to_string(),
         },
-    ];
+    ]
+}
 
-    let result = result_to_json(
-        rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
-            .expect("compile_sources should not return a JsError")
-            .into(),
-    );
+#[wasm_bindgen_test]
+fn compile_valid_sources_returns_no_errors() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
+        .expect("compile_sources should not return a JsError");
 
-    let diagnostics = result["diagnostics"].as_array().expect("diagnostics array");
-    let errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d["level"].as_str() == Some("Error"))
-        .collect();
+    assert_eq!(result.error_count(), 0, "expected no errors");
+    assert!(result.has_model(), "expected a model to be present");
+}
 
-    assert!(errors.is_empty(), "expected no errors, got: {errors:?}");
+#[wasm_bindgen_test]
+fn diagnostics_returns_typed_wrappers() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
+        .expect("compile_sources should not return a JsError");
+
+    let diags = result.diagnostics();
+    // Valid sources should produce no error diagnostics.
+    for d in &diags {
+        assert_ne!(d.level(), "Error", "unexpected error: {}", d.message());
+    }
+}
+
+#[wasm_bindgen_test]
+fn components_returns_typed_wrappers() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
+        .expect("compile_sources should not return a JsError");
+
+    let comps = result.components();
+    assert!(!comps.is_empty(), "expected at least one component");
+    let server = comps.iter().find(|c| c.label() == "server");
+    assert!(server.is_some(), "expected component 'server'");
+    let server = server.unwrap();
+    assert!(server.leaf(), "server should be a leaf component");
+    assert_eq!(server.description(), "HTTP server");
+}
+
+#[wasm_bindgen_test]
+fn score_returns_typed_wrapper() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
+        .expect("compile_sources should not return a JsError");
+
+    let score = result
+        .score()
+        .expect("score should be present for valid model");
+    assert_eq!(score.project_name(), "test");
+    // overall_percentage is a f64 in [0, 100]
+    let pct = score.overall_percentage();
     assert!(
-        result["model"].is_object(),
-        "expected a model to be present"
+        (0.0..=100.0).contains(&pct),
+        "overall_percentage out of range: {pct}"
+    );
+}
+
+#[wasm_bindgen_test]
+fn project_returns_typed_wrapper() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
+        .expect("compile_sources should not return a JsError");
+
+    let project = result
+        .project()
+        .expect("project should be present for valid model");
+    assert_eq!(project.name(), "test");
+    assert_eq!(project.version(), "0.1.0");
+}
+
+#[wasm_bindgen_test]
+fn components_returns_empty_vec_on_error() {
+    let sources = vec![rhizz_core::Source {
+        filename: "bad.hcl".to_string(),
+        content: "this is not valid HCL {{{{".to_string(),
+    }];
+
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
+        .expect("compile_sources should not return a JsError");
+
+    assert!(!result.has_model());
+    assert!(
+        result.components().is_empty(),
+        "expected empty components when model is absent"
+    );
+    assert!(
+        result.score().is_none(),
+        "expected no score when model is absent"
+    );
+    assert!(
+        result.project().is_none(),
+        "expected no project when model is absent"
     );
 }
 
@@ -64,18 +130,14 @@ fn compile_invalid_hcl_returns_error_diagnostic() {
         content: "this is not valid HCL {{{{".to_string(),
     }];
 
-    let result = result_to_json(
-        rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
-            .expect("compile_sources should not return a JsError")
-            .into(),
-    );
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
+        .expect("compile_sources should not return a JsError");
 
-    let diagnostics = result["diagnostics"].as_array().unwrap();
     assert!(
-        !diagnostics.is_empty(),
+        result.error_count() > 0,
         "expected at least one error diagnostic"
     );
-    assert_eq!(result["model"], serde_json::Value::Null);
+    assert!(!result.has_model());
 }
 
 #[wasm_bindgen_test]
