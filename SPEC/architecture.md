@@ -126,18 +126,17 @@ See [gui.md](gui.md) for GUI-frontend-specific notes.
 
 - A thin `cdylib` crate that wraps `rhizz-core` with
   [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/) bindings.
-- Exposes a single function —
-  `compile_sources(sources: JsValue) -> Result<JsValue, JsError>` — that accepts
-  a JS array of `{ filename, content }` objects and returns a native JS object
-  matching `CompileResult`.
-- Serialisation between Rust and JS is handled by `serde-wasm-bindgen`; no JSON
+- Exposes a typed class API via `CompileResultJS::compile(sources)` — accepts a
+  JS array of `{ filename, content }` objects and returns a `CompileResultJS`
+  instance with typed accessor methods.
+- Input deserialisation is handled by `serde-wasm-bindgen`; no JSON
   stringification is required on the JavaScript side.
 - Built with `wasm-pack build --target web` (ES modules for browsers/Deno) or
   `--target nodejs` (CommonJS). The `pkg/` output is a self-contained npm
   package including `.wasm`, JS bindings, and TypeScript type declarations.
 - Contains no I/O of its own; callers supply HCL content as strings (read from
-  disk, a text editor, etc.) and receive the compiled result back as a plain JS
-  object.
+  disk, a text editor, etc.) and receive the compiled result back as a typed
+  `CompileResultJS` class with getter methods.
 
 ---
 
@@ -150,15 +149,21 @@ access.
 
 ```ts
 // ES module import after wasm-pack build --target web
-import init, { compile_sources } from "./rhizz_wasm.js";
+import init, { CompileResultJS } from "./rhizz_wasm.js";
 
 await init(); // loads and initialises the .wasm binary (--target web only)
 
-const result = compile_sources([
+const result = CompileResultJS.compile([
   { filename: "project.hcl", content: "..." },
   { filename: "system.hcl", content: "..." },
 ]);
-// result: { model: Model | null, diagnostics: Diagnostic[] }
+// result: CompileResultJS
+const diags = result.diagnostics();   // DiagnosticJS[]
+const model = result.model();         // ModelJS | undefined
+if (model) {
+  const comps = model.components();   // ComponentJS[]
+  const score = model.score();        // ScoreReportJS
+}
 ```
 
 ### Building

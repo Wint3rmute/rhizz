@@ -4,6 +4,164 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 38 — Fix `project.name` default: should be directory name, not empty string
+
+**Spec reference:** SPEC.md §2.1 (`project` Block — `name` attribute, Default: `directory name`).
+
+Already implemented in `crates/rhizz-core/src/lib.rs` via `default_project_name()` (called
+by `compile()` before `resolve()`). Tests `missing_project_name_defaults_to_directory_name`,
+`missing_project_block_defaults_to_common_source_directory_name`, and
+`explicit_project_name_overrides_directory_default` verify the behaviour. Audit finding was
+that `resolve.rs` itself uses `unwrap_or_default()`, but the public `compile()` API correctly
+sets the name before calling the resolver.
+
+---
+
+## Task 35 — Implement previous-valid-model fallback on recompile failure
+
+**Spec reference**: `SPEC/gui.md` § File Watching and Live Recompile.
+
+Fixed `crates/rhizz-gui/src/main.rs`: when a recompile triggered by a file-watcher event
+returns `(None, errors)`, `self.model` is no longer overwritten. Only a fresh `Some(model)`
+result updates the stored model; `self.diagnostics` is always replaced; `self.view_layouts`
+is only invalidated when the model actually changes.
+
+---
+
+## Task 34 — Reconcile `RawConnection.from`/`to` and `RawField.type` optionality with SPEC/models.md
+
+**Spec reference**: `SPEC/models.md` — Raw Models §Block structs.
+
+Updated `SPEC/models.md` to reflect the implementation's `Option<String>` types for
+`RawConnection.from`, `RawConnection.to`, and `RawField.type`, with a note that their
+absence is caught by the resolver (E002 / E007) rather than at parse time for richer
+error messages.
+
+---
+
+## Task 33 — Reconcile `SPEC/frontend.md` `CompileResultJS` interface with implementation
+
+**Spec reference**: `SPEC/frontend.md` — **Typed bindings via wrapper structs**.
+
+Updated `SPEC/frontend.md` to reflect the current two-level API: `CompileResultJS`
+exposes `diagnostics()`, `error_count()`, `warning_count()`, and `model() -> Option<ModelJS>`;
+`ModelJS` exposes `project()`, `components()`, `component_by_name()`, and `score()`. The
+`has_model()`, `components()`, and `score()` methods that were on `CompileResultJS` in the
+stale spec are now correctly documented on `ModelJS`. The type mapping table was also updated
+to include `ModelJS` and `ProjectJS`.
+
+---
+
+## Task 29 — Reconcile `rhizz-wasm` public JS API with spec
+
+**Spec reference**: `SPEC/architecture.md` — **Wasm-specific notes** and **§ `rhizz-wasm` › Public API (JavaScript)**.
+
+Updated `SPEC/architecture.md` to document the typed class API (`CompileResultJS::compile()`)
+instead of the stale free-function `compile_sources()`. The Wasm-specific notes bullet and
+the Public API JavaScript code sample both now reflect the actual implementation.
+
+---
+
+## Task 37 — Add missing `Deserialize` to `rhizz-core` public diagnostic types
+
+**Spec reference**: `SPEC/architecture.md` — `rhizz-core` § Invariants
+
+Added `Serialize` + `Deserialize` to `Level`, a custom `Deserialize` impl for
+`DiagnosticCode` (matching by code string against all 28 known codes),
+`Deserialize` to `Diagnostic`, and `Deserialize` to `CompileResult`.  Added
+`serde_json` as a dev-dependency and two round-trip tests (no-model and with-model).
+
+---
+
+## Task 31 — Fix `score_component` leaf scoring to match spec
+
+**Spec reference**: `SPEC.md` §5 "Completion Scoring" — Per-Entity Completeness
+table (lines 400–409).
+
+**What was fixed** in `crates/rhizz-core/src/score.rs`:
+
+- Leaf with no description now returns `0.0` (Incomplete) instead of `0.5`.
+- Leaf with description but ≥1 incomplete port now returns `0.5` (Partial)
+  instead of `1.0`.
+- Leaf with description and all ports complete (or no ports) returns `1.0` (Complete).
+
+**Tests updated/added**:
+
+- `leaf_component_with_description_scores_1`: updated `partial: 1 → partial: 0`,
+  `incomplete: 0 → incomplete: 1` for the no-description leaf.
+- `non_leaf_component_no_children_scores_0`: gave leaf "a" a description so it
+  stays Complete and the assertion on non-leaf "parent" remaining Incomplete holds.
+- `leaf_with_description_and_complete_port_scores_1`: new — leaf + description +
+  port with all fields → 1.0.
+- `leaf_with_description_and_incomplete_port_scores_partial`: new — leaf +
+  description + port with fieldless message → 0.5.
+
+---
+
+## Task 32 — Fix `field.required` default: should be `true`, not `false`
+
+**Spec reference**: `SPEC.md` §2.7 `field` Block — attribute table (line 302).
+
+**What the spec says**:
+
+> | `required` | bool | no | `true` | Whether the field is mandatory in the message |
+
+The default value for `required` when the attribute is omitted is **`true`**.
+
+**What the code does** (`crates/rhizz-core/src/resolve.rs`, line 790):
+
+```rust
+required: lf.inner.required.unwrap_or(false),
+```
+
+The fallback is `false`, so any field that omits `required` is silently treated
+as optional — the opposite of what the spec requires.
+
+**Acceptance criteria**:
+
+- Change `unwrap_or(false)` to `unwrap_or(true)` at the `required` field
+  assignment in `resolve_field` / `resolve_message` in
+  `crates/rhizz-core/src/resolve.rs`.
+- Add or update a unit test that parses a `field` block with no explicit
+  `required` attribute and asserts the resolved `Field::required` is `true`.
+- Add a complementary test that parses a `field` block with `required = false`
+  and asserts the resolved value is `false`, confirming explicit overrides still
+  work.
+- All existing tests continue to pass.
+
+---
+
+## Task 30 — Fix `show_messages` default: should be `true`, not `false`
+
+**Spec reference**: `SPEC.md` §2.8 `view` Block — `filter` sub-block attribute
+table (line 342).
+
+**What the spec says**:
+
+> | `show_messages` | bool | no | `true` | Whether to list messages … |
+
+The default value for `show_messages` when the attribute is omitted is **`true`**.
+
+**What the code does** (`crates/rhizz-core/src/resolve.rs`, line 833):
+
+```rust
+show_messages: f.show_messages.unwrap_or(false),
+```
+
+The fallback is `false`, so any view that omits `show_messages` silently suppresses
+message labels on edges — the opposite of what the spec requires.
+
+**Acceptance criteria**:
+
+- Change `unwrap_or(false)` to `unwrap_or(true)` in `resolve_view` in
+  `crates/rhizz-core/src/resolve.rs`.
+- Add or update a unit/integration test that verifies a view with no explicit
+  `show_messages` attribute does show message labels on edges in the rendered DOT
+  output (i.e. the rendered edge label contains message names).
+- All existing tests continue to pass.
+
+---
+
 ## Task 27 — Typed WASM wrappers for rhizz-core structs
 
 Implement `#[wasm_bindgen]` wrapper structs in `rhizz-wasm` for the core types

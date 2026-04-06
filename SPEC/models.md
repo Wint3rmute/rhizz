@@ -87,13 +87,16 @@ struct RawPort {
 
 /// A connection wiring two sibling components together.
 /// `from` and `to` are either `"comp"` (bare) or `"comp:port"` (typed).
+/// Both are `Option<String>` in the raw struct; their absence is caught by the
+/// resolver (E002) rather than at parse time, to include the connection label
+/// in the error message.
 #[derive(Debug, Clone)]
 struct RawConnection {
     description: Option<String>,
     tags: Option<Vec<String>>,
     level: Option<i32>,
-    from: String,
-    to: String,
+    from: Option<String>,
+    to: Option<String>,
     encapsulates: Option<Vec<String>>,
 }
 
@@ -107,7 +110,8 @@ struct RawMessage {
 
 #[derive(Debug, Clone)]
 struct RawField {
-    r#type: String,           // required
+    /// Required at the HCL level — absence is caught by the resolver (E007).
+    r#type: Option<String>,
     description: Option<String>,
     unit: Option<String>,
     required: Option<bool>,

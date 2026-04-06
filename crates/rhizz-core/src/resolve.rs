@@ -787,7 +787,7 @@ fn process_fields(
             field_type,
             description: lf.inner.description.clone().unwrap_or_default(),
             unit: lf.inner.unit.clone().unwrap_or_default(),
-            required: lf.inner.required.unwrap_or(false),
+            required: lf.inner.required.unwrap_or(true),
         });
         field_ids.push(fid);
     }
@@ -830,7 +830,7 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
             exclude_tags: f.exclude_tags,
             max_level: f.max_level,
             components: f.components,
-            show_messages: f.show_messages.unwrap_or(false),
+            show_messages: f.show_messages.unwrap_or(true),
         }
     };
     let output = {
@@ -1563,6 +1563,115 @@ system "sys2" {
             !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
             "expected no W012 when top-level component referenced multiple times, got: {:?}",
             warnings
+        );
+    }
+
+    // ── Task 30: show_messages default ─────────────────────────────────────
+
+    /// When a view's `filter` block omits `show_messages`, the resolved
+    /// `ViewFilter::show_messages` must default to `true` (SPEC §2.8).
+    #[test]
+    fn show_messages_defaults_to_true_when_omitted() {
+        let src = r#"
+system "sys" {
+    component "a" { leaf = true }
+}
+view "v" {
+    system = "sys"
+    filter {}
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("should resolve");
+        assert_eq!(model.views.len(), 1);
+        assert!(
+            model.views[0].filter.show_messages,
+            "show_messages should default to true when omitted"
+        );
+    }
+
+    /// When `show_messages = false` is set explicitly, it must resolve to `false`.
+    #[test]
+    fn show_messages_explicit_false_resolves_to_false() {
+        let src = r#"
+system "sys" {
+    component "a" { leaf = true }
+}
+view "v" {
+    system = "sys"
+    filter {
+        show_messages = false
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("should resolve");
+        assert_eq!(model.views.len(), 1);
+        assert!(
+            !model.views[0].filter.show_messages,
+            "show_messages should be false when explicitly set to false"
+        );
+    }
+
+    // ── Task 32: field.required default ────────────────────────────────────
+
+    /// When a `field` block omits `required`, the resolved `Field::required`
+    /// must default to `true` (SPEC §2.7).
+    #[test]
+    fn field_required_defaults_to_true_when_omitted() {
+        let src = r#"
+system "s" {
+    component "a" {
+        leaf = true
+        port "p" {
+            message "m" {
+                field "f" {
+                    type = "uint8"
+                }
+            }
+        }
+    }
+    component "b" { leaf = true }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("should resolve");
+        assert_eq!(model.fields.len(), 1);
+        assert!(
+            model.fields[0].required,
+            "field.required should default to true when omitted"
+        );
+    }
+
+    /// When `required = false` is set explicitly, the resolved value must be `false`.
+    #[test]
+    fn field_required_explicit_false_resolves_to_false() {
+        let src = r#"
+system "s" {
+    component "a" {
+        leaf = true
+        port "p" {
+            message "m" {
+                field "f" {
+                    type     = "uint8"
+                    required = false
+                }
+            }
+        }
+    }
+    component "b" { leaf = true }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("should resolve");
+        assert_eq!(model.fields.len(), 1);
+        assert!(
+            !model.fields[0].required,
+            "field.required should be false when explicitly set to false"
         );
     }
 }

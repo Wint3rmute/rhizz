@@ -1,12 +1,12 @@
 //! Diagnostic types — codes, severity, and structured diagnostic messages.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ── Level ─────────────────────────────────────────────────────────────────────
 
 /// The severity level of a diagnostic, modelled after the Rust compiler's own
 /// `Level` type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Level {
     /// An error that causes compilation to fail.
     Error,
@@ -210,10 +210,54 @@ impl Serialize for DiagnosticCode {
     }
 }
 
+impl<'de> Deserialize<'de> for DiagnosticCode {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        match s.as_str() {
+            "E000" => Ok(DiagnosticCode::E000),
+            "E001" => Ok(DiagnosticCode::E001),
+            "E002" => Ok(DiagnosticCode::E002),
+            "E003" => Ok(DiagnosticCode::E003),
+            "E004" => Ok(DiagnosticCode::E004),
+            "E005" => Ok(DiagnosticCode::E005),
+            "E006" => Ok(DiagnosticCode::E006),
+            "E007" => Ok(DiagnosticCode::E007),
+            "E008" => Ok(DiagnosticCode::E008),
+            "E009" => Ok(DiagnosticCode::E009),
+            "E010" => Ok(DiagnosticCode::E010),
+            "E011" => Ok(DiagnosticCode::E011),
+            "E012" => Ok(DiagnosticCode::E012),
+            "E013" => Ok(DiagnosticCode::E013),
+            "E014" => Ok(DiagnosticCode::E014),
+            "W000" => Ok(DiagnosticCode::W000),
+            "W001" => Ok(DiagnosticCode::W001),
+            "W002" => Ok(DiagnosticCode::W002),
+            "W003" => Ok(DiagnosticCode::W003),
+            "W004" => Ok(DiagnosticCode::W004),
+            "W005" => Ok(DiagnosticCode::W005),
+            "W006" => Ok(DiagnosticCode::W006),
+            "W007" => Ok(DiagnosticCode::W007),
+            "W008" => Ok(DiagnosticCode::W008),
+            "W009" => Ok(DiagnosticCode::W009),
+            "W010" => Ok(DiagnosticCode::W010),
+            "W011" => Ok(DiagnosticCode::W011),
+            "W012" => Ok(DiagnosticCode::W012),
+            other => Err(serde::de::Error::unknown_variant(
+                other,
+                &[
+                    "E000", "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009",
+                    "E010", "E011", "E012", "E013", "E014", "W000", "W001", "W002", "W003", "W004",
+                    "W005", "W006", "W007", "W008", "W009", "W010", "W011", "W012",
+                ],
+            )),
+        }
+    }
+}
+
 // ── Diagnostic ────────────────────────────────────────────────────────────────
 
 /// A diagnostic message emitted during parsing, resolution, or validation.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Diagnostic {
     /// Diagnostic code identifying the class of error or warning.
     pub code: DiagnosticCode,

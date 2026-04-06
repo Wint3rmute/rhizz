@@ -3175,6 +3175,7 @@ dependencies = [
  "anyhow",
  "hcl-rs",
  "serde",
+ "serde_json",
  "tracing",
  "walkdir",
 ]

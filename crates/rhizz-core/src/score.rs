@@ -10,12 +10,22 @@ use tracing::instrument;
 fn score_component(id: ComponentId, model: &Model) -> f64 {
     let comp = &model.components[id.0];
     if comp.leaf {
-        // Leaf component: complete if it has a description, partial otherwise.
-        // (ports are optional detail — a leaf with description and no ports is Complete)
+        // Leaf component scoring (spec §5 Per-Entity Completeness):
+        //   - No description                          → Incomplete (0.0)
+        //   - Has description, ≥1 incomplete port     → Partial   (0.5)
+        //   - Has description, all ports complete
+        //     (or no ports at all)                    → Complete  (1.0)
         if comp.description.is_empty() {
-            0.5
-        } else {
+            0.0
+        } else if comp.ports.is_empty()
+            || comp
+                .ports
+                .iter()
+                .all(|&pid| score_port(pid.0, model) == 1.0)
+        {
             1.0
+        } else {
+            0.5
         }
     } else if comp.children.is_empty() {
         // Non-leaf, no children yet -> incomplete.
@@ -374,10 +384,80 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        // "a" -> 1.0, "b" -> 0.5
+        // "a" has description, no ports -> 1.0 (Complete)
+        // "b" has no description         -> 0.0 (Incomplete)
         assert_eq!(report.components.complete, 1);
-        assert_eq!(report.components.partial, 1);
-        assert_eq!(report.components.incomplete, 0);
+        assert_eq!(report.components.partial, 0);
+        assert_eq!(report.components.incomplete, 1);
+    }
+
+    // ── unit: leaf with description + complete port → 1.0 ──────────────────
+
+    #[test]
+    fn leaf_with_description_and_complete_port_scores_1() {
+        let src = r#"
+            system "s" {
+              component "a" {
+                description = "has desc"
+                leaf = true
+                port "p" {
+                  protocol = "spi"
+                  role = "provider"
+                  message "m1" {
+                    description = "fully defined"
+                    field "x" { type = "uint8" }
+                  }
+                }
+              }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a:p"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        // "a" has description and its only port is complete (all messages have fields) -> 1.0
+        // "b" has no description -> 0.0
+        assert_eq!(
+            report.components.complete, 1,
+            "leaf with description and complete port should score 1.0"
+        );
+    }
+
+    // ── unit: leaf with description + incomplete port → 0.5 ────────────────
+
+    #[test]
+    fn leaf_with_description_and_incomplete_port_scores_partial() {
+        let src = r#"
+            system "s" {
+              component "a" {
+                description = "has desc"
+                leaf = true
+                port "p" {
+                  role = "provider"
+                  message "m1" {
+                    description = "no fields"
+                  }
+                }
+              }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a:p"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        // "a" has description but port "p" has a message with no fields -> port incomplete -> 0.5
+        assert_eq!(
+            report.components.partial, 1,
+            "leaf with description and incomplete port should score 0.5"
+        );
     }
 
     // ── unit: non-leaf component scoring ────────────────────────────────────
@@ -387,6 +467,7 @@ mod tests {
         let src = r#"
             system "s" {
               component "a" {
+                description = "fully defined leaf"
                 leaf = true
               }
               component "parent" {
@@ -401,10 +482,13 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
+        // "a" has description, no ports → Complete (1.0)
+        // "parent" is non-leaf with no children → Incomplete (0.0)
         assert_eq!(
             report.components.incomplete, 1,
             "parent has no children -> 0.0"
         );
+        assert_eq!(report.components.complete, 1, "a is complete");
     }
 
     // ── unit: port scoring ───────────────────────────────────────────────────

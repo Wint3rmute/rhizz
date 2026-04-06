@@ -37,7 +37,7 @@ pub struct Source {
 }
 
 /// The result of compiling one or more [`Source`] files.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompileResult {
     /// The fully-resolved model, if no hard errors were encountered.
     pub model: Option<Model>,
@@ -198,6 +198,63 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn compile_result_round_trip_no_model() {
+        let result = CompileResult {
+            model: None,
+            diagnostics: vec![Diagnostic {
+                code: DiagnosticCode::E001,
+                file: Some(std::path::PathBuf::from("test.hcl")),
+                line: Some(5),
+                message: "something went wrong".into(),
+            }],
+        };
+        let json = serde_json::to_string(&result).expect("should serialize");
+        let restored: CompileResult = serde_json::from_str(&json).expect("should deserialize");
+        assert!(restored.model.is_none());
+        assert_eq!(restored.diagnostics.len(), 1);
+        assert_eq!(restored.diagnostics[0].code, DiagnosticCode::E001);
+        assert_eq!(restored.diagnostics[0].line, Some(5));
+        assert_eq!(restored.diagnostics[0].message, "something went wrong");
+    }
+
+    #[test]
+    fn compile_result_round_trip_with_model() {
+        let dir = TempProjectDir::new("round-trip-model");
+        write_hcl(
+            &dir.path().join("project.hcl"),
+            r#"
+project {
+  name    = "roundtrip"
+  version = "1.0.0"
+}
+"#,
+        );
+        write_hcl(
+            &dir.path().join("systems.hcl"),
+            r#"
+system "alpha" {}
+"#,
+        );
+        let result = compile_dir(dir.path());
+        assert!(
+            result.model.is_some(),
+            "compilation should succeed; diagnostics: {:?}",
+            result.diagnostics
+        );
+
+        let json = serde_json::to_string(&result).expect("should serialize");
+        let restored: CompileResult = serde_json::from_str(&json).expect("should deserialize");
+        let orig_model = result.model.as_ref().unwrap();
+        let rest_model = restored
+            .model
+            .as_ref()
+            .expect("model should survive round-trip");
+        assert_eq!(rest_model.project.name, orig_model.project.name);
+        assert_eq!(rest_model.project.version, orig_model.project.version);
+        assert_eq!(rest_model.systems.len(), orig_model.systems.len());
     }
 
     #[test]

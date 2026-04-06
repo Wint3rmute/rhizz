@@ -665,12 +665,17 @@ impl eframe::App for RhizzApp {
         }
         if changed {
             info!("Source files changed, rebuilding the model...");
-            let (model, diagnostics) = load_and_compile(&self.path);
-            let view_count = model.as_ref().map_or(0, |m| m.views.len());
-            self.model = model;
+            let (new_model, diagnostics) = load_and_compile(&self.path);
             self.diagnostics = diagnostics;
-            self.view_layouts = vec![None; view_count];
-            self.selected_view = self.selected_view.min(view_count.saturating_sub(1));
+            if let Some(model) = new_model {
+                let view_count = model.views.len();
+                self.model = Some(model);
+                self.view_layouts = vec![None; view_count];
+                self.selected_view = self.selected_view.min(view_count.saturating_sub(1));
+            }
+            // When recompile produces no model (hard errors), keep the previous
+            // valid model so the graph view stays visible while the user fixes
+            // the errors (spec: SPEC/gui.md § File Watching and Live Recompile).
             ctx.request_repaint();
         } else {
             ctx.request_repaint_after(std::time::Duration::from_secs(2));

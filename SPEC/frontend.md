@@ -87,6 +87,8 @@ Diagnostic          ──From──▸  DiagnosticJS                 class Diag
 Component           ──From──▸  ComponentJS                  class ComponentJS  { label, description, … }
 ScoreReport         ──From──▸  ScoreReportJS                class ScoreReportJS { overall_percentage, … }
 CategoryScore       ──From──▸  CategoryScoreJS              class CategoryScoreJS { complete, partial, … }
+Project             ──From──▸  ProjectJS                    class ProjectJS { name, version, … }
+Model               ──wrap──▸  ModelJS                      class ModelJS { components(), score(), … }
 ```
 
 `CompileResultJS` is the main entry point — an opaque class that holds the
@@ -96,12 +98,22 @@ compiled state and returns typed wrappers from its methods:
 #[wasm_bindgen]
 impl CompileResultJS {
     pub fn compile(sources: JsValue) -> Result<CompileResultJS, JsError>;
-    pub fn has_model(&self) -> bool;
     pub fn diagnostics(&self) -> Vec<DiagnosticJS>;
-    pub fn components(&self) -> Vec<ComponentJS>;
-    pub fn score(&self) -> Option<ScoreReportJS>;
     pub fn error_count(&self) -> usize;
     pub fn warning_count(&self) -> usize;
+    pub fn model(&self) -> Option<ModelJS>;
+}
+```
+
+`ModelJS` holds the resolved model and provides typed access to its contents:
+
+```rust
+#[wasm_bindgen]
+impl ModelJS {
+    pub fn project(&self) -> ProjectJS;
+    pub fn components(&self) -> Vec<ComponentJS>;
+    pub fn component_by_name(&self, name: &str) -> Option<ComponentJS>;
+    pub fn score(&self) -> ScoreReportJS;
 }
 ```
 
