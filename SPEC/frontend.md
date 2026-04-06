@@ -10,7 +10,7 @@ Browser-based system model explorer. Pure SPA — no API, no external backend.
 | Language | TypeScript |
 | UI framework | Svelte 5 |
 | Build tool | Vite |
-| Visualisation | Three.js (SVGRenderer) |
+| Visualisation | Custom SVG renderer |
 | Model compiler | `rhizz-wasm` (WASM build of `rhizz-core`) |
 
 ## Architecture
@@ -28,16 +28,82 @@ web/
 
 ## WASM Integration
 
-The `rhizz-wasm` package (built with `wasm-pack --target web`) is resolved via a Vite alias pointing at `../crates/rhizz-wasm/pkg`. The wrapper in `lib/rhizz.ts` provides a typed interface:
+The `rhizz-wasm` package (built with `wasm-pack --target web`) is resolved via a Vite alias pointing at `../crates/rhizz-wasm/pkg`.
 
-```ts
-await initWasm();
-const result: CompileResult = compile(sources);
-// result.model: Model | null
-// result.diagnostics: Diagnostic[]
+### Typed bindings via wrapper structs
+
+`rhizz-wasm` exposes **`#[wasm_bindgen]` wrapper structs** that convert from `rhizz-core` types. Each wrapper has `#[wasm_bindgen(getter)]` methods for its fields, so `wasm-pack` generates matching TypeScript class definitions with full autocompletion — no manual `.d.ts` files needed.
+
+Example — wrapping `rhizz_core::Diagnostic`:
+
+```rust
+// rhizz-wasm/src/lib.rs
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct DiagnosticJS {
+    code: String,
+    message: String,
+}
+
+#[wasm_bindgen]
+impl DiagnosticJS {
+    // Getter makes the field visible in TypeScript definitions
+    // and in JavaScript introspection (e.g. Object.keys, console.log).
+    #[wasm_bindgen(getter)]
+    pub fn code(&self) -> String { self.code.clone() }
+
+    #[wasm_bindgen(getter)]
+    pub fn message(&self) -> String { self.message.clone() }
+}
+
+impl From<&rhizz_core::Diagnostic> for DiagnosticJS {
+    fn from(d: &rhizz_core::Diagnostic) -> Self {
+        Self { code: d.code.code.to_string(), message: d.message.clone() }
+    }
+}
 ```
 
-All types in `lib/types.ts` mirror the Rust `Model` structs — arena-indexed IDs (`SystemId`, `ComponentId`, …) are plain `number` indices into the corresponding arrays.
+`wasm-pack` then generates:
+
+```typescript
+// rhizz_wasm.d.ts (auto-generated)
+export class DiagnosticJS {
+    free(): void;
+    readonly code: string;
+    readonly message: string;
+}
+```
+
+```
+rhizz-core types              rhizz-wasm wrappers          TS (auto-generated)
+─────────────────              ───────────────────          ───────────────────
+Diagnostic          ──From──▸  DiagnosticJS                 class DiagnosticJS { code, message, … }
+Component           ──From──▸  ComponentJS                  class ComponentJS  { label, description, … }
+ScoreReport         ──From──▸  ScoreReportJS                class ScoreReportJS { overall_percentage, … }
+CategoryScore       ──From──▸  CategoryScoreJS              class CategoryScoreJS { complete, partial, … }
+```
+
+`CompileResultJS` is the main entry point — an opaque class that holds the compiled state and returns typed wrappers from its methods:
+
+```rust
+#[wasm_bindgen]
+impl CompileResultJS {
+    pub fn compile(sources: JsValue) -> Result<CompileResultJS, JsError>;
+    pub fn has_model(&self) -> bool;
+    pub fn diagnostics(&self) -> Vec<DiagnosticJS>;
+    pub fn components(&self) -> Vec<ComponentJS>;
+    pub fn score(&self) -> Option<ScoreReportJS>;
+    pub fn error_count(&self) -> usize;
+    pub fn warning_count(&self) -> usize;
+}
+```
+
+### Design principles
+
+- **`rhizz-core` has no wasm dependency** — all wasm-bindgen concerns stay in `rhizz-wasm`.
+- **Wrappers use `From` conversions** — mechanical mapping, easy to extend.
+- **Expose only what the frontend needs** — complex enums and internal IDs are flattened or omitted; more accessors are added as the frontend grows.
+- **Arena IDs are plain `number` indices** — `ComponentId(3)` becomes `3` in TS, indexable into the corresponding array.
 
 ## Rendering Pipeline
 
