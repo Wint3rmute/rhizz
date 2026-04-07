@@ -74,14 +74,9 @@ jobs:
       - name: Build Frontend
         run: deno run build
         working-directory: ./web
-<<<<<<< Updated upstream
 
-      - name: Build Rust release
-        run: cargo build --release --quiet
-
-  build-wasm:
-    name: Build rhizz-wasm
-    if: github.event_name == 'push'
-    uses: ./.github/workflows/build-wasm.yml
-=======
->>>>>>> Stashed changes
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhizz-web
+          path: web/build/

@@ -7,10 +7,95 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-wasm:
     uses: ./.github/workflows/build-wasm.yml
+
+  build-frontend:
+    name: Build Frontend
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wasm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: lts
+          cache-hash: ${{ hashFiles('**/deno.json') }}
+
+      - name: Deno Install
+        run: deno install
+        working-directory: ./web
+
+      - name: Build Frontend
+        run: deno run build
+        working-directory: ./web
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhizz-web
+          path: web/build/
+
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build documentation
+        run: cargo doc --no-deps --all
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhizz-docs
+          path: target/doc/
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    needs: [build-frontend, build-docs]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rhizz-web
+          path: pages/
+
+      - name: Download docs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rhizz-docs
+          path: pages/docs/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
 
   publish:
     name: Publish GitHub release
