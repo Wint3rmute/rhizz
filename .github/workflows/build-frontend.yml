@@ -14,7 +14,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: rhizz-wasm
-          path: crates/rhizz-wasm/pkg/
+          path: .
 
       - name: Setup Deno
         uses: denoland/setup-deno@v2
