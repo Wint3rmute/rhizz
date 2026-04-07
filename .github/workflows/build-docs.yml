@@ -24,8 +24,13 @@ jobs:
           echo '<meta http-equiv="refresh" content="0; url=rhizz_core/index.html">' \
             > target/doc/index.html
 
+      - name: Stage docs artifact contents
+        run: |
+          mkdir -p docs-artifact
+          cp -a target/doc/. docs-artifact/
+
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
         with:
           name: rhizz-docs
-          path: target/doc/
+          path: docs-artifact/
