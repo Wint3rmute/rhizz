@@ -38,8 +38,14 @@ jobs:
         run: deno run build
         working-directory: ./web
 
+      - name: Stage frontend artifact
+        run: |
+          rm -rf pages
+          mkdir -p pages
+          cp -a web/build/. pages/
+
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
         with:
           name: rhizz-web
-          path: web/build/
+          path: pages/
