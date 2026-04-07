@@ -1,0 +1,45 @@
+name: Build Frontend
+
+on:
+  workflow_call:
+
+jobs:
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download wasm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: lts
+          cache-hash: ${{ hashFiles('**/deno.json') }}
+
+      - name: Typescript Formatting check
+        run: deno fmt --check
+        working-directory: ./web
+
+      - name: Deno Install
+        run: deno install
+        working-directory: ./web
+
+      - name: Check Frontend
+        run: deno check && deno run check
+        working-directory: ./web
+
+      - name: Build Frontend
+        run: deno run build
+        working-directory: ./web
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhizz-web
+          path: web/build/
