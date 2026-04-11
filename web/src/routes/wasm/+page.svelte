@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import { compile_system } from "../../rhizz_wasm_wrapper";
   import ModelComponentsOutline from "../../components/ModelComponentsOutline.svelte";
   import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
@@ -23,9 +24,17 @@
     >
       <h3 class="font-semibold mb-3 text-gray-100">Navigation</h3>
       <ul class="space-y-2 text-sm text-gray-300">
-        <li><a href="/overview" class="block hover:text-white">Overview</a></li>
-        <li><a href="/editor" class="block hover:text-white">Editor</a></li>
-        <li><a href="/" class="block hover:text-white">Home</a></li>
+        <li>
+          <a href={resolve("/overview", {})} class="block hover:text-white"
+          >Overview</a>
+        </li>
+        <li>
+          <a href={resolve("/editor", {})} class="block hover:text-white"
+          >Editor</a>
+        </li>
+        <li>
+          <a href={resolve("/", {})} class="block hover:text-white">Home</a>
+        </li>
       </ul>
     </aside>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import type { ProjectJS } from "rhizz";
 
   let {
@@ -13,7 +14,8 @@
 </script>
 
 <div class="navbar bg-gray-900 text-gray-100 border-b border-gray-800">
-  <a href="/" class="btn btn-ghost text-xl text-white">← rhizz</a>
+  <a href={resolve("/", {})} class="btn btn-ghost text-xl text-white"
+  >← rhizz</a>
   {#if project}
     <span class="ml-2 text-sm opacity-70">{project.name} {
         project.version

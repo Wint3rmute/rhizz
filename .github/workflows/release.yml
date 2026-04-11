@@ -1,4 +1,4 @@
-name: Deploy Pages
+name: pages
 
 on:
   push:
@@ -14,19 +14,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-wasm:
-    uses: ./.github/workflows/build-wasm.yml
+  wasm:
+    uses: ./.github/workflows/wasm.yml
 
-  build-frontend:
-    needs: build-wasm
-    uses: ./.github/workflows/build-frontend.yml
+  frontend:
+    needs: wasm
+    uses: ./.github/workflows/frontend.yml
 
-  build-docs:
-    uses: ./.github/workflows/build-docs.yml
+  docs:
+    uses: ./.github/workflows/docs.yml
 
   deploy-pages:
     name: Deploy to GitHub Pages
-    needs: [build-frontend, build-docs]
+    needs: [frontend, docs]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

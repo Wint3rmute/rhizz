@@ -1,11 +1,11 @@
-name: Build Documentation
+name: documentation
 
 on:
   workflow_call:
 
 jobs:
   build-docs:
-    name: Build Documentation
+    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

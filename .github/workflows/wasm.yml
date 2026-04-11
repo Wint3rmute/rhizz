@@ -1,11 +1,11 @@
-name: Build WASM
+name: wasm
 
 on:
   workflow_call:
 
 jobs:
   build-wasm:
-    name: Build rhizz-wasm
+    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
     branches: [main, master]
 
 jobs:
-  build-wasm:
-    uses: ./.github/workflows/build-wasm.yml
+  wasm:
+    uses: ./.github/workflows/wasm.yml
 
   rust:
-    name: Rust
+    name: rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -41,5 +41,5 @@ jobs:
         run: cargo doc --no-deps --all
 
   frontend:
-    needs: build-wasm
-    uses: ./.github/workflows/build-frontend.yml
+    needs: wasm
+    uses: ./.github/workflows/frontend.yml
