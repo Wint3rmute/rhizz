@@ -245,15 +245,15 @@
                   {#if score}
                     {
                       score.components.complete +
-                        score.ports.complete +
-                        score.connections.complete +
-                        score.messages.complete
+                      score.ports.complete +
+                      score.connections.complete +
+                      score.messages.complete
                     } entities fully specified out of
                     {
                       catTotal(score.components) +
-                        catTotal(score.ports) +
-                        catTotal(score.connections) +
-                        catTotal(score.messages)
+                      catTotal(score.ports) +
+                      catTotal(score.connections) +
+                      catTotal(score.messages)
                     } total
                   {/if}
                 </p>
@@ -274,7 +274,7 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {#each               [
+              {#each [
                 {
                   label: "Components",
                   icon: "▦",
@@ -303,9 +303,7 @@
                   color: "progress-success",
                   ring: "text-success",
                 },
-              ] as
-                row
-              }
+              ] as row}
                 {@const pct = catPct(row.cat)}
                 {@const total = catTotal(row.cat)}
                 <div class="bg-gray-900 rounded-xl p-4 flex flex-col gap-3">
