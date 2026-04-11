@@ -8,10 +8,10 @@ jobs:
     name: Build Frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download wasm artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
@@ -47,7 +47,7 @@ jobs:
           cp -a web/build/. pages/
 
       - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rhizz-web
           path: pages/
