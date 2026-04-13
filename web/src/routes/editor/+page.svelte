@@ -16,7 +16,66 @@
   let model = $derived(output.model());
   let components = $derived(model ? model.components() : []);
 
-  let checked = $state<Record<string, boolean>>({});
+  // Stores position of each checked element. If an element is unchecked, it's not present here
+  let checked = $state<Record<string, {x: number, y: number}>>({});
+
+  // Per-node positions in SVG-space
+  // let positions = $state<Record<string, { x: number; y: number }>>({});
+
+  // Initialise positions for newly-checked components outside of render
+  // $effect(() => {
+  //   const visible = components.filter((c) => checked[c.label]);
+  //   visible.forEach((component, i) => {
+  //     if (!positions[component.label]) {
+  //       positions[component.label] = {
+  //         x: (i % 5) * 150,
+  //         y: Math.floor(i / 5) * 150,
+  //       };
+  //     }
+  //   });
+  // });
+
+  // Drag state
+  let dragging: { label: string; offsetX: number; offsetY: number } | null =
+    $state(null);
+
+  function svgPoint(
+    svg: SVGElement,
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } {
+    const pt = (svg as SVGSVGElement).createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = (svg as SVGSVGElement).getScreenCTM();
+    if (!ctm) return { x: clientX, y: clientY };
+    const transformed = pt.matrixTransform(ctm.inverse());
+    return { x: transformed.x, y: transformed.y };
+  }
+
+  function onNodeMouseDown(event: MouseEvent, label: string) {
+    event.preventDefault();
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    const pos = checked[label] ?? { x: 0, y: 0 };
+    dragging = {
+      label,
+      offsetX: svgCoords.x - pos.x,
+      offsetY: svgCoords.y - pos.y,
+    };
+  }
+
+  function onSvgMouseMove(event: MouseEvent) {
+    if (!dragging) return;
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    checked[dragging.label] = {
+      x: svgCoords.x - dragging.offsetX,
+      y: svgCoords.y - dragging.offsetY,
+    };
+  }
+
+  function onSvgMouseUp() {
+    dragging = null;
+  }
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -27,6 +86,7 @@
     </button>
 
     <div class="flex-1 w-full bg-[#0a0a14]">
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <svg
     bind:this={root_svg}
     version="1.1"
@@ -34,6 +94,10 @@
     height="600"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="{editor_state.view_box.x} {editor_state.view_box.y} 600 400"
+    onmousemove={onSvgMouseMove}
+    onmouseup={onSvgMouseUp}
+    onmouseleave={onSvgMouseUp}
+    style="cursor: {dragging ? 'grabbing' : 'default'}"
   >
     <defs>
       <pattern id="Pattern" x="0" y="0" width=".1" height=".1">
@@ -50,20 +114,31 @@
     />
 
     {#snippet ViewNode(name: string, x: number, y: number)}
-      <rect {x} {y} width="100" height="100" rx="5" stroke="white" />
-      <text
-        x={x + 50}
-        y={y + 50}
-        fill="white"
-        text-anchor="middle"
-        dominant-baseline="middle"
+      <g
+        transform="translate({x}, {y})"
+        onmousedown={(e) => onNodeMouseDown(e, name)}
+        style="cursor: grab"
       >
-        {name}
-      </text>
+        <rect width="100" height="100" rx="5" stroke="white" fill="transparent" />
+        <text
+          x={50}
+          y={50}
+          fill="white"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          style="pointer-events: none; user-select: none"
+        >
+          {name}
+        </text>
+      </g>
     {/snippet}
 
-    {#each components.filter((c) => checked[c.label]) as component, i}
-      {@render ViewNode(component.label, (i % 5) * 150, Math.floor(i / 5) * 150)}
+    {#each components.filter((c) => checked[c.label]) as component}
+      {@render ViewNode(
+        component.label,
+        checked[component.label]?.x ?? 0,
+        checked[component.label]?.y ?? 0,
+      )}
     {/each}
       </svg>
     </div>
@@ -83,7 +158,14 @@
               type="checkbox"
               id="comp-{component.label}"
               class="checkbox checkbox-xs"
-              bind:checked={checked[component.label]}
+
+              onchange={(value)=> {
+                if (value.currentTarget.checked) {
+                  checked[component.label] = {x: 100, y: 100};
+                } else {
+                  delete checked[component.label];
+                }
+              } }
             />
             <label for="comp-{component.label}" class="cursor-pointer truncate" title={component.label}>
               {#if !component.leaf}
