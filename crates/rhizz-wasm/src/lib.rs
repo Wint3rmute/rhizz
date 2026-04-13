@@ -204,6 +204,39 @@ impl From<&rhizz_core::Project> for ProjectJS {
     }
 }
 
+// ── ConnectionJS ───────────────────────────────────────────────────────────────
+
+/// A connection exposed to JavaScript.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct ConnectionJS {
+    label: String,
+    // description: String,
+    // tags: Vec<String>,
+    level: i32,
+    pub from: usize,
+    pub to: usize
+}
+
+impl From<&rhizz_core::Connection> for ConnectionJS {
+    fn from(c: &rhizz_core::Connection) -> Self {
+        Self {
+            label: c.label.clone(),
+            level: c.level,
+            from: c.from.component.0,
+            to: c.to.component.0
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl ConnectionJS {
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> String {
+        return self.label.clone();
+    }
+}
+
 // ── ComponentJS ───────────────────────────────────────────────────────────────
 
 /// A resolved component exposed to JavaScript.
@@ -310,6 +343,16 @@ impl ModelJS {
             .collect()
     }
 
+    /// Returns all connections as typed wrappers.
+    pub fn connections(&self) -> Vec<ConnectionJS> {
+        self.inner
+            .connections
+            .iter()
+            .map(ConnectionJS::from)
+            .collect()
+    }
+
+
     /// Returns the component with the given label, or `undefined` if not found.
     pub fn component_by_name(&self, name: &str) -> Option<ComponentJS> {
         self.inner
@@ -317,6 +360,11 @@ impl ModelJS {
             .iter()
             .find(|c| c.label == name)
             .map(ComponentJS::from)
+    }
+
+    /// Returns the component with the given id, or `undefined` if not found.
+    pub fn component_by_id(&self, id: usize) -> Option<ComponentJS> {
+        self.inner.components.get(id).map(ComponentJS::from)
     }
 
     /// Computes and returns the completion score report.

@@ -15,6 +15,9 @@
   );
   let model = $derived(output.model());
   let components = $derived(model ? model.components() : []);
+  let connections = $derived(model ? model.connections() : []);
+
+  console.log(model);
 
   // Stores position of each checked element. If an element is unchecked, it's not present here
   let checked = $state<Record<string, {x: number, y: number}>>({});
@@ -177,5 +180,16 @@
         {/each}
       </ul>
     {/if}
+
+    <br>
+    <h3 class="font-semibold text-sm mb-3 text-gray-300 uppercase tracking-wide">Connections</h3>
+
+      <ul class="space-y-1">
+        {#each connections as connection}
+          <li class="flex items-center gap-2 text-sm">
+           {connection.label}
+          </li>
+        {/each}
+      </ul>
   </aside>
 </div>
