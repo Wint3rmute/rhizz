@@ -213,7 +213,7 @@ pub struct ConnectionJS {
     label: String,
     // description: String,
     // tags: Vec<String>,
-    level: i32,
+    // level: i32,
     pub from: usize,
     pub to: usize,
 }
@@ -222,7 +222,7 @@ impl From<&rhizz_core::Connection> for ConnectionJS {
     fn from(c: &rhizz_core::Connection) -> Self {
         Self {
             label: c.label.clone(),
-            level: c.level,
+            // level: c.level,
             from: c.from.component.0,
             to: c.to.component.0,
         }
@@ -233,7 +233,7 @@ impl From<&rhizz_core::Connection> for ConnectionJS {
 impl ConnectionJS {
     #[wasm_bindgen(getter)]
     pub fn label(&self) -> String {
-        return self.label.clone();
+        self.label.clone()
     }
 }
 
