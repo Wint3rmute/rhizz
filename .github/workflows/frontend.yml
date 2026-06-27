@@ -19,7 +19,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
-          deno-version: latest
+          deno-version: 2.8.3
           cache-hash: ${{ hashFiles('**/deno.json') }}
 
       - name: Typescript Formatting check
@@ -38,7 +38,7 @@ jobs:
         run: deno run build
         working-directory: ./web
         env:
-          BASE_PATH: '/${{ github.event.repository.name }}'
+          BASE_PATH: "/${{ github.event.repository.name }}"
 
       - name: Stage frontend artifact
         run: |
