@@ -222,6 +222,9 @@ impl From<&rhizz_core::Connection> for ConnectionJS {
     fn from(c: &rhizz_core::Connection) -> Self {
         Self {
             label: c.label.clone(),
+            // Uncommented, not used yet anywhere,
+            // otherwise linter complains.
+            // Uncomment when you start using it
             // level: c.level,
             from: c.from.component.0,
             to: c.to.component.0,
