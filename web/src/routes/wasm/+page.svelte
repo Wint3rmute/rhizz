@@ -5,6 +5,7 @@
   import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
   import persisted from "../../Persisted.svelte";
   import MonacoEditor from "../../components/MonacoEditor.svelte";
+  import ModelStatsRow from "../../components/ModelStatsRow.svelte";
 
   let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
 
@@ -14,6 +15,32 @@
 
   let model = $derived(output.model());
   let diagnostics = $derived(output.diagnostics());
+
+  // Persist the last successfully compiled model so stats survive syntax errors.
+  let lastModel = $state<ReturnType<typeof output.model>>(undefined);
+  $effect(() => {
+    if (model !== undefined) lastModel = model;
+  });
+  let stale = $derived(model === undefined && lastModel !== undefined);
+
+  let components = $derived(lastModel ? lastModel.components() : []);
+  let score = $derived(lastModel ? lastModel.score() : null);
+  let leafCount = $derived(components.filter((c) => c.leaf).length);
+  let compositeCount = $derived(components.filter((c) => !c.leaf).length);
+
+  function catTotal(
+    cat: { complete: number; partial: number; incomplete: number } | null,
+  ) {
+    return cat ? cat.complete + cat.partial + cat.incomplete : 0;
+  }
+  function catPct(cat: { percentage: number } | null) {
+    return cat ? Math.round(cat.percentage) : 0;
+  }
+
+  let totalPorts = $derived(catTotal(score?.ports ?? null));
+  let totalConnections = $derived(catTotal(score?.connections ?? null));
+  let totalMessages = $derived(catTotal(score?.messages ?? null));
+  let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
 
 <div class="flex-1 w-full bg-gray-900">
@@ -43,9 +70,30 @@
       </ul>
     </aside>
 
-    <main class="md:col-span-6 lg:col-span-8 flex">
+    <main class="md:col-span-6 lg:col-span-8 flex flex-col gap-4">
+      {#if lastModel !== undefined}
+        <div
+          class="
+            transition-opacity duration-300 {stale
+            ? 'opacity-40 grayscale'
+            : ''}
+          "
+        >
+          <ModelStatsRow
+            componentCount={components.length}
+            {leafCount}
+            {compositeCount}
+            portCount={totalPorts}
+            portsPct={catPct(score?.ports ?? null)}
+            connectionCount={totalConnections}
+            connectionsPct={catPct(score?.connections ?? null)}
+            {overallPct}
+            messageCount={totalMessages}
+          />
+        </div>
+      {/if}
       <div
-        class="w-full bg-gray-800 p-6 rounded shadow flex flex-col h-full text-gray-100"
+        class="w-full bg-gray-800 p-6 rounded shadow flex flex-col flex-1 text-gray-100"
       >
         <h1 class="text-2xl font-semibold mb-4 text-white">
           WASM Test
@@ -61,6 +109,7 @@
     >
       {#if model !== undefined}
         <ModelComponentsOutline {model} />
+        <div class="divider"></div>
       {/if}
       <CompilationDiagnosticsOutline {diagnostics} />
     </aside>
