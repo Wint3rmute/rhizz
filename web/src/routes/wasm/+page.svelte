@@ -4,6 +4,7 @@
   import ModelComponentsOutline from "../../components/ModelComponentsOutline.svelte";
   import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
   import persisted from "../../Persisted.svelte";
+  import MonacoEditor from "../../components/MonacoEditor.svelte";
 
   let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
 
@@ -25,11 +26,15 @@
       <h3 class="font-semibold mb-3 text-gray-100">Navigation</h3>
       <ul class="space-y-2 text-sm text-gray-300">
         <li>
-          <a href={resolve("/overview", {})} class="block hover:text-white"
+          <a
+            href={resolve("/overview", {})}
+            class="block hover:text-white"
           >Overview</a>
         </li>
         <li>
-          <a href={resolve("/editor", {})} class="block hover:text-white"
+          <a
+            href={resolve("/editor", {})}
+            class="block hover:text-white"
           >Editor</a>
         </li>
         <li>
@@ -42,11 +47,12 @@
       <div
         class="w-full bg-gray-800 p-6 rounded shadow flex flex-col h-full text-gray-100"
       >
-        <h1 class="text-2xl font-semibold mb-4 text-white">WASM Test</h1>
-        <textarea
-          bind:value={input.value}
-          class="font-mono flex-1 w-full p-4 border rounded resize-none bg-gray-700 text-gray-100 border-gray-600 placeholder-gray-400"
-        ></textarea>
+        <h1 class="text-2xl font-semibold mb-4 text-white">
+          WASM Test
+        </h1>
+        <div class="flex-1 w-full">
+          <MonacoEditor bind:value={input.value} language="hcl" />
+        </div>
       </div>
     </main>
 

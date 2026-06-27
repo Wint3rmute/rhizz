@@ -99,7 +99,8 @@
         width="1000"
         height="600"
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="{editor_state.view_box.x} {editor_state.view_box.y} 600 400"
+        viewBox="{editor_state.view_box.x} {editor_state.view_box
+                    .y} 600 400"
         onmousemove={onSvgMouseMove}
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
@@ -107,7 +108,13 @@
       >
         <defs>
           <pattern id="Pattern" x="0" y="0" width=".1" height=".1">
-            <circle cx="10" cy="10" r="2" fill="white" fill-opacity="0.5" />
+            <circle
+              cx="10"
+              cy="10"
+              r="2"
+              fill="white"
+              fill-opacity="0.5"
+            />
           </pattern>
         </defs>
         <rect
@@ -180,7 +187,10 @@
               class="checkbox checkbox-xs"
               onchange={(value) => {
                 if (value.currentTarget.checked) {
-                  checked[component.label] = { x: 100, y: 100 };
+                  checked[component.label] = {
+                    x: 100,
+                    y: 100,
+                  };
                 } else {
                   delete checked[component.label];
                 }
@@ -201,7 +211,7 @@
       </ul>
     {/if}
 
-    <br>
+    <br />
     <h3
       class="font-semibold text-sm mb-3 text-gray-300 uppercase tracking-wide"
     >
