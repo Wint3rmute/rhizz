@@ -215,7 +215,7 @@ pub struct ConnectionJS {
     // tags: Vec<String>,
     level: i32,
     pub from: usize,
-    pub to: usize
+    pub to: usize,
 }
 
 impl From<&rhizz_core::Connection> for ConnectionJS {
@@ -224,7 +224,7 @@ impl From<&rhizz_core::Connection> for ConnectionJS {
             label: c.label.clone(),
             level: c.level,
             from: c.from.component.0,
-            to: c.to.component.0
+            to: c.to.component.0,
         }
     }
 }
@@ -351,7 +351,6 @@ impl ModelJS {
             .map(ConnectionJS::from)
             .collect()
     }
-
 
     /// Returns the component with the given label, or `undefined` if not found.
     pub fn component_by_name(&self, name: &str) -> Option<ComponentJS> {
