@@ -17,8 +17,6 @@
   let components = $derived(model ? model.components() : []);
   let connections = $derived(model ? model.connections() : []);
 
-  console.log(model);
-
   // Stores position of each checked element. If an element is unchecked, it's not present here
   let checked = $state<Record<string, { x: number; y: number }>>({});
 
@@ -79,6 +77,56 @@
   function onSvgMouseUp() {
     dragging = null;
   }
+
+  // Returns the centre point of a node given its top-left position.
+  function nodeCenter(label: string): { x: number; y: number } | null {
+    const pos = checked[label];
+    if (!pos) return null;
+    return { x: pos.x + 50, y: pos.y + 50 };
+  }
+
+  // Builds an SVG path string for a Z-shaped elbow route with rounded corners.
+  function elbowPath(
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    r = 10,
+  ): string {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const mx = (ax + bx) / 2;
+
+    if (Math.abs(dy) < 0.5) return `M ${ax},${ay} L ${bx},${by}`;
+
+    const rc = Math.min(r, Math.abs(dx) / 2, Math.abs(dy) / 2);
+    const sx = dx >= 0 ? 1 : -1;
+    const sy = dy >= 0 ? 1 : -1;
+    const s1 = dx * dy > 0 ? 1 : 0;
+    const s2 = 1 - s1;
+
+    return [
+      `M ${ax},${ay}`,
+      `L ${mx - sx * rc},${ay}`,
+      `A ${rc},${rc} 0 0,${s1} ${mx},${ay + sy * rc}`,
+      `L ${mx},${by - sy * rc}`,
+      `A ${rc},${rc} 0 0,${s2} ${mx + sx * rc},${by}`,
+      `L ${bx},${by}`,
+    ].join(" ");
+  }
+
+  // Only connections where both endpoints are currently on the canvas.
+  let visibleConnections = $derived(
+    connections.flatMap((conn) => {
+      const from = model?.component_by_id(conn.from);
+      const to = model?.component_by_id(conn.to);
+      if (!from || !to) return [];
+      const a = nodeCenter(from.label);
+      const b = nodeCenter(to.label);
+      if (!a || !b) return [];
+      return [{ conn, a, b }];
+    }),
+  );
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -116,6 +164,20 @@
               fill-opacity="0.5"
             />
           </pattern>
+          <marker
+            id="arrow"
+            markerWidth="8"
+            markerHeight="6"
+            refX="8"
+            refY="3"
+            orient="auto"
+          >
+            <polygon
+              points="0 0, 8 3, 0 6"
+              fill="white"
+              fill-opacity="0.5"
+            />
+          </marker>
         </defs>
         <rect
           fill="url(#Pattern)"
@@ -125,6 +187,28 @@
           width="300%"
           height="300%"
         />
+
+        {#each visibleConnections as { conn, a, b }}
+          <path
+            d={elbowPath(a.x, a.y, b.x, b.y)}
+            stroke="white"
+            stroke-opacity="0.35"
+            stroke-width="1.5"
+            fill="none"
+            marker-end="url(#arrow)"
+          />
+          <text
+            x={(a.x + b.x) / 2}
+            y={(a.y + b.y) / 2 - 6}
+            fill="white"
+            fill-opacity="0.5"
+            font-size="10"
+            text-anchor="middle"
+            style="pointer-events: none; user-select: none"
+          >
+            {conn.label}
+          </text>
+        {/each}
 
         {#snippet ViewNode(name: string, x: number, y: number)}
           <g
