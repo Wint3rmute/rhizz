@@ -9,8 +9,6 @@
       lastY: number;
     }
     | { type: "zooming" };
-  // | { type: "dragging_element"; elementId: string; offsetX: number; offsetY: number }
-  // | { type: "adding_element"; query: string; candidateType: string | null };
 
   const editor_state = $state<
     { current: EditorState; view_box: { x: number; y: number } }

@@ -20,22 +20,6 @@
   // Stores position of each checked element. If an element is unchecked, it's not present here
   let checked = $state<Record<string, { x: number; y: number }>>({});
 
-  // Per-node positions in SVG-space
-  // let positions = $state<Record<string, { x: number; y: number }>>({});
-
-  // Initialise positions for newly-checked components outside of render
-  // $effect(() => {
-  //   const visible = components.filter((c) => checked[c.label]);
-  //   visible.forEach((component, i) => {
-  //     if (!positions[component.label]) {
-  //       positions[component.label] = {
-  //         x: (i % 5) * 150,
-  //         y: Math.floor(i / 5) * 150,
-  //       };
-  //     }
-  //   });
-  // });
-
   // Drag state
   let dragging: { label: string; offsetX: number; offsetY: number } | null =
     $state(null);
