@@ -4,7 +4,7 @@ import {
   get_editor_state,
   reset_view,
 } from "../../ViewEditorState.svelte";
-import { isModifierHeld } from "../../KeyboardState.svelte";
+import { isModifierHeld, isSpaceHeld } from "../../KeyboardState.svelte";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
 
@@ -347,11 +347,12 @@ function svgPoint(
   return { x: transformed.x, y: transformed.y };
 }
 
-// Middle mouse button always pans, regardless of what's under the
-// cursor — including directly over a node, so it must be handled here too
-// (not just in onCanvasMouseDown, which only sees clicks on empty canvas).
+// Middle mouse button, or the left button while Space is held, always
+// pans, regardless of what's under the cursor — including directly over a
+// node, so it must be handled here too (not just in onCanvasMouseDown,
+// which only sees clicks on empty canvas).
 function onNodeMouseDown(event: MouseEvent, index: number) {
-  if (event.button === 1) {
+  if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     panning = { lastX: event.clientX, lastY: event.clientY };
     return;
@@ -383,7 +384,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
-  if (event.button === 1) {
+  if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     panning = { lastX: event.clientX, lastY: event.clientY };
     return;
@@ -408,6 +409,10 @@ function onCanvasMouseDown(event: MouseEvent) {
 // (see the ViewNode snippet), so `index` is always already in `selected`.
 function onResizeHandleMouseDown(event: MouseEvent, index: number) {
   if (event.button !== 0) return;
+  // Let a space-held click bubble up to the node's own mousedown handler,
+  // which starts panning instead of a resize — keeps "how to start a pan"
+  // in one place.
+  if (isSpaceHeld()) return;
   event.preventDefault();
   event.stopPropagation();
 

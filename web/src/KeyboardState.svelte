@@ -18,8 +18,30 @@
     }
   }
 
+  // Whether an event's target is a place where typing a literal space
+  // should keep working normally (inputs, textareas, contenteditable —
+  // this covers Monaco's hidden textarea too).
+  function isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    return (
+      target.isContentEditable ||
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA"
+    );
+  }
+
   if (typeof window !== "undefined") {
-    window.addEventListener("keydown", (e) => setHeld(e.code, true));
+    window.addEventListener("keydown", (e) => {
+      setHeld(e.code, true);
+      // Space scrolls the page by default when focus isn't on an editable
+      // element (e.g. nothing focused, or a plain canvas/SVG) — suppress
+      // that so a hold-Space-to-pan feature doesn't also scroll the page.
+      // Skipped for editable targets so typing a literal space still works
+      // everywhere else in the app (e.g. the HCL text editor).
+      if (e.code === "Space" && !isEditableTarget(e.target)) {
+        e.preventDefault();
+      }
+    });
     window.addEventListener("keyup", (e) => setHeld(e.code, false));
     // Held-key state can get stuck "on" if a key is released while the
     // window doesn't have focus (e.g. switching apps mid-shortcut, or a
