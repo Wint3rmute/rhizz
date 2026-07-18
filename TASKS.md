@@ -15,23 +15,7 @@ How to work on this file:
 
 
 
-## Task 42 — Deduplicate drag/resize coordinate-and-clamp logic in the diagrams canvas
 
-Small/polish item from the architecture review.
-
-The drag and resize branches of `onSvgMouseMove` (and their single-vs-group
-variants) repeat a similar shape — get pointer coordinates, compute a
-proposed box, optionally clamp against an active parent, write via
-`setNodeBox`, cascade to children — with small variations that have
-drifted apart slightly across several iterations.
-
-- Extract the shared shape into one or more helper functions so the
-  single/group drag and resize paths share logic instead of parallel,
-  slightly-diverging implementations.
-- No behavior change.
-- Validate with `deno task check` and `deno task build`.
-
----
 
 ## Task 43 — Add schema validation for persisted diagram localStorage data
 

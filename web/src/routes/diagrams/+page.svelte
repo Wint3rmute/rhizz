@@ -10,19 +10,19 @@ import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
 import {
-  MIN_NODE_SIZE,
+  type Box,
   boxBoundaryPoint,
   boxCenter,
   boxContains,
   clampResizeWithin,
   clampWithin,
+  type ConnectionOrientation,
   depthOf,
   elbowPath,
+  MIN_NODE_SIZE,
+  type TextAlign,
   textPosition,
   unionBox,
-  type Box,
-  type ConnectionOrientation,
-  type TextAlign,
 } from "./geometry";
 
 const editor_state = create_editor_state();
@@ -87,10 +87,9 @@ function componentKey(index: number): string {
       current = component.parent_component_index;
       continue;
     }
-    const system =
-      component.parent_system_index !== undefined
-        ? systems[component.parent_system_index]
-        : undefined;
+    const system = component.parent_system_index !== undefined
+      ? systems[component.parent_system_index]
+      : undefined;
     if (system) parts.unshift(system.label);
     current = undefined;
   }
@@ -316,47 +315,47 @@ let selectedBox = $derived(
 type Interaction =
   | { type: "idle" }
   | {
-      // Dragging any selected node moves the whole selection together:
-      // startPositions snapshots every selected node's position when the
-      // drag begins; each move event recomputes every node's position
-      // from its own snapshot plus the same delta the anchor (grabbed)
-      // node moved by, so the group moves rigidly with no incremental
-      // drift.
-      type: "dragging";
-      anchorIndex: number;
-      offsetX: number;
-      offsetY: number;
-      startPositions: Record<number, { x: number; y: number }>;
-    }
+    // Dragging any selected node moves the whole selection together:
+    // startPositions snapshots every selected node's position when the
+    // drag begins; each move event recomputes every node's position
+    // from its own snapshot plus the same delta the anchor (grabbed)
+    // node moved by, so the group moves rigidly with no incremental
+    // drift.
+    type: "dragging";
+    anchorIndex: number;
+    offsetX: number;
+    offsetY: number;
+    startPositions: Record<number, { x: number; y: number }>;
+  }
   | {
-      // Resizing any selected node's handle scales the whole selection
-      // together, proportionally, around the fixed top-left corner of the
-      // selection's combined bounding box (groupBox, captured at resize
-      // start alongside every selected node's starting box).
-      type: "resizing";
-      anchorIndex: number;
-      groupBox: Box;
-      startBoxes: Record<number, Box>;
-    }
+    // Resizing any selected node's handle scales the whole selection
+    // together, proportionally, around the fixed top-left corner of the
+    // selection's combined bounding box (groupBox, captured at resize
+    // start alongside every selected node's starting box).
+    type: "resizing";
+    anchorIndex: number;
+    groupBox: Box;
+    startBoxes: Record<number, Box>;
+  }
   | {
-      // Canvas pan. Started by the middle mouse button, or the left
-      // button while Space is held, anywhere on the canvas (including
-      // over a node). lastX/lastY track screen-space pointer position of
-      // the last move event.
-      type: "panning";
-      lastX: number;
-      lastY: number;
-    }
+    // Canvas pan. Started by the middle mouse button, or the left
+    // button while Space is held, anywhere on the canvas (including
+    // over a node). lastX/lastY track screen-space pointer position of
+    // the last move event.
+    type: "panning";
+    lastX: number;
+    lastY: number;
+  }
   | {
-      // Marquee select: start point + current point, in world (SVG)
-      // coordinates. Started by dragging the left mouse button over empty
-      // canvas.
-      type: "marquee";
-      startX: number;
-      startY: number;
-      x: number;
-      y: number;
-    };
+    // Marquee select: start point + current point, in world (SVG)
+    // coordinates. Started by dragging the left mouse button over empty
+    // canvas.
+    type: "marquee";
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+  };
 
 let interaction: Interaction = $state({ type: "idle" });
 
@@ -392,7 +391,11 @@ function svgPoint(
 function onNodeMouseDown(event: MouseEvent, index: number) {
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
-    interaction = { type: "panning", lastX: event.clientX, lastY: event.clientY };
+    interaction = {
+      type: "panning",
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
     return;
   }
   if (event.button !== 0) return;
@@ -426,7 +429,11 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 function onCanvasMouseDown(event: MouseEvent) {
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
-    interaction = { type: "panning", lastX: event.clientX, lastY: event.clientY };
+    interaction = {
+      type: "panning",
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
     return;
   }
   if (event.button !== 0) return;
@@ -466,6 +473,67 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
   interaction = { type: "resizing", anchorIndex: index, groupBox, startBoxes };
 }
 
+// Moves every node in `startPositions` (a snapshot of the whole selection
+// taken when the drag began) by the same (deltaX, deltaY) offset from its
+// own snapshot position — recomputed from the snapshot each event (not
+// accumulated incrementally) to avoid drift. Each node still respects its
+// own active-parent containment individually — if only some of the
+// selection is constrained, the group may not move perfectly rigidly, but
+// no node is ever allowed to escape its parent's box — and cascades
+// containment to its own children. Shared by single- and multi-node
+// drags alike, since a single dragged node is just a selection of one.
+function applyGroupDelta(
+  startPositions: Record<number, { x: number; y: number }>,
+  deltaX: number,
+  deltaY: number,
+) {
+  for (const [indexStr, start] of Object.entries(startPositions)) {
+    const index = Number(indexStr);
+    const box = nodeBox(index);
+    if (!box) continue;
+    let next: Box = {
+      x: start.x + deltaX,
+      y: start.y + deltaY,
+      width: box.width,
+      height: box.height,
+    };
+    const ownParentBox = activeParentBox(index);
+    if (ownParentBox) {
+      next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
+    }
+    setNodeBox(index, next);
+    reclampChildren(index);
+  }
+}
+
+// Scales every node in `startBoxes` (a snapshot of the whole selection
+// taken when the resize began) by (scaleX, scaleY), applied to both
+// position (relative to the selection's fixed top-left, `groupBox`) and
+// size. Shared by single- and multi-node resizes alike, since a single
+// resized node is just a selection of one. Unlike group-drag, this does
+// not enforce parent containment — scaling several nodes while respecting
+// potentially different constraints per node is a lot more complex, and
+// not needed at this project stage (see TASKS.md Task 46).
+function applyGroupScale(
+  startBoxes: Record<number, Box>,
+  groupBox: Box,
+  scaleX: number,
+  scaleY: number,
+) {
+  for (const [indexStr, startBox] of Object.entries(startBoxes)) {
+    const index = Number(indexStr);
+    const relX = startBox.x - groupBox.x;
+    const relY = startBox.y - groupBox.y;
+    const next: Box = {
+      x: snap(groupBox.x + relX * scaleX),
+      y: snap(groupBox.y + relY * scaleY),
+      width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
+      height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
+    };
+    setNodeBox(index, next);
+  }
+}
+
 function onSvgMouseMove(event: MouseEvent) {
   // Captured to a local const so TypeScript can narrow `current.type` per
   // switch case below — narrowing directly on the live `interaction`
@@ -492,32 +560,10 @@ function onSvgMouseMove(event: MouseEvent) {
           );
         }
         // The whole selection moves by the same delta the anchor (grabbed)
-        // node moved by, recomputed from each node's own start snapshot each
-        // event (not accumulated incrementally) to avoid drift.
+        // node moved by.
         const deltaX = anchorNext.x - anchorStart.x;
         const deltaY = anchorNext.y - anchorStart.y;
-
-        for (const [indexStr, start] of Object.entries(current.startPositions)) {
-          const index = Number(indexStr);
-          const box = nodeBox(index);
-          if (!box) continue;
-          let next: Box = {
-            x: start.x + deltaX,
-            y: start.y + deltaY,
-            width: box.width,
-            height: box.height,
-          };
-          // Each node still respects its own active-parent containment
-          // individually — if only some of the selection is constrained,
-          // the group may not move perfectly rigidly, but no node is ever
-          // allowed to escape its parent's box.
-          const ownParentBox = activeParentBox(index);
-          if (ownParentBox) {
-            next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
-          }
-          setNodeBox(index, next);
-          reclampChildren(index);
-        }
+        applyGroupDelta(current.startPositions, deltaX, deltaY);
       }
       return;
     }
@@ -527,28 +573,11 @@ function onSvgMouseMove(event: MouseEvent) {
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
         const rawWidth = Math.max(MIN_NODE_SIZE, svgCoords.x - anchorStart.x);
         const rawHeight = Math.max(MIN_NODE_SIZE, svgCoords.y - anchorStart.y);
-        // Group-resize is a uniform scale (derived from how much the grabbed
-        // node's own box changed) applied to every selected node's position
-        // (relative to the selection's fixed top-left, groupBox) and size.
-        // Unlike single-node resize, this does not enforce parent
-        // containment — scaling several nodes while respecting potentially
-        // different constraints per node is a lot more complex, and not
-        // needed at this project stage.
+        // Group-resize is a uniform scale, derived from how much the
+        // grabbed node's own box changed.
         const scaleX = rawWidth / anchorStart.width;
         const scaleY = rawHeight / anchorStart.height;
-
-        for (const [indexStr, startBox] of Object.entries(current.startBoxes)) {
-          const index = Number(indexStr);
-          const relX = startBox.x - current.groupBox.x;
-          const relY = startBox.y - current.groupBox.y;
-          const next = {
-            x: snap(current.groupBox.x + relX * scaleX),
-            y: snap(current.groupBox.y + relY * scaleY),
-            width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
-            height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
-          };
-          setNodeBox(index, next);
-        }
+        applyGroupScale(current.startBoxes, current.groupBox, scaleX, scaleY);
       }
       return;
     }
@@ -558,7 +587,11 @@ function onSvgMouseMove(event: MouseEvent) {
       const zoom = editor_state.view.zoom;
       editor_state.view.x -= dxScreen / zoom;
       editor_state.view.y -= dyScreen / zoom;
-      interaction = { type: "panning", lastX: event.clientX, lastY: event.clientY };
+      interaction = {
+        type: "panning",
+        lastX: event.clientX,
+        lastY: event.clientY,
+      };
       return;
     }
     case "marquee": {

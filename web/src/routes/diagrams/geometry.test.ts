@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MIN_NODE_SIZE,
-  TEXT_ALIGN_PADDING,
+  type Box,
   boxBoundaryPoint,
   boxCenter,
   boxContains,
@@ -9,9 +8,10 @@ import {
   clampWithin,
   depthOf,
   elbowPath,
+  MIN_NODE_SIZE,
+  TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
-  type Box,
 } from "./geometry";
 
 describe("boxCenter", () => {
@@ -152,7 +152,7 @@ describe("unionBox", () => {
 });
 
 describe("textPosition", () => {
-  it("centers text for \"center\" alignment", () => {
+  it('centers text for "center" alignment', () => {
     expect(textPosition("center", 100, 60)).toEqual({
       x: 50,
       y: 30,
@@ -161,7 +161,7 @@ describe("textPosition", () => {
     });
   });
 
-  it("top-centers text (inset by TEXT_ALIGN_PADDING) for \"top-center\"", () => {
+  it('top-centers text (inset by TEXT_ALIGN_PADDING) for "top-center"', () => {
     expect(textPosition("top-center", 100, 60)).toEqual({
       x: 50,
       y: TEXT_ALIGN_PADDING,
@@ -170,7 +170,7 @@ describe("textPosition", () => {
     });
   });
 
-  it("top-left-aligns text (inset by TEXT_ALIGN_PADDING) for \"top-left\"", () => {
+  it('top-left-aligns text (inset by TEXT_ALIGN_PADDING) for "top-left"', () => {
     expect(textPosition("top-left", 100, 60)).toEqual({
       x: TEXT_ALIGN_PADDING,
       y: TEXT_ALIGN_PADDING,

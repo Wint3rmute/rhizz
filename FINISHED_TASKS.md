@@ -4,6 +4,30 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 42 — Deduplicate drag/resize coordinate-and-clamp logic in the diagrams canvas
+
+- Extracted the per-node write loops out of `onSvgMouseMove`'s
+  `"dragging"`/`"resizing"` switch cases in
+  `web/src/routes/diagrams/+page.svelte` into two named top-level
+  functions:
+  - `applyGroupDelta(startPositions, deltaX, deltaY)` — moves every node in
+    a position snapshot by the same offset, clamping each individually to
+    its own active parent and cascading via `reclampChildren`. Used for
+    both single- and multi-node drags (a single dragged node is just a
+    selection of one).
+  - `applyGroupScale(startBoxes, groupBox, scaleX, scaleY)` — scales every
+    node in a box snapshot by the same factor, relative to the selection's
+    fixed top-left. Used for both single- and multi-node resizes.
+- The two switch cases now each follow the same two-step shape: compute an
+  anchor-derived parameter (a delta for drag, a scale factor for resize),
+  then apply it to the whole snapshot via the corresponding helper —
+  instead of inlining the per-node loop directly in the switch case.
+- Pure refactor, no behavior change. Validated with `deno task check` (0
+  errors/warnings), `deno task build` (succeeds), and `deno task test`
+  (34/34 geometry tests still pass).
+
+---
+
 ## Task 41 — Replace plain Set with SvelteSet for the selection state
 
 - `selected` in `web/src/routes/diagrams/+page.svelte` is now `const
