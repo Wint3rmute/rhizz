@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 46 — Enforce containment during group-resize
+
+- `applyGroupScale` (`web/src/routes/diagrams/+page.svelte`) now clamps
+  each node's scaled box against its own `activeParentBox` (if any) before
+  writing it, exactly mirroring what `applyGroupDelta` already did for
+  drag — clamped individually per-node rather than solving for one "safe"
+  group scale factor upfront. Resizing a group can therefore end up not
+  perfectly uniform when some members are parent-constrained and others
+  aren't, an accepted trade-off matching the one `applyGroupDelta` already
+  documents for drag.
+- Extracted the now-identical "clamp against own active parent, write via
+  setNodeBox, cascade via reclampChildren" tail shared by both
+  `applyGroupDelta` and `applyGroupScale` into one helper,
+  `writeClampedToActiveParent(index, next)`. Both functions now only
+  compute their own `next: Box` (a positional delta vs. a size/position
+  scale) and delegate the rest to the shared helper — removing the last
+  bit of duplication between the two.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (47/47 pass, unaffected), and `deno fmt`
+  (no changes needed). Manual browser verification (nest a component,
+  select a group including it alongside unconstrained nodes, resize the
+  group) was not performed in this environment — worth a spot check.
+
+---
+
 ## Task 45 — Extend containment clamping to grandchildren (multi-level nesting)
 
 - `reclampChildren(parentIndex)` in `web/src/routes/diagrams/+page.svelte`

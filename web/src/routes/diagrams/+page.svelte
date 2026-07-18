@@ -491,10 +491,26 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
 // own snapshot position — recomputed from the snapshot each event (not
 // accumulated incrementally) to avoid drift. Each node still respects its
 // own active-parent containment individually — if only some of the
-// selection is constrained, the group may not move perfectly rigidly, but
-// no node is ever allowed to escape its parent's box — and cascades
-// containment to its own children. Shared by single- and multi-node
-// drags alike, since a single dragged node is just a selection of one.
+// selection is constrained, the group may not move/scale perfectly
+// rigidly/uniformly, but no node is ever allowed to escape its parent's
+// box — and cascades containment to its own descendants. Shared by both
+// applyGroupDelta and applyGroupScale below, since they only differ in
+// how `next` is computed (a positional delta vs. a size/position scale).
+function writeClampedToActiveParent(index: number, next: Box) {
+  const ownParentBox = activeParentBox(index);
+  const clamped = ownParentBox
+    ? clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN)
+    : next;
+  setNodeBox(index, clamped);
+  reclampChildren(index);
+}
+
+// Moves every node in `startPositions` (a snapshot of the whole selection
+// taken when the drag began) by the same (deltaX, deltaY) offset from its
+// own snapshot position — recomputed from the snapshot each event (not
+// accumulated incrementally) to avoid drift. Shared by single- and
+// multi-node drags alike, since a single dragged node is just a
+// selection of one.
 function applyGroupDelta(
   startPositions: Record<number, { x: number; y: number }>,
   deltaX: number,
@@ -504,18 +520,13 @@ function applyGroupDelta(
     const index = Number(indexStr);
     const box = nodeBox(index);
     if (!box) continue;
-    let next: Box = {
+    const next: Box = {
       x: start.x + deltaX,
       y: start.y + deltaY,
       width: box.width,
       height: box.height,
     };
-    const ownParentBox = activeParentBox(index);
-    if (ownParentBox) {
-      next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
-    }
-    setNodeBox(index, next);
-    reclampChildren(index);
+    writeClampedToActiveParent(index, next);
   }
 }
 
@@ -523,12 +534,7 @@ function applyGroupDelta(
 // taken when the resize began) by (scaleX, scaleY), applied to both
 // position (relative to the selection's fixed top-left, `groupBox`) and
 // size. Shared by single- and multi-node resizes alike, since a single
-// resized node is just a selection of one. Cascades containment to each
-// node's own descendants via reclampChildren, same as applyGroupDelta —
-// but unlike applyGroupDelta, does NOT clamp the resized node itself
-// against its own active parent: scaling several nodes while respecting
-// potentially different parent constraints per node is a lot more
-// complex, and not needed at this project stage (see TASKS.md Task 46).
+// resized node is just a selection of one.
 function applyGroupScale(
   startBoxes: Record<number, Box>,
   groupBox: Box,
@@ -545,8 +551,7 @@ function applyGroupScale(
       width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
       height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
     };
-    setNodeBox(index, next);
-    reclampChildren(index);
+    writeClampedToActiveParent(index, next);
   }
 }
 

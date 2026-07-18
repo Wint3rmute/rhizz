@@ -14,54 +14,39 @@ How to work on this file:
 ---
 
 
-
-
-
-
-
-## Task 46 — Enforce containment during group-resize
-
-Small/polish item from the architecture review.
-
-Group-resize (proportional scaling of a multi-selection) does not enforce
-parent containment at all, unlike single-node resize. This is a known,
-documented gap from when group-resize was implemented.
-
-- Decide on a reasonable behavior when a group-resize would push a
-  constrained child outside its parent (e.g. cap the group scale factor to
-  the most restrictive member, or clamp each affected child individually
-  after the scale is applied).
-- Validate with `deno task check` and `deno task build`.
-
-**Implementation plan:** Clamp each affected child individually after the
-group scale is applied, rather than solving for one "safe" group scale
-factor upfront (which would need a constraint-solving pass over every
-constrained member — unnecessary complexity at this project's stage).
-Concretely: in `applyGroupScale`'s loop, after computing each node's
-scaled `next` box as it does today, check `activeParentBox(index)`; if
-present, clamp `next` through `clampWithin(next, parentBox,
-CHILD_CONTAINMENT_MARGIN)` (the same helper `applyGroupDelta` already uses)
-before calling `setNodeBox`. Nodes without an active parent are
-unaffected.
-
-This brings resize in line with the containment guarantee drag already
-provides, at the cost of the group occasionally no longer looking like a
-perfectly uniform scale when some members are constrained and others
-aren't — an accepted trade-off, mirroring the one `applyGroupDelta`
-already documents ("the group may not move perfectly rigidly, but no node
-is ever allowed to escape its parent's box"). Once both `applyGroupDelta`
-and `applyGroupScale` do the same "compute proposed box, then clamp
-against own active parent if present" step, consider factoring that check
-into one small shared helper.
-
-Validate with `deno task check` and `deno task build`, and manually verify
-by nesting a component, selecting a group that includes it alongside
-other nodes, and resizing the group.
-
 ## (For later brainstorming) Task 48 - virtual filesystem hierarchy for frontend
 
 High-level goal: make it possible to store multiple multi-file projects & diagrams,
 with the web application pretending to have a virtual filesystem hierarchy.
+
+## (For later brainstorming) Task 49 - visual regression testing
+
+As we now have a virtual filesystem hierarchy for the frontend, we can create
+end-to-end tests which load the project, render a diagram and verify that it
+matches the expected output.
+
+Vitest supports visual regression testing. The goal of this task is to implement
+infrastructure for visual regression testing in the frontend, then ask the
+developer to create diagrams, which can be saved as reference images for future
+comparisons.
+
+
+## (For later brainstorming) Task 50 - automatic layout via force simulation
+
+The goal of this task is to implement automatic layout via force simulation, so
+that nodes are automatically positioned to avoid overlap and minimize edge
+crossings.
+
+The functionality to trigger force simulation would be triggered by the user,
+either via a button or a keyboard shortcut. The functionality shall allow to run
+the force simulation and automatically position the nodes, either for all nodes
+or for a selected subset of nodes.
+
+Specific use-cases:
+
+- Button on the bottom toolbar - "auto-layout"
+- When new nodes are added to the diagram (although the force simulation should only run for new nodes)
+- When exploring the system model in an interactive fashion
 
 ---
 
