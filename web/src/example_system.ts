@@ -38,7 +38,7 @@ system "home-monitor" {
   component "controller" {
     description = "ARM Cortex-M4 processing hub"
     tags        = ["compute", "data"]
-    leaf        = true
+    leaf        = false
 
     port "i2c-in" {
       description = "I2C bus to sensor"
@@ -65,6 +65,56 @@ system "home-monitor" {
         field "humidity"  { type = "float32" }
         field "timestamp" { type = "uint64"  }
       }
+    }
+
+    # ── Internal decomposition ──────────────
+    component "mcu" {
+      description = "STM32 ARM Cortex-M4 microcontroller"
+      tags        = ["electronics", "compute"]
+      leaf        = true
+
+      port "power-in" {
+        description = "Regulated 3.3V power input"
+        protocol    = "power"
+        role        = "consumer"
+        tags        = ["power"]
+
+        message "status" {
+          description = "Power rail health"
+          field "voltage" {
+            type = "float32"
+            unit = "V"
+          }
+        }
+      }
+    }
+
+    component "power-supply" {
+      description = "Buck converter regulating battery voltage to 3.3V"
+      tags        = ["electronics", "power"]
+      leaf        = true
+
+      port "power-out" {
+        description = "Regulated 3.3V power output"
+        protocol    = "power"
+        role        = "provider"
+        tags        = ["power"]
+
+        message "status" {
+          description = "Power rail health"
+          field "voltage" {
+            type = "float32"
+            unit = "V"
+          }
+        }
+      }
+    }
+
+    connection "power-rail" {
+      description = "Power delivery from supply to MCU"
+      tags        = ["power"]
+      from        = "power-supply:power-out"
+      to          = "mcu:power-in"
     }
   }
 
