@@ -13,20 +13,10 @@ How to work on this file:
 
 ---
 
-## Task 36 — Containment polish and documented scope boundaries
-
-- If a parent is resized smaller than a child already inside it, re-clamp/
-  shrink the child to fit.
-- Explicitly out of scope for this task (document as code comments where
-  relevant, do not implement):
-  - Overlap avoidance between sibling children — containment only.
-  - Deep/transitive clamping across more than one level (grandchildren):
-    if `A ⊃ B ⊃ C` are all on canvas, `C` clamps to `B` only, not to `A`.
-- Validate with `deno task check` and `deno task build`.
 
 ---
 
-## Task 28 — Task template
+## Task <NUMBER> — Task template
 
 - Task description here
 - Requirements, spec, acceptance criteria as bullet points
