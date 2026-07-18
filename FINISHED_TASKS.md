@@ -4,6 +4,29 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 31 — Add resizable size to diagram nodes (data model)
+
+- Extended the per-node persisted record from `{x, y}` to
+  `{x, y, width?, height?}` (`width`/`height` optional in storage so entries
+  persisted before this task still parse without a migration step).
+- Added `nodeBox(index)`, a helper that reads a checked node's position and
+  size, backfilling `DEFAULT_NODE_WIDTH`/`DEFAULT_NODE_HEIGHT` (`100x100`,
+  matching the previous hardcoded size) when `width`/`height` are missing.
+- `nodeCenter` now derives the centre point from `nodeBox`'s actual
+  width/height instead of the fixed `+50` offset.
+- The `ViewNode` snippet and its canvas call site now render dynamic
+  `width`/`height` (via `{@const box = nodeBox(index)}`) instead of the
+  hardcoded `"100"`/`"100"`; the label text re-centers at `width/2, height/2`.
+- Checking a new component from the sidebar now writes `width`/`height`
+  explicitly (still defaulting to `100x100`), so freshly-placed nodes don't
+  rely on the backfill path.
+- No visible/behavioral change yet (all nodes still default to `100x100`),
+  but the data model now supports variable node size — unblocks Task 32.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 30 — Add node selection state to the diagram canvas
 
 - Added `selected: number | null` (component arena index) as page state on

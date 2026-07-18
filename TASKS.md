@@ -13,21 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 31 — Add resizable size to diagram nodes (data model)
-
-- Extend the per-node persisted record from `{x, y}` to
-  `{x, y, width, height}`, defaulting to `100x100` to match current visuals.
-- Defensively backfill old persisted entries that lack `width`/`height` when
-  loading from `localStorage`.
-- Render nodes with dynamic `width`/`height` instead of the hardcoded
-  `"100"`/`"100"`; recompute `nodeCenter` from actual size instead of the
-  fixed `+50` offset.
-- End-to-end result: no visible/behavioral change yet, but the data model now
-  supports variable node size — unblocks Task 32.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 32 — Add corner-drag resize interaction for the selected node
 
 - Render a small resize handle at the bottom-right corner of the selected

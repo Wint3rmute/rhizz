@@ -42,17 +42,39 @@ let model = $derived(output.model());
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
-// Stores position of each checked element, keyed by the component's arena
-// index (its position in model.components(), same index space as
+// Default node size, in world (SVG) units, for newly-placed nodes and for
+// backfilling entries persisted before per-node sizing existed.
+const DEFAULT_NODE_WIDTH = 100;
+const DEFAULT_NODE_HEIGHT = 100;
+
+// Stores position + size of each checked element, keyed by the component's
+// arena index (its position in model.components(), same index space as
 // ConnectionJS.from/to and ComponentJS.parent_component_index). Component
 // labels are only unique within a parent scope (SPEC.md §2.3), so labels
 // cannot be used as a stable key once components are nested. If an element
 // is unchecked, it's not present here. Persisted so the diagram layout
-// survives page reloads.
-let checked = persisted<Record<number, { x: number; y: number }>>(
-  "DIAGRAM_CHECKED_NODES",
-  {},
-);
+// survives page reloads. width/height are optional in storage so entries
+// persisted before node sizing existed still parse; see nodeBox() for the
+// backfilled read path.
+let checked = persisted<
+  Record<number, { x: number; y: number; width?: number; height?: number }>
+>("DIAGRAM_CHECKED_NODES", {});
+
+// Returns the placed node's box (position + size), or null if the component
+// isn't currently checked. Backfills width/height with defaults for entries
+// persisted before node sizing was introduced.
+function nodeBox(
+  index: number,
+): { x: number; y: number; width: number; height: number } | null {
+  const pos = checked.value[index];
+  if (!pos) return null;
+  return {
+    x: pos.x,
+    y: pos.y,
+    width: pos.width ?? DEFAULT_NODE_WIDTH,
+    height: pos.height ?? DEFAULT_NODE_HEIGHT,
+  };
+}
 
 // Currently selected node (component arena index), or null if nothing is
 // selected. Not persisted — selection is a transient UI state.
@@ -143,11 +165,11 @@ function onWheel(event: WheelEvent) {
   editor_state.view.y = mouseSvg.y - fracY * newHeight;
 }
 
-// Returns the centre point of a node given its top-left position.
+// Returns the centre point of a node given its top-left position and size.
 function nodeCenter(index: number): { x: number; y: number } | null {
-  const pos = checked.value[index];
-  if (!pos) return null;
-  return { x: pos.x + 50, y: pos.y + 50 };
+  const box = nodeBox(index);
+  if (!box) return null;
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
 // Builds an SVG path string for a Z-shaped elbow route with rounded corners.
@@ -322,6 +344,8 @@ let visibleConnections = $derived(
           index: number,
           x: number,
           y: number,
+          width: number,
+          height: number,
         )}
           <g
             transform="translate({x}, {y})"
@@ -329,16 +353,16 @@ let visibleConnections = $derived(
             style="cursor: grab"
           >
             <rect
-              width="100"
-              height="100"
+              {width}
+              {height}
               rx="5"
               stroke={selected === index ? "var(--color-primary)" : "white"}
               stroke-width={selected === index ? 2 : 1}
               fill="var(--color-base-200)"
             />
             <text
-              x={50}
-              y={50}
+              x={width / 2}
+              y={height / 2}
               fill="white"
               text-anchor="middle"
               dominant-baseline="middle"
@@ -350,12 +374,15 @@ let visibleConnections = $derived(
         {/snippet}
 
         {#each components as component, index}
-          {#if checked.value[index]}
+          {@const box = nodeBox(index)}
+          {#if box}
             {@render ViewNode(
               component.label,
               index,
-              checked.value[index]?.x ?? 0,
-              checked.value[index]?.y ?? 0,
+              box.x,
+              box.y,
+              box.width,
+              box.height,
             )}
           {/if}
         {/each}
@@ -399,6 +426,8 @@ let visibleConnections = $derived(
                   checked.value[index] = {
                     x: 100,
                     y: 100,
+                    width: DEFAULT_NODE_WIDTH,
+                    height: DEFAULT_NODE_HEIGHT,
                   };
                 } else {
                   delete checked.value[index];
