@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 40 — Make the diagram view (pan/zoom) page-scoped instead of a module-level singleton
+
+- `web/src/ViewEditorState.svelte` no longer holds a module-level
+  `editor_state` singleton or a `get_editor_state()` accessor. Replaced
+  with `create_editor_state()`, a factory that returns a fresh
+  `$state`-backed `ViewEditorState` (`{ view: { x, y, zoom } }`) on every
+  call, plus the exported `ViewEditorState` type. `clamp_zoom()` is
+  unchanged (already a pure, stateless function).
+- `reset_view()` now takes the state instance to reset as a parameter
+  (`reset_view(state: ViewEditorState)`) instead of implicitly resetting
+  the old shared singleton.
+- `web/src/routes/diagrams/+page.svelte` now calls
+  `const editor_state = create_editor_state();` to construct its own
+  independent instance, and the "Reset View" button now calls
+  `reset_view(editor_state)`.
+- This is a pure refactor with the diagrams page as the sole consumer, so
+  behavior is unchanged today, but any future feature needing more than
+  one independent diagram view (split view, a thumbnail preview, ...) can
+  now just call `create_editor_state()` again instead of fighting over one
+  shared pan/zoom. Matches the intentional distinction already documented
+  in `ViewEditorState.svelte`: unlike genuinely global concerns
+  (`KeyboardState.svelte`'s physical key state, `ThemeState.svelte`'s
+  app-wide theme), pan/zoom is inherently per-view.
+- Hit and fixed a Svelte compiler error (`$state(...) can only be used as
+  a variable declaration initializer...`) from initially writing
+  `create_editor_state()` as `return $state({...})` directly — `$state()`
+  must be assigned to a local variable first, then returned.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (34/34 geometry tests still pass).
+
+---
+
 ## Task 39 — Make diagram layout persistence keys stable across HCL source edits
 
 - Added a minimal `SystemJS` wrapper (`label` getter only) and

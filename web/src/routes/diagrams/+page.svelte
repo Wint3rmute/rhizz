@@ -1,7 +1,7 @@
 <script lang="ts">
 import {
   clamp_zoom,
-  get_editor_state,
+  create_editor_state,
   reset_view,
 } from "../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../KeyboardState.svelte";
@@ -24,7 +24,7 @@ import {
   type TextAlign,
 } from "./geometry";
 
-const editor_state = get_editor_state();
+const editor_state = create_editor_state();
 let root_svg: SVGElement;
 
 // Tracks the canvas's rendered pixel size so the SVG viewBox can match it
@@ -1019,7 +1019,7 @@ function zoomToFill() {
           Zoom to Fill
         </button>
         <button
-          onclick={reset_view}
+          onclick={() => reset_view(editor_state)}
           class="btn btn-ghost btn-sm"
           title="Reset pan and zoom. Useful when you get lost in the diagram"
         >

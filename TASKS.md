@@ -13,23 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 40 — Make the diagram view (pan/zoom) page-scoped instead of a module-level singleton
-
-`ViewEditorState.svelte`'s `editor_state` (pan/zoom) is a module-level
-singleton shared by every consumer of `get_editor_state()`. This was
-flagged early in the diagrams work and never revisited; every other piece
-of diagrams state added since is properly component-scoped.
-
-- Refactor so the diagrams page owns its own view state instance (e.g. via
-  context, or constructed locally and passed down), rather than a shared
-  global.
-- Confirm this doesn't regress the current single-instance case while
-  unblocking any future multi-instance use (split view, thumbnail
-  preview, etc.).
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 41 — Replace plain Set with SvelteSet for the selection state
 
 `selected` (in `web/src/routes/diagrams/+page.svelte`) is a plain
