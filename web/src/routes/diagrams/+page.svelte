@@ -1186,9 +1186,10 @@ function runAutoLayout() {
           onclick={runAutoLayout}
           disabled={autoLayoutRunning}
           class="btn btn-ghost btn-sm {autoLayoutRunning ? 'animate-pulse' : ''}"
+          style="cursor: {autoLayoutRunning ? 'wait' : 'pointer'}"
           title="Auto-arrange the selection (or all top-level nodes, if nothing is selected) using force-directed layout"
         >
-          {autoLayoutRunning ? 'Calculating…' : 'Auto Layout'}
+          Auto Layout
         </button>
         <button
           onclick={() => (gridVisible = !gridVisible)}
