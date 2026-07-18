@@ -13,7 +13,14 @@ How to work on this file:
 
 ---
 
-## (For later brainstorming) Task 50 - automatic layout via force simulation
+## Task 50 - automatic layout via force simulation
+
+**Status: in progress.** Steps 1–3 of the phased plan below are done and
+demoable — there's a working "Auto Layout" button on the diagrams page’s
+bottom toolbar. Steps 4–5 (recursive per-sibling-group layout, "pin
+existing nodes" for the new-nodes use-case, and the "exploring
+interactively" use-case) are still open follow-ups; see the end of this
+entry for what's implemented so far.
 
 The goal of this task is to implement automatic layout via force simulation, so
 that nodes are automatically positioned to avoid overlap and minimize edge
@@ -154,6 +161,40 @@ noise never enters a given group's simulation.
 5. Follow-up: revisit the "exploring the system model interactively" use
    case once there's a concrete feature (e.g. auto-expanding children) to
    hang it off of.
+
+### Implemented so far (steps 1–3)
+
+- `web/src/routes/diagrams/forceLayout.ts`: pure, Svelte/rhizz-free module
+  wrapping `d3-force` (added as a dependency, along with `@types/d3-force`).
+  Named `forceLayout.ts` rather than `layout.ts` to avoid colliding with
+  SvelteKit's reserved `+layout.ts` route-file convention. Exposes
+  `createForceLayout(nodes, edges, options)` (returns a `{ tick(), alpha() }`
+  pair for frame-by-frame driving) and `runForceLayout(...)` (a synchronous
+  convenience wrapper that ticks to convergence, used by tests). Nodes are
+  approximated as circles (`Math.hypot(width, height) / 2`) for the
+  collision force; a node's own diagram index is round-tripped via a
+  `componentIndex` field (NOT `index` — d3-force reserves that name on
+  every simulation node for its own bookkeeping and will silently overwrite
+  it). Supports pinning a node in place via `fixed: true` (sets d3-force's
+  `fx`/`fy`), already threaded through for the not-yet-wired-up "new nodes"
+  use-case. 9 Vitest tests in `forceLayout.test.ts`.
+- `web/src/routes/diagrams/+page.svelte`: added a `runAutoLayout()` function
+  and an "Auto Layout" button in the bottom toolbar. Target set is the
+  current selection, or every placed top-level node if nothing's selected
+  (v1 scope, per step 2 above). Edges are `connections` filtered to those
+  with both endpoints in the target set. Driven via `requestAnimationFrame`,
+  writing each frame's result back through `writeClampedToActiveParent`
+  (the same clamp-to-own-parent-and-cascade path drag/resize already use
+  — Tasks 45/46), so a manually-selected mix of parents/children stays
+  containment-safe even without hierarchy-aware grouping yet. Stops once
+  `alpha` decays below `AUTO_LAYOUT_ALPHA_MIN` or `AUTO_LAYOUT_MAX_FRAMES`
+  is reached. `autoLayoutRunning` disables the button mid-run so a second
+  click can't race the first.
+- Not yet done: the undo/snapshot safety net mentioned above — running
+  auto-layout on a hand-arranged diagram is currently irreversible other
+  than manually dragging things back.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (56/56 pass), and `deno fmt` (clean).
 
 ---
 

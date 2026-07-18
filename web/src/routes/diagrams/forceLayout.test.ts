@@ -100,7 +100,8 @@ describe("runForceLayout", () => {
     ];
     const result = runForceLayout(nodes, []);
     expect(result.map((r) => r.index).sort((a, b) => a - b)).toEqual([
-      5, 12,
+      5,
+      12,
     ]);
   });
 });

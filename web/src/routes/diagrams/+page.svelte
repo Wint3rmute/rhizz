@@ -11,6 +11,11 @@ import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
+  createForceLayout,
+  type LayoutEdge,
+  type LayoutNode,
+} from "./forceLayout";
+import {
   type Box,
   boxBoundaryPoint,
   boxCenter,
@@ -747,6 +752,87 @@ function zoomToFill() {
   editor_state.view.y = bounds.y + bounds.height / 2 -
     canvas_height / newZoom / 2;
 }
+
+// Auto-layout animation budget: stop once the simulation has settled
+// (alpha below this threshold), or after this many animation frames,
+// whichever comes first — so a pathological/never-converging case can't
+// spin forever.
+const AUTO_LAYOUT_ALPHA_MIN = 0.005;
+const AUTO_LAYOUT_MAX_FRAMES = 300;
+
+// Whether an auto-layout animation is currently running — disables the
+// "Auto Layout" button so a second run can't start and race the first
+// one over the same node positions.
+let autoLayoutRunning = $state(false);
+
+// Runs a force-directed auto-layout pass over the target set of nodes:
+// the current selection if non-empty, otherwise every currently-placed
+// *top-level* node. v1 scope only — see TASKS.md Task 50 for why a flat
+// pass mixing every level of a hierarchy at once isn't the right model;
+// a manually-selected mix of parents/children is still handled safely
+// (each moved node is clamped to its own active parent, same as a live
+// drag), just not laid out with any special awareness of the hierarchy.
+// Animates the result by driving the simulation frame-by-frame via
+// requestAnimationFrame, writing back through the same
+// clamp-to-active-parent-and-cascade path a live drag uses, rather than
+// jumping straight to the converged layout.
+function runAutoLayout() {
+  if (autoLayoutRunning) return;
+
+  const targetIndices = selected.size > 0 ? [...selected] : renderOrder.filter(
+    (index) => components[index]?.parent_component_index === undefined,
+  );
+
+  const layoutNodes: LayoutNode[] = targetIndices.flatMap((index) => {
+    const box = nodeBox(index);
+    return box ? [{ index, box }] : [];
+  });
+  if (layoutNodes.length < 2) return; // nothing meaningful to arrange
+
+  const targetSet = new Set(targetIndices);
+  const layoutEdges: LayoutEdge[] = connections
+    .filter((conn) => targetSet.has(conn.from) && targetSet.has(conn.to))
+    .map((conn) => ({ from: conn.from, to: conn.to }));
+
+  // Centers the simulation on the target set's current combined bounding
+  // box, rather than the world origin, so the group settles roughly
+  // where it already was instead of jumping across the canvas.
+  const bounds = unionBox(layoutNodes.map((n) => n.box));
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  const layout = createForceLayout(layoutNodes, layoutEdges, {
+    centerX,
+    centerY,
+  });
+
+  autoLayoutRunning = true;
+  let frame = 0;
+
+  function step() {
+    const results = layout.tick();
+    for (const result of results) {
+      const box = nodeBox(result.index);
+      if (!box) continue;
+      writeClampedToActiveParent(result.index, {
+        x: result.x,
+        y: result.y,
+        width: box.width,
+        height: box.height,
+      });
+    }
+
+    frame += 1;
+    const converged = layout.alpha() < AUTO_LAYOUT_ALPHA_MIN;
+    if (!converged && frame < AUTO_LAYOUT_MAX_FRAMES) {
+      requestAnimationFrame(step);
+    } else {
+      autoLayoutRunning = false;
+    }
+  }
+
+  requestAnimationFrame(step);
+}
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -1076,6 +1162,14 @@ function zoomToFill() {
             {/each}
           </select>
         </div>
+        <button
+          onclick={runAutoLayout}
+          disabled={autoLayoutRunning}
+          class="btn btn-ghost btn-sm"
+          title="Auto-arrange the selection (or all top-level nodes, if nothing is selected) using force-directed layout"
+        >
+          Auto Layout
+        </button>
         <button
           onclick={() => (gridVisible = !gridVisible)}
           class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"
