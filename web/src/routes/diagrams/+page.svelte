@@ -5,6 +5,7 @@ import {
   reset_view,
 } from "../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../KeyboardState.svelte";
+import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
@@ -284,11 +285,13 @@ function reclampChildren(parentIndex: number) {
 }
 
 // Currently selected nodes (component arena indices). Not persisted —
-// selection is transient UI state. Always reassigned as a fresh Set on
-// change (never mutated in place): plain Set mutations aren't deeply
-// tracked by Svelte's $state the way plain object/array mutations are, so
-// every change below constructs a new Set to trigger reactivity.
-let selected: Set<number> = $state(new Set());
+// selection is transient UI state. Uses SvelteSet (from svelte/reactivity)
+// rather than a plain Set wrapped in $state, since plain Set mutations
+// aren't deeply tracked by Svelte's $state the way plain object/array
+// mutations are — SvelteSet makes add()/delete()/clear() directly
+// reactive, so call sites can mutate it in place instead of always
+// reconstructing and reassigning a fresh Set.
+const selected = new SvelteSet<number>();
 
 // The single selected node, or null if zero or more than one are selected.
 // Used wherever an operation only makes sense for exactly one node (the
@@ -400,7 +403,8 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   // selected (as part of a multi-selection) keeps the whole selection, so
   // dragging it moves the whole group.
   if (!selected.has(index)) {
-    selected = new Set([index]);
+    selected.clear();
+    selected.add(index);
   }
 
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
@@ -575,9 +579,10 @@ function onSvgMouseUp() {
     // Otherwise, commit whatever the live preview (marqueeCandidates) was
     // already showing.
     const box = marqueeBox;
-    selected = box && (box.width > 2 || box.height > 2)
-      ? new Set(marqueeCandidates)
-      : new Set();
+    selected.clear();
+    if (box && (box.width > 2 || box.height > 2)) {
+      for (const index of marqueeCandidates) selected.add(index);
+    }
   }
   interaction = { type: "idle" };
 }
@@ -1080,11 +1085,7 @@ function zoomToFill() {
                   // savedLayout.value[componentKey(index)] is intentionally
                   // left alone, so re-checking this component later
                   // restores it here.
-                  if (selected.has(index)) {
-                    const next = new Set(selected);
-                    next.delete(index);
-                    selected = next;
-                  }
+                  selected.delete(index);
                 }
               }}
             />

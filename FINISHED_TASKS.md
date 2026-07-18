@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 41 — Replace plain Set with SvelteSet for the selection state
+
+- `selected` in `web/src/routes/diagrams/+page.svelte` is now `const
+  selected = new SvelteSet<number>();` (imported from
+  `svelte/reactivity`), replacing the old `let selected: Set<number> =
+  $state(new Set());`. `SvelteSet` is deeply reactive on its own, so
+  `add()`/`delete()`/`clear()` are directly tracked — no more
+  reassigning a fresh `Set` just to trigger reactivity, and no more risk
+  of a future direct `.add()`/`.delete()` call silently becoming a no-op.
+- Simplified the three call sites that used to reconstruct a new `Set`:
+  - `onNodeMouseDown`'s "replace selection with just this node" path is
+    now `selected.clear(); selected.add(index);` instead of `selected =
+    new Set([index]);`.
+  - `onSvgMouseUp`'s marquee-commit path is now `selected.clear(); if
+    (...) { for (const index of marqueeCandidates) selected.add(index); }`
+    instead of ternary-constructing a whole new `Set`.
+  - The sidebar checkbox's uncheck handler is now a single
+    `selected.delete(index);` (removed the redundant `has()` check +
+    copy-then-delete-then-reassign dance, since `delete()` on a key
+    that isn't present is already a harmless no-op).
+- `marqueeCandidates` (a `$derived.by` producing a brand new `Set` each
+  recompute, never mutated in place) was deliberately left as a plain
+  `Set` — it's freshly constructed every time, so there's no reactivity
+  gap to fix there.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (34/34 geometry tests still pass).
+
+---
+
 ## Task 40 — Make the diagram view (pan/zoom) page-scoped instead of a module-level singleton
 
 - `web/src/ViewEditorState.svelte` no longer holds a module-level

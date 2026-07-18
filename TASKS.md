@@ -13,22 +13,7 @@ How to work on this file:
 
 ---
 
-## Task 41 — Replace plain Set with SvelteSet for the selection state
 
-`selected` (in `web/src/routes/diagrams/+page.svelte`) is a plain
-`Set<number>` wrapped in `$state`, which requires always reassigning a
-fresh `Set` on every change (documented via comments) since plain `Set`
-mutations aren't deeply tracked by Svelte's `$state`. This is a footgun
-for future contributors who might call `.add()`/`.delete()` directly and
-get a silent no-op.
-
-- Replace with `SvelteSet` from `svelte/reactivity`, which supports direct
-  mutation.
-- Simplify call sites that currently reconstruct a new `Set` purely to
-  satisfy reactivity.
-- Validate with `deno task check` and `deno task build`.
-
----
 
 ## Task 42 — Deduplicate drag/resize coordinate-and-clamp logic in the diagrams canvas
 
