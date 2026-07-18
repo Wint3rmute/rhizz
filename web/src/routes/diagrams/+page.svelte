@@ -58,6 +58,13 @@ const MIN_NODE_SIZE = 40;
 // multiplier later.
 const SNAP_GRID_SIZE = 10;
 
+// Whether the background grid is drawn. Toggled via the "Toggle Grid"
+// button; not persisted — it's a transient display preference, not part
+// of the saved diagram. Purely visual: the underlying rect stays in place
+// either way, since it's also the hit-target for panning/marquee-select on
+// empty canvas (see the <rect> using this below).
+let gridVisible = $state(true);
+
 // Whether dragging/resizing snaps position/size to SNAP_GRID_SIZE-unit
 // increments. Toggled via the "Snap to Grid" button; not persisted — it's
 // a transient editing mode, not part of the saved diagram.
@@ -888,7 +895,7 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
           </marker>
         </defs>
         <rect
-          fill="url(#Grid)"
+          fill={gridVisible ? "url(#Grid)" : "transparent"}
           x={editor_state.view.x}
           y={editor_state.view.y}
           width={canvas_width / editor_state.view.zoom}
@@ -1018,6 +1025,13 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
       </svg>
 
       <div class="absolute bottom-2 right-2 z-10 flex gap-2">
+        <button
+          onclick={() => (gridVisible = !gridVisible)}
+          class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"
+          title="Toggle background grid visibility"
+        >
+          Toggle Grid
+        </button>
         <button
           onclick={() => (snapEnabled = !snapEnabled)}
           class="btn btn-sm {snapActive ? 'btn-primary' : 'btn-ghost'}"
