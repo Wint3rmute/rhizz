@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 34 — Add text alignment control to the node inspector
+
+- Extended the per-node record (from Task 31) with an optional
+  `textAlign?: "center" | "top-center" | "top-left"` field (a new
+  `TextAlign` type alias); `nodeBox()` backfills it to `"center"`
+  (`DEFAULT_TEXT_ALIGN`) for entries persisted before this task.
+- Added `setSelectedTextAlign(align)` to update the currently selected
+  node's alignment, and a `selectedBox` derived value so the inspector can
+  read the current value.
+- Added a 3-button daisyUI `join` segmented control ("Center" / "Top" /
+  "Top-left") to the inspector panel from Task 33, highlighting the active
+  option with `btn-primary`.
+- Added `textPosition(align, width, height)`, mapping alignment to the
+  label `<text>`'s `x`/`y`/`text-anchor`/`dominant-baseline`; the two
+  top-aligned variants are inset by `TEXT_ALIGN_PADDING` (`8` world units)
+  from the node's edges.
+- `ViewNode` snippet and its render call site now thread `textAlign`
+  through from `nodeBox()`.
+- End-to-end result: select a node, change alignment in the inspector, the
+  label repositions live inside the box and persists across reload.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 33 — Add left-side inspector panel for the selected node
 
 - Added a `selectedComponent` derived value (`components[selected] ?? null`)

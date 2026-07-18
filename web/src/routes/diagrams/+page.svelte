@@ -58,25 +58,46 @@ const MIN_NODE_SIZE = 40;
 const RESIZE_HANDLE_SIZE = 10;
 const RESIZE_HANDLE_RADIUS = 5;
 
-// Stores position + size of each checked element, keyed by the component's
-// arena index (its position in model.components(), same index space as
-// ConnectionJS.from/to and ComponentJS.parent_component_index). Component
-// labels are only unique within a parent scope (SPEC.md §2.3), so labels
-// cannot be used as a stable key once components are nested. If an element
-// is unchecked, it's not present here. Persisted so the diagram layout
-// survives page reloads. width/height are optional in storage so entries
-// persisted before node sizing existed still parse; see nodeBox() for the
-// backfilled read path.
+// Where a node's label is positioned within its box.
+type TextAlign = "center" | "top-center" | "top-left";
+const DEFAULT_TEXT_ALIGN: TextAlign = "center";
+
+// Inset from a node's edges for the two top-aligned variants, in world units.
+const TEXT_ALIGN_PADDING = 8;
+
+// Stores position + size + style of each checked element, keyed by the
+// component's arena index (its position in model.components(), same index
+// space as ConnectionJS.from/to and ComponentJS.parent_component_index).
+// Component labels are only unique within a parent scope (SPEC.md §2.3), so
+// labels cannot be used as a stable key once components are nested. If an
+// element is unchecked, it's not present here. Persisted so the diagram
+// layout survives page reloads. width/height/textAlign are optional in
+// storage so entries persisted before those features existed still parse;
+// see nodeBox() for the backfilled read path.
 let checked = persisted<
-  Record<number, { x: number; y: number; width?: number; height?: number }>
+  Record<
+    number,
+    {
+      x: number;
+      y: number;
+      width?: number;
+      height?: number;
+      textAlign?: TextAlign;
+    }
+  >
 >("DIAGRAM_CHECKED_NODES", {});
 
-// Returns the placed node's box (position + size), or null if the component
-// isn't currently checked. Backfills width/height with defaults for entries
-// persisted before node sizing was introduced.
-function nodeBox(
-  index: number,
-): { x: number; y: number; width: number; height: number } | null {
+// Returns the placed node's box (position + size + text alignment), or null
+// if the component isn't currently checked. Backfills width/height/
+// textAlign with defaults for entries persisted before those features were
+// introduced.
+function nodeBox(index: number): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  textAlign: TextAlign;
+} | null {
   const pos = checked.value[index];
   if (!pos) return null;
   return {
@@ -84,7 +105,49 @@ function nodeBox(
     y: pos.y,
     width: pos.width ?? DEFAULT_NODE_WIDTH,
     height: pos.height ?? DEFAULT_NODE_HEIGHT,
+    textAlign: pos.textAlign ?? DEFAULT_TEXT_ALIGN,
   };
+}
+
+// Sets the text alignment of the currently selected node, if any.
+function setSelectedTextAlign(align: TextAlign) {
+  if (selected === null) return;
+  const box = checked.value[selected];
+  if (!box) return;
+  checked.value[selected] = { ...box, textAlign: align };
+}
+
+// Maps a text alignment + node size to the label <text>'s x/y/anchor/
+// baseline. The two top-aligned variants are inset by TEXT_ALIGN_PADDING
+// from the node's edges.
+function textPosition(
+  align: TextAlign,
+  width: number,
+  height: number,
+): { x: number; y: number; anchor: string; baseline: string } {
+  switch (align) {
+    case "top-center":
+      return {
+        x: width / 2,
+        y: TEXT_ALIGN_PADDING,
+        anchor: "middle",
+        baseline: "hanging",
+      };
+    case "top-left":
+      return {
+        x: TEXT_ALIGN_PADDING,
+        y: TEXT_ALIGN_PADDING,
+        anchor: "start",
+        baseline: "hanging",
+      };
+    case "center":
+      return {
+        x: width / 2,
+        y: height / 2,
+        anchor: "middle",
+        baseline: "middle",
+      };
+  }
 }
 
 // Currently selected node (component arena index), or null if nothing is
@@ -93,6 +156,7 @@ let selected: number | null = $state(null);
 let selectedComponent = $derived(
   selected !== null ? components[selected] ?? null : null,
 );
+let selectedBox = $derived(selected !== null ? nodeBox(selected) : null);
 
 // Node-drag state
 let dragging: { index: number; offsetX: number; offsetY: number } | null =
@@ -286,7 +350,38 @@ let visibleConnections = $derived(
 
       <div class="divider my-3"></div>
 
-      <!-- Style controls (e.g. text alignment) are added in Task 34. -->
+      <div class="text-xs font-semibold text-base-content/70 uppercase tracking-wide mb-2">
+        Text alignment
+      </div>
+      <div class="join w-full">
+        <button
+          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
+            'center'
+            ? 'btn-primary'
+            : 'btn-ghost'}"
+          onclick={() => setSelectedTextAlign("center")}
+        >
+          Center
+        </button>
+        <button
+          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
+            'top-center'
+            ? 'btn-primary'
+            : 'btn-ghost'}"
+          onclick={() => setSelectedTextAlign("top-center")}
+        >
+          Top
+        </button>
+        <button
+          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
+            'top-left'
+            ? 'btn-primary'
+            : 'btn-ghost'}"
+          onclick={() => setSelectedTextAlign("top-left")}
+        >
+          Top-left
+        </button>
+      </div>
     {:else}
       <p class="text-base-content/50 text-sm">
         Select a component on the canvas to edit its properties.
@@ -424,7 +519,9 @@ let visibleConnections = $derived(
           y: number,
           width: number,
           height: number,
+          textAlign: TextAlign,
         )}
+          {@const textPos = textPosition(textAlign, width, height)}
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
@@ -439,11 +536,11 @@ let visibleConnections = $derived(
               fill="var(--color-base-200)"
             />
             <text
-              x={width / 2}
-              y={height / 2}
+              x={textPos.x}
+              y={textPos.y}
               fill="white"
-              text-anchor="middle"
-              dominant-baseline="middle"
+              text-anchor={textPos.anchor}
+              dominant-baseline={textPos.baseline}
               style="pointer-events: none; user-select: none"
             >
               {label}
@@ -481,6 +578,7 @@ let visibleConnections = $derived(
               box.y,
               box.width,
               box.height,
+              box.textAlign,
             )}
           {/if}
         {/each}

@@ -13,22 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 34 — Add text alignment control to the node inspector
-
-- Extend the per-node record (from Task 31) with
-  `textAlign: "center" | "top-center" | "top-left"`, defaulting to
-  `"center"`.
-- Add a 3-button segmented control to the inspector panel (Task 33), bound
-  to the selected node's `textAlign`.
-- Map `textAlign` to the label `<text>` element's `x`/`y`/`text-anchor`/
-  `dominant-baseline`, with small fixed padding for the two top-aligned
-  variants.
-- End-to-end result: select a node, change alignment, the label repositions
-  live inside the box and persists across reload.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 35 — Enforce parent/child containment constraints on the canvas
 
 Builds on Task 29 (index-keyed canvas state) and `ComponentJS.parent_component_index`
