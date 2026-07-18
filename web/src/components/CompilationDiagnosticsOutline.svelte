@@ -7,11 +7,10 @@
 <div class="text-sm text-gray-300 space-y-2">
   {#if diagnostics.length === 0}
     <div role="alert" class="alert alert-success alert-soft">
-      No Warnings <br>
-      No Errors <br>
+      No Warnings<br />
+      No Errors<br />
       Well Done!
     </div>
-    <br>
   {/if}
   {#each diagnostics as diagnostic}
     {#if diagnostic.code.startsWith("E")}

@@ -8,7 +8,6 @@
 <div class="text-sm text-gray-300 space-y-2">
   {#if components.length === 0}
     <div>No components defined...</div>
-    <br>
   {/if}
   {#each components as component}
     <div class="alert alert-soft">
