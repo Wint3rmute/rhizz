@@ -17,46 +17,7 @@ How to work on this file:
 
 
 
-## Task 45 — Extend containment clamping to grandchildren (multi-level nesting)
 
-Small/polish item from the architecture review. Mirrors the scope note
-from the previously-postponed containment-polish task, re-added here for
-visibility.
-
-Containment clamping only considers a node's *direct* parent. If
-`A ⊃ B ⊃ C` are all placed on canvas, `C` clamps to `B` but not
-transitively to `A`.
-
-- Decide and implement how deep the clamping should cascade (likely:
-  transitively clamp through the whole ancestor chain, not just the
-  direct parent).
-- Validate with `deno task check` and `deno task build`.
-
-**Implementation plan:** The fix belongs in `reclampChildren(parentIndex)`
-— today it clamps only `parentIndex`'s *direct* children against
-`parentIndex`'s box. Make it recurse: after clamping each direct child,
-call `reclampChildren(childIndex)` again so grandchildren (and deeper) get
-re-clamped against their own just-updated parent, cascading all the way
-down. Since `reclampChildren` already bails out early for any component
-not currently placed on canvas, the recursion is naturally bounded by
-what's actually on-screen — no separate depth limit needed.
-
-`activeParentBox` and the per-node clamp during a drag/single resize
-(which only clamp a node against its *immediate* active parent) don't
-need to change — that's still correct on its own, since a node should
-always stay within its direct parent regardless of nesting depth. The
-transitive part is entirely handled by `reclampChildren`'s cascade once a
-middle ancestor's box changes, so this task is essentially a one-function
-fix plus verification.
-
-This is UI-interaction-driven and not easily covered by the existing pure
-geometry unit tests, so validate manually in the browser: place a 3-level
-`A ⊃ B ⊃ C` hierarchy, drag `A` far enough that `B` has to clamp, and
-confirm `C` is re-clamped to follow. Validate with `deno task check` and
-`deno task build`, and update `reclampChildren`'s doc comment (which
-currently says "direct child") to describe the new transitive behavior.
-
----
 
 ## Task 46 — Enforce containment during group-resize
 
@@ -96,6 +57,11 @@ into one small shared helper.
 Validate with `deno task check` and `deno task build`, and manually verify
 by nesting a component, selecting a group that includes it alongside
 other nodes, and resizing the group.
+
+## (For later brainstorming) Task 48 - virtual filesystem hierarchy for frontend
+
+High-level goal: make it possible to store multiple multi-file projects & diagrams,
+with the web application pretending to have a virtual filesystem hierarchy.
 
 ---
 

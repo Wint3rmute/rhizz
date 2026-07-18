@@ -263,8 +263,10 @@ const CHILD_CONTAINMENT_MARGIN = 10;
 // Returns the box of `index`'s parent component, but only if that parent is
 // itself currently placed on the canvas ("active") — a node with a parent
 // that isn't on canvas has nothing to be constrained by. Only considers the
-// direct parent (see TASKS.md Task 36 for why deeper/transitive containment
-// is explicitly out of scope).
+// direct parent — a node only ever needs to stay within its own immediate
+// parent's box; staying within *its* parent's ancestors transitively is
+// handled separately by reclampChildren's recursive cascade below, once a
+// middle ancestor's own box changes.
 function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
   const parentIndex = components[index]?.parent_component_index;
   if (parentIndex === undefined) return null;
@@ -272,9 +274,15 @@ function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
 }
 
 // Re-clamps every currently-placed direct child of `parentIndex` against
-// the parent's current box. Called after a parent is dragged or resized so
-// its children's constraint region follows it live, and after checking a
-// new component (in case it's a parent of already-placed children).
+// the parent's current box, then recurses into each clamped child so
+// grandchildren (and deeper) are re-clamped against their own
+// just-updated parent in turn — cascading containment through the whole
+// ancestor chain, not just one level. Called after a parent is dragged or
+// resized so its descendants' constraint regions follow it live, and
+// after checking a new component (in case it's a parent of already-placed
+// children). Naturally bounded by what's actually on-screen, since a
+// component that isn't currently placed has no box to clamp or recurse
+// into.
 function reclampChildren(parentIndex: number) {
   const parentBox = nodeBox(parentIndex);
   if (!parentBox) return;
@@ -284,6 +292,7 @@ function reclampChildren(parentIndex: number) {
     if (!box) return; // not currently placed on canvas
     const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
     setNodeBox(childIndex, clamped);
+    reclampChildren(childIndex);
   });
 }
 
@@ -514,10 +523,12 @@ function applyGroupDelta(
 // taken when the resize began) by (scaleX, scaleY), applied to both
 // position (relative to the selection's fixed top-left, `groupBox`) and
 // size. Shared by single- and multi-node resizes alike, since a single
-// resized node is just a selection of one. Unlike group-drag, this does
-// not enforce parent containment — scaling several nodes while respecting
-// potentially different constraints per node is a lot more complex, and
-// not needed at this project stage (see TASKS.md Task 46).
+// resized node is just a selection of one. Cascades containment to each
+// node's own descendants via reclampChildren, same as applyGroupDelta —
+// but unlike applyGroupDelta, does NOT clamp the resized node itself
+// against its own active parent: scaling several nodes while respecting
+// potentially different parent constraints per node is a lot more
+// complex, and not needed at this project stage (see TASKS.md Task 46).
 function applyGroupScale(
   startBoxes: Record<number, Box>,
   groupBox: Box,
@@ -535,6 +546,7 @@ function applyGroupScale(
       height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
     };
     setNodeBox(index, next);
+    reclampChildren(index);
   }
 }
 

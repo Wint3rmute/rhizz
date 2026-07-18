@@ -4,6 +4,47 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 45 — Extend containment clamping to grandchildren (multi-level nesting)
+
+- `reclampChildren(parentIndex)` in `web/src/routes/diagrams/+page.svelte`
+  now recurses: after clamping each direct child of `parentIndex` against
+  `parentIndex`'s box and writing it via `setNodeBox`, it calls
+  `reclampChildren(childIndex)` on that same child, so grandchildren (and
+  deeper) get re-clamped against their own just-updated parent in turn.
+  Containment now cascades through the whole ancestor chain instead of
+  stopping one level down.
+- The recursion is naturally bounded by what's actually placed on canvas
+  — `reclampChildren` already bails out early (`if (!parentBox) return;`)
+  for any component without a box, so no separate depth limit was needed.
+- `activeParentBox` (and the per-node clamp during drag) intentionally
+  stayed unchanged — a node only ever needs to stay within its own
+  *immediate* parent; the transitive part is entirely handled by
+  `reclampChildren`'s cascade once a middle ancestor's box changes. Updated
+  both functions' doc comments to describe this division of
+  responsibility and removed the now-outdated reference to this being
+  "explicitly out of scope" (that was this same task, previously
+  postponed).
+- Caught during manual review: `applyGroupScale` (which handles *all*
+  resizing, single- or multi-node, since Task 42's refactor) never called
+  `reclampChildren` at all, so resizing a parent didn't cascade
+  containment to its children/grandchildren even after the fix above —
+  only drag exercised the new recursion. Added `reclampChildren(index)`
+  right after each `setNodeBox(index, next)` in `applyGroupScale`'s loop,
+  mirroring `applyGroupDelta`, so resize now cascades containment to
+  descendants exactly like drag does. `applyGroupScale` still
+  intentionally does *not* clamp the resized node itself against its own
+  parent (that remains Task 46's scope) — updated its doc comment to spell
+  out that distinction precisely.
+- This is UI-interaction-driven behavior not easily covered by the
+  existing pure geometry unit tests; validated with `deno task check` (0
+  errors/warnings), `deno task build` (succeeds), and `deno task test`
+  (47/47 pass, unaffected). Manual browser verification (place a 3-level
+  `A ⊃ B ⊃ C` hierarchy; drag `A` far enough that `B` clamps and confirm
+  `C` follows; separately resize `A` and confirm `B`/`C` are re-clamped
+  too) was not performed in this environment — worth a spot check.
+
+---
+
 ## Task 44 — Make diagram tuning constants configurable
 
 - Scoped to `SNAP_GRID_SIZE` only, per the task's own priority —
