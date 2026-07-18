@@ -3,8 +3,8 @@
   let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
 </script>
 
-<h3 class="font-semibold mb-3 text-gray-100">Diagnostics</h3>
-<div class="text-sm text-gray-300 space-y-2">
+<h3 class="font-semibold mb-3 text-base-content">Diagnostics</h3>
+<div class="text-sm text-base-content/70 space-y-2">
   {#if diagnostics.length === 0}
     <div role="alert" class="alert alert-success alert-soft">
       No Warnings<br />

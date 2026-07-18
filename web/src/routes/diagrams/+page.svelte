@@ -123,7 +123,7 @@
       New
     </button>
 
-    <div class="flex-1 w-full bg-[#0a0a14]">
+    <div class="flex-1 w-full bg-neutral">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <svg
         bind:this={root_svg}
@@ -233,16 +233,16 @@
 
   <!-- Right sidebar: component list -->
   <aside
-    class="w-64 shrink-0 bg-gray-900 text-gray-100 p-4 overflow-y-auto border-l border-gray-700"
+    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300"
   >
     <h3
-      class="font-semibold text-sm mb-3 text-gray-300 uppercase tracking-wide"
+      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
     >
       Components
     </h3>
 
     {#if components.length === 0}
-      <p class="text-gray-500 text-sm">
+      <p class="text-base-content/50 text-sm">
         No components found.<br />Open the editor and define some systems.
       </p>
     {:else}
@@ -270,7 +270,7 @@
               title={component.label}
             >
               {#if !component.leaf}
-                <span class="text-gray-400 mr-1">▸</span>
+                <span class="text-base-content/60 mr-1">▸</span>
               {/if}
               {component.label}
             </label>
@@ -281,7 +281,7 @@
 
     <br />
     <h3
-      class="font-semibold text-sm mb-3 text-gray-300 uppercase tracking-wide"
+      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
     >
       Connections
     </h3>

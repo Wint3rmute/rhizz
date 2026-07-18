@@ -53,29 +53,29 @@
   let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
 
-<div class="flex-1 w-full bg-gray-900">
+<div class="flex-1 w-full bg-base-100">
   <div
     class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6 h-full"
   >
     <aside
-      class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow"
+      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
-      <h3 class="font-semibold mb-3 text-gray-100">Navigation</h3>
-      <ul class="space-y-2 text-sm text-gray-300">
+      <h3 class="font-semibold mb-3 text-base-content">Navigation</h3>
+      <ul class="space-y-2 text-sm text-base-content/70">
         <li>
           <a
             href={resolve("/overview", {})}
-            class="block hover:text-white"
+            class="block hover:text-base-content"
           >Overview</a>
         </li>
         <li>
           <a
             href={resolve("/diagrams", {})}
-            class="block hover:text-white"
+            class="block hover:text-base-content"
           >Diagrams</a>
         </li>
         <li>
-          <a href={resolve("/", {})} class="block hover:text-white">Home</a>
+          <a href={resolve("/", {})} class="block hover:text-base-content">Home</a>
         </li>
       </ul>
     </aside>
@@ -103,9 +103,9 @@
         </div>
       {/if}
       <div
-        class="w-full bg-gray-800 p-6 rounded shadow flex flex-col flex-1 text-gray-100"
+        class="w-full bg-base-200 p-6 rounded shadow flex flex-col flex-1 text-base-content"
       >
-        <h1 class="text-2xl font-semibold mb-4 text-white">
+        <h1 class="text-2xl font-semibold mb-4 text-base-content">
           Editor
         </h1>
         <div class="flex-1 w-full">
@@ -115,7 +115,7 @@
     </main>
 
     <aside
-      class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow"
+      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
       {#if model !== undefined}
         <ModelComponentsOutline {model} />

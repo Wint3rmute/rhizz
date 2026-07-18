@@ -58,13 +58,13 @@
   ]);
 </script>
 
-<div class="card bg-gray-800 shadow">
+<div class="card bg-base-200 shadow">
   <div class="card-body">
-    <h2 class="card-title text-gray-100 mb-6">Completion Breakdown</h2>
+    <h2 class="card-title text-base-content mb-6">Completion Breakdown</h2>
 
     <!-- Radial summary -->
     <div
-      class="flex flex-col sm:flex-row items-center gap-6 mb-8 p-4 rounded-xl bg-gray-900"
+      class="flex flex-col sm:flex-row items-center gap-6 mb-8 p-4 rounded-xl bg-base-100"
     >
       <div
         class="radial-progress {overallPct >= 80 ? 'text-success' : overallPct >= 50 ? 'text-warning' : 'text-error'} shrink-0"
@@ -77,7 +77,7 @@
         >{overallPct}%</span>
       </div>
       <div class="flex-1 text-center sm:text-left">
-        <div class="text-xl font-semibold text-gray-100 mb-1">
+        <div class="text-xl font-semibold text-base-content mb-1">
           {#if overallPct === 100}
             Model fully specified
           {:else if overallPct >= 80}
@@ -90,25 +90,25 @@
             Not yet started
           {/if}
         </div>
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-base-content/60">
           {completeTotal} entities fully specified out of {grandTotal} total
         </p>
         <div
-          class="flex gap-4 mt-3 justify-center sm:justify-start text-xs text-gray-400"
+          class="flex gap-4 mt-3 justify-center sm:justify-start text-xs text-base-content/60"
         >
           <span class="flex items-center gap-1">
             <span
-              class="inline-block w-2 h-2 rounded-full bg-green-500"
+              class="inline-block w-2 h-2 rounded-full bg-success"
             ></span>Complete
           </span>
           <span class="flex items-center gap-1">
             <span
-              class="inline-block w-2 h-2 rounded-full bg-yellow-500"
+              class="inline-block w-2 h-2 rounded-full bg-warning"
             ></span>Partial
           </span>
           <span class="flex items-center gap-1">
             <span
-              class="inline-block w-2 h-2 rounded-full bg-gray-600"
+              class="inline-block w-2 h-2 rounded-full bg-base-content/40"
             ></span>Incomplete
           </span>
         </div>
@@ -119,11 +119,11 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {#each rows as row}
         {@const total = row.cat.complete + row.cat.partial + row.cat.incomplete}
-        <div class="bg-gray-900 rounded-xl p-4 flex flex-col gap-3">
+        <div class="bg-base-100 rounded-xl p-4 flex flex-col gap-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-lg {row.ring}">{row.icon}</span>
-              <span class="font-semibold text-gray-200">{row.label}</span>
+              <span class="font-semibold text-base-content">{row.label}</span>
             </div>
             <span
               class="text-lg font-bold tabular-nums {row.cat.pct >= 80 ? 'text-success' : row.cat.pct >= 50 ? 'text-warning' : 'text-error'}"
@@ -137,16 +137,16 @@
           </progress>
           <div class="flex gap-2 text-xs flex-wrap">
             {#if total === 0}
-              <span class="badge badge-sm badge-ghost text-gray-500"
+              <span class="badge badge-sm badge-ghost text-base-content/50"
               >none defined</span>
             {:else}
               <span
-                class="badge badge-sm bg-green-900 text-green-300 border-0"
+                class="badge badge-sm badge-soft badge-success"
               >{row.cat.complete} complete</span>
               <span
-                class="badge badge-sm bg-yellow-900 text-yellow-300 border-0"
+                class="badge badge-sm badge-soft badge-warning"
               >{row.cat.partial} partial</span>
-              <span class="badge badge-sm badge-ghost text-gray-500">{
+              <span class="badge badge-sm badge-ghost text-base-content/50">{
                   row.cat.incomplete
                 } incomplete</span>
             {/if}
