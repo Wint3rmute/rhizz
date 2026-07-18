@@ -876,7 +876,7 @@ function zoomToFill() {
                 y1="0"
                 x2={i}
                 y2={MAJOR_GRID_SPACING}
-                stroke="white"
+                stroke="var(--color-base-content)"
                 stroke-opacity="0.08"
                 stroke-width="1"
               />
@@ -885,7 +885,7 @@ function zoomToFill() {
                 y1={i}
                 x2={MAJOR_GRID_SPACING}
                 y2={i}
-                stroke="white"
+                stroke="var(--color-base-content)"
                 stroke-opacity="0.08"
                 stroke-width="1"
               />
@@ -895,7 +895,7 @@ function zoomToFill() {
               y1="0"
               x2={MAJOR_GRID_SPACING}
               y2="0"
-              stroke="white"
+              stroke="var(--color-base-content)"
               stroke-opacity="0.2"
               stroke-width="1"
             />
@@ -904,7 +904,7 @@ function zoomToFill() {
               y1="0"
               x2="0"
               y2={MAJOR_GRID_SPACING}
-              stroke="white"
+              stroke="var(--color-base-content)"
               stroke-opacity="0.2"
               stroke-width="1"
             />
@@ -919,7 +919,7 @@ function zoomToFill() {
           >
             <polygon
               points="0 0, 8 3, 0 6"
-              fill="white"
+              fill="var(--color-base-content)"
               fill-opacity="0.5"
             />
           </marker>
@@ -955,14 +955,16 @@ function zoomToFill() {
               {width}
               {height}
               rx="5"
-              stroke={highlighted ? "var(--color-primary)" : "white"}
+              stroke={highlighted
+                ? "var(--color-primary)"
+                : "var(--color-base-content)"}
               stroke-width={highlighted ? 2 : 1}
               fill="var(--color-base-200)"
             />
             <text
               x={textPos.x}
               y={textPos.y}
-              fill="white"
+              fill="var(--color-base-content)"
               text-anchor={textPos.anchor}
               dominant-baseline={textPos.baseline}
               style="pointer-events: none; user-select: none"
@@ -1019,7 +1021,7 @@ function zoomToFill() {
         {#each visibleConnections as { conn, a, b, orientation }}
           <path
             d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
-            stroke="white"
+            stroke="var(--color-base-content)"
             stroke-opacity="0.35"
             stroke-width="1.5"
             fill="none"
@@ -1029,7 +1031,7 @@ function zoomToFill() {
           <text
             x={(a.x + b.x) / 2}
             y={(a.y + b.y) / 2 - 6}
-            fill="white"
+            fill="var(--color-base-content)"
             fill-opacity="0.5"
             font-size="10"
             text-anchor="middle"
