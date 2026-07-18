@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 36 — Extract pure geometry helpers from diagrams/+page.svelte into a dedicated module
+
+- Created `web/src/routes/diagrams/geometry.ts`, a Svelte/DOM-independent
+  module holding `clampWithin`, `clampResizeWithin`, `unionBox`,
+  `boxContains`, `boxCenter`, `boxBoundaryPoint`, `elbowPath`,
+  `textPosition`, `depthOf`, the `Box`/`ConnectionOrientation`/`TextAlign`
+  type aliases, and the `MIN_NODE_SIZE`/`TEXT_ALIGN_PADDING` constants they
+  depend on.
+- `depthOf` was refactored to take an explicit `parentOf: (index) => number
+  | undefined` lookup function instead of closing over the reactive
+  `components` array, so it's a pure function usable outside the
+  component. `+page.svelte` now defines a small `parentOf` wrapper and
+  passes it at the call site.
+- `+page.svelte` imports everything it needs from `./geometry` instead of
+  defining these inline; `snap()` stayed in the component since it reads
+  component-local `snapActive` state.
+- No behavior change — confirmed via `deno task check` and `deno task
+  build`, both passing identically to before the extraction.
+- Set up the test infrastructure this unblocks: added `vitest` to
+  `web/package.json` (`deno task test` runs `vitest run`, using Deno's
+  fallback to `package.json` scripts — no `deno.json` task needed), and
+  configured it via `test: {...}` in `vite.config.ts` (imported from
+  `"vitest/config"` instead of plain `"vite"` for typing). No DOM
+  environment configured yet, since only pure-function tests exist so far;
+  add jsdom/happy-dom + `@testing-library/svelte` if/when component tests
+  are needed.
+
+---
+
 ## Task 35 — Enforce parent/child containment constraints on the canvas
 
 - Added `activeParentBox(index)`: returns a node's parent's box, but only

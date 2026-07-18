@@ -7,6 +7,21 @@ import {
 import { isModifierHeld, isSpaceHeld } from "../../KeyboardState.svelte";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
+import {
+  MIN_NODE_SIZE,
+  boxBoundaryPoint,
+  boxCenter,
+  boxContains,
+  clampResizeWithin,
+  clampWithin,
+  depthOf,
+  elbowPath,
+  textPosition,
+  unionBox,
+  type Box,
+  type ConnectionOrientation,
+  type TextAlign,
+} from "./geometry";
 
 const editor_state = get_editor_state();
 let root_svg: SVGElement;
@@ -48,10 +63,6 @@ let connections = $derived(model ? model.connections() : []);
 const DEFAULT_NODE_WIDTH = 100;
 const DEFAULT_NODE_HEIGHT = 100;
 
-// Nodes can't be resized smaller than this (world units), so a node never
-// shrinks into an unusable sliver.
-const MIN_NODE_SIZE = 40;
-
 // How many world units position/size snap to when "snap to grid" (below)
 // is enabled. Kept as its own constant, separate from MINOR_GRID_SPACING,
 // so it can be tuned independently — e.g. exposed as a UI-selectable
@@ -92,12 +103,9 @@ function snap(value: number): number {
 const RESIZE_HANDLE_SIZE = 10;
 const RESIZE_HANDLE_RADIUS = 5;
 
-// Where a node's label is positioned within its box.
-type TextAlign = "center" | "top-center" | "top-left";
+// Default text alignment for newly-placed nodes and for backfilling
+// entries persisted before per-node text alignment existed.
 const DEFAULT_TEXT_ALIGN: TextAlign = "center";
-
-// Inset from a node's edges for the two top-aligned variants, in world units.
-const TEXT_ALIGN_PADDING = 8;
 
 // Position + size + style of a node, as stored in checked/savedLayout
 // below. width/height/textAlign are optional so entries persisted before
@@ -177,8 +185,6 @@ function setSelectedTextAlign(align: TextAlign) {
 // in world units.
 const CHILD_CONTAINMENT_MARGIN = 10;
 
-type Box = { x: number; y: number; width: number; height: number };
-
 // Returns the box of `index`'s parent component, but only if that parent is
 // itself currently placed on the canvas ("active") — a node with a parent
 // that isn't on canvas has nothing to be constrained by. Only considers the
@@ -188,42 +194,6 @@ function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
   const parentIndex = components[index]?.parent_component_index;
   if (parentIndex === undefined) return null;
   return nodeBox(parentIndex);
-}
-
-// Clamps `child`'s position (and, if it doesn't fit, its size) so it stays
-// fully inside `parent`, inset by `margin` on all sides. Pure — does not
-// read or write `checked`. Used wherever the child's top-left corner is free
-// to move (drag, initial placement, cascading after the parent moves).
-function clampWithin(child: Box, parent: Box, margin: number): Box {
-  const innerX = parent.x + margin;
-  const innerY = parent.y + margin;
-  const innerWidth = Math.max(0, parent.width - margin * 2);
-  const innerHeight = Math.max(0, parent.height - margin * 2);
-
-  const width = Math.min(child.width, innerWidth);
-  const height = Math.min(child.height, innerHeight);
-
-  const x = Math.min(Math.max(child.x, innerX), innerX + innerWidth - width);
-  const y = Math.min(Math.max(child.y, innerY), innerY + innerHeight - height);
-
-  return { x, y, width, height };
-}
-
-// Clamps a resizing box's width/height so it doesn't grow past `parent`'s
-// inner edge, inset by `margin`. Unlike clampWithin, the box's top-left
-// corner (x, y) is treated as fixed — resizing always anchors from the
-// corner opposite the handle being dragged.
-function clampResizeWithin(
-  box: Box,
-  parent: Box,
-  margin: number,
-): { width: number; height: number } {
-  const maxWidth = parent.x + parent.width - margin - box.x;
-  const maxHeight = parent.y + parent.height - margin - box.y;
-  return {
-    width: Math.min(box.width, Math.max(MIN_NODE_SIZE, maxWidth)),
-    height: Math.min(box.height, Math.max(MIN_NODE_SIZE, maxHeight)),
-  };
 }
 
 // Re-clamps every currently-placed direct child of `parentIndex` against
@@ -240,62 +210,6 @@ function reclampChildren(parentIndex: number) {
     const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
     setNodeBox(childIndex, clamped);
   });
-}
-
-// Bounding box (union) enclosing every box in `boxes`. Used to find a
-// multi-selection's combined extent for group-resize.
-function unionBox(boxes: Box[]): Box {
-  const x = Math.min(...boxes.map((b) => b.x));
-  const y = Math.min(...boxes.map((b) => b.y));
-  const right = Math.max(...boxes.map((b) => b.x + b.width));
-  const bottom = Math.max(...boxes.map((b) => b.y + b.height));
-  return { x, y, width: right - x, height: bottom - y };
-}
-
-// Whether `inner` lies fully inside `outer`. Used for marquee-select: a
-// node is only selected once its entire bounding box is enclosed by the
-// marquee rectangle, not merely overlapping it — the mental model users
-// expect from most selection tools.
-function boxContains(outer: Box, inner: Box): boolean {
-  return (
-    inner.x >= outer.x &&
-    inner.y >= outer.y &&
-    inner.x + inner.width <= outer.x + outer.width &&
-    inner.y + inner.height <= outer.y + outer.height
-  );
-}
-
-// Maps a text alignment + node size to the label <text>'s x/y/anchor/
-// baseline. The two top-aligned variants are inset by TEXT_ALIGN_PADDING
-// from the node's edges.
-function textPosition(
-  align: TextAlign,
-  width: number,
-  height: number,
-): { x: number; y: number; anchor: string; baseline: string } {
-  switch (align) {
-    case "top-center":
-      return {
-        x: width / 2,
-        y: TEXT_ALIGN_PADDING,
-        anchor: "middle",
-        baseline: "hanging",
-      };
-    case "top-left":
-      return {
-        x: TEXT_ALIGN_PADDING,
-        y: TEXT_ALIGN_PADDING,
-        anchor: "start",
-        baseline: "hanging",
-      };
-    case "center":
-      return {
-        x: width / 2,
-        y: height / 2,
-        anchor: "middle",
-        baseline: "middle",
-      };
-  }
 }
 
 // Currently selected nodes (component arena indices). Not persisted —
@@ -589,100 +503,6 @@ function onWheel(event: WheelEvent) {
   editor_state.view.y = mouseSvg.y - fracY * newHeight;
 }
 
-// Returns the centre point of a box.
-function boxCenter(box: Box): { x: number; y: number } {
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-}
-
-// Whether a connection leaves/enters its endpoints horizontally (via the
-// left/right side, jogging vertically in the middle — for boxes that are
-// mostly side-by-side) or vertically (via the top/bottom side, jogging
-// horizontally in the middle — for boxes that are mostly stacked).
-type ConnectionOrientation = "horizontal" | "vertical";
-
-// Returns the midpoint of the side of `box` facing `towards`, for the
-// given orientation: the box's left/right-centre if horizontal, or its
-// top/bottom-centre if vertical. Both endpoints of a connection are always
-// resolved with the *same* orientation (decided once from the two boxes'
-// centres, see visibleConnections below) so the chosen side is consistent
-// with the elbow shape connecting them.
-function boxBoundaryPoint(
-  box: Box,
-  towards: { x: number; y: number },
-  orientation: ConnectionOrientation,
-): { x: number; y: number } {
-  const center = boxCenter(box);
-  if (orientation === "horizontal") {
-    const sign = towards.x >= center.x ? 1 : -1;
-    return { x: center.x + sign * (box.width / 2), y: center.y };
-  }
-  const sign = towards.y >= center.y ? 1 : -1;
-  return { x: center.x, y: center.y + sign * (box.height / 2) };
-}
-
-// Builds an SVG path with a straight/rounded-elbow route between two
-// points that always leaves/enters along `orientation`'s axis —
-// "horizontal" produces a horizontal-vertical-horizontal (H-V-H) jog,
-// "vertical" produces a vertical-horizontal-vertical (V-H-V) jog. Falls
-// back to a straight line when the two points are already aligned on the
-// jog axis (no bend needed).
-//
-// Both variants share one abstract shape, built in terms of a "primary"
-// axis p (the leave/enter direction) and "secondary" axis s (the jog
-// direction); only the final p/s -> x/y mapping differs. Swapping which
-// physical axis is p vs s is a reflection, which reverses the handedness
-// of the rounded corners, so the arc sweep-flags are flipped for the
-// vertical variant to keep corners rounding the correct way.
-function elbowPath(
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  orientation: ConnectionOrientation,
-  r = 10,
-): string {
-  const horizontal = orientation === "horizontal";
-  const toXY = (p: number, s: number): [number, number] =>
-    horizontal ? [p, s] : [s, p];
-  const sweep = (
-    flag: 0 | 1,
-  ): 0 | 1 => (horizontal ? flag : ((1 - flag) as 0 | 1));
-
-  const [ap, as_] = horizontal ? [ax, ay] : [ay, ax];
-  const [bp, bs] = horizontal ? [bx, by] : [by, bx];
-  const dp = bp - ap;
-  const ds = bs - as_;
-
-  if (Math.abs(ds) < 0.5) {
-    const [x1, y1] = toXY(ap, as_);
-    const [x2, y2] = toXY(bp, bs);
-    return `M ${x1},${y1} L ${x2},${y2}`;
-  }
-
-  const mp = (ap + bp) / 2;
-  const rc = Math.min(r, Math.abs(dp) / 2, Math.abs(ds) / 2);
-  const sp = dp >= 0 ? 1 : -1;
-  const ss = ds >= 0 ? 1 : -1;
-  const t1 = dp * ds > 0 ? 1 : 0;
-  const t2 = 1 - t1;
-
-  const [x0, y0] = toXY(ap, as_);
-  const [x1, y1] = toXY(mp - sp * rc, as_);
-  const [x2, y2] = toXY(mp, as_ + ss * rc);
-  const [x3, y3] = toXY(mp, bs - ss * rc);
-  const [x4, y4] = toXY(mp + sp * rc, bs);
-  const [x5, y5] = toXY(bp, bs);
-
-  return [
-    `M ${x0},${y0}`,
-    `L ${x1},${y1}`,
-    `A ${rc},${rc} 0 0,${sweep(t1 as 0 | 1)} ${x2},${y2}`,
-    `L ${x3},${y3}`,
-    `A ${rc},${rc} 0 0,${sweep(t2 as 0 | 1)} ${x4},${y4}`,
-    `L ${x5},${y5}`,
-  ].join(" ");
-}
-
 // Only connections where both endpoints are currently on the canvas.
 // conn.from/conn.to are already component arena indices, matching the same
 // index space `checked` is keyed by. Endpoints are anchored to each box's
@@ -708,15 +528,9 @@ let visibleConnections = $derived(
   }),
 );
 
-// Number of parent_component_index hops from the model root to `index`.
-function depthOf(index: number): number {
-  let depth = 0;
-  let current = components[index]?.parent_component_index;
-  while (current !== undefined) {
-    depth += 1;
-    current = components[current]?.parent_component_index;
-  }
-  return depth;
+// Looks up a component's direct parent index, for depthOf below.
+function parentOf(index: number): number | undefined {
+  return components[index]?.parent_component_index;
 }
 
 // Indices of currently-placed nodes, ordered shallowest-first so parents
@@ -726,7 +540,7 @@ function depthOf(index: number): number {
 let renderOrder = $derived(
   Object.keys(checked.value)
     .map(Number)
-    .sort((a, b) => depthOf(a) - depthOf(b)),
+    .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
 );
 
 // Nodes that would be selected if the marquee were released right now —
