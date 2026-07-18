@@ -13,24 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 29 — Rekey diagram canvas state by component index instead of label
-
-The `/diagrams` canvas currently keys its per-node state (`checked`) by
-`component.label`. Per `SPEC.md` §2.3, labels are only guaranteed unique
-**within a parent scope** — two components in different branches of a
-hierarchical model may legally share a label (e.g. two different `"mcu"`
-leaves under two different composites). This is a prerequisite fix before any
-further diagram work, since it also sets up parent/child lookups needed later
-(a component's `parent_component_index` is already an arena index into
-`model.components()`).
-
-- Change `checked`'s keys (and the sidebar checkbox `id`s) from
-  `component.label` to the component's array index in `model.components()`.
-- No visible behavior change — this is a pure correctness/foundation fix.
-- Validate with `deno task check` and `deno task build` in `web/`.
-
----
-
 ## Task 30 — Add node selection state to the diagram canvas
 
 - Add `selected: number | null` (component index) as page state on

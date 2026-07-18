@@ -42,16 +42,20 @@ let model = $derived(output.model());
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
-// Stores position of each checked element. If an element is unchecked,
-// it's not present here. Persisted so the diagram layout survives page
-// reloads.
-let checked = persisted<Record<string, { x: number; y: number }>>(
+// Stores position of each checked element, keyed by the component's arena
+// index (its position in model.components(), same index space as
+// ConnectionJS.from/to and ComponentJS.parent_component_index). Component
+// labels are only unique within a parent scope (SPEC.md §2.3), so labels
+// cannot be used as a stable key once components are nested. If an element
+// is unchecked, it's not present here. Persisted so the diagram layout
+// survives page reloads.
+let checked = persisted<Record<number, { x: number; y: number }>>(
   "DIAGRAM_CHECKED_NODES",
   {},
 );
 
 // Node-drag state
-let dragging: { label: string; offsetX: number; offsetY: number } | null =
+let dragging: { index: number; offsetX: number; offsetY: number } | null =
   $state(null);
 
 // Canvas-pan state (screen-space pointer position of the last move event)
@@ -71,12 +75,12 @@ function svgPoint(
   return { x: transformed.x, y: transformed.y };
 }
 
-function onNodeMouseDown(event: MouseEvent, label: string) {
+function onNodeMouseDown(event: MouseEvent, index: number) {
   event.preventDefault();
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  const pos = checked.value[label] ?? { x: 0, y: 0 };
+  const pos = checked.value[index] ?? { x: 0, y: 0 };
   dragging = {
-    label,
+    index,
     offsetX: svgCoords.x - pos.x,
     offsetY: svgCoords.y - pos.y,
   };
@@ -89,7 +93,7 @@ function onCanvasMouseDown(event: MouseEvent) {
 function onSvgMouseMove(event: MouseEvent) {
   if (dragging) {
     const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-    checked.value[dragging.label] = {
+    checked.value[dragging.index] = {
       x: svgCoords.x - dragging.offsetX,
       y: svgCoords.y - dragging.offsetY,
     };
@@ -134,8 +138,8 @@ function onWheel(event: WheelEvent) {
 }
 
 // Returns the centre point of a node given its top-left position.
-function nodeCenter(label: string): { x: number; y: number } | null {
-  const pos = checked.value[label];
+function nodeCenter(index: number): { x: number; y: number } | null {
+  const pos = checked.value[index];
   if (!pos) return null;
   return { x: pos.x + 50, y: pos.y + 50 };
 }
@@ -171,13 +175,12 @@ function elbowPath(
 }
 
 // Only connections where both endpoints are currently on the canvas.
+// conn.from/conn.to are already component arena indices, matching the same
+// index space `checked` is keyed by.
 let visibleConnections = $derived(
   connections.flatMap((conn) => {
-    const from = model?.component_by_id(conn.from);
-    const to = model?.component_by_id(conn.to);
-    if (!from || !to) return [];
-    const a = nodeCenter(from.label);
-    const b = nodeCenter(to.label);
+    const a = nodeCenter(conn.from);
+    const b = nodeCenter(conn.to);
     if (!a || !b) return [];
     return [{ conn, a, b }];
   }),
@@ -308,10 +311,15 @@ let visibleConnections = $derived(
           </text>
         {/each}
 
-        {#snippet ViewNode(name: string, x: number, y: number)}
+        {#snippet ViewNode(
+          label: string,
+          index: number,
+          x: number,
+          y: number,
+        )}
           <g
             transform="translate({x}, {y})"
-            onmousedown={(e) => onNodeMouseDown(e, name)}
+            onmousedown={(e) => onNodeMouseDown(e, index)}
             style="cursor: grab"
           >
             <rect
@@ -329,17 +337,20 @@ let visibleConnections = $derived(
               dominant-baseline="middle"
               style="pointer-events: none; user-select: none"
             >
-              {name}
+              {label}
             </text>
           </g>
         {/snippet}
 
-        {#each components.filter((c) => checked.value[c.label]) as component}
-          {@render ViewNode(
-            component.label,
-            checked.value[component.label]?.x ?? 0,
-            checked.value[component.label]?.y ?? 0,
-          )}
+        {#each components as component, index}
+          {#if checked.value[index]}
+            {@render ViewNode(
+              component.label,
+              index,
+              checked.value[index]?.x ?? 0,
+              checked.value[index]?.y ?? 0,
+            )}
+          {/if}
         {/each}
       </svg>
 
@@ -369,26 +380,26 @@ let visibleConnections = $derived(
       </p>
     {:else}
       <ul class="space-y-1">
-        {#each components as component}
+        {#each components as component, index}
           <li class="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              id="comp-{component.label}"
+              id="comp-{index}"
               class="checkbox checkbox-xs"
-              checked={!!checked.value[component.label]}
+              checked={!!checked.value[index]}
               onchange={(value) => {
                 if (value.currentTarget.checked) {
-                  checked.value[component.label] = {
+                  checked.value[index] = {
                     x: 100,
                     y: 100,
                   };
                 } else {
-                  delete checked.value[component.label];
+                  delete checked.value[index];
                 }
               }}
             />
             <label
-              for="comp-{component.label}"
+              for="comp-{index}"
               class="cursor-pointer truncate"
               title={component.label}
             >

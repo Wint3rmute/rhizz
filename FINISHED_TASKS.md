@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 29 — Rekey diagram canvas state by component index instead of label
+
+The `/diagrams` canvas keyed its per-node state (`checked`) by
+`component.label`. Per `SPEC.md` §2.3, labels are only guaranteed unique
+**within a parent scope** — two components in different branches of a
+hierarchical model may legally share a label (e.g. two different `"mcu"`
+leaves under two different composites), so label-keyed canvas state would
+collide once nested components appear on the same canvas.
+
+- Changed `checked`'s keys (and the sidebar checkbox `id`s) from
+  `component.label` to the component's arena index (its position in
+  `model.components()`), matching the index space already used by
+  `ConnectionJS.from`/`to` and `ComponentJS.parent_component_index`.
+- `web/src/routes/diagrams/+page.svelte`: `dragging`, `nodeCenter`,
+  `onNodeMouseDown`, `checked`'s type, and both `{#each}` loops (canvas nodes
+  and sidebar list) now use the numeric index instead of the label string.
+- Simplified `visibleConnections`: since `conn.from`/`conn.to` are already
+  component indices, dropped the now-unnecessary `model.component_by_id(...)`
+  lookups that existed solely to get `.label` for the old `nodeCenter(label)`
+  calls.
+- No visible behavior change (existing persisted layouts under the old
+  label-keyed scheme will not carry over, since the key space changed).
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 27 — Typed WASM wrappers for rhizz-core structs
 
 Implement `#[wasm_bindgen]` wrapper structs in `rhizz-wasm` for the core types
