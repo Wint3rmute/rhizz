@@ -51,6 +51,25 @@ const DEFAULT_NODE_HEIGHT = 100;
 // shrinks into an unusable sliver.
 const MIN_NODE_SIZE = 40;
 
+// How many world units position/size snap to when "snap to grid" (below)
+// is enabled. Kept as its own constant, separate from MINOR_GRID_SPACING,
+// so it can be tuned independently — e.g. exposed as a UI-selectable
+// multiplier later.
+const SNAP_GRID_SIZE = 10;
+
+// Whether dragging/resizing snaps position/size to SNAP_GRID_SIZE-unit
+// increments. Toggled via the "Snap to Grid" button. Not persisted — it's
+// a transient editing mode, not part of the saved diagram.
+let snapEnabled = $state(false);
+
+// Rounds `value` to the nearest multiple of SNAP_GRID_SIZE, or returns it
+// unchanged when snapping is off.
+function snap(value: number): number {
+  return snapEnabled
+    ? Math.round(value / SNAP_GRID_SIZE) * SNAP_GRID_SIZE
+    : value;
+}
+
 // Size of the resize-handle square rendered at a selected node's
 // bottom-right corner, in world units. Its outer corner is rounded to
 // match the node's own `rx` so it hugs the node's rounded corner instead
@@ -285,8 +304,8 @@ function onSvgMouseMove(event: MouseEvent) {
     if (box) {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
       let next: Box = {
-        x: svgCoords.x - dragging.offsetX,
-        y: svgCoords.y - dragging.offsetY,
+        x: snap(svgCoords.x - dragging.offsetX),
+        y: snap(svgCoords.y - dragging.offsetY),
         width: box.width,
         height: box.height,
       };
@@ -307,8 +326,8 @@ function onSvgMouseMove(event: MouseEvent) {
     if (box) {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
       let next = {
-        width: Math.max(MIN_NODE_SIZE, svgCoords.x - box.x),
-        height: Math.max(MIN_NODE_SIZE, svgCoords.y - box.y),
+        width: snap(Math.max(MIN_NODE_SIZE, svgCoords.x - box.x)),
+        height: snap(Math.max(MIN_NODE_SIZE, svgCoords.y - box.y)),
       };
       const parentBox = activeParentBox(resizing.index);
       if (parentBox) {
@@ -773,13 +792,22 @@ let renderOrder = $derived(
         {/each}
       </svg>
 
-      <button
-        onclick={reset_view}
-        class="btn btn-ghost btn-sm absolute bottom-2 right-2 z-10"
-        title="Reset pan and zoom"
-      >
-        Reset View
-      </button>
+      <div class="absolute bottom-2 right-2 z-10 flex gap-2">
+        <button
+          onclick={() => (snapEnabled = !snapEnabled)}
+          class="btn btn-sm {snapEnabled ? 'btn-primary' : 'btn-ghost'}"
+          title="Snap dragging/resizing to a {SNAP_GRID_SIZE}-unit grid"
+        >
+          Snap to Grid
+        </button>
+        <button
+          onclick={reset_view}
+          class="btn btn-ghost btn-sm"
+          title="Reset pan and zoom"
+        >
+          Reset View
+        </button>
+      </div>
     </div>
   </div>
 
