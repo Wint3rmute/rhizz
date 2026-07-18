@@ -362,11 +362,38 @@ function onWheel(event: WheelEvent) {
   editor_state.view.y = mouseSvg.y - fracY * newHeight;
 }
 
-// Returns the centre point of a node given its top-left position and size.
-function nodeCenter(index: number): { x: number; y: number } | null {
-  const box = nodeBox(index);
-  if (!box) return null;
+// Returns the centre point of a box.
+function boxCenter(box: Box): { x: number; y: number } {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+// Returns the midpoint of whichever side of `box` faces `towards` (top,
+// bottom, left, or right) — not the exact point where a straight ray from
+// the centre would exit the rectangle, which can land arbitrarily close to
+// a corner at diagonal angles and looks messy. Anchoring to a side's
+// midpoint instead keeps connection endpoints readable regardless of the
+// angle between the two boxes.
+function boxBoundaryPoint(
+  box: Box,
+  towards: { x: number; y: number },
+): { x: number; y: number } {
+  const center = boxCenter(box);
+  const dx = towards.x - center.x;
+  const dy = towards.y - center.y;
+  if (dx === 0 && dy === 0) return center;
+
+  const halfWidth = box.width / 2;
+  const halfHeight = box.height / 2;
+
+  // Compare how "steep" the approach is relative to the box's aspect ratio
+  // to decide whether the left/right or top/bottom side faces `towards`
+  // (the same test a ray-rectangle intersection would use to pick a side —
+  // we just don't use the exact hit point on it, only which side it is).
+  const horizontal = Math.abs(dx) * halfHeight > Math.abs(dy) * halfWidth;
+
+  return horizontal
+    ? { x: center.x + Math.sign(dx) * halfWidth, y: center.y }
+    : { x: center.x, y: center.y + Math.sign(dy) * halfHeight };
 }
 
 // Builds an SVG path string for a Z-shaped elbow route with rounded corners.
@@ -401,12 +428,18 @@ function elbowPath(
 
 // Only connections where both endpoints are currently on the canvas.
 // conn.from/conn.to are already component arena indices, matching the same
-// index space `checked` is keyed by.
+// index space `checked` is keyed by. Endpoints are anchored to each box's
+// boundary (the edge facing the other node), not its centre, so the arrow
+// terminates on the node's perimeter instead of passing into its interior.
 let visibleConnections = $derived(
   connections.flatMap((conn) => {
-    const a = nodeCenter(conn.from);
-    const b = nodeCenter(conn.to);
-    if (!a || !b) return [];
+    const boxA = nodeBox(conn.from);
+    const boxB = nodeBox(conn.to);
+    if (!boxA || !boxB) return [];
+    const centerA = boxCenter(boxA);
+    const centerB = boxCenter(boxB);
+    const a = boxBoundaryPoint(boxA, centerB);
+    const b = boxBoundaryPoint(boxB, centerA);
     return [{ conn, a, b }];
   }),
 );
