@@ -16,8 +16,8 @@
 <div class="navbar bg-gray-900 text-gray-100 border-b border-gray-800">
   <a href={resolve("/", {})} class="btn btn-ghost text-xl text-white"
   >← rhizz</a>
-  <a href={resolve("/wasm", {})} class="btn">WASM Test</a>
-  <a href={resolve("/editor", {})} class="btn">Editor Test</a>
+  <a href={resolve("/editor", {})} class="btn">Editor</a>
+  <a href={resolve("/diagrams", {})} class="btn">Diagrams</a>
   <a href={resolve("/overview", {})} class="btn">System Overview</a>
 
   {#if project}

@@ -95,9 +95,9 @@
         </li>
         <li>
           <a
-            href={resolve("/editor", {})}
+            href={resolve("/diagrams", {})}
             class="block hover:text-white"
-          >Editor</a>
+          >Diagrams</a>
         </li>
         <li>
           <a href={resolve("/", {})} class="block hover:text-white">Home</a>
