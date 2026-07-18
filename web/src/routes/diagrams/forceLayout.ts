@@ -46,11 +46,25 @@ export type ForceLayoutOptions = {
   // Extra spacing enforced between nodes' circumscribing circles, on top
   // of their own radii, so boxes don't end up edge-to-edge with zero gap.
   collidePadding?: number;
+  // How strongly linked pairs are nudged towards a shared x (stacked
+  // vertically) or shared y (side-by-side), whichever they're already
+  // closer to — 0 disables this entirely, leaving connections free to
+  // settle at any angle. See forceOrthogonalAlign below.
+  alignStrength?: number;
+  // Number of ticks over which forces ramp up from ~0 to full strength,
+  // instead of applying at full strength from the very first tick. Purely
+  // cosmetic (it only affects the *positions this module reports* each
+  // tick, never the underlying simulation's own physics or its eventual
+  // converged result) — smooths out the otherwise-sharp jump an animated
+  // caller would show on frame 1. 0 (the default) disables the ramp.
+  warmupTicks?: number;
 };
 
 const DEFAULT_LINK_DISTANCE = 160;
 const DEFAULT_CHARGE_STRENGTH = -300;
 const DEFAULT_COLLIDE_PADDING = 20;
+const DEFAULT_ALIGN_STRENGTH = 0.7;
+const DEFAULT_WARMUP_TICKS = 0;
 
 // Ticks/convergence defaults for runForceLayout's synchronous loop.
 const DEFAULT_MAX_TICKS = 300;
@@ -64,6 +78,42 @@ const DEFAULT_ALPHA_MIN = 0.001;
 interface SimNode extends SimulationNodeDatum {
   componentIndex: number;
   radius: number;
+}
+
+// A custom d3-force-compatible force (a plain (alpha) => void function,
+// same shape as the built-in forces) that nudges each linked pair of
+// nodes towards either a shared x (stacked vertically) or a shared y
+// (side-by-side horizontally) — whichever the pair's current position
+// already leans towards — so connections tend to end up strictly
+// horizontal/vertical rather than at an arbitrary diagonal angle. Purely
+// a readability preference layered on top of forceLink: it adjusts
+// velocity the same way every other force does, so it composes with
+// collision/containment instead of overriding them.
+function forceOrthogonalAlign(
+  links: SimulationLinkDatum<SimNode>[],
+  strength: number,
+) {
+  return (alpha: number) => {
+    if (strength === 0) return;
+    for (const link of links) {
+      const source = link.source as SimNode;
+      const target = link.target as SimNode;
+      const dx = (target.x ?? 0) - (source.x ?? 0);
+      const dy = (target.y ?? 0) - (source.y ?? 0);
+      const pull = strength * alpha;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Already closer to side-by-side: pull their y's together.
+        const adjust = dy * pull;
+        source.vy = (source.vy ?? 0) + adjust;
+        target.vy = (target.vy ?? 0) - adjust;
+      } else {
+        // Already closer to stacked: pull their x's together.
+        const adjust = dx * pull;
+        source.vx = (source.vx ?? 0) + adjust;
+        target.vx = (target.vx ?? 0) - adjust;
+      }
+    }
+  };
 }
 
 // A running (but externally-driven) force simulation: call tick()
@@ -95,6 +145,8 @@ export function createForceLayout(
     linkDistance = DEFAULT_LINK_DISTANCE,
     chargeStrength = DEFAULT_CHARGE_STRENGTH,
     collidePadding = DEFAULT_COLLIDE_PADDING,
+    alignStrength = DEFAULT_ALIGN_STRENGTH,
+    warmupTicks = DEFAULT_WARMUP_TICKS,
   } = options;
 
   const boxByIndex = new Map(nodes.map((n) => [n.index, n.box]));
@@ -129,18 +181,43 @@ export function createForceLayout(
         forceCollide<SimNode>((n) => n.radius + collidePadding),
       )
       .force("center", forceCenter(centerX, centerY))
+      .force("align", forceOrthogonalAlign(simLinks, alignStrength))
       .stop();
 
+  // Tracks the last position actually *returned* for each node (as
+  // opposed to the simulation's own internal, unramped position) — the
+  // warmup ramp below blends from here towards the true position each
+  // tick, rather than from the true-previous-tick position, so the
+  // displayed motion accelerates smoothly with no catch-up jump once the
+  // ramp finishes.
+  let tickCount = 0;
+  const lastDisplayed = new Map<number, { x: number; y: number }>(
+    nodes.map((n) => [n.index, { x: n.box.x, y: n.box.y }]),
+  );
+
   function extractResults(): LayoutResult[] {
+    tickCount += 1;
+    const rampFactor = warmupTicks > 0
+      ? Math.min(1, tickCount / warmupTicks)
+      : 1;
+
     return simNodes.map((n) => {
       const box = boxByIndex.get(n.componentIndex);
       const width = box?.width ?? 0;
       const height = box?.height ?? 0;
-      return {
-        index: n.componentIndex,
-        x: (n.x ?? 0) - width / 2,
-        y: (n.y ?? 0) - height / 2,
-      };
+      const trueX = (n.x ?? 0) - width / 2;
+      const trueY = (n.y ?? 0) - height / 2;
+
+      let x = trueX;
+      let y = trueY;
+      if (rampFactor < 1) {
+        const prev = lastDisplayed.get(n.componentIndex) ??
+          { x: trueX, y: trueY };
+        x = prev.x + (trueX - prev.x) * rampFactor;
+        y = prev.y + (trueY - prev.y) * rampFactor;
+      }
+      lastDisplayed.set(n.componentIndex, { x, y });
+      return { index: n.componentIndex, x, y };
     });
   }
 

@@ -105,6 +105,58 @@ describe("runForceLayout", () => {
       12,
     ]);
   });
+
+  it("nudges a diagonally-connected pair towards horizontal/vertical alignment", () => {
+    const nodes: LayoutNode[] = [
+      { index: 0, box: { x: 0, y: 0, width: 100, height: 100 } },
+      { index: 1, box: { x: 400, y: 150, width: 100, height: 100 } },
+    ];
+    const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
+
+    // dx (400) > dy (150) initially, so the pair already leans towards
+    // side-by-side — alignment should pull their y's closer together
+    // than an otherwise-identical run with alignment disabled.
+    const aligned = runForceLayout(nodes, edges, { alignStrength: 1 });
+    const unaligned = runForceLayout(nodes, edges, { alignStrength: 0 });
+
+    const dyAligned = Math.abs(
+      aligned[1].y + 50 - (aligned[0].y + 50),
+    );
+    const dyUnaligned = Math.abs(
+      unaligned[1].y + 50 - (unaligned[0].y + 50),
+    );
+
+    expect(dyAligned).toBeLessThan(dyUnaligned);
+  });
+
+  it("leaves connections free to settle at any angle when alignStrength is 0", () => {
+    const nodes: LayoutNode[] = [
+      { index: 0, box: { x: 0, y: 0, width: 100, height: 100 } },
+      { index: 1, box: { x: 400, y: 150, width: 100, height: 100 } },
+    ];
+    const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
+
+    // Should not throw or behave differently just because alignStrength
+    // is explicitly 0 rather than omitted.
+    expect(() => runForceLayout(nodes, edges, { alignStrength: 0 }))
+      .not.toThrow();
+  });
+
+  it("doesn't change the final converged result, only how gradually it's revealed", () => {
+    const nodes: LayoutNode[] = [
+      { index: 0, box: { x: 0, y: 0, width: 100, height: 100 } },
+      { index: 1, box: { x: 500, y: 0, width: 100, height: 100 } },
+    ];
+    const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
+
+    const withWarmup = runForceLayout(nodes, edges, { warmupTicks: 30 });
+    const withoutWarmup = runForceLayout(nodes, edges, { warmupTicks: 0 });
+
+    // The warmup ramp only affects what's *returned* early on, never the
+    // underlying simulation's own physics — so by convergence, both runs
+    // should land on the exact same final positions.
+    expect(withWarmup).toEqual(withoutWarmup);
+  });
 });
 
 describe("createForceLayout", () => {
@@ -135,6 +187,54 @@ describe("createForceLayout", () => {
     // Simulation is still active (alpha hasn't decayed to 0 in 2 ticks),
     // so positions should keep changing tick over tick.
     expect(second).not.toEqual(first);
+  });
+
+  it("moves nodes less on tick 1 when warmupTicks is set than when it isn't", () => {
+    const nodes: LayoutNode[] = [
+      { index: 0, box: { x: 0, y: 0, width: 100, height: 100 } },
+      { index: 1, box: { x: 1000, y: 0, width: 100, height: 100 } },
+    ];
+    const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
+
+    const ramped = createForceLayout(nodes, edges, { warmupTicks: 10 });
+    const unramped = createForceLayout(nodes, edges, { warmupTicks: 0 });
+
+    const rampedFirst = ramped.tick()[0];
+    const unrampedFirst = unramped.tick()[0];
+
+    const rampedMove = distance(
+      { x: rampedFirst.x, y: rampedFirst.y },
+      { x: nodes[0].box.x, y: nodes[0].box.y },
+    );
+    const unrampedMove = distance(
+      { x: unrampedFirst.x, y: unrampedFirst.y },
+      { x: nodes[0].box.x, y: nodes[0].box.y },
+    );
+
+    expect(rampedMove).toBeLessThan(unrampedMove);
+  });
+
+  it("reaches full, unramped movement once warmupTicks have elapsed", () => {
+    const nodes: LayoutNode[] = [
+      { index: 0, box: { x: 0, y: 0, width: 100, height: 100 } },
+      { index: 1, box: { x: 1000, y: 0, width: 100, height: 100 } },
+    ];
+    const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
+    const warmupTicks = 5;
+
+    const ramped = createForceLayout(nodes, edges, { warmupTicks });
+    const unramped = createForceLayout(nodes, edges, { warmupTicks: 0 });
+
+    let rampedResult = ramped.tick();
+    let unrampedResult = unramped.tick();
+    for (let i = 1; i < warmupTicks; i++) {
+      rampedResult = ramped.tick();
+      unrampedResult = unramped.tick();
+    }
+
+    // At exactly tick == warmupTicks, the ramp factor is 1 (full
+    // strength), so both runs should already report the same position.
+    expect(rampedResult).toEqual(unrampedResult);
   });
 });
 

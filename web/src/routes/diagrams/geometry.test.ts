@@ -87,6 +87,35 @@ describe("clampWithin", () => {
       height: 180,
     });
   });
+
+  it("reserves extra space at the top when topMargin is given", () => {
+    const child: Box = { x: 20, y: 5, width: 50, height: 50 };
+    const topMargin = 30;
+    expect(clampWithin(child, parent, margin, topMargin)).toEqual({
+      x: 20,
+      y: 30, // pushed down past topMargin, not just margin
+      width: 50,
+      height: 50,
+    });
+  });
+
+  it("shrinks height (not just repositions) when topMargin leaves no room", () => {
+    const child: Box = { x: 20, y: 20, width: 50, height: 185 };
+    const topMargin = 30;
+    expect(clampWithin(child, parent, margin, topMargin)).toEqual({
+      x: 20,
+      y: 30,
+      width: 50,
+      height: 160, // parent.height(200) - margin(10) - topMargin(30)
+    });
+  });
+
+  it("defaults topMargin to margin, matching the old symmetric behavior", () => {
+    const child: Box = { x: -50, y: -50, width: 50, height: 50 };
+    expect(clampWithin(child, parent, margin)).toEqual(
+      clampWithin(child, parent, margin, margin),
+    );
+  });
 });
 
 describe("clampResizeWithin", () => {

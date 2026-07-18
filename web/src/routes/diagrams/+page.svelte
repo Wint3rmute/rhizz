@@ -266,6 +266,15 @@ function setSelectedTextAlign(align: TextAlign) {
 // in world units.
 const CHILD_CONTAINMENT_MARGIN = 10;
 
+// Extra padding reserved at a parent's *top* edge specifically, on top of
+// CHILD_CONTAINMENT_MARGIN, so a child can never be dragged/laid out over
+// the area where the parent's own title text is rendered (see
+// textPosition() in geometry.ts — the label sits near the top of the box
+// for the "top-center"/"top-left" alignments, and even for "center" a
+// child overlapping the exact middle would still obscure it). Sized to
+// comfortably clear a label line plus its own padding.
+const CHILD_CONTAINMENT_TOP_MARGIN = 28;
+
 // Returns the box of `index`'s parent component, but only if that parent is
 // itself currently placed on the canvas ("active") — a node with a parent
 // that isn't on canvas has nothing to be constrained by. Only considers the
@@ -296,7 +305,12 @@ function reclampChildren(parentIndex: number) {
     if (component.parent_component_index !== parentIndex) return;
     const box = nodeBox(childIndex);
     if (!box) return; // not currently placed on canvas
-    const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
+    const clamped = clampWithin(
+      box,
+      parentBox,
+      CHILD_CONTAINMENT_MARGIN,
+      CHILD_CONTAINMENT_TOP_MARGIN,
+    );
     setNodeBox(childIndex, clamped);
     reclampChildren(childIndex);
   });
@@ -514,7 +528,12 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
 function writeClampedToActiveParent(index: number, next: Box) {
   const ownParentBox = activeParentBox(index);
   const clamped = ownParentBox
-    ? clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN)
+    ? clampWithin(
+      next,
+      ownParentBox,
+      CHILD_CONTAINMENT_MARGIN,
+      CHILD_CONTAINMENT_TOP_MARGIN,
+    )
     : next;
   setNodeBox(index, clamped);
   reclampChildren(index);
@@ -593,6 +612,7 @@ function onSvgMouseMove(event: MouseEvent) {
             anchorNext,
             anchorParentBox,
             CHILD_CONTAINMENT_MARGIN,
+            CHILD_CONTAINMENT_TOP_MARGIN,
           );
         }
         // The whole selection moves by the same delta the anchor (grabbed)
@@ -770,6 +790,14 @@ function zoomToFill() {
 const AUTO_LAYOUT_ALPHA_MIN = 0.005;
 const AUTO_LAYOUT_MAX_FRAMES = 300;
 
+// Fraction of the frame budget spent ramping forces up from ~0 to full
+// strength, instead of applying at full strength from frame 1 — avoids
+// the sharp jump an instant full-strength start would otherwise cause.
+const AUTO_LAYOUT_WARMUP_FRACTION = 0.1;
+const AUTO_LAYOUT_WARMUP_TICKS = Math.round(
+  AUTO_LAYOUT_MAX_FRAMES * AUTO_LAYOUT_WARMUP_FRACTION,
+);
+
 // Whether an auto-layout animation is currently running — disables the
 // "Auto Layout" button so a second run can't start and race the first
 // one over the same node positions.
@@ -821,7 +849,11 @@ function runAutoLayout() {
       const centerX = bounds.x + bounds.width / 2;
       const centerY = bounds.y + bounds.height / 2;
 
-      return createForceLayout(groupNodes, groupEdges, { centerX, centerY });
+      return createForceLayout(groupNodes, groupEdges, {
+        centerX,
+        centerY,
+        warmupTicks: AUTO_LAYOUT_WARMUP_TICKS,
+      });
     },
   );
 
@@ -1269,7 +1301,12 @@ function runAutoLayout() {
                   };
                   const parentBox = activeParentBox(index);
                   if (parentBox) {
-                    box = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
+                    box = clampWithin(
+                      box,
+                      parentBox,
+                      CHILD_CONTAINMENT_MARGIN,
+                      CHILD_CONTAINMENT_TOP_MARGIN,
+                    );
                   }
                   setNodeBox(index, {
                     ...box,

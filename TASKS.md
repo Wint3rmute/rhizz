@@ -205,8 +205,41 @@ noise never enters a given group's simulation.
 - Not yet done: the undo/snapshot safety net mentioned above — running
   auto-layout on a hand-arranged diagram is currently irreversible other
   than manually dragging things back.
+
+### Post-4a refinements (from user testing feedback)
+
+- `geometry.ts`'s `clampWithin(child, parent, margin, topMargin?)` gained
+  an optional 4th `topMargin` parameter (defaults to `margin`, so all
+  pre-existing 3-arg call sites are unaffected). `+page.svelte` now passes
+  a new `CHILD_CONTAINMENT_TOP_MARGIN` (28) alongside
+  `CHILD_CONTAINMENT_MARGIN` at every child-vs-parent clamp site (drag,
+  resize/auto-layout's `writeClampedToActiveParent`, `reclampChildren`'s
+  cascade, and the sidebar checkbox's initial-placement clamp), so a
+  child can never be dragged, resized, or auto-laid-out on top of the
+  area where its parent's own title text is rendered.
+- `forceLayout.ts` gained a custom d3-force-compatible `alignStrength`
+  force (`forceOrthogonalAlign`): for each linked pair, nudges their
+  shared y together if they're already closer to side-by-side (|dx| >
+  |dy|), or their shared x together if already closer to stacked — so
+  connected nodes tend to settle strictly horizontally/vertically aligned
+  rather than at an arbitrary diagonal angle. Defaults to a modest
+  `DEFAULT_ALIGN_STRENGTH = 0.15`; `0` disables it entirely.
+- `forceLayout.ts` gained a `warmupTicks` option: for the first
+  `warmupTicks` calls to `tick()`, the *returned* position is blended
+  from the last-returned position towards the true (unramped) simulation
+  position by an increasing fraction, rather than jumping straight to it
+  — easing the animation in instead of snapping to full-strength movement
+  on frame 1. Purely cosmetic: it never touches the underlying
+  simulation's own physics, so the eventual converged result is
+  unaffected (verified by a test asserting identical final output with
+  and without warmup). `+page.svelte` wires this up as
+  `AUTO_LAYOUT_WARMUP_TICKS = round(AUTO_LAYOUT_MAX_FRAMES * 0.1)` —
+  literally "the first 10% of frames", per the request.
+- Added 5 new `geometry.test.ts` cases (topMargin behavior) and 8 new
+  `forceLayout.test.ts` cases (alignment + warmup ramp), for 68 total
+  frontend tests.
 - Validated with `deno task check` (0 errors/warnings), `deno task build`
-  (succeeds), `deno task test` (60/60 pass), and `deno fmt` (clean).
+  (succeeds), `deno task test` (68/68 pass), and `deno fmt` (clean).
 
 ---
 
