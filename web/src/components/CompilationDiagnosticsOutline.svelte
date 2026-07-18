@@ -15,11 +15,17 @@ let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
   {#each diagnostics as diagnostic}
     {#if diagnostic.code.startsWith("E")}
       <div role="alert" class="alert alert-error alert-soft">
-        {diagnostic.code} - {diagnostic.message}
+          <p>
+          <a class="link" target="_blank" href="https://github.com/Wint3rmute/rhizz/blob/main/SPEC/diagnostics/{diagnostic.code}.md">{diagnostic.code}</a>
+            - {diagnostic.message}
+          </p>
       </div>
     {:else}
       <div role="alert" class="alert alert-warning alert-soft">
-        {diagnostic.code} - {diagnostic.message}
+          <p>
+          <a class="link" target="_blank" href="https://github.com/Wint3rmute/rhizz/blob/main/SPEC/diagnostics/{diagnostic.code}.md">{diagnostic.code}</a>
+            - {diagnostic.message}
+          </p>
       </div>
     {/if}
   {/each}

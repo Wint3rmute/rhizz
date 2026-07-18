@@ -128,12 +128,13 @@ function nodeBox(index: number): {
   };
 }
 
-// Sets the text alignment of the currently selected node, if any.
+// Sets the text alignment of the currently selected node. Only meaningful
+// (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
-  if (selected === null) return;
-  const box = checked.value[selected];
+  if (primarySelected === null) return;
+  const box = checked.value[primarySelected];
   if (!box) return;
-  checked.value[selected] = { ...box, textAlign: align };
+  checked.value[primarySelected] = { ...box, textAlign: align };
 }
 
 // Padding kept between a child node's edges and its active parent's edges,
@@ -205,6 +206,26 @@ function reclampChildren(parentIndex: number) {
   });
 }
 
+// Bounding box (union) enclosing every box in `boxes`. Used to find a
+// multi-selection's combined extent for group-resize.
+function unionBox(boxes: Box[]): Box {
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.width));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.height));
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+// Whether two axis-aligned boxes overlap at all. Used for marquee-select.
+function boxesIntersect(a: Box, b: Box): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
 // Maps a text alignment + node size to the label <text>'s x/y/anchor/
 // baseline. The two top-aligned variants are inset by TEXT_ALIGN_PADDING
 // from the node's edges.
@@ -238,25 +259,68 @@ function textPosition(
   }
 }
 
-// Currently selected node (component arena index), or null if nothing is
-// selected. Not persisted — selection is a transient UI state.
-let selected: number | null = $state(null);
-let selectedComponent = $derived(
-  selected !== null ? components[selected] ?? null : null,
+// Currently selected nodes (component arena indices). Not persisted —
+// selection is transient UI state. Always reassigned as a fresh Set on
+// change (never mutated in place): plain Set mutations aren't deeply
+// tracked by Svelte's $state the way plain object/array mutations are, so
+// every change below constructs a new Set to trigger reactivity.
+let selected: Set<number> = $state(new Set());
+
+// The single selected node, or null if zero or more than one are selected.
+// Used wherever an operation only makes sense for exactly one node (the
+// inspector's details/text-alignment controls).
+let primarySelected = $derived(
+  selected.size === 1 ? [...selected][0] : null,
 );
-let selectedBox = $derived(selected !== null ? nodeBox(selected) : null);
+let selectedComponent = $derived(
+  primarySelected !== null ? components[primarySelected] ?? null : null,
+);
+let selectedBox = $derived(
+  primarySelected !== null ? nodeBox(primarySelected) : null,
+);
 
-// Node-drag state
-let dragging: { index: number; offsetX: number; offsetY: number } | null =
-  $state(null);
+// Node-drag state. Dragging any selected node moves the whole selection
+// together: startPositions snapshots every selected node's position when
+// the drag begins; each move event recomputes every node's position from
+// its own snapshot plus the same delta the anchor (grabbed) node moved by,
+// so the group moves rigidly with no incremental drift.
+let dragging: {
+  anchorIndex: number;
+  offsetX: number;
+  offsetY: number;
+  startPositions: Record<number, { x: number; y: number }>;
+} | null = $state(null);
 
-// Node-resize state. The node's top-left corner (x, y) stays fixed while
-// resizing — width/height are recomputed live from the pointer's current
-// world-space position each move event, so no delta-tracking is needed.
-let resizing: { index: number } | null = $state(null);
+// Node-resize state. Resizing any selected node's handle scales the whole
+// selection together, proportionally, around the fixed top-left corner of
+// the selection's combined bounding box (groupBox, captured at resize
+// start alongside every selected node's starting box).
+let resizing: {
+  anchorIndex: number;
+  groupBox: Box;
+  startBoxes: Record<number, Box>;
+} | null = $state(null);
 
-// Canvas-pan state (screen-space pointer position of the last move event)
+// Canvas-pan state (screen-space pointer position of the last move event).
+// Started by the middle mouse button, anywhere on the canvas (including
+// over a node).
 let panning: { lastX: number; lastY: number } | null = $state(null);
+
+// Marquee-select state: start point + current point, in world (SVG)
+// coordinates. Started by dragging the left mouse button over empty
+// canvas.
+type MarqueeState = { startX: number; startY: number; x: number; y: number };
+let marquee: MarqueeState | null = $state(null);
+let marqueeBox: Box | null = $derived.by(() => {
+  if (!marquee) return null;
+  const m: MarqueeState = marquee;
+  return {
+    x: Math.min(m.startX, m.x),
+    y: Math.min(m.startY, m.y),
+    width: Math.abs(m.x - m.startX),
+    height: Math.abs(m.y - m.startY),
+  };
+});
 
 function svgPoint(
   svg: SVGElement,
@@ -272,73 +336,157 @@ function svgPoint(
   return { x: transformed.x, y: transformed.y };
 }
 
+// Middle mouse button always pans, regardless of what's under the
+// cursor — including directly over a node, so it must be handled here too
+// (not just in onCanvasMouseDown, which only sees clicks on empty canvas).
 function onNodeMouseDown(event: MouseEvent, index: number) {
+  if (event.button === 1) {
+    event.preventDefault();
+    panning = { lastX: event.clientX, lastY: event.clientY };
+    return;
+  }
+  if (event.button !== 0) return;
   event.preventDefault();
-  selected = index;
+
+  // Clicking a node that isn't already part of the selection replaces the
+  // selection with just that node. Clicking a node that's already
+  // selected (as part of a multi-selection) keeps the whole selection, so
+  // dragging it moves the whole group.
+  if (!selected.has(index)) {
+    selected = new Set([index]);
+  }
+
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  const pos = checked.value[index] ?? { x: 0, y: 0 };
+  const startPositions: Record<number, { x: number; y: number }> = {};
+  for (const i of selected) {
+    const box = checked.value[i];
+    if (box) startPositions[i] = { x: box.x, y: box.y };
+  }
+  const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
   dragging = {
-    index,
-    offsetX: svgCoords.x - pos.x,
-    offsetY: svgCoords.y - pos.y,
+    anchorIndex: index,
+    offsetX: svgCoords.x - anchorStart.x,
+    offsetY: svgCoords.y - anchorStart.y,
+    startPositions,
   };
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
-  selected = null;
-  panning = { lastX: event.clientX, lastY: event.clientY };
+  if (event.button === 1) {
+    event.preventDefault();
+    panning = { lastX: event.clientX, lastY: event.clientY };
+    return;
+  }
+  if (event.button !== 0) return;
+
+  // Left-drag on empty canvas starts a marquee selection; the actual
+  // selection change happens on mouseup, once the drag's extent is known
+  // (see onSvgMouseUp).
+  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+  marquee = {
+    startX: svgCoords.x,
+    startY: svgCoords.y,
+    x: svgCoords.x,
+    y: svgCoords.y,
+  };
 }
 
-// Starts a resize. Stops propagation so the handle's own mousedown doesn't
-// also bubble up to the node's onmousedown (which would start a drag too).
+// Starts a resize of the whole current selection. Stops propagation so the
+// handle's own mousedown doesn't also bubble up to the node's onmousedown
+// (which would start a drag too). Handles only render on selected nodes
+// (see the ViewNode snippet), so `index` is always already in `selected`.
 function onResizeHandleMouseDown(event: MouseEvent, index: number) {
+  if (event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
-  selected = index;
-  resizing = { index };
+
+  const startBoxes: Record<number, Box> = {};
+  for (const i of selected) {
+    const box = nodeBox(i);
+    if (box) startBoxes[i] = box;
+  }
+  const groupBox = unionBox(Object.values(startBoxes));
+  resizing = { anchorIndex: index, groupBox, startBoxes };
 }
 
 function onSvgMouseMove(event: MouseEvent) {
   if (dragging) {
-    const box = nodeBox(dragging.index);
-    if (box) {
+    const anchorStart = dragging.startPositions[dragging.anchorIndex];
+    const anchorBox = nodeBox(dragging.anchorIndex);
+    if (anchorStart && anchorBox) {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      let next: Box = {
+      let anchorNext: Box = {
         x: snap(svgCoords.x - dragging.offsetX),
         y: snap(svgCoords.y - dragging.offsetY),
-        width: box.width,
-        height: box.height,
+        width: anchorBox.width,
+        height: anchorBox.height,
       };
-      const parentBox = activeParentBox(dragging.index);
-      if (parentBox) {
-        next = clampWithin(next, parentBox, CHILD_CONTAINMENT_MARGIN);
+      const anchorParentBox = activeParentBox(dragging.anchorIndex);
+      if (anchorParentBox) {
+        anchorNext = clampWithin(
+          anchorNext,
+          anchorParentBox,
+          CHILD_CONTAINMENT_MARGIN,
+        );
       }
-      checked.value[dragging.index] = {
-        ...checked.value[dragging.index],
-        ...next,
-      };
-      reclampChildren(dragging.index);
+      // The whole selection moves by the same delta the anchor (grabbed)
+      // node moved by, recomputed from each node's own start snapshot each
+      // event (not accumulated incrementally) to avoid drift.
+      const deltaX = anchorNext.x - anchorStart.x;
+      const deltaY = anchorNext.y - anchorStart.y;
+
+      for (const [indexStr, start] of Object.entries(dragging.startPositions)) {
+        const index = Number(indexStr);
+        const box = nodeBox(index);
+        if (!box) continue;
+        let next: Box = {
+          x: start.x + deltaX,
+          y: start.y + deltaY,
+          width: box.width,
+          height: box.height,
+        };
+        // Each node still respects its own active-parent containment
+        // individually — if only some of the selection is constrained,
+        // the group may not move perfectly rigidly, but no node is ever
+        // allowed to escape its parent's box.
+        const ownParentBox = activeParentBox(index);
+        if (ownParentBox) {
+          next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
+        }
+        checked.value[index] = { ...checked.value[index], ...next };
+        reclampChildren(index);
+      }
     }
     return;
   }
   if (resizing) {
-    const box = checked.value[resizing.index];
-    if (box) {
+    const anchorStart = resizing.startBoxes[resizing.anchorIndex];
+    if (anchorStart) {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      let next = {
-        width: snap(Math.max(MIN_NODE_SIZE, svgCoords.x - box.x)),
-        height: snap(Math.max(MIN_NODE_SIZE, svgCoords.y - box.y)),
-      };
-      const parentBox = activeParentBox(resizing.index);
-      if (parentBox) {
-        next = clampResizeWithin(
-          { x: box.x, y: box.y, ...next },
-          parentBox,
-          CHILD_CONTAINMENT_MARGIN,
-        );
+      const rawWidth = Math.max(MIN_NODE_SIZE, svgCoords.x - anchorStart.x);
+      const rawHeight = Math.max(MIN_NODE_SIZE, svgCoords.y - anchorStart.y);
+      // Group-resize is a uniform scale (derived from how much the grabbed
+      // node's own box changed) applied to every selected node's position
+      // (relative to the selection's fixed top-left, groupBox) and size.
+      // Unlike single-node resize, this does not enforce parent
+      // containment — scaling several nodes while respecting potentially
+      // different constraints per node is a lot more complex, and not
+      // needed at this project stage.
+      const scaleX = rawWidth / anchorStart.width;
+      const scaleY = rawHeight / anchorStart.height;
+
+      for (const [indexStr, startBox] of Object.entries(resizing.startBoxes)) {
+        const index = Number(indexStr);
+        const relX = startBox.x - resizing.groupBox.x;
+        const relY = startBox.y - resizing.groupBox.y;
+        const next = {
+          x: snap(resizing.groupBox.x + relX * scaleX),
+          y: snap(resizing.groupBox.y + relY * scaleY),
+          width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
+          height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
+        };
+        checked.value[index] = { ...checked.value[index], ...next };
       }
-      checked.value[resizing.index] = { ...box, ...next };
-      reclampChildren(resizing.index);
     }
     return;
   }
@@ -349,6 +497,11 @@ function onSvgMouseMove(event: MouseEvent) {
     editor_state.view.x -= dxScreen / zoom;
     editor_state.view.y -= dyScreen / zoom;
     panning = { lastX: event.clientX, lastY: event.clientY };
+    return;
+  }
+  if (marquee) {
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    marquee = { ...marquee, x: svgCoords.x, y: svgCoords.y };
   }
 }
 
@@ -356,6 +509,24 @@ function onSvgMouseUp() {
   dragging = null;
   resizing = null;
   panning = null;
+  if (marquee) {
+    const box = marqueeBox;
+    // A marquee with negligible size is just a click: clear the selection
+    // (matches the old "click empty canvas to deselect" behavior).
+    if (box && (box.width > 2 || box.height > 2)) {
+      const matches = new Set<number>();
+      for (const index of renderOrder) {
+        const nodeBoxAtIndex = nodeBox(index);
+        if (nodeBoxAtIndex && boxesIntersect(nodeBoxAtIndex, box)) {
+          matches.add(index);
+        }
+      }
+      selected = matches;
+    } else {
+      selected = new Set();
+    }
+    marquee = null;
+  }
 }
 
 // Zooms in/out on the mouse wheel, keeping the point under the cursor
@@ -537,7 +708,15 @@ let renderOrder = $derived(
       Inspector
     </h3>
 
-    {#if selectedComponent}
+    {#if selected.size > 1}
+      <p class="text-sm text-base-content/70">
+        {selected.size} components selected.
+      </p>
+      <p class="text-sm text-base-content/50 mt-1">
+        Drag any of them to move the whole selection, or drag a handle to
+        resize the whole selection proportionally.
+      </p>
+    {:else if selectedComponent}
       <div class="font-semibold truncate" title={selectedComponent.label}>
         {selectedComponent.label}
       </div>
@@ -609,7 +788,11 @@ let renderOrder = $derived(
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
         onwheel={onWheel}
-        style="cursor: {dragging || resizing || panning ? 'grabbing' : 'grab'}"
+        style="cursor: {dragging || resizing || panning
+          ? 'grabbing'
+          : marquee
+            ? 'crosshair'
+            : 'grab'}"
       >
         <defs>
           <!--
@@ -708,8 +891,8 @@ let renderOrder = $derived(
               {width}
               {height}
               rx="5"
-              stroke={selected === index ? "var(--color-primary)" : "white"}
-              stroke-width={selected === index ? 2 : 1}
+              stroke={selected.has(index) ? "var(--color-primary)" : "white"}
+              stroke-width={selected.has(index) ? 2 : 1}
               fill="var(--color-base-200)"
             />
             <text
@@ -722,7 +905,7 @@ let renderOrder = $derived(
             >
               {label}
             </text>
-            {#if selected === index}
+            {#if selected.has(index)}
               <!--
                 Only the outer (bottom-right) corner is rounded, matching
                 the node's own rx, so the handle hugs the node's rounded
@@ -777,6 +960,7 @@ let renderOrder = $derived(
             stroke-width="1.5"
             fill="none"
             marker-end="url(#arrow)"
+            style="pointer-events: none"
           />
           <text
             x={(a.x + b.x) / 2}
@@ -790,6 +974,20 @@ let renderOrder = $derived(
             {conn.label}
           </text>
         {/each}
+
+        {#if marqueeBox}
+          <rect
+            x={marqueeBox.x}
+            y={marqueeBox.y}
+            width={marqueeBox.width}
+            height={marqueeBox.height}
+            fill="var(--color-primary)"
+            fill-opacity="0.15"
+            stroke="var(--color-primary)"
+            stroke-width="1"
+            style="pointer-events: none"
+          />
+        {/if}
       </svg>
 
       <div class="absolute bottom-2 right-2 z-10 flex gap-2">
@@ -852,7 +1050,11 @@ let renderOrder = $derived(
                   reclampChildren(index);
                 } else {
                   delete checked.value[index];
-                  if (selected === index) selected = null;
+                  if (selected.has(index)) {
+                    const next = new Set(selected);
+                    next.delete(index);
+                    selected = next;
+                  }
                 }
               }}
             />
