@@ -1,6 +1,7 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
 import type { ProjectJS } from "rhizz";
+import { getTheme, toggleTheme } from "../ThemeState.svelte";
 
 let {
   project = null,
@@ -32,5 +33,12 @@ let {
         {errorCount} errors · {warningCount} warnings
       </div>
     {/if}
+    <button
+      onclick={toggleTheme}
+      class="btn btn-ghost btn-sm"
+      title="Toggle light/dark theme"
+    >
+      {getTheme() === "dark" ? "🌙" : "☀️"}
+    </button>
   </div>
 </div>
