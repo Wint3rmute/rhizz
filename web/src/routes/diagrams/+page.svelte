@@ -9,6 +9,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
+import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
   type Box,
   boxBoundaryPoint,
@@ -112,11 +113,19 @@ let keyToIndex = $derived.by(() => {
 const DEFAULT_NODE_WIDTH = 100;
 const DEFAULT_NODE_HEIGHT = 100;
 
+// User-selectable snap grid sizes, in world units, offered by the
+// dropdown next to the "Snap to Grid" button. A fixed set (rather than a
+// free-form numeric input) keeps the choices "nice" round numbers that
+// also line up with MINOR_GRID_SPACING/MAJOR_GRID_SPACING above.
+const SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const DEFAULT_SNAP_GRID_SIZE: number = SNAP_GRID_SIZE_OPTIONS[0];
+
 // How many world units position/size snap to when "snap to grid" (below)
-// is enabled. Kept as its own constant, separate from MINOR_GRID_SPACING,
-// so it can be tuned independently — e.g. exposed as a UI-selectable
-// multiplier later.
-const SNAP_GRID_SIZE = 10;
+// is enabled. Separate from MINOR_GRID_SPACING so it can be tuned
+// independently. Persisted (unlike gridVisible/snapEnabled below) since
+// it's more of a per-project preference than a transient editing mode —
+// adjustable via the dropdown next to the "Snap to Grid" button.
+let snapGridSize = persisted("DIAGRAM_SNAP_GRID_SIZE", DEFAULT_SNAP_GRID_SIZE);
 
 // Whether the background grid is drawn. Toggled via the "Toggle Grid"
 // button; not persisted — it's a transient display preference, not part
@@ -125,9 +134,10 @@ const SNAP_GRID_SIZE = 10;
 // empty canvas (see the <rect> using this below).
 let gridVisible = $state(true);
 
-// Whether dragging/resizing snaps position/size to SNAP_GRID_SIZE-unit
+// Whether dragging/resizing snaps position/size to snapGridSize-unit
 // increments. Toggled via the "Snap to Grid" button; not persisted — it's
 // a transient editing mode, not part of the saved diagram.
+// (snapGridSize itself, above, is persisted.)
 let snapEnabled = $state(false);
 
 // Whether snapping is actually in effect right now: either the toggle is
@@ -137,12 +147,16 @@ let snapEnabled = $state(false);
 // modifier-key override, not just the persistent toggle.
 let snapActive = $derived(snapEnabled || isModifierHeld());
 
-// Rounds `value` to the nearest multiple of SNAP_GRID_SIZE, or returns it
-// unchanged when snapping is off.
+// Rounds `value` to the nearest multiple of snapGridSize, or returns it
+// unchanged when snapping is off. Falls back to the default grid size
+// rather than trusting the persisted value is still a valid, positive
+// option (e.g. if localStorage is hand-edited to 0 or a negative number).
 function snap(value: number): number {
-  return snapActive
-    ? Math.round(value / SNAP_GRID_SIZE) * SNAP_GRID_SIZE
-    : value;
+  if (!snapActive) return value;
+  const gridSize = snapGridSize.value > 0
+    ? snapGridSize.value
+    : DEFAULT_SNAP_GRID_SIZE;
+  return Math.round(value / gridSize) * gridSize;
 }
 
 // Size of the resize-handle square rendered at a selected node's
@@ -155,18 +169,6 @@ const RESIZE_HANDLE_RADIUS = 5;
 // Default text alignment for newly-placed nodes and for backfilling
 // entries persisted before per-node text alignment existed.
 const DEFAULT_TEXT_ALIGN: TextAlign = "center";
-
-// Position + size + style of a node, as stored in checked/savedLayout
-// below. width/height/textAlign are optional so entries persisted before
-// those features existed still parse; see nodeBox() for the backfilled
-// read path.
-type StoredBox = {
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  textAlign?: TextAlign;
-};
 
 // Which components are currently placed on the canvas, keyed by
 // componentKey() (a structurally-stable path of labels — see above), not
@@ -208,8 +210,10 @@ function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
     ? record
     : withoutLegacyKeys;
 }
-checked.value = stripLegacyIndexKeys(checked.value);
-savedLayout.value = stripLegacyIndexKeys(savedLayout.value);
+checked.value = sanitizeStoredRecord(stripLegacyIndexKeys(checked.value));
+savedLayout.value = sanitizeStoredRecord(
+  stripLegacyIndexKeys(savedLayout.value),
+);
 
 // Writes `box` to both `checked` (the current on-canvas state) and
 // savedLayout (the remembered layout), merging over any existing fields.
@@ -259,8 +263,10 @@ const CHILD_CONTAINMENT_MARGIN = 10;
 // Returns the box of `index`'s parent component, but only if that parent is
 // itself currently placed on the canvas ("active") — a node with a parent
 // that isn't on canvas has nothing to be constrained by. Only considers the
-// direct parent (see TASKS.md Task 36 for why deeper/transitive containment
-// is explicitly out of scope).
+// direct parent — a node only ever needs to stay within its own immediate
+// parent's box; staying within *its* parent's ancestors transitively is
+// handled separately by reclampChildren's recursive cascade below, once a
+// middle ancestor's own box changes.
 function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
   const parentIndex = components[index]?.parent_component_index;
   if (parentIndex === undefined) return null;
@@ -268,9 +274,15 @@ function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
 }
 
 // Re-clamps every currently-placed direct child of `parentIndex` against
-// the parent's current box. Called after a parent is dragged or resized so
-// its children's constraint region follows it live, and after checking a
-// new component (in case it's a parent of already-placed children).
+// the parent's current box, then recurses into each clamped child so
+// grandchildren (and deeper) are re-clamped against their own
+// just-updated parent in turn — cascading containment through the whole
+// ancestor chain, not just one level. Called after a parent is dragged or
+// resized so its descendants' constraint regions follow it live, and
+// after checking a new component (in case it's a parent of already-placed
+// children). Naturally bounded by what's actually on-screen, since a
+// component that isn't currently placed has no box to clamp or recurse
+// into.
 function reclampChildren(parentIndex: number) {
   const parentBox = nodeBox(parentIndex);
   if (!parentBox) return;
@@ -280,6 +292,7 @@ function reclampChildren(parentIndex: number) {
     if (!box) return; // not currently placed on canvas
     const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
     setNodeBox(childIndex, clamped);
+    reclampChildren(childIndex);
   });
 }
 
@@ -478,10 +491,26 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
 // own snapshot position — recomputed from the snapshot each event (not
 // accumulated incrementally) to avoid drift. Each node still respects its
 // own active-parent containment individually — if only some of the
-// selection is constrained, the group may not move perfectly rigidly, but
-// no node is ever allowed to escape its parent's box — and cascades
-// containment to its own children. Shared by single- and multi-node
-// drags alike, since a single dragged node is just a selection of one.
+// selection is constrained, the group may not move/scale perfectly
+// rigidly/uniformly, but no node is ever allowed to escape its parent's
+// box — and cascades containment to its own descendants. Shared by both
+// applyGroupDelta and applyGroupScale below, since they only differ in
+// how `next` is computed (a positional delta vs. a size/position scale).
+function writeClampedToActiveParent(index: number, next: Box) {
+  const ownParentBox = activeParentBox(index);
+  const clamped = ownParentBox
+    ? clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN)
+    : next;
+  setNodeBox(index, clamped);
+  reclampChildren(index);
+}
+
+// Moves every node in `startPositions` (a snapshot of the whole selection
+// taken when the drag began) by the same (deltaX, deltaY) offset from its
+// own snapshot position — recomputed from the snapshot each event (not
+// accumulated incrementally) to avoid drift. Shared by single- and
+// multi-node drags alike, since a single dragged node is just a
+// selection of one.
 function applyGroupDelta(
   startPositions: Record<number, { x: number; y: number }>,
   deltaX: number,
@@ -491,18 +520,13 @@ function applyGroupDelta(
     const index = Number(indexStr);
     const box = nodeBox(index);
     if (!box) continue;
-    let next: Box = {
+    const next: Box = {
       x: start.x + deltaX,
       y: start.y + deltaY,
       width: box.width,
       height: box.height,
     };
-    const ownParentBox = activeParentBox(index);
-    if (ownParentBox) {
-      next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
-    }
-    setNodeBox(index, next);
-    reclampChildren(index);
+    writeClampedToActiveParent(index, next);
   }
 }
 
@@ -510,10 +534,7 @@ function applyGroupDelta(
 // taken when the resize began) by (scaleX, scaleY), applied to both
 // position (relative to the selection's fixed top-left, `groupBox`) and
 // size. Shared by single- and multi-node resizes alike, since a single
-// resized node is just a selection of one. Unlike group-drag, this does
-// not enforce parent containment — scaling several nodes while respecting
-// potentially different constraints per node is a lot more complex, and
-// not needed at this project stage (see TASKS.md Task 46).
+// resized node is just a selection of one.
 function applyGroupScale(
   startBoxes: Record<number, Box>,
   groupBox: Box,
@@ -530,7 +551,7 @@ function applyGroupScale(
       width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
       height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
     };
-    setNodeBox(index, next);
+    writeClampedToActiveParent(index, next);
   }
 }
 
@@ -1034,14 +1055,27 @@ function zoomToFill() {
         {/if}
       </svg>
 
-      <div class="absolute bottom-2 right-2 z-10 flex gap-2">
-        <button
-          onclick={() => (snapEnabled = !snapEnabled)}
-          class="btn btn-sm {snapActive ? 'btn-primary' : 'btn-ghost'}"
-          title="Snap dragging/resizing to a {SNAP_GRID_SIZE}-unit grid — or hold Ctrl/Cmd to snap temporarily"
-        >
-          Snap to Grid
-        </button>
+      <div
+        class="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
+      >
+        <div class="join">
+          <button
+            onclick={() => (snapEnabled = !snapEnabled)}
+            class="btn btn-sm join-item {snapActive ? 'btn-primary' : 'btn-ghost'}"
+            title="Snap dragging/resizing to a {snapGridSize.value}-unit grid — or hold Ctrl/Cmd to snap temporarily"
+          >
+            Snap to Grid
+          </button>
+          <select
+            bind:value={snapGridSize.value}
+            class="select select-sm join-item w-20"
+            title="Snap grid size, in world units"
+          >
+            {#each SNAP_GRID_SIZE_OPTIONS as option}
+              <option value={option}>{option}</option>
+            {/each}
+          </select>
+        </div>
         <button
           onclick={() => (gridVisible = !gridVisible)}
           class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"

@@ -17,7 +17,8 @@
     "@tailwindcss/vite": "^4.2.2",
     "daisyui": "^5.5.19",
     "tailwindcss": "^4.2.2",
-    "rhizz": "file:../crates/rhizz-wasm/pkg/"
+    "rhizz": "file:../crates/rhizz-wasm/pkg/",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^7.0.1",

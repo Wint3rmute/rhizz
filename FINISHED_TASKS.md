@@ -4,6 +4,145 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 46 — Enforce containment during group-resize
+
+- `applyGroupScale` (`web/src/routes/diagrams/+page.svelte`) now clamps
+  each node's scaled box against its own `activeParentBox` (if any) before
+  writing it, exactly mirroring what `applyGroupDelta` already did for
+  drag — clamped individually per-node rather than solving for one "safe"
+  group scale factor upfront. Resizing a group can therefore end up not
+  perfectly uniform when some members are parent-constrained and others
+  aren't, an accepted trade-off matching the one `applyGroupDelta` already
+  documents for drag.
+- Extracted the now-identical "clamp against own active parent, write via
+  setNodeBox, cascade via reclampChildren" tail shared by both
+  `applyGroupDelta` and `applyGroupScale` into one helper,
+  `writeClampedToActiveParent(index, next)`. Both functions now only
+  compute their own `next: Box` (a positional delta vs. a size/position
+  scale) and delegate the rest to the shared helper — removing the last
+  bit of duplication between the two.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (47/47 pass, unaffected), and `deno fmt`
+  (no changes needed). Manual browser verification (nest a component,
+  select a group including it alongside unconstrained nodes, resize the
+  group) was not performed in this environment — worth a spot check.
+
+---
+
+## Task 45 — Extend containment clamping to grandchildren (multi-level nesting)
+
+- `reclampChildren(parentIndex)` in `web/src/routes/diagrams/+page.svelte`
+  now recurses: after clamping each direct child of `parentIndex` against
+  `parentIndex`'s box and writing it via `setNodeBox`, it calls
+  `reclampChildren(childIndex)` on that same child, so grandchildren (and
+  deeper) get re-clamped against their own just-updated parent in turn.
+  Containment now cascades through the whole ancestor chain instead of
+  stopping one level down.
+- The recursion is naturally bounded by what's actually placed on canvas
+  — `reclampChildren` already bails out early (`if (!parentBox) return;`)
+  for any component without a box, so no separate depth limit was needed.
+- `activeParentBox` (and the per-node clamp during drag) intentionally
+  stayed unchanged — a node only ever needs to stay within its own
+  *immediate* parent; the transitive part is entirely handled by
+  `reclampChildren`'s cascade once a middle ancestor's box changes. Updated
+  both functions' doc comments to describe this division of
+  responsibility and removed the now-outdated reference to this being
+  "explicitly out of scope" (that was this same task, previously
+  postponed).
+- Caught during manual review: `applyGroupScale` (which handles *all*
+  resizing, single- or multi-node, since Task 42's refactor) never called
+  `reclampChildren` at all, so resizing a parent didn't cascade
+  containment to its children/grandchildren even after the fix above —
+  only drag exercised the new recursion. Added `reclampChildren(index)`
+  right after each `setNodeBox(index, next)` in `applyGroupScale`'s loop,
+  mirroring `applyGroupDelta`, so resize now cascades containment to
+  descendants exactly like drag does. `applyGroupScale` still
+  intentionally does *not* clamp the resized node itself against its own
+  parent (that remains Task 46's scope) — updated its doc comment to spell
+  out that distinction precisely.
+- This is UI-interaction-driven behavior not easily covered by the
+  existing pure geometry unit tests; validated with `deno task check` (0
+  errors/warnings), `deno task build` (succeeds), and `deno task test`
+  (47/47 pass, unaffected). Manual browser verification (place a 3-level
+  `A ⊃ B ⊃ C` hierarchy; drag `A` far enough that `B` clamps and confirm
+  `C` follows; separately resize `A` and confirm `B`/`C` are re-clamped
+  too) was not performed in this environment — worth a spot check.
+
+---
+
+## Task 44 — Make diagram tuning constants configurable
+
+- Scoped to `SNAP_GRID_SIZE` only, per the task's own priority —
+  `MIN_NODE_SIZE`, `ZOOM_TO_FILL_FRACTION`, `CHILD_CONTAINMENT_MARGIN`, and
+  `TEXT_ALIGN_PADDING` stay hardcoded until a concrete need for exposing
+  them shows up.
+- Replaced `const SNAP_GRID_SIZE = 10;` in
+  `web/src/routes/diagrams/+page.svelte` with `let snapGridSize =
+  persisted("DIAGRAM_SNAP_GRID_SIZE", DEFAULT_SNAP_GRID_SIZE);`, reusing
+  the same `persisted()` helper already backing
+  `checked`/`savedLayout`/`input`, so the chosen grid size survives page
+  reloads. Added `SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const`
+  (fixed, "nice" round numbers that line up with
+  MINOR_GRID_SPACING/MAJOR_GRID_SPACING) and a `DEFAULT_SNAP_GRID_SIZE`
+  derived from it. `snap()` falls back to `DEFAULT_SNAP_GRID_SIZE`
+  whenever the persisted value isn't positive (e.g. a hand-edited `0` or
+  negative `localStorage` value), so it can never divide by a
+  zero/negative grid size.
+- Added a `<select>` dropdown (daisyUI `select select-sm`, grouped with
+  the existing "Snap to Grid" button via a `join` wrapper so they read as
+  one control) `bind:value={snapGridSize.value}`, populated from
+  `SNAP_GRID_SIZE_OPTIONS`, next to the "Snap to Grid" button in the
+  bottom-right button row — a fixed set of choices rather than a
+  free-form numeric input, and rather than a general settings panel for a
+  single value. Updated the button's tooltip to interpolate the live
+  `snapGridSize.value` instead of the old constant.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (47/47 pass, unaffected by this
+  change).
+
+---
+
+## Task 43 — Add schema validation for persisted diagram localStorage data
+
+- Added `zod` (v4) as a `web/package.json` dependency and a new
+  `web/src/routes/diagrams/persistence.ts` module: `StoredBoxSchema`
+  (`z.object({ x: z.number(), y: z.number(), width: z.number().optional(),
+  height: z.number().optional(), textAlign: z.enum(["center",
+  "top-center", "top-left"]).optional() })`), `StoredBox` (now `z.infer<
+  typeof StoredBoxSchema>` instead of a hand-written type — one source of
+  truth for the shape), and `sanitizeStoredRecord()`.
+- `sanitizeStoredRecord(record: Record<string, unknown>)` runs
+  `StoredBoxSchema.safeParse()` **per entry** (not one whole-object parse),
+  keeping every valid entry and dropping only the malformed ones, with a
+  single `console.warn` naming every dropped key in one line.
+- `web/src/routes/diagrams/+page.svelte` removed its hand-written
+  `StoredBox` type (now imported from `persistence.ts`) and now chains
+  `checked.value = sanitizeStoredRecord(stripLegacyIndexKeys(checked.value))`
+  (same for `savedLayout`) right at load time — the one spot both existing
+  migration logic and the new validation run, so every other read/write
+  site (`nodeBox()`, `setNodeBox()`, the hot drag/resize path) keeps
+  trusting that anything already in `checked.value` is well-formed.
+- Added `web/src/routes/diagrams/persistence.test.ts` (13 tests, matching
+  `geometry.test.ts`'s pattern): valid entries pass through unchanged,
+  entries with only the required `x`/`y` still parse (backwards-compat
+  with pre-width/height/textAlign data), non-numeric/missing/invalid
+  fields and fully-malformed entries (`null`, a string, an array) are
+  rejected, malformed entries are dropped independently of valid
+  siblings, and the single-`console.warn`-naming-every-dropped-key
+  behavior is asserted directly (via a `vi.spyOn(console, "warn")`).
+- No behavior change for well-formed data — this is purely a guardrail
+  for corrupted/hand-edited `localStorage` entries or future schema
+  drift. Chose Zod (a TS-only schema library) over an earlier brainstormed
+  Rust/serde/wasm approach: for a small, frequently-tweaked, frontend-only
+  concern like this, a TS schema library wins on iteration speed, type
+  inference (`z.infer`), and testability, even though the Rust option
+  would better seed a future "backend defines the schema" pattern.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (47/47 — 34 existing geometry tests +
+  13 new persistence tests — pass).
+
+---
+
 ## Task 42 — Deduplicate drag/resize coordinate-and-clamp logic in the diagrams canvas
 
 - Extracted the per-node write loops out of `onSvgMouseMove`'s
