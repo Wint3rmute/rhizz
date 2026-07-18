@@ -12,6 +12,7 @@ import type { ComponentJS } from "rhizz";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
   createForceLayout,
+  groupBySiblings,
   type LayoutEdge,
   type LayoutNode,
 } from "./forceLayout";
@@ -776,21 +777,23 @@ let autoLayoutRunning = $state(false);
 
 // Runs a force-directed auto-layout pass over the target set of nodes:
 // the current selection if non-empty, otherwise every currently-placed
-// *top-level* node. v1 scope only — see TASKS.md Task 50 for why a flat
-// pass mixing every level of a hierarchy at once isn't the right model;
-// a manually-selected mix of parents/children is still handled safely
-// (each moved node is clamped to its own active parent, same as a live
-// drag), just not laid out with any special awareness of the hierarchy.
-// Animates the result by driving the simulation frame-by-frame via
-// requestAnimationFrame, writing back through the same
-// clamp-to-active-parent-and-cascade path a live drag uses, rather than
-// jumping straight to the converged layout.
+// node at any level. The target set is partitioned into sibling groups
+// (groupBySiblings, keyed by immediate parent) and each group gets its
+// own independent simulation, confined around its own parent's current
+// box (or its own combined bounding box, for a top-level group or an
+// orphaned nested group whose parent isn't itself placed) — rather than
+// one flat simulation mixing unrelated hierarchy levels together. See
+// TASKS.md Task 50 for why: a node shouldn't be repelled by/attracted to
+// a node it isn't actually a sibling of. Every result is still written
+// through the same clamp-to-active-parent-and-cascade path a live drag
+// uses, regardless of grouping, as a containment safety net. All groups'
+// simulations are driven together, frame-by-frame, via
+// requestAnimationFrame, rather than jumping straight to the converged
+// layout.
 function runAutoLayout() {
   if (autoLayoutRunning) return;
 
-  const targetIndices = selected.size > 0 ? [...selected] : renderOrder.filter(
-    (index) => components[index]?.parent_component_index === undefined,
-  );
+  const targetIndices = selected.size > 0 ? [...selected] : renderOrder;
 
   const layoutNodes: LayoutNode[] = targetIndices.flatMap((index) => {
     const box = nodeBox(index);
@@ -798,29 +801,43 @@ function runAutoLayout() {
   });
   if (layoutNodes.length < 2) return; // nothing meaningful to arrange
 
-  const targetSet = new Set(targetIndices);
-  const layoutEdges: LayoutEdge[] = connections
-    .filter((conn) => targetSet.has(conn.from) && targetSet.has(conn.to))
-    .map((conn) => ({ from: conn.from, to: conn.to }));
+  const groups = groupBySiblings(layoutNodes, parentOf);
+  const groupLayouts = [...groups.entries()].map(
+    ([parentIndex, groupNodes]) => {
+      const groupIndexSet = new Set(groupNodes.map((n) => n.index));
+      const groupEdges: LayoutEdge[] = connections
+        .filter(
+          (conn) => groupIndexSet.has(conn.from) && groupIndexSet.has(conn.to),
+        )
+        .map((conn) => ({ from: conn.from, to: conn.to }));
 
-  // Centers the simulation on the target set's current combined bounding
-  // box, rather than the world origin, so the group settles roughly
-  // where it already was instead of jumping across the canvas.
-  const bounds = unionBox(layoutNodes.map((n) => n.box));
-  const centerX = bounds.x + bounds.width / 2;
-  const centerY = bounds.y + bounds.height / 2;
+      // Centers each group's simulation on its own parent's current box
+      // (if that parent is itself placed on canvas), so a nested group
+      // stays roughly where its parent already is; falls back to the
+      // group's own combined bounding box otherwise (top-level, or a
+      // nested group whose parent isn't shown).
+      const parentBox = parentIndex !== undefined ? nodeBox(parentIndex) : null;
+      const bounds = parentBox ?? unionBox(groupNodes.map((n) => n.box));
+      const centerX = bounds.x + bounds.width / 2;
+      const centerY = bounds.y + bounds.height / 2;
 
-  const layout = createForceLayout(layoutNodes, layoutEdges, {
-    centerX,
-    centerY,
-  });
+      return createForceLayout(groupNodes, groupEdges, { centerX, centerY });
+    },
+  );
 
   autoLayoutRunning = true;
   let frame = 0;
 
   function step() {
-    const results = layout.tick();
     frame += 1;
+
+    let allSettled = true;
+    const allResults: { index: number; x: number; y: number }[] = [];
+    for (const layout of groupLayouts) {
+      allResults.push(...layout.tick());
+      if (layout.alpha() >= AUTO_LAYOUT_ALPHA_MIN) allSettled = false;
+    }
+
     // Only snap the final settling frame, not every intermediate one:
     // snapping every frame while snapping is active would force the
     // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
@@ -828,10 +845,9 @@ function runAutoLayout() {
     // written position anyway, only the last write actually matters for
     // the visible result — so it's the only one that needs to respect
     // the grid.
-    const converged = layout.alpha() < AUTO_LAYOUT_ALPHA_MIN ||
-      frame >= AUTO_LAYOUT_MAX_FRAMES;
+    const converged = allSettled || frame >= AUTO_LAYOUT_MAX_FRAMES;
 
-    for (const result of results) {
+    for (const result of allResults) {
       const box = nodeBox(result.index);
       if (!box) continue;
       writeClampedToActiveParent(result.index, {

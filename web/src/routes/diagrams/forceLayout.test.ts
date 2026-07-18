@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createForceLayout,
+  groupBySiblings,
   type LayoutEdge,
   type LayoutNode,
   runForceLayout,
@@ -134,5 +135,46 @@ describe("createForceLayout", () => {
     // Simulation is still active (alpha hasn't decayed to 0 in 2 ticks),
     // so positions should keep changing tick over tick.
     expect(second).not.toEqual(first);
+  });
+});
+
+describe("groupBySiblings", () => {
+  it("puts every top-level node (no parent) into one group keyed by undefined", () => {
+    const nodes = [{ index: 0 }, { index: 1 }, { index: 2 }];
+    const groups = groupBySiblings(nodes, () => undefined);
+
+    expect(groups.size).toBe(1);
+    expect(groups.get(undefined)).toEqual(nodes);
+  });
+
+  it("splits nodes with different parents into separate groups", () => {
+    const nodes = [{ index: 0 }, { index: 1 }, { index: 2 }, { index: 3 }];
+    const parents: Record<number, number | undefined> = {
+      0: 10,
+      1: 10,
+      2: 20,
+      3: undefined,
+    };
+    const groups = groupBySiblings(nodes, (index) => parents[index]);
+
+    expect(groups.size).toBe(3);
+    expect(groups.get(10)).toEqual([{ index: 0 }, { index: 1 }]);
+    expect(groups.get(20)).toEqual([{ index: 2 }]);
+    expect(groups.get(undefined)).toEqual([{ index: 3 }]);
+  });
+
+  it("preserves each node's original data, not just its index", () => {
+    const nodes = [
+      { index: 0, box: { x: 1, y: 2, width: 3, height: 4 } },
+      { index: 1, box: { x: 5, y: 6, width: 7, height: 8 } },
+    ];
+    const groups = groupBySiblings(nodes, () => undefined);
+
+    expect(groups.get(undefined)).toEqual(nodes);
+  });
+
+  it("returns an empty map for an empty input", () => {
+    const groups = groupBySiblings([], () => undefined);
+    expect(groups.size).toBe(0);
   });
 });

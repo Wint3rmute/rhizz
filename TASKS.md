@@ -15,11 +15,12 @@ How to work on this file:
 
 ## Task 50 - automatic layout via force simulation
 
-**Status: in progress.** Steps 1–3 of the phased plan below are done and
+**Status: in progress.** Steps 1–4a of the phased plan below are done and
 demoable — there's a working "Auto Layout" button on the diagrams page’s
-bottom toolbar. Steps 4–5 (recursive per-sibling-group layout, "pin
-existing nodes" for the new-nodes use-case, and the "exploring
-interactively" use-case) are still open follow-ups; see the end of this
+bottom toolbar, now with recursive per-sibling-group layout (step 4a).
+Remaining open follow-ups: "pin existing nodes" for the new-nodes
+use-case (step 4b), the "exploring interactively" use-case (step 5), and
+the undo/safety-net idea from the brainstorm below. See the end of this
 entry for what's implemented so far.
 
 The goal of this task is to implement automatic layout via force simulation, so
@@ -162,39 +163,50 @@ noise never enters a given group's simulation.
    case once there's a concrete feature (e.g. auto-expanding children) to
    hang it off of.
 
-### Implemented so far (steps 1–3)
+### Implemented so far (steps 1–4a)
 
 - `web/src/routes/diagrams/forceLayout.ts`: pure, Svelte/rhizz-free module
   wrapping `d3-force` (added as a dependency, along with `@types/d3-force`).
   Named `forceLayout.ts` rather than `layout.ts` to avoid colliding with
   SvelteKit's reserved `+layout.ts` route-file convention. Exposes
   `createForceLayout(nodes, edges, options)` (returns a `{ tick(), alpha() }`
-  pair for frame-by-frame driving) and `runForceLayout(...)` (a synchronous
-  convenience wrapper that ticks to convergence, used by tests). Nodes are
-  approximated as circles (`Math.hypot(width, height) / 2`) for the
-  collision force; a node's own diagram index is round-tripped via a
-  `componentIndex` field (NOT `index` — d3-force reserves that name on
-  every simulation node for its own bookkeeping and will silently overwrite
-  it). Supports pinning a node in place via `fixed: true` (sets d3-force's
-  `fx`/`fy`), already threaded through for the not-yet-wired-up "new nodes"
-  use-case. 9 Vitest tests in `forceLayout.test.ts`.
-- `web/src/routes/diagrams/+page.svelte`: added a `runAutoLayout()` function
-  and an "Auto Layout" button in the bottom toolbar. Target set is the
-  current selection, or every placed top-level node if nothing's selected
-  (v1 scope, per step 2 above). Edges are `connections` filtered to those
-  with both endpoints in the target set. Driven via `requestAnimationFrame`,
-  writing each frame's result back through `writeClampedToActiveParent`
-  (the same clamp-to-own-parent-and-cascade path drag/resize already use
-  — Tasks 45/46), so a manually-selected mix of parents/children stays
-  containment-safe even without hierarchy-aware grouping yet. Stops once
-  `alpha` decays below `AUTO_LAYOUT_ALPHA_MIN` or `AUTO_LAYOUT_MAX_FRAMES`
-  is reached. `autoLayoutRunning` disables the button mid-run so a second
-  click can't race the first.
+  pair for frame-by-frame driving), `runForceLayout(...)` (a synchronous
+  convenience wrapper that ticks to convergence, used by tests), and
+  `groupBySiblings(nodes, parentOf)` (partitions nodes into sibling groups
+  by immediate parent — step 4a below). Nodes are approximated as circles
+  (`Math.hypot(width, height) / 2`) for the collision force; a node's own
+  diagram index is round-tripped via a `componentIndex` field (NOT `index`
+  — d3-force reserves that name on every simulation node for its own
+  bookkeeping and will silently overwrite it). Supports pinning a node in
+  place via `fixed: true` (sets d3-force's `fx`/`fy`), already threaded
+  through for the not-yet-wired-up "new nodes" use-case. 13 Vitest tests
+  in `forceLayout.test.ts`.
+- `web/src/routes/diagrams/+page.svelte`: added a `runAutoLayout()`
+  function and an "Auto Layout" button in the bottom toolbar. Target set
+  is the current selection, or **every** currently-placed node (any
+  level) if nothing's selected. The target set is partitioned via
+  `groupBySiblings` and each sibling group gets its own independent
+  `createForceLayout` simulation, centered on its own parent's current
+  box if that parent is itself placed (or the group's own combined
+  bounding box otherwise) — step 4a, closing the main remaining gap from
+  the original brainstorm. All groups' simulations are driven together in
+  one shared `requestAnimationFrame` loop; every result is still written
+  through `writeClampedToActiveParent` (the same clamp-to-own-parent-and-
+  cascade path drag/resize use — Tasks 45/46) regardless of grouping, as
+  a containment safety net. Stops once every group's `alpha` decays below
+  `AUTO_LAYOUT_ALPHA_MIN`, or `AUTO_LAYOUT_MAX_FRAMES` is reached,
+  whichever comes first; only the final settling frame is snapped to the
+  grid (`snap()`), so the animation itself stays smooth even when
+  snap-to-grid is on. `autoLayoutRunning` disables the button mid-run
+  (with a `wait` cursor on hover) and locks out
+  drag/resize/pan/marquee-select on the canvas for the duration (each
+  gets a matching `wait` cursor too), so clicking around mid-animation
+  can't silently fight the simulation's writes.
 - Not yet done: the undo/snapshot safety net mentioned above — running
   auto-layout on a hand-arranged diagram is currently irreversible other
   than manually dragging things back.
 - Validated with `deno task check` (0 errors/warnings), `deno task build`
-  (succeeds), `deno task test` (56/56 pass), and `deno fmt` (clean).
+  (succeeds), `deno task test` (60/60 pass), and `deno fmt` (clean).
 
 ---
 

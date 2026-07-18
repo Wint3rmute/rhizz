@@ -153,6 +153,33 @@ export function createForceLayout(
   };
 }
 
+// Partitions `nodes` into sibling groups by their immediate parent —
+// `parentOf(node.index)`, with `undefined` meaning "top-level" (no
+// parent, or a parent that isn't itself in the target set). Each
+// resulting group contains only nodes that share the same immediate
+// parent, preserving input order within a group. Used to run one
+// independent force simulation per group rather than one flat simulation
+// mixing unrelated hierarchy levels together (see TASKS.md Task 50: a
+// node shouldn't be repelled by/attracted to a node it's not actually a
+// sibling of, just because both happen to be in the same auto-layout
+// invocation).
+export function groupBySiblings<T extends { index: number }>(
+  nodes: T[],
+  parentOf: (index: number) => number | undefined,
+): Map<number | undefined, T[]> {
+  const groups = new Map<number | undefined, T[]>();
+  for (const node of nodes) {
+    const parent = parentOf(node.index);
+    const group = groups.get(parent);
+    if (group) {
+      group.push(node);
+    } else {
+      groups.set(parent, [node]);
+    }
+  }
+  return groups;
+}
+
 // Convenience wrapper for callers that just want a final, converged
 // layout synchronously (e.g. tests, or a "no animation" fallback) instead
 // of driving the simulation frame-by-frame themselves. Runs until alpha
