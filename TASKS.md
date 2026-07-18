@@ -13,34 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 37 — Add unit tests for the extracted geometry module (continued)
-
-Task 36 (extraction) is done, and the test harness (Vitest, via
-`deno task test`) is scaffolded with initial tests for `boxCenter`,
-`boxContains`, and `clampWithin` in
-`web/src/routes/diagrams/geometry.test.ts`. Remaining work:
-
-- `elbowPath` — both orientations, including the straight-line shortcuts
-  and the sweep-flag reflection for the vertical variant. Consider
-  `@std/testing/snapshot`-style snapshotting (or Vitest's own
-  `toMatchSnapshot`) rather than hand-written string literals, since exact
-  path strings are brittle to assert on directly.
-- `boxBoundaryPoint` — all four side choices, including axis-aligned edge
-  cases (dx or dy exactly 0).
-- `clampResizeWithin` — within bounds unchanged; exceeds right/bottom edge
-  → capped; capped result still respects `MIN_NODE_SIZE`.
-- `unionBox` — single box; multiple scattered boxes; decide what to do
-  about the empty-array case (currently `Math.min()`/`Math.max()` with no
-  args returns `±Infinity` — likely worth a guard/fix while adding the
-  test).
-- `depthOf` — root component → 0; nested chain → correct hop count; no
-  parent → 0.
-- `textPosition` — exact x/y/anchor/baseline per alignment case (not yet
-  covered).
-- Validate with `deno task test`.
-
----
-
 ## Task 38 — Replace ad hoc interaction state with a discriminated-union state machine
 
 `dragging`, `resizing`, `panning`, and `marquee` are four independently

@@ -58,9 +58,15 @@ export function clampResizeWithin(
 }
 
 // Bounding box (union) enclosing every box in `boxes`. Used to find a
-// multi-selection's combined extent for group-resize. `boxes` must be
-// non-empty (Math.min/max of an empty array is +/-Infinity).
+// multi-selection's combined extent for group-resize.
 export function unionBox(boxes: Box[]): Box {
+  if (boxes.length === 0) {
+    // Math.min/max of an empty array is +/-Infinity, which would silently
+    // produce NaN/Infinity geometry instead of a clear failure — every
+    // current call site already guards against calling this with no
+    // boxes, so reaching here indicates a bug at the call site.
+    throw new Error("unionBox: boxes must be non-empty");
+  }
   const x = Math.min(...boxes.map((b) => b.x));
   const y = Math.min(...boxes.map((b) => b.y));
   const right = Math.max(...boxes.map((b) => b.x + b.width));

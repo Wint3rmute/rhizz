@@ -4,6 +4,34 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 37 — Add unit tests for the extracted geometry module
+
+- Expanded `web/src/routes/diagrams/geometry.test.ts` from the initial
+  3-function smoke test to full coverage of every exported function in
+  `geometry.ts`: `boxCenter`, `boxContains`, `clampWithin`,
+  `clampResizeWithin`, `unionBox`, `textPosition`, `boxBoundaryPoint`,
+  `elbowPath`, `depthOf` — 34 tests total.
+- `elbowPath` is tested structurally rather than via snapshot/exact-string
+  matching (which would be brittle to assert on by hand and wouldn't
+  independently verify correctness, only lock in whatever the current
+  output happens to be). A small test-local `waypoints()` helper parses
+  out the ordered M/L/A endpoints, and tests assert the property that
+  actually matters: horizontal orientation keeps `y` fixed on the first
+  and last legs (H-V-H), vertical orientation keeps `x` fixed on the first
+  and last legs (V-H-V) — exactly the behavior fixed earlier when the
+  original bug (always H-V-H regardless of orientation) was found.
+- Hardened `unionBox` while writing its tests: an empty input array
+  previously fell through to `Math.min()`/`Math.max()` on an empty array
+  (`+/-Infinity`), silently producing garbage geometry. Now throws a clear
+  error instead — every current call site (`onResizeHandleMouseDown`,
+  `zoomToFill`) already guards against calling it with no boxes, so this
+  is a pure hardening change with no behavior change at any real call
+  site.
+- Validated with `deno task test` (34/34 passing), `deno task check`, and
+  `deno task build`.
+
+---
+
 ## Task 36 — Extract pure geometry helpers from diagrams/+page.svelte into a dedicated module
 
 - Created `web/src/routes/diagrams/geometry.ts`, a Svelte/DOM-independent
