@@ -20,6 +20,8 @@
             packages = [
               pkgs.rustc
               pkgs.cargo
+              pkgs.clippy
+              pkgs.rustfmt
               pkgs.wasm-pack
               pkgs.deno
               pkgs.lld

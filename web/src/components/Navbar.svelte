@@ -1,16 +1,17 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
-  import type { ProjectJS } from "rhizz";
+import { resolve } from "$app/paths";
+import type { ProjectJS } from "rhizz";
+import { getTheme, toggleTheme } from "../ThemeState.svelte";
 
-  let {
-    project = null,
-    errorCount = null,
-    warningCount = null,
-  }: {
-    project?: ProjectJS | null;
-    errorCount?: number | null;
-    warningCount?: number | null;
-  } = $props();
+let {
+  project = null,
+  errorCount = null,
+  warningCount = null,
+}: {
+  project?: ProjectJS | null;
+  errorCount?: number | null;
+  warningCount?: number | null;
+} = $props();
 </script>
 
 <div class="navbar bg-base-100 text-base-content border-b border-base-300">
@@ -32,5 +33,12 @@
         {errorCount} errors · {warningCount} warnings
       </div>
     {/if}
+    <button
+      onclick={toggleTheme}
+      class="btn btn-ghost btn-sm"
+      title="Toggle light/dark theme"
+    >
+      {getTheme() === "dark" ? "🌙" : "☀️"}
+    </button>
   </div>
 </div>

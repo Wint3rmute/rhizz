@@ -1,80 +1,80 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
-  import { compile_system } from "../../rhizz_wasm_wrapper";
-  import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
-  import ModelStatsRow from "../../components/ModelStatsRow.svelte";
-  import CompletionBreakdown from "../../components/CompletionBreakdown.svelte";
-  import type { CategoryScore } from "../../components/CompletionBreakdown.svelte";
-  import persisted from "../../Persisted.svelte";
+import { resolve } from "$app/paths";
+import { compile_system } from "../../rhizz_wasm_wrapper";
+import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
+import ModelStatsRow from "../../components/ModelStatsRow.svelte";
+import CompletionBreakdown from "../../components/CompletionBreakdown.svelte";
+import type { CategoryScore } from "../../components/CompletionBreakdown.svelte";
+import persisted from "../../Persisted.svelte";
 
-  let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
+let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
 
-  let output = $derived.by(() =>
-    compile_system([{ filename: "all.hcl", content: input.value }])
-  );
+let output = $derived.by(() =>
+  compile_system([{ filename: "all.hcl", content: input.value }])
+);
 
-  let model = $derived(output.model());
-  let diagnostics = $derived(output.diagnostics());
+let model = $derived(output.model());
+let diagnostics = $derived(output.diagnostics());
 
-  let components = $derived(model ? model.components() : []);
-  let score = $derived(model ? model.score() : null);
-  let project = $derived(model ? model.project() : null);
+let components = $derived(model ? model.components() : []);
+let score = $derived(model ? model.score() : null);
+let project = $derived(model ? model.project() : null);
 
-  let leafCount = $derived(components.filter((c) => c.leaf).length);
-  let compositeCount = $derived(components.filter((c) => !c.leaf).length);
+let leafCount = $derived(components.filter((c) => c.leaf).length);
+let compositeCount = $derived(components.filter((c) => !c.leaf).length);
 
-  function catTotal(
-    cat: { complete: number; partial: number; incomplete: number } | null,
-  ) {
-    return cat ? cat.complete + cat.partial + cat.incomplete : 0;
-  }
-  function catPct(cat: { percentage: number } | null) {
-    return cat ? Math.round(cat.percentage) : 0;
-  }
-  function toCat(
-    cat:
-      | {
-        complete: number;
-        partial: number;
-        incomplete: number;
-        percentage: number;
-      }
-      | null
-      | undefined,
-  ): CategoryScore {
-    return {
-      complete: cat?.complete ?? 0,
-      partial: cat?.partial ?? 0,
-      incomplete: cat?.incomplete ?? 0,
-      pct: cat ? Math.round(cat.percentage) : 0,
-    };
-  }
+function catTotal(
+  cat: { complete: number; partial: number; incomplete: number } | null,
+) {
+  return cat ? cat.complete + cat.partial + cat.incomplete : 0;
+}
+function catPct(cat: { percentage: number } | null) {
+  return cat ? Math.round(cat.percentage) : 0;
+}
+function toCat(
+  cat:
+    | {
+      complete: number;
+      partial: number;
+      incomplete: number;
+      percentage: number;
+    }
+    | null
+    | undefined,
+): CategoryScore {
+  return {
+    complete: cat?.complete ?? 0,
+    partial: cat?.partial ?? 0,
+    incomplete: cat?.incomplete ?? 0,
+    pct: cat ? Math.round(cat.percentage) : 0,
+  };
+}
 
-  let totalPorts = $derived(catTotal(score?.ports ?? null));
-  let totalConnections = $derived(catTotal(score?.connections ?? null));
-  let totalMessages = $derived(catTotal(score?.messages ?? null));
-  let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
-  let completeTotal = $derived(
-    score
-      ? score.components.complete +
-        score.ports.complete +
-        score.connections.complete +
-        score.messages.complete
-      : 0,
-  );
-  let grandTotal = $derived(
-    catTotal(score?.components ?? null) +
-      catTotal(score?.ports ?? null) +
-      catTotal(score?.connections ?? null) +
-      catTotal(score?.messages ?? null),
-  );
+let totalPorts = $derived(catTotal(score?.ports ?? null));
+let totalConnections = $derived(catTotal(score?.connections ?? null));
+let totalMessages = $derived(catTotal(score?.messages ?? null));
+let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
+let completeTotal = $derived(
+  score
+    ? score.components.complete +
+      score.ports.complete +
+      score.connections.complete +
+      score.messages.complete
+    : 0,
+);
+let grandTotal = $derived(
+  catTotal(score?.components ?? null) +
+    catTotal(score?.ports ?? null) +
+    catTotal(score?.connections ?? null) +
+    catTotal(score?.messages ?? null),
+);
 
-  function levelBadge(level: number): string {
-    if (level <= 1) return "badge-primary";
-    if (level === 2) return "badge-secondary";
-    if (level === 3) return "badge-accent";
-    return "badge-neutral";
-  }
+function levelBadge(level: number): string {
+  if (level <= 1) return "badge-primary";
+  if (level === 2) return "badge-secondary";
+  if (level === 3) return "badge-accent";
+  return "badge-neutral";
+}
 </script>
 
 <div class="flex-1 w-full bg-base-100 overflow-y-auto">
@@ -100,7 +100,8 @@
           >Diagrams</a>
         </li>
         <li>
-          <a href={resolve("/", {})} class="block hover:text-base-content">Home</a>
+          <a href={resolve("/", {})}
+            class="block hover:text-base-content">Home</a>
         </li>
       </ul>
     </aside>

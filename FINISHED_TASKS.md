@@ -4,6 +4,423 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 42 — Deduplicate drag/resize coordinate-and-clamp logic in the diagrams canvas
+
+- Extracted the per-node write loops out of `onSvgMouseMove`'s
+  `"dragging"`/`"resizing"` switch cases in
+  `web/src/routes/diagrams/+page.svelte` into two named top-level
+  functions:
+  - `applyGroupDelta(startPositions, deltaX, deltaY)` — moves every node in
+    a position snapshot by the same offset, clamping each individually to
+    its own active parent and cascading via `reclampChildren`. Used for
+    both single- and multi-node drags (a single dragged node is just a
+    selection of one).
+  - `applyGroupScale(startBoxes, groupBox, scaleX, scaleY)` — scales every
+    node in a box snapshot by the same factor, relative to the selection's
+    fixed top-left. Used for both single- and multi-node resizes.
+- The two switch cases now each follow the same two-step shape: compute an
+  anchor-derived parameter (a delta for drag, a scale factor for resize),
+  then apply it to the whole snapshot via the corresponding helper —
+  instead of inlining the per-node loop directly in the switch case.
+- Pure refactor, no behavior change. Validated with `deno task check` (0
+  errors/warnings), `deno task build` (succeeds), and `deno task test`
+  (34/34 geometry tests still pass).
+
+---
+
+## Task 41 — Replace plain Set with SvelteSet for the selection state
+
+- `selected` in `web/src/routes/diagrams/+page.svelte` is now `const
+  selected = new SvelteSet<number>();` (imported from
+  `svelte/reactivity`), replacing the old `let selected: Set<number> =
+  $state(new Set());`. `SvelteSet` is deeply reactive on its own, so
+  `add()`/`delete()`/`clear()` are directly tracked — no more
+  reassigning a fresh `Set` just to trigger reactivity, and no more risk
+  of a future direct `.add()`/`.delete()` call silently becoming a no-op.
+- Simplified the three call sites that used to reconstruct a new `Set`:
+  - `onNodeMouseDown`'s "replace selection with just this node" path is
+    now `selected.clear(); selected.add(index);` instead of `selected =
+    new Set([index]);`.
+  - `onSvgMouseUp`'s marquee-commit path is now `selected.clear(); if
+    (...) { for (const index of marqueeCandidates) selected.add(index); }`
+    instead of ternary-constructing a whole new `Set`.
+  - The sidebar checkbox's uncheck handler is now a single
+    `selected.delete(index);` (removed the redundant `has()` check +
+    copy-then-delete-then-reassign dance, since `delete()` on a key
+    that isn't present is already a harmless no-op).
+- `marqueeCandidates` (a `$derived.by` producing a brand new `Set` each
+  recompute, never mutated in place) was deliberately left as a plain
+  `Set` — it's freshly constructed every time, so there's no reactivity
+  gap to fix there.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (34/34 geometry tests still pass).
+
+---
+
+## Task 40 — Make the diagram view (pan/zoom) page-scoped instead of a module-level singleton
+
+- `web/src/ViewEditorState.svelte` no longer holds a module-level
+  `editor_state` singleton or a `get_editor_state()` accessor. Replaced
+  with `create_editor_state()`, a factory that returns a fresh
+  `$state`-backed `ViewEditorState` (`{ view: { x, y, zoom } }`) on every
+  call, plus the exported `ViewEditorState` type. `clamp_zoom()` is
+  unchanged (already a pure, stateless function).
+- `reset_view()` now takes the state instance to reset as a parameter
+  (`reset_view(state: ViewEditorState)`) instead of implicitly resetting
+  the old shared singleton.
+- `web/src/routes/diagrams/+page.svelte` now calls
+  `const editor_state = create_editor_state();` to construct its own
+  independent instance, and the "Reset View" button now calls
+  `reset_view(editor_state)`.
+- This is a pure refactor with the diagrams page as the sole consumer, so
+  behavior is unchanged today, but any future feature needing more than
+  one independent diagram view (split view, a thumbnail preview, ...) can
+  now just call `create_editor_state()` again instead of fighting over one
+  shared pan/zoom. Matches the intentional distinction already documented
+  in `ViewEditorState.svelte`: unlike genuinely global concerns
+  (`KeyboardState.svelte`'s physical key state, `ThemeState.svelte`'s
+  app-wide theme), pan/zoom is inherently per-view.
+- Hit and fixed a Svelte compiler error (`$state(...) can only be used as
+  a variable declaration initializer...`) from initially writing
+  `create_editor_state()` as `return $state({...})` directly — `$state()`
+  must be assigned to a local variable first, then returned.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (34/34 geometry tests still pass).
+
+---
+
+## Task 39 — Make diagram layout persistence keys stable across HCL source edits
+
+- Added a minimal `SystemJS` wrapper (`label` getter only) and
+  `ModelJS::systems()` to `crates/rhizz-wasm/src/lib.rs`, mirroring the
+  existing `ComponentJS`/`ConnectionJS` wrapper pattern. System labels are
+  globally unique (unlike component labels, which are only unique within
+  their parent scope — SPEC.md §2.3), so a system's label is a safe root
+  for a stable path. Rebuilt the wasm bindings with `wasm-pack build
+  crates/rhizz-wasm --target web` so `web/src/routes/diagrams/+page.svelte`
+  picks up the new binding (linked via the existing `"rhizz":
+  "file:../crates/rhizz-wasm/pkg/"` dependency).
+- Added `componentKey(index)` in `+page.svelte`, which walks the chain of
+  `parent_component_index` up to the root and prepends the root's parent
+  system's label (via the new `systems` derived + `parent_system_index`),
+  producing a path like `"home-monitor/controller/mcu"`. This replaces the
+  raw arena index as the storage key for both `checked` and `savedLayout`
+  (now typed `Record<string, StoredBox>` instead of `Record<number,
+  StoredBox>`), so reordering/inserting components earlier in the HCL
+  source no longer silently reattaches a persisted position to the wrong
+  component.
+- Added `keyToIndex`, a `$derived.by` reverse map from `componentKey()` →
+  current arena index, rebuilt whenever `components`/`systems` change.
+  `renderOrder` now maps `Object.keys(checked.value)` through this reverse
+  map (dropping keys that no longer resolve to a component) instead of
+  parsing them back with `Number(...)`.
+- All other read/write sites (`setNodeBox`, `nodeBox`,
+  `setSelectedTextAlign`, `onNodeMouseDown`'s drag-start snapshot, and the
+  sidebar checkbox's check/uncheck handlers) now key through
+  `componentKey(index)` instead of the bare arena index.
+- Migration: added `stripLegacyIndexKeys()`, run once against
+  `checked.value`/`savedLayout.value` right after they're loaded. Old
+  arena-index keys are plain-integer strings (e.g. `"0"`, `"1"`), which
+  can never occur as a `componentKey()` path (a real path always contains
+  at least one `"/"`, from its root system label), so they're identified
+  unambiguously and dropped rather than left to linger unused in
+  `localStorage` forever. There's no reliable way to migrate their values
+  forward (the whole point of this change is that the old
+  index→component mapping could silently be wrong), so anyone with
+  pre-existing diagram layouts gets a one-time reset, as the task allowed.
+- Fixed a TS7022 circular-inference compiler error (`'component'
+  implicitly has type 'any' because it ... is referenced ... in its own
+  initializer`) surfaced by `componentKey`'s `while` loop reassigning its
+  loop variable, by explicitly annotating the loop-local `const component:
+  ComponentJS | undefined = components[current]` (imported `ComponentJS`
+  as a type from `"rhizz"`, matching the existing pattern in
+  `Navbar.svelte`) — a known TypeScript design limitation with loops that
+  both read and reassign a shared variable across iterations.
+- Validated with `cargo build`/`cargo test --all` (rhizz-wasm + workspace,
+  all pass; `cargo clippy` is unavailable in this sandbox's Nix devshell,
+  so it could not be run for the Rust change), and `deno task check` (0
+  errors/warnings), `deno task build`, and `deno task test` (all 34
+  existing geometry tests still pass) for the frontend. Manual
+  browser verification of reordering components in the HCL source was not
+  performed (no interactive browser available in this environment) —
+  recommend the user spot-check this manually.
+
+---
+
+## Task 38 — Replace ad hoc interaction state with a discriminated-union state machine
+
+- In `web/src/routes/diagrams/+page.svelte`, replaced the four
+  independently-nullable state variables `dragging`, `resizing`,
+  `panning`, and `marquee` (plus the separate `MarqueeState` type) with a
+  single discriminated union `Interaction` (`{ type: "idle" } | { type:
+  "dragging", ... } | { type: "resizing", ... } | { type: "panning", ... }
+  | { type: "marquee", ... }`) held in one `interaction: Interaction =
+  $state({ type: "idle" })`. This restores the spirit of the old
+  discriminated-union `EditorState` (`idle | moving_canvas | zooming`)
+  that used to live in `ViewEditorState.svelte` before it was removed
+  earlier in the session in favor of separate flags.
+- Updated `onNodeMouseDown`, `onCanvasMouseDown`,
+  `onResizeHandleMouseDown`, `onSvgMouseMove`, and `onSvgMouseUp` to read
+  and write `interaction` via exhaustive `switch`/discriminant checks
+  instead of independent `if` chains. `onSvgMouseMove` captures
+  `const current = interaction;` at the top and switches on
+  `current.type`, since TypeScript can't reliably narrow directly on a
+  live `$state` binding across branches — each `case` body reads from
+  `current`, and only reassigns the live `interaction` when it needs to
+  persist updated fields (`panning`'s `lastX`/`lastY`, `marquee`'s
+  `x`/`y`) for the next move event.
+- `marqueeBox` (the derived marquee rectangle) is now computed from
+  `interaction` via `$derived.by` with the same capture-then-narrow
+  pattern, rather than from the old standalone `marquee` variable.
+- Updated template usages: the SVG cursor style and the `ViewNode`
+  snippet's `highlighted` computation now switch on `interaction.type`
+  instead of checking the old `dragging`/`resizing`/`panning`/`marquee`
+  variables directly.
+- Pure refactor — no behavior change. Validated with `deno task check`
+  (0 errors/warnings), `deno task build` (succeeds), and `deno task test`
+  (all 34 existing geometry tests still pass).
+
+---
+
+## Task 37 — Add unit tests for the extracted geometry module
+
+- Expanded `web/src/routes/diagrams/geometry.test.ts` from the initial
+  3-function smoke test to full coverage of every exported function in
+  `geometry.ts`: `boxCenter`, `boxContains`, `clampWithin`,
+  `clampResizeWithin`, `unionBox`, `textPosition`, `boxBoundaryPoint`,
+  `elbowPath`, `depthOf` — 34 tests total.
+- `elbowPath` is tested structurally rather than via snapshot/exact-string
+  matching (which would be brittle to assert on by hand and wouldn't
+  independently verify correctness, only lock in whatever the current
+  output happens to be). A small test-local `waypoints()` helper parses
+  out the ordered M/L/A endpoints, and tests assert the property that
+  actually matters: horizontal orientation keeps `y` fixed on the first
+  and last legs (H-V-H), vertical orientation keeps `x` fixed on the first
+  and last legs (V-H-V) — exactly the behavior fixed earlier when the
+  original bug (always H-V-H regardless of orientation) was found.
+- Hardened `unionBox` while writing its tests: an empty input array
+  previously fell through to `Math.min()`/`Math.max()` on an empty array
+  (`+/-Infinity`), silently producing garbage geometry. Now throws a clear
+  error instead — every current call site (`onResizeHandleMouseDown`,
+  `zoomToFill`) already guards against calling it with no boxes, so this
+  is a pure hardening change with no behavior change at any real call
+  site.
+- Validated with `deno task test` (34/34 passing), `deno task check`, and
+  `deno task build`.
+
+---
+
+## Task 36 — Extract pure geometry helpers from diagrams/+page.svelte into a dedicated module
+
+- Created `web/src/routes/diagrams/geometry.ts`, a Svelte/DOM-independent
+  module holding `clampWithin`, `clampResizeWithin`, `unionBox`,
+  `boxContains`, `boxCenter`, `boxBoundaryPoint`, `elbowPath`,
+  `textPosition`, `depthOf`, the `Box`/`ConnectionOrientation`/`TextAlign`
+  type aliases, and the `MIN_NODE_SIZE`/`TEXT_ALIGN_PADDING` constants they
+  depend on.
+- `depthOf` was refactored to take an explicit `parentOf: (index) => number
+  | undefined` lookup function instead of closing over the reactive
+  `components` array, so it's a pure function usable outside the
+  component. `+page.svelte` now defines a small `parentOf` wrapper and
+  passes it at the call site.
+- `+page.svelte` imports everything it needs from `./geometry` instead of
+  defining these inline; `snap()` stayed in the component since it reads
+  component-local `snapActive` state.
+- No behavior change — confirmed via `deno task check` and `deno task
+  build`, both passing identically to before the extraction.
+- Set up the test infrastructure this unblocks: added `vitest` to
+  `web/package.json` (`deno task test` runs `vitest run`, using Deno's
+  fallback to `package.json` scripts — no `deno.json` task needed), and
+  configured it via `test: {...}` in `vite.config.ts` (imported from
+  `"vitest/config"` instead of plain `"vite"` for typing). No DOM
+  environment configured yet, since only pure-function tests exist so far;
+  add jsdom/happy-dom + `@testing-library/svelte` if/when component tests
+  are needed.
+
+---
+
+## Task 35 — Enforce parent/child containment constraints on the canvas
+
+- Added `activeParentBox(index)`: returns a node's parent's box, but only
+  if that parent is itself currently placed ("active") on the canvas —
+  built on `ComponentJS.parent_component_index` (already exposed by
+  `rhizz-wasm`) and the index-keyed canvas state from Task 29.
+- Added a pure `clampWithin(child, parent, margin)` helper: clamps the
+  child's position (and shrinks its size if it doesn't fit) so its full box
+  stays inside the parent's box, inset by `CHILD_CONTAINMENT_MARGIN` (`10`
+  world units). Used for drag, initial placement, and cascading, where the
+  child's top-left corner is free to move.
+- Added a second pure helper, `clampResizeWithin(box, parent, margin)`, for
+  the resize case specifically — resizing keeps the top-left corner fixed,
+  so only width/height are capped against the parent's remaining inner
+  space (rather than also letting position float, which `clampWithin`
+  does).
+- Added `reclampChildren(parentIndex)`: re-clamps every currently-placed
+  *direct* child of a parent against the parent's current box. Called
+  after every parent drag/resize move event (so children's constraint
+  region follows live, not just on drop) and after checking a new
+  component (in case it's a parent of children that were already placed).
+- Wired the clamp into `onSvgMouseMove`'s `dragging` and `resizing`
+  branches, and into the sidebar checkbox's initial-placement logic
+  (replacing the old blind `(100, 100)` default when the parent is active).
+- Added `depthOf(index)` (walks the `parent_component_index` chain) and a
+  `renderOrder` derived value (currently-placed indices sorted
+  shallowest-first) so parents always paint before their children,
+  regardless of arena order — otherwise a child could end up visually
+  hidden behind its parent's fill.
+- End-to-end result: place a composite component and one of its children
+  (e.g. the example system's `controller` → `mcu`/`power-supply`) —
+  dragging/resizing the child is bounded to the parent's box; moving/
+  resizing the parent carries the constraint region with it live.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds). Also independently
+  validated the new example-system hierarchy (added earlier) against the
+  real Rust checker (`cargo run -p rhizz-cli -- check/score`): 0 errors, 0
+  warnings, 100% completion score.
+
+---
+
+## Task 34 — Add text alignment control to the node inspector
+
+- Extended the per-node record (from Task 31) with an optional
+  `textAlign?: "center" | "top-center" | "top-left"` field (a new
+  `TextAlign` type alias); `nodeBox()` backfills it to `"center"`
+  (`DEFAULT_TEXT_ALIGN`) for entries persisted before this task.
+- Added `setSelectedTextAlign(align)` to update the currently selected
+  node's alignment, and a `selectedBox` derived value so the inspector can
+  read the current value.
+- Added a 3-button daisyUI `join` segmented control ("Center" / "Top" /
+  "Top-left") to the inspector panel from Task 33, highlighting the active
+  option with `btn-primary`.
+- Added `textPosition(align, width, height)`, mapping alignment to the
+  label `<text>`'s `x`/`y`/`text-anchor`/`dominant-baseline`; the two
+  top-aligned variants are inset by `TEXT_ALIGN_PADDING` (`8` world units)
+  from the node's edges.
+- `ViewNode` snippet and its render call site now thread `textAlign`
+  through from `nodeBox()`.
+- End-to-end result: select a node, change alignment in the inspector, the
+  label repositions live inside the box and persists across reload.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
+## Task 33 — Add left-side inspector panel for the selected node
+
+- Added a `selectedComponent` derived value (`components[selected] ?? null`)
+  on `web/src/routes/diagrams/+page.svelte`.
+- Added a new left sidebar, shown only when `selectedComponent` is set,
+  mirroring the existing right sidebar's structure/styling (`w-64 shrink-0
+  bg-base-100 text-base-content p-4 overflow-y-auto`, `border-r` instead of
+  `border-l` since it sits on the opposite side).
+- For now, shows the selected component's label (header) and description
+  (if any) — an empty shell with a placeholder comment marking where style
+  controls (text alignment, etc.) will be added in Task 34.
+- End-to-end result: selecting a node opens the panel; deselecting (or
+  unchecking the selected component) closes it.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
+## Task 32 — Add corner-drag resize interaction for the selected node
+
+- Added a small resize-handle square at the bottom-right corner of a node,
+  rendered only when that node is `selected`.
+- Added `resizing: { index: number } | null` state, mirroring the existing
+  `dragging`/`panning` pattern. Resize keeps the node's top-left corner
+  fixed and recomputes `width`/`height` live from the pointer's current
+  world-space position each move event (via the existing `svgPoint()`
+  helper, so pan/zoom are automatically accounted for) — no delta-tracking
+  needed. Size is clamped to a `MIN_NODE_SIZE` (`40`) floor.
+- The handle's `onmousedown` calls `event.stopPropagation()` so it doesn't
+  also bubble into the node's own `onmousedown` (which would start a drag
+  at the same time).
+- `onSvgMouseMove`/`onSvgMouseUp` extended with a `resizing` branch
+  alongside `dragging`/`panning`; cursor style now also shows `grabbing`
+  while resizing.
+- **Fixed a latent bug found while implementing this**: node dragging was
+  overwriting the entire `checked.value[index]` record with just `{x, y}`,
+  silently dropping any custom `width`/`height` set in Task 31 on every
+  drag move. Changed to a spread merge (`{...box, x, y}`) so size survives
+  dragging.
+- End-to-end result: select a node, drag its corner, it resizes (respecting
+  the minimum size) and the new size persists across reload.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
+## Task 31 — Add resizable size to diagram nodes (data model)
+
+- Extended the per-node persisted record from `{x, y}` to
+  `{x, y, width?, height?}` (`width`/`height` optional in storage so entries
+  persisted before this task still parse without a migration step).
+- Added `nodeBox(index)`, a helper that reads a checked node's position and
+  size, backfilling `DEFAULT_NODE_WIDTH`/`DEFAULT_NODE_HEIGHT` (`100x100`,
+  matching the previous hardcoded size) when `width`/`height` are missing.
+- `nodeCenter` now derives the centre point from `nodeBox`'s actual
+  width/height instead of the fixed `+50` offset.
+- The `ViewNode` snippet and its canvas call site now render dynamic
+  `width`/`height` (via `{@const box = nodeBox(index)}`) instead of the
+  hardcoded `"100"`/`"100"`; the label text re-centers at `width/2, height/2`.
+- Checking a new component from the sidebar now writes `width`/`height`
+  explicitly (still defaulting to `100x100`), so freshly-placed nodes don't
+  rely on the backfill path.
+- No visible/behavioral change yet (all nodes still default to `100x100`),
+  but the data model now supports variable node size — unblocks Task 32.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
+## Task 30 — Add node selection state to the diagram canvas
+
+- Added `selected: number | null` (component arena index) as page state on
+  `web/src/routes/diagrams/+page.svelte`. Not persisted — selection is
+  transient UI state.
+- `onNodeMouseDown` now sets `selected = index`; `onCanvasMouseDown`
+  (background rect, already used for panning) sets `selected = null`, so
+  clicking empty canvas deselects.
+- Selected node renders with an accent-colored (`var(--color-primary)`),
+  slightly thicker stroke instead of the default white one.
+- Edge case: unchecking a component from the sidebar while it's selected
+  now also clears `selected`, avoiding stale selection pointing at a node
+  that's no longer rendered.
+- No sidebar yet (that's Task 33) — this step only proves the selection
+  mechanic and gives visual feedback.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
+## Task 29 — Rekey diagram canvas state by component index instead of label
+
+The `/diagrams` canvas keyed its per-node state (`checked`) by
+`component.label`. Per `SPEC.md` §2.3, labels are only guaranteed unique
+**within a parent scope** — two components in different branches of a
+hierarchical model may legally share a label (e.g. two different `"mcu"`
+leaves under two different composites), so label-keyed canvas state would
+collide once nested components appear on the same canvas.
+
+- Changed `checked`'s keys (and the sidebar checkbox `id`s) from
+  `component.label` to the component's arena index (its position in
+  `model.components()`), matching the index space already used by
+  `ConnectionJS.from`/`to` and `ComponentJS.parent_component_index`.
+- `web/src/routes/diagrams/+page.svelte`: `dragging`, `nodeCenter`,
+  `onNodeMouseDown`, `checked`'s type, and both `{#each}` loops (canvas nodes
+  and sidebar list) now use the numeric index instead of the label string.
+- Simplified `visibleConnections`: since `conn.from`/`conn.to` are already
+  component indices, dropped the now-unnecessary `model.component_by_id(...)`
+  lookups that existed solely to get `.label` for the old `nodeCenter(label)`
+  calls.
+- No visible behavior change (existing persisted layouts under the old
+  label-keyed scheme will not carry over, since the key space changed).
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 27 — Typed WASM wrappers for rhizz-core structs
 
 Implement `#[wasm_bindgen]` wrapper structs in `rhizz-wasm` for the core types

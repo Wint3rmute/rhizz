@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
+import { resolve } from "$app/paths";
 </script>
 
 <div class="flex-1 flex items-center justify-center">

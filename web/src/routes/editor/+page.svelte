@@ -1,56 +1,56 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
-  import { compile_system } from "../../rhizz_wasm_wrapper";
-  import ModelComponentsOutline from "../../components/ModelComponentsOutline.svelte";
-  import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
-  import persisted from "../../Persisted.svelte";
-  import MonacoEditor from "../../components/MonacoEditor.svelte";
-  import ModelStatsRow from "../../components/ModelStatsRow.svelte";
-  import { EXAMPLE_SYSTEM_HCL } from "../../example_system";
+import { resolve } from "$app/paths";
+import { compile_system } from "../../rhizz_wasm_wrapper";
+import ModelComponentsOutline from "../../components/ModelComponentsOutline.svelte";
+import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
+import persisted from "../../Persisted.svelte";
+import MonacoEditor from "../../components/MonacoEditor.svelte";
+import ModelStatsRow from "../../components/ModelStatsRow.svelte";
+import { EXAMPLE_SYSTEM_HCL } from "../../example_system";
 
-  let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
+let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
 
-  function loadExample() {
-    const confirmed = confirm(
-      "Replace your current project with the example project? This will overwrite what's in the editor.",
-    );
-    if (confirmed) {
-      input.value = EXAMPLE_SYSTEM_HCL;
-    }
-  }
-
-  let output = $derived.by(() =>
-    compile_system([{ filename: "all.hcl", content: input.value }])
+function loadExample() {
+  const confirmed = confirm(
+    "Replace your current project with the example project? This will overwrite what's in the editor.",
   );
-
-  let model = $derived(output.model());
-  let diagnostics = $derived(output.diagnostics());
-
-  // Persist the last successfully compiled model so stats survive syntax errors.
-  let lastModel = $state<ReturnType<typeof output.model>>(undefined);
-  $effect(() => {
-    if (model !== undefined) lastModel = model;
-  });
-  let stale = $derived(model === undefined && lastModel !== undefined);
-
-  let components = $derived(lastModel ? lastModel.components() : []);
-  let score = $derived(lastModel ? lastModel.score() : null);
-  let leafCount = $derived(components.filter((c) => c.leaf).length);
-  let compositeCount = $derived(components.filter((c) => !c.leaf).length);
-
-  function catTotal(
-    cat: { complete: number; partial: number; incomplete: number } | null,
-  ) {
-    return cat ? cat.complete + cat.partial + cat.incomplete : 0;
+  if (confirmed) {
+    input.value = EXAMPLE_SYSTEM_HCL;
   }
-  function catPct(cat: { percentage: number } | null) {
-    return cat ? Math.round(cat.percentage) : 0;
-  }
+}
 
-  let totalPorts = $derived(catTotal(score?.ports ?? null));
-  let totalConnections = $derived(catTotal(score?.connections ?? null));
-  let totalMessages = $derived(catTotal(score?.messages ?? null));
-  let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
+let output = $derived.by(() =>
+  compile_system([{ filename: "all.hcl", content: input.value }])
+);
+
+let model = $derived(output.model());
+let diagnostics = $derived(output.diagnostics());
+
+// Persist the last successfully compiled model so stats survive syntax errors.
+let lastModel = $state<ReturnType<typeof output.model>>(undefined);
+$effect(() => {
+  if (model !== undefined) lastModel = model;
+});
+let stale = $derived(model === undefined && lastModel !== undefined);
+
+let components = $derived(lastModel ? lastModel.components() : []);
+let score = $derived(lastModel ? lastModel.score() : null);
+let leafCount = $derived(components.filter((c) => c.leaf).length);
+let compositeCount = $derived(components.filter((c) => !c.leaf).length);
+
+function catTotal(
+  cat: { complete: number; partial: number; incomplete: number } | null,
+) {
+  return cat ? cat.complete + cat.partial + cat.incomplete : 0;
+}
+function catPct(cat: { percentage: number } | null) {
+  return cat ? Math.round(cat.percentage) : 0;
+}
+
+let totalPorts = $derived(catTotal(score?.ports ?? null));
+let totalConnections = $derived(catTotal(score?.connections ?? null));
+let totalMessages = $derived(catTotal(score?.messages ?? null));
+let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
 
 <div class="flex-1 w-full bg-base-100">
@@ -75,7 +75,8 @@
           >Diagrams</a>
         </li>
         <li>
-          <a href={resolve("/", {})} class="block hover:text-base-content">Home</a>
+          <a href={resolve("/", {})}
+            class="block hover:text-base-content">Home</a>
         </li>
       </ul>
     </aside>

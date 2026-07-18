@@ -1,0 +1,225 @@
+// Pure geometry helpers for the diagrams canvas (web/src/routes/diagrams/
+// +page.svelte). Deliberately has zero Svelte/DOM dependency, so it can be
+// unit tested directly (see geometry.test.ts) without mounting a component.
+
+// Where a node's label is positioned within its box.
+export type TextAlign = "center" | "top-center" | "top-left";
+
+export type Box = { x: number; y: number; width: number; height: number };
+
+// Whether a connection leaves/enters its endpoints horizontally (via the
+// left/right side, jogging vertically in the middle — for boxes that are
+// mostly side-by-side) or vertically (via the top/bottom side, jogging
+// horizontally in the middle — for boxes that are mostly stacked).
+export type ConnectionOrientation = "horizontal" | "vertical";
+
+// Nodes can't be resized smaller than this (world units), so a node never
+// shrinks into an unusable sliver. Used by clampResizeWithin below.
+export const MIN_NODE_SIZE = 40;
+
+// Inset from a node's edges for the two top-aligned TextAlign variants, in
+// world units.
+export const TEXT_ALIGN_PADDING = 8;
+
+// Clamps `child`'s position (and, if it doesn't fit, its size) so it stays
+// fully inside `parent`, inset by `margin` on all sides. Used wherever the
+// child's top-left corner is free to move (drag, initial placement,
+// cascading after the parent moves).
+export function clampWithin(child: Box, parent: Box, margin: number): Box {
+  const innerX = parent.x + margin;
+  const innerY = parent.y + margin;
+  const innerWidth = Math.max(0, parent.width - margin * 2);
+  const innerHeight = Math.max(0, parent.height - margin * 2);
+
+  const width = Math.min(child.width, innerWidth);
+  const height = Math.min(child.height, innerHeight);
+
+  const x = Math.min(Math.max(child.x, innerX), innerX + innerWidth - width);
+  const y = Math.min(Math.max(child.y, innerY), innerY + innerHeight - height);
+
+  return { x, y, width, height };
+}
+
+// Clamps a resizing box's width/height so it doesn't grow past `parent`'s
+// inner edge, inset by `margin`. Unlike clampWithin, the box's top-left
+// corner (x, y) is treated as fixed — resizing always anchors from the
+// corner opposite the handle being dragged.
+export function clampResizeWithin(
+  box: Box,
+  parent: Box,
+  margin: number,
+): { width: number; height: number } {
+  const maxWidth = parent.x + parent.width - margin - box.x;
+  const maxHeight = parent.y + parent.height - margin - box.y;
+  return {
+    width: Math.min(box.width, Math.max(MIN_NODE_SIZE, maxWidth)),
+    height: Math.min(box.height, Math.max(MIN_NODE_SIZE, maxHeight)),
+  };
+}
+
+// Bounding box (union) enclosing every box in `boxes`. Used to find a
+// multi-selection's combined extent for group-resize.
+export function unionBox(boxes: Box[]): Box {
+  if (boxes.length === 0) {
+    // Math.min/max of an empty array is +/-Infinity, which would silently
+    // produce NaN/Infinity geometry instead of a clear failure — every
+    // current call site already guards against calling this with no
+    // boxes, so reaching here indicates a bug at the call site.
+    throw new Error("unionBox: boxes must be non-empty");
+  }
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.width));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.height));
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+// Whether `inner` lies fully inside `outer`. Used for marquee-select: a
+// node is only selected once its entire bounding box is enclosed by the
+// marquee rectangle, not merely overlapping it — the mental model users
+// expect from most selection tools.
+export function boxContains(outer: Box, inner: Box): boolean {
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
+  );
+}
+
+// Maps a text alignment + node size to the label <text>'s x/y/anchor/
+// baseline. The two top-aligned variants are inset by TEXT_ALIGN_PADDING
+// from the node's edges.
+export function textPosition(
+  align: TextAlign,
+  width: number,
+  height: number,
+): { x: number; y: number; anchor: string; baseline: string } {
+  switch (align) {
+    case "top-center":
+      return {
+        x: width / 2,
+        y: TEXT_ALIGN_PADDING,
+        anchor: "middle",
+        baseline: "hanging",
+      };
+    case "top-left":
+      return {
+        x: TEXT_ALIGN_PADDING,
+        y: TEXT_ALIGN_PADDING,
+        anchor: "start",
+        baseline: "hanging",
+      };
+    case "center":
+      return {
+        x: width / 2,
+        y: height / 2,
+        anchor: "middle",
+        baseline: "middle",
+      };
+  }
+}
+
+// Returns the centre point of a box.
+export function boxCenter(box: Box): { x: number; y: number } {
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+// Returns the midpoint of the side of `box` facing `towards`, for the
+// given orientation: the box's left/right-centre if horizontal, or its
+// top/bottom-centre if vertical. Both endpoints of a connection are always
+// resolved with the *same* orientation (decided once from the two boxes'
+// centres, by the caller) so the chosen side is consistent with the elbow
+// shape connecting them.
+export function boxBoundaryPoint(
+  box: Box,
+  towards: { x: number; y: number },
+  orientation: ConnectionOrientation,
+): { x: number; y: number } {
+  const center = boxCenter(box);
+  if (orientation === "horizontal") {
+    const sign = towards.x >= center.x ? 1 : -1;
+    return { x: center.x + sign * (box.width / 2), y: center.y };
+  }
+  const sign = towards.y >= center.y ? 1 : -1;
+  return { x: center.x, y: center.y + sign * (box.height / 2) };
+}
+
+// Builds an SVG path with a straight/rounded-elbow route between two
+// points that always leaves/enters along `orientation`'s axis —
+// "horizontal" produces a horizontal-vertical-horizontal (H-V-H) jog,
+// "vertical" produces a vertical-horizontal-vertical (V-H-V) jog. Falls
+// back to a straight line when the two points are already aligned on the
+// jog axis (no bend needed).
+//
+// Both variants share one abstract shape, built in terms of a "primary"
+// axis p (the leave/enter direction) and "secondary" axis s (the jog
+// direction); only the final p/s -> x/y mapping differs. Swapping which
+// physical axis is p vs s is a reflection, which reverses the handedness
+// of the rounded corners, so the arc sweep-flags are flipped for the
+// vertical variant to keep corners rounding the correct way.
+export function elbowPath(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  orientation: ConnectionOrientation,
+  r = 10,
+): string {
+  const horizontal = orientation === "horizontal";
+  const toXY = (p: number, s: number): [number, number] =>
+    horizontal ? [p, s] : [s, p];
+  const sweep = (flag: 0 | 1): 0 | 1 =>
+    horizontal ? flag : ((1 - flag) as 0 | 1);
+
+  const [ap, as_] = horizontal ? [ax, ay] : [ay, ax];
+  const [bp, bs] = horizontal ? [bx, by] : [by, bx];
+  const dp = bp - ap;
+  const ds = bs - as_;
+
+  if (Math.abs(ds) < 0.5) {
+    const [x1, y1] = toXY(ap, as_);
+    const [x2, y2] = toXY(bp, bs);
+    return `M ${x1},${y1} L ${x2},${y2}`;
+  }
+
+  const mp = (ap + bp) / 2;
+  const rc = Math.min(r, Math.abs(dp) / 2, Math.abs(ds) / 2);
+  const sp = dp >= 0 ? 1 : -1;
+  const ss = ds >= 0 ? 1 : -1;
+  const t1 = dp * ds > 0 ? 1 : 0;
+  const t2 = 1 - t1;
+
+  const [x0, y0] = toXY(ap, as_);
+  const [x1, y1] = toXY(mp - sp * rc, as_);
+  const [x2, y2] = toXY(mp, as_ + ss * rc);
+  const [x3, y3] = toXY(mp, bs - ss * rc);
+  const [x4, y4] = toXY(mp + sp * rc, bs);
+  const [x5, y5] = toXY(bp, bs);
+
+  return [
+    `M ${x0},${y0}`,
+    `L ${x1},${y1}`,
+    `A ${rc},${rc} 0 0,${sweep(t1 as 0 | 1)} ${x2},${y2}`,
+    `L ${x3},${y3}`,
+    `A ${rc},${rc} 0 0,${sweep(t2 as 0 | 1)} ${x4},${y4}`,
+    `L ${x5},${y5}`,
+  ].join(" ");
+}
+
+// Number of parent hops from the model root to `index`, following
+// `parentOf` (typically `(i) => components[i]?.parent_component_index`).
+// Takes a lookup function rather than the component array directly so this
+// stays independent of the reactive `components` derived value.
+export function depthOf(
+  index: number,
+  parentOf: (index: number) => number | undefined,
+): number {
+  let depth = 0;
+  let current = parentOf(index);
+  while (current !== undefined) {
+    depth += 1;
+    current = parentOf(current);
+  }
+  return depth;
+}
