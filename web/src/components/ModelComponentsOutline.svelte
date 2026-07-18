@@ -4,8 +4,8 @@
   let components = $derived(model.components());
 </script>
 
-<h3 class="font-semibold mb-3 text-gray-100">Model Outline</h3>
-<div class="text-sm text-gray-300 space-y-2">
+<h3 class="font-semibold mb-3 text-base-content">Model Outline</h3>
+<div class="text-sm text-base-content/70 space-y-2">
   {#if components.length === 0}
     <div>No components defined...</div>
   {/if}

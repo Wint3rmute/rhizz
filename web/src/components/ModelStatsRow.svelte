@@ -24,7 +24,7 @@
   }: Props = $props();
 </script>
 
-<div class="stats stats-vertical sm:stats-horizontal shadow bg-gray-800 w-full">
+<div class="stats stats-vertical sm:stats-horizontal shadow bg-base-200 w-full">
   <div class="stat">
     <div class="stat-figure text-primary">
       <svg
@@ -42,9 +42,9 @@
         />
       </svg>
     </div>
-    <div class="stat-title text-gray-400">Components</div>
-    <div class="stat-value text-gray-100">{componentCount}</div>
-    <div class="stat-desc text-gray-500">
+    <div class="stat-title text-base-content/60">Components</div>
+    <div class="stat-value text-base-content">{componentCount}</div>
+    <div class="stat-desc text-base-content/50">
       {leafCount} atomic · {compositeCount} composite
     </div>
   </div>
@@ -66,9 +66,9 @@
         />
       </svg>
     </div>
-    <div class="stat-title text-gray-400">Ports</div>
-    <div class="stat-value text-gray-100">{portCount}</div>
-    <div class="stat-desc text-gray-500">{portsPct}% defined</div>
+    <div class="stat-title text-base-content/60">Ports</div>
+    <div class="stat-value text-base-content">{portCount}</div>
+    <div class="stat-desc text-base-content/50">{portsPct}% defined</div>
   </div>
 
   <div class="stat">
@@ -88,9 +88,9 @@
         />
       </svg>
     </div>
-    <div class="stat-title text-gray-400">Connections</div>
-    <div class="stat-value text-gray-100">{connectionCount}</div>
-    <div class="stat-desc text-gray-500">{connectionsPct}% defined</div>
+    <div class="stat-title text-base-content/60">Connections</div>
+    <div class="stat-value text-base-content">{connectionCount}</div>
+    <div class="stat-desc text-base-content/50">{connectionsPct}% defined</div>
   </div>
 
   <div class="stat">
@@ -110,12 +110,12 @@
         />
       </svg>
     </div>
-    <div class="stat-title text-gray-400">Completion</div>
+    <div class="stat-title text-base-content/60">Completion</div>
     <div
       class="stat-value {overallPct >= 80 ? 'text-success' : overallPct >= 50 ? 'text-warning' : 'text-error'}"
     >
       {overallPct}%
     </div>
-    <div class="stat-desc text-gray-500">{messageCount} messages defined</div>
+    <div class="stat-desc text-base-content/50">{messageCount} messages defined</div>
   </div>
 </div>

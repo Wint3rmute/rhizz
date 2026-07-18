@@ -1,5 +1,5 @@
 // Mirrors examples/single-file/project.hcl — used by the "help" button on
-// the /wasm route to let users try the app with a working example.
+// the /editor route to let users try the app with a working example.
 export const EXAMPLE_SYSTEM_HCL = `project {
   name    = "home-monitor"
   version = "0.1.0"

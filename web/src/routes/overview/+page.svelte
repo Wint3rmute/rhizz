@@ -77,30 +77,30 @@
   }
 </script>
 
-<div class="flex-1 w-full bg-gray-900 overflow-y-auto">
+<div class="flex-1 w-full bg-base-100 overflow-y-auto">
   <div
     class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6"
   >
     <!-- Left sidebar -->
     <aside
-      class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow"
+      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
-      <h3 class="font-semibold mb-3 text-gray-100">Navigation</h3>
-      <ul class="space-y-2 text-sm text-gray-300">
+      <h3 class="font-semibold mb-3 text-base-content">Navigation</h3>
+      <ul class="space-y-2 text-sm text-base-content/70">
         <li>
           <a
             href={resolve("/overview", {})}
-            class="block hover:text-white"
+            class="block hover:text-base-content"
           >Overview</a>
         </li>
         <li>
           <a
-            href={resolve("/editor", {})}
-            class="block hover:text-white"
-          >Editor</a>
+            href={resolve("/diagrams", {})}
+            class="block hover:text-base-content"
+          >Diagrams</a>
         </li>
         <li>
-          <a href={resolve("/", {})} class="block hover:text-white">Home</a>
+          <a href={resolve("/", {})} class="block hover:text-base-content">Home</a>
         </li>
       </ul>
     </aside>
@@ -108,13 +108,13 @@
     <!-- Main dashboard -->
     <main class="md:col-span-6 lg:col-span-8 flex flex-col gap-6">
       {#if !model}
-        <div class="card bg-gray-800 shadow">
+        <div class="card bg-base-200 shadow">
           <div class="card-body items-center text-center py-16">
             <div class="text-5xl mb-4">📐</div>
-            <h2 class="card-title text-gray-100">
+            <h2 class="card-title text-base-content">
               No model loaded
             </h2>
-            <p class="text-gray-400 text-sm">
+            <p class="text-base-content/60 text-sm">
               Open the editor and write some HCL to see your system overview
               here.
             </p>
@@ -131,23 +131,23 @@
       {:else}
         <!-- ── Project header ── -->
         {#if project && project.name}
-          <div class="card bg-gray-800 shadow">
+          <div class="card bg-base-200 shadow">
             <div
               class="card-body py-4 px-6 flex-row items-center gap-4 flex-wrap"
             >
               <div>
-                <h1 class="text-2xl font-bold text-white">
+                <h1 class="text-2xl font-bold text-base-content">
                   {project.name}
                 </h1>
                 {#if project.version}
-                  <span class="text-sm text-gray-400">v{project.version}</span>
+                  <span class="text-sm text-base-content/60">v{project.version}</span>
                 {/if}
               </div>
               {#if project.authors.length > 0}
                 <div class="ml-auto flex gap-2 flex-wrap">
                   {#each project.authors as author}
                     <div
-                      class="badge badge-outline badge-sm text-gray-300"
+                      class="badge badge-outline badge-sm text-base-content/70"
                     >
                       {author}
                     </div>
@@ -184,16 +184,16 @@
 
         <!-- ── Components table ── -->
         {#if components.length > 0}
-          <div class="card bg-gray-800 shadow">
+          <div class="card bg-base-200 shadow">
             <div class="card-body">
-              <h2 class="card-title text-gray-100 mb-2">
+              <h2 class="card-title text-base-content mb-2">
                 Components
               </h2>
               <div class="overflow-x-auto">
                 <table class="table table-sm">
                   <thead>
                     <tr
-                      class="text-gray-400 border-gray-700"
+                      class="text-base-content/60 border-base-300"
                     >
                       <th>Label</th>
                       <th>Level</th>
@@ -205,7 +205,7 @@
                   <tbody>
                     {#each components as comp}
                       <tr
-                        class="border-gray-700 hover:bg-gray-700"
+                        class="border-base-300 hover:bg-base-300"
                       >
                         <td
                           class="font-mono text-primary text-sm"
@@ -224,22 +224,22 @@
                         <td>
                           {#if comp.leaf}
                             <span
-                              class="badge badge-sm badge-outline text-gray-300"
+                              class="badge badge-sm badge-outline text-base-content/70"
                             >atomic</span>
                           {:else}
                             <span
-                              class="badge badge-sm badge-outline text-gray-400"
+                              class="badge badge-sm badge-outline text-base-content/60"
                             >composite</span>
                           {/if}
                         </td>
                         <td
-                          class="text-gray-300 text-sm max-w-xs truncate"
+                          class="text-base-content/70 text-sm max-w-xs truncate"
                         >
                           {#if comp.description}
                             {comp.description}
                           {:else}
                             <span
-                              class="text-gray-600 italic"
+                              class="text-base-content/40 italic"
                             >—</span>
                           {/if}
                         </td>
@@ -249,7 +249,7 @@
                           >
                             {#each comp.tags as tag}
                               <span
-                                class="badge badge-xs badge-ghost text-gray-400"
+                                class="badge badge-xs badge-ghost text-base-content/60"
                               >{tag}</span>
                             {/each}
                           </div>
@@ -267,7 +267,7 @@
 
     <!-- Right sidebar -->
     <aside
-      class="md:col-span-3 lg:col-span-2 bg-gray-900 text-gray-100 p-4 rounded shadow"
+      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
       <CompilationDiagnosticsOutline {diagnostics} />
     </aside>

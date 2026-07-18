@@ -19,7 +19,7 @@
       inherit: true,
       rules: [],
       colors: {
-        "editor.background": cssVarToHex("--color-gray-800"),
+        "editor.background": cssVarToHex("--color-base-200"),
         "editor.foreground": cssVarToHex("--color-base-content"),
         "editor.lineHighlightBackground": cssVarToHex("--color-base-300"),
         "editorLineNumber.foreground": cssVarToHex(
