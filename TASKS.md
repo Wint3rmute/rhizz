@@ -15,42 +15,7 @@ How to work on this file:
 
 
 
-## Task 44 — Make diagram tuning constants configurable
 
-Small/polish item from the architecture review.
-
-Constants like `SNAP_GRID_SIZE`, `MIN_NODE_SIZE`, `ZOOM_TO_FILL_FRACTION`,
-`CHILD_CONTAINMENT_MARGIN`, and `TEXT_ALIGN_PADDING` are hardcoded in
-`web/src/routes/diagrams/+page.svelte`, despite earlier discussion
-anticipating some of these becoming user-configurable.
-
-- Design a small settings mechanism (persisted, page-scoped) for at least
-  `SNAP_GRID_SIZE`, since that one was explicitly called out as likely to
-  need this.
-- Add UI for adjusting it (e.g. in the existing bottom-right button row or
-  the inspector panel).
-- Validate with `deno task check` and `deno task build`.
-
-**Implementation plan:** Scope to `SNAP_GRID_SIZE` only, as the task
-prioritizes — leave `MIN_NODE_SIZE`, `ZOOM_TO_FILL_FRACTION`,
-`CHILD_CONTAINMENT_MARGIN`, and `TEXT_ALIGN_PADDING` hardcoded until a
-concrete need for exposing them shows up (avoids speculative settings UI).
-Replace `const SNAP_GRID_SIZE = 10;` with a persisted, page-scoped value
-via the existing `persisted()` helper (the same one already backing
-`checked`/`savedLayout`/`input`), e.g. `let snapGridSize =
-persisted("DIAGRAM_SNAP_GRID_SIZE", 10);`, and update `snap()` to read
-`snapGridSize.value` instead of the constant.
-
-Add a minimal control next to the existing "Snap to Grid" button in the
-bottom-right button row — a small numeric input or a `+`/`-` stepper pair,
-clamped to a sane range (e.g. 1–100) — rather than building a general
-settings panel for a single value. Update the button's tooltip to
-interpolate the live `snapGridSize.value` instead of the old constant.
-
-Validate with `deno task check` and `deno task build`, and manually
-confirm the chosen grid size persists across a page reload.
-
----
 
 ## Task 45 — Extend containment clamping to grandchildren (multi-level nesting)
 

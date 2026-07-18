@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 44 — Make diagram tuning constants configurable
+
+- Scoped to `SNAP_GRID_SIZE` only, per the task's own priority —
+  `MIN_NODE_SIZE`, `ZOOM_TO_FILL_FRACTION`, `CHILD_CONTAINMENT_MARGIN`, and
+  `TEXT_ALIGN_PADDING` stay hardcoded until a concrete need for exposing
+  them shows up.
+- Replaced `const SNAP_GRID_SIZE = 10;` in
+  `web/src/routes/diagrams/+page.svelte` with `let snapGridSize =
+  persisted("DIAGRAM_SNAP_GRID_SIZE", DEFAULT_SNAP_GRID_SIZE);`, reusing
+  the same `persisted()` helper already backing
+  `checked`/`savedLayout`/`input`, so the chosen grid size survives page
+  reloads. Added `SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const`
+  (fixed, "nice" round numbers that line up with
+  MINOR_GRID_SPACING/MAJOR_GRID_SPACING) and a `DEFAULT_SNAP_GRID_SIZE`
+  derived from it. `snap()` falls back to `DEFAULT_SNAP_GRID_SIZE`
+  whenever the persisted value isn't positive (e.g. a hand-edited `0` or
+  negative `localStorage` value), so it can never divide by a
+  zero/negative grid size.
+- Added a `<select>` dropdown (daisyUI `select select-sm`, grouped with
+  the existing "Snap to Grid" button via a `join` wrapper so they read as
+  one control) `bind:value={snapGridSize.value}`, populated from
+  `SNAP_GRID_SIZE_OPTIONS`, next to the "Snap to Grid" button in the
+  bottom-right button row — a fixed set of choices rather than a
+  free-form numeric input, and rather than a general settings panel for a
+  single value. Updated the button's tooltip to interpolate the live
+  `snapGridSize.value` instead of the old constant.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (47/47 pass, unaffected by this
+  change).
+
+---
+
 ## Task 43 — Add schema validation for persisted diagram localStorage data
 
 - Added `zod` (v4) as a `web/package.json` dependency and a new
