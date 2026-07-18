@@ -47,6 +47,14 @@ let connections = $derived(model ? model.connections() : []);
 const DEFAULT_NODE_WIDTH = 100;
 const DEFAULT_NODE_HEIGHT = 100;
 
+// Nodes can't be resized smaller than this (world units), so a node never
+// shrinks into an unusable sliver.
+const MIN_NODE_SIZE = 40;
+
+// Size of the resize-handle square rendered at a selected node's
+// bottom-right corner, in world units.
+const RESIZE_HANDLE_SIZE = 10;
+
 // Stores position + size of each checked element, keyed by the component's
 // arena index (its position in model.components(), same index space as
 // ConnectionJS.from/to and ComponentJS.parent_component_index). Component
@@ -84,6 +92,11 @@ let selected: number | null = $state(null);
 let dragging: { index: number; offsetX: number; offsetY: number } | null =
   $state(null);
 
+// Node-resize state. The node's top-left corner (x, y) stays fixed while
+// resizing — width/height are recomputed live from the pointer's current
+// world-space position each move event, so no delta-tracking is needed.
+let resizing: { index: number } | null = $state(null);
+
 // Canvas-pan state (screen-space pointer position of the last move event)
 let panning: { lastX: number; lastY: number } | null = $state(null);
 
@@ -118,13 +131,35 @@ function onCanvasMouseDown(event: MouseEvent) {
   panning = { lastX: event.clientX, lastY: event.clientY };
 }
 
+// Starts a resize. Stops propagation so the handle's own mousedown doesn't
+// also bubble up to the node's onmousedown (which would start a drag too).
+function onResizeHandleMouseDown(event: MouseEvent, index: number) {
+  event.preventDefault();
+  event.stopPropagation();
+  selected = index;
+  resizing = { index };
+}
+
 function onSvgMouseMove(event: MouseEvent) {
   if (dragging) {
     const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
     checked.value[dragging.index] = {
+      ...checked.value[dragging.index],
       x: svgCoords.x - dragging.offsetX,
       y: svgCoords.y - dragging.offsetY,
     };
+    return;
+  }
+  if (resizing) {
+    const box = checked.value[resizing.index];
+    if (box) {
+      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+      checked.value[resizing.index] = {
+        ...box,
+        width: Math.max(MIN_NODE_SIZE, svgCoords.x - box.x),
+        height: Math.max(MIN_NODE_SIZE, svgCoords.y - box.y),
+      };
+    }
     return;
   }
   if (panning) {
@@ -139,6 +174,7 @@ function onSvgMouseMove(event: MouseEvent) {
 
 function onSvgMouseUp() {
   dragging = null;
+  resizing = null;
   panning = null;
 }
 
@@ -237,7 +273,7 @@ let visibleConnections = $derived(
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
         onwheel={onWheel}
-        style="cursor: {dragging || panning ? 'grabbing' : 'grab'}"
+        style="cursor: {dragging || resizing || panning ? 'grabbing' : 'grab'}"
       >
         <defs>
           <!--
@@ -370,6 +406,17 @@ let visibleConnections = $derived(
             >
               {label}
             </text>
+            {#if selected === index}
+              <rect
+                x={width - RESIZE_HANDLE_SIZE}
+                y={height - RESIZE_HANDLE_SIZE}
+                width={RESIZE_HANDLE_SIZE}
+                height={RESIZE_HANDLE_SIZE}
+                fill="var(--color-primary)"
+                style="cursor: nwse-resize"
+                onmousedown={(e) => onResizeHandleMouseDown(e, index)}
+              />
+            {/if}
           </g>
         {/snippet}
 

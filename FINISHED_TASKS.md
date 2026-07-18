@@ -4,6 +4,34 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 32 — Add corner-drag resize interaction for the selected node
+
+- Added a small resize-handle square at the bottom-right corner of a node,
+  rendered only when that node is `selected`.
+- Added `resizing: { index: number } | null` state, mirroring the existing
+  `dragging`/`panning` pattern. Resize keeps the node's top-left corner
+  fixed and recomputes `width`/`height` live from the pointer's current
+  world-space position each move event (via the existing `svgPoint()`
+  helper, so pan/zoom are automatically accounted for) — no delta-tracking
+  needed. Size is clamped to a `MIN_NODE_SIZE` (`40`) floor.
+- The handle's `onmousedown` calls `event.stopPropagation()` so it doesn't
+  also bubble into the node's own `onmousedown` (which would start a drag
+  at the same time).
+- `onSvgMouseMove`/`onSvgMouseUp` extended with a `resizing` branch
+  alongside `dragging`/`panning`; cursor style now also shows `grabbing`
+  while resizing.
+- **Fixed a latent bug found while implementing this**: node dragging was
+  overwriting the entire `checked.value[index]` record with just `{x, y}`,
+  silently dropping any custom `width`/`height` set in Task 31 on every
+  drag move. Changed to a spread merge (`{...box, x, y}`) so size survives
+  dragging.
+- End-to-end result: select a node, drag its corner, it resizes (respecting
+  the minimum size) and the new size persists across reload.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 31 — Add resizable size to diagram nodes (data model)
 
 - Extended the per-node persisted record from `{x, y}` to

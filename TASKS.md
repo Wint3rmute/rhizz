@@ -13,19 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 32 — Add corner-drag resize interaction for the selected node
-
-- Render a small resize handle at the bottom-right corner of the selected
-  node only (hidden otherwise).
-- Add a `resizing` interaction state that mirrors the existing
-  `dragging`/`panning` pattern in `+page.svelte`; update `width`/`height` on
-  drag with a sane minimum size (e.g. `40x40`).
-- End-to-end result: select a node, drag its corner, it resizes and the new
-  size persists across reload.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 33 — Add left-side inspector panel for the selected node
 
 - Add a new left sidebar (mirroring the existing right sidebar's structure
