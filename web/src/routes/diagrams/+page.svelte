@@ -117,6 +117,75 @@ function setSelectedTextAlign(align: TextAlign) {
   checked.value[selected] = { ...box, textAlign: align };
 }
 
+// Padding kept between a child node's edges and its active parent's edges,
+// in world units.
+const CHILD_CONTAINMENT_MARGIN = 10;
+
+type Box = { x: number; y: number; width: number; height: number };
+
+// Returns the box of `index`'s parent component, but only if that parent is
+// itself currently placed on the canvas ("active") — a node with a parent
+// that isn't on canvas has nothing to be constrained by. Only considers the
+// direct parent (see TASKS.md Task 36 for why deeper/transitive containment
+// is explicitly out of scope).
+function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
+  const parentIndex = components[index]?.parent_component_index;
+  if (parentIndex === undefined) return null;
+  return nodeBox(parentIndex);
+}
+
+// Clamps `child`'s position (and, if it doesn't fit, its size) so it stays
+// fully inside `parent`, inset by `margin` on all sides. Pure — does not
+// read or write `checked`. Used wherever the child's top-left corner is free
+// to move (drag, initial placement, cascading after the parent moves).
+function clampWithin(child: Box, parent: Box, margin: number): Box {
+  const innerX = parent.x + margin;
+  const innerY = parent.y + margin;
+  const innerWidth = Math.max(0, parent.width - margin * 2);
+  const innerHeight = Math.max(0, parent.height - margin * 2);
+
+  const width = Math.min(child.width, innerWidth);
+  const height = Math.min(child.height, innerHeight);
+
+  const x = Math.min(Math.max(child.x, innerX), innerX + innerWidth - width);
+  const y = Math.min(Math.max(child.y, innerY), innerY + innerHeight - height);
+
+  return { x, y, width, height };
+}
+
+// Clamps a resizing box's width/height so it doesn't grow past `parent`'s
+// inner edge, inset by `margin`. Unlike clampWithin, the box's top-left
+// corner (x, y) is treated as fixed — resizing always anchors from the
+// corner opposite the handle being dragged.
+function clampResizeWithin(
+  box: Box,
+  parent: Box,
+  margin: number,
+): { width: number; height: number } {
+  const maxWidth = parent.x + parent.width - margin - box.x;
+  const maxHeight = parent.y + parent.height - margin - box.y;
+  return {
+    width: Math.min(box.width, Math.max(MIN_NODE_SIZE, maxWidth)),
+    height: Math.min(box.height, Math.max(MIN_NODE_SIZE, maxHeight)),
+  };
+}
+
+// Re-clamps every currently-placed direct child of `parentIndex` against
+// the parent's current box. Called after a parent is dragged or resized so
+// its children's constraint region follows it live, and after checking a
+// new component (in case it's a parent of already-placed children).
+function reclampChildren(parentIndex: number) {
+  const parentBox = nodeBox(parentIndex);
+  if (!parentBox) return;
+  components.forEach((component, childIndex) => {
+    if (component.parent_component_index !== parentIndex) return;
+    const box = nodeBox(childIndex);
+    if (!box) return; // not currently placed on canvas
+    const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
+    checked.value[childIndex] = { ...checked.value[childIndex], ...clamped };
+  });
+}
+
 // Maps a text alignment + node size to the label <text>'s x/y/anchor/
 // baseline. The two top-aligned variants are inset by TEXT_ALIGN_PADDING
 // from the node's edges.
@@ -212,23 +281,45 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
 
 function onSvgMouseMove(event: MouseEvent) {
   if (dragging) {
-    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-    checked.value[dragging.index] = {
-      ...checked.value[dragging.index],
-      x: svgCoords.x - dragging.offsetX,
-      y: svgCoords.y - dragging.offsetY,
-    };
+    const box = nodeBox(dragging.index);
+    if (box) {
+      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+      let next: Box = {
+        x: svgCoords.x - dragging.offsetX,
+        y: svgCoords.y - dragging.offsetY,
+        width: box.width,
+        height: box.height,
+      };
+      const parentBox = activeParentBox(dragging.index);
+      if (parentBox) {
+        next = clampWithin(next, parentBox, CHILD_CONTAINMENT_MARGIN);
+      }
+      checked.value[dragging.index] = {
+        ...checked.value[dragging.index],
+        ...next,
+      };
+      reclampChildren(dragging.index);
+    }
     return;
   }
   if (resizing) {
     const box = checked.value[resizing.index];
     if (box) {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      checked.value[resizing.index] = {
-        ...box,
+      let next = {
         width: Math.max(MIN_NODE_SIZE, svgCoords.x - box.x),
         height: Math.max(MIN_NODE_SIZE, svgCoords.y - box.y),
       };
+      const parentBox = activeParentBox(resizing.index);
+      if (parentBox) {
+        next = clampResizeWithin(
+          { x: box.x, y: box.y, ...next },
+          parentBox,
+          CHILD_CONTAINMENT_MARGIN,
+        );
+      }
+      checked.value[resizing.index] = { ...box, ...next };
+      reclampChildren(resizing.index);
     }
     return;
   }
@@ -318,6 +409,27 @@ let visibleConnections = $derived(
     if (!a || !b) return [];
     return [{ conn, a, b }];
   }),
+);
+
+// Number of parent_component_index hops from the model root to `index`.
+function depthOf(index: number): number {
+  let depth = 0;
+  let current = components[index]?.parent_component_index;
+  while (current !== undefined) {
+    depth += 1;
+    current = components[current]?.parent_component_index;
+  }
+  return depth;
+}
+
+// Indices of currently-placed nodes, ordered shallowest-first so parents
+// are always painted before their children — otherwise a child could end
+// up visually hidden behind its parent's fill, depending on arbitrary
+// arena order.
+let renderOrder = $derived(
+  Object.keys(checked.value)
+    .map(Number)
+    .sort((a, b) => depthOf(a) - depthOf(b)),
 );
 </script>
 
@@ -568,9 +680,10 @@ let visibleConnections = $derived(
           </g>
         {/snippet}
 
-        {#each components as component, index}
+        {#each renderOrder as index}
           {@const box = nodeBox(index)}
-          {#if box}
+          {@const component = components[index]}
+          {#if box && component}
             {@render ViewNode(
               component.label,
               index,
@@ -619,12 +732,20 @@ let visibleConnections = $derived(
               checked={!!checked.value[index]}
               onchange={(value) => {
                 if (value.currentTarget.checked) {
-                  checked.value[index] = {
+                  let box: Box = {
                     x: 100,
                     y: 100,
                     width: DEFAULT_NODE_WIDTH,
                     height: DEFAULT_NODE_HEIGHT,
                   };
+                  const parentBox = activeParentBox(index);
+                  if (parentBox) {
+                    box = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
+                  }
+                  checked.value[index] = { ...box, textAlign: DEFAULT_TEXT_ALIGN };
+                  // In case this component is itself the parent of children
+                  // that were already placed on canvas before it was.
+                  reclampChildren(index);
                 } else {
                   delete checked.value[index];
                   if (selected === index) selected = null;

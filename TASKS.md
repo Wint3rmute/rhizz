@@ -13,35 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 35 — Enforce parent/child containment constraints on the canvas
-
-Builds on Task 29 (index-keyed canvas state) and `ComponentJS.parent_component_index`
-(already exposed by `rhizz-wasm`).
-
-- A node "has an active parent" iff its `parent_component_index` is also a
-  key currently present in the canvas state.
-- Add a pure `clampWithin(childBox, parentBox, margin)` helper that clamps
-  the child's position (and shrinks its size if needed) so its full box
-  stays inside the parent's box.
-- Apply the clamp:
-  - Live during child drag (not just on drop) whenever its parent is present
-    on canvas.
-  - After child resize.
-  - On initial placement — checking a child whose parent is already placed
-    drops it clamped inside the parent, instead of the current blind
-    `(100, 100)` default.
-  - Cascading — moving or resizing a parent re-clamps all of its currently
-    placed children afterward.
-- Ensure paint order puts parents before children (sort by hierarchy depth)
-  so children visually sit on top of their parent's box instead of being
-  obscured by it.
-- End-to-end result: place a composite component and one of its children on
-  canvas — dragging/resizing the child is bounded to the parent's box;
-  moving/resizing the parent carries the constraint region with it.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 36 — Containment polish and documented scope boundaries
 
 - If a parent is resized smaller than a child already inside it, re-clamp/

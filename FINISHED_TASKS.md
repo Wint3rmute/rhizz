@@ -4,6 +4,47 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 35 — Enforce parent/child containment constraints on the canvas
+
+- Added `activeParentBox(index)`: returns a node's parent's box, but only
+  if that parent is itself currently placed ("active") on the canvas —
+  built on `ComponentJS.parent_component_index` (already exposed by
+  `rhizz-wasm`) and the index-keyed canvas state from Task 29.
+- Added a pure `clampWithin(child, parent, margin)` helper: clamps the
+  child's position (and shrinks its size if it doesn't fit) so its full box
+  stays inside the parent's box, inset by `CHILD_CONTAINMENT_MARGIN` (`10`
+  world units). Used for drag, initial placement, and cascading, where the
+  child's top-left corner is free to move.
+- Added a second pure helper, `clampResizeWithin(box, parent, margin)`, for
+  the resize case specifically — resizing keeps the top-left corner fixed,
+  so only width/height are capped against the parent's remaining inner
+  space (rather than also letting position float, which `clampWithin`
+  does).
+- Added `reclampChildren(parentIndex)`: re-clamps every currently-placed
+  *direct* child of a parent against the parent's current box. Called
+  after every parent drag/resize move event (so children's constraint
+  region follows live, not just on drop) and after checking a new
+  component (in case it's a parent of children that were already placed).
+- Wired the clamp into `onSvgMouseMove`'s `dragging` and `resizing`
+  branches, and into the sidebar checkbox's initial-placement logic
+  (replacing the old blind `(100, 100)` default when the parent is active).
+- Added `depthOf(index)` (walks the `parent_component_index` chain) and a
+  `renderOrder` derived value (currently-placed indices sorted
+  shallowest-first) so parents always paint before their children,
+  regardless of arena order — otherwise a child could end up visually
+  hidden behind its parent's fill.
+- End-to-end result: place a composite component and one of its children
+  (e.g. the example system's `controller` → `mcu`/`power-supply`) —
+  dragging/resizing the child is bounded to the parent's box; moving/
+  resizing the parent carries the constraint region with it live.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds). Also independently
+  validated the new example-system hierarchy (added earlier) against the
+  real Rust checker (`cargo run -p rhizz-cli -- check/score`): 0 errors, 0
+  warnings, 100% completion score.
+
+---
+
 ## Task 34 — Add text alignment control to the node inspector
 
 - Extended the per-node record (from Task 31) with an optional
