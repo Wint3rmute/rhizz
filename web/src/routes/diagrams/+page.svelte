@@ -16,6 +16,24 @@
   let canvas_width = $state(800);
   let canvas_height = $state(600);
 
+  // Background grid spacing, in world (SVG) units. MAJOR_GRID_SPACING
+  // matches the node size (100x100), so the grid doubles as a snapping
+  // guide; MINOR_GRID_SPACING subdivides each major cell into tenths.
+  //
+  // TODO: spacing is fixed, so at extreme zoom the grid can get too dense
+  // (zoomed out) or too sparse (zoomed in). If that becomes an issue, make
+  // spacing adaptive: derive a multiplier from editor_state.view.zoom,
+  // snapped to a "nice" progression (1, 2, 5, 10, 20, 50, ...) so that
+  // MINOR_GRID_SPACING * zoom stays within a target pixel range (e.g.
+  // 8-40px), and feed the result into the pattern's width/height and the
+  // minorGridLines offsets below instead of the constants.
+  const MAJOR_GRID_SPACING = 100;
+  const MINOR_GRID_SPACING = 10;
+  const minorGridLines = Array.from(
+    { length: MAJOR_GRID_SPACING / MINOR_GRID_SPACING - 1 },
+    (_, i) => (i + 1) * MINOR_GRID_SPACING,
+  );
+
   let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
   let output = $derived.by(() =>
     compile_system([{ filename: "all.hcl", content: input.value }])
@@ -186,13 +204,57 @@
         style="cursor: {dragging || panning ? 'grabbing' : 'grab'}"
       >
         <defs>
-          <pattern id="Pattern" x="0" y="0" width=".1" height=".1">
-            <circle
-              cx="10"
-              cy="10"
-              r="2"
-              fill="white"
-              fill-opacity="0.5"
+          <!--
+            World-space grid: patternUnits="userSpaceOnUse" ties the tile to
+            the same coordinate system as nodes/connections, so it pans and
+            zooms for free via the SVG's own viewBox transform — no JS math
+            needed. The tile is sized to the major spacing (100 units, same
+            as a node) and draws the minor lines inside it plus one bold
+            line on its own edge, which tiles seamlessly into the major grid.
+          -->
+          <pattern
+            id="Grid"
+            width={MAJOR_GRID_SPACING}
+            height={MAJOR_GRID_SPACING}
+            patternUnits="userSpaceOnUse"
+          >
+            {#each minorGridLines as i}
+              <line
+                x1={i}
+                y1="0"
+                x2={i}
+                y2={MAJOR_GRID_SPACING}
+                stroke="white"
+                stroke-opacity="0.08"
+                stroke-width="1"
+              />
+              <line
+                x1="0"
+                y1={i}
+                x2={MAJOR_GRID_SPACING}
+                y2={i}
+                stroke="white"
+                stroke-opacity="0.08"
+                stroke-width="1"
+              />
+            {/each}
+            <line
+              x1="0"
+              y1="0"
+              x2={MAJOR_GRID_SPACING}
+              y2="0"
+              stroke="white"
+              stroke-opacity="0.2"
+              stroke-width="1"
+            />
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2={MAJOR_GRID_SPACING}
+              stroke="white"
+              stroke-opacity="0.2"
+              stroke-width="1"
             />
           </pattern>
           <marker
@@ -211,12 +273,11 @@
           </marker>
         </defs>
         <rect
-          fill="url(#Pattern)"
-          stroke="black"
-          x="-100%"
-          y="-100%"
-          width="300%"
-          height="300%"
+          fill="url(#Grid)"
+          x={editor_state.view.x}
+          y={editor_state.view.y}
+          width={canvas_width / editor_state.view.zoom}
+          height={canvas_height / editor_state.view.zoom}
           onmousedown={onCanvasMouseDown}
         />
 
