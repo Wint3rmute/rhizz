@@ -720,6 +720,34 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
   }
   return candidates;
 });
+
+// Fraction of the viewport the diagram's bounding box should fill (in
+// whichever axis is more constraining, so it fits fully in both) when
+// "Zoom to Fill" is used.
+const ZOOM_TO_FILL_FRACTION = 0.8;
+
+// Zooms and pans so every currently-placed node's combined bounding box
+// fills ZOOM_TO_FILL_FRACTION of the viewport, centered. No-op if nothing
+// is placed on canvas.
+function zoomToFill() {
+  const boxes = renderOrder
+    .map((index) => nodeBox(index))
+    .filter(
+      (box): box is NonNullable<ReturnType<typeof nodeBox>> => box !== null,
+    );
+  if (boxes.length === 0) return;
+  const bounds = unionBox(boxes);
+
+  const zoomX = (canvas_width * ZOOM_TO_FILL_FRACTION) / bounds.width;
+  const zoomY = (canvas_height * ZOOM_TO_FILL_FRACTION) / bounds.height;
+  const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
+
+  editor_state.view.zoom = newZoom;
+  editor_state.view.x =
+    bounds.x + bounds.width / 2 - canvas_width / newZoom / 2;
+  editor_state.view.y =
+    bounds.y + bounds.height / 2 - canvas_height / newZoom / 2;
+}
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -1026,13 +1054,6 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
 
       <div class="absolute bottom-2 right-2 z-10 flex gap-2">
         <button
-          onclick={() => (gridVisible = !gridVisible)}
-          class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"
-          title="Toggle background grid visibility"
-        >
-          Toggle Grid
-        </button>
-        <button
           onclick={() => (snapEnabled = !snapEnabled)}
           class="btn btn-sm {snapActive ? 'btn-primary' : 'btn-ghost'}"
           title="Snap dragging/resizing to a {SNAP_GRID_SIZE}-unit grid — or hold Ctrl/Cmd to snap temporarily"
@@ -1040,9 +1061,23 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
           Snap to Grid
         </button>
         <button
+          onclick={() => (gridVisible = !gridVisible)}
+          class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"
+          title="Toggle background grid visibility - nice for screenshots"
+        >
+          Toggle Grid
+        </button>
+        <button
+          onclick={zoomToFill}
+          class="btn btn-ghost btn-sm"
+          title="Zoom and pan to fit the whole diagram - useful for screenshots"
+        >
+          Zoom to Fill
+        </button>
+        <button
           onclick={reset_view}
           class="btn btn-ghost btn-sm"
-          title="Reset pan and zoom"
+          title="Reset pan and zoom. Useful when you get lost in the diagram"
         >
           Reset View
         </button>
