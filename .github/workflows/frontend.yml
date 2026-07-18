@@ -31,7 +31,11 @@ jobs:
         working-directory: ./web
 
       - name: Check Frontend
-        run: deno check && deno run check
+        run: deno run check
+        working-directory: ./web
+
+      - name: Test Frontend
+        run: deno run test
         working-directory: ./web
 
       - name: Build Frontend
