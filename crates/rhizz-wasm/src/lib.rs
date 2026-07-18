@@ -240,6 +240,36 @@ impl ConnectionJS {
     }
 }
 
+// ── SystemJS ──────────────────────────────────────────────────────────────────
+
+/// A top-level system exposed to JavaScript.
+///
+/// Systems (unlike components, whose labels are only unique within their
+/// parent scope) have globally-unique labels, so `label` is suitable as a
+/// stable identifier even across `ModelJS::systems()` re-ordering.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct SystemJS {
+    label: String,
+}
+
+#[wasm_bindgen]
+impl SystemJS {
+    /// Globally-unique system identifier.
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+}
+
+impl From<&rhizz_core::System> for SystemJS {
+    fn from(s: &rhizz_core::System) -> Self {
+        Self {
+            label: s.label.clone(),
+        }
+    }
+}
+
 // ── ComponentJS ───────────────────────────────────────────────────────────────
 
 /// A resolved component exposed to JavaScript.
@@ -335,6 +365,11 @@ impl ModelJS {
     /// Returns the project metadata.
     pub fn project(&self) -> ProjectJS {
         ProjectJS::from(&self.inner.project)
+    }
+
+    /// Returns all top-level systems as typed wrappers.
+    pub fn systems(&self) -> Vec<SystemJS> {
+        self.inner.systems.iter().map(SystemJS::from).collect()
     }
 
     /// Returns all components as typed wrappers.

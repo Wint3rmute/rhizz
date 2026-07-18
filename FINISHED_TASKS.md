@@ -4,6 +4,64 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 39 — Make diagram layout persistence keys stable across HCL source edits
+
+- Added a minimal `SystemJS` wrapper (`label` getter only) and
+  `ModelJS::systems()` to `crates/rhizz-wasm/src/lib.rs`, mirroring the
+  existing `ComponentJS`/`ConnectionJS` wrapper pattern. System labels are
+  globally unique (unlike component labels, which are only unique within
+  their parent scope — SPEC.md §2.3), so a system's label is a safe root
+  for a stable path. Rebuilt the wasm bindings with `wasm-pack build
+  crates/rhizz-wasm --target web` so `web/src/routes/diagrams/+page.svelte`
+  picks up the new binding (linked via the existing `"rhizz":
+  "file:../crates/rhizz-wasm/pkg/"` dependency).
+- Added `componentKey(index)` in `+page.svelte`, which walks the chain of
+  `parent_component_index` up to the root and prepends the root's parent
+  system's label (via the new `systems` derived + `parent_system_index`),
+  producing a path like `"home-monitor/controller/mcu"`. This replaces the
+  raw arena index as the storage key for both `checked` and `savedLayout`
+  (now typed `Record<string, StoredBox>` instead of `Record<number,
+  StoredBox>`), so reordering/inserting components earlier in the HCL
+  source no longer silently reattaches a persisted position to the wrong
+  component.
+- Added `keyToIndex`, a `$derived.by` reverse map from `componentKey()` →
+  current arena index, rebuilt whenever `components`/`systems` change.
+  `renderOrder` now maps `Object.keys(checked.value)` through this reverse
+  map (dropping keys that no longer resolve to a component) instead of
+  parsing them back with `Number(...)`.
+- All other read/write sites (`setNodeBox`, `nodeBox`,
+  `setSelectedTextAlign`, `onNodeMouseDown`'s drag-start snapshot, and the
+  sidebar checkbox's check/uncheck handlers) now key through
+  `componentKey(index)` instead of the bare arena index.
+- Migration: added `stripLegacyIndexKeys()`, run once against
+  `checked.value`/`savedLayout.value` right after they're loaded. Old
+  arena-index keys are plain-integer strings (e.g. `"0"`, `"1"`), which
+  can never occur as a `componentKey()` path (a real path always contains
+  at least one `"/"`, from its root system label), so they're identified
+  unambiguously and dropped rather than left to linger unused in
+  `localStorage` forever. There's no reliable way to migrate their values
+  forward (the whole point of this change is that the old
+  index→component mapping could silently be wrong), so anyone with
+  pre-existing diagram layouts gets a one-time reset, as the task allowed.
+- Fixed a TS7022 circular-inference compiler error (`'component'
+  implicitly has type 'any' because it ... is referenced ... in its own
+  initializer`) surfaced by `componentKey`'s `while` loop reassigning its
+  loop variable, by explicitly annotating the loop-local `const component:
+  ComponentJS | undefined = components[current]` (imported `ComponentJS`
+  as a type from `"rhizz"`, matching the existing pattern in
+  `Navbar.svelte`) — a known TypeScript design limitation with loops that
+  both read and reassign a shared variable across iterations.
+- Validated with `cargo build`/`cargo test --all` (rhizz-wasm + workspace,
+  all pass; `cargo clippy` is unavailable in this sandbox's Nix devshell,
+  so it could not be run for the Rust change), and `deno task check` (0
+  errors/warnings), `deno task build`, and `deno task test` (all 34
+  existing geometry tests still pass) for the frontend. Manual
+  browser verification of reordering components in the HCL source was not
+  performed (no interactive browser available in this environment) —
+  recommend the user spot-check this manually.
+
+---
+
 ## Task 38 — Replace ad hoc interaction state with a discriminated-union state machine
 
 - In `web/src/routes/diagrams/+page.svelte`, replaced the four

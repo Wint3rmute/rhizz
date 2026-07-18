@@ -13,26 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 39 — Make diagram layout persistence keys stable across HCL source edits
-
-`checked`/`savedLayout` are keyed by a component's arena index (its
-position in `model.components()`), which is derived from HCL parse order.
-Reordering or inserting components earlier in the source file silently
-reattaches persisted positions to the wrong component on reload.
-
-- Design and implement a structurally stable key (e.g. a path built from
-  the chain of parent labels down to the component, such as
-  `"controller/mcu"`), replacing the raw arena index as the storage key for
-  both `checked` and `savedLayout`.
-- Handle the migration path for existing persisted data under the old
-  arena-index keys (either a one-time migration or accept that old
-  layouts reset once, clearly documented).
-- Validate with `deno task check` and `deno task build`, and manually
-  verify that reordering components in the HCL source no longer scrambles
-  persisted positions.
-
----
-
 ## Task 40 — Make the diagram view (pan/zoom) page-scoped instead of a module-level singleton
 
 `ViewEditorState.svelte`'s `editor_state` (pan/zoom) is a module-level

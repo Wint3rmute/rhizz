@@ -7,6 +7,7 @@ import {
 import { isModifierHeld, isSpaceHeld } from "../../KeyboardState.svelte";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
+import type { ComponentJS } from "rhizz";
 import {
   MIN_NODE_SIZE,
   boxBoundaryPoint,
@@ -55,8 +56,56 @@ let output = $derived.by(() =>
   compile_system([{ filename: "all.hcl", content: input.value }])
 );
 let model = $derived(output.model());
+let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
+
+// Builds a structurally-stable persistence key for a component: the path
+// of labels from its root system down to it, e.g.
+// "home-monitor/controller/mcu". Unlike the component's arena index (its
+// position in model.components(), which shifts whenever components are
+// reordered or inserted earlier in the HCL source), this key only changes
+// if the component itself (or an ancestor) is renamed or reparented — a
+// much rarer, more intentional edit. System labels are globally unique
+// (unlike component labels, which are only unique within their parent
+// scope — SPEC.md §2.3), so prefixing with the root system's label keeps
+// the whole path collision-free even across multiple systems.
+//
+// Falls back to a `#<index>`-prefixed key (which can never collide with a
+// real path, since real paths always contain at least one "/") if the
+// chain can't be resolved — shouldn't happen for a resolved model, but
+// keeps this total rather than throwing.
+function componentKey(index: number): string {
+  const parts: string[] = [];
+  let current: number | undefined = index;
+  while (current !== undefined) {
+    const component: ComponentJS | undefined = components[current];
+    if (!component) return `#${index}`;
+    parts.unshift(component.label);
+    if (component.parent_component_index !== undefined) {
+      current = component.parent_component_index;
+      continue;
+    }
+    const system =
+      component.parent_system_index !== undefined
+        ? systems[component.parent_system_index]
+        : undefined;
+    if (system) parts.unshift(system.label);
+    current = undefined;
+  }
+  return parts.join("/");
+}
+
+// Reverse lookup from a persistence key back to the component's current
+// arena index, rebuilt whenever `components`/`systems` change. Entries in
+// `checked`/`savedLayout` whose key isn't found here belong to a component
+// that no longer exists (renamed, removed, or reparented) and are simply
+// not rendered.
+let keyToIndex = $derived.by(() => {
+  const map = new Map<string, number>();
+  components.forEach((_, index) => map.set(componentKey(index), index));
+  return map;
+});
 
 // Default node size, in world (SVG) units, for newly-placed nodes and for
 // backfilling entries persisted before per-node sizing existed.
@@ -119,16 +168,18 @@ type StoredBox = {
   textAlign?: TextAlign;
 };
 
-// Which components are currently placed on the canvas, keyed by the
-// component's arena index (its position in model.components(), same index
-// space as ConnectionJS.from/to and ComponentJS.parent_component_index).
-// Component labels are only unique within a parent scope (SPEC.md §2.3), so
-// labels cannot be used as a stable key once components are nested. If a
-// component is unchecked, it's not present here — but its last-known box
-// is kept in savedLayout below, so re-checking it later restores it to
-// where it was instead of resetting to the default position. Persisted so
-// the diagram layout survives page reloads.
-let checked = persisted<Record<number, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
+// Which components are currently placed on the canvas, keyed by
+// componentKey() (a structurally-stable path of labels — see above), not
+// by arena index: component labels are only unique within a parent scope
+// (SPEC.md §2.3), so a bare label can't be used as a key once components
+// are nested, but arena indices shift whenever components are reordered
+// or inserted earlier in the HCL source, silently reattaching persisted
+// positions to the wrong component (see TASKS.md Task 39). If a component
+// is unchecked, it's not present here — but its last-known box is kept in
+// savedLayout below, so re-checking it later restores it to where it was
+// instead of resetting to the default position. Persisted so the diagram
+// layout survives page reloads.
+let checked = persisted<Record<string, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
 
 // Remembers every component's last-known box, even after it's unchecked
 // (removed from `checked`) — entries here are never deleted, only updated.
@@ -136,10 +187,29 @@ let checked = persisted<Record<number, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
 // handler) so a component's layout survives being temporarily removed
 // from the canvas. Persisted separately from `checked` since the two have
 // different lifetimes (checked entries disappear on uncheck; these don't).
-let savedLayout = persisted<Record<number, StoredBox>>(
+let savedLayout = persisted<Record<string, StoredBox>>(
   "DIAGRAM_SAVED_LAYOUT",
   {},
 );
+
+// One-time migration away from the old arena-index-keyed scheme: those
+// keys were plain integers (e.g. "0", "1"), which can never occur as a
+// componentKey() path (a real path always contains at least one "/", from
+// its root system label). There's no reliable way to migrate their values
+// forward — the whole point of this change is that the old index→component
+// mapping could silently be wrong — so this just strips them out rather
+// than let them linger unused in localStorage forever; anyone with
+// pre-existing diagram layouts gets a one-time reset.
+function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
+  const withoutLegacyKeys = Object.fromEntries(
+    Object.entries(record).filter(([key]) => !/^\d+$/.test(key)),
+  );
+  return Object.keys(withoutLegacyKeys).length === Object.keys(record).length
+    ? record
+    : withoutLegacyKeys;
+}
+checked.value = stripLegacyIndexKeys(checked.value);
+savedLayout.value = stripLegacyIndexKeys(savedLayout.value);
 
 // Writes `box` to both `checked` (the current on-canvas state) and
 // savedLayout (the remembered layout), merging over any existing fields.
@@ -147,8 +217,9 @@ let savedLayout = persisted<Record<number, StoredBox>>(
 // keeps the remembered layout up to date, instead of relying on each call
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
-  checked.value[index] = { ...checked.value[index], ...box };
-  savedLayout.value[index] = { ...savedLayout.value[index], ...box };
+  const key = componentKey(index);
+  checked.value[key] = { ...checked.value[key], ...box };
+  savedLayout.value[key] = { ...savedLayout.value[key], ...box };
 }
 
 // Returns the placed node's box (position + size + text alignment), or null
@@ -162,7 +233,7 @@ function nodeBox(index: number): {
   height: number;
   textAlign: TextAlign;
 } | null {
-  const pos = checked.value[index];
+  const pos = checked.value[componentKey(index)];
   if (!pos) return null;
   return {
     x: pos.x,
@@ -177,7 +248,7 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  if (!checked.value[primarySelected]) return;
+  if (!checked.value[componentKey(primarySelected)]) return;
   setNodeBox(primarySelected, { textAlign: align });
 }
 
@@ -335,7 +406,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
   for (const i of selected) {
-    const box = checked.value[i];
+    const box = checked.value[componentKey(i)];
     if (box) startPositions[i] = { x: box.x, y: box.y };
   }
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
@@ -570,7 +641,8 @@ function parentOf(index: number): number | undefined {
 // arena order.
 let renderOrder = $derived(
   Object.keys(checked.value)
-    .map(Number)
+    .map((key) => keyToIndex.get(key))
+    .filter((index): index is number => index !== undefined)
     .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
 );
 
@@ -979,13 +1051,13 @@ function zoomToFill() {
               type="checkbox"
               id="comp-{index}"
               class="checkbox checkbox-xs"
-              checked={!!checked.value[index]}
+              checked={!!checked.value[componentKey(index)]}
               onchange={(value) => {
                 if (value.currentTarget.checked) {
                   // Restore the remembered layout if this component has
                   // been placed before (even if it was later unchecked),
                   // instead of always resetting to the default position.
-                  const remembered = savedLayout.value[index];
+                  const remembered = savedLayout.value[componentKey(index)];
                   let box: Box = {
                     x: remembered?.x ?? 100,
                     y: remembered?.y ?? 100,
@@ -1004,9 +1076,10 @@ function zoomToFill() {
                   // that were already placed on canvas before it was.
                   reclampChildren(index);
                 } else {
-                  delete checked.value[index];
-                  // savedLayout.value[index] is intentionally left alone,
-                  // so re-checking this component later restores it here.
+                  delete checked.value[componentKey(index)];
+                  // savedLayout.value[componentKey(index)] is intentionally
+                  // left alone, so re-checking this component later
+                  // restores it here.
                   if (selected.has(index)) {
                     const next = new Set(selected);
                     next.delete(index);
