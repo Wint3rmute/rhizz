@@ -623,7 +623,9 @@ function elbowPath(
   const horizontal = orientation === "horizontal";
   const toXY = (p: number, s: number): [number, number] =>
     horizontal ? [p, s] : [s, p];
-  const sweep = (flag: 0 | 1): 0 | 1 => (horizontal ? flag : ((1 - flag) as 0 | 1));
+  const sweep = (
+    flag: 0 | 1,
+  ): 0 | 1 => (horizontal ? flag : ((1 - flag) as 0 | 1));
 
   const [ap, as_] = horizontal ? [ax, ay] : [ay, ax];
   const [bp, bs] = horizontal ? [bx, by] : [by, bx];
@@ -743,10 +745,10 @@ function zoomToFill() {
   const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
 
   editor_state.view.zoom = newZoom;
-  editor_state.view.x =
-    bounds.x + bounds.width / 2 - canvas_width / newZoom / 2;
-  editor_state.view.y =
-    bounds.y + bounds.height / 2 - canvas_height / newZoom / 2;
+  editor_state.view.x = bounds.x + bounds.width / 2 -
+    canvas_width / newZoom / 2;
+  editor_state.view.y = bounds.y + bounds.height / 2 -
+    canvas_height / newZoom / 2;
 }
 </script>
 
