@@ -1,13 +1,16 @@
 <script lang="ts">
-  import {
-    get_editor_state,
-    switch_state_zooming,
-  } from "../../ViewEditorState.svelte";
+  import { get_editor_state } from "../../ViewEditorState.svelte";
   import { compile_system } from "../../rhizz_wasm_wrapper";
   import persisted from "../../Persisted.svelte";
 
   const editor_state = get_editor_state();
   let root_svg: SVGElement;
+
+  // Tracks the canvas's rendered pixel size so the SVG viewBox can match it
+  // exactly (1 SVG unit == 1 pixel), keeping the canvas filling all
+  // available space with no letterboxing regardless of viewport size.
+  let canvas_width = $state(800);
+  let canvas_height = $state(600);
 
   let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
   let output = $derived.by(() =>
@@ -116,23 +119,20 @@
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
-    <button
-      onclick={switch_state_zooming}
-      class="btn btn-primary btn-sm m-2 self-start"
+    <div
+      class="flex-1 w-full h-full bg-neutral"
+      bind:clientWidth={canvas_width}
+      bind:clientHeight={canvas_height}
     >
-      New
-    </button>
-
-    <div class="flex-1 w-full bg-neutral">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <svg
         bind:this={root_svg}
         version="1.1"
-        width="1000"
-        height="600"
+        width="100%"
+        height="100%"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="{editor_state.view_box.x} {editor_state.view_box
-                    .y} 600 400"
+                    .y} {canvas_width} {canvas_height}"
         onmousemove={onSvgMouseMove}
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}

@@ -23,8 +23,4 @@
   export function get_editor_state() {
     return editor_state;
   }
-
-  export function switch_state_zooming() {
-    editor_state.view_box.x += 10;
-  }
 </script>
