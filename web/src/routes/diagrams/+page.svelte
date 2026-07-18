@@ -52,8 +52,11 @@ const DEFAULT_NODE_HEIGHT = 100;
 const MIN_NODE_SIZE = 40;
 
 // Size of the resize-handle square rendered at a selected node's
-// bottom-right corner, in world units.
+// bottom-right corner, in world units. Its outer corner is rounded to
+// match the node's own `rx` so it hugs the node's rounded corner instead
+// of poking past it.
 const RESIZE_HANDLE_SIZE = 10;
+const RESIZE_HANDLE_RADIUS = 5;
 
 // Stores position + size of each checked element, keyed by the component's
 // arena index (its position in model.components(), same index space as
@@ -407,11 +410,20 @@ let visibleConnections = $derived(
               {label}
             </text>
             {#if selected === index}
-              <rect
-                x={width - RESIZE_HANDLE_SIZE}
-                y={height - RESIZE_HANDLE_SIZE}
-                width={RESIZE_HANDLE_SIZE}
-                height={RESIZE_HANDLE_SIZE}
+              <!--
+                Only the outer (bottom-right) corner is rounded, matching
+                the node's own rx, so the handle hugs the node's rounded
+                corner instead of poking past it. rect's rx rounds all four
+                corners uniformly, so a path with a single arc is used
+                instead of a rect.
+              -->
+              <path
+                d="M {width - RESIZE_HANDLE_SIZE},{height -
+                  RESIZE_HANDLE_SIZE} L {width},{height - RESIZE_HANDLE_SIZE}
+                  L {width},{height - RESIZE_HANDLE_RADIUS}
+                  A {RESIZE_HANDLE_RADIUS},{RESIZE_HANDLE_RADIUS} 0 0,1 {width -
+                  RESIZE_HANDLE_RADIUS},{height} L {width -
+                  RESIZE_HANDLE_SIZE},{height} Z"
                 fill="var(--color-primary)"
                 style="cursor: nwse-resize"
                 onmousedown={(e) => onResizeHandleMouseDown(e, index)}
