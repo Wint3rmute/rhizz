@@ -367,62 +367,90 @@ function boxCenter(box: Box): { x: number; y: number } {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-// Returns the midpoint of whichever side of `box` faces `towards` (top,
-// bottom, left, or right) — not the exact point where a straight ray from
-// the centre would exit the rectangle, which can land arbitrarily close to
-// a corner at diagonal angles and looks messy. Anchoring to a side's
-// midpoint instead keeps connection endpoints readable regardless of the
-// angle between the two boxes.
+// Whether a connection leaves/enters its endpoints horizontally (via the
+// left/right side, jogging vertically in the middle — for boxes that are
+// mostly side-by-side) or vertically (via the top/bottom side, jogging
+// horizontally in the middle — for boxes that are mostly stacked).
+type ConnectionOrientation = "horizontal" | "vertical";
+
+// Returns the midpoint of the side of `box` facing `towards`, for the
+// given orientation: the box's left/right-centre if horizontal, or its
+// top/bottom-centre if vertical. Both endpoints of a connection are always
+// resolved with the *same* orientation (decided once from the two boxes'
+// centres, see visibleConnections below) so the chosen side is consistent
+// with the elbow shape connecting them.
 function boxBoundaryPoint(
   box: Box,
   towards: { x: number; y: number },
+  orientation: ConnectionOrientation,
 ): { x: number; y: number } {
   const center = boxCenter(box);
-  const dx = towards.x - center.x;
-  const dy = towards.y - center.y;
-  if (dx === 0 && dy === 0) return center;
-
-  const halfWidth = box.width / 2;
-  const halfHeight = box.height / 2;
-
-  // Compare how "steep" the approach is relative to the box's aspect ratio
-  // to decide whether the left/right or top/bottom side faces `towards`
-  // (the same test a ray-rectangle intersection would use to pick a side —
-  // we just don't use the exact hit point on it, only which side it is).
-  const horizontal = Math.abs(dx) * halfHeight > Math.abs(dy) * halfWidth;
-
-  return horizontal
-    ? { x: center.x + Math.sign(dx) * halfWidth, y: center.y }
-    : { x: center.x, y: center.y + Math.sign(dy) * halfHeight };
+  if (orientation === "horizontal") {
+    const sign = towards.x >= center.x ? 1 : -1;
+    return { x: center.x + sign * (box.width / 2), y: center.y };
+  }
+  const sign = towards.y >= center.y ? 1 : -1;
+  return { x: center.x, y: center.y + sign * (box.height / 2) };
 }
 
-// Builds an SVG path string for a Z-shaped elbow route with rounded corners.
+// Builds an SVG path with a straight/rounded-elbow route between two
+// points that always leaves/enters along `orientation`'s axis —
+// "horizontal" produces a horizontal-vertical-horizontal (H-V-H) jog,
+// "vertical" produces a vertical-horizontal-vertical (V-H-V) jog. Falls
+// back to a straight line when the two points are already aligned on the
+// jog axis (no bend needed).
+//
+// Both variants share one abstract shape, built in terms of a "primary"
+// axis p (the leave/enter direction) and "secondary" axis s (the jog
+// direction); only the final p/s -> x/y mapping differs. Swapping which
+// physical axis is p vs s is a reflection, which reverses the handedness
+// of the rounded corners, so the arc sweep-flags are flipped for the
+// vertical variant to keep corners rounding the correct way.
 function elbowPath(
   ax: number,
   ay: number,
   bx: number,
   by: number,
+  orientation: ConnectionOrientation,
   r = 10,
 ): string {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const mx = (ax + bx) / 2;
+  const horizontal = orientation === "horizontal";
+  const toXY = (p: number, s: number): [number, number] =>
+    horizontal ? [p, s] : [s, p];
+  const sweep = (flag: 0 | 1): 0 | 1 => (horizontal ? flag : ((1 - flag) as 0 | 1));
 
-  if (Math.abs(dy) < 0.5) return `M ${ax},${ay} L ${bx},${by}`;
+  const [ap, as_] = horizontal ? [ax, ay] : [ay, ax];
+  const [bp, bs] = horizontal ? [bx, by] : [by, bx];
+  const dp = bp - ap;
+  const ds = bs - as_;
 
-  const rc = Math.min(r, Math.abs(dx) / 2, Math.abs(dy) / 2);
-  const sx = dx >= 0 ? 1 : -1;
-  const sy = dy >= 0 ? 1 : -1;
-  const s1 = dx * dy > 0 ? 1 : 0;
-  const s2 = 1 - s1;
+  if (Math.abs(ds) < 0.5) {
+    const [x1, y1] = toXY(ap, as_);
+    const [x2, y2] = toXY(bp, bs);
+    return `M ${x1},${y1} L ${x2},${y2}`;
+  }
+
+  const mp = (ap + bp) / 2;
+  const rc = Math.min(r, Math.abs(dp) / 2, Math.abs(ds) / 2);
+  const sp = dp >= 0 ? 1 : -1;
+  const ss = ds >= 0 ? 1 : -1;
+  const t1 = dp * ds > 0 ? 1 : 0;
+  const t2 = 1 - t1;
+
+  const [x0, y0] = toXY(ap, as_);
+  const [x1, y1] = toXY(mp - sp * rc, as_);
+  const [x2, y2] = toXY(mp, as_ + ss * rc);
+  const [x3, y3] = toXY(mp, bs - ss * rc);
+  const [x4, y4] = toXY(mp + sp * rc, bs);
+  const [x5, y5] = toXY(bp, bs);
 
   return [
-    `M ${ax},${ay}`,
-    `L ${mx - sx * rc},${ay}`,
-    `A ${rc},${rc} 0 0,${s1} ${mx},${ay + sy * rc}`,
-    `L ${mx},${by - sy * rc}`,
-    `A ${rc},${rc} 0 0,${s2} ${mx + sx * rc},${by}`,
-    `L ${bx},${by}`,
+    `M ${x0},${y0}`,
+    `L ${x1},${y1}`,
+    `A ${rc},${rc} 0 0,${sweep(t1 as 0 | 1)} ${x2},${y2}`,
+    `L ${x3},${y3}`,
+    `A ${rc},${rc} 0 0,${sweep(t2 as 0 | 1)} ${x4},${y4}`,
+    `L ${x5},${y5}`,
   ].join(" ");
 }
 
@@ -431,6 +459,9 @@ function elbowPath(
 // index space `checked` is keyed by. Endpoints are anchored to each box's
 // boundary (the edge facing the other node), not its centre, so the arrow
 // terminates on the node's perimeter instead of passing into its interior.
+// Orientation is decided once from the raw centre-to-centre delta (not
+// either box's own aspect ratio) so both endpoints — and the elbow shape
+// joining them — always agree on the same horizontal/vertical choice.
 let visibleConnections = $derived(
   connections.flatMap((conn) => {
     const boxA = nodeBox(conn.from);
@@ -438,9 +469,13 @@ let visibleConnections = $derived(
     if (!boxA || !boxB) return [];
     const centerA = boxCenter(boxA);
     const centerB = boxCenter(boxB);
-    const a = boxBoundaryPoint(boxA, centerB);
-    const b = boxBoundaryPoint(boxB, centerA);
-    return [{ conn, a, b }];
+    const orientation: ConnectionOrientation =
+      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
+        ? "horizontal"
+        : "vertical";
+    const a = boxBoundaryPoint(boxA, centerB, orientation);
+    const b = boxBoundaryPoint(boxB, centerA, orientation);
+    return [{ conn, a, b, orientation }];
   }),
 );
 
@@ -715,9 +750,9 @@ let renderOrder = $derived(
           trade-off for now (proper edge routing that dodges nodes entirely
           is a bigger feature, not needed at this stage).
         -->
-        {#each visibleConnections as { conn, a, b }}
+        {#each visibleConnections as { conn, a, b, orientation }}
           <path
-            d={elbowPath(a.x, a.y, b.x, b.y)}
+            d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
             stroke="white"
             stroke-opacity="0.35"
             stroke-width="1.5"
