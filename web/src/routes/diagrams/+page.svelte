@@ -42,8 +42,13 @@
   let components = $derived(model ? model.components() : []);
   let connections = $derived(model ? model.connections() : []);
 
-  // Stores position of each checked element. If an element is unchecked, it's not present here
-  let checked = $state<Record<string, { x: number; y: number }>>({});
+  // Stores position of each checked element. If an element is unchecked,
+  // it's not present here. Persisted so the diagram layout survives page
+  // reloads.
+  let checked = persisted<Record<string, { x: number; y: number }>>(
+    "DIAGRAM_CHECKED_NODES",
+    {},
+  );
 
   // Node-drag state
   let dragging: { label: string; offsetX: number; offsetY: number } | null =
@@ -69,7 +74,7 @@
   function onNodeMouseDown(event: MouseEvent, label: string) {
     event.preventDefault();
     const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-    const pos = checked[label] ?? { x: 0, y: 0 };
+    const pos = checked.value[label] ?? { x: 0, y: 0 };
     dragging = {
       label,
       offsetX: svgCoords.x - pos.x,
@@ -84,7 +89,7 @@
   function onSvgMouseMove(event: MouseEvent) {
     if (dragging) {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      checked[dragging.label] = {
+      checked.value[dragging.label] = {
         x: svgCoords.x - dragging.offsetX,
         y: svgCoords.y - dragging.offsetY,
       };
@@ -130,7 +135,7 @@
 
   // Returns the centre point of a node given its top-left position.
   function nodeCenter(label: string): { x: number; y: number } | null {
-    const pos = checked[label];
+    const pos = checked.value[label];
     if (!pos) return null;
     return { x: pos.x + 50, y: pos.y + 50 };
   }
@@ -314,7 +319,7 @@
               height="100"
               rx="5"
               stroke="white"
-              fill="transparent"
+              fill="var(--color-base-200)"
             />
             <text
               x={50}
@@ -329,11 +334,11 @@
           </g>
         {/snippet}
 
-        {#each components.filter((c) => checked[c.label]) as component}
+        {#each components.filter((c) => checked.value[c.label]) as component}
           {@render ViewNode(
             component.label,
-            checked[component.label]?.x ?? 0,
-            checked[component.label]?.y ?? 0,
+            checked.value[component.label]?.x ?? 0,
+            checked.value[component.label]?.y ?? 0,
           )}
         {/each}
       </svg>
@@ -370,14 +375,15 @@
               type="checkbox"
               id="comp-{component.label}"
               class="checkbox checkbox-xs"
+              checked={!!checked.value[component.label]}
               onchange={(value) => {
                 if (value.currentTarget.checked) {
-                  checked[component.label] = {
+                  checked.value[component.label] = {
                     x: 100,
                     y: 100,
                   };
                 } else {
-                  delete checked[component.label];
+                  delete checked.value[component.label];
                 }
               }}
             />
