@@ -407,6 +407,11 @@ function svgPoint(
 // node, so it must be handled here too (not just in onCanvasMouseDown,
 // which only sees clicks on empty canvas).
 function onNodeMouseDown(event: MouseEvent, index: number) {
+  // Auto-layout is actively writing node positions every frame; letting a
+  // drag/select start at the same time would silently fight it (clicks
+  // would visibly do nothing useful) — see the cursor style on <svg>
+  // below for the matching "busy" affordance.
+  if (autoLayoutRunning) return;
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     interaction = {
@@ -445,6 +450,8 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
+  // See onNodeMouseDown's matching guard above.
+  if (autoLayoutRunning) return;
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     interaction = {
@@ -474,6 +481,8 @@ function onCanvasMouseDown(event: MouseEvent) {
 // (which would start a drag too). Handles only render on selected nodes
 // (see the ViewNode snippet), so `index` is always already in `selected`.
 function onResizeHandleMouseDown(event: MouseEvent, index: number) {
+  // See onNodeMouseDown's matching guard above.
+  if (autoLayoutRunning) return;
   if (event.button !== 0) return;
   // Let a space-held click bubble up to the node's own mousedown handler,
   // which starts panning instead of a resize — keeps "how to start a pan"
@@ -811,23 +820,32 @@ function runAutoLayout() {
 
   function step() {
     const results = layout.tick();
+    frame += 1;
+    // Only snap the final settling frame, not every intermediate one:
+    // snapping every frame while snapping is active would force the
+    // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
+    // settling smoothly. Since every frame overwrites the previous one's
+    // written position anyway, only the last write actually matters for
+    // the visible result — so it's the only one that needs to respect
+    // the grid.
+    const converged = layout.alpha() < AUTO_LAYOUT_ALPHA_MIN ||
+      frame >= AUTO_LAYOUT_MAX_FRAMES;
+
     for (const result of results) {
       const box = nodeBox(result.index);
       if (!box) continue;
       writeClampedToActiveParent(result.index, {
-        x: result.x,
-        y: result.y,
+        x: converged ? snap(result.x) : result.x,
+        y: converged ? snap(result.y) : result.y,
         width: box.width,
         height: box.height,
       });
     }
 
-    frame += 1;
-    const converged = layout.alpha() < AUTO_LAYOUT_ALPHA_MIN;
-    if (!converged && frame < AUTO_LAYOUT_MAX_FRAMES) {
-      requestAnimationFrame(step);
-    } else {
+    if (converged) {
       autoLayoutRunning = false;
+    } else {
+      requestAnimationFrame(step);
     }
   }
 
@@ -932,13 +950,15 @@ function runAutoLayout() {
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
         onwheel={onWheel}
-        style="cursor: {interaction.type === 'dragging' ||
-        interaction.type === 'resizing' ||
-        interaction.type === 'panning'
-          ? 'grabbing'
-          : interaction.type === 'marquee'
-            ? 'crosshair'
-            : 'grab'}"
+        style="cursor: {autoLayoutRunning
+          ? 'wait'
+          : interaction.type === 'dragging' ||
+              interaction.type === 'resizing' ||
+              interaction.type === 'panning'
+            ? 'grabbing'
+            : interaction.type === 'marquee'
+              ? 'crosshair'
+              : 'grab'}"
       >
         <defs>
           <!--
@@ -1034,7 +1054,7 @@ function runAutoLayout() {
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
-            style="cursor: grab"
+            style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
           >
             <rect
               {width}
@@ -1072,7 +1092,7 @@ function runAutoLayout() {
                   RESIZE_HANDLE_RADIUS},{height} L {width -
                   RESIZE_HANDLE_SIZE},{height} Z"
                 fill="var(--color-primary)"
-                style="cursor: nwse-resize"
+                style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
                 onmousedown={(e) => onResizeHandleMouseDown(e, index)}
               />
             {/if}
