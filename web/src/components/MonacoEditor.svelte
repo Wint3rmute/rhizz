@@ -11,6 +11,7 @@
   let { value = $bindable(), language = "plaintext" }: Props = $props();
 
   let editor_div: HTMLDivElement;
+  let editor: monaco.editor.IStandaloneCodeEditor | undefined;
 
   $effect(() => {
     monaco.editor.defineTheme("daisy", {
@@ -33,7 +34,7 @@
       },
     });
 
-    const editor = monaco.editor.create(editor_div, {
+    const created = monaco.editor.create(editor_div, {
       value: untrack(() => value),
       language,
       lineNumbers: "off",
@@ -43,15 +44,26 @@
       theme: "daisy",
       automaticLayout: true,
     });
+    editor = created;
 
-    const on_content_changed = editor.onDidChangeModelContent(() => {
-      value = editor.getValue();
+    const on_content_changed = created.onDidChangeModelContent(() => {
+      value = created.getValue();
     });
 
     return () => {
       on_content_changed.dispose();
-      editor.dispose();
+      created.dispose();
+      editor = undefined;
     };
+  });
+
+  // Sync external changes to `value` (e.g. loading an example project) into
+  // the editor. Changes originating from the editor itself are filtered out
+  // by the equality check below, avoiding feedback loops.
+  $effect(() => {
+    if (editor && value !== editor.getValue()) {
+      editor.setValue(value);
+    }
   });
 </script>
 
