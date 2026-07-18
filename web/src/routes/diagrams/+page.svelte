@@ -216,13 +216,16 @@ function unionBox(boxes: Box[]): Box {
   return { x, y, width: right - x, height: bottom - y };
 }
 
-// Whether two axis-aligned boxes overlap at all. Used for marquee-select.
-function boxesIntersect(a: Box, b: Box): boolean {
+// Whether `inner` lies fully inside `outer`. Used for marquee-select: a
+// node is only selected once its entire bounding box is enclosed by the
+// marquee rectangle, not merely overlapping it — the mental model users
+// expect from most selection tools.
+function boxContains(outer: Box, inner: Box): boolean {
   return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
   );
 }
 
@@ -510,21 +513,14 @@ function onSvgMouseUp() {
   resizing = null;
   panning = null;
   if (marquee) {
-    const box = marqueeBox;
     // A marquee with negligible size is just a click: clear the selection
     // (matches the old "click empty canvas to deselect" behavior).
-    if (box && (box.width > 2 || box.height > 2)) {
-      const matches = new Set<number>();
-      for (const index of renderOrder) {
-        const nodeBoxAtIndex = nodeBox(index);
-        if (nodeBoxAtIndex && boxesIntersect(nodeBoxAtIndex, box)) {
-          matches.add(index);
-        }
-      }
-      selected = matches;
-    } else {
-      selected = new Set();
-    }
+    // Otherwise, commit whatever the live preview (marqueeCandidates) was
+    // already showing.
+    const box = marqueeBox;
+    selected = box && (box.width > 2 || box.height > 2)
+      ? new Set(marqueeCandidates)
+      : new Set();
     marquee = null;
   }
 }
@@ -689,6 +685,21 @@ let renderOrder = $derived(
     .map(Number)
     .sort((a, b) => depthOf(a) - depthOf(b)),
 );
+
+// Nodes that would be selected if the marquee were released right now —
+// i.e. nodes whose full bounding box is enclosed by the marquee rectangle.
+// Drives the live selection preview while dragging; committed as-is by
+// onSvgMouseUp once the mouse is released.
+let marqueeCandidates: Set<number> = $derived.by(() => {
+  if (!marqueeBox) return new Set();
+  const box = marqueeBox;
+  const candidates = new Set<number>();
+  for (const index of renderOrder) {
+    const box2 = nodeBox(index);
+    if (box2 && boxContains(box, box2)) candidates.add(index);
+  }
+  return candidates;
+});
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -882,6 +893,9 @@ let renderOrder = $derived(
           textAlign: TextAlign,
         )}
           {@const textPos = textPosition(textAlign, width, height)}
+          {@const highlighted = marquee
+            ? marqueeCandidates.has(index)
+            : selected.has(index)}
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
@@ -891,8 +905,8 @@ let renderOrder = $derived(
               {width}
               {height}
               rx="5"
-              stroke={selected.has(index) ? "var(--color-primary)" : "white"}
-              stroke-width={selected.has(index) ? 2 : 1}
+              stroke={highlighted ? "var(--color-primary)" : "white"}
+              stroke-width={highlighted ? 2 : 1}
               fill="var(--color-base-200)"
             />
             <text
