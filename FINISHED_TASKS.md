@@ -4,6 +4,26 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 30 — Add node selection state to the diagram canvas
+
+- Added `selected: number | null` (component arena index) as page state on
+  `web/src/routes/diagrams/+page.svelte`. Not persisted — selection is
+  transient UI state.
+- `onNodeMouseDown` now sets `selected = index`; `onCanvasMouseDown`
+  (background rect, already used for panning) sets `selected = null`, so
+  clicking empty canvas deselects.
+- Selected node renders with an accent-colored (`var(--color-primary)`),
+  slightly thicker stroke instead of the default white one.
+- Edge case: unchecking a component from the sidebar while it's selected
+  now also clears `selected`, avoiding stale selection pointing at a node
+  that's no longer rendered.
+- No sidebar yet (that's Task 33) — this step only proves the selection
+  mechanic and gives visual feedback.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 29 — Rekey diagram canvas state by component index instead of label
 
 The `/diagrams` canvas keyed its per-node state (`checked`) by

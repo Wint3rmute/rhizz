@@ -13,18 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 30 — Add node selection state to the diagram canvas
-
-- Add `selected: number | null` (component index) as page state on
-  `web/src/routes/diagrams/+page.svelte`.
-- Clicking a node selects it; clicking empty canvas deselects it.
-- Visually distinguish the selected node (e.g. accent-colored stroke/outline).
-- No sidebar yet — this step only proves the selection mechanic and gives
-  visual feedback.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 31 — Add resizable size to diagram nodes (data model)
 
 - Extend the per-node persisted record from `{x, y}` to

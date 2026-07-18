@@ -54,6 +54,10 @@ let checked = persisted<Record<number, { x: number; y: number }>>(
   {},
 );
 
+// Currently selected node (component arena index), or null if nothing is
+// selected. Not persisted — selection is a transient UI state.
+let selected: number | null = $state(null);
+
 // Node-drag state
 let dragging: { index: number; offsetX: number; offsetY: number } | null =
   $state(null);
@@ -77,6 +81,7 @@ function svgPoint(
 
 function onNodeMouseDown(event: MouseEvent, index: number) {
   event.preventDefault();
+  selected = index;
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const pos = checked.value[index] ?? { x: 0, y: 0 };
   dragging = {
@@ -87,6 +92,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
+  selected = null;
   panning = { lastX: event.clientX, lastY: event.clientY };
 }
 
@@ -326,7 +332,8 @@ let visibleConnections = $derived(
               width="100"
               height="100"
               rx="5"
-              stroke="white"
+              stroke={selected === index ? "var(--color-primary)" : "white"}
+              stroke-width={selected === index ? 2 : 1}
               fill="var(--color-base-200)"
             />
             <text
@@ -395,6 +402,7 @@ let visibleConnections = $derived(
                   };
                 } else {
                   delete checked.value[index];
+                  if (selected === index) selected = null;
                 }
               }}
             />
