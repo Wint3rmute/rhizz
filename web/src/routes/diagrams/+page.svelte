@@ -4,6 +4,7 @@ import {
   get_editor_state,
   reset_view,
 } from "../../ViewEditorState.svelte";
+import { isModifierHeld } from "../../KeyboardState.svelte";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
 
@@ -58,14 +59,21 @@ const MIN_NODE_SIZE = 40;
 const SNAP_GRID_SIZE = 10;
 
 // Whether dragging/resizing snaps position/size to SNAP_GRID_SIZE-unit
-// increments. Toggled via the "Snap to Grid" button. Not persisted — it's
+// increments. Toggled via the "Snap to Grid" button; not persisted — it's
 // a transient editing mode, not part of the saved diagram.
 let snapEnabled = $state(false);
+
+// Whether snapping is actually in effect right now: either the toggle is
+// on, or the modifier key (Ctrl/Cmd) is currently held as a quick
+// temporary override. A $derived (rather than inlining the check into
+// snap()) so the "Snap to Grid" button can also reflect the live
+// modifier-key override, not just the persistent toggle.
+let snapActive = $derived(snapEnabled || isModifierHeld());
 
 // Rounds `value` to the nearest multiple of SNAP_GRID_SIZE, or returns it
 // unchanged when snapping is off.
 function snap(value: number): number {
-  return snapEnabled
+  return snapActive
     ? Math.round(value / SNAP_GRID_SIZE) * SNAP_GRID_SIZE
     : value;
 }
@@ -1007,8 +1015,8 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
       <div class="absolute bottom-2 right-2 z-10 flex gap-2">
         <button
           onclick={() => (snapEnabled = !snapEnabled)}
-          class="btn btn-sm {snapEnabled ? 'btn-primary' : 'btn-ghost'}"
-          title="Snap dragging/resizing to a {SNAP_GRID_SIZE}-unit grid"
+          class="btn btn-sm {snapActive ? 'btn-primary' : 'btn-ghost'}"
+          title="Snap dragging/resizing to a {SNAP_GRID_SIZE}-unit grid — or hold Ctrl/Cmd to snap temporarily"
         >
           Snap to Grid
         </button>
