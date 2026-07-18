@@ -602,28 +602,6 @@ let renderOrder = $derived(
           onmousedown={onCanvasMouseDown}
         />
 
-        {#each visibleConnections as { conn, a, b }}
-          <path
-            d={elbowPath(a.x, a.y, b.x, b.y)}
-            stroke="white"
-            stroke-opacity="0.35"
-            stroke-width="1.5"
-            fill="none"
-            marker-end="url(#arrow)"
-          />
-          <text
-            x={(a.x + b.x) / 2}
-            y={(a.y + b.y) / 2 - 6}
-            fill="white"
-            fill-opacity="0.5"
-            font-size="10"
-            text-anchor="middle"
-            style="pointer-events: none; user-select: none"
-          >
-            {conn.label}
-          </text>
-        {/each}
-
         {#snippet ViewNode(
           label: string,
           index: number,
@@ -694,6 +672,36 @@ let renderOrder = $derived(
               box.textAlign,
             )}
           {/if}
+        {/each}
+
+        <!--
+          Connections are drawn after (on top of) nodes so arrows/labels are
+          never hidden behind an opaque node fill — this can occasionally
+          mean a connection line visually crosses over an unrelated node if
+          its route happens to pass through it, which is an accepted
+          trade-off for now (proper edge routing that dodges nodes entirely
+          is a bigger feature, not needed at this stage).
+        -->
+        {#each visibleConnections as { conn, a, b }}
+          <path
+            d={elbowPath(a.x, a.y, b.x, b.y)}
+            stroke="white"
+            stroke-opacity="0.35"
+            stroke-width="1.5"
+            fill="none"
+            marker-end="url(#arrow)"
+          />
+          <text
+            x={(a.x + b.x) / 2}
+            y={(a.y + b.y) / 2 - 6}
+            fill="white"
+            fill-opacity="0.5"
+            font-size="10"
+            text-anchor="middle"
+            style="pointer-events: none; user-select: none"
+          >
+            {conn.label}
+          </text>
         {/each}
       </svg>
 
