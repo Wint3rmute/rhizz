@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { get_editor_state } from "../../ViewEditorState.svelte";
+  import {
+    clamp_zoom,
+    get_editor_state,
+    reset_view,
+  } from "../../ViewEditorState.svelte";
   import { compile_system } from "../../rhizz_wasm_wrapper";
   import persisted from "../../Persisted.svelte";
 
@@ -23,9 +27,12 @@
   // Stores position of each checked element. If an element is unchecked, it's not present here
   let checked = $state<Record<string, { x: number; y: number }>>({});
 
-  // Drag state
+  // Node-drag state
   let dragging: { label: string; offsetX: number; offsetY: number } | null =
     $state(null);
+
+  // Canvas-pan state (screen-space pointer position of the last move event)
+  let panning: { lastX: number; lastY: number } | null = $state(null);
 
   function svgPoint(
     svg: SVGElement,
@@ -52,17 +59,55 @@
     };
   }
 
+  function onCanvasMouseDown(event: MouseEvent) {
+    panning = { lastX: event.clientX, lastY: event.clientY };
+  }
+
   function onSvgMouseMove(event: MouseEvent) {
-    if (!dragging) return;
-    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-    checked[dragging.label] = {
-      x: svgCoords.x - dragging.offsetX,
-      y: svgCoords.y - dragging.offsetY,
-    };
+    if (dragging) {
+      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+      checked[dragging.label] = {
+        x: svgCoords.x - dragging.offsetX,
+        y: svgCoords.y - dragging.offsetY,
+      };
+      return;
+    }
+    if (panning) {
+      const dxScreen = event.clientX - panning.lastX;
+      const dyScreen = event.clientY - panning.lastY;
+      const zoom = editor_state.view.zoom;
+      editor_state.view.x -= dxScreen / zoom;
+      editor_state.view.y -= dyScreen / zoom;
+      panning = { lastX: event.clientX, lastY: event.clientY };
+    }
   }
 
   function onSvgMouseUp() {
     dragging = null;
+    panning = null;
+  }
+
+  // Zooms in/out on the mouse wheel, keeping the point under the cursor
+  // visually fixed while the rest of the canvas scales around it.
+  function onWheel(event: WheelEvent) {
+    event.preventDefault();
+    const zoom = editor_state.view.zoom;
+    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = clamp_zoom(zoom * factor);
+    if (newZoom === zoom) return;
+
+    const mouseSvg = svgPoint(root_svg, event.clientX, event.clientY);
+    const oldWidth = canvas_width / zoom;
+    const oldHeight = canvas_height / zoom;
+    const fracX = (mouseSvg.x - editor_state.view.x) / oldWidth;
+    const fracY = (mouseSvg.y - editor_state.view.y) / oldHeight;
+
+    const newWidth = canvas_width / newZoom;
+    const newHeight = canvas_height / newZoom;
+
+    editor_state.view.zoom = newZoom;
+    editor_state.view.x = mouseSvg.x - fracX * newWidth;
+    editor_state.view.y = mouseSvg.y - fracY * newHeight;
   }
 
   // Returns the centre point of a node given its top-left position.
@@ -120,7 +165,7 @@
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
     <div
-      class="flex-1 w-full h-full bg-neutral"
+      class="relative flex-1 w-full h-full bg-neutral"
       bind:clientWidth={canvas_width}
       bind:clientHeight={canvas_height}
     >
@@ -131,12 +176,14 @@
         width="100%"
         height="100%"
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="{editor_state.view_box.x} {editor_state.view_box
-                    .y} {canvas_width} {canvas_height}"
+        viewBox="{editor_state.view.x} {editor_state.view
+                    .y} {canvas_width / editor_state.view.zoom} {canvas_height /
+                    editor_state.view.zoom}"
         onmousemove={onSvgMouseMove}
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
-        style="cursor: {dragging ? "grabbing" : "default"}"
+        onwheel={onWheel}
+        style="cursor: {dragging || panning ? 'grabbing' : 'grab'}"
       >
         <defs>
           <pattern id="Pattern" x="0" y="0" width=".1" height=".1">
@@ -170,6 +217,7 @@
           y="-100%"
           width="300%"
           height="300%"
+          onmousedown={onCanvasMouseDown}
         />
 
         {#each visibleConnections as { conn, a, b }}
@@ -228,6 +276,14 @@
           )}
         {/each}
       </svg>
+
+      <button
+        onclick={reset_view}
+        class="btn btn-ghost btn-sm absolute bottom-2 right-2 z-10"
+        title="Reset pan and zoom"
+      >
+        Reset View
+      </button>
     </div>
   </div>
 
