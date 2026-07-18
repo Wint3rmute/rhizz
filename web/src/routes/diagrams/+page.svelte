@@ -831,7 +831,7 @@ function zoomToFill() {
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
     <div
-      class="relative flex-1 w-full h-full bg-neutral"
+      class="relative flex-1 w-full h-full bg-base-300"
       bind:clientWidth={canvas_width}
       bind:clientHeight={canvas_height}
     >
