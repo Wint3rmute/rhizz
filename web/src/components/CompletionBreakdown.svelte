@@ -1,61 +1,61 @@
 <script lang="ts">
-  export interface CategoryScore {
-    complete: number;
-    partial: number;
-    incomplete: number;
-    pct: number;
-  }
+export interface CategoryScore {
+  complete: number;
+  partial: number;
+  incomplete: number;
+  pct: number;
+}
 
-  interface Props {
-    overallPct: number;
-    completeTotal: number;
-    grandTotal: number;
-    components: CategoryScore;
-    ports: CategoryScore;
-    connections: CategoryScore;
-    messages: CategoryScore;
-  }
+interface Props {
+  overallPct: number;
+  completeTotal: number;
+  grandTotal: number;
+  components: CategoryScore;
+  ports: CategoryScore;
+  connections: CategoryScore;
+  messages: CategoryScore;
+}
 
-  let {
-    overallPct,
-    completeTotal,
-    grandTotal,
-    components,
-    ports,
-    connections,
-    messages,
-  }: Props = $props();
+let {
+  overallPct,
+  completeTotal,
+  grandTotal,
+  components,
+  ports,
+  connections,
+  messages,
+}: Props = $props();
 
-  const rows = $derived([
-    {
-      label: "Components",
-      icon: "▦",
-      cat: components,
-      color: "progress-primary",
-      ring: "text-primary",
-    },
-    {
-      label: "Ports",
-      icon: "⚡",
-      cat: ports,
-      color: "progress-secondary",
-      ring: "text-secondary",
-    },
-    {
-      label: "Connections",
-      icon: "⇄",
-      cat: connections,
-      color: "progress-accent",
-      ring: "text-accent",
-    },
-    {
-      label: "Messages",
-      icon: "✉",
-      cat: messages,
-      color: "progress-success",
-      ring: "text-success",
-    },
-  ]);
+const rows = $derived([
+  {
+    label: "Components",
+    icon: "▦",
+    cat: components,
+    color: "progress-primary",
+    ring: "text-primary",
+  },
+  {
+    label: "Ports",
+    icon: "⚡",
+    cat: ports,
+    color: "progress-secondary",
+    ring: "text-secondary",
+  },
+  {
+    label: "Connections",
+    icon: "⇄",
+    cat: connections,
+    color: "progress-accent",
+    ring: "text-accent",
+  },
+  {
+    label: "Messages",
+    icon: "✉",
+    cat: messages,
+    color: "progress-success",
+    ring: "text-success",
+  },
+]);
 </script>
 
 <div class="card bg-base-200 shadow">

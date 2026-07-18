@@ -1,27 +1,27 @@
 <script lang="ts">
-  interface Props {
-    componentCount: number;
-    leafCount: number;
-    compositeCount: number;
-    portCount: number;
-    portsPct: number;
-    connectionCount: number;
-    connectionsPct: number;
-    overallPct: number;
-    messageCount: number;
-  }
+interface Props {
+  componentCount: number;
+  leafCount: number;
+  compositeCount: number;
+  portCount: number;
+  portsPct: number;
+  connectionCount: number;
+  connectionsPct: number;
+  overallPct: number;
+  messageCount: number;
+}
 
-  let {
-    componentCount,
-    leafCount,
-    compositeCount,
-    portCount,
-    portsPct,
-    connectionCount,
-    connectionsPct,
-    overallPct,
-    messageCount,
-  }: Props = $props();
+let {
+  componentCount,
+  leafCount,
+  compositeCount,
+  portCount,
+  portsPct,
+  connectionCount,
+  connectionsPct,
+  overallPct,
+  messageCount,
+}: Props = $props();
 </script>
 
 <div class="stats stats-vertical sm:stats-horizontal shadow bg-base-200 w-full">
@@ -116,6 +116,7 @@
     >
       {overallPct}%
     </div>
-    <div class="stat-desc text-base-content/50">{messageCount} messages defined</div>
+    <div
+      class="stat-desc text-base-content/50">{messageCount} messages defined</div>
   </div>
 </div>

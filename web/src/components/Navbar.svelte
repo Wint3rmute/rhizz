@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
-  import type { ProjectJS } from "rhizz";
+import { resolve } from "$app/paths";
+import type { ProjectJS } from "rhizz";
 
-  let {
-    project = null,
-    errorCount = null,
-    warningCount = null,
-  }: {
-    project?: ProjectJS | null;
-    errorCount?: number | null;
-    warningCount?: number | null;
-  } = $props();
+let {
+  project = null,
+  errorCount = null,
+  warningCount = null,
+}: {
+  project?: ProjectJS | null;
+  errorCount?: number | null;
+  warningCount?: number | null;
+} = $props();
 </script>
 
 <div class="navbar bg-base-100 text-base-content border-b border-base-300">

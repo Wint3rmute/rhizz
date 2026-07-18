@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { DiagnosticJS } from "rhizz";
-  let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
+import { DiagnosticJS } from "rhizz";
+let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
 </script>
 
 <h3 class="font-semibold mb-3 text-base-content">Diagnostics</h3>

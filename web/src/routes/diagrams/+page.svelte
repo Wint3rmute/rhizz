@@ -1,187 +1,187 @@
 <script lang="ts">
-  import {
-    clamp_zoom,
-    get_editor_state,
-    reset_view,
-  } from "../../ViewEditorState.svelte";
-  import { compile_system } from "../../rhizz_wasm_wrapper";
-  import persisted from "../../Persisted.svelte";
+import {
+  clamp_zoom,
+  get_editor_state,
+  reset_view,
+} from "../../ViewEditorState.svelte";
+import { compile_system } from "../../rhizz_wasm_wrapper";
+import persisted from "../../Persisted.svelte";
 
-  const editor_state = get_editor_state();
-  let root_svg: SVGElement;
+const editor_state = get_editor_state();
+let root_svg: SVGElement;
 
-  // Tracks the canvas's rendered pixel size so the SVG viewBox can match it
-  // exactly (1 SVG unit == 1 pixel), keeping the canvas filling all
-  // available space with no letterboxing regardless of viewport size.
-  let canvas_width = $state(800);
-  let canvas_height = $state(600);
+// Tracks the canvas's rendered pixel size so the SVG viewBox can match it
+// exactly (1 SVG unit == 1 pixel), keeping the canvas filling all
+// available space with no letterboxing regardless of viewport size.
+let canvas_width = $state(800);
+let canvas_height = $state(600);
 
-  // Background grid spacing, in world (SVG) units. MAJOR_GRID_SPACING
-  // matches the node size (100x100), so the grid doubles as a snapping
-  // guide; MINOR_GRID_SPACING subdivides each major cell into tenths.
-  //
-  // TODO: spacing is fixed, so at extreme zoom the grid can get too dense
-  // (zoomed out) or too sparse (zoomed in). If that becomes an issue, make
-  // spacing adaptive: derive a multiplier from editor_state.view.zoom,
-  // snapped to a "nice" progression (1, 2, 5, 10, 20, 50, ...) so that
-  // MINOR_GRID_SPACING * zoom stays within a target pixel range (e.g.
-  // 8-40px), and feed the result into the pattern's width/height and the
-  // minorGridLines offsets below instead of the constants.
-  const MAJOR_GRID_SPACING = 100;
-  const MINOR_GRID_SPACING = 10;
-  const minorGridLines = Array.from(
-    { length: MAJOR_GRID_SPACING / MINOR_GRID_SPACING - 1 },
-    (_, i) => (i + 1) * MINOR_GRID_SPACING,
-  );
+// Background grid spacing, in world (SVG) units. MAJOR_GRID_SPACING
+// matches the node size (100x100), so the grid doubles as a snapping
+// guide; MINOR_GRID_SPACING subdivides each major cell into tenths.
+//
+// TODO: spacing is fixed, so at extreme zoom the grid can get too dense
+// (zoomed out) or too sparse (zoomed in). If that becomes an issue, make
+// spacing adaptive: derive a multiplier from editor_state.view.zoom,
+// snapped to a "nice" progression (1, 2, 5, 10, 20, 50, ...) so that
+// MINOR_GRID_SPACING * zoom stays within a target pixel range (e.g.
+// 8-40px), and feed the result into the pattern's width/height and the
+// minorGridLines offsets below instead of the constants.
+const MAJOR_GRID_SPACING = 100;
+const MINOR_GRID_SPACING = 10;
+const minorGridLines = Array.from(
+  { length: MAJOR_GRID_SPACING / MINOR_GRID_SPACING - 1 },
+  (_, i) => (i + 1) * MINOR_GRID_SPACING,
+);
 
-  let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
-  let output = $derived.by(() =>
-    compile_system([{ filename: "all.hcl", content: input.value }])
-  );
-  let model = $derived(output.model());
-  let components = $derived(model ? model.components() : []);
-  let connections = $derived(model ? model.connections() : []);
+let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
+let output = $derived.by(() =>
+  compile_system([{ filename: "all.hcl", content: input.value }])
+);
+let model = $derived(output.model());
+let components = $derived(model ? model.components() : []);
+let connections = $derived(model ? model.connections() : []);
 
-  // Stores position of each checked element. If an element is unchecked,
-  // it's not present here. Persisted so the diagram layout survives page
-  // reloads.
-  let checked = persisted<Record<string, { x: number; y: number }>>(
-    "DIAGRAM_CHECKED_NODES",
-    {},
-  );
+// Stores position of each checked element. If an element is unchecked,
+// it's not present here. Persisted so the diagram layout survives page
+// reloads.
+let checked = persisted<Record<string, { x: number; y: number }>>(
+  "DIAGRAM_CHECKED_NODES",
+  {},
+);
 
-  // Node-drag state
-  let dragging: { label: string; offsetX: number; offsetY: number } | null =
-    $state(null);
+// Node-drag state
+let dragging: { label: string; offsetX: number; offsetY: number } | null =
+  $state(null);
 
-  // Canvas-pan state (screen-space pointer position of the last move event)
-  let panning: { lastX: number; lastY: number } | null = $state(null);
+// Canvas-pan state (screen-space pointer position of the last move event)
+let panning: { lastX: number; lastY: number } | null = $state(null);
 
-  function svgPoint(
-    svg: SVGElement,
-    clientX: number,
-    clientY: number,
-  ): { x: number; y: number } {
-    const pt = (svg as SVGSVGElement).createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    const ctm = (svg as SVGSVGElement).getScreenCTM();
-    if (!ctm) return { x: clientX, y: clientY };
-    const transformed = pt.matrixTransform(ctm.inverse());
-    return { x: transformed.x, y: transformed.y };
-  }
+function svgPoint(
+  svg: SVGElement,
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } {
+  const pt = (svg as SVGSVGElement).createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const ctm = (svg as SVGSVGElement).getScreenCTM();
+  if (!ctm) return { x: clientX, y: clientY };
+  const transformed = pt.matrixTransform(ctm.inverse());
+  return { x: transformed.x, y: transformed.y };
+}
 
-  function onNodeMouseDown(event: MouseEvent, label: string) {
-    event.preventDefault();
+function onNodeMouseDown(event: MouseEvent, label: string) {
+  event.preventDefault();
+  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+  const pos = checked.value[label] ?? { x: 0, y: 0 };
+  dragging = {
+    label,
+    offsetX: svgCoords.x - pos.x,
+    offsetY: svgCoords.y - pos.y,
+  };
+}
+
+function onCanvasMouseDown(event: MouseEvent) {
+  panning = { lastX: event.clientX, lastY: event.clientY };
+}
+
+function onSvgMouseMove(event: MouseEvent) {
+  if (dragging) {
     const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-    const pos = checked.value[label] ?? { x: 0, y: 0 };
-    dragging = {
-      label,
-      offsetX: svgCoords.x - pos.x,
-      offsetY: svgCoords.y - pos.y,
+    checked.value[dragging.label] = {
+      x: svgCoords.x - dragging.offsetX,
+      y: svgCoords.y - dragging.offsetY,
     };
+    return;
   }
-
-  function onCanvasMouseDown(event: MouseEvent) {
+  if (panning) {
+    const dxScreen = event.clientX - panning.lastX;
+    const dyScreen = event.clientY - panning.lastY;
+    const zoom = editor_state.view.zoom;
+    editor_state.view.x -= dxScreen / zoom;
+    editor_state.view.y -= dyScreen / zoom;
     panning = { lastX: event.clientX, lastY: event.clientY };
   }
+}
 
-  function onSvgMouseMove(event: MouseEvent) {
-    if (dragging) {
-      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      checked.value[dragging.label] = {
-        x: svgCoords.x - dragging.offsetX,
-        y: svgCoords.y - dragging.offsetY,
-      };
-      return;
-    }
-    if (panning) {
-      const dxScreen = event.clientX - panning.lastX;
-      const dyScreen = event.clientY - panning.lastY;
-      const zoom = editor_state.view.zoom;
-      editor_state.view.x -= dxScreen / zoom;
-      editor_state.view.y -= dyScreen / zoom;
-      panning = { lastX: event.clientX, lastY: event.clientY };
-    }
-  }
+function onSvgMouseUp() {
+  dragging = null;
+  panning = null;
+}
 
-  function onSvgMouseUp() {
-    dragging = null;
-    panning = null;
-  }
+// Zooms in/out on the mouse wheel, keeping the point under the cursor
+// visually fixed while the rest of the canvas scales around it.
+function onWheel(event: WheelEvent) {
+  event.preventDefault();
+  const zoom = editor_state.view.zoom;
+  const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+  const newZoom = clamp_zoom(zoom * factor);
+  if (newZoom === zoom) return;
 
-  // Zooms in/out on the mouse wheel, keeping the point under the cursor
-  // visually fixed while the rest of the canvas scales around it.
-  function onWheel(event: WheelEvent) {
-    event.preventDefault();
-    const zoom = editor_state.view.zoom;
-    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
-    const newZoom = clamp_zoom(zoom * factor);
-    if (newZoom === zoom) return;
+  const mouseSvg = svgPoint(root_svg, event.clientX, event.clientY);
+  const oldWidth = canvas_width / zoom;
+  const oldHeight = canvas_height / zoom;
+  const fracX = (mouseSvg.x - editor_state.view.x) / oldWidth;
+  const fracY = (mouseSvg.y - editor_state.view.y) / oldHeight;
 
-    const mouseSvg = svgPoint(root_svg, event.clientX, event.clientY);
-    const oldWidth = canvas_width / zoom;
-    const oldHeight = canvas_height / zoom;
-    const fracX = (mouseSvg.x - editor_state.view.x) / oldWidth;
-    const fracY = (mouseSvg.y - editor_state.view.y) / oldHeight;
+  const newWidth = canvas_width / newZoom;
+  const newHeight = canvas_height / newZoom;
 
-    const newWidth = canvas_width / newZoom;
-    const newHeight = canvas_height / newZoom;
+  editor_state.view.zoom = newZoom;
+  editor_state.view.x = mouseSvg.x - fracX * newWidth;
+  editor_state.view.y = mouseSvg.y - fracY * newHeight;
+}
 
-    editor_state.view.zoom = newZoom;
-    editor_state.view.x = mouseSvg.x - fracX * newWidth;
-    editor_state.view.y = mouseSvg.y - fracY * newHeight;
-  }
+// Returns the centre point of a node given its top-left position.
+function nodeCenter(label: string): { x: number; y: number } | null {
+  const pos = checked.value[label];
+  if (!pos) return null;
+  return { x: pos.x + 50, y: pos.y + 50 };
+}
 
-  // Returns the centre point of a node given its top-left position.
-  function nodeCenter(label: string): { x: number; y: number } | null {
-    const pos = checked.value[label];
-    if (!pos) return null;
-    return { x: pos.x + 50, y: pos.y + 50 };
-  }
+// Builds an SVG path string for a Z-shaped elbow route with rounded corners.
+function elbowPath(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  r = 10,
+): string {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const mx = (ax + bx) / 2;
 
-  // Builds an SVG path string for a Z-shaped elbow route with rounded corners.
-  function elbowPath(
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number,
-    r = 10,
-  ): string {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const mx = (ax + bx) / 2;
+  if (Math.abs(dy) < 0.5) return `M ${ax},${ay} L ${bx},${by}`;
 
-    if (Math.abs(dy) < 0.5) return `M ${ax},${ay} L ${bx},${by}`;
+  const rc = Math.min(r, Math.abs(dx) / 2, Math.abs(dy) / 2);
+  const sx = dx >= 0 ? 1 : -1;
+  const sy = dy >= 0 ? 1 : -1;
+  const s1 = dx * dy > 0 ? 1 : 0;
+  const s2 = 1 - s1;
 
-    const rc = Math.min(r, Math.abs(dx) / 2, Math.abs(dy) / 2);
-    const sx = dx >= 0 ? 1 : -1;
-    const sy = dy >= 0 ? 1 : -1;
-    const s1 = dx * dy > 0 ? 1 : 0;
-    const s2 = 1 - s1;
+  return [
+    `M ${ax},${ay}`,
+    `L ${mx - sx * rc},${ay}`,
+    `A ${rc},${rc} 0 0,${s1} ${mx},${ay + sy * rc}`,
+    `L ${mx},${by - sy * rc}`,
+    `A ${rc},${rc} 0 0,${s2} ${mx + sx * rc},${by}`,
+    `L ${bx},${by}`,
+  ].join(" ");
+}
 
-    return [
-      `M ${ax},${ay}`,
-      `L ${mx - sx * rc},${ay}`,
-      `A ${rc},${rc} 0 0,${s1} ${mx},${ay + sy * rc}`,
-      `L ${mx},${by - sy * rc}`,
-      `A ${rc},${rc} 0 0,${s2} ${mx + sx * rc},${by}`,
-      `L ${bx},${by}`,
-    ].join(" ");
-  }
-
-  // Only connections where both endpoints are currently on the canvas.
-  let visibleConnections = $derived(
-    connections.flatMap((conn) => {
-      const from = model?.component_by_id(conn.from);
-      const to = model?.component_by_id(conn.to);
-      if (!from || !to) return [];
-      const a = nodeCenter(from.label);
-      const b = nodeCenter(to.label);
-      if (!a || !b) return [];
-      return [{ conn, a, b }];
-    }),
-  );
+// Only connections where both endpoints are currently on the canvas.
+let visibleConnections = $derived(
+  connections.flatMap((conn) => {
+    const from = model?.component_by_id(conn.from);
+    const to = model?.component_by_id(conn.to);
+    if (!from || !to) return [];
+    const a = nodeCenter(from.label);
+    const b = nodeCenter(to.label);
+    if (!a || !b) return [];
+    return [{ conn, a, b }];
+  }),
+);
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">

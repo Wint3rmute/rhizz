@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { ModelJS } from "rhizz";
-  let { model }: { model: ModelJS } = $props();
-  let components = $derived(model.components());
+import { ModelJS } from "rhizz";
+let { model }: { model: ModelJS } = $props();
+let components = $derived(model.components());
 </script>
 
 <h3 class="font-semibold mb-3 text-base-content">Model Outline</h3>
