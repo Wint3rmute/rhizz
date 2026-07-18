@@ -6,8 +6,18 @@
   import persisted from "../../Persisted.svelte";
   import MonacoEditor from "../../components/MonacoEditor.svelte";
   import ModelStatsRow from "../../components/ModelStatsRow.svelte";
+  import { EXAMPLE_SYSTEM_HCL } from "../../example_system";
 
   let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
+
+  function loadExample() {
+    const confirmed = confirm(
+      "Replace your current project with the example project? This will overwrite what's in the editor.",
+    );
+    if (confirmed) {
+      input.value = EXAMPLE_SYSTEM_HCL;
+    }
+  }
 
   let output = $derived.by(() =>
     compile_system([{ filename: "all.hcl", content: input.value }])
@@ -115,3 +125,11 @@
     </aside>
   </div>
 </div>
+
+<button
+  class="btn btn-circle btn-secondary fixed bottom-4 left-4 z-50"
+  onclick={loadExample}
+  title="Load example project"
+>
+  ?
+</button>
