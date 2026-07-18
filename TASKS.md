@@ -13,47 +13,7 @@ How to work on this file:
 
 ---
 
-## Task 43 — Add schema validation for persisted diagram localStorage data
 
-Small/polish item from the architecture review.
-
-`nodeBox()` backfills *missing* fields on `checked`/`savedLayout` entries,
-but there's no validation that persisted `localStorage` data is
-well-formed at all. A corrupted or manually-edited entry (or a future
-schema change) could propagate `NaN`/`undefined` into the geometry math
-with no guardrail.
-
-- Add lightweight runtime validation (e.g. a schema-check function, or a
-  small validation library if one is already justified elsewhere in the
-  project) when reading persisted diagram state, discarding/ignoring
-  malformed entries instead of letting them propagate.
-- Validate with `deno task check` and `deno task build`.
-
-**Implementation plan:** Add a `validateStoredBox(value: unknown):
-StoredBox | null` function that checks `x`/`y` are finite numbers, that
-`width`/`height` (if present) are finite numbers, and that `textAlign` (if
-present) is one of the three `TextAlign` literals, returning `null` for
-anything else; wrap it in a `sanitizeStoredRecord(record: unknown):
-Record<string, StoredBox>` that filters a raw parsed object through it,
-dropping invalid entries (with a `console.warn` naming the dropped keys,
-so corruption isn't totally silent during development).
-
-Apply this at load time only, right where `stripLegacyIndexKeys` already
-runs on `checked.value`/`savedLayout.value` (chain it as
-`sanitizeStoredRecord(stripLegacyIndexKeys(...))`), so every other
-read/write site (`nodeBox()`, `setNodeBox()`, ...) can keep trusting that
-anything already in `checked.value` is well-formed, with no validation
-sprinkled into the hot drag/resize path. Extract
-`validateStoredBox`/`sanitizeStoredRecord` into a plain, Svelte-free
-function (e.g. alongside `geometry.ts` or a new small `persistence.ts`)
-so they can get direct Vitest coverage the same way `geometry.ts` does,
-rather than only being exercised indirectly through the component.
-
-No behavior change for well-formed data — this is purely a guardrail for
-corrupted/hand-edited `localStorage` entries or future schema drift.
-Validate with `deno task check`, `deno task build`, and `deno task test`.
-
----
 
 ## Task 44 — Make diagram tuning constants configurable
 

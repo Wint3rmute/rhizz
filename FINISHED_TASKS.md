@@ -4,6 +4,47 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 43 — Add schema validation for persisted diagram localStorage data
+
+- Added `zod` (v4) as a `web/package.json` dependency and a new
+  `web/src/routes/diagrams/persistence.ts` module: `StoredBoxSchema`
+  (`z.object({ x: z.number(), y: z.number(), width: z.number().optional(),
+  height: z.number().optional(), textAlign: z.enum(["center",
+  "top-center", "top-left"]).optional() })`), `StoredBox` (now `z.infer<
+  typeof StoredBoxSchema>` instead of a hand-written type — one source of
+  truth for the shape), and `sanitizeStoredRecord()`.
+- `sanitizeStoredRecord(record: Record<string, unknown>)` runs
+  `StoredBoxSchema.safeParse()` **per entry** (not one whole-object parse),
+  keeping every valid entry and dropping only the malformed ones, with a
+  single `console.warn` naming every dropped key in one line.
+- `web/src/routes/diagrams/+page.svelte` removed its hand-written
+  `StoredBox` type (now imported from `persistence.ts`) and now chains
+  `checked.value = sanitizeStoredRecord(stripLegacyIndexKeys(checked.value))`
+  (same for `savedLayout`) right at load time — the one spot both existing
+  migration logic and the new validation run, so every other read/write
+  site (`nodeBox()`, `setNodeBox()`, the hot drag/resize path) keeps
+  trusting that anything already in `checked.value` is well-formed.
+- Added `web/src/routes/diagrams/persistence.test.ts` (13 tests, matching
+  `geometry.test.ts`'s pattern): valid entries pass through unchanged,
+  entries with only the required `x`/`y` still parse (backwards-compat
+  with pre-width/height/textAlign data), non-numeric/missing/invalid
+  fields and fully-malformed entries (`null`, a string, an array) are
+  rejected, malformed entries are dropped independently of valid
+  siblings, and the single-`console.warn`-naming-every-dropped-key
+  behavior is asserted directly (via a `vi.spyOn(console, "warn")`).
+- No behavior change for well-formed data — this is purely a guardrail
+  for corrupted/hand-edited `localStorage` entries or future schema
+  drift. Chose Zod (a TS-only schema library) over an earlier brainstormed
+  Rust/serde/wasm approach: for a small, frequently-tweaked, frontend-only
+  concern like this, a TS schema library wins on iteration speed, type
+  inference (`z.infer`), and testability, even though the Rust option
+  would better seed a future "backend defines the schema" pattern.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), and `deno task test` (47/47 — 34 existing geometry tests +
+  13 new persistence tests — pass).
+
+---
+
 ## Task 42 — Deduplicate drag/resize coordinate-and-clamp logic in the diagrams canvas
 
 - Extracted the per-node write loops out of `onSvgMouseMove`'s

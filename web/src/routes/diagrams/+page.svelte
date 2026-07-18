@@ -9,6 +9,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../rhizz_wasm_wrapper";
 import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
+import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
   type Box,
   boxBoundaryPoint,
@@ -156,18 +157,6 @@ const RESIZE_HANDLE_RADIUS = 5;
 // entries persisted before per-node text alignment existed.
 const DEFAULT_TEXT_ALIGN: TextAlign = "center";
 
-// Position + size + style of a node, as stored in checked/savedLayout
-// below. width/height/textAlign are optional so entries persisted before
-// those features existed still parse; see nodeBox() for the backfilled
-// read path.
-type StoredBox = {
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  textAlign?: TextAlign;
-};
-
 // Which components are currently placed on the canvas, keyed by
 // componentKey() (a structurally-stable path of labels — see above), not
 // by arena index: component labels are only unique within a parent scope
@@ -208,8 +197,8 @@ function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
     ? record
     : withoutLegacyKeys;
 }
-checked.value = stripLegacyIndexKeys(checked.value);
-savedLayout.value = stripLegacyIndexKeys(savedLayout.value);
+checked.value = sanitizeStoredRecord(stripLegacyIndexKeys(checked.value));
+savedLayout.value = sanitizeStoredRecord(stripLegacyIndexKeys(savedLayout.value));
 
 // Writes `box` to both `checked` (the current on-canvas state) and
 // savedLayout (the remembered layout), merging over any existing fields.
