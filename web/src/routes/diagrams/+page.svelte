@@ -99,27 +99,49 @@ const DEFAULT_TEXT_ALIGN: TextAlign = "center";
 // Inset from a node's edges for the two top-aligned variants, in world units.
 const TEXT_ALIGN_PADDING = 8;
 
-// Stores position + size + style of each checked element, keyed by the
+// Position + size + style of a node, as stored in checked/savedLayout
+// below. width/height/textAlign are optional so entries persisted before
+// those features existed still parse; see nodeBox() for the backfilled
+// read path.
+type StoredBox = {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  textAlign?: TextAlign;
+};
+
+// Which components are currently placed on the canvas, keyed by the
 // component's arena index (its position in model.components(), same index
 // space as ConnectionJS.from/to and ComponentJS.parent_component_index).
 // Component labels are only unique within a parent scope (SPEC.md §2.3), so
-// labels cannot be used as a stable key once components are nested. If an
-// element is unchecked, it's not present here. Persisted so the diagram
-// layout survives page reloads. width/height/textAlign are optional in
-// storage so entries persisted before those features existed still parse;
-// see nodeBox() for the backfilled read path.
-let checked = persisted<
-  Record<
-    number,
-    {
-      x: number;
-      y: number;
-      width?: number;
-      height?: number;
-      textAlign?: TextAlign;
-    }
-  >
->("DIAGRAM_CHECKED_NODES", {});
+// labels cannot be used as a stable key once components are nested. If a
+// component is unchecked, it's not present here — but its last-known box
+// is kept in savedLayout below, so re-checking it later restores it to
+// where it was instead of resetting to the default position. Persisted so
+// the diagram layout survives page reloads.
+let checked = persisted<Record<number, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
+
+// Remembers every component's last-known box, even after it's unchecked
+// (removed from `checked`) — entries here are never deleted, only updated.
+// Read from when re-checking a component (see the sidebar checkbox
+// handler) so a component's layout survives being temporarily removed
+// from the canvas. Persisted separately from `checked` since the two have
+// different lifetimes (checked entries disappear on uncheck; these don't).
+let savedLayout = persisted<Record<number, StoredBox>>(
+  "DIAGRAM_SAVED_LAYOUT",
+  {},
+);
+
+// Writes `box` to both `checked` (the current on-canvas state) and
+// savedLayout (the remembered layout), merging over any existing fields.
+// Centralizing this in one place means every write site automatically
+// keeps the remembered layout up to date, instead of relying on each call
+// site to remember to mirror the write itself.
+function setNodeBox(index: number, box: Partial<StoredBox>) {
+  checked.value[index] = { ...checked.value[index], ...box };
+  savedLayout.value[index] = { ...savedLayout.value[index], ...box };
+}
 
 // Returns the placed node's box (position + size + text alignment), or null
 // if the component isn't currently checked. Backfills width/height/
@@ -147,9 +169,8 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  const box = checked.value[primarySelected];
-  if (!box) return;
-  checked.value[primarySelected] = { ...box, textAlign: align };
+  if (!checked.value[primarySelected]) return;
+  setNodeBox(primarySelected, { textAlign: align });
 }
 
 // Padding kept between a child node's edges and its active parent's edges,
@@ -217,7 +238,7 @@ function reclampChildren(parentIndex: number) {
     const box = nodeBox(childIndex);
     if (!box) return; // not currently placed on canvas
     const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
-    checked.value[childIndex] = { ...checked.value[childIndex], ...clamped };
+    setNodeBox(childIndex, clamped);
   });
 }
 
@@ -476,7 +497,7 @@ function onSvgMouseMove(event: MouseEvent) {
         if (ownParentBox) {
           next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
         }
-        checked.value[index] = { ...checked.value[index], ...next };
+        setNodeBox(index, next);
         reclampChildren(index);
       }
     }
@@ -508,7 +529,7 @@ function onSvgMouseMove(event: MouseEvent) {
           width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
           height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
         };
-        checked.value[index] = { ...checked.value[index], ...next };
+        setNodeBox(index, next);
       }
     }
     return;
@@ -1114,22 +1135,31 @@ function zoomToFill() {
               checked={!!checked.value[index]}
               onchange={(value) => {
                 if (value.currentTarget.checked) {
+                  // Restore the remembered layout if this component has
+                  // been placed before (even if it was later unchecked),
+                  // instead of always resetting to the default position.
+                  const remembered = savedLayout.value[index];
                   let box: Box = {
-                    x: 100,
-                    y: 100,
-                    width: DEFAULT_NODE_WIDTH,
-                    height: DEFAULT_NODE_HEIGHT,
+                    x: remembered?.x ?? 100,
+                    y: remembered?.y ?? 100,
+                    width: remembered?.width ?? DEFAULT_NODE_WIDTH,
+                    height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
                   };
                   const parentBox = activeParentBox(index);
                   if (parentBox) {
                     box = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
                   }
-                  checked.value[index] = { ...box, textAlign: DEFAULT_TEXT_ALIGN };
+                  setNodeBox(index, {
+                    ...box,
+                    textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
+                  });
                   // In case this component is itself the parent of children
                   // that were already placed on canvas before it was.
                   reclampChildren(index);
                 } else {
                   delete checked.value[index];
+                  // savedLayout.value[index] is intentionally left alone,
+                  // so re-checking this component later restores it here.
                   if (selected.has(index)) {
                     const next = new Set(selected);
                     next.delete(index);
