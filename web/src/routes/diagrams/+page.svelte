@@ -232,46 +232,68 @@ let selectedBox = $derived(
   primarySelected !== null ? nodeBox(primarySelected) : null,
 );
 
-// Node-drag state. Dragging any selected node moves the whole selection
-// together: startPositions snapshots every selected node's position when
-// the drag begins; each move event recomputes every node's position from
-// its own snapshot plus the same delta the anchor (grabbed) node moved by,
-// so the group moves rigidly with no incremental drift.
-let dragging: {
-  anchorIndex: number;
-  offsetX: number;
-  offsetY: number;
-  startPositions: Record<number, { x: number; y: number }>;
-} | null = $state(null);
+// All pointer-driven canvas interactions (drag, resize, pan, marquee
+// select) are mutually exclusive, so they're modeled as a single
+// discriminated union rather than four independently-nullable state
+// variables. This mirrors the interaction state machine used elsewhere in
+// the app (see the removed EditorState union that used to live in
+// ViewEditorState.svelte) and avoids having to reason about impossible
+// combinations (e.g. dragging AND panning at once).
+type Interaction =
+  | { type: "idle" }
+  | {
+      // Dragging any selected node moves the whole selection together:
+      // startPositions snapshots every selected node's position when the
+      // drag begins; each move event recomputes every node's position
+      // from its own snapshot plus the same delta the anchor (grabbed)
+      // node moved by, so the group moves rigidly with no incremental
+      // drift.
+      type: "dragging";
+      anchorIndex: number;
+      offsetX: number;
+      offsetY: number;
+      startPositions: Record<number, { x: number; y: number }>;
+    }
+  | {
+      // Resizing any selected node's handle scales the whole selection
+      // together, proportionally, around the fixed top-left corner of the
+      // selection's combined bounding box (groupBox, captured at resize
+      // start alongside every selected node's starting box).
+      type: "resizing";
+      anchorIndex: number;
+      groupBox: Box;
+      startBoxes: Record<number, Box>;
+    }
+  | {
+      // Canvas pan. Started by the middle mouse button, or the left
+      // button while Space is held, anywhere on the canvas (including
+      // over a node). lastX/lastY track screen-space pointer position of
+      // the last move event.
+      type: "panning";
+      lastX: number;
+      lastY: number;
+    }
+  | {
+      // Marquee select: start point + current point, in world (SVG)
+      // coordinates. Started by dragging the left mouse button over empty
+      // canvas.
+      type: "marquee";
+      startX: number;
+      startY: number;
+      x: number;
+      y: number;
+    };
 
-// Node-resize state. Resizing any selected node's handle scales the whole
-// selection together, proportionally, around the fixed top-left corner of
-// the selection's combined bounding box (groupBox, captured at resize
-// start alongside every selected node's starting box).
-let resizing: {
-  anchorIndex: number;
-  groupBox: Box;
-  startBoxes: Record<number, Box>;
-} | null = $state(null);
+let interaction: Interaction = $state({ type: "idle" });
 
-// Canvas-pan state (screen-space pointer position of the last move event).
-// Started by the middle mouse button, anywhere on the canvas (including
-// over a node).
-let panning: { lastX: number; lastY: number } | null = $state(null);
-
-// Marquee-select state: start point + current point, in world (SVG)
-// coordinates. Started by dragging the left mouse button over empty
-// canvas.
-type MarqueeState = { startX: number; startY: number; x: number; y: number };
-let marquee: MarqueeState | null = $state(null);
 let marqueeBox: Box | null = $derived.by(() => {
-  if (!marquee) return null;
-  const m: MarqueeState = marquee;
+  const current = interaction;
+  if (current.type !== "marquee") return null;
   return {
-    x: Math.min(m.startX, m.x),
-    y: Math.min(m.startY, m.y),
-    width: Math.abs(m.x - m.startX),
-    height: Math.abs(m.y - m.startY),
+    x: Math.min(current.startX, current.x),
+    y: Math.min(current.startY, current.y),
+    width: Math.abs(current.x - current.startX),
+    height: Math.abs(current.y - current.startY),
   };
 });
 
@@ -296,7 +318,7 @@ function svgPoint(
 function onNodeMouseDown(event: MouseEvent, index: number) {
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
-    panning = { lastX: event.clientX, lastY: event.clientY };
+    interaction = { type: "panning", lastX: event.clientX, lastY: event.clientY };
     return;
   }
   if (event.button !== 0) return;
@@ -317,7 +339,8 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
     if (box) startPositions[i] = { x: box.x, y: box.y };
   }
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
-  dragging = {
+  interaction = {
+    type: "dragging",
     anchorIndex: index,
     offsetX: svgCoords.x - anchorStart.x,
     offsetY: svgCoords.y - anchorStart.y,
@@ -328,7 +351,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 function onCanvasMouseDown(event: MouseEvent) {
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
-    panning = { lastX: event.clientX, lastY: event.clientY };
+    interaction = { type: "panning", lastX: event.clientX, lastY: event.clientY };
     return;
   }
   if (event.button !== 0) return;
@@ -337,7 +360,8 @@ function onCanvasMouseDown(event: MouseEvent) {
   // selection change happens on mouseup, once the drag's extent is known
   // (see onSvgMouseUp).
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  marquee = {
+  interaction = {
+    type: "marquee",
     startX: svgCoords.x,
     startY: svgCoords.y,
     x: svgCoords.x,
@@ -364,110 +388,117 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
     if (box) startBoxes[i] = box;
   }
   const groupBox = unionBox(Object.values(startBoxes));
-  resizing = { anchorIndex: index, groupBox, startBoxes };
+  interaction = { type: "resizing", anchorIndex: index, groupBox, startBoxes };
 }
 
 function onSvgMouseMove(event: MouseEvent) {
-  if (dragging) {
-    const anchorStart = dragging.startPositions[dragging.anchorIndex];
-    const anchorBox = nodeBox(dragging.anchorIndex);
-    if (anchorStart && anchorBox) {
-      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      let anchorNext: Box = {
-        x: snap(svgCoords.x - dragging.offsetX),
-        y: snap(svgCoords.y - dragging.offsetY),
-        width: anchorBox.width,
-        height: anchorBox.height,
-      };
-      const anchorParentBox = activeParentBox(dragging.anchorIndex);
-      if (anchorParentBox) {
-        anchorNext = clampWithin(
-          anchorNext,
-          anchorParentBox,
-          CHILD_CONTAINMENT_MARGIN,
-        );
-      }
-      // The whole selection moves by the same delta the anchor (grabbed)
-      // node moved by, recomputed from each node's own start snapshot each
-      // event (not accumulated incrementally) to avoid drift.
-      const deltaX = anchorNext.x - anchorStart.x;
-      const deltaY = anchorNext.y - anchorStart.y;
-
-      for (const [indexStr, start] of Object.entries(dragging.startPositions)) {
-        const index = Number(indexStr);
-        const box = nodeBox(index);
-        if (!box) continue;
-        let next: Box = {
-          x: start.x + deltaX,
-          y: start.y + deltaY,
-          width: box.width,
-          height: box.height,
+  // Captured to a local const so TypeScript can narrow `current.type` per
+  // switch case below — narrowing directly on the live `interaction`
+  // $state binding doesn't work reliably across these branches.
+  const current = interaction;
+  switch (current.type) {
+    case "dragging": {
+      const anchorStart = current.startPositions[current.anchorIndex];
+      const anchorBox = nodeBox(current.anchorIndex);
+      if (anchorStart && anchorBox) {
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        let anchorNext: Box = {
+          x: snap(svgCoords.x - current.offsetX),
+          y: snap(svgCoords.y - current.offsetY),
+          width: anchorBox.width,
+          height: anchorBox.height,
         };
-        // Each node still respects its own active-parent containment
-        // individually — if only some of the selection is constrained,
-        // the group may not move perfectly rigidly, but no node is ever
-        // allowed to escape its parent's box.
-        const ownParentBox = activeParentBox(index);
-        if (ownParentBox) {
-          next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
+        const anchorParentBox = activeParentBox(current.anchorIndex);
+        if (anchorParentBox) {
+          anchorNext = clampWithin(
+            anchorNext,
+            anchorParentBox,
+            CHILD_CONTAINMENT_MARGIN,
+          );
         }
-        setNodeBox(index, next);
-        reclampChildren(index);
-      }
-    }
-    return;
-  }
-  if (resizing) {
-    const anchorStart = resizing.startBoxes[resizing.anchorIndex];
-    if (anchorStart) {
-      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      const rawWidth = Math.max(MIN_NODE_SIZE, svgCoords.x - anchorStart.x);
-      const rawHeight = Math.max(MIN_NODE_SIZE, svgCoords.y - anchorStart.y);
-      // Group-resize is a uniform scale (derived from how much the grabbed
-      // node's own box changed) applied to every selected node's position
-      // (relative to the selection's fixed top-left, groupBox) and size.
-      // Unlike single-node resize, this does not enforce parent
-      // containment — scaling several nodes while respecting potentially
-      // different constraints per node is a lot more complex, and not
-      // needed at this project stage.
-      const scaleX = rawWidth / anchorStart.width;
-      const scaleY = rawHeight / anchorStart.height;
+        // The whole selection moves by the same delta the anchor (grabbed)
+        // node moved by, recomputed from each node's own start snapshot each
+        // event (not accumulated incrementally) to avoid drift.
+        const deltaX = anchorNext.x - anchorStart.x;
+        const deltaY = anchorNext.y - anchorStart.y;
 
-      for (const [indexStr, startBox] of Object.entries(resizing.startBoxes)) {
-        const index = Number(indexStr);
-        const relX = startBox.x - resizing.groupBox.x;
-        const relY = startBox.y - resizing.groupBox.y;
-        const next = {
-          x: snap(resizing.groupBox.x + relX * scaleX),
-          y: snap(resizing.groupBox.y + relY * scaleY),
-          width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
-          height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
-        };
-        setNodeBox(index, next);
+        for (const [indexStr, start] of Object.entries(current.startPositions)) {
+          const index = Number(indexStr);
+          const box = nodeBox(index);
+          if (!box) continue;
+          let next: Box = {
+            x: start.x + deltaX,
+            y: start.y + deltaY,
+            width: box.width,
+            height: box.height,
+          };
+          // Each node still respects its own active-parent containment
+          // individually — if only some of the selection is constrained,
+          // the group may not move perfectly rigidly, but no node is ever
+          // allowed to escape its parent's box.
+          const ownParentBox = activeParentBox(index);
+          if (ownParentBox) {
+            next = clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN);
+          }
+          setNodeBox(index, next);
+          reclampChildren(index);
+        }
       }
+      return;
     }
-    return;
-  }
-  if (panning) {
-    const dxScreen = event.clientX - panning.lastX;
-    const dyScreen = event.clientY - panning.lastY;
-    const zoom = editor_state.view.zoom;
-    editor_state.view.x -= dxScreen / zoom;
-    editor_state.view.y -= dyScreen / zoom;
-    panning = { lastX: event.clientX, lastY: event.clientY };
-    return;
-  }
-  if (marquee) {
-    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-    marquee = { ...marquee, x: svgCoords.x, y: svgCoords.y };
+    case "resizing": {
+      const anchorStart = current.startBoxes[current.anchorIndex];
+      if (anchorStart) {
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        const rawWidth = Math.max(MIN_NODE_SIZE, svgCoords.x - anchorStart.x);
+        const rawHeight = Math.max(MIN_NODE_SIZE, svgCoords.y - anchorStart.y);
+        // Group-resize is a uniform scale (derived from how much the grabbed
+        // node's own box changed) applied to every selected node's position
+        // (relative to the selection's fixed top-left, groupBox) and size.
+        // Unlike single-node resize, this does not enforce parent
+        // containment — scaling several nodes while respecting potentially
+        // different constraints per node is a lot more complex, and not
+        // needed at this project stage.
+        const scaleX = rawWidth / anchorStart.width;
+        const scaleY = rawHeight / anchorStart.height;
+
+        for (const [indexStr, startBox] of Object.entries(current.startBoxes)) {
+          const index = Number(indexStr);
+          const relX = startBox.x - current.groupBox.x;
+          const relY = startBox.y - current.groupBox.y;
+          const next = {
+            x: snap(current.groupBox.x + relX * scaleX),
+            y: snap(current.groupBox.y + relY * scaleY),
+            width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
+            height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
+          };
+          setNodeBox(index, next);
+        }
+      }
+      return;
+    }
+    case "panning": {
+      const dxScreen = event.clientX - current.lastX;
+      const dyScreen = event.clientY - current.lastY;
+      const zoom = editor_state.view.zoom;
+      editor_state.view.x -= dxScreen / zoom;
+      editor_state.view.y -= dyScreen / zoom;
+      interaction = { type: "panning", lastX: event.clientX, lastY: event.clientY };
+      return;
+    }
+    case "marquee": {
+      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+      interaction = { ...current, x: svgCoords.x, y: svgCoords.y };
+      return;
+    }
+    case "idle":
+      return;
   }
 }
 
 function onSvgMouseUp() {
-  dragging = null;
-  resizing = null;
-  panning = null;
-  if (marquee) {
+  const current = interaction;
+  if (current.type === "marquee") {
     // A marquee with negligible size is just a click: clear the selection
     // (matches the old "click empty canvas to deselect" behavior).
     // Otherwise, commit whatever the live preview (marqueeCandidates) was
@@ -476,8 +507,8 @@ function onSvgMouseUp() {
     selected = box && (box.width > 2 || box.height > 2)
       ? new Set(marqueeCandidates)
       : new Set();
-    marquee = null;
   }
+  interaction = { type: "idle" };
 }
 
 // Zooms in/out on the mouse wheel, keeping the point under the cursor
@@ -684,9 +715,11 @@ function zoomToFill() {
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
         onwheel={onWheel}
-        style="cursor: {dragging || resizing || panning
+        style="cursor: {interaction.type === 'dragging' ||
+        interaction.type === 'resizing' ||
+        interaction.type === 'panning'
           ? 'grabbing'
-          : marquee
+          : interaction.type === 'marquee'
             ? 'crosshair'
             : 'grab'}"
       >
@@ -778,7 +811,7 @@ function zoomToFill() {
           textAlign: TextAlign,
         )}
           {@const textPos = textPosition(textAlign, width, height)}
-          {@const highlighted = marquee
+          {@const highlighted = interaction.type === "marquee"
             ? marqueeCandidates.has(index)
             : selected.has(index)}
           <g

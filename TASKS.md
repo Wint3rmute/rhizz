@@ -13,30 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 38 — Replace ad hoc interaction state with a discriminated-union state machine
-
-`dragging`, `resizing`, `panning`, and `marquee` are four independently
-nullable state variables in `web/src/routes/diagrams/+page.svelte`,
-checked in sequence across `onNodeMouseDown`/`onCanvasMouseDown`/
-`onResizeHandleMouseDown`/`onSvgMouseMove`/`onSvgMouseUp`. Nothing enforces
-that at most one is active at a time other than convention — the codebase
-used to have a proper discriminated-union `EditorState` for this
-(`idle | moving_canvas | zooming` in `ViewEditorState.svelte`) before it
-was removed in favor of these separate flags.
-
-- Replace the four separate variables with one
-  `interaction: {type: "idle"} | {type: "dragging", ...} | {type: "resizing", ...} | {type: "panning", ...} | {type: "marquee", ...}`
-  state.
-- Update all five handler functions to read/write this single state via
-  exhaustive `switch`/discriminant checks instead of independent `if`
-  chains.
-- End-to-end result: no behavior change, but adding a future interaction
-  mode only requires extending one union type instead of adding another
-  parallel nullable variable.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 39 — Make diagram layout persistence keys stable across HCL source edits
 
 `checked`/`savedLayout` are keyed by a component's arena index (its

@@ -4,6 +4,41 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 38 — Replace ad hoc interaction state with a discriminated-union state machine
+
+- In `web/src/routes/diagrams/+page.svelte`, replaced the four
+  independently-nullable state variables `dragging`, `resizing`,
+  `panning`, and `marquee` (plus the separate `MarqueeState` type) with a
+  single discriminated union `Interaction` (`{ type: "idle" } | { type:
+  "dragging", ... } | { type: "resizing", ... } | { type: "panning", ... }
+  | { type: "marquee", ... }`) held in one `interaction: Interaction =
+  $state({ type: "idle" })`. This restores the spirit of the old
+  discriminated-union `EditorState` (`idle | moving_canvas | zooming`)
+  that used to live in `ViewEditorState.svelte` before it was removed
+  earlier in the session in favor of separate flags.
+- Updated `onNodeMouseDown`, `onCanvasMouseDown`,
+  `onResizeHandleMouseDown`, `onSvgMouseMove`, and `onSvgMouseUp` to read
+  and write `interaction` via exhaustive `switch`/discriminant checks
+  instead of independent `if` chains. `onSvgMouseMove` captures
+  `const current = interaction;` at the top and switches on
+  `current.type`, since TypeScript can't reliably narrow directly on a
+  live `$state` binding across branches — each `case` body reads from
+  `current`, and only reassigns the live `interaction` when it needs to
+  persist updated fields (`panning`'s `lastX`/`lastY`, `marquee`'s
+  `x`/`y`) for the next move event.
+- `marqueeBox` (the derived marquee rectangle) is now computed from
+  `interaction` via `$derived.by` with the same capture-then-narrow
+  pattern, rather than from the old standalone `marquee` variable.
+- Updated template usages: the SVG cursor style and the `ViewNode`
+  snippet's `highlighted` computation now switch on `interaction.type`
+  instead of checking the old `dragging`/`resizing`/`panning`/`marquee`
+  variables directly.
+- Pure refactor — no behavior change. Validated with `deno task check`
+  (0 errors/warnings), `deno task build` (succeeds), and `deno task test`
+  (all 34 existing geometry tests still pass).
+
+---
+
 ## Task 37 — Add unit tests for the extracted geometry module
 
 - Expanded `web/src/routes/diagrams/geometry.test.ts` from the initial
