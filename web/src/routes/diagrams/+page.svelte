@@ -90,6 +90,9 @@ function nodeBox(
 // Currently selected node (component arena index), or null if nothing is
 // selected. Not persisted — selection is a transient UI state.
 let selected: number | null = $state(null);
+let selectedComponent = $derived(
+  selected !== null ? components[selected] ?? null : null,
+);
 
 // Node-drag state
 let dragging: { index: number; offsetX: number; offsetY: number } | null =
@@ -255,6 +258,42 @@ let visibleConnections = $derived(
 </script>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
+  <!--
+    Left sidebar: inspector for the selected node. Always rendered (even
+    with nothing selected) so it keeps a fixed w-64 slot in this flex row.
+    Toggling it in/out of the DOM would resize the canvas column next to it
+    (since it's flex-1), which changes canvas_width/canvas_height and jumps
+    the whole viewBox on every selection change.
+  -->
+  <aside
+    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300"
+  >
+    <h3
+      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+    >
+      Inspector
+    </h3>
+
+    {#if selectedComponent}
+      <div class="font-semibold truncate" title={selectedComponent.label}>
+        {selectedComponent.label}
+      </div>
+      {#if selectedComponent.description}
+        <p class="text-sm text-base-content/60 mt-1">
+          {selectedComponent.description}
+        </p>
+      {/if}
+
+      <div class="divider my-3"></div>
+
+      <!-- Style controls (e.g. text alignment) are added in Task 34. -->
+    {:else}
+      <p class="text-base-content/50 text-sm">
+        Select a component on the canvas to edit its properties.
+      </p>
+    {/if}
+  </aside>
+
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
     <div

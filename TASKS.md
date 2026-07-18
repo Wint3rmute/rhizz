@@ -13,17 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 33 — Add left-side inspector panel for the selected node
-
-- Add a new left sidebar (mirroring the existing right sidebar's structure
-  and styling) shown only when `selected !== null`.
-- For now, show the selected component's label/description as a header —
-  an empty shell ready for style controls added in Task 34.
-- End-to-end result: selecting a node opens the panel; deselecting closes it.
-- Validate with `deno task check` and `deno task build`.
-
----
-
 ## Task 34 — Add text alignment control to the node inspector
 
 - Extend the per-node record (from Task 31) with

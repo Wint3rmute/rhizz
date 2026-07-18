@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 33 — Add left-side inspector panel for the selected node
+
+- Added a `selectedComponent` derived value (`components[selected] ?? null`)
+  on `web/src/routes/diagrams/+page.svelte`.
+- Added a new left sidebar, shown only when `selectedComponent` is set,
+  mirroring the existing right sidebar's structure/styling (`w-64 shrink-0
+  bg-base-100 text-base-content p-4 overflow-y-auto`, `border-r` instead of
+  `border-l` since it sits on the opposite side).
+- For now, shows the selected component's label (header) and description
+  (if any) — an empty shell with a placeholder comment marking where style
+  controls (text alignment, etc.) will be added in Task 34.
+- End-to-end result: selecting a node opens the panel; deselecting (or
+  unchecking the selected component) closes it.
+- Validated with `deno task check` (`svelte-check`: 0 errors/warnings) and
+  `deno task build` (production build succeeds).
+
+---
+
 ## Task 32 — Add corner-drag resize interaction for the selected node
 
 - Added a small resize-handle square at the bottom-right corner of a node,
