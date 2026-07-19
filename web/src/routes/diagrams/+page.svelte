@@ -1006,16 +1006,16 @@ function runAutoLayout() {
 
 // Small "what's happening right now" hint shown in the canvas's
 // bottom-right corner — purely informational, no effect on behavior.
-// Deliberately skips "dragging" (already visually obvious from the node
-// moving under the cursor — a text label for it would just be noise)
-// and "idle"/"marquee-not-yet-started" (nothing to announce).
+// Deliberately skips "panning" (purely a viewport/navigation action, not
+// an edit — a text label for it would just be noise) and
+// "idle"/"marquee-not-yet-started" (nothing to announce).
 let currentActivity = $derived.by((): string | null => {
   if (autoLayoutRunning) return "Calculating…";
   switch (interaction.type) {
+    case "dragging":
+      return "Dragging";
     case "resizing":
       return "Resizing";
-    case "panning":
-      return "Panning";
     case "marquee":
       return "Selecting";
     default:
