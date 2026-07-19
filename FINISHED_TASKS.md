@@ -4,6 +4,151 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 50 — Automatic layout via force simulation
+
+Implemented an "Auto Layout" button on the diagrams page's bottom
+toolbar: force-arranges the current selection, or every currently-placed
+node (any level) if nothing's selected. One remaining concrete piece of
+the original scope (pinning pre-existing nodes so only newly-added ones
+get laid out) was split out as Task 53; the vaguer "exploring the system
+model interactively" use-case was deliberately left untracked, since
+there's still no concrete trigger to hang it off of.
+
+- `web/src/routes/diagrams/forceLayout.ts`: pure, Svelte/`rhizz-core`-free
+  wrapper around `d3-force` (+ `@types/d3-force`). Exposes
+  `createForceLayout` (a `{ tick(), alpha() }` pair for frame-by-frame
+  driving), `runForceLayout` (synchronous convergence, used by tests),
+  and `groupBySiblings` (partitions nodes by immediate parent). Nodes are
+  approximated as circles (`Math.hypot(width, height) / 2`) for the
+  collision force; a node's own diagram index round-trips via a
+  `componentIndex` field, not `index` (which d3-force reserves for its
+  own bookkeeping and silently overwrites). Supports pinning a node via
+  `fixed: true` (sets d3-force's `fx`/`fy` — not yet wired to any UI, see
+  Task 53). A custom `forceOrthogonalAlign` force biases connected pairs
+  toward strictly horizontal/vertical alignment rather than arbitrary
+  diagonals. A `warmupTicks` option eases the animation in over the first
+  N ticks (verified to never change the eventual converged result). 31
+  Vitest tests across `forceLayout.test.ts`.
+- The target set is partitioned into sibling groups (`groupBySiblings`,
+  keyed by parent) and each group gets its own independent simulation,
+  centered on its parent's current box (or its own bounding box for
+  top-level/orphaned groups) — avoiding a flat simulation that would let
+  unrelated hierarchy levels interfere with each other. All groups run
+  together via one shared `requestAnimationFrame` loop; every result is
+  still written through `writeClampedToActiveParent` (Tasks 45/46's
+  containment path) regardless of grouping, as a safety net. Only the
+  final settling frame is snapped to grid, so the animation stays smooth
+  even with snap-to-grid on.
+- `autoLayoutRunning` disables the button (`wait` cursor on hover) and
+  locks out drag/resize/pan/marquee-select for the duration (matching
+  `wait` cursors across the canvas, nodes, and resize handles), so
+  clicking around mid-animation can't silently fight the simulation's
+  writes.
+- `geometry.ts`'s `clampWithin` gained an optional 4th `topMargin`
+  parameter (defaults to `margin`, so existing 3-arg callers are
+  unaffected); `+page.svelte` passes a `CHILD_CONTAINMENT_TOP_MARGIN`
+  (28) at every child-vs-parent clamp site, so a child can never be
+  dragged, resized, or auto-laid-out over the area where its parent's
+  title text renders.
+- Integrates with Task 51's undo/redo (one undo point per auto-layout
+  run, recorded before the animation starts) and Task 52's persistence
+  (writes go through the same `checked`/`savedLayout` storage as every
+  other diagram edit).
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (68/68 pass at the time), and `deno fmt`
+  (clean).
+
+---
+
+## Task 52 — Persist the diagram's camera (pan/zoom) state
+
+From user testing feedback: diagram content (`checked`/`savedLayout`)
+survived page reloads via `persisted()`, but the camera (pan/zoom) did
+not, since `ViewEditorState.svelte`'s `create_editor_state()` was pure
+in-memory `$state` (a deliberate factory, not a persisted singleton, per
+Task 40 — so a future multi-view feature could create independent
+instances without them fighting over shared state).
+
+- `create_editor_state()` now takes an optional `storageKey` parameter.
+  When omitted, behavior is unchanged (in-memory-only `$state`, as
+  before). When given, it delegates to the *same* `persisted()` helper
+  `checked`/`savedLayout`/`input`/`snapGridSize` already use — rather than
+  re-implementing `localStorage` load/save a second time — reshaped via a
+  `get view()` accessor so every existing call site in `+page.svelte`
+  keeps mutating `editor_state.view.x/y/zoom` directly, exactly as before;
+  only the single construction line changed, to
+  `create_editor_state("DIAGRAM_VIEW")`.
+- Keeping the storage key caller-supplied (not hardcoded inside
+  `ViewEditorState.svelte`) preserves Task 40's original intent: two
+  independent view instances (e.g. a future split view) would use two
+  different keys and never collide, unlike a single global `persisted()`
+  call baked into the module.
+- Validated with `deno task check` (0 errors/warnings — including
+  re-hitting and re-fixing the same `$state(...)` "must be assigned to a
+  variable first" compiler error from Task 40), `deno task build`
+  (succeeds), `deno task test` (78/78 pass, unaffected), and `deno fmt`
+  (clean).
+
+---
+
+## Task 51 — Diagram edit history (undo/redo)
+
+Grew out of Task 50's "undo/snapshot safety net" brainstorm idea, but
+expanded per user request into a full general-purpose diagram undo/redo
+system (Ctrl/Cmd+Z / Ctrl/Cmd+Y), not just a one-shot "undo the last
+auto-layout" affordance.
+
+- Added `web/src/routes/diagrams/history.ts`: a generic, bounded undo/redo
+  stack (`createHistoryStack<T>()`, `pushHistory`, `undoHistory`,
+  `redoHistory`) with zero dependency on any diagram-specific type — `T`
+  is opaque to the module, so it's reusable for any snapshot-able state,
+  not just the diagram layout. `pushHistory` clears the redo stack (a new
+  edit invalidates the old "future"); both stacks are capped at a caller-
+  supplied `limit`, discarding the oldest entry once exceeded. 10 Vitest
+  tests in `history.test.ts`, using plain strings/numbers — no diagram
+  context needed.
+- `web/src/routes/diagrams/+page.svelte`: added a `DiagramSnapshot` type
+  (`{ checked, savedLayout }` — deliberately excluding `selected` and
+  view/grid/snap preferences, which aren't "diagram content") and a
+  page-level `diagramHistory = createHistoryStack<DiagramSnapshot>()`,
+  capped at `UNDO_HISTORY_LIMIT = 100`. `recordUndoPoint()` snapshots the
+  current state (a shallow copy of both records — safe because
+  `setNodeBox()` always replaces a `StoredBox` entry wholesale rather than
+  mutating one in place, so a shallow copy is a fully independent
+  snapshot) and pushes it; `undoDiagramEdit()`/`redoDiagramEdit()` pop the
+  matching stack and call `applyDiagramSnapshot()`, which assigns fresh
+  copies (`{ ...snapshot.checked }`) back onto `checked.value`/
+  `savedLayout.value` and clears `selected` (a restored snapshot may not
+  match the current selection).
+- `recordUndoPoint()` is called once per *gesture*, not once per
+  `setNodeBox()` write — at the top of `onNodeMouseDown`'s drag-start
+  path, `onResizeHandleMouseDown`'s resize-start path, the sidebar
+  checkbox's check/uncheck handler, `setSelectedTextAlign` (skipped for a
+  no-op re-click of the already-active alignment), and once before
+  `runAutoLayout`'s animation begins (not per-frame). A drag/resize/auto-
+  layout's many intermediate writes are covered by the single snapshot
+  taken at the gesture's start, so undo reverts the whole gesture in one
+  step.
+- Added `<svelte:window onkeydown={onDiagramKeyDown} />` to the page
+  template. Deliberately page-scoped (not added to the app-wide
+  `KeyboardState.svelte` module) since "undo" here specifically means
+  "undo a diagram edit" — a different page (e.g. the HCL text editor)
+  would want its own, unrelated undo behavior. Recognizes Ctrl/Cmd+Z
+  (undo), Ctrl/Cmd+Y (redo, as requested), and also Ctrl/Cmd+Shift+Z
+  (the Mac-idiomatic alternative redo binding) as a bonus. Both
+  `undoDiagramEdit`/`redoDiagramEdit` are blocked while
+  `autoLayoutRunning`, same as every other diagram-mutating interaction
+  — restoring a snapshot mid-animation would just be immediately
+  overwritten by the next frame.
+- History is in-memory only (not persisted to `localStorage`), matching
+  how undo history conventionally resets on reload in most editors; not
+  wrapped in the existing `persisted()` helper.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (78/78 pass — 10 new `history.test.ts`
+  cases), and `deno fmt` (clean).
+
+---
+
 ## Task 46 — Enforce containment during group-resize
 
 - `applyGroupScale` (`web/src/routes/diagrams/+page.svelte`) now clamps

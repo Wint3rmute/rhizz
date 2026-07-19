@@ -13,13 +13,50 @@ How to work on this file:
 
 ---
 
+## Task 53 - pin existing nodes when auto-laying-out newly-added ones
 
-## (For later brainstorming) Task 48 - virtual filesystem hierarchy for frontend
+Split out from Task 50 (now finished — see `FINISHED_TASKS.md`) as the one
+remaining concrete piece of its original scope. `forceLayout.ts` already
+supports pinning a node in place via `fixed: true` on a `LayoutNode` (sets
+d3-force's `fx`/`fy`, ignored by all forces) — added specifically for this
+case, but nothing calls it that way yet.
+
+- When a component is checked onto the canvas (the sidebar checkbox's
+  "check" branch), instead of just placing it at a default/remembered
+  position, run a force-layout pass where every *other* currently-placed
+  sibling is `fixed: true` and only the newly-checked node is free to
+  move — so it settles into whatever gap is available near its
+  connections, without visibly disturbing anything else already placed.
+- Needs a concrete trigger decision: should this replace the current
+  "restore remembered position, or default to (100, 100)" behavior
+  unconditionally, or only when there's no remembered position to
+  restore (i.e. first-time placement only, not re-checking something
+  that was previously positioned)? Lean towards the latter — respecting
+  a remembered position take priority over auto-placing.
+- Validate with `deno task check`, `deno task build`, `deno task test`.
+
+---
+
+
+## (For later brainstorming) Task <N> - Displaying editing state in bottom-right corner
+
+Just for understandability, I'd like to display the current editing state in the bottom-right corner.
+As editing is a state machine, stuff like "dragging", "selecting", "editing" should be shown as small
+hints in the UI, so the user can gain a better understanding of what they are doing.
+
+Spec:
+
+* The editing state should be displayed in the bottom-right corner as a small hint.
+* The hint should be a small text label that changes depending on the current editing state.
+* The hint shall fade in quickly as the user enters a new editing state.
+* the hint shall fade out slowly after a brief period of inactivity.
+
+## (For later brainstorming) Task <N> - virtual filesystem hierarchy for frontend
 
 High-level goal: make it possible to store multiple multi-file projects & diagrams,
 with the web application pretending to have a virtual filesystem hierarchy.
 
-## (For later brainstorming) Task 49 - visual regression testing
+## (For later brainstorming) Task <N> - visual regression testing
 
 As we now have a virtual filesystem hierarchy for the frontend, we can create
 end-to-end tests which load the project, render a diagram and verify that it
@@ -30,25 +67,6 @@ infrastructure for visual regression testing in the frontend, then ask the
 developer to create diagrams, which can be saved as reference images for future
 comparisons.
 
-
-## (For later brainstorming) Task 50 - automatic layout via force simulation
-
-The goal of this task is to implement automatic layout via force simulation, so
-that nodes are automatically positioned to avoid overlap and minimize edge
-crossings.
-
-The functionality to trigger force simulation would be triggered by the user,
-either via a button or a keyboard shortcut. The functionality shall allow to run
-the force simulation and automatically position the nodes, either for all nodes
-or for a selected subset of nodes.
-
-Specific use-cases:
-
-- Button on the bottom toolbar - "auto-layout"
-- When new nodes are added to the diagram (although the force simulation should only run for new nodes)
-- When exploring the system model in an interactive fashion
-
----
 
 ## Task <NUMBER> — Task template
 

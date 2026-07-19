@@ -11,6 +11,18 @@ import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
+  createHistoryStack,
+  pushHistory,
+  redoHistory,
+  undoHistory,
+} from "./history";
+import {
+  createForceLayout,
+  groupBySiblings,
+  type LayoutEdge,
+  type LayoutNode,
+} from "./forceLayout";
+import {
   type Box,
   boxBoundaryPoint,
   boxCenter,
@@ -26,7 +38,7 @@ import {
   unionBox,
 } from "./geometry";
 
-const editor_state = create_editor_state();
+const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
 
 // Tracks the canvas's rendered pixel size so the SVG viewBox can match it
@@ -252,13 +264,25 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  if (!checked.value[componentKey(primarySelected)]) return;
+  const box = checked.value[componentKey(primarySelected)];
+  if (!box) return;
+  if (box.textAlign === align) return; // no-op: skip a redundant undo point
+  recordUndoPoint();
   setNodeBox(primarySelected, { textAlign: align });
 }
 
 // Padding kept between a child node's edges and its active parent's edges,
 // in world units.
 const CHILD_CONTAINMENT_MARGIN = 10;
+
+// Extra padding reserved at a parent's *top* edge specifically, on top of
+// CHILD_CONTAINMENT_MARGIN, so a child can never be dragged/laid out over
+// the area where the parent's own title text is rendered (see
+// textPosition() in geometry.ts — the label sits near the top of the box
+// for the "top-center"/"top-left" alignments, and even for "center" a
+// child overlapping the exact middle would still obscure it). Sized to
+// comfortably clear a label line plus its own padding.
+const CHILD_CONTAINMENT_TOP_MARGIN = 28;
 
 // Returns the box of `index`'s parent component, but only if that parent is
 // itself currently placed on the canvas ("active") — a node with a parent
@@ -290,7 +314,12 @@ function reclampChildren(parentIndex: number) {
     if (component.parent_component_index !== parentIndex) return;
     const box = nodeBox(childIndex);
     if (!box) return; // not currently placed on canvas
-    const clamped = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
+    const clamped = clampWithin(
+      box,
+      parentBox,
+      CHILD_CONTAINMENT_MARGIN,
+      CHILD_CONTAINMENT_TOP_MARGIN,
+    );
     setNodeBox(childIndex, clamped);
     reclampChildren(childIndex);
   });
@@ -304,6 +333,90 @@ function reclampChildren(parentIndex: number) {
 // reactive, so call sites can mutate it in place instead of always
 // reconstructing and reassigning a fresh Set.
 const selected = new SvelteSet<number>();
+
+// Snapshot of the diagram's persisted content — the unit of undo/redo
+// history. Deliberately excludes `selected` (transient UI state, not
+// diagram content, and not guaranteed to still make sense after
+// restoring an older/newer snapshot) and view/grid/snap preferences.
+type DiagramSnapshot = {
+  checked: Record<string, StoredBox>;
+  savedLayout: Record<string, StoredBox>;
+};
+
+// How many undo steps (and, independently, redo steps) are kept.
+const UNDO_HISTORY_LIMIT = 100;
+const diagramHistory = createHistoryStack<DiagramSnapshot>();
+
+function snapshotDiagram(): DiagramSnapshot {
+  return {
+    checked: { ...checked.value },
+    savedLayout: { ...savedLayout.value },
+  };
+}
+
+function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
+  // Copies (rather than reuses) the snapshot's records, so the object
+  // sitting in the undo/redo stacks is never the same live object that
+  // setNodeBox() et al. go on to mutate afterwards.
+  checked.value = { ...snapshot.checked };
+  savedLayout.value = { ...snapshot.savedLayout };
+  // The restored snapshot may not have (or may no longer make sense for)
+  // the same selection, so it's simplest and safest to just clear it.
+  selected.clear();
+}
+
+// Records the diagram's current state as an undo point, right *before* a
+// discrete edit is about to change it — a drag/resize gesture starting, a
+// component being checked/unchecked, a text-alignment change, or an
+// auto-layout run. Must be called once per *gesture*, not once per
+// underlying setNodeBox() write: a whole drag, from mousedown to mouseup,
+// is one undo step, not one per mousemove event (see call sites).
+function recordUndoPoint() {
+  pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
+}
+
+// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
+// diagram-mutating interactions — restoring a snapshot while the
+// animation loop is still writing every frame would just get immediately
+// overwritten.
+function undoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const previous = undoHistory(
+    diagramHistory,
+    snapshotDiagram(),
+    UNDO_HISTORY_LIMIT,
+  );
+  if (previous) applyDiagramSnapshot(previous);
+}
+
+// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
+function redoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const next = redoHistory(
+    diagramHistory,
+    snapshotDiagram(),
+    UNDO_HISTORY_LIMIT,
+  );
+  if (next) applyDiagramSnapshot(next);
+}
+
+// Handles the undo/redo keyboard shortcuts. Scoped to this page (via the
+// <svelte:window> binding below), rather than living in the app-wide
+// KeyboardState.svelte module, since "undo" here specifically means
+// "undo a diagram edit" — a different page (e.g. the HCL text editor)
+// would want its own, unrelated undo behavior.
+function onDiagramKeyDown(event: KeyboardEvent) {
+  const primary = event.ctrlKey || event.metaKey;
+  if (!primary) return;
+  const key = event.key.toLowerCase();
+  if (key === "z" && !event.shiftKey) {
+    event.preventDefault();
+    undoDiagramEdit();
+  } else if (key === "y" || (key === "z" && event.shiftKey)) {
+    event.preventDefault();
+    redoDiagramEdit();
+  }
+}
 
 // The single selected node, or null if zero or more than one are selected.
 // Used wherever an operation only makes sense for exactly one node (the
@@ -402,6 +515,11 @@ function svgPoint(
 // node, so it must be handled here too (not just in onCanvasMouseDown,
 // which only sees clicks on empty canvas).
 function onNodeMouseDown(event: MouseEvent, index: number) {
+  // Auto-layout is actively writing node positions every frame; letting a
+  // drag/select start at the same time would silently fight it (clicks
+  // would visibly do nothing useful) — see the cursor style on <svg>
+  // below for the matching "busy" affordance.
+  if (autoLayoutRunning) return;
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     interaction = {
@@ -413,6 +531,10 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   }
   if (event.button !== 0) return;
   event.preventDefault();
+
+  // One undo point per drag *gesture* (not per mousemove) — recorded here,
+  // at mousedown, before anything moves.
+  recordUndoPoint();
 
   // Clicking a node that isn't already part of the selection replaces the
   // selection with just that node. Clicking a node that's already
@@ -440,6 +562,8 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
+  // See onNodeMouseDown's matching guard above.
+  if (autoLayoutRunning) return;
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     interaction = {
@@ -469,6 +593,8 @@ function onCanvasMouseDown(event: MouseEvent) {
 // (which would start a drag too). Handles only render on selected nodes
 // (see the ViewNode snippet), so `index` is always already in `selected`.
 function onResizeHandleMouseDown(event: MouseEvent, index: number) {
+  // See onNodeMouseDown's matching guard above.
+  if (autoLayoutRunning) return;
   if (event.button !== 0) return;
   // Let a space-held click bubble up to the node's own mousedown handler,
   // which starts panning instead of a resize — keeps "how to start a pan"
@@ -476,6 +602,9 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
   if (isSpaceHeld()) return;
   event.preventDefault();
   event.stopPropagation();
+
+  // One undo point per resize gesture, recorded before anything resizes.
+  recordUndoPoint();
 
   const startBoxes: Record<number, Box> = {};
   for (const i of selected) {
@@ -499,7 +628,12 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
 function writeClampedToActiveParent(index: number, next: Box) {
   const ownParentBox = activeParentBox(index);
   const clamped = ownParentBox
-    ? clampWithin(next, ownParentBox, CHILD_CONTAINMENT_MARGIN)
+    ? clampWithin(
+      next,
+      ownParentBox,
+      CHILD_CONTAINMENT_MARGIN,
+      CHILD_CONTAINMENT_TOP_MARGIN,
+    )
     : next;
   setNodeBox(index, clamped);
   reclampChildren(index);
@@ -578,6 +712,7 @@ function onSvgMouseMove(event: MouseEvent) {
             anchorNext,
             anchorParentBox,
             CHILD_CONTAINMENT_MARGIN,
+            CHILD_CONTAINMENT_TOP_MARGIN,
           );
         }
         // The whole selection moves by the same delta the anchor (grabbed)
@@ -747,7 +882,130 @@ function zoomToFill() {
   editor_state.view.y = bounds.y + bounds.height / 2 -
     canvas_height / newZoom / 2;
 }
+
+// Auto-layout animation budget: stop once the simulation has settled
+// (alpha below this threshold), or after this many animation frames,
+// whichever comes first — so a pathological/never-converging case can't
+// spin forever.
+const AUTO_LAYOUT_ALPHA_MIN = 0.005;
+const AUTO_LAYOUT_MAX_FRAMES = 300;
+
+// Fraction of the frame budget spent ramping forces up from ~0 to full
+// strength, instead of applying at full strength from frame 1 — avoids
+// the sharp jump an instant full-strength start would otherwise cause.
+const AUTO_LAYOUT_WARMUP_FRACTION = 0.1;
+const AUTO_LAYOUT_WARMUP_TICKS = Math.round(
+  AUTO_LAYOUT_MAX_FRAMES * AUTO_LAYOUT_WARMUP_FRACTION,
+);
+
+// Whether an auto-layout animation is currently running — disables the
+// "Auto Layout" button so a second run can't start and race the first
+// one over the same node positions.
+let autoLayoutRunning = $state(false);
+
+// Runs a force-directed auto-layout pass over the target set of nodes:
+// the current selection if non-empty, otherwise every currently-placed
+// node at any level. The target set is partitioned into sibling groups
+// (groupBySiblings, keyed by immediate parent) and each group gets its
+// own independent simulation, confined around its own parent's current
+// box (or its own combined bounding box, for a top-level group or an
+// orphaned nested group whose parent isn't itself placed) — rather than
+// one flat simulation mixing unrelated hierarchy levels together. See
+// TASKS.md Task 50 for why: a node shouldn't be repelled by/attracted to
+// a node it isn't actually a sibling of. Every result is still written
+// through the same clamp-to-active-parent-and-cascade path a live drag
+// uses, regardless of grouping, as a containment safety net. All groups'
+// simulations are driven together, frame-by-frame, via
+// requestAnimationFrame, rather than jumping straight to the converged
+// layout.
+function runAutoLayout() {
+  if (autoLayoutRunning) return;
+
+  const targetIndices = selected.size > 0 ? [...selected] : renderOrder;
+
+  const layoutNodes: LayoutNode[] = targetIndices.flatMap((index) => {
+    const box = nodeBox(index);
+    return box ? [{ index, box }] : [];
+  });
+  if (layoutNodes.length < 2) return; // nothing meaningful to arrange
+
+  // One undo point for the whole auto-layout run, recorded before the
+  // animation starts — not per-frame.
+  recordUndoPoint();
+
+  const groups = groupBySiblings(layoutNodes, parentOf);
+  const groupLayouts = [...groups.entries()].map(
+    ([parentIndex, groupNodes]) => {
+      const groupIndexSet = new Set(groupNodes.map((n) => n.index));
+      const groupEdges: LayoutEdge[] = connections
+        .filter(
+          (conn) => groupIndexSet.has(conn.from) && groupIndexSet.has(conn.to),
+        )
+        .map((conn) => ({ from: conn.from, to: conn.to }));
+
+      // Centers each group's simulation on its own parent's current box
+      // (if that parent is itself placed on canvas), so a nested group
+      // stays roughly where its parent already is; falls back to the
+      // group's own combined bounding box otherwise (top-level, or a
+      // nested group whose parent isn't shown).
+      const parentBox = parentIndex !== undefined ? nodeBox(parentIndex) : null;
+      const bounds = parentBox ?? unionBox(groupNodes.map((n) => n.box));
+      const centerX = bounds.x + bounds.width / 2;
+      const centerY = bounds.y + bounds.height / 2;
+
+      return createForceLayout(groupNodes, groupEdges, {
+        centerX,
+        centerY,
+        warmupTicks: AUTO_LAYOUT_WARMUP_TICKS,
+      });
+    },
+  );
+
+  autoLayoutRunning = true;
+  let frame = 0;
+
+  function step() {
+    frame += 1;
+
+    let allSettled = true;
+    const allResults: { index: number; x: number; y: number }[] = [];
+    for (const layout of groupLayouts) {
+      allResults.push(...layout.tick());
+      if (layout.alpha() >= AUTO_LAYOUT_ALPHA_MIN) allSettled = false;
+    }
+
+    // Only snap the final settling frame, not every intermediate one:
+    // snapping every frame while snapping is active would force the
+    // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
+    // settling smoothly. Since every frame overwrites the previous one's
+    // written position anyway, only the last write actually matters for
+    // the visible result — so it's the only one that needs to respect
+    // the grid.
+    const converged = allSettled || frame >= AUTO_LAYOUT_MAX_FRAMES;
+
+    for (const result of allResults) {
+      const box = nodeBox(result.index);
+      if (!box) continue;
+      writeClampedToActiveParent(result.index, {
+        x: converged ? snap(result.x) : result.x,
+        y: converged ? snap(result.y) : result.y,
+        width: box.width,
+        height: box.height,
+      });
+    }
+
+    if (converged) {
+      autoLayoutRunning = false;
+    } else {
+      requestAnimationFrame(step);
+    }
+  }
+
+  requestAnimationFrame(step);
+}
 </script>
+
+<svelte:window onkeydown={onDiagramKeyDown} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
@@ -846,13 +1104,15 @@ function zoomToFill() {
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
         onwheel={onWheel}
-        style="cursor: {interaction.type === 'dragging' ||
-        interaction.type === 'resizing' ||
-        interaction.type === 'panning'
-          ? 'grabbing'
-          : interaction.type === 'marquee'
-            ? 'crosshair'
-            : 'grab'}"
+        style="cursor: {autoLayoutRunning
+          ? 'wait'
+          : interaction.type === 'dragging' ||
+              interaction.type === 'resizing' ||
+              interaction.type === 'panning'
+            ? 'grabbing'
+            : interaction.type === 'marquee'
+              ? 'crosshair'
+              : 'grab'}"
       >
         <defs>
           <!--
@@ -948,7 +1208,7 @@ function zoomToFill() {
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
-            style="cursor: grab"
+            style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
           >
             <rect
               {width}
@@ -986,7 +1246,7 @@ function zoomToFill() {
                   RESIZE_HANDLE_RADIUS},{height} L {width -
                   RESIZE_HANDLE_SIZE},{height} Z"
                 fill="var(--color-primary)"
-                style="cursor: nwse-resize"
+                style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
                 onmousedown={(e) => onResizeHandleMouseDown(e, index)}
               />
             {/if}
@@ -1077,6 +1337,15 @@ function zoomToFill() {
           </select>
         </div>
         <button
+          onclick={runAutoLayout}
+          disabled={autoLayoutRunning}
+          class="btn btn-ghost btn-sm {autoLayoutRunning ? 'animate-pulse' : ''}"
+          style="cursor: {autoLayoutRunning ? 'wait' : 'pointer'}"
+          title="Auto-arrange the selection (or all top-level nodes, if nothing is selected) using force-directed layout"
+        >
+          Auto Layout
+        </button>
+        <button
           onclick={() => (gridVisible = !gridVisible)}
           class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"
           title="Toggle background grid visibility - nice for screenshots"
@@ -1125,6 +1394,7 @@ function zoomToFill() {
               class="checkbox checkbox-xs"
               checked={!!checked.value[componentKey(index)]}
               onchange={(value) => {
+                recordUndoPoint();
                 if (value.currentTarget.checked) {
                   // Restore the remembered layout if this component has
                   // been placed before (even if it was later unchecked),
@@ -1138,7 +1408,12 @@ function zoomToFill() {
                   };
                   const parentBox = activeParentBox(index);
                   if (parentBox) {
-                    box = clampWithin(box, parentBox, CHILD_CONTAINMENT_MARGIN);
+                    box = clampWithin(
+                      box,
+                      parentBox,
+                      CHILD_CONTAINMENT_MARGIN,
+                      CHILD_CONTAINMENT_TOP_MARGIN,
+                    );
                   }
                   setNodeBox(index, {
                     ...box,

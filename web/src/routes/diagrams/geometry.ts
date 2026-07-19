@@ -22,14 +22,22 @@ export const MIN_NODE_SIZE = 40;
 export const TEXT_ALIGN_PADDING = 8;
 
 // Clamps `child`'s position (and, if it doesn't fit, its size) so it stays
-// fully inside `parent`, inset by `margin` on all sides. Used wherever the
-// child's top-left corner is free to move (drag, initial placement,
-// cascading after the parent moves).
-export function clampWithin(child: Box, parent: Box, margin: number): Box {
+// fully inside `parent`, inset by `margin` on all sides (or by `topMargin`
+// specifically on top, if given — e.g. to reserve room for the parent's
+// own title text, which is rendered near the top of its box; see
+// textPosition() below). Used wherever the child's top-left corner is
+// free to move (drag, initial placement, cascading after the parent
+// moves).
+export function clampWithin(
+  child: Box,
+  parent: Box,
+  margin: number,
+  topMargin: number = margin,
+): Box {
   const innerX = parent.x + margin;
-  const innerY = parent.y + margin;
+  const innerY = parent.y + topMargin;
   const innerWidth = Math.max(0, parent.width - margin * 2);
-  const innerHeight = Math.max(0, parent.height - margin * 2);
+  const innerHeight = Math.max(0, parent.height - margin - topMargin);
 
   const width = Math.min(child.width, innerWidth);
   const height = Math.min(child.height, innerHeight);
