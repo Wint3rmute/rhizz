@@ -26,8 +26,8 @@ tasks in `TASKS.md`. You do NOT write Rust code.
    first 60 lines of `FINISHED_TASKS.md`, and any relevant `SPEC/*.md` files to
    understand current state.
 2. **Analyze the feature** — Think through the proposed change end-to-end: HCL
-   schema impact, resolved-model impact, validation rules, rendering impact
-   (DOT, Mermaid), CLI/GUI impact, and backwards compatibility.
+   schema impact, resolved-model impact, validation rules, view rendering impact ,
+  CLI/Frontend impact, and backwards compatibility.
 3. **Update SPEC.md / SPEC/*.md** — Add or amend specification sections as
    needed. Keep them precise and implementation-ready (tables, code blocks,
    exact field names). If the change introduces new HCL syntax, add or update

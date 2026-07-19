@@ -9,15 +9,13 @@ path = "src/main.rs"
 
 [dependencies]
 rhizz-core          = { path = "../rhizz-core" }
-rhizz-dot           = { path = "../rhizz-dot" }
-rhizz-mermaid       = { path = "../rhizz-mermaid" }
 anyhow              = "1"
 walkdir             = "2"
 serde               = { version = "1", features = ["derive"] }
 clap                = { version = "4", features = ["derive"] }
 owo-colors          = "4"
 serde_json          = "1"
-notify              = "6"
+notify              = "8"
 ctrlc               = "3"
 tracing             = "0.1"
 tracing-subscriber  = { version = "0.3", features = ["env-filter"] }

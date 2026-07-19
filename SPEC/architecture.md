@@ -9,9 +9,7 @@ rhizz/
   Cargo.toml          # workspace root
   crates/
     rhizz-core/       # model compiler — pure library, no I/O
-    rhizz-dot/        # Graphviz DOT renderer — pure text transform
     rhizz-cli/        # CLI frontend
-    rhizz-gui/        # egui desktop GUI frontend
     rhizz-wasm/       # WebAssembly bindings (browser / Node.js frontend)
     …                 # additional frontends (LSP, …) may be added here
   examples/
