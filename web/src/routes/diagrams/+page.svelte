@@ -1003,6 +1003,54 @@ function runAutoLayout() {
 
   requestAnimationFrame(step);
 }
+
+// Small "what's happening right now" hint shown in the canvas's
+// bottom-right corner — purely informational, no effect on behavior.
+// Deliberately skips "dragging" (already visually obvious from the node
+// moving under the cursor — a text label for it would just be noise)
+// and "idle"/"marquee-not-yet-started" (nothing to announce).
+let currentActivity = $derived.by((): string | null => {
+  if (autoLayoutRunning) return "Calculating…";
+  switch (interaction.type) {
+    case "resizing":
+      return "Resizing";
+    case "panning":
+      return "Panning";
+    case "marquee":
+      return "Selecting";
+    default:
+      return null;
+  }
+});
+
+// Fade timing for the hint below, in ms — kept as separate tweakable
+// constants (rather than baked into Tailwind duration classes) so they
+// can be adjusted without touching markup.
+const ACTIVITY_HINT_FADE_IN_MS = 100;
+const ACTIVITY_HINT_SUSTAIN_MS = 500;
+const ACTIVITY_HINT_FADE_OUT_MS = 400;
+
+let activityHintLabel: string | null = $state(null);
+let activityHintVisible = $state(false);
+
+// Shows the hint immediately when a new activity starts. When it ends,
+// keeps showing the *last* label for ACTIVITY_HINT_SUSTAIN_MS before
+// starting the (slower) fade-out — cancelled automatically (via this
+// effect's cleanup, which Svelte runs before every re-execution) if a
+// new activity begins before that sustain period elapses, so quick
+// back-to-back activities never visibly flicker out and back in.
+$effect(() => {
+  const label = currentActivity;
+  if (label !== null) {
+    activityHintLabel = label;
+    activityHintVisible = true;
+    return;
+  }
+  const timeout = setTimeout(() => {
+    activityHintVisible = false;
+  }, ACTIVITY_HINT_SUSTAIN_MS);
+  return () => clearTimeout(timeout);
+});
 </script>
 
 <svelte:window onkeydown={onDiagramKeyDown} />
@@ -1366,6 +1414,15 @@ function runAutoLayout() {
         >
           Reset View
         </button>
+      </div>
+
+      <div
+        class="absolute bottom-2 right-2 z-10 pointer-events-none bg-base-100 border border-base-300 rounded-box shadow px-3 py-1 text-sm text-base-content/80"
+        style="opacity: {activityHintVisible ? 1 : 0}; transition-property: opacity; transition-duration: {activityHintVisible
+          ? ACTIVITY_HINT_FADE_IN_MS
+          : ACTIVITY_HINT_FADE_OUT_MS}ms;"
+      >
+        {activityHintLabel ?? ""}
       </div>
     </div>
   </div>

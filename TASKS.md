@@ -38,19 +38,6 @@ case, but nothing calls it that way yet.
 ---
 
 
-## (For later brainstorming) Task <N> - Displaying editing state in bottom-right corner
-
-Just for understandability, I'd like to display the current editing state in the bottom-right corner.
-As editing is a state machine, stuff like "dragging", "selecting", "editing" should be shown as small
-hints in the UI, so the user can gain a better understanding of what they are doing.
-
-Spec:
-
-* The editing state should be displayed in the bottom-right corner as a small hint.
-* The hint should be a small text label that changes depending on the current editing state.
-* The hint shall fade in quickly as the user enters a new editing state.
-* the hint shall fade out slowly after a brief period of inactivity.
-
 ## (For later brainstorming) Task <N> - virtual filesystem hierarchy for frontend
 
 High-level goal: make it possible to store multiple multi-file projects & diagrams,

@@ -4,6 +4,45 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 54 — Display current editing state as a bottom-right hint
+
+- `web/src/routes/diagrams/+page.svelte` gained a `currentActivity`
+  `$derived.by`, resolving the two overlapping state sources into one
+  label: `autoLayoutRunning` first ("Calculating…"), then
+  `interaction.type` (`"Resizing"`, `"Panning"`, `"Selecting"` for
+  marquee). Deliberately excludes `"dragging"` (per explicit feedback —
+  already visually obvious from the node moving under the cursor, a text
+  label would just be noise) and `"idle"` (nothing to announce).
+- Fade timing needed its own small state machine, not just a CSS
+  transition bound straight to a derived value: an `$effect` watches
+  `currentActivity` and, on entering a new activity, immediately sets
+  `activityHintLabel`/`activityHintVisible = true`; on returning to
+  idle/dragging, schedules a `setTimeout` (after `ACTIVITY_HINT_
+  SUSTAIN_MS`) that hides it. If a new activity starts before that
+  timeout fires, Svelte's automatic effect-cleanup (the function returned
+  from the effect) clears the pending timeout before the effect re-runs
+  — so quick back-to-back activities never visibly flicker out and back
+  in.
+- `ACTIVITY_HINT_FADE_IN_MS` (100), `ACTIVITY_HINT_SUSTAIN_MS` (500), and
+  `ACTIVITY_HINT_FADE_OUT_MS` (400) are extracted as top-level constants
+  per request, so they can be tweaked without touching markup. The
+  template interpolates whichever duration applies directly into an
+  inline `transition-duration` style (rather than baking fixed Tailwind
+  `duration-*` classes into markup), so the constants are the single
+  source of truth for both the JS timing and the CSS animation.
+- Positioned `absolute bottom-2 right-2` inside the same canvas-relative
+  container as the bottom-center toolbar (that toolbar moved to
+  bottom-*center* a few tasks ago, so bottom-right was free); `pointer-
+  events-none` so it can never intercept clicks.
+- No automated test coverage — this is UI/timing behavior tightly coupled
+  to Svelte's `$effect`/`setTimeout`, unlike the project's pure-function
+  Vitest-covered modules (`geometry.ts`/`forceLayout.ts`/`history.ts`).
+  Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (78/78 pass, unaffected), and `deno fmt`
+  (clean); the animation itself needs manual/browser verification.
+
+---
+
 ## Task 50 — Automatic layout via force simulation
 
 Implemented an "Auto Layout" button on the diagrams page's bottom
