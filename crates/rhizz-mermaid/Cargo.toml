@@ -9,10 +9,10 @@ png = ["mermaid-rs-renderer/png", "dep:resvg", "dep:usvg"]
 
 [dependencies]
 rhizz-core = { path = "../rhizz-core" }
-mermaid-rs-renderer = { version = "0.2.0", default-features = false }
+mermaid-rs-renderer = { version = "0.3.1", default-features = false }
 anyhow = "1.0"
-resvg = { version = "0.46", optional = true }
-usvg = { version = "0.46", optional = true }
+resvg = { version = "0.47", optional = true }
+usvg = { version = "0.47", optional = true }
 tracing = "0.1"
 
 [dev-dependencies]
