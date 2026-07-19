@@ -20,6 +20,7 @@
             packages = [
               pkgs.rustc
               pkgs.cargo
+              pkgs.cargo-audit
               pkgs.clippy
               pkgs.rustfmt
               pkgs.wasm-pack
