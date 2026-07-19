@@ -38,7 +38,7 @@ import {
   unionBox,
 } from "./geometry";
 
-const editor_state = create_editor_state();
+const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
 
 // Tracks the canvas's rendered pixel size so the SVG viewBox can match it

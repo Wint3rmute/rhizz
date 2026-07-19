@@ -4,6 +4,37 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 52 — Persist the diagram's camera (pan/zoom) state
+
+From user testing feedback: diagram content (`checked`/`savedLayout`)
+survived page reloads via `persisted()`, but the camera (pan/zoom) did
+not, since `ViewEditorState.svelte`'s `create_editor_state()` was pure
+in-memory `$state` (a deliberate factory, not a persisted singleton, per
+Task 40 — so a future multi-view feature could create independent
+instances without them fighting over shared state).
+
+- `create_editor_state()` now takes an optional `storageKey` parameter.
+  When omitted, behavior is unchanged (in-memory-only `$state`, as
+  before). When given, it delegates to the *same* `persisted()` helper
+  `checked`/`savedLayout`/`input`/`snapGridSize` already use — rather than
+  re-implementing `localStorage` load/save a second time — reshaped via a
+  `get view()` accessor so every existing call site in `+page.svelte`
+  keeps mutating `editor_state.view.x/y/zoom` directly, exactly as before;
+  only the single construction line changed, to
+  `create_editor_state("DIAGRAM_VIEW")`.
+- Keeping the storage key caller-supplied (not hardcoded inside
+  `ViewEditorState.svelte`) preserves Task 40's original intent: two
+  independent view instances (e.g. a future split view) would use two
+  different keys and never collide, unlike a single global `persisted()`
+  call baked into the module.
+- Validated with `deno task check` (0 errors/warnings — including
+  re-hitting and re-fixing the same `$state(...)` "must be assigned to a
+  variable first" compiler error from Task 40), `deno task build`
+  (succeeds), `deno task test` (78/78 pass, unaffected), and `deno fmt`
+  (clean).
+
+---
+
 ## Task 51 — Diagram edit history (undo/redo)
 
 Grew out of Task 50's "undo/snapshot safety net" brainstorm idea, but
