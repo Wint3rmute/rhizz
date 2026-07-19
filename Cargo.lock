@@ -643,6 +643,7 @@ dependencies = [
  "ctrlc",
  "notify",
  "owo-colors",
+ "rhizz-core",
  "serde",
  "serde_json",
  "tempfile",

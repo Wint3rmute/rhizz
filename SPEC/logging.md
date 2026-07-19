@@ -21,7 +21,7 @@ not interfere with JSON output (`--json`) or piped DOT content.
 
 | Level   | Where                                      | Meaning                                   |
 | ------- | ------------------------------------------ | ----------------------------------------- |
-| `trace` | `rhizz-core`, `rhizz-dot`, `rhizz-mermaid` | Entry/exit of every instrumented function |
+| `trace` | `rhizz-core`                               | Entry/exit of every instrumented function |
 | `debug` | (reserved for future use)                  | Intermediate computed values              |
 | `info`  | (reserved for future use)                  | High-level pipeline progress              |
 | `warn`  | `rhizz-core` validation                    | Non-blocking diagnostic issues (W-codes)  |
@@ -37,10 +37,6 @@ The `#[instrument]` attribute is applied to all major public entry points:
 - `rhizz_core::resolve::resolve` — model resolution
 - `rhizz_core::validate::validate` — warning validation pass
 - `rhizz_core::score::score` — completion scoring
-- `rhizz_dot::render_view` — DOT rendering
-- `rhizz_mermaid::render_view` — Mermaid flowchart rendering
-- `rhizz_mermaid::render_view_svg` — SVG rendering
-- `rhizz_mermaid::render_view_png` — PNG rendering
 
 Library crates (`rhizz-core`, `rhizz-dot`, `rhizz-mermaid`) depend only on the
 `tracing` facade and do **not** install a subscriber. It is the responsibility

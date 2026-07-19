@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context as _;
 use clap::{Parser, Subcommand};
-use tracing::info;
 use walkdir::WalkDir;
 
 use rhizz_core::{Diagnostic, DiagnosticCode, Source};
@@ -362,94 +361,6 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
         None
     };
 
-    // ── Views (if check passed and command requires it) ───────────────────────
-    let mut generated_views: Vec<(String, PathBuf)> = Vec::new();
-    if !has_errors
-        && matches!(cmd, CommandKind::Views | CommandKind::Build)
-        && let Some(ref m) = model
-    {
-        for view in &m.views {
-            // Apply --view filter.
-            if let Some(ref filter_name) = cli.view
-                && view.label != *filter_name
-            {
-                continue;
-            }
-
-            // Dispatch to the appropriate renderer based on the output file
-            // extension:
-            //   .mmd  → Mermaid flowchart source (text) + PNG raster bytes
-            //   *     → Graphviz DOT source (text)
-            // Note: `rankdir` is ignored for Mermaid output (prototype limitation).
-            // For .mmd views, both the .mmd source and a .png are written automatically.
-            let is_mermaid = view.output.filename.ends_with(".mmd");
-
-            // Build the list of (path, bytes) pairs to write for this view.
-            let mut outputs: Vec<(PathBuf, Vec<u8>)> = Vec::new();
-
-            if is_mermaid {
-                let mmd_path = cli.output_dir.join(&view.output.filename);
-                let mmd_source = rhizz_mermaid::render_view(m, view);
-                outputs.push((mmd_path, mmd_source.clone().into_bytes()));
-
-                let md_filename = view.output.filename.trim_end_matches(".mmd").to_owned() + ".md";
-                let md_path = cli.output_dir.join(&md_filename);
-                let md_content = format!("# {}\n\n```mermaid\n{}```\n", view.label, mmd_source);
-                outputs.push((md_path, md_content.into_bytes()));
-
-                let png_filename =
-                    view.output.filename.trim_end_matches(".mmd").to_owned() + ".png";
-                let png_path = cli.output_dir.join(&png_filename);
-                match rhizz_mermaid::render_view_png(m, view) {
-                    Ok(bytes) => outputs.push((png_path, bytes)),
-                    Err(e) => {
-                        let d = Diagnostic::error(
-                            DiagnosticCode::E000,
-                            format!("PNG rendering failed for '{}': {e}", view.label),
-                        );
-                        if !cli.json {
-                            eprintln!("{}", format_diagnostic(&d, color));
-                        }
-                        return 1;
-                    }
-                }
-            } else {
-                let out_path = cli.output_dir.join(&view.output.filename);
-                outputs.push((out_path, rhizz_dot::render_view(m, view).into_bytes()));
-            }
-
-            for (out_path, content) in outputs {
-                // Ensure output directory exists.
-                if let Some(parent) = out_path.parent()
-                    && let Err(e) = std::fs::create_dir_all(parent)
-                {
-                    let d = Diagnostic::error(
-                        DiagnosticCode::E000,
-                        format!("cannot create output directory: {e}"),
-                    );
-                    if !cli.json {
-                        eprintln!("{}", format_diagnostic(&d, color));
-                    }
-                    return 1;
-                }
-
-                if let Err(e) = std::fs::write(&out_path, content) {
-                    let d = Diagnostic::error(
-                        DiagnosticCode::E000,
-                        format!("cannot write {}: {e}", out_path.display()),
-                    );
-                    if !cli.json {
-                        eprintln!("{}", format_diagnostic(&d, color));
-                    }
-                    return 1;
-                }
-
-                info!(view = %view.label, path = %out_path.display(), "rendered output file");
-                generated_views.push((view.label.clone(), out_path));
-            }
-        }
-    }
-
     // ── Output ────────────────────────────────────────────────────────────────
     if cli.json {
         let json_out = JsonOutput {
@@ -480,19 +391,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     percent: (r.overall_percentage() * 10.0).round() / 10.0,
                 },
             }),
-            views: if generated_views.is_empty() {
-                None
-            } else {
-                Some(
-                    generated_views
-                        .iter()
-                        .map(|(name, path)| JsonView {
-                            name: name.clone(),
-                            file: path.display().to_string(),
-                        })
-                        .collect(),
-                )
-            },
+            views: None,
         };
         println!(
             "{}",
@@ -515,20 +414,6 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
         // Score report.
         if let Some(ref report) = score_report {
             println!("{report}");
-        }
-
-        // Views generated.
-        if !generated_views.is_empty() {
-            let unique_views: std::collections::HashSet<&str> = generated_views
-                .iter()
-                .map(|(name, _)| name.as_str())
-                .collect();
-            let n = unique_views.len();
-            let out_dir = cli.output_dir.display();
-            println!(
-                "🖼️ Rendered {n} diagram{} → {out_dir}",
-                if n == 1 { "" } else { "s" }
-            );
         }
     }
 
@@ -756,10 +641,6 @@ mod tests {
         ]);
         let code = run(&cli);
         assert_eq!(code, 0, "drone build should exit 0");
-        assert!(
-            out_dir.path().join("drone-overview.dot").exists(),
-            "drone-overview.dot should be generated"
-        );
     }
 
     #[test]

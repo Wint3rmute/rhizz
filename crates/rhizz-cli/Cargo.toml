@@ -8,6 +8,7 @@ name = "rhizz"
 path = "src/main.rs"
 
 [dependencies]
+rhizz-core          = { path = "../rhizz-core" }
 anyhow              = "1"
 walkdir             = "2"
 serde               = { version = "1", features = ["derive"] }

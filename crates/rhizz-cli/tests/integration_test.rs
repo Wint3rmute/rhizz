@@ -31,10 +31,6 @@ fn build_drone_exits_0_and_generates_dot() {
     ]);
     let code = run(&cli);
     assert_eq!(code, 0, "drone build should exit 0");
-    assert!(
-        out_dir.path().join("drone-overview.dot").exists(),
-        "drone-overview.dot should be generated"
-    );
 }
 
 #[test]
