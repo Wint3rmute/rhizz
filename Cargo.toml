@@ -1,10 +1,7 @@
 [workspace]
 members = [
     "crates/rhizz-core",
-    "crates/rhizz-dot",
-    "crates/rhizz-mermaid",
     "crates/rhizz-cli",
-    "crates/rhizz-gui",
     "crates/rhizz-wasm",
 ]
 resolver = "2"
