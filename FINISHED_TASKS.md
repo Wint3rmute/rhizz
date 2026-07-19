@@ -4,6 +4,62 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 50 — Automatic layout via force simulation
+
+Implemented an "Auto Layout" button on the diagrams page's bottom
+toolbar: force-arranges the current selection, or every currently-placed
+node (any level) if nothing's selected. One remaining concrete piece of
+the original scope (pinning pre-existing nodes so only newly-added ones
+get laid out) was split out as Task 53; the vaguer "exploring the system
+model interactively" use-case was deliberately left untracked, since
+there's still no concrete trigger to hang it off of.
+
+- `web/src/routes/diagrams/forceLayout.ts`: pure, Svelte/`rhizz-core`-free
+  wrapper around `d3-force` (+ `@types/d3-force`). Exposes
+  `createForceLayout` (a `{ tick(), alpha() }` pair for frame-by-frame
+  driving), `runForceLayout` (synchronous convergence, used by tests),
+  and `groupBySiblings` (partitions nodes by immediate parent). Nodes are
+  approximated as circles (`Math.hypot(width, height) / 2`) for the
+  collision force; a node's own diagram index round-trips via a
+  `componentIndex` field, not `index` (which d3-force reserves for its
+  own bookkeeping and silently overwrites). Supports pinning a node via
+  `fixed: true` (sets d3-force's `fx`/`fy` — not yet wired to any UI, see
+  Task 53). A custom `forceOrthogonalAlign` force biases connected pairs
+  toward strictly horizontal/vertical alignment rather than arbitrary
+  diagonals. A `warmupTicks` option eases the animation in over the first
+  N ticks (verified to never change the eventual converged result). 31
+  Vitest tests across `forceLayout.test.ts`.
+- The target set is partitioned into sibling groups (`groupBySiblings`,
+  keyed by parent) and each group gets its own independent simulation,
+  centered on its parent's current box (or its own bounding box for
+  top-level/orphaned groups) — avoiding a flat simulation that would let
+  unrelated hierarchy levels interfere with each other. All groups run
+  together via one shared `requestAnimationFrame` loop; every result is
+  still written through `writeClampedToActiveParent` (Tasks 45/46's
+  containment path) regardless of grouping, as a safety net. Only the
+  final settling frame is snapped to grid, so the animation stays smooth
+  even with snap-to-grid on.
+- `autoLayoutRunning` disables the button (`wait` cursor on hover) and
+  locks out drag/resize/pan/marquee-select for the duration (matching
+  `wait` cursors across the canvas, nodes, and resize handles), so
+  clicking around mid-animation can't silently fight the simulation's
+  writes.
+- `geometry.ts`'s `clampWithin` gained an optional 4th `topMargin`
+  parameter (defaults to `margin`, so existing 3-arg callers are
+  unaffected); `+page.svelte` passes a `CHILD_CONTAINMENT_TOP_MARGIN`
+  (28) at every child-vs-parent clamp site, so a child can never be
+  dragged, resized, or auto-laid-out over the area where its parent's
+  title text renders.
+- Integrates with Task 51's undo/redo (one undo point per auto-layout
+  run, recorded before the animation starts) and Task 52's persistence
+  (writes go through the same `checked`/`savedLayout` storage as every
+  other diagram edit).
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (68/68 pass at the time), and `deno fmt`
+  (clean).
+
+---
+
 ## Task 52 — Persist the diagram's camera (pan/zoom) state
 
 From user testing feedback: diagram content (`checked`/`savedLayout`)
