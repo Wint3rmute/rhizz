@@ -11,6 +11,12 @@ import persisted from "../../Persisted.svelte";
 import type { ComponentJS } from "rhizz";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
+  createHistoryStack,
+  pushHistory,
+  redoHistory,
+  undoHistory,
+} from "./history";
+import {
   createForceLayout,
   groupBySiblings,
   type LayoutEdge,
@@ -258,7 +264,10 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  if (!checked.value[componentKey(primarySelected)]) return;
+  const box = checked.value[componentKey(primarySelected)];
+  if (!box) return;
+  if (box.textAlign === align) return; // no-op: skip a redundant undo point
+  recordUndoPoint();
   setNodeBox(primarySelected, { textAlign: align });
 }
 
@@ -324,6 +333,90 @@ function reclampChildren(parentIndex: number) {
 // reactive, so call sites can mutate it in place instead of always
 // reconstructing and reassigning a fresh Set.
 const selected = new SvelteSet<number>();
+
+// Snapshot of the diagram's persisted content — the unit of undo/redo
+// history. Deliberately excludes `selected` (transient UI state, not
+// diagram content, and not guaranteed to still make sense after
+// restoring an older/newer snapshot) and view/grid/snap preferences.
+type DiagramSnapshot = {
+  checked: Record<string, StoredBox>;
+  savedLayout: Record<string, StoredBox>;
+};
+
+// How many undo steps (and, independently, redo steps) are kept.
+const UNDO_HISTORY_LIMIT = 100;
+const diagramHistory = createHistoryStack<DiagramSnapshot>();
+
+function snapshotDiagram(): DiagramSnapshot {
+  return {
+    checked: { ...checked.value },
+    savedLayout: { ...savedLayout.value },
+  };
+}
+
+function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
+  // Copies (rather than reuses) the snapshot's records, so the object
+  // sitting in the undo/redo stacks is never the same live object that
+  // setNodeBox() et al. go on to mutate afterwards.
+  checked.value = { ...snapshot.checked };
+  savedLayout.value = { ...snapshot.savedLayout };
+  // The restored snapshot may not have (or may no longer make sense for)
+  // the same selection, so it's simplest and safest to just clear it.
+  selected.clear();
+}
+
+// Records the diagram's current state as an undo point, right *before* a
+// discrete edit is about to change it — a drag/resize gesture starting, a
+// component being checked/unchecked, a text-alignment change, or an
+// auto-layout run. Must be called once per *gesture*, not once per
+// underlying setNodeBox() write: a whole drag, from mousedown to mouseup,
+// is one undo step, not one per mousemove event (see call sites).
+function recordUndoPoint() {
+  pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
+}
+
+// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
+// diagram-mutating interactions — restoring a snapshot while the
+// animation loop is still writing every frame would just get immediately
+// overwritten.
+function undoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const previous = undoHistory(
+    diagramHistory,
+    snapshotDiagram(),
+    UNDO_HISTORY_LIMIT,
+  );
+  if (previous) applyDiagramSnapshot(previous);
+}
+
+// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
+function redoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const next = redoHistory(
+    diagramHistory,
+    snapshotDiagram(),
+    UNDO_HISTORY_LIMIT,
+  );
+  if (next) applyDiagramSnapshot(next);
+}
+
+// Handles the undo/redo keyboard shortcuts. Scoped to this page (via the
+// <svelte:window> binding below), rather than living in the app-wide
+// KeyboardState.svelte module, since "undo" here specifically means
+// "undo a diagram edit" — a different page (e.g. the HCL text editor)
+// would want its own, unrelated undo behavior.
+function onDiagramKeyDown(event: KeyboardEvent) {
+  const primary = event.ctrlKey || event.metaKey;
+  if (!primary) return;
+  const key = event.key.toLowerCase();
+  if (key === "z" && !event.shiftKey) {
+    event.preventDefault();
+    undoDiagramEdit();
+  } else if (key === "y" || (key === "z" && event.shiftKey)) {
+    event.preventDefault();
+    redoDiagramEdit();
+  }
+}
 
 // The single selected node, or null if zero or more than one are selected.
 // Used wherever an operation only makes sense for exactly one node (the
@@ -439,6 +532,10 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   if (event.button !== 0) return;
   event.preventDefault();
 
+  // One undo point per drag *gesture* (not per mousemove) — recorded here,
+  // at mousedown, before anything moves.
+  recordUndoPoint();
+
   // Clicking a node that isn't already part of the selection replaces the
   // selection with just that node. Clicking a node that's already
   // selected (as part of a multi-selection) keeps the whole selection, so
@@ -505,6 +602,9 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
   if (isSpaceHeld()) return;
   event.preventDefault();
   event.stopPropagation();
+
+  // One undo point per resize gesture, recorded before anything resizes.
+  recordUndoPoint();
 
   const startBoxes: Record<number, Box> = {};
   for (const i of selected) {
@@ -829,6 +929,10 @@ function runAutoLayout() {
   });
   if (layoutNodes.length < 2) return; // nothing meaningful to arrange
 
+  // One undo point for the whole auto-layout run, recorded before the
+  // animation starts — not per-frame.
+  recordUndoPoint();
+
   const groups = groupBySiblings(layoutNodes, parentOf);
   const groupLayouts = [...groups.entries()].map(
     ([parentIndex, groupNodes]) => {
@@ -900,6 +1004,8 @@ function runAutoLayout() {
   requestAnimationFrame(step);
 }
 </script>
+
+<svelte:window onkeydown={onDiagramKeyDown} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
@@ -1288,6 +1394,7 @@ function runAutoLayout() {
               class="checkbox checkbox-xs"
               checked={!!checked.value[componentKey(index)]}
               onchange={(value) => {
+                recordUndoPoint();
                 if (value.currentTarget.checked) {
                   // Restore the remembered layout if this component has
                   // been placed before (even if it was later unchecked),

@@ -19,9 +19,11 @@ How to work on this file:
 demoable — there's a working "Auto Layout" button on the diagrams page’s
 bottom toolbar, now with recursive per-sibling-group layout (step 4a).
 Remaining open follow-ups: "pin existing nodes" for the new-nodes
-use-case (step 4b), the "exploring interactively" use-case (step 5), and
-the undo/safety-net idea from the brainstorm below. See the end of this
-entry for what's implemented so far.
+use-case (step 4b), and the "exploring interactively" use-case (step 5).
+The undo/safety-net idea from the brainstorm below grew into a full
+general-purpose diagram undo/redo system (not just auto-layout-specific)
+and shipped as Task 51 in `FINISHED_TASKS.md`. See the end of this entry
+for what's implemented so far.
 
 The goal of this task is to implement automatic layout via force simulation, so
 that nodes are automatically positioned to avoid overlap and minimize edge
@@ -243,12 +245,25 @@ noise never enters a given group's simulation.
 
 ---
 
-## (For later brainstorming) Task 48 - virtual filesystem hierarchy for frontend
+## (For later brainstorming) Task <N> - Displaying editing state in bottom-right corner
+
+Just for understandability, I'd like to display the current editing state in the bottom-right corner.
+As editing is a state machine, stuff like "dragging", "selecting", "editing" should be shown as small
+hints in the UI, so the user can gain a better understanding of what they are doing.
+
+Spec:
+
+* The editing state should be displayed in the bottom-right corner as a small hint.
+* The hint should be a small text label that changes depending on the current editing state.
+* The hint shall fade in quickly as the user enters a new editing state.
+* the hint shall fade out slowly after a brief period of inactivity.
+
+## (For later brainstorming) Task <N> - virtual filesystem hierarchy for frontend
 
 High-level goal: make it possible to store multiple multi-file projects & diagrams,
 with the web application pretending to have a virtual filesystem hierarchy.
 
-## (For later brainstorming) Task 49 - visual regression testing
+## (For later brainstorming) Task <N> - visual regression testing
 
 As we now have a virtual filesystem hierarchy for the frontend, we can create
 end-to-end tests which load the project, render a diagram and verify that it

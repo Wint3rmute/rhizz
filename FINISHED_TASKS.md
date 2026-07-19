@@ -4,6 +4,64 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 51 — Diagram edit history (undo/redo)
+
+Grew out of Task 50's "undo/snapshot safety net" brainstorm idea, but
+expanded per user request into a full general-purpose diagram undo/redo
+system (Ctrl/Cmd+Z / Ctrl/Cmd+Y), not just a one-shot "undo the last
+auto-layout" affordance.
+
+- Added `web/src/routes/diagrams/history.ts`: a generic, bounded undo/redo
+  stack (`createHistoryStack<T>()`, `pushHistory`, `undoHistory`,
+  `redoHistory`) with zero dependency on any diagram-specific type — `T`
+  is opaque to the module, so it's reusable for any snapshot-able state,
+  not just the diagram layout. `pushHistory` clears the redo stack (a new
+  edit invalidates the old "future"); both stacks are capped at a caller-
+  supplied `limit`, discarding the oldest entry once exceeded. 10 Vitest
+  tests in `history.test.ts`, using plain strings/numbers — no diagram
+  context needed.
+- `web/src/routes/diagrams/+page.svelte`: added a `DiagramSnapshot` type
+  (`{ checked, savedLayout }` — deliberately excluding `selected` and
+  view/grid/snap preferences, which aren't "diagram content") and a
+  page-level `diagramHistory = createHistoryStack<DiagramSnapshot>()`,
+  capped at `UNDO_HISTORY_LIMIT = 100`. `recordUndoPoint()` snapshots the
+  current state (a shallow copy of both records — safe because
+  `setNodeBox()` always replaces a `StoredBox` entry wholesale rather than
+  mutating one in place, so a shallow copy is a fully independent
+  snapshot) and pushes it; `undoDiagramEdit()`/`redoDiagramEdit()` pop the
+  matching stack and call `applyDiagramSnapshot()`, which assigns fresh
+  copies (`{ ...snapshot.checked }`) back onto `checked.value`/
+  `savedLayout.value` and clears `selected` (a restored snapshot may not
+  match the current selection).
+- `recordUndoPoint()` is called once per *gesture*, not once per
+  `setNodeBox()` write — at the top of `onNodeMouseDown`'s drag-start
+  path, `onResizeHandleMouseDown`'s resize-start path, the sidebar
+  checkbox's check/uncheck handler, `setSelectedTextAlign` (skipped for a
+  no-op re-click of the already-active alignment), and once before
+  `runAutoLayout`'s animation begins (not per-frame). A drag/resize/auto-
+  layout's many intermediate writes are covered by the single snapshot
+  taken at the gesture's start, so undo reverts the whole gesture in one
+  step.
+- Added `<svelte:window onkeydown={onDiagramKeyDown} />` to the page
+  template. Deliberately page-scoped (not added to the app-wide
+  `KeyboardState.svelte` module) since "undo" here specifically means
+  "undo a diagram edit" — a different page (e.g. the HCL text editor)
+  would want its own, unrelated undo behavior. Recognizes Ctrl/Cmd+Z
+  (undo), Ctrl/Cmd+Y (redo, as requested), and also Ctrl/Cmd+Shift+Z
+  (the Mac-idiomatic alternative redo binding) as a bonus. Both
+  `undoDiagramEdit`/`redoDiagramEdit` are blocked while
+  `autoLayoutRunning`, same as every other diagram-mutating interaction
+  — restoring a snapshot mid-animation would just be immediately
+  overwritten by the next frame.
+- History is in-memory only (not persisted to `localStorage`), matching
+  how undo history conventionally resets on reload in most editors; not
+  wrapped in the existing `persisted()` helper.
+- Validated with `deno task check` (0 errors/warnings), `deno task build`
+  (succeeds), `deno task test` (78/78 pass — 10 new `history.test.ts`
+  cases), and `deno fmt` (clean).
+
+---
+
 ## Task 46 — Enforce containment during group-resize
 
 - `applyGroupScale` (`web/src/routes/diagrams/+page.svelte`) now clamps
