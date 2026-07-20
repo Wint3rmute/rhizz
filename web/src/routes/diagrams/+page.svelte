@@ -1016,8 +1016,16 @@ let currentActivity = $derived.by((): string | null => {
       return "Dragging";
     case "resizing":
       return "Resizing";
-    case "marquee":
+    case "marquee": {
+      // A marquee this small is really just a click (same threshold
+      // onSvgMouseUp uses to decide whether to commit a selection) —
+      // most commonly a click on empty canvas to *deselect*, which isn't
+      // meaningfully "selecting" anything and shouldn't announce itself
+      // as such.
+      const box = marqueeBox;
+      if (!box || (box.width <= 2 && box.height <= 2)) return null;
       return "Selecting";
+    }
     default:
       return null;
   }
