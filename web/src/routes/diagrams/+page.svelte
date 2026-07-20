@@ -386,7 +386,10 @@ function undoDiagramEdit() {
     snapshotDiagram(),
     UNDO_HISTORY_LIMIT,
   );
-  if (previous) applyDiagramSnapshot(previous);
+  if (previous) {
+    applyDiagramSnapshot(previous);
+    flashActivity("Undo");
+  }
 }
 
 // Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
@@ -397,7 +400,10 @@ function redoDiagramEdit() {
     snapshotDiagram(),
     UNDO_HISTORY_LIMIT,
   );
-  if (next) applyDiagramSnapshot(next);
+  if (next) {
+    applyDiagramSnapshot(next);
+    flashActivity("Redo");
+  }
 }
 
 // Handles the undo/redo keyboard shortcuts. Scoped to this page (via the
@@ -1009,7 +1015,30 @@ function runAutoLayout() {
 // Deliberately skips "panning" (purely a viewport/navigation action, not
 // an edit — a text label for it would just be noise) and
 // "idle"/"marquee-not-yet-started" (nothing to announce).
+// A one-shot "pulse" label (e.g. "Undo"/"Redo") for actions that
+// complete instantly rather than persisting as an interaction state—
+// unlike dragging/resizing/etc., there's no ongoing state to derive a
+// label from, so flashActivity() below sets this directly. It's cleared
+// again on the very next tick (not immediately), so `currentActivity`
+// briefly sees it as "active" — just like a real interaction state —
+// letting the exact same sustain/fade-out effect further down handle the
+// rest, rather than needing a second parallel mechanism.
+let pulseActivity: string | null = $state(null);
+
+function flashActivity(label: string) {
+  pulseActivity = label;
+}
+
+$effect(() => {
+  if (pulseActivity === null) return;
+  const id = setTimeout(() => {
+    pulseActivity = null;
+  }, 0);
+  return () => clearTimeout(id);
+});
+
 let currentActivity = $derived.by((): string | null => {
+  if (pulseActivity !== null) return pulseActivity;
   if (autoLayoutRunning) return "Calculating…";
   switch (interaction.type) {
     case "dragging":
