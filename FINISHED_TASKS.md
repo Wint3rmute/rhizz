@@ -4,6 +4,70 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 56 — `ProjectStore` interface + localStorage-backed implementation
+
+Second of the five-task VFS sequence (55–59). Introduces the actual
+storage engine behind a storage-agnostic interface, with zero new
+dependencies — the entire VFS lives in one JSON blob under one
+`localStorage` key, matching the existing `Persisted.svelte.ts` pattern.
+Still local-first/single-editor; no locking, no CRDT.
+
+- Added `web/src/vfs/operations.ts`: pure, synchronous functions
+  (`listProjects`, `createProject`, `deleteProject`, `listNodes`,
+  `createFile`, `createDirectory`, `updateFileContent`, `renameNode`,
+  `moveNode`, `deleteNode`) operating on a `VfsData` snapshot
+  (`{ version: 1, projects: Project[], nodes: FsNode[] }`). Each either
+  returns a new `VfsData` (never mutating its input) or throws —
+  validation (unknown project/node ids, parent-must-be-a-directory,
+  parent-must-belong-to-the-same-project, `wouldCreateCycle` before a
+  move), cascading deletes (via `descendantsOf`, from Task 55's
+  `tree.ts`), and "touch the owning project's `updatedAt`" bookkeeping all
+  live here exactly once, shared by every store implementation instead of
+  being reimplemented per backend.
+- Added `web/src/vfs/store.ts`: the `ProjectStore` interface (`listProjects`,
+  `createProject`, `deleteProject`, `listNodes`, `createFile`,
+  `createDirectory`, `updateFileContent`, `renameNode`, `moveNode`,
+  `deleteNode`), documented with its rejection rules. Every method returns
+  a `Promise` even though both current implementations are fully
+  synchronous — kept deliberately so a future network- or sync-queue-backed
+  implementation is a drop-in replacement with no call-site changes.
+- Added `web/src/vfs/inMemoryStore.ts`: `InMemoryProjectStore`, a thin
+  `ProjectStore` wrapper holding one in-memory `VfsData` and delegating
+  every method to `operations.ts`. No storage dependency — the default
+  fast test double.
+- Added `web/src/vfs/localStorageStore.ts`: `LocalStorageProjectStore`,
+  a thin `ProjectStore` wrapper that on every call reads the single
+  `"rhizz:vfs:v1"` localStorage key, `JSON.parse`s + validates it with
+  zod (dropping individually-malformed projects/nodes rather than
+  discarding the whole blob — same forgiving-parse philosophy as
+  `sanitizeStoredRecord` in `diagrams/persistence.ts`), delegates the
+  mutation to `operations.ts`, then `JSON.stringify`s and writes the
+  result back. Constructor takes an optional `StorageLike` (`{ getItem,
+  setItem }` — the minimal subset actually needed, deliberately not the
+  full DOM `Storage` interface's `removeItem`/`clear`/`length`/`key`),
+  defaulting to `globalThis.localStorage`, plus an optional clock
+  function — both purely to keep the class unit-testable without a DOM
+  environment (this project's Vitest setup has no jsdom/happy-dom — see
+  Task 36's notes).
+- Added `web/src/vfs/store.contract.test.ts`: exports
+  `runProjectStoreContractTests(label, makeStore)` (23 `it`s across
+  project CRUD, file/directory CRUD, rename, move — including the
+  self-move and descendant-move cycle-rejection cases — recursive delete,
+  and revision/updatedAt bookkeeping) and calls it once for
+  `InMemoryProjectStore` and once for `LocalStorageProjectStore` (backed by
+  a plain `Map`-based fake storage, plus a deterministic incrementing
+  clock so timestamp assertions can't flake on real wall-clock
+  resolution) — 46 tests total, both implementations verified against the
+  exact same rules.
+- No UI changes. No new dependencies — only `zod` (already present) plus
+  `localStorage`/`JSON`/`crypto.randomUUID()`, all browser built-ins.
+- Validated with `deno task --cwd web test` (156/156 pass, 46 new),
+  `deno task --cwd web check` (`svelte-check`: 0 errors/warnings),
+  `deno task --cwd web build` (succeeds), and `deno fmt --check web`
+  (clean). Commands run via `nix develop --command deno ...` per the
+  user's environment, using `deno task --cwd <dir>` (this sandbox's
+  `deno` doesn't support the `-C` shorthand).
+
 ## Task 55 — VFS domain types & pure tree helpers
 
 First of a five-task sequence (55–59) building a virtual filesystem

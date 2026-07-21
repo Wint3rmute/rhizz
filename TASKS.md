@@ -13,81 +13,14 @@ How to work on this file:
 
 ---
 
-## Task 56 — `ProjectStore` interface + localStorage-backed implementation (no new dependencies)
-
-Second of a five-task sequence (55–59; Task 55 — VFS domain types & pure
-tree helpers, in `web/src/vfs/types.ts`/`tree.ts` — is finished, see
-`FINISHED_TASKS.md`) building a virtual filesystem hierarchy for the
-frontend, so it can store multiple multi-file projects & diagrams in the
-browser. Explicitly a **local-first, single-editor** workflow — no
-real-time collaboration, no CRDT, no concurrent-edit merging. A future
-file-locking mechanism is a plausible follow-up once there's a backend,
-but out of scope here; don't design around concurrent writers.
-
-Builds on Task 55's types. Introduces the actual storage engine behind a
-storage-agnostic interface, so a future backend-backed implementation is a
-drop-in replacement with zero call-site changes — without adding any new
-library. Given the working assumptions (only small projects, only a handful
-of them, browsers are fast), this is deliberately the simplest thing that
-works: **the entire VFS lives in one JSON blob under one `localStorage`
-key**, following the exact same shape as the existing `Persisted.svelte.ts`
-helper — no IndexedDB, no per-record keys, no manual indexes.
-
-- Add `web/src/vfs/store.ts` defining the `ProjectStore` interface:
-  - `listProjects()`, `createProject(name)`, `deleteProject(id)`
-  - `listNodes(projectId)`
-  - `createFile(projectId, parentId, name, contentType, content)`
-  - `createDirectory(projectId, parentId, name)`
-  - `updateFileContent(fileId, content)` — bumps `revision` and `updatedAt`
-  - `renameNode(nodeId, name)`
-  - `moveNode(nodeId, newParentId)` — rejects with an error if
-    `wouldCreateCycle` says yes
-  - `deleteNode(nodeId)` — recursive for directories, using `descendantsOf`
-  - All methods return `Promise`s, even though the implementation below is
-    fully synchronous — keeps the interface shape identical to what a future
-    network-backed implementation will need, without requiring any real
-    asynchrony (or a real backend) today.
-- Add `web/src/vfs/localStorageStore.ts` implementing `LocalStorageProjectStore`:
-  - One `localStorage` key (e.g. `"rhizz:vfs:v1"`) holding
-    `{ version: 1, projects: Project[], nodes: FsNode[] }` as a single JSON
-    document.
-  - Every method: read the blob, `JSON.parse` + validate with a zod schema
-    (drop individually-malformed projects/nodes rather than discarding the
-    whole blob on one bad entry — same forgiving-parse philosophy as
-    `sanitizeStoredRecord` in `diagrams/persistence.ts`), mutate the
-    in-memory arrays with plain `Array` methods (`.filter()`/`.map()` —
-    no indexing structures; fine at the stated scale), `JSON.stringify` and
-    write the whole blob back.
-  - Constructor takes an optional `Storage`-shaped object (`{ getItem,
-    setItem, removeItem }`), defaulting to `globalThis.localStorage`. This
-    is purely so tests can inject a plain in-memory object instead of
-    depending on a DOM environment (the project's Vitest setup has no
-    jsdom/happy-dom yet — see Task 36's notes — and this avoids needing to
-    add one just for this).
-  - `version` field exists from day one so a future schema change has
-    somewhere to hang a migration, even though no migration logic is needed
-    yet.
-- Implement `InMemoryProjectStore` in `web/src/vfs/inMemoryStore.ts` (a
-  plain array-backed implementation with no storage dependency at all) as
-  the fast default test double.
-- Add a single shared contract test suite (e.g.
-  `web/src/vfs/store.contract.test.ts` exporting a
-  `runProjectStoreContractTests(makeStore: () => ProjectStore)` helper) run
-  against both implementations, covering: project CRUD, file/directory CRUD,
-  rename, move (including the cycle-rejection case), recursive delete, and
-  that `revision`/`updatedAt` change on `updateFileContent`.
-- **No new npm/deno dependencies.** Everything here uses `localStorage`,
-  `JSON`, `crypto.randomUUID()`, and `zod` (already a dependency).
-- Explicitly deferred, only worth revisiting if it's ever actually a
-  problem: if project data outgrows `localStorage`'s ~5–10MB per-origin
-  quota, a `LocalStorageProjectStore` can be swapped for one backed by the
-  browser's native `indexedDB.open`/`IDBTransaction` API (still no wrapper
-  library) behind the same `ProjectStore` interface, with no UI changes.
-  Not needed at the current scale — don't build it preemptively.
-- No UI changes in this task.
-- Validate with `deno task check`, `deno task build`, `deno task test`.
-
 ## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
+
+Third of the five-task VFS sequence (55–59). Tasks 55 (VFS domain types &
+pure tree helpers) and 56 (`ProjectStore` interface +
+`LocalStorageProjectStore`/`InMemoryProjectStore`) are finished — see
+`FINISHED_TASKS.md`. `web/src/vfs/store.ts` now defines `ProjectStore`,
+and `web/src/vfs/localStorageStore.ts` exports `LocalStorageProjectStore`,
+ready to back this task's `ProjectState`.
 
 - Add `web/src/routes/projects/+page.svelte` — list existing projects
   (name + updated-at), create a new (empty or example-seeded) project,
