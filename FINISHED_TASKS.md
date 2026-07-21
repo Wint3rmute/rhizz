@@ -4,6 +4,94 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
+
+Third of the five-task VFS sequence (55–59). Turns the single-project SPA
+into a multi-project one: a `/projects` landing page, project-scoped
+routing for the editor/diagrams/overview pages, and a one-time migration
+of any pre-existing single-project data. Still local-first/single-editor;
+no locking, no CRDT.
+
+- Added `web/src/ProjectState.svelte` (a module-only `.svelte` file with
+  `<script module>`, matching the established `ThemeState.svelte`/
+  `KeyboardState.svelte` pattern — not `ProjectState.svelte.ts` as
+  originally sketched in TASKS.md, since that's not actually this
+  codebase's convention for shared singleton state). Exports:
+  - `projectStore`: the one app-wide `LocalStorageProjectStore` instance.
+  - `getCurrentProjectId()`/`getCurrentProject()` + `setCurrentProject(id)`/
+    `refreshCurrentProject()`: reactive `$state` tracking only the active
+    project's *metadata* (id + `Project`), not its node list — deliberately,
+    so pages that need file contents (editor/diagrams/overview) always
+    fetch fresh from `projectStore` themselves instead of risking a stale
+    shared cache shadowing their own edits.
+  - `createProjectWithMainFile(name, content)`: creates a project and
+    seeds it with one root-level `main.hcl` file — the interim "exactly
+    one editable file per project" convention until Task 58 adds a real
+    file-tree UI.
+  - A one-time `migrateLegacySystemInputBox()` migration, run
+    automatically at module load: if the legacy `SYSTEM_INPUT_BOX`
+    localStorage key exists (JSON-quoted, per `Persisted.svelte.ts`'s
+    storage format), its content is moved into a new "Migrated project"
+    via `createProjectWithMainFile`, then the legacy key is removed —
+    making it a no-op on every subsequent load.
+- Added `firstHclFile(nodes)` to `web/src/vfs/tree.ts` (+ 4 new tests in
+  `tree.test.ts`): picks the first hcl-content file in a node list, used
+  by the editor page and `createProjectWithMainFile`'s convention above.
+- Added `renameProject(id, name)` to the `ProjectStore` interface
+  (`store.ts`), its pure implementation in `operations.ts`, both
+  `LocalStorageProjectStore`/`InMemoryProjectStore`, and 2 new contract
+  tests — needed once the `/projects` page's "Rename" action existed, but
+  missing from Task 56 (which only covered node rename, not project
+  rename).
+- Added `web/src/routes/projects/+page.svelte`: lists projects (sorted by
+  most recently touched, via each project's `updatedAt`), with "New
+  project" (prompts for a name, seeds an empty main file), "New from
+  example" (seeds `example_system.ts`'s `EXAMPLE_SYSTEM_HCL` — moved here
+  from the editor page's old "?" button), Rename, and Delete actions.
+- Added `web/src/routes/projects/[id]/+layout.ts` (`{ projectId:
+  params.id }`) and `+layout.svelte` (calls `setCurrentProject` whenever
+  `[id]` changes, showing a loading state, then either a "Project not
+  found" fallback with a link back to `/projects`, or the child route).
+- Moved `routes/editor`, `routes/diagrams`, `routes/overview` (with all
+  their colocated helper modules/tests: `forceLayout.ts`, `geometry.ts`,
+  `history.ts`, `persistence.ts` + `*.test.ts`) under
+  `routes/projects/[id]/...`, fixing relative import depths throughout.
+  Each page now sources its compiled model from
+  `projectSources(await projectStore.listNodes(projectId))` (Task 55's
+  helper) instead of the global `persisted("SYSTEM_INPUT_BOX", ...)`
+  string:
+  - `editor/+page.svelte`: binds Monaco to `firstHclFile`'s content,
+    writing back via `projectStore.updateFileContent` on every change
+    (no debounce yet — same as the old `persisted()` behavior; Task 58
+    may add debouncing once there's more than one file to write).
+  - `diagrams/+page.svelte`/`overview/+page.svelte`: read-only
+    compilation from the project's nodes. Diagram canvas layout
+    (`DIAGRAM_CHECKED_NODES`/`DIAGRAM_SAVED_LAYOUT`) and camera state
+    (`DIAGRAM_VIEW`) deliberately still use global `localStorage` —
+    that's Task 59's job.
+- Updated `Navbar.svelte` to read the active project directly from
+  `ProjectState` (no prop-drilling needed, since Navbar lives in the root
+  layout, outside `/projects/[id]`'s own layout data): shows
+  project-scoped Editor/Diagrams/Overview links (hidden when no project
+  is active) and the active project's name, alongside the pre-existing
+  (and, it turns out, already-unused — nothing was passing it any props)
+  compiled-HCL-project display.
+- Updated the root `/+page.svelte` to link to `/projects` instead of the
+  now-nested `/editor`/`/diagrams`/`/overview`.
+- No new dependencies.
+- Validated with `deno task --cwd web test` (164/164 pass, 8 new: 4
+  `firstHclFile` cases + 4 `renameProject` contract cases across both
+  store implementations), `deno task --cwd web check` (`svelte-check`: 0
+  errors/warnings), `deno task --cwd web build` (succeeds, including the
+  new `/projects` and `/projects/[id]/...` routes), and `deno fmt --check
+  web` (clean, `.svelte` files included via the `fmt-component` unstable
+  flag). The legacy-data migration itself has no automated test — it's a
+  one-shot `localStorage`-coupled module side effect in the same vein as
+  `ThemeState.svelte`/`KeyboardState.svelte`, neither of which have tests
+  either; recommend a manual spot-check (load the app with a pre-existing
+  `SYSTEM_INPUT_BOX` key set, confirm a "Migrated project" appears and the
+  key is gone afterward).
+
 ## Task 56 — `ProjectStore` interface + localStorage-backed implementation
 
 Second of the five-task VFS sequence (55–59). Introduces the actual

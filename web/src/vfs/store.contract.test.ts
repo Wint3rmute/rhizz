@@ -42,6 +42,22 @@ export function runProjectStoreContractTests(
         await expect(store.deleteProject("does-not-exist")).rejects.toThrow();
       });
 
+      it("renames a project", async () => {
+        const store = makeStore();
+        const project = await store.createProject("old-name");
+        await store.renameProject(project.id, "new-name");
+        const [renamed] = await store.listProjects();
+        expect(renamed.name).toBe("new-name");
+        expect(renamed.updatedAt).not.toBe(project.updatedAt);
+      });
+
+      it("rejects renaming an unknown project", async () => {
+        const store = makeStore();
+        await expect(
+          store.renameProject("does-not-exist", "x"),
+        ).rejects.toThrow();
+      });
+
       it("deleting a project also deletes its nodes", async () => {
         const store = makeStore();
         const project = await store.createProject("temp");

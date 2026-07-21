@@ -3,6 +3,7 @@ import type { FsDirectory, FsFile, FsNode } from "./types";
 import {
   buildTree,
   descendantsOf,
+  firstHclFile,
   pathOf,
   projectSources,
   type TreeNode,
@@ -157,6 +158,31 @@ describe("wouldCreateCycle", () => {
   it("is false when moving under an unrelated node", () => {
     expect(wouldCreateCycle("dir-components", "dir-diagrams", fixture()))
       .toBe(false);
+  });
+});
+
+describe("firstHclFile", () => {
+  it("returns the first hcl-content file", () => {
+    const result = firstHclFile(fixture());
+    expect(result?.id).toBe("file-imu");
+  });
+
+  it("skips directories and diagram-layout files", () => {
+    const nodes = [
+      dir("d", "d", null),
+      file("layout", "layout.json", null, "{}", "diagram-layout"),
+      file("main", "main.hcl", null, 'system "x" {}'),
+    ];
+    expect(firstHclFile(nodes)?.id).toBe("main");
+  });
+
+  it("returns null when there are no hcl files", () => {
+    const nodes = [file("layout", "layout.json", null, "{}", "diagram-layout")];
+    expect(firstHclFile(nodes)).toBeNull();
+  });
+
+  it("returns null for an empty node list", () => {
+    expect(firstHclFile([])).toBeNull();
   });
 });
 

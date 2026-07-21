@@ -18,6 +18,8 @@ import type {
 export interface ProjectStore {
   listProjects(): Promise<Project[]>;
   createProject(name: string): Promise<Project>;
+  /** Rejects if `id` doesn't exist. */
+  renameProject(id: string, name: string): Promise<void>;
   /** Also deletes every node belonging to the project. Rejects if `id` doesn't exist. */
   deleteProject(id: string): Promise<void>;
 

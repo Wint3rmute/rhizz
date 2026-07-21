@@ -8,7 +8,7 @@
 // called by the store's moveNode before a move is applied; these helpers
 // don't re-validate that invariant on every call, aside from pathOf's
 // defensive guard below.
-import { type FsNode, isFile } from "./types";
+import { type FsFile, type FsNode, isFile } from "./types";
 
 // A single compiled source file, matching the `{ filename, content }`
 // shape rhizz-core's `compile()` — and thus `CompileResultJS.compile` /
@@ -16,6 +16,17 @@ import { type FsNode, isFile } from "./types";
 export interface Source {
   filename: string;
   content: string;
+}
+
+// Picks the one file a project's editor should show, until Task 58 adds
+// a real file-tree UI: the first hcl-content file found (in `nodes`
+// order), or `null` if the project has none. Every project created via
+// ProjectState.createProjectWithMainFile() has exactly one, so in
+// practice this is stable — but nothing here assumes that; a project
+// with several hcl files just exposes the first one until Task 58 lands.
+export function firstHclFile(nodes: FsNode[]): FsFile | null {
+  return nodes.find((n): n is FsFile => isFile(n) && n.contentType === "hcl") ??
+    null;
 }
 
 export interface TreeNode {

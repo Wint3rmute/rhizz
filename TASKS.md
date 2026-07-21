@@ -13,35 +13,15 @@ How to work on this file:
 
 ---
 
-## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
-
-Third of the five-task VFS sequence (55–59). Tasks 55 (VFS domain types &
-pure tree helpers) and 56 (`ProjectStore` interface +
-`LocalStorageProjectStore`/`InMemoryProjectStore`) are finished — see
-`FINISHED_TASKS.md`. `web/src/vfs/store.ts` now defines `ProjectStore`,
-and `web/src/vfs/localStorageStore.ts` exports `LocalStorageProjectStore`,
-ready to back this task's `ProjectState`.
-
-- Add `web/src/routes/projects/+page.svelte` — list existing projects
-  (name + updated-at), create a new (empty or example-seeded) project,
-  rename, delete. Becomes the new landing page linked from the navbar.
-- Add `web/src/ProjectState.svelte.ts` (same pattern as `ThemeState.svelte`/
-  `KeyboardState.svelte`) holding the current project id as reactive `$state`,
-  backed by a module-level `LocalStorageProjectStore` instance.
-- Existing `/editor`, `/diagrams`, `/overview` routes move under
-  `/projects/[id]/...`, reading/writing through `ProjectState` instead of the
-  global `persisted("SYSTEM_INPUT_BOX", ...)` singleton.
-- One-time migration: on app startup, if the legacy `SYSTEM_INPUT_BOX`
-  localStorage key exists, create a project named e.g. "Migrated project"
-  seeded with a single `all.hcl` file containing that content, then remove
-  the legacy key. Existing users keep their data with no manual steps.
-- `example_system.ts` becomes a "create from example" option on
-  `/projects` rather than a button on `/editor`.
-- Update `Navbar.svelte` to show the current project name/version (already
-  has `project` prop support) and link back to `/projects`.
-- Validate with `deno task check`, `deno task build`, `deno task test`.
-
 ## Task 58 — File-tree sidebar in the editor, wired to `ProjectStore`
+
+Fourth of the five-task VFS sequence (55–59). Tasks 55–57 are finished —
+see `FINISHED_TASKS.md`. There's now a `/projects` landing page and
+project-scoped routing (`/projects/[id]/editor`/`diagrams`/`overview`),
+with `web/src/ProjectState.svelte` tracking the active project and
+`web/src/vfs/tree.ts`'s `firstHclFile` picking the interim "single
+editable file" per project — this task replaces that interim convention
+with a real file tree.
 
 - Add a file-tree sidebar to `/projects/[id]/editor` (using `buildTree` from
   Task 55) showing the active project's `FsNode`s, with `.hcl` files and

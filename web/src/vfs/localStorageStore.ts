@@ -116,6 +116,10 @@ export class LocalStorageProjectStore implements ProjectStore {
     return project;
   }
 
+  async renameProject(id: string, name: string): Promise<void> {
+    this.write(ops.renameProject(this.read(), id, name, this.now()));
+  }
+
   async deleteProject(id: string): Promise<void> {
     this.write(ops.deleteProject(this.read(), id));
   }

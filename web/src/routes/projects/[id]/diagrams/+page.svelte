@@ -3,12 +3,16 @@ import {
   clamp_zoom,
   create_editor_state,
   reset_view,
-} from "../../ViewEditorState.svelte";
-import { isModifierHeld, isSpaceHeld } from "../../KeyboardState.svelte";
+} from "../../../../ViewEditorState.svelte";
+import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
-import { compile_system } from "../../rhizz_wasm_wrapper";
-import persisted from "../../Persisted.svelte";
+import { compile_system } from "../../../../rhizz_wasm_wrapper";
+import persisted from "../../../../Persisted.svelte";
+import { projectStore } from "../../../../ProjectState.svelte";
+import { projectSources } from "../../../../vfs/tree";
+import type { FsNode } from "../../../../vfs/types";
 import type { ComponentJS } from "rhizz";
+import type { PageProps } from "./$types";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
   createHistoryStack,
@@ -65,10 +69,17 @@ const minorGridLines = Array.from(
   (_, i) => (i + 1) * MINOR_GRID_SPACING,
 );
 
-let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
-let output = $derived.by(() =>
-  compile_system([{ filename: "all.hcl", content: input.value }])
-);
+let { data }: PageProps = $props();
+
+let nodes = $state<FsNode[]>([]);
+$effect(() => {
+  const id = data.projectId;
+  projectStore.listNodes(id).then((n) => {
+    nodes = n;
+  });
+});
+
+let output = $derived.by(() => compile_system(projectSources(nodes)));
 let model = $derived(output.model());
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);

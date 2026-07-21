@@ -100,6 +100,21 @@ export function deleteProject(data: VfsData, id: string): VfsData {
   };
 }
 
+export function renameProject(
+  data: VfsData,
+  id: string,
+  name: string,
+  now: string,
+): VfsData {
+  findProject(data, id); // throws if missing
+  return {
+    ...data,
+    projects: data.projects.map((p) =>
+      p.id === id ? { ...p, name, updatedAt: now } : p
+    ),
+  };
+}
+
 export function listNodes(data: VfsData, projectId: string): FsNode[] {
   return data.nodes.filter((n) => n.projectId === projectId);
 }

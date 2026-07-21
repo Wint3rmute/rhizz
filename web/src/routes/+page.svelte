@@ -8,10 +8,9 @@ import { resolve } from "$app/paths";
       <h1 class="card-title text-3xl">rhizz</h1>
       <p class="text-base-content/70">System Model Explorer</p>
       <div class="card-actions justify-center">
-        <a href={resolve("/editor", {})} class="btn btn-primary">Editor</a>
-        <a href={resolve("/diagrams", {})} class="btn btn-primary">Diagrams</a>
-        <a href={resolve("/overview", {})} class="btn btn-primary"
-        >System Overview</a>
+        <a href={resolve("/projects", {})} class="btn btn-primary">
+          Projects
+        </a>
       </div>
     </div>
   </div>

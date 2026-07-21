@@ -37,6 +37,10 @@ export class InMemoryProjectStore implements ProjectStore {
     return project;
   }
 
+  async renameProject(id: string, name: string): Promise<void> {
+    this.data = ops.renameProject(this.data, id, name, this.now());
+  }
+
   async deleteProject(id: string): Promise<void> {
     this.data = ops.deleteProject(this.data, id);
   }
