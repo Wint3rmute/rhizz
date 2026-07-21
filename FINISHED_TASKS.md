@@ -4,6 +4,57 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 55 — VFS domain types & pure tree helpers
+
+First of a five-task sequence (55–59) building a virtual filesystem
+hierarchy for the frontend, to support multiple multi-file projects &
+diagrams stored locally in the browser. Explicitly local-first,
+single-editor — no real-time collaboration/CRDT; a future file-locking
+mechanism is left as a possible follow-up once there's a backend, not
+designed for here.
+
+- Added `web/src/vfs/types.ts`: zod schemas + inferred types for the VFS
+  domain — `FsFileContentTypeSchema` (`"hcl" | "diagram-layout"`),
+  `FsDirectorySchema`, `FsFileSchema`, `FsNodeSchema` (a
+  `z.discriminatedUnion("kind", ...)` of the two), and `ProjectSchema`.
+  IDs (`id`/`projectId`/`parentId`) are plain strings, intended to be
+  client-generated UUIDs (`crypto.randomUUID()`) — never names/paths —
+  so a future backend can accept client-created records without an
+  ID-remapping step. `FsFile` carries `revision`/`updatedAt` so even a
+  naive last-write-wins sync strategy has something to compare later.
+  Added `isFile`/`isDirectory` type guards for narrowing `FsNode` in
+  `.filter(...)` chains.
+- Added `web/src/vfs/tree.ts`: pure functions operating on flat `FsNode[]`
+  lists, with zero Svelte/DOM/storage dependency —
+  - `buildTree(nodes)` — flat list to nested `TreeNode[]` for sidebar
+    rendering; treats a node as a root if `parentId` is `null` *or*
+    points outside the given list, so it works whether called with every
+    node in the store or a pre-filtered per-project slice.
+  - `pathOf(nodeId, nodes)` — `"/"`-joined ancestor path (e.g.
+    `"components/imu.hcl"`); throws on an unknown id or a detected cycle.
+  - `descendantsOf(nodeId, nodes)` — breadth-first list of all
+    descendants, for recursive directory delete.
+  - `wouldCreateCycle(nodeId, newParentId, nodes)` — guard intended for a
+    future `ProjectStore.moveNode` (Task 56); `null` target is never a
+    cycle, moving under self or under a descendant is.
+  - `projectSources(nodes)` — filters `contentType: "hcl"` files and maps
+    them to `{ filename: pathOf(node), content }`, the exact `Source[]`
+    shape `rhizz_wasm_wrapper.ts`'s `compile_system` already accepts, so
+    diagnostics can eventually point at real per-file paths instead of
+    the current hardcoded `"all.hcl"`.
+- Added `web/src/vfs/types.test.ts` (14 tests) and `web/src/vfs/tree.test.ts`
+  (18 tests) covering schema acceptance/rejection (including the
+  discriminated union and the type guards) and each tree helper's edge
+  cases (empty input, cycles, grandchildren, unrelated-node moves).
+- No storage engine, no UI changes — that's Task 56 onward.
+- No new dependencies (only `zod`, already present).
+- Validated with `deno task --cwd web test` (110/110 pass, 32 new),
+  `deno task --cwd web check` (`svelte-check`: 0 errors/warnings),
+  `deno task --cwd web build` (succeeds), and `deno fmt --check web`
+  (clean). Commands were run via `nix develop --command deno ...` in this
+  environment, using `deno task --cwd <dir>` since this sandbox's `deno`
+  didn't support the `-C` shorthand.
+
 ## Task 54 — Display current editing state as a bottom-right hint
 
 - `web/src/routes/diagrams/+page.svelte` gained a `currentActivity`

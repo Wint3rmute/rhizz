@@ -13,42 +13,16 @@ How to work on this file:
 
 ---
 
-## Task 55 — VFS domain types & pure tree helpers
-
-High-level goal (spans Tasks 55–59): make it possible to store multiple
-multi-file projects & diagrams in the browser, with the web application
-pretending to have a virtual filesystem hierarchy. This is explicitly a
-**local-first, single-editor** workflow — no real-time collaboration, no CRDT,
-no concurrent-edit merging. A future file-locking mechanism ("this project is
-being edited by X") is a plausible follow-up once there's a backend, but is
-out of scope here; don't design around concurrent writers.
-
-This task only introduces the plain TypeScript domain types and pure tree
-helpers — no storage engine yet.
-
-- Add `web/src/vfs/types.ts` with zod schemas + inferred types:
-  - `FsNode`: `{ id: string; projectId: string; parentId: string | null; name: string; kind: "file" | "directory" }`
-  - `FsFile extends FsNode`: `{ kind: "file"; contentType: "hcl" | "diagram-layout"; content: string; revision: number; updatedAt: string }`
-  - `Project`: `{ id: string; name: string; createdAt: string; updatedAt: string }`
-  - IDs are client-generated UUIDs (`crypto.randomUUID()`) — never names/paths
-    used as keys, so a future backend can accept client-created records
-    without an ID-remapping step.
-- Add `web/src/vfs/tree.ts` with pure functions operating on `FsNode[]`:
-  - `buildTree(nodes)` — flat list to nested tree for sidebar rendering
-  - `pathOf(nodeId, nodes)` — joined ancestor names, e.g. `"components/imu.hcl"`
-  - `descendantsOf(nodeId, nodes)` — for recursive directory delete
-  - `wouldCreateCycle(nodeId, newParentId, nodes)` — guard used by a future
-    `moveNode`
-  - `projectSources(nodes)` — filters `contentType: "hcl"` files and maps to
-    `{ filename: pathOf(node), content }`, matching the `Source[]` shape
-    `compile_system` already accepts (see `rhizz_wasm_wrapper.ts`)
-- No Svelte, no IndexedDB, no DOM — plain functions/modules, so they're
-  trivially unit-testable and reusable by a future backend-facing adapter.
-- Validate with `deno task check`, `deno task build`, `deno task test` (new
-  `types.test.ts`/`tree.test.ts` covering the tree helpers, especially
-  `wouldCreateCycle` and `projectSources`).
-
 ## Task 56 — `ProjectStore` interface + localStorage-backed implementation (no new dependencies)
+
+Second of a five-task sequence (55–59; Task 55 — VFS domain types & pure
+tree helpers, in `web/src/vfs/types.ts`/`tree.ts` — is finished, see
+`FINISHED_TASKS.md`) building a virtual filesystem hierarchy for the
+frontend, so it can store multiple multi-file projects & diagrams in the
+browser. Explicitly a **local-first, single-editor** workflow — no
+real-time collaboration, no CRDT, no concurrent-edit merging. A future
+file-locking mechanism is a plausible follow-up once there's a backend,
+but out of scope here; don't design around concurrent writers.
 
 Builds on Task 55's types. Introduces the actual storage engine behind a
 storage-agnostic interface, so a future backend-backed implementation is a
