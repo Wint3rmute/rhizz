@@ -23,6 +23,7 @@
     "d3-force": "^3.0.0"
   },
   "devDependencies": {
+    "@storybook/addon-essentials": "^8.2.0",
     "@storybook/svelte": "^8.2.0",
     "@storybook/sveltekit": "^8.2.0",
     "@sveltejs/adapter-auto": "^7.0.1",
