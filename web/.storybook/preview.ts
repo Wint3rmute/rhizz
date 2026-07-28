@@ -1,10 +1,16 @@
 import "../src/app.css";
 
-export const parameters = {
-  controls: {
-    matchers: {
-      color: /(background|color)$/i,
-      date: /Date$/i,
+export default {
+  tags: ["autodocs"],
+  parameters: {
+    controls: {
+      matchers: {
+        color: /(background|color)$/i,
+        date: /Date$/i,
+      },
+    },
+    options: {
+      storySort: (a, b) => a.id.localeCompare(b.id),
     },
   },
 };
