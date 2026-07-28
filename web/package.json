@@ -10,7 +10,8 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --compiler-warnings a11y_click_events_have_key_events:ignore",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:storybook": "storybook build --config-dir .storybook --output-dir storybook-static"
   },
   "dependencies": {
     "@sveltejs/adapter-static": "^3.0.10",
@@ -22,11 +23,14 @@
     "d3-force": "^3.0.0"
   },
   "devDependencies": {
+    "@storybook/svelte": "^8.2.0",
+    "@storybook/sveltekit": "^8.2.0",
     "@sveltejs/adapter-auto": "^7.0.1",
     "@sveltejs/kit": "^2.70.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@types/d3-force": "^3.0.10",
     "monaco-editor": "^0.55.1",
+    "storybook": "^8.2.0",
     "svelte": "^5.56.6",
     "svelte-check": "^4.7.3",
     "typescript": "^5.9.3",
