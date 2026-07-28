@@ -5,7 +5,9 @@ const storybookBase = appBase
 
 export default {
   stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|svelte)"],
-  addons: ["@storybook/addon-essentials"],
+  // The current Storybook core packages do not currently ship a compatible
+  // addon-essentials release, so the default addon set is left empty.
+  addons: [],
   framework: {
     name: "@storybook/sveltekit",
     options: {},
