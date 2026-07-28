@@ -45,7 +45,7 @@ jobs:
           BASE_PATH: "/${{ github.event.repository.name }}"
 
       - name: Build Storybook
-        run: ./node_modules/.bin/storybook build --config-dir .storybook --output-dir storybook-static
+        run: npm run build:storybook
         working-directory: ./web
         env:
           BASE_PATH: "/${{ github.event.repository.name }}"
