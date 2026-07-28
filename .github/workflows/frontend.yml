@@ -44,11 +44,18 @@ jobs:
         env:
           BASE_PATH: "/${{ github.event.repository.name }}"
 
+      - name: Build Storybook
+        run: ./node_modules/.bin/storybook build --config-dir .storybook --output-dir storybook-static
+        working-directory: ./web
+        env:
+          BASE_PATH: "/${{ github.event.repository.name }}"
+
       - name: Stage frontend artifact
         run: |
           rm -rf pages
-          mkdir -p pages
+          mkdir -p pages/storybook
           cp -a web/build/. pages/
+          cp -a web/storybook-static/. pages/storybook/
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v7
