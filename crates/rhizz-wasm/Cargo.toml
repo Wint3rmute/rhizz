@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 description = "WebAssembly bindings for rhizz-core"
 
+[package.metadata.wasm-pack.profile.release]
+# Larger WASM packages, but this works
+# from android's termux environment.
+wasm-opt = false
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
