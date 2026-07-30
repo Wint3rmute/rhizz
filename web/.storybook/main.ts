@@ -16,7 +16,7 @@ export default {
   stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|svelte)"],
   // The current Storybook core packages do not currently ship a compatible
   // addon-essentials release, so the default addon set is left empty.
-  addons: [],
+  addons: ["@storybook/addon-vitest"],
   framework: {
     name: "@storybook/sveltekit",
     options: {},
