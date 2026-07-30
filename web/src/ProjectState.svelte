@@ -10,8 +10,9 @@
 // list: pages that need the project's files (editor/diagrams/overview)
 // fetch those directly from `projectStore` themselves, so a page's own
 // edits are never at risk of being shadowed by a stale cache living here.
+import { openProjectFs } from "./vfs/fs";
 import { LocalStorageProjectStore } from "./vfs/localStorageStore";
-import type { FsFileContentType, Project } from "./vfs/types";
+import type { Project } from "./vfs/types";
 
 // The single localStorage-backed VFS for the whole app. Every
 // page/component that reads or mutates projects/files goes through this
@@ -50,21 +51,18 @@ export async function refreshCurrentProject(): Promise<void> {
   if (currentProjectId !== null) await setCurrentProject(currentProjectId);
 }
 
-// Creates a project and seeds it with a single root-level hcl file
-// (see vfs/tree.ts's firstHclFile — the interim "one editable file per
-// project" convention until Task 58 adds a real file-tree UI). Kept here
-// rather than duplicated at each call site (the /projects page's
-// "new project" and "new from example" actions).
+// Creates a project and seeds it with a single root-level "main.hcl"
+// file — the interim "one editable file per project" convention until
+// Task 58 adds a real file-tree UI. Kept here rather than duplicated at
+// each call site (the /projects page's "new project" and "new from
+// example" actions).
 export async function createProjectWithMainFile(
   name: string,
   content: string,
 ): Promise<Project> {
   const project = await projectStore.createProject(name);
-  await projectStore.createFile(
-    project.id,
-    null,
+  await openProjectFs(projectStore, project.id).writeFile(
     "main.hcl",
-    "hcl" satisfies FsFileContentType,
     content,
   );
   return project;

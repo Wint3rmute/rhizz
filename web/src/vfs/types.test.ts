@@ -16,7 +16,6 @@ const validFile: FsFile = {
   parentId: null,
   name: "drone.hcl",
   kind: "file",
-  contentType: "hcl",
   content: 'system "drone" {}',
   revision: 0,
   updatedAt: "2024-01-01T00:00:00.000Z",
@@ -42,14 +41,6 @@ describe("FsFileSchema", () => {
 
   it("rejects a file with a negative revision", () => {
     const result = FsFileSchema.safeParse({ ...validFile, revision: -1 });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects an unknown contentType", () => {
-    const result = FsFileSchema.safeParse({
-      ...validFile,
-      contentType: "yaml",
-    });
     expect(result.success).toBe(false);
   });
 

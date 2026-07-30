@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { FsDirectory, FsFile, FsNode } from "./types";
+import type { FsDirectory, FsNode } from "./types";
 import {
   buildTree,
   descendantsOf,
-  firstHclFile,
   pathOf,
-  projectSources,
+  resolveDirectory,
+  resolveNode,
+  splitBasename,
+  splitPath,
   type TreeNode,
   wouldCreateCycle,
 } from "./tree";
@@ -19,15 +21,13 @@ function file(
   name: string,
   parentId: string | null,
   content = "",
-  contentType: FsFile["contentType"] = "hcl",
-): FsFile {
+) {
   return {
     id,
     projectId: "p1",
     parentId,
     name,
-    kind: "file",
-    contentType,
+    kind: "file" as const,
     content,
     revision: 0,
     updatedAt: "2024-01-01T00:00:00.000Z",
@@ -39,20 +39,14 @@ function file(
 // components/ (dir-components)
 //   imu.hcl    (file-imu)
 // diagrams/    (dir-diagrams)
-//   overview.json (file-overview, contentType: "diagram-layout")
+//   overview.json (file-overview)
 // drone.hcl    (file-drone, root-level)
 function fixture(): FsNode[] {
   return [
     dir("dir-components", "components", null),
     file("file-imu", "imu.hcl", "dir-components", 'component "imu" {}'),
     dir("dir-diagrams", "diagrams", null),
-    file(
-      "file-overview",
-      "overview.json",
-      "dir-diagrams",
-      "{}",
-      "diagram-layout",
-    ),
+    file("file-overview", "overview.json", "dir-diagrams", "{}"),
     file("file-drone", "drone.hcl", null, 'system "drone" {}'),
   ];
 }
@@ -161,49 +155,90 @@ describe("wouldCreateCycle", () => {
   });
 });
 
-describe("firstHclFile", () => {
-  it("returns the first hcl-content file", () => {
-    const result = firstHclFile(fixture());
-    expect(result?.id).toBe("file-imu");
+describe("splitPath", () => {
+  it("splits a simple path into segments", () => {
+    expect(splitPath("components/imu.hcl")).toEqual(["components", "imu.hcl"]);
   });
 
-  it("skips directories and diagram-layout files", () => {
-    const nodes = [
-      dir("d", "d", null),
-      file("layout", "layout.json", null, "{}", "diagram-layout"),
-      file("main", "main.hcl", null, 'system "x" {}'),
-    ];
-    expect(firstHclFile(nodes)?.id).toBe("main");
+  it("treats '', '.', '/' and './' as the root (no segments)", () => {
+    expect(splitPath("")).toEqual([]);
+    expect(splitPath(".")).toEqual([]);
+    expect(splitPath("/")).toEqual([]);
+    expect(splitPath("./")).toEqual([]);
   });
 
-  it("returns null when there are no hcl files", () => {
-    const nodes = [file("layout", "layout.json", null, "{}", "diagram-layout")];
-    expect(firstHclFile(nodes)).toBeNull();
-  });
-
-  it("returns null for an empty node list", () => {
-    expect(firstHclFile([])).toBeNull();
+  it("ignores leading/trailing slashes and embedded '.' segments", () => {
+    expect(splitPath("/components/./imu.hcl/")).toEqual([
+      "components",
+      "imu.hcl",
+    ]);
   });
 });
 
-describe("projectSources", () => {
-  it("includes only hcl-content files, mapped to filename/content", () => {
-    const sources = projectSources(fixture());
-    expect(sources).toEqual([
-      { filename: "components/imu.hcl", content: 'component "imu" {}' },
-      { filename: "drone.hcl", content: 'system "drone" {}' },
-    ]);
+describe("resolveNode", () => {
+  it("resolves a root-level file", () => {
+    expect(resolveNode(fixture(), "drone.hcl")?.id).toBe("file-drone");
   });
 
-  it("excludes diagram-layout files", () => {
-    const sources = projectSources(fixture());
-    expect(sources.some((s) => s.filename.includes("overview.json"))).toBe(
-      false,
-    );
+  it("resolves a nested file", () => {
+    expect(resolveNode(fixture(), "components/imu.hcl")?.id).toBe("file-imu");
   });
 
-  it("returns an empty array when there are no hcl files", () => {
-    const nodes = [file("f", "layout.json", null, "{}", "diagram-layout")];
-    expect(projectSources(nodes)).toEqual([]);
+  it("resolves a directory", () => {
+    expect(resolveNode(fixture(), "components")?.id).toBe("dir-components");
+  });
+
+  it("returns undefined for a missing path", () => {
+    expect(resolveNode(fixture(), "nope.hcl")).toBeUndefined();
+  });
+
+  it("returns undefined when an intermediate segment doesn't exist", () => {
+    expect(resolveNode(fixture(), "nope/imu.hcl")).toBeUndefined();
+  });
+
+  it("returns undefined for the root path itself", () => {
+    expect(resolveNode(fixture(), "")).toBeUndefined();
+  });
+});
+
+describe("resolveDirectory", () => {
+  it("resolves the project root for an empty/'.' path", () => {
+    expect(resolveDirectory(fixture(), "")).toEqual({ id: null });
+    expect(resolveDirectory(fixture(), ".")).toEqual({ id: null });
+  });
+
+  it("resolves an existing directory", () => {
+    expect(resolveDirectory(fixture(), "components")).toEqual({
+      id: "dir-components",
+    });
+  });
+
+  it("returns undefined when the path is a file, not a directory", () => {
+    expect(resolveDirectory(fixture(), "drone.hcl")).toBeUndefined();
+  });
+
+  it("returns undefined when the path doesn't exist", () => {
+    expect(resolveDirectory(fixture(), "nope")).toBeUndefined();
+  });
+});
+
+describe("splitBasename", () => {
+  it("splits a nested path into dirname/basename", () => {
+    expect(splitBasename("components/imu.hcl")).toEqual({
+      dirname: "components",
+      basename: "imu.hcl",
+    });
+  });
+
+  it("uses '' (the root) as dirname for a top-level path", () => {
+    expect(splitBasename("drone.hcl")).toEqual({
+      dirname: "",
+      basename: "drone.hcl",
+    });
+  });
+
+  it("throws for the root path itself, which has no basename", () => {
+    expect(() => splitBasename("")).toThrow();
+    expect(() => splitBasename(".")).toThrow();
   });
 });

@@ -9,8 +9,8 @@ import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
-import { projectSources } from "../../../../vfs/tree";
-import type { FsNode } from "../../../../vfs/types";
+import { readProjectSources, type Source } from "../../../../vfs/compile";
+import { openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
@@ -71,15 +71,15 @@ const minorGridLines = Array.from(
 
 let { data }: PageProps = $props();
 
-let nodes = $state<FsNode[]>([]);
+let sources = $state<Source[]>([]);
 $effect(() => {
-  const id = data.projectId;
-  projectStore.listNodes(id).then((n) => {
-    nodes = n;
+  const fs = openProjectFs(projectStore, data.projectId);
+  readProjectSources(fs).then((s) => {
+    sources = s;
   });
 });
 
-let output = $derived.by(() => compile_system(projectSources(nodes)));
+let output = $derived.by(() => compile_system(sources));
 let model = $derived(output.model());
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);

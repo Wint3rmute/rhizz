@@ -1,5 +1,13 @@
-// Storage-agnostic interface for the frontend's virtual filesystem: many
-// projects, each holding a tree of files/directories (see ./types.ts).
+// Storage-agnostic, *id-based* interface for the frontend's virtual
+// filesystem — the "inode layer". This is an internal implementation
+// detail of ./vfs: real filesystems don't expose inode numbers to
+// userland either. Everything outside this directory should go through
+// the path-based facade in ./fs.ts (ProjectFs/openProjectFs) instead of
+// importing ProjectStore directly — the one exception is ProjectState.svelte,
+// which needs whole-project operations (listProjects/createProject/
+// renameProject/deleteProject) that have no path-based equivalent, since
+// a "project" here is closer to a separate mounted volume than a path
+// within one.
 //
 // Every method returns a Promise, even though every implementation so far
 // (LocalStorageProjectStore, InMemoryProjectStore) is fully synchronous
@@ -7,13 +15,7 @@
 // identical to whatever a future network-backed (or sync-queue-backed)
 // implementation will need, so adopting one later is a drop-in
 // replacement — no call sites elsewhere in the app need to change.
-import type {
-  FsDirectory,
-  FsFile,
-  FsFileContentType,
-  FsNode,
-  Project,
-} from "./types";
+import type { FsDirectory, FsFile, FsNode, Project } from "./types";
 
 export interface ProjectStore {
   listProjects(): Promise<Project[]>;
@@ -33,7 +35,6 @@ export interface ProjectStore {
     projectId: string,
     parentId: string | null,
     name: string,
-    contentType: FsFileContentType,
     content: string,
   ): Promise<FsFile>;
   /** Same parentId rules as createFile. */

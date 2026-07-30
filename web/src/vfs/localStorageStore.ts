@@ -15,7 +15,6 @@ import type { ProjectStore } from "./store";
 import {
   type FsDirectory,
   type FsFile,
-  type FsFileContentType,
   type FsNode,
   FsNodeSchema,
   type Project,
@@ -132,7 +131,6 @@ export class LocalStorageProjectStore implements ProjectStore {
     projectId: string,
     parentId: string | null,
     name: string,
-    contentType: FsFileContentType,
     content: string,
   ): Promise<FsFile> {
     const { data, file } = ops.createFile(
@@ -141,7 +139,6 @@ export class LocalStorageProjectStore implements ProjectStore {
       projectId,
       parentId,
       name,
-      contentType,
       content,
       this.now(),
     );

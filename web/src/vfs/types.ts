@@ -10,15 +10,6 @@
 // (no server-side ID remapping needed for offline-created data).
 import { z } from "zod";
 
-// Content held by a file node. "hcl" is a normal rhizz source file;
-// "diagram-layout" is JSON persisted by the diagrams canvas (see
-// web/src/routes/diagrams/persistence.ts). Keeping this as a first-class
-// content type — rather than inferring it from a filename extension —
-// means projectSources() (./tree.ts) can cleanly select only the files
-// the compiler cares about.
-export const FsFileContentTypeSchema = z.enum(["hcl", "diagram-layout"]);
-export type FsFileContentType = z.infer<typeof FsFileContentTypeSchema>;
-
 const BaseNodeSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -34,7 +25,11 @@ export type FsDirectory = z.infer<typeof FsDirectorySchema>;
 
 export const FsFileSchema = BaseNodeSchema.extend({
   kind: z.literal("file"),
-  contentType: FsFileContentTypeSchema,
+  // What a file *is* (an hcl source, a diagram layout, ...) is a matter
+  // of naming convention (e.g. a ".hcl" extension) for callers to decide
+  // — same as a real filesystem, which has no "content type" concept of
+  // its own. See vfs/compile.ts for the one place that convention is
+  // actually applied.
   content: z.string(),
   // Bumped on every content write. Cheap now; enough for a naive
   // last-write-wins strategy if/when this ever needs to reconcile with a

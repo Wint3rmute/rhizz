@@ -4,6 +4,77 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 58 — Refactor the VFS into a `node:fs`-style path-based API
+
+Unplanned insertion into the VFS sequence (55–60, was 55–59), prompted by
+a review: Task 56's `ProjectStore` was an id/inode-style CRUD interface
+(`createFile(projectId, parentId, name, contentType, content)`,
+`updateFileContent(fileId, content)`), and pages (Task 57) had to hold
+raw `FsNode[]` arrays and helpers like `firstHclFile`/`projectSources` to
+cope — i.e. "inode" concerns leaking into high-level UI code. Real
+filesystems don't expose inode numbers to userland either; they keep
+them behind a path-based syscall API. This task does the same here.
+
+- Added `web/src/vfs/fs.ts`: the new public surface, deliberately shaped
+  after `node:fs/promises`:
+  - `ProjectFs` interface: `readFile`, `writeFile` (creates-or-overwrites,
+    like real `fs.writeFile`), `mkdir` (with `{ recursive }`), `readdir`
+    (with `{ recursive }`, returning `Dirent`-like `{ name, path,
+    isFile(), isDirectory() }`), `rm` (with `{ recursive, force }`),
+    `rename`, `stat` (returning `{ isFile(), isDirectory() }`).
+  - `openProjectFs(store: ProjectStore, projectId): ProjectFs` — opens a
+    filesystem view scoped to one project.
+  - `VfsError extends Error` with a Node-style `.code` (`ENOENT`,
+    `EISDIR`, `ENOTDIR`, `EEXIST`, `ENOTEMPTY`, `EINVAL` for the
+    move-into-own-subdirectory case), so callers can branch on `.code`
+    the way real `node:fs` error handling does.
+  - Internally resolves paths via new pure helpers in `tree.ts`
+    (`splitPath`, `resolveNode`, `resolveDirectory`, `splitBasename`) and
+    delegates the actual mutation to the existing id-based `ProjectStore`
+    — `ProjectStore`/`operations.ts` are now explicitly documented as an
+    internal "inode layer", not meant to be imported outside `./vfs`
+    (except `ProjectState.svelte`, which legitimately needs whole-project
+    operations with no path-based equivalent).
+- Added `web/src/vfs/compile.ts`: `readProjectSources(fs: ProjectFs)`,
+  replacing `tree.ts`'s old `projectSources(nodes)`. This is the one
+  place that knows "a rhizz source file is named `*.hcl`" — built
+  entirely on `ProjectFs.readdir`/`readFile`, exactly like a real Node
+  program gathering source files off a real directory (mirroring
+  `rhizz-core`'s own `**/*.hcl` glob-based discovery). `fs.ts` itself
+  stays fully generic, with no rhizz-specific knowledge.
+- Removed `contentType` from `FsFile` (`types.ts`) entirely: a real
+  filesystem has no "content type" tag on a file, only a name/extension
+  convention. `firstHclFile`/`projectSources` (`tree.ts`) are gone;
+  "which files are sources" is now purely a `.hcl`-extension convention
+  applied by `compile.ts`, not a schema field.
+- Editor/diagrams/overview pages (`routes/projects/[id]/...`) rewritten
+  to use `openProjectFs`/`readProjectSources` exclusively — none of them
+  import `FsNode`, touch `.id`/`.parentId`, or call `ProjectStore`
+  directly anymore. The editor now just does `fs.readFile("main.hcl")`/
+  `fs.writeFile("main.hcl", content)` against a well-known path, exactly
+  like ordinary fs-based code opening a known file — no more
+  `firstHclFile` node-lookup dance.
+- `ProjectState.svelte`'s `createProjectWithMainFile` now seeds a project
+  via `openProjectFs(...).writeFile("main.hcl", content)` instead of a
+  raw `projectStore.createFile(..., "hcl", ...)` call.
+- New test files: `web/src/vfs/fs.test.ts` (35 cases covering every
+  `ProjectFs` method's success and error paths, using
+  `InMemoryProjectStore` as the backing store) and
+  `web/src/vfs/compile.test.ts` (4 cases). `tree.test.ts` gained tests for
+  the new path-resolution helpers and dropped the removed
+  `firstHclFile`/`projectSources` tests. `types.test.ts` dropped its
+  `contentType` cases. `store.contract.test.ts`'s `createFile` calls
+  updated to drop the now-removed `contentType` argument.
+- No new dependencies.
+- Validated with `deno task --cwd web test` (211/211 pass, up from 164),
+  `deno task --cwd web build` (succeeds), and `deno fmt --check web`
+  (clean). `deno task --cwd web check` reports the same 5 pre-existing,
+  unrelated errors it did before this change (`@storybook/svelte` is
+  declared in `package.json` but not installed in this sandbox's
+  `node_modules` — affects `*.stories.ts` files added in a prior,
+  unrelated commit; not fixed here as it's outside this task's scope and
+  a `node_modules` install issue, not a code issue).
+
 ## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
 
 Third of the five-task VFS sequence (55–59). Turns the single-project SPA

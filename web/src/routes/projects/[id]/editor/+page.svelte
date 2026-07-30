@@ -6,62 +6,53 @@ import CompilationDiagnosticsOutline from "../../../../components/CompilationDia
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
-import { firstHclFile } from "../../../../vfs/tree";
-import type { FsNode } from "../../../../vfs/types";
+import { openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 
-// The project's node list, refetched whenever the [id] route param
-// changes. Not shared with other pages via ProjectState — see
-// ProjectState.svelte's comment on why node lists are fetched per-page
-// rather than cached centrally.
-let nodes = $state<FsNode[]>([]);
-let loadedProjectId: string | null = null;
+// Until Task 58 adds a real file-tree sidebar, every project has exactly
+// one editable file, always at this well-known path (see
+// ProjectState.svelte's createProjectWithMainFile) — this page just
+// reads/writes it directly, the same way any ordinary fs-based program
+// would open a known file by path.
+const MAIN_FILE_PATH = "main.hcl";
 
+let fs = $derived(openProjectFs(projectStore, data.projectId));
+
+let content = $state("");
+let loadedProjectId: string | null = null;
+let lastWrittenContent = "";
+
+// Loads the file's content into the editor once, when the project first
+// becomes available (or changes identity — e.g. after switching
+// projects). Missing files (e.g. a project that predates this
+// convention) fall back to empty content rather than erroring.
 $effect(() => {
   const id = data.projectId;
   if (id === loadedProjectId) return;
   loadedProjectId = id;
-  projectStore.listNodes(id).then((n) => {
-    nodes = n;
-  });
-});
-
-// Until Task 58 adds a real file-tree sidebar, every project has exactly
-// one editable file (see vfs/tree.ts's firstHclFile) and this page just
-// binds Monaco straight to it.
-let mainFile = $derived(firstHclFile(nodes));
-
-let content = $state("");
-let loadedFileId: string | null = null;
-let lastWrittenContent = "";
-
-// Loads the file's content into the editor once, when it first becomes
-// available (or changes identity — e.g. after switching projects).
-$effect(() => {
-  const file = mainFile;
-  if (file && file.id !== loadedFileId) {
-    loadedFileId = file.id;
-    content = file.content;
-    lastWrittenContent = file.content;
-  }
+  fs.readFile(MAIN_FILE_PATH)
+    .catch(() => "")
+    .then((loaded) => {
+      content = loaded;
+      lastWrittenContent = loaded;
+    });
 });
 
 // Writes edits back to the store. Comparing against `lastWrittenContent`
-// (rather than `mainFile.content`, which goes stale the moment this
-// writes without refetching `nodes`) means this only ever fires for an
-// actual edit, never for the load effect's own initial assignment above.
+// (rather than re-reading the file, which would need an extra round
+// trip) means this only ever fires for an actual edit, never for the
+// load effect's own initial assignment above.
 $effect(() => {
-  if (loadedFileId !== null && content !== lastWrittenContent) {
-    const fileId = loadedFileId;
+  if (loadedProjectId !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
-    projectStore.updateFileContent(fileId, content);
+    fs.writeFile(MAIN_FILE_PATH, content);
   }
 });
 
 let output = $derived.by(() =>
-  compile_system([{ filename: mainFile?.name ?? "main.hcl", content }])
+  compile_system([{ filename: MAIN_FILE_PATH, content }])
 );
 
 let model = $derived(output.model());

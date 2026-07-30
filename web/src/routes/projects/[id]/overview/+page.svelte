@@ -6,21 +6,21 @@ import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
-import { projectSources } from "../../../../vfs/tree";
-import type { FsNode } from "../../../../vfs/types";
+import { readProjectSources, type Source } from "../../../../vfs/compile";
+import { openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
 
-let nodes = $state<FsNode[]>([]);
+let sources = $state<Source[]>([]);
 $effect(() => {
-  const id = data.projectId;
-  projectStore.listNodes(id).then((n) => {
-    nodes = n;
+  const fs = openProjectFs(projectStore, data.projectId);
+  readProjectSources(fs).then((s) => {
+    sources = s;
   });
 });
 
-let output = $derived.by(() => compile_system(projectSources(nodes)));
+let output = $derived.by(() => compile_system(sources));
 
 let model = $derived(output.model());
 let diagnostics = $derived(output.diagnostics());

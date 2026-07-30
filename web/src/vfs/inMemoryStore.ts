@@ -6,13 +6,7 @@
 import * as ops from "./operations";
 import { emptyVfsData, type VfsData } from "./operations";
 import type { ProjectStore } from "./store";
-import type {
-  FsDirectory,
-  FsFile,
-  FsFileContentType,
-  FsNode,
-  Project,
-} from "./types";
+import type { FsDirectory, FsFile, FsNode, Project } from "./types";
 
 export class InMemoryProjectStore implements ProjectStore {
   private data: VfsData = emptyVfsData();
@@ -53,7 +47,6 @@ export class InMemoryProjectStore implements ProjectStore {
     projectId: string,
     parentId: string | null,
     name: string,
-    contentType: FsFileContentType,
     content: string,
   ): Promise<FsFile> {
     const { data, file } = ops.createFile(
@@ -62,7 +55,6 @@ export class InMemoryProjectStore implements ProjectStore {
       projectId,
       parentId,
       name,
-      contentType,
       content,
       this.now(),
     );

@@ -9,7 +9,6 @@
 import {
   type FsDirectory,
   type FsFile,
-  type FsFileContentType,
   type FsNode,
   isDirectory,
   isFile,
@@ -125,7 +124,6 @@ export function createFile(
   projectId: string,
   parentId: string | null,
   name: string,
-  contentType: FsFileContentType,
   content: string,
   now: string,
 ): { data: VfsData; file: FsFile } {
@@ -138,7 +136,6 @@ export function createFile(
     parentId,
     name,
     kind: "file",
-    contentType,
     content,
     revision: 0,
     updatedAt: now,

@@ -61,7 +61,7 @@ export function runProjectStoreContractTests(
       it("deleting a project also deletes its nodes", async () => {
         const store = makeStore();
         const project = await store.createProject("temp");
-        await store.createFile(project.id, null, "a.hcl", "hcl", "");
+        await store.createFile(project.id, null, "a.hcl", "");
         await store.deleteProject(project.id);
         expect(await store.listNodes(project.id)).toEqual([]);
       });
@@ -80,7 +80,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "drone.hcl",
-          "hcl",
           'system "drone" {}',
         );
         const nodes = await store.listNodes(project.id);
@@ -98,7 +97,6 @@ export function runProjectStoreContractTests(
           project.id,
           dir.id,
           "imu.hcl",
-          "hcl",
           "",
         );
         expect(file.parentId).toBe(dir.id);
@@ -107,7 +105,7 @@ export function runProjectStoreContractTests(
       it("rejects creating a file under an unknown project", async () => {
         const store = makeStore();
         await expect(
-          store.createFile("nope", null, "a.hcl", "hcl", ""),
+          store.createFile("nope", null, "a.hcl", ""),
         ).rejects.toThrow();
       });
 
@@ -118,11 +116,10 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "a.hcl",
-          "hcl",
           "",
         );
         await expect(
-          store.createFile(project.id, file.id, "b.hcl", "hcl", ""),
+          store.createFile(project.id, file.id, "b.hcl", ""),
         ).rejects.toThrow();
       });
 
@@ -132,7 +129,7 @@ export function runProjectStoreContractTests(
         const projectB = await store.createProject("b");
         const dirInA = await store.createDirectory(projectA.id, null, "dir");
         await expect(
-          store.createFile(projectB.id, dirInA.id, "x.hcl", "hcl", ""),
+          store.createFile(projectB.id, dirInA.id, "x.hcl", ""),
         ).rejects.toThrow();
       });
     });
@@ -145,7 +142,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "a.hcl",
-          "hcl",
           "",
         );
         await store.renameNode(file.id, "b.hcl");
@@ -168,7 +164,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "a.hcl",
-          "hcl",
           "",
         );
         await store.moveNode(file.id, dir.id);
@@ -184,7 +179,6 @@ export function runProjectStoreContractTests(
           project.id,
           dir.id,
           "a.hcl",
-          "hcl",
           "",
         );
         await store.moveNode(file.id, null);
@@ -218,7 +212,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "a.hcl",
-          "hcl",
           "",
         );
         await expect(store.moveNode(file.id, "nope")).rejects.toThrow();
@@ -230,7 +223,7 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        await store.createFile(project.id, dir.id, "a.hcl", "hcl", "");
+        await store.createFile(project.id, dir.id, "a.hcl", "");
         await store.deleteNode(dir.id);
         expect(await store.listNodes(project.id)).toEqual([]);
       });
@@ -243,7 +236,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "keep.hcl",
-          "hcl",
           "",
         );
         await store.deleteNode(dir.id);
@@ -265,7 +257,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "a.hcl",
-          "hcl",
           "v0",
         );
         expect(file.revision).toBe(0);
@@ -297,7 +288,6 @@ export function runProjectStoreContractTests(
           project.id,
           null,
           "a.hcl",
-          "hcl",
           "",
         );
         await store.updateFileContent(file.id, "changed");
