@@ -74,6 +74,16 @@ them behind a path-based syscall API. This task does the same here.
   `node_modules` — affects `*.stories.ts` files added in a prior,
   unrelated commit; not fixed here as it's outside this task's scope and
   a `node_modules` install issue, not a code issue).
+- **Post-review fix:** `rename()` didn't check whether `newPath` was
+  already occupied by a *different* node before moving/renaming into it
+  — could leave two distinct nodes resolving to the same path, with
+  `resolveNode()` then silently returning whichever happened to come
+  first. Now rejects with `EEXIST` when the destination is taken by a
+  node other than the one being renamed (renaming a path onto itself is
+  still a harmless no-op, matching real `fs.rename`). Added 4 more tests
+  to `fs.test.ts` (`215/215` passing) covering the file/directory
+  destination-occupied cases, the same-node no-op case, and an explicit
+  "never leaves two nodes at one path" regression check.
 
 ## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
 

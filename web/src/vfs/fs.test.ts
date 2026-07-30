@@ -223,6 +223,40 @@ describe("rename", () => {
     expect(await codeOf(fs.rename("a.hcl", "nope/a.hcl"))).toBe("ENOENT");
   });
 
+  it("rejects with EEXIST when the destination path is already taken by a different file", async () => {
+    await fs.writeFile("a.hcl", "a-content");
+    await fs.writeFile("b.hcl", "b-content");
+    expect(await codeOf(fs.rename("a.hcl", "b.hcl"))).toBe("EEXIST");
+    // Neither side should have been touched.
+    expect(await fs.readFile("a.hcl")).toBe("a-content");
+    expect(await fs.readFile("b.hcl")).toBe("b-content");
+  });
+
+  it("rejects with EEXIST when the destination path is already taken by a directory", async () => {
+    await fs.writeFile("a.hcl", "");
+    await fs.mkdir("b");
+    expect(await codeOf(fs.rename("a.hcl", "b"))).toBe("EEXIST");
+  });
+
+  it("does not reject when the destination path resolves to the same node (no-op rename)", async () => {
+    await fs.writeFile("a.hcl", "content");
+    await expect(fs.rename("a.hcl", "a.hcl")).resolves.toBeUndefined();
+    expect(await fs.readFile("a.hcl")).toBe("content");
+  });
+
+  it("never leaves two nodes resolving to the same destination path", async () => {
+    await fs.mkdir("components");
+    await fs.writeFile("components/a.hcl", "");
+    await fs.writeFile("b.hcl", "");
+    await expect(
+      fs.rename("b.hcl", "components/a.hcl"),
+    ).rejects.toThrow();
+    // Exactly one entry named "a.hcl" should exist under components/,
+    // not two silently-shadowing nodes.
+    const entries = await fs.readdir("components");
+    expect(entries.filter((e) => e.name === "a.hcl")).toHaveLength(1);
+  });
+
   it("rejects with EINVAL when moving a directory into its own subdirectory", async () => {
     await fs.mkdir("outer");
     await fs.mkdir("outer/inner");

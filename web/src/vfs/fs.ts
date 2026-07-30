@@ -232,6 +232,24 @@ export function openProjectFs(
         );
       }
 
+      // Without this check, renaming onto an occupied path would leave
+      // two distinct nodes resolving to the same path — resolveNode()
+      // would then return whichever one happens to come first, silently
+      // shadowing the other. Renaming a path onto itself (same node) is
+      // fine and a no-op, same as real fs.rename.
+      const existingAtDestination = nodes.find(
+        (n) => n.parentId === newParent.id && n.name === basename,
+      );
+      if (
+        existingAtDestination !== undefined &&
+        existingAtDestination.id !== node.id
+      ) {
+        throw new VfsError(
+          "EEXIST",
+          `dest already exists, rename '${oldPath}' -> '${newPath}'`,
+        );
+      }
+
       if (newParent.id !== node.parentId) {
         if (wouldCreateCycle(node.id, newParent.id, nodes)) {
           throw new VfsError(
