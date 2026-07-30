@@ -73,6 +73,38 @@ function assertValidParent(
   }
 }
 
+// Throws if a node named `name` already exists under `parentId` within
+// `projectId`. A path only resolves to a single node (see tree.ts's
+// resolveNode/pathOf, both of which pick the first match) when no two
+// siblings share a name — this is what keeps that invariant true.
+// Enforced on every create, rename, and move below, regardless of the
+// colliding node's kind (a file and a directory can't share a name
+// either, same as a real filesystem). `excludeNodeId` lets renameNode/
+// moveNode re-check a node's own current slot without it colliding with
+// itself.
+function assertNoSiblingWithName(
+  data: VfsData,
+  projectId: string,
+  parentId: string | null,
+  name: string,
+  excludeNodeId?: string,
+): void {
+  const collision = data.nodes.find(
+    (n) =>
+      n.projectId === projectId &&
+      n.parentId === parentId &&
+      n.name === name &&
+      n.id !== excludeNodeId,
+  );
+  if (collision !== undefined) {
+    throw new Error(
+      `A node named "${name}" already exists under parent "${
+        parentId ?? "<root>"
+      }"`,
+    );
+  }
+}
+
 export function listProjects(data: VfsData): Project[] {
   return [...data.projects];
 }
@@ -129,6 +161,7 @@ export function createFile(
 ): { data: VfsData; file: FsFile } {
   findProject(data, projectId); // throws if missing
   assertValidParent(data, projectId, parentId);
+  assertNoSiblingWithName(data, projectId, parentId, name);
 
   const file: FsFile = {
     id,
@@ -161,6 +194,7 @@ export function createDirectory(
 ): { data: VfsData; directory: FsDirectory } {
   findProject(data, projectId); // throws if missing
   assertValidParent(data, projectId, parentId);
+  assertNoSiblingWithName(data, projectId, parentId, name);
 
   const directory: FsDirectory = {
     id,
@@ -213,6 +247,7 @@ export function renameNode(
   now: string,
 ): VfsData {
   const node = findNode(data, nodeId);
+  assertNoSiblingWithName(data, node.projectId, node.parentId, name, nodeId);
   const nodes = data.nodes.map((n) => n.id === nodeId ? { ...n, name } : n);
 
   return {
@@ -230,6 +265,13 @@ export function moveNode(
 ): VfsData {
   const node = findNode(data, nodeId);
   assertValidParent(data, node.projectId, newParentId);
+  assertNoSiblingWithName(
+    data,
+    node.projectId,
+    newParentId,
+    node.name,
+    nodeId,
+  );
 
   if (wouldCreateCycle(nodeId, newParentId, data.nodes)) {
     throw new Error(

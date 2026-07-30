@@ -132,6 +132,67 @@ export function runProjectStoreContractTests(
           store.createFile(projectB.id, dirInA.id, "x.hcl", ""),
         ).rejects.toThrow();
       });
+
+      it("rejects creating a file when a sibling file already has that name", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        await store.createFile(project.id, null, "a.hcl", "first");
+        await expect(
+          store.createFile(project.id, null, "a.hcl", "second"),
+        ).rejects.toThrow();
+      });
+
+      it("rejects creating a directory when a sibling directory already has that name", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        await store.createDirectory(project.id, null, "components");
+        await expect(
+          store.createDirectory(project.id, null, "components"),
+        ).rejects.toThrow();
+      });
+
+      it("rejects creating a directory when a sibling file already has that name", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        await store.createFile(project.id, null, "components", "");
+        await expect(
+          store.createDirectory(project.id, null, "components"),
+        ).rejects.toThrow();
+      });
+
+      it("rejects creating a file when a sibling directory already has that name", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        await store.createDirectory(project.id, null, "components");
+        await expect(
+          store.createFile(project.id, null, "components", ""),
+        ).rejects.toThrow();
+      });
+
+      it("allows two siblings with the same name under different parents", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        const dirA = await store.createDirectory(project.id, null, "a");
+        const dirB = await store.createDirectory(project.id, null, "b");
+        await expect(
+          store.createFile(project.id, dirA.id, "same.hcl", ""),
+        ).resolves.toBeTruthy();
+        await expect(
+          store.createFile(project.id, dirB.id, "same.hcl", ""),
+        ).resolves.toBeTruthy();
+      });
+
+      it("allows two siblings with the same name in different projects", async () => {
+        const store = makeStore();
+        const projectA = await store.createProject("a");
+        const projectB = await store.createProject("b");
+        await expect(
+          store.createFile(projectA.id, null, "same.hcl", ""),
+        ).resolves.toBeTruthy();
+        await expect(
+          store.createFile(projectB.id, null, "same.hcl", ""),
+        ).resolves.toBeTruthy();
+      });
     });
 
     describe("rename", () => {
@@ -152,6 +213,22 @@ export function runProjectStoreContractTests(
       it("rejects renaming an unknown node", async () => {
         const store = makeStore();
         await expect(store.renameNode("nope", "x")).rejects.toThrow();
+      });
+
+      it("rejects renaming a node to a name a sibling already has", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        await store.createFile(project.id, null, "a.hcl", "");
+        const b = await store.createFile(project.id, null, "b.hcl", "");
+        await expect(store.renameNode(b.id, "a.hcl")).rejects.toThrow();
+      });
+
+      it("allows renaming a node to its own current name (no-op)", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        const file = await store.createFile(project.id, null, "a.hcl", "");
+        await expect(store.renameNode(file.id, "a.hcl")).resolves
+          .toBeUndefined();
       });
     });
 
@@ -215,6 +292,15 @@ export function runProjectStoreContractTests(
           "",
         );
         await expect(store.moveNode(file.id, "nope")).rejects.toThrow();
+      });
+
+      it("rejects moving a node into a directory that already has a child with the same name", async () => {
+        const store = makeStore();
+        const project = await store.createProject("p");
+        const dir = await store.createDirectory(project.id, null, "dir");
+        await store.createFile(project.id, dir.id, "a.hcl", "");
+        const rootFile = await store.createFile(project.id, null, "a.hcl", "");
+        await expect(store.moveNode(rootFile.id, dir.id)).rejects.toThrow();
       });
     });
 

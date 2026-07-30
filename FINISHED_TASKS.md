@@ -84,6 +84,21 @@ them behind a path-based syscall API. This task does the same here.
   to `fs.test.ts` (`215/215` passing) covering the file/directory
   destination-occupied cases, the same-node no-op case, and an explicit
   "never leaves two nodes at one path" regression check.
+- **Post-review fix:** the previous fix only covered `fs.ts`'s own
+  check-before-call in `writeFile`/`mkdir`/`rename` — `operations.ts`
+  itself (`createFile`, `createDirectory`, `renameNode`, `moveNode`)
+  still had no same-name-sibling guard of its own, so anything calling
+  `ProjectStore` directly (bypassing `fs.ts`) could still create two
+  siblings sharing a name, breaking `resolveNode`/`pathOf`'s
+  single-match assumption. Added a shared `assertNoSiblingWithName()`
+  helper in `operations.ts`, applied to all four mutating operations
+  (scoped by `projectId` + `parentId`, excluding the node's own id for
+  rename/move so a same-name no-op still succeeds; a file and directory
+  can't share a name either, matching real filesystem semantics). Added
+  18 new cases to `store.contract.test.ts` (`233/233` passing, run
+  against both `LocalStorageProjectStore` and `InMemoryProjectStore`)
+  covering create/rename/move collisions across file×file, file×
+  directory, cross-parent, and cross-project scenarios.
 
 ## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
 
