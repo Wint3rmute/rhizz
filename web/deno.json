@@ -5,7 +5,7 @@
   "nodeModulesDir": "manual",
   "unstable": ["fmt-component"],
   "imports": {
-    "svelte-check": "npm:svelte-check@^4.7.3"
+    "svelte-check": "npm:svelte-check@^4.7.4"
   },
   "lint": {
     "exclude": [".svelte-kit/generated/"]
