@@ -31,7 +31,6 @@ import {
   boxBoundaryPoint,
   boxCenter,
   boxContains,
-  clampResizeWithin,
   clampWithin,
   type ConnectionOrientation,
   depthOf,
