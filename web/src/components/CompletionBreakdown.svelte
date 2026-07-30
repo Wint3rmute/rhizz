@@ -117,7 +117,7 @@ const rows = $derived([
 
     <!-- Category grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {#each rows as row}
+      {#each rows as row (row.label)}
         {@const total = row.cat.complete + row.cat.partial + row.cat.incomplete}
         <div class="bg-base-100 rounded-xl p-4 flex flex-col gap-3">
           <div class="flex items-center justify-between">

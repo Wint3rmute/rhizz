@@ -9,7 +9,7 @@ let components = $derived(model.components());
   {#if components.length === 0}
     <div>No components defined...</div>
   {/if}
-  {#each components as component}
+  {#each components as component, i (i)}
     <div class="alert alert-soft">
       {component.label}
     </div>
