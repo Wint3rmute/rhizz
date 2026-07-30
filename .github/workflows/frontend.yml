@@ -19,7 +19,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
-          deno-version: 2.9.2
+          deno-version: 2.9.4
           cache-hash: ${{ hashFiles('**/deno.json') }}
 
       - name: Typescript Formatting check
@@ -27,7 +27,7 @@ jobs:
         working-directory: ./web
 
       - name: Deno Install
-        run: deno install
+        run: deno install && deno run playwright-install && deno run playwright-check
         working-directory: ./web
 
       - name: Lint Frontend
