@@ -125,6 +125,10 @@ function componentKey(index: number): string {
 // that no longer exists (renamed, removed, or reparented) and are simply
 // not rendered.
 let keyToIndex = $derived.by(() => {
+  // Built fresh and returned as-is on every recomputation; reactivity
+  // already comes from the surrounding $derived.by, not from mutating
+  // this Map later.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const map = new Map<string, number>();
   components.forEach((_, index) => map.set(componentKey(index), index));
   return map;
@@ -863,6 +867,10 @@ let renderOrder = $derived(
 let marqueeCandidates: Set<number> = $derived.by(() => {
   if (!marqueeBox) return new Set();
   const box = marqueeBox;
+  // Built fresh and returned as-is on every recomputation; reactivity
+  // already comes from the surrounding $derived.by, not from mutating
+  // this Set later.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const candidates = new Set<number>();
   for (const index of renderOrder) {
     const box2 = nodeBox(index);
