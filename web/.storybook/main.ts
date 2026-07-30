@@ -20,7 +20,11 @@ export default {
   // is registered explicitly since DiagramToolbar.stories.ts's NarrowCanvas
   // story relies on it (globals.viewport) to constrain the preview to a
   // tablet-width viewport.
-  addons: ["@storybook/addon-vitest", "storybook/viewport", "@storybook/addon-docs"],
+  addons: [
+    "@storybook/addon-vitest",
+    "storybook/viewport",
+    "@storybook/addon-docs",
+  ],
   framework: {
     name: "@storybook/sveltekit",
     options: {},
