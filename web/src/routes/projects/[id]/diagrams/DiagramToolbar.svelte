@@ -37,7 +37,8 @@ let {
 </script>
 
 <div
-  class="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
+  data-testid="diagram-toolbar"
+  class="absolute bottom-2 left-1/2 w-max -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
 >
   <div class="join">
     <button
