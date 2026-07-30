@@ -35,6 +35,12 @@ export default defineConfig(
 	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			// Lets `const { a, ...rest } = obj` patterns destructure a field
+			// purely to exclude it from `rest`, without `a` itself being
+			// flagged as unused — used throughout vfs/types.test.ts to build
+			// "this object minus one required field" fixtures.
+			'@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }]
+		}
 	}
 );
