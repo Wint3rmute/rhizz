@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 // Imported from "vitest/config" rather than plain "vite" — it re-exports
 // Vite's defineConfig with the `test` field typed, so Vitest config can
 // live alongside the existing Vite config instead of a separate file.
