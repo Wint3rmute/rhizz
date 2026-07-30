@@ -4,6 +4,305 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 58 — Refactor the VFS into a `node:fs`-style path-based API
+
+Unplanned insertion into the VFS sequence (55–60, was 55–59), prompted by
+a review: Task 56's `ProjectStore` was an id/inode-style CRUD interface
+(`createFile(projectId, parentId, name, contentType, content)`,
+`updateFileContent(fileId, content)`), and pages (Task 57) had to hold
+raw `FsNode[]` arrays and helpers like `firstHclFile`/`projectSources` to
+cope — i.e. "inode" concerns leaking into high-level UI code. Real
+filesystems don't expose inode numbers to userland either; they keep
+them behind a path-based syscall API. This task does the same here.
+
+- Added `web/src/vfs/fs.ts`: the new public surface, deliberately shaped
+  after `node:fs/promises`:
+  - `ProjectFs` interface: `readFile`, `writeFile` (creates-or-overwrites,
+    like real `fs.writeFile`), `mkdir` (with `{ recursive }`), `readdir`
+    (with `{ recursive }`, returning `Dirent`-like `{ name, path,
+    isFile(), isDirectory() }`), `rm` (with `{ recursive, force }`),
+    `rename`, `stat` (returning `{ isFile(), isDirectory() }`).
+  - `openProjectFs(store: ProjectStore, projectId): ProjectFs` — opens a
+    filesystem view scoped to one project.
+  - `VfsError extends Error` with a Node-style `.code` (`ENOENT`,
+    `EISDIR`, `ENOTDIR`, `EEXIST`, `ENOTEMPTY`, `EINVAL` for the
+    move-into-own-subdirectory case), so callers can branch on `.code`
+    the way real `node:fs` error handling does.
+  - Internally resolves paths via new pure helpers in `tree.ts`
+    (`splitPath`, `resolveNode`, `resolveDirectory`, `splitBasename`) and
+    delegates the actual mutation to the existing id-based `ProjectStore`
+    — `ProjectStore`/`operations.ts` are now explicitly documented as an
+    internal "inode layer", not meant to be imported outside `./vfs`
+    (except `ProjectState.svelte`, which legitimately needs whole-project
+    operations with no path-based equivalent).
+- Added `web/src/vfs/compile.ts`: `readProjectSources(fs: ProjectFs)`,
+  replacing `tree.ts`'s old `projectSources(nodes)`. This is the one
+  place that knows "a rhizz source file is named `*.hcl`" — built
+  entirely on `ProjectFs.readdir`/`readFile`, exactly like a real Node
+  program gathering source files off a real directory (mirroring
+  `rhizz-core`'s own `**/*.hcl` glob-based discovery). `fs.ts` itself
+  stays fully generic, with no rhizz-specific knowledge.
+- Removed `contentType` from `FsFile` (`types.ts`) entirely: a real
+  filesystem has no "content type" tag on a file, only a name/extension
+  convention. `firstHclFile`/`projectSources` (`tree.ts`) are gone;
+  "which files are sources" is now purely a `.hcl`-extension convention
+  applied by `compile.ts`, not a schema field.
+- Editor/diagrams/overview pages (`routes/projects/[id]/...`) rewritten
+  to use `openProjectFs`/`readProjectSources` exclusively — none of them
+  import `FsNode`, touch `.id`/`.parentId`, or call `ProjectStore`
+  directly anymore. The editor now just does `fs.readFile("main.hcl")`/
+  `fs.writeFile("main.hcl", content)` against a well-known path, exactly
+  like ordinary fs-based code opening a known file — no more
+  `firstHclFile` node-lookup dance.
+- `ProjectState.svelte`'s `createProjectWithMainFile` now seeds a project
+  via `openProjectFs(...).writeFile("main.hcl", content)` instead of a
+  raw `projectStore.createFile(..., "hcl", ...)` call.
+- New test files: `web/src/vfs/fs.test.ts` (35 cases covering every
+  `ProjectFs` method's success and error paths, using
+  `InMemoryProjectStore` as the backing store) and
+  `web/src/vfs/compile.test.ts` (4 cases). `tree.test.ts` gained tests for
+  the new path-resolution helpers and dropped the removed
+  `firstHclFile`/`projectSources` tests. `types.test.ts` dropped its
+  `contentType` cases. `store.contract.test.ts`'s `createFile` calls
+  updated to drop the now-removed `contentType` argument.
+- No new dependencies.
+- Validated with `deno task --cwd web test` (211/211 pass, up from 164),
+  `deno task --cwd web build` (succeeds), and `deno fmt --check web`
+  (clean). `deno task --cwd web check` reports the same 5 pre-existing,
+  unrelated errors it did before this change (`@storybook/svelte` is
+  declared in `package.json` but not installed in this sandbox's
+  `node_modules` — affects `*.stories.ts` files added in a prior,
+  unrelated commit; not fixed here as it's outside this task's scope and
+  a `node_modules` install issue, not a code issue).
+- **Post-review fix:** `rename()` didn't check whether `newPath` was
+  already occupied by a *different* node before moving/renaming into it
+  — could leave two distinct nodes resolving to the same path, with
+  `resolveNode()` then silently returning whichever happened to come
+  first. Now rejects with `EEXIST` when the destination is taken by a
+  node other than the one being renamed (renaming a path onto itself is
+  still a harmless no-op, matching real `fs.rename`). Added 4 more tests
+  to `fs.test.ts` (`215/215` passing) covering the file/directory
+  destination-occupied cases, the same-node no-op case, and an explicit
+  "never leaves two nodes at one path" regression check.
+- **Post-review fix:** the previous fix only covered `fs.ts`'s own
+  check-before-call in `writeFile`/`mkdir`/`rename` — `operations.ts`
+  itself (`createFile`, `createDirectory`, `renameNode`, `moveNode`)
+  still had no same-name-sibling guard of its own, so anything calling
+  `ProjectStore` directly (bypassing `fs.ts`) could still create two
+  siblings sharing a name, breaking `resolveNode`/`pathOf`'s
+  single-match assumption. Added a shared `assertNoSiblingWithName()`
+  helper in `operations.ts`, applied to all four mutating operations
+  (scoped by `projectId` + `parentId`, excluding the node's own id for
+  rename/move so a same-name no-op still succeeds; a file and directory
+  can't share a name either, matching real filesystem semantics). Added
+  18 new cases to `store.contract.test.ts` (`233/233` passing, run
+  against both `LocalStorageProjectStore` and `InMemoryProjectStore`)
+  covering create/rename/move collisions across file×file, file×
+  directory, cross-parent, and cross-project scenarios.
+
+## Task 57 — `/projects` route, `ProjectState`, and legacy-data migration
+
+Third of the five-task VFS sequence (55–59). Turns the single-project SPA
+into a multi-project one: a `/projects` landing page, project-scoped
+routing for the editor/diagrams/overview pages, and a one-time migration
+of any pre-existing single-project data. Still local-first/single-editor;
+no locking, no CRDT.
+
+- Added `web/src/ProjectState.svelte` (a module-only `.svelte` file with
+  `<script module>`, matching the established `ThemeState.svelte`/
+  `KeyboardState.svelte` pattern — not `ProjectState.svelte.ts` as
+  originally sketched in TASKS.md, since that's not actually this
+  codebase's convention for shared singleton state). Exports:
+  - `projectStore`: the one app-wide `LocalStorageProjectStore` instance.
+  - `getCurrentProjectId()`/`getCurrentProject()` + `setCurrentProject(id)`/
+    `refreshCurrentProject()`: reactive `$state` tracking only the active
+    project's *metadata* (id + `Project`), not its node list — deliberately,
+    so pages that need file contents (editor/diagrams/overview) always
+    fetch fresh from `projectStore` themselves instead of risking a stale
+    shared cache shadowing their own edits.
+  - `createProjectWithMainFile(name, content)`: creates a project and
+    seeds it with one root-level `main.hcl` file — the interim "exactly
+    one editable file per project" convention until Task 58 adds a real
+    file-tree UI.
+  - A one-time `migrateLegacySystemInputBox()` migration, run
+    automatically at module load: if the legacy `SYSTEM_INPUT_BOX`
+    localStorage key exists (JSON-quoted, per `Persisted.svelte.ts`'s
+    storage format), its content is moved into a new "Migrated project"
+    via `createProjectWithMainFile`, then the legacy key is removed —
+    making it a no-op on every subsequent load.
+- Added `firstHclFile(nodes)` to `web/src/vfs/tree.ts` (+ 4 new tests in
+  `tree.test.ts`): picks the first hcl-content file in a node list, used
+  by the editor page and `createProjectWithMainFile`'s convention above.
+- Added `renameProject(id, name)` to the `ProjectStore` interface
+  (`store.ts`), its pure implementation in `operations.ts`, both
+  `LocalStorageProjectStore`/`InMemoryProjectStore`, and 2 new contract
+  tests — needed once the `/projects` page's "Rename" action existed, but
+  missing from Task 56 (which only covered node rename, not project
+  rename).
+- Added `web/src/routes/projects/+page.svelte`: lists projects (sorted by
+  most recently touched, via each project's `updatedAt`), with "New
+  project" (prompts for a name, seeds an empty main file), "New from
+  example" (seeds `example_system.ts`'s `EXAMPLE_SYSTEM_HCL` — moved here
+  from the editor page's old "?" button), Rename, and Delete actions.
+- Added `web/src/routes/projects/[id]/+layout.ts` (`{ projectId:
+  params.id }`) and `+layout.svelte` (calls `setCurrentProject` whenever
+  `[id]` changes, showing a loading state, then either a "Project not
+  found" fallback with a link back to `/projects`, or the child route).
+- Moved `routes/editor`, `routes/diagrams`, `routes/overview` (with all
+  their colocated helper modules/tests: `forceLayout.ts`, `geometry.ts`,
+  `history.ts`, `persistence.ts` + `*.test.ts`) under
+  `routes/projects/[id]/...`, fixing relative import depths throughout.
+  Each page now sources its compiled model from
+  `projectSources(await projectStore.listNodes(projectId))` (Task 55's
+  helper) instead of the global `persisted("SYSTEM_INPUT_BOX", ...)`
+  string:
+  - `editor/+page.svelte`: binds Monaco to `firstHclFile`'s content,
+    writing back via `projectStore.updateFileContent` on every change
+    (no debounce yet — same as the old `persisted()` behavior; Task 58
+    may add debouncing once there's more than one file to write).
+  - `diagrams/+page.svelte`/`overview/+page.svelte`: read-only
+    compilation from the project's nodes. Diagram canvas layout
+    (`DIAGRAM_CHECKED_NODES`/`DIAGRAM_SAVED_LAYOUT`) and camera state
+    (`DIAGRAM_VIEW`) deliberately still use global `localStorage` —
+    that's Task 59's job.
+- Updated `Navbar.svelte` to read the active project directly from
+  `ProjectState` (no prop-drilling needed, since Navbar lives in the root
+  layout, outside `/projects/[id]`'s own layout data): shows
+  project-scoped Editor/Diagrams/Overview links (hidden when no project
+  is active) and the active project's name, alongside the pre-existing
+  (and, it turns out, already-unused — nothing was passing it any props)
+  compiled-HCL-project display.
+- Updated the root `/+page.svelte` to link to `/projects` instead of the
+  now-nested `/editor`/`/diagrams`/`/overview`.
+- No new dependencies.
+- Validated with `deno task --cwd web test` (164/164 pass, 8 new: 4
+  `firstHclFile` cases + 4 `renameProject` contract cases across both
+  store implementations), `deno task --cwd web check` (`svelte-check`: 0
+  errors/warnings), `deno task --cwd web build` (succeeds, including the
+  new `/projects` and `/projects/[id]/...` routes), and `deno fmt --check
+  web` (clean, `.svelte` files included via the `fmt-component` unstable
+  flag). The legacy-data migration itself has no automated test — it's a
+  one-shot `localStorage`-coupled module side effect in the same vein as
+  `ThemeState.svelte`/`KeyboardState.svelte`, neither of which have tests
+  either; recommend a manual spot-check (load the app with a pre-existing
+  `SYSTEM_INPUT_BOX` key set, confirm a "Migrated project" appears and the
+  key is gone afterward).
+
+## Task 56 — `ProjectStore` interface + localStorage-backed implementation
+
+Second of the five-task VFS sequence (55–59). Introduces the actual
+storage engine behind a storage-agnostic interface, with zero new
+dependencies — the entire VFS lives in one JSON blob under one
+`localStorage` key, matching the existing `Persisted.svelte.ts` pattern.
+Still local-first/single-editor; no locking, no CRDT.
+
+- Added `web/src/vfs/operations.ts`: pure, synchronous functions
+  (`listProjects`, `createProject`, `deleteProject`, `listNodes`,
+  `createFile`, `createDirectory`, `updateFileContent`, `renameNode`,
+  `moveNode`, `deleteNode`) operating on a `VfsData` snapshot
+  (`{ version: 1, projects: Project[], nodes: FsNode[] }`). Each either
+  returns a new `VfsData` (never mutating its input) or throws —
+  validation (unknown project/node ids, parent-must-be-a-directory,
+  parent-must-belong-to-the-same-project, `wouldCreateCycle` before a
+  move), cascading deletes (via `descendantsOf`, from Task 55's
+  `tree.ts`), and "touch the owning project's `updatedAt`" bookkeeping all
+  live here exactly once, shared by every store implementation instead of
+  being reimplemented per backend.
+- Added `web/src/vfs/store.ts`: the `ProjectStore` interface (`listProjects`,
+  `createProject`, `deleteProject`, `listNodes`, `createFile`,
+  `createDirectory`, `updateFileContent`, `renameNode`, `moveNode`,
+  `deleteNode`), documented with its rejection rules. Every method returns
+  a `Promise` even though both current implementations are fully
+  synchronous — kept deliberately so a future network- or sync-queue-backed
+  implementation is a drop-in replacement with no call-site changes.
+- Added `web/src/vfs/inMemoryStore.ts`: `InMemoryProjectStore`, a thin
+  `ProjectStore` wrapper holding one in-memory `VfsData` and delegating
+  every method to `operations.ts`. No storage dependency — the default
+  fast test double.
+- Added `web/src/vfs/localStorageStore.ts`: `LocalStorageProjectStore`,
+  a thin `ProjectStore` wrapper that on every call reads the single
+  `"rhizz:vfs:v1"` localStorage key, `JSON.parse`s + validates it with
+  zod (dropping individually-malformed projects/nodes rather than
+  discarding the whole blob — same forgiving-parse philosophy as
+  `sanitizeStoredRecord` in `diagrams/persistence.ts`), delegates the
+  mutation to `operations.ts`, then `JSON.stringify`s and writes the
+  result back. Constructor takes an optional `StorageLike` (`{ getItem,
+  setItem }` — the minimal subset actually needed, deliberately not the
+  full DOM `Storage` interface's `removeItem`/`clear`/`length`/`key`),
+  defaulting to `globalThis.localStorage`, plus an optional clock
+  function — both purely to keep the class unit-testable without a DOM
+  environment (this project's Vitest setup has no jsdom/happy-dom — see
+  Task 36's notes).
+- Added `web/src/vfs/store.contract.test.ts`: exports
+  `runProjectStoreContractTests(label, makeStore)` (23 `it`s across
+  project CRUD, file/directory CRUD, rename, move — including the
+  self-move and descendant-move cycle-rejection cases — recursive delete,
+  and revision/updatedAt bookkeeping) and calls it once for
+  `InMemoryProjectStore` and once for `LocalStorageProjectStore` (backed by
+  a plain `Map`-based fake storage, plus a deterministic incrementing
+  clock so timestamp assertions can't flake on real wall-clock
+  resolution) — 46 tests total, both implementations verified against the
+  exact same rules.
+- No UI changes. No new dependencies — only `zod` (already present) plus
+  `localStorage`/`JSON`/`crypto.randomUUID()`, all browser built-ins.
+- Validated with `deno task --cwd web test` (156/156 pass, 46 new),
+  `deno task --cwd web check` (`svelte-check`: 0 errors/warnings),
+  `deno task --cwd web build` (succeeds), and `deno fmt --check web`
+  (clean). Commands run via `nix develop --command deno ...` per the
+  user's environment, using `deno task --cwd <dir>` (this sandbox's
+  `deno` doesn't support the `-C` shorthand).
+
+## Task 55 — VFS domain types & pure tree helpers
+
+First of a five-task sequence (55–59) building a virtual filesystem
+hierarchy for the frontend, to support multiple multi-file projects &
+diagrams stored locally in the browser. Explicitly local-first,
+single-editor — no real-time collaboration/CRDT; a future file-locking
+mechanism is left as a possible follow-up once there's a backend, not
+designed for here.
+
+- Added `web/src/vfs/types.ts`: zod schemas + inferred types for the VFS
+  domain — `FsFileContentTypeSchema` (`"hcl" | "diagram-layout"`),
+  `FsDirectorySchema`, `FsFileSchema`, `FsNodeSchema` (a
+  `z.discriminatedUnion("kind", ...)` of the two), and `ProjectSchema`.
+  IDs (`id`/`projectId`/`parentId`) are plain strings, intended to be
+  client-generated UUIDs (`crypto.randomUUID()`) — never names/paths —
+  so a future backend can accept client-created records without an
+  ID-remapping step. `FsFile` carries `revision`/`updatedAt` so even a
+  naive last-write-wins sync strategy has something to compare later.
+  Added `isFile`/`isDirectory` type guards for narrowing `FsNode` in
+  `.filter(...)` chains.
+- Added `web/src/vfs/tree.ts`: pure functions operating on flat `FsNode[]`
+  lists, with zero Svelte/DOM/storage dependency —
+  - `buildTree(nodes)` — flat list to nested `TreeNode[]` for sidebar
+    rendering; treats a node as a root if `parentId` is `null` *or*
+    points outside the given list, so it works whether called with every
+    node in the store or a pre-filtered per-project slice.
+  - `pathOf(nodeId, nodes)` — `"/"`-joined ancestor path (e.g.
+    `"components/imu.hcl"`); throws on an unknown id or a detected cycle.
+  - `descendantsOf(nodeId, nodes)` — breadth-first list of all
+    descendants, for recursive directory delete.
+  - `wouldCreateCycle(nodeId, newParentId, nodes)` — guard intended for a
+    future `ProjectStore.moveNode` (Task 56); `null` target is never a
+    cycle, moving under self or under a descendant is.
+  - `projectSources(nodes)` — filters `contentType: "hcl"` files and maps
+    them to `{ filename: pathOf(node), content }`, the exact `Source[]`
+    shape `rhizz_wasm_wrapper.ts`'s `compile_system` already accepts, so
+    diagnostics can eventually point at real per-file paths instead of
+    the current hardcoded `"all.hcl"`.
+- Added `web/src/vfs/types.test.ts` (14 tests) and `web/src/vfs/tree.test.ts`
+  (18 tests) covering schema acceptance/rejection (including the
+  discriminated union and the type guards) and each tree helper's edge
+  cases (empty input, cycles, grandchildren, unrelated-node moves).
+- No storage engine, no UI changes — that's Task 56 onward.
+- No new dependencies (only `zod`, already present).
+- Validated with `deno task --cwd web test` (110/110 pass, 32 new),
+  `deno task --cwd web check` (`svelte-check`: 0 errors/warnings),
+  `deno task --cwd web build` (succeeds), and `deno fmt --check web`
+  (clean). Commands were run via `nix develop --command deno ...` in this
+  environment, using `deno task --cwd <dir>` since this sandbox's `deno`
+  didn't support the `-C` shorthand.
+
 ## Task 54 — Display current editing state as a bottom-right hint
 
 - `web/src/routes/diagrams/+page.svelte` gained a `currentActivity`

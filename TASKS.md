@@ -13,7 +13,93 @@ How to work on this file:
 
 ---
 
-## Task 53 - pin existing nodes when auto-laying-out newly-added ones
+## Task 59 — File-tree sidebar in the editor, wired to `ProjectFs`
+
+Fifth of the VFS sequence (55–60, was 55–59 before Task 58 — an
+unplanned `node:fs`-style API refactor — was inserted; see
+`FINISHED_TASKS.md`). There's now
+a `/projects` landing page, project-scoped routing
+(`/projects/[id]/editor`/`diagrams`/`overview`), and a path-based
+`ProjectFs` (`web/src/vfs/fs.ts`'s `openProjectFs`) that every page
+already uses instead of touching `FsNode`/ids directly. The editor
+currently hardcodes a single well-known path (`"main.hcl"`, see its
+`+page.svelte`) as an interim convention — this task replaces that with a
+real file tree.
+
+- Add a file-tree sidebar to `/projects/[id]/editor` (using `buildTree`
+  from Task 55, fed by `ProjectFs.readdir(".", { recursive: true })`)
+  showing the active project's files/directories.
+- Clicking a file loads its content into the existing `MonacoEditor` via
+  `fs.readFile(path)`; edits call `fs.writeFile(path, content)`
+  (debounced, matching the current write-on-change pattern).
+- Context menu / toolbar actions for create file (`fs.writeFile`), create
+  directory (`fs.mkdir`), rename/move (`fs.rename` — drag-and-drop is a
+  nice-to-have, not required), and delete (`fs.rm`) — all calling
+  straight into `ProjectFs`, never `ProjectStore` directly.
+- Compilation keeps using `readProjectSources(fs)` (`vfs/compile.ts`,
+  already wired up in `diagrams`/`overview`), independent of which file
+  is currently open in the editor.
+- Diagnostics' `file` field already reflects real per-file paths (each
+  `Source.filename` from `readProjectSources`), since Task 58's refactor.
+- Validate with `deno task check`, `deno task build`, `deno task test`.
+
+## Task 60 — Move diagram layout persistence into the VFS
+
+- Replace `diagrams/persistence.ts`'s direct `localStorage` reads/writes
+  with JSON files under a conventional path in the active project's VFS
+  (e.g. `.rhizz/diagrams/<name>.json`, one file per saved view/diagram —
+  identified by path convention, the same way `vfs/compile.ts` identifies
+  source files by their `.hcl` extension; there's no `contentType` tag on
+  `FsFile` to key off since Task 58), so diagram layouts are
+  project-scoped instead of global, and get carried along with the rest
+  of the project's data. Use `ProjectFs` (`fs.readFile`/`fs.writeFile`/
+  `fs.mkdir`), not `ProjectStore` directly.
+  - Keep `StoredBoxSchema`/`sanitizeStoredRecord` as the validation layer
+    for the JSON stored inside the file's content — just change *where*
+    that JSON is read from/written to.
+- Migrate any existing global diagram-layout localStorage data into the
+  first/migrated project created in Task 57 (extend that migration step).
+- No behavior change from the user's point of view beyond "diagrams now
+  belong to a project" — same drag/resize/pin/undo interactions as before.
+- Validate with `deno task check`, `deno task build`, `deno task test`
+  (existing `persistence.test.ts`/`history.test.ts`/`geometry.test.ts`
+  suites should be unaffected apart from the storage plumbing).
+
+## (For later brainstorming) Task <N> - visual regression testing
+
+Now that Tasks 55–60 give us a real virtual filesystem hierarchy for the
+frontend, we can create end-to-end tests which load a project, render a
+diagram and verify that it matches the expected output.
+
+Vitest supports visual regression testing. The goal of this task is to implement
+infrastructure for visual regression testing in the frontend, then ask the
+developer to create diagrams, which can be saved as reference images for future
+comparisons.
+
+## (For later brainstorming) Task <N> - use UNIX-style paths for component references
+
+Currently, when defining connections between components, path are specified using label + colon notation (e.g. `foo:bar`). While this is convenient for simple cases, it should be replaced with a more standard UNIX-style path notation (e.g. `/foo/bar`).
+
+Both relative and absolute paths should be supported.
+
+Definition of done:
+
+- All documentation (SPEC.md and other markdown documents) are updated to reflect the new approach
+- The rhizz-core module is updated
+- Code is checked for presence of unit tests which check that both relative and absolute paths are supported. Existing tests are updated to reflect the new approach.
+- Example models in `examples/` are updated to reflect the new approach. Each example model is checked after changes using the Rhizz CLI.
+- Example model hardcoded in the frontend application is updated to use the new approach
+
+## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
+
+This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.
+
+I suggest starting out this task with writing a new example in `examples/` that demonstrates all possible incomplete definitions and how the compiler handles them,
+showcasing the compiler's flexibility in gradual validation.
+
+It should later be expanded into unit tests, but that is only after the core idea is implemented and checked by the user.
+
+## (For later brainstorming) Task <N> - pin existing nodes when auto-laying-out newly-added ones
 
 Split out from Task 50 (now finished — see `FINISHED_TASKS.md`) as the one
 remaining concrete piece of its original scope. `forceLayout.ts` already
@@ -34,25 +120,6 @@ case, but nothing calls it that way yet.
   that was previously positioned)? Lean towards the latter — respecting
   a remembered position take priority over auto-placing.
 - Validate with `deno task check`, `deno task build`, `deno task test`.
-
----
-
-
-## (For later brainstorming) Task <N> - virtual filesystem hierarchy for frontend
-
-High-level goal: make it possible to store multiple multi-file projects & diagrams,
-with the web application pretending to have a virtual filesystem hierarchy.
-
-## (For later brainstorming) Task <N> - visual regression testing
-
-As we now have a virtual filesystem hierarchy for the frontend, we can create
-end-to-end tests which load the project, render a diagram and verify that it
-matches the expected output.
-
-Vitest supports visual regression testing. The goal of this task is to implement
-infrastructure for visual regression testing in the frontend, then ask the
-developer to create diagrams, which can be saved as reference images for future
-comparisons.
 
 
 ## Task <NUMBER> — Task template

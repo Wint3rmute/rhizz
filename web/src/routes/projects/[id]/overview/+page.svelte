@@ -1,17 +1,26 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
-import { compile_system } from "../../rhizz_wasm_wrapper";
-import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
-import ModelStatsRow from "../../components/ModelStatsRow.svelte";
-import CompletionBreakdown from "../../components/CompletionBreakdown.svelte";
-import type { CategoryScore } from "../../components/CompletionBreakdown.svelte";
-import persisted from "../../Persisted.svelte";
+import { compile_system } from "../../../../rhizz_wasm_wrapper";
+import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
+import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
+import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
+import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
+import { projectStore } from "../../../../ProjectState.svelte";
+import { readProjectSources, type Source } from "../../../../vfs/compile";
+import { openProjectFs } from "../../../../vfs/fs";
+import type { PageProps } from "./$types";
 
-let input = persisted("SYSTEM_INPUT_BOX", "# Your input goes here");
+let { data }: PageProps = $props();
 
-let output = $derived.by(() =>
-  compile_system([{ filename: "all.hcl", content: input.value }])
-);
+let sources = $state<Source[]>([]);
+$effect(() => {
+  const fs = openProjectFs(projectStore, data.projectId);
+  readProjectSources(fs).then((s) => {
+    sources = s;
+  });
+});
+
+let output = $derived.by(() => compile_system(sources));
 
 let model = $derived(output.model());
 let diagnostics = $derived(output.diagnostics());
@@ -89,19 +98,19 @@ function levelBadge(level: number): string {
       <ul class="space-y-2 text-sm text-base-content/70">
         <li>
           <a
-            href={resolve("/overview", {})}
+            href={resolve("/projects/[id]/editor", { id: data.projectId })}
             class="block hover:text-base-content"
-          >Overview</a>
+          >Editor</a>
         </li>
         <li>
           <a
-            href={resolve("/diagrams", {})}
+            href={resolve("/projects/[id]/diagrams", { id: data.projectId })}
             class="block hover:text-base-content"
           >Diagrams</a>
         </li>
         <li>
-          <a href={resolve("/", {})}
-            class="block hover:text-base-content">Home</a>
+          <a href={resolve("/projects", {})}
+            class="block hover:text-base-content">Projects</a>
         </li>
       </ul>
     </aside>
