@@ -15,8 +15,12 @@ const storybookBase = isGitHubActionsCI
 export default {
   stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|svelte)"],
   // The current Storybook core packages do not currently ship a compatible
-  // addon-essentials release, so the default addon set is left empty.
-  addons: ["@storybook/addon-vitest"],
+  // addon-essentials release, so most of the former "essentials" bundle
+  // (controls, actions, backgrounds, ...) is left out — "storybook/viewport"
+  // is registered explicitly since DiagramToolbar.stories.ts's NarrowCanvas
+  // story relies on it (globals.viewport) to constrain the preview to a
+  // tablet-width viewport.
+  addons: ["@storybook/addon-vitest", "storybook/viewport", "@storybook/addon-docs"],
   framework: {
     name: "@storybook/sveltekit",
     options: {},

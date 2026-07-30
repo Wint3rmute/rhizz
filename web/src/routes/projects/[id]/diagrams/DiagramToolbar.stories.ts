@@ -45,3 +45,19 @@ export const AutoLayoutRunning: Story = {
     autoLayoutRunning: true,
   },
 };
+
+// Constrains this story to a tablet-width viewport, unlike the other
+// stories above (which render "fullscreen", giving the toolbar far more
+// room than it actually has in the real app, where it's squeezed
+// between two fixed-width sidebars). This is the story that would have
+// caught the text-overflow/wrapping bug that only showed up once
+// deployed, not in a full-width story.
+export const NarrowCanvas: Story = {
+  args: {},
+  globals: {
+    viewport: { value: "tablet" },
+  },
+  parameters: {
+    layout: "centered",
+  },
+};
