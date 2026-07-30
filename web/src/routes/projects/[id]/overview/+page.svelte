@@ -155,7 +155,7 @@ function levelBadge(level: number): string {
               </div>
               {#if project.authors.length > 0}
                 <div class="ml-auto flex gap-2 flex-wrap">
-                  {#each project.authors as author}
+                  {#each project.authors as author, i (i)}
                     <div
                       class="badge badge-outline badge-sm text-base-content/70"
                     >
@@ -213,7 +213,7 @@ function levelBadge(level: number): string {
                     </tr>
                   </thead>
                   <tbody>
-                    {#each components as comp}
+                    {#each components as comp, i (i)}
                       <tr
                         class="border-base-300 hover:bg-base-300"
                       >
@@ -257,7 +257,7 @@ function levelBadge(level: number): string {
                           <div
                             class="flex gap-1 flex-wrap"
                           >
-                            {#each comp.tags as tag}
+                            {#each comp.tags as tag, j (j)}
                               <span
                                 class="badge badge-xs badge-ghost text-base-content/60"
                               >{tag}</span>

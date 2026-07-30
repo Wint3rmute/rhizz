@@ -31,7 +31,6 @@ import {
   boxBoundaryPoint,
   boxCenter,
   boxContains,
-  clampResizeWithin,
   clampWithin,
   type ConnectionOrientation,
   depthOf,
@@ -126,6 +125,10 @@ function componentKey(index: number): string {
 // that no longer exists (renamed, removed, or reparented) and are simply
 // not rendered.
 let keyToIndex = $derived.by(() => {
+  // Built fresh and returned as-is on every recomputation; reactivity
+  // already comes from the surrounding $derived.by, not from mutating
+  // this Map later.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const map = new Map<string, number>();
   components.forEach((_, index) => map.set(componentKey(index), index));
   return map;
@@ -864,6 +867,10 @@ let renderOrder = $derived(
 let marqueeCandidates: Set<number> = $derived.by(() => {
   if (!marqueeBox) return new Set();
   const box = marqueeBox;
+  // Built fresh and returned as-is on every recomputation; reactivity
+  // already comes from the surrounding $derived.by, not from mutating
+  // this Set later.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const candidates = new Set<number>();
   for (const index of renderOrder) {
     const box2 = nodeBox(index);
@@ -1225,7 +1232,7 @@ $effect(() => {
             height={MAJOR_GRID_SPACING}
             patternUnits="userSpaceOnUse"
           >
-            {#each minorGridLines as i}
+            {#each minorGridLines as i (i)}
               <line
                 x1={i}
                 y1="0"
@@ -1349,7 +1356,7 @@ $effect(() => {
           </g>
         {/snippet}
 
-        {#each renderOrder as index}
+        {#each renderOrder as index (index)}
           {@const box = nodeBox(index)}
           {@const component = components[index]}
           {#if box && component}
@@ -1373,7 +1380,7 @@ $effect(() => {
           trade-off for now (proper edge routing that dodges nodes entirely
           is a bigger feature, not needed at this stage).
         -->
-        {#each visibleConnections as { conn, a, b, orientation }}
+        {#each visibleConnections as { conn, a, b, orientation } (`${conn.label}-${conn.from}-${conn.to}`)}
           <path
             d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
             stroke="var(--color-base-content)"
@@ -1427,7 +1434,7 @@ $effect(() => {
             class="select select-sm join-item w-20"
             title="Snap grid size, in world units"
           >
-            {#each SNAP_GRID_SIZE_OPTIONS as option}
+            {#each SNAP_GRID_SIZE_OPTIONS as option (option)}
               <option value={option}>{option}</option>
             {/each}
           </select>
@@ -1491,7 +1498,7 @@ $effect(() => {
       </p>
     {:else}
       <ul class="space-y-1">
-        {#each components as component, index}
+        {#each components as component, index (index)}
           <li class="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -1559,7 +1566,7 @@ $effect(() => {
     </h3>
 
     <ul class="space-y-1">
-      {#each connections as connection}
+      {#each connections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
         <li class="flex items-center gap-2 text-sm">
           {connection.label}
         </li>

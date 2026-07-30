@@ -30,7 +30,11 @@ jobs:
         run: deno install
         working-directory: ./web
 
-      - name: Check Frontend
+      - name: Lint Frontend
+        run: deno run lint
+        working-directory: ./web
+
+      - name: Svelte Check
         run: deno run check
         working-directory: ./web
 

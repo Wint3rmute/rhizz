@@ -12,7 +12,7 @@ let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
       Well Done!
     </div>
   {/if}
-  {#each diagnostics as diagnostic}
+  {#each diagnostics as diagnostic, i (i)}
     {#if diagnostic.code.startsWith("E")}
       <div role="alert" class="alert alert-error alert-soft">
           <p>
