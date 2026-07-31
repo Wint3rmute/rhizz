@@ -60,6 +60,7 @@ function toggleCollapsed(path: string) {
             entry.path
             ? 'font-semibold text-primary'
             : ''}"
+          aria-current={selectedPath === entry.path ? "true" : undefined}
           onclick={() => (selectedPath = entry.path)}
         >{entry.name}</button>
       {/if}
