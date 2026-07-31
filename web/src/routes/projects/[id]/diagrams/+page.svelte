@@ -14,7 +14,13 @@ import { openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
 import DiagramToolbar from "./DiagramToolbar.svelte";
-import { sanitizeStoredRecord, type StoredBox } from "./persistence";
+import {
+  CHECKED_NODES_PATH,
+  readDiagramLayoutFile,
+  SAVED_LAYOUT_PATH,
+  type StoredBox,
+  writeDiagramLayoutFile,
+} from "./persistence";
 import {
   createHistoryStack,
   pushHistory,
@@ -206,9 +212,11 @@ const DEFAULT_TEXT_ALIGN: TextAlign = "center";
 // positions to the wrong component (see TASKS.md Task 39). If a component
 // is unchecked, it's not present here — but its last-known box is kept in
 // savedLayout below, so re-checking it later restores it to where it was
-// instead of resetting to the default position. Persisted so the diagram
-// layout survives page reloads.
-let checked = persisted<Record<string, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
+// instead of resetting to the default position. Persisted into the active
+// project's VFS (see the load/save $effects below), so the diagram layout
+// travels with the project instead of being shared across every project
+// in the browser (TASKS.md Task 60).
+let checked = $state<Record<string, StoredBox>>({});
 
 // Remembers every component's last-known box, even after it's unchecked
 // (removed from `checked`) — entries here are never deleted, only updated.
@@ -216,10 +224,7 @@ let checked = persisted<Record<string, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
 // handler) so a component's layout survives being temporarily removed
 // from the canvas. Persisted separately from `checked` since the two have
 // different lifetimes (checked entries disappear on uncheck; these don't).
-let savedLayout = persisted<Record<string, StoredBox>>(
-  "DIAGRAM_SAVED_LAYOUT",
-  {},
-);
+let savedLayout = $state<Record<string, StoredBox>>({});
 
 // One-time migration away from the old arena-index-keyed scheme: those
 // keys were plain integers (e.g. "0", "1"), which can never occur as a
@@ -227,8 +232,8 @@ let savedLayout = persisted<Record<string, StoredBox>>(
 // its root system label). There's no reliable way to migrate their values
 // forward — the whole point of this change is that the old index→component
 // mapping could silently be wrong — so this just strips them out rather
-// than let them linger unused in localStorage forever; anyone with
-// pre-existing diagram layouts gets a one-time reset.
+// than let them linger unused in storage forever; anyone with pre-existing
+// diagram layouts gets a one-time reset.
 function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
   const withoutLegacyKeys = Object.fromEntries(
     Object.entries(record).filter(([key]) => !/^\d+$/.test(key)),
@@ -237,10 +242,48 @@ function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
     ? record
     : withoutLegacyKeys;
 }
-checked.value = sanitizeStoredRecord(stripLegacyIndexKeys(checked.value));
-savedLayout.value = sanitizeStoredRecord(
-  stripLegacyIndexKeys(savedLayout.value),
-);
+
+// Guards the write-back $effects below against firing with stale/empty
+// data while the load for the *current* project is still in flight —
+// reset to false whenever data.projectId changes (below), flipped back to
+// true once that project's checked.json/saved-layout.json have both
+// loaded. Without this, navigating straight from one project's diagram
+// page to another's would briefly overwrite the new project's files with
+// the previous project's (or an empty) layout.
+let diagramLayoutLoaded = $state(false);
+
+$effect(() => {
+  diagramLayoutLoaded = false;
+  const fs = openProjectFs(projectStore, data.projectId);
+  Promise.all([
+    readDiagramLayoutFile(fs, CHECKED_NODES_PATH),
+    readDiagramLayoutFile(fs, SAVED_LAYOUT_PATH),
+  ]).then(([loadedChecked, loadedSavedLayout]) => {
+    checked = stripLegacyIndexKeys(loadedChecked);
+    savedLayout = stripLegacyIndexKeys(loadedSavedLayout);
+    diagramLayoutLoaded = true;
+  });
+});
+
+$effect(() => {
+  const snapshot = checked;
+  if (!diagramLayoutLoaded) return;
+  writeDiagramLayoutFile(
+    openProjectFs(projectStore, data.projectId),
+    CHECKED_NODES_PATH,
+    snapshot,
+  );
+});
+
+$effect(() => {
+  const snapshot = savedLayout;
+  if (!diagramLayoutLoaded) return;
+  writeDiagramLayoutFile(
+    openProjectFs(projectStore, data.projectId),
+    SAVED_LAYOUT_PATH,
+    snapshot,
+  );
+});
 
 // Writes `box` to both `checked` (the current on-canvas state) and
 // savedLayout (the remembered layout), merging over any existing fields.
@@ -249,8 +292,8 @@ savedLayout.value = sanitizeStoredRecord(
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
   const key = componentKey(index);
-  checked.value[key] = { ...checked.value[key], ...box };
-  savedLayout.value[key] = { ...savedLayout.value[key], ...box };
+  checked[key] = { ...checked[key], ...box };
+  savedLayout[key] = { ...savedLayout[key], ...box };
 }
 
 // Returns the placed node's box (position + size + text alignment), or null
@@ -264,7 +307,7 @@ function nodeBox(index: number): {
   height: number;
   textAlign: TextAlign;
 } | null {
-  const pos = checked.value[componentKey(index)];
+  const pos = checked[componentKey(index)];
   if (!pos) return null;
   return {
     x: pos.x,
@@ -279,7 +322,7 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  const box = checked.value[componentKey(primarySelected)];
+  const box = checked[componentKey(primarySelected)];
   if (!box) return;
   if (box.textAlign === align) return; // no-op: skip a redundant undo point
   recordUndoPoint();
@@ -364,8 +407,8 @@ const diagramHistory = createHistoryStack<DiagramSnapshot>();
 
 function snapshotDiagram(): DiagramSnapshot {
   return {
-    checked: { ...checked.value },
-    savedLayout: { ...savedLayout.value },
+    checked: { ...checked },
+    savedLayout: { ...savedLayout },
   };
 }
 
@@ -373,8 +416,8 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
   // Copies (rather than reuses) the snapshot's records, so the object
   // sitting in the undo/redo stacks is never the same live object that
   // setNodeBox() et al. go on to mutate afterwards.
-  checked.value = { ...snapshot.checked };
-  savedLayout.value = { ...snapshot.savedLayout };
+  checked = { ...snapshot.checked };
+  savedLayout = { ...snapshot.savedLayout };
   // The restored snapshot may not have (or may no longer make sense for)
   // the same selection, so it's simplest and safest to just clear it.
   selected.clear();
@@ -569,7 +612,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
   for (const i of selected) {
-    const box = checked.value[componentKey(i)];
+    const box = checked[componentKey(i)];
     if (box) startPositions[i] = { x: box.x, y: box.y };
   }
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
@@ -855,7 +898,7 @@ function parentOf(index: number): number | undefined {
 // up visually hidden behind its parent's fill, depending on arbitrary
 // arena order.
 let renderOrder = $derived(
-  Object.keys(checked.value)
+  Object.keys(checked)
     .map((key) => keyToIndex.get(key))
     .filter((index): index is number => index !== undefined)
     .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
@@ -1464,14 +1507,14 @@ $effect(() => {
               type="checkbox"
               id="comp-{index}"
               class="checkbox checkbox-xs"
-              checked={!!checked.value[componentKey(index)]}
+              checked={!!checked[componentKey(index)]}
               onchange={(value) => {
                 recordUndoPoint();
                 if (value.currentTarget.checked) {
                   // Restore the remembered layout if this component has
                   // been placed before (even if it was later unchecked),
                   // instead of always resetting to the default position.
-                  const remembered = savedLayout.value[componentKey(index)];
+                  const remembered = savedLayout[componentKey(index)];
                   let box: Box = {
                     x: remembered?.x ?? 100,
                     y: remembered?.y ?? 100,
@@ -1495,10 +1538,10 @@ $effect(() => {
                   // that were already placed on canvas before it was.
                   reclampChildren(index);
                 } else {
-                  delete checked.value[componentKey(index)];
-                  // savedLayout.value[componentKey(index)] is intentionally
-                  // left alone, so re-checking this component later
-                  // restores it here.
+                  delete checked[componentKey(index)];
+                  // savedLayout[componentKey(index)] is intentionally left
+                  // alone, so re-checking this component later restores it
+                  // here.
                   selected.delete(index);
                 }
               }}

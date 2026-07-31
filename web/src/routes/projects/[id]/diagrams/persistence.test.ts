@@ -1,5 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { sanitizeStoredRecord, StoredBoxSchema } from "./persistence";
+import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
+import { openProjectFs } from "../../../../vfs/fs";
+import {
+  CHECKED_NODES_PATH,
+  readDiagramLayoutFile,
+  sanitizeStoredRecord,
+  StoredBoxSchema,
+  writeDiagramLayoutFile,
+} from "./persistence";
+
+async function projectFs() {
+  const store = new InMemoryProjectStore();
+  const project = await store.createProject("test");
+  return openProjectFs(store, project.id);
+}
 
 describe("StoredBoxSchema", () => {
   it("accepts a fully-populated valid entry", () => {
@@ -107,6 +121,61 @@ describe("sanitizeStoredRecord", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     sanitizeStoredRecord({ good: { x: 1, y: 2 } });
     expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
+  it("returns an empty record when the file has never been saved", async () => {
+    const fs = await projectFs();
+    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({});
+  });
+
+  it("round-trips a written record", async () => {
+    const fs = await projectFs();
+    const data = { "sys/a": { x: 1, y: 2, width: 100, height: 50 } };
+    await writeDiagramLayoutFile(fs, CHECKED_NODES_PATH, data);
+    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual(data);
+  });
+
+  it("creates the containing directory on first write", async () => {
+    const fs = await projectFs();
+    await writeDiagramLayoutFile(fs, CHECKED_NODES_PATH, {});
+    const entries = await fs.readdir(".", { recursive: true });
+    expect(entries.some((e) => e.path === ".rhizz" && e.isDirectory())).toBe(
+      true,
+    );
+  });
+
+  it("drops malformed entries when reading a hand-edited file", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = await projectFs();
+    await fs.mkdir(".rhizz/diagrams", { recursive: true });
+    await fs.writeFile(
+      CHECKED_NODES_PATH,
+      JSON.stringify({ good: { x: 1, y: 2 }, bad: { x: "nope" } }),
+    );
+    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({
+      good: { x: 1, y: 2 },
+    });
+    warnSpy.mockRestore();
+  });
+
+  it("returns an empty record for malformed JSON", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = await projectFs();
+    await fs.mkdir(".rhizz/diagrams", { recursive: true });
+    await fs.writeFile(CHECKED_NODES_PATH, "not json{");
+    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({});
+    warnSpy.mockRestore();
+  });
+
+  it("returns an empty record when the file's top level isn't an object", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = await projectFs();
+    await fs.mkdir(".rhizz/diagrams", { recursive: true });
+    await fs.writeFile(CHECKED_NODES_PATH, JSON.stringify([1, 2, 3]));
+    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({});
     warnSpy.mockRestore();
   });
 });

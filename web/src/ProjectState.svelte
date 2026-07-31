@@ -13,6 +13,12 @@
 import { openProjectFs } from "./vfs/fs";
 import { LocalStorageProjectStore } from "./vfs/localStorageStore";
 import type { Project } from "./vfs/types";
+import {
+  CHECKED_NODES_PATH,
+  sanitizeStoredRecord,
+  SAVED_LAYOUT_PATH,
+  writeDiagramLayoutFile,
+} from "./routes/projects/[id]/diagrams/persistence";
 
 // The single localStorage-backed VFS for the whole app. Every
 // page/component that reads or mutates projects/files goes through this
@@ -95,8 +101,49 @@ async function migrateLegacySystemInputBox(): Promise<void> {
     // keep `raw` as-is
   }
 
-  await createProjectWithMainFile("Migrated project", content);
+  const project = await createProjectWithMainFile("Migrated project", content);
   localStorage.removeItem(LEGACY_SYSTEM_INPUT_KEY);
+  await migrateLegacyDiagramLayout(project.id);
+}
+
+// One-time migration (extends the one above): before Task 60, diagram
+// layouts lived under these two global localStorage keys — shared by
+// every project in the browser, since there was only ever one project
+// worth of diagram data before this task. Anyone with pre-existing
+// layout data gets it copied into the project just migrated above
+// (there's no other project it could sensibly belong to), then the
+// legacy keys are removed.
+const LEGACY_CHECKED_NODES_KEY = "DIAGRAM_CHECKED_NODES";
+const LEGACY_SAVED_LAYOUT_KEY = "DIAGRAM_SAVED_LAYOUT";
+
+async function migrateLegacyDiagramLayout(projectId: string): Promise<void> {
+  if (typeof localStorage === "undefined") return;
+
+  const fs = openProjectFs(projectStore, projectId);
+  for (
+    const [legacyKey, path] of [
+      [LEGACY_CHECKED_NODES_KEY, CHECKED_NODES_PATH],
+      [LEGACY_SAVED_LAYOUT_KEY, SAVED_LAYOUT_PATH],
+    ] as const
+  ) {
+    const raw = localStorage.getItem(legacyKey);
+    if (raw === null) continue;
+
+    let record: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(raw);
+      if (
+        typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ) {
+        record = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Malformed JSON: treat as if nothing was ever saved.
+    }
+
+    await writeDiagramLayoutFile(fs, path, sanitizeStoredRecord(record));
+    localStorage.removeItem(legacyKey);
+  }
 }
 
 if (typeof window !== "undefined") {

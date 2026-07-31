@@ -1,8 +1,11 @@
-// Schema + validation for the diagram data persisted to localStorage
-// (web/src/routes/diagrams/+page.svelte's `checked`/`savedLayout`).
-// Deliberately has zero Svelte/DOM dependency, so it can be unit tested
-// directly (see persistence.test.ts) without mounting a component.
+// Schema + validation for the diagram data persisted into the active
+// project's VFS (web/src/routes/projects/[id]/diagrams/+page.svelte's
+// `checked`/`savedLayout` — see readDiagramLayoutFile/
+// writeDiagramLayoutFile below). Deliberately has zero Svelte/DOM
+// dependency, so it can be unit tested directly (see persistence.test.ts)
+// without mounting a component.
 import { z } from "zod";
+import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 
 // Where a node's label is positioned within its box. Structurally
 // identical to (and interchangeable with) geometry.ts's `TextAlign` type,
@@ -57,4 +60,64 @@ export function sanitizeStoredRecord(
   }
 
   return sanitized;
+}
+
+// Conventional location for diagram layout data inside a project's VFS —
+// mirrors how vfs/compile.ts identifies source files by their ".hcl"
+// extension, since there's no contentType tag on FsFile to key off (see
+// TASKS.md Task 60). One JSON file per persisted record (rather than one
+// combined file) keeps each file's shape a plain Record<string,
+// StoredBox> that this module's own schema already validates, instead of
+// inventing a second, combined schema just for storage.
+const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
+export const CHECKED_NODES_PATH = `${DIAGRAM_LAYOUT_DIR}/checked.json`;
+export const SAVED_LAYOUT_PATH = `${DIAGRAM_LAYOUT_DIR}/saved-layout.json`;
+
+// Reads and validates a diagram layout file from the project's VFS,
+// tolerating everything a hand-edited or pre-existing file could throw at
+// it: a missing file (never saved yet — returns {}), malformed JSON, a
+// non-object top level, or individually malformed entries (each dropped
+// via sanitizeStoredRecord rather than invalidating the whole file).
+export async function readDiagramLayoutFile(
+  fs: ProjectFs,
+  path: string,
+): Promise<Record<string, StoredBox>> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(path);
+  } catch (error) {
+    if (error instanceof VfsError && error.code === "ENOENT") return {};
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.warn(
+      `Malformed JSON in diagram layout file "${path}"; starting from an empty layout`,
+    );
+    return {};
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    console.warn(
+      `Unrecognized data shape in diagram layout file "${path}"; starting from an empty layout`,
+    );
+    return {};
+  }
+
+  return sanitizeStoredRecord(parsed as Record<string, unknown>);
+}
+
+// Writes a diagram layout file into the project's VFS, creating
+// `.rhizz/diagrams/` first if this is the first diagram layout ever saved
+// for this project.
+export async function writeDiagramLayoutFile(
+  fs: ProjectFs,
+  path: string,
+  data: Record<string, StoredBox>,
+): Promise<void> {
+  await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+  await fs.writeFile(path, JSON.stringify(data));
 }

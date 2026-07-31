@@ -4,6 +4,51 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 60 — Move diagram layout persistence into the VFS
+
+Sixth (and last) of the VFS sequence (55–60). Replaced the diagrams
+page's global `localStorage`-backed `checked`/`savedLayout` records
+(`persisted("DIAGRAM_CHECKED_NODES", ...)`/`persisted("DIAGRAM_SAVED_LAYOUT", ...)`)
+with JSON files inside the active project's VFS, so diagram layouts now
+travel with the project instead of being shared globally across every
+project in the browser.
+
+- `persistence.ts` gained `readDiagramLayoutFile`/`writeDiagramLayoutFile`,
+  built on `ProjectFs` (`fs.readFile`/`fs.writeFile`/`fs.mkdir`), storing
+  each record at a conventional path — `.rhizz/diagrams/checked.json` and
+  `.rhizz/diagrams/saved-layout.json` (one file per persisted record,
+  identified by path convention the same way `vfs/compile.ts` identifies
+  `.hcl` source files). `StoredBoxSchema`/`sanitizeStoredRecord` stayed
+  the validation layer for the JSON stored inside each file — only
+  *where* that JSON is read from/written to changed. `readDiagramLayoutFile`
+  tolerates a missing file (ENOENT → `{}`), malformed JSON, and a
+  non-object top level, all by falling back to an empty record rather
+  than throwing.
+- `+page.svelte`'s `checked`/`savedLayout` became plain `$state` records
+  (no longer the `persisted()` `{ value }` wrapper — every `.value`
+  access was dropped). A `diagramLayoutLoaded` flag guards the two
+  write-back `$effect`s against firing with stale/empty data while the
+  load for the *current* project (keyed off `data.projectId`, like the
+  existing `sources` effect) is still in flight, so navigating directly
+  between two projects' diagram pages can't cross-contaminate their
+  layout files.
+- Extended `ProjectState.svelte`'s existing one-time legacy migration
+  (Task 57's `migrateLegacySystemInputBox`): after the legacy HCL string
+  is moved into a new "Migrated project", `migrateLegacyDiagramLayout`
+  now also copies any pre-existing `DIAGRAM_CHECKED_NODES`/
+  `DIAGRAM_SAVED_LAYOUT` global localStorage data into that same
+  project's new VFS-backed files, then removes the legacy keys.
+- Added VFS-backed round-trip/malformed-data test coverage for
+  `readDiagramLayoutFile`/`writeDiagramLayoutFile` to
+  `persistence.test.ts` (using `InMemoryProjectStore` + `openProjectFs`).
+  Existing `persistence.test.ts`/`history.test.ts`/`geometry.test.ts`
+  suites were unaffected apart from the new cases.
+- No behavior change from the user's point of view beyond "diagrams now
+  belong to a project" — same drag/resize/pin/undo interactions as
+  before.
+- Validated with `deno task check`, `deno task build`, `deno run lint`,
+  and `npx vitest run --project unit_tests` (247 tests passing).
+
 ## Task 59 — File-tree sidebar in the editor, wired to `ProjectFs`
 
 Fifth of the VFS sequence (55–60). Replaces the editor's interim
