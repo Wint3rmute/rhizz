@@ -49,10 +49,17 @@ jobs:
           BASE_PATH: "/${{ github.event.repository.name }}"
 
       - name: Build Storybook
-        run: npm run build-storybook
+        run: deno run build-storybook
         working-directory: ./web
         env:
           BASE_PATH: "/${{ github.event.repository.name }}"
+
+      - name: Upload to Chromatic
+        run: deno run chromatic
+        working-directory: ./web
+        env:
+          BASE_PATH: "/${{ github.event.repository.name }}"
+          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
       - name: Stage frontend artifact
         run: |
