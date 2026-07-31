@@ -4,6 +4,56 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 65 — Multiple named diagrams per project, selectable via `FileTree`
+
+Follow-up to Task 60: replaced the single implicit per-project diagram
+(`checked.json` + `saved-layout.json`) with any number of named diagrams,
+selectable from a `FileTree` sidebar on the diagrams page — reusing the
+editor's `FileTree.svelte` completely unmodified, since it was already
+generic over `Dirent[]` + path callbacks.
+
+- `persistence.ts`: replaced `CHECKED_NODES_PATH`/`SAVED_LAYOUT_PATH`
+  with `DIAGRAM_LAYOUT_DIR` (`.rhizz/diagrams`) and a `DiagramLayout`
+  shape (`{ checked, savedLayout }`) — one JSON file per diagram (e.g.
+  `.rhizz/diagrams/main.json`), rather than two fixed-name files.
+  `readDiagramLayoutFile`/`writeDiagramLayoutFile` now read/write that
+  combined shape; `StoredBoxSchema`/`sanitizeStoredRecord` stayed the
+  per-entry validation layer.
+  Added `migrateLegacyDiagramFiles(fs)`: a one-time per-project migration
+  that combines any pre-existing Task 60-era `checked.json`/
+  `saved-layout.json` into a new `main.json`, then deletes the legacy
+  files — a no-op once neither legacy file exists.
+- `ProjectState.svelte`'s existing legacy-localStorage migration
+  (`migrateLegacyDiagramLayout`) now writes directly into the new
+  project's `.rhizz/diagrams/main.json` via `writeDiagramLayoutFile`,
+  instead of the old two-fixed-path scheme.
+- `+page.svelte`: added `selectedDiagramPath`/`diagramEntries` state and
+  a `FileTree` sidebar (leftmost of three, alongside the existing
+  Inspector/Components sidebars) for picking which diagram is open.
+  Wired `oncreatefile`/`oncreatedirectory`/`onrename`/`ondelete` to
+  `ProjectFs` calls scoped under `DIAGRAM_LAYOUT_DIR`, copying the
+  editor's `+page.svelte` prompt()-based create/rename flow exactly
+  (including the "Untitled.json"-style default name). A brand new
+  project with no diagrams yet gets one auto-seeded ("main.json") the
+  first time its diagrams page loads, so checking a component onto the
+  canvas is never silently non-persistent. The Components sidebar shows
+  a "No diagram selected" hint (instead of the checklist) on the rare
+  edge case where every diagram has been deleted.
+  The load/write `$effect`s from Task 60's reactivity-tracking fix now
+  key off `fullDiagramPath` (derived from `selectedDiagramPath`) instead
+  of the two fixed path constants, still using `$state.snapshot()` for
+  correct dependency tracking.
+- Extended `persistence.test.ts` with `DiagramLayout`-shaped
+  round-trip/malformed-data cases and full `migrateLegacyDiagramFiles`
+  coverage (both-legacy-files, one-legacy-file, and no-op-on-repeat
+  cases) using `InMemoryProjectStore`.
+- Fixed a pre-existing duplicate/misnumbered pair of "allow embedding
+  diagrams via unique URLs" tasks in `TASKS.md` (was Task 61 and Task 62
+  with identical text) while renumbering around this task.
+- Validated with `deno task check`, `deno run lint`,
+  `npx vitest run --project unit_tests` (252 tests passing), and
+  `deno task build`.
+
 ## Task 60 — Move diagram layout persistence into the VFS
 
 Sixth (and last) of the VFS sequence (55–60). Replaced the diagrams

@@ -2,12 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
-  CHECKED_NODES_PATH,
+  DIAGRAM_LAYOUT_DIR,
+  emptyDiagramLayout,
+  migrateLegacyDiagramFiles,
   readDiagramLayoutFile,
   sanitizeStoredRecord,
   StoredBoxSchema,
   writeDiagramLayoutFile,
 } from "./persistence";
+
+const MAIN_DIAGRAM_PATH = `${DIAGRAM_LAYOUT_DIR}/main.json`;
 
 async function projectFs() {
   const store = new InMemoryProjectStore();
@@ -126,56 +130,149 @@ describe("sanitizeStoredRecord", () => {
 });
 
 describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
-  it("returns an empty record when the file has never been saved", async () => {
+  it("returns an empty layout when the file has never been saved", async () => {
     const fs = await projectFs();
-    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({});
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
   });
 
-  it("round-trips a written record", async () => {
+  it("round-trips a written layout", async () => {
     const fs = await projectFs();
-    const data = { "sys/a": { x: 1, y: 2, width: 100, height: 50 } };
-    await writeDiagramLayoutFile(fs, CHECKED_NODES_PATH, data);
-    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual(data);
+    const layout = {
+      checked: { "sys/a": { x: 1, y: 2, width: 100, height: 50 } },
+      savedLayout: { "sys/a": { x: 1, y: 2, width: 100, height: 50 } },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout);
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(layout);
   });
 
   it("creates the containing directory on first write", async () => {
     const fs = await projectFs();
-    await writeDiagramLayoutFile(fs, CHECKED_NODES_PATH, {});
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());
     const entries = await fs.readdir(".", { recursive: true });
     expect(entries.some((e) => e.path === ".rhizz" && e.isDirectory())).toBe(
       true,
     );
   });
 
-  it("drops malformed entries when reading a hand-edited file", async () => {
+  it("drops malformed entries within checked/savedLayout when reading a hand-edited file", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const fs = await projectFs();
-    await fs.mkdir(".rhizz/diagrams", { recursive: true });
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
     await fs.writeFile(
-      CHECKED_NODES_PATH,
-      JSON.stringify({ good: { x: 1, y: 2 }, bad: { x: "nope" } }),
+      MAIN_DIAGRAM_PATH,
+      JSON.stringify({
+        checked: { good: { x: 1, y: 2 }, bad: { x: "nope" } },
+        savedLayout: {},
+      }),
     );
-    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({
-      good: { x: 1, y: 2 },
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
+      checked: { good: { x: 1, y: 2 } },
+      savedLayout: {},
     });
     warnSpy.mockRestore();
   });
 
-  it("returns an empty record for malformed JSON", async () => {
+  it("returns an empty layout for malformed JSON", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const fs = await projectFs();
-    await fs.mkdir(".rhizz/diagrams", { recursive: true });
-    await fs.writeFile(CHECKED_NODES_PATH, "not json{");
-    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({});
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, "not json{");
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
     warnSpy.mockRestore();
   });
 
-  it("returns an empty record when the file's top level isn't an object", async () => {
+  it("returns an empty layout when the file's top level isn't an object", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const fs = await projectFs();
-    await fs.mkdir(".rhizz/diagrams", { recursive: true });
-    await fs.writeFile(CHECKED_NODES_PATH, JSON.stringify([1, 2, 3]));
-    expect(await readDiagramLayoutFile(fs, CHECKED_NODES_PATH)).toEqual({});
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, JSON.stringify([1, 2, 3]));
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
     warnSpy.mockRestore();
+  });
+
+  it("treats missing checked/savedLayout keys as empty records", async () => {
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, JSON.stringify({}));
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
+  });
+});
+
+describe("migrateLegacyDiagramFiles", () => {
+  const LEGACY_CHECKED_PATH = `${DIAGRAM_LAYOUT_DIR}/checked.json`;
+  const LEGACY_SAVED_LAYOUT_PATH = `${DIAGRAM_LAYOUT_DIR}/saved-layout.json`;
+
+  it("does nothing when neither legacy file exists", async () => {
+    const fs = await projectFs();
+    await migrateLegacyDiagramFiles(fs);
+    const entries = await fs.readdir(".", { recursive: true }).catch(() => []);
+    expect(entries).toEqual([]);
+  });
+
+  it("combines both legacy files into a new main.json and removes the legacy files", async () => {
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(
+      LEGACY_CHECKED_PATH,
+      JSON.stringify({ "sys/a": { x: 1, y: 2 } }),
+    );
+    await fs.writeFile(
+      LEGACY_SAVED_LAYOUT_PATH,
+      JSON.stringify({ "sys/a": { x: 1, y: 2 }, "sys/b": { x: 3, y: 4 } }),
+    );
+
+    await migrateLegacyDiagramFiles(fs);
+
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
+      checked: { "sys/a": { x: 1, y: 2 } },
+      savedLayout: { "sys/a": { x: 1, y: 2 }, "sys/b": { x: 3, y: 4 } },
+    });
+    await expect(fs.readFile(LEGACY_CHECKED_PATH)).rejects.toThrow();
+    await expect(fs.readFile(LEGACY_SAVED_LAYOUT_PATH)).rejects.toThrow();
+  });
+
+  it("migrates even when only one of the two legacy files exists", async () => {
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(
+      LEGACY_CHECKED_PATH,
+      JSON.stringify({ "sys/a": { x: 1, y: 2 } }),
+    );
+
+    await migrateLegacyDiagramFiles(fs);
+
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
+      checked: { "sys/a": { x: 1, y: 2 } },
+      savedLayout: {},
+    });
+  });
+
+  it("is a no-op on a second call", async () => {
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(
+      LEGACY_CHECKED_PATH,
+      JSON.stringify({ "sys/a": { x: 1, y: 2 } }),
+    );
+
+    await migrateLegacyDiagramFiles(fs);
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, {
+      checked: { "sys/z": { x: 9, y: 9 } },
+      savedLayout: {},
+    });
+    await migrateLegacyDiagramFiles(fs); // should not overwrite main.json again
+
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
+      checked: { "sys/z": { x: 9, y: 9 } },
+      savedLayout: {},
+    });
   });
 });

@@ -10,14 +10,16 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
-import { openProjectFs } from "../../../../vfs/fs";
+import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
+import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import {
-  CHECKED_NODES_PATH,
+  DIAGRAM_LAYOUT_DIR,
+  emptyDiagramLayout,
+  migrateLegacyDiagramFiles,
   readDiagramLayoutFile,
-  SAVED_LAYOUT_PATH,
   type StoredBox,
   writeDiagramLayoutFile,
 } from "./persistence";
@@ -77,9 +79,10 @@ const minorGridLines = Array.from(
 
 let { data }: PageProps = $props();
 
+let fs = $derived(openProjectFs(projectStore, data.projectId));
+
 let sources = $state<Source[]>([]);
 $effect(() => {
-  const fs = openProjectFs(projectStore, data.projectId);
   readProjectSources(fs).then((s) => {
     sources = s;
   });
@@ -243,56 +246,213 @@ function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
     : withoutLegacyKeys;
 }
 
-// Guards the write-back $effects below against firing with stale/empty
-// data while the load for the *current* project is still in flight —
-// reset to false whenever data.projectId changes (below), flipped back to
-// true once that project's checked.json/saved-layout.json have both
-// loaded. Without this, navigating straight from one project's diagram
-// page to another's would briefly overwrite the new project's files with
-// the previous project's (or an empty) layout.
+// Which diagram (a `.rhizz/diagrams/<name>.json` file) is currently open
+// on the canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.json" —
+// exactly like the editor's own `selectedPath` is relative to the
+// project root (TASKS.md Task 65). `null` means no diagram exists yet
+// (or none is selected), in which case the canvas below simply has
+// nothing placed on it.
+let selectedDiagramPath = $state<string | null>(null);
+let diagramEntries = $state<Dirent[]>([]);
+
+let fullDiagramPath = $derived(
+  selectedDiagramPath === null
+    ? null
+    : `${DIAGRAM_LAYOUT_DIR}/${selectedDiagramPath}`,
+);
+
+async function refreshDiagramEntries(): Promise<void> {
+  try {
+    diagramEntries = await fs.readdir(DIAGRAM_LAYOUT_DIR, {
+      recursive: true,
+    });
+  } catch {
+    // No diagram has ever been saved for this project yet, so
+    // DIAGRAM_LAYOUT_DIR itself doesn't exist (ENOENT) — there's simply
+    // nothing to list.
+    diagramEntries = [];
+  }
+}
+
+// Picks a sensible default diagram to open: the first ".json" file found
+// (in practice "main.json" for any project migrated from Task 60's
+// single-implicit-diagram scheme), or `null` if the project has no
+// diagrams at all yet.
+function firstDiagramPath(): string | null {
+  return diagramEntries.find((e) => e.isFile() && e.name.endsWith(".json"))
+    ?.path ?? null;
+}
+
+// (Re)loads the diagram file list once per project, when the project
+// first becomes available or changes identity (e.g. after switching
+// projects) — migrating any Task 60-era legacy files first, so they show
+// up as this project's "main" diagram instead of vanishing.
+let loadedDiagramProjectId: string | null = null;
+$effect(() => {
+  const id = data.projectId;
+  if (id === loadedDiagramProjectId) return;
+  loadedDiagramProjectId = id;
+  selectedDiagramPath = null;
+  migrateLegacyDiagramFiles(fs)
+    .then(refreshDiagramEntries)
+    .then(async () => {
+      if (firstDiagramPath() === null) {
+        // A brand new project (or one migrated from Task 60 with no prior
+        // diagram data at all) has no diagram files yet — seed one so
+        // there's always something selected/editable, mirroring how a
+        // fresh project always starts with a "main.hcl" (see
+        // ProjectState.svelte's createProjectWithMainFile) rather than an
+        // empty file list. Without this, checking a component onto the
+        // canvas before ever creating a diagram would silently never be
+        // persisted (fullDiagramPath stays null).
+        await fs.writeFile(
+          `${DIAGRAM_LAYOUT_DIR}/main.json`,
+          JSON.stringify(emptyDiagramLayout()),
+        );
+        await refreshDiagramEntries();
+      }
+      selectedDiagramPath = firstDiagramPath();
+    });
+});
+
+// Guards the write-back $effect below against firing with stale/empty
+// data while the load for the *currently selected diagram* is still in
+// flight — reset to false whenever fullDiagramPath changes, flipped back
+// to true once that file has loaded. Without this, switching from one
+// diagram (or project) to another would briefly overwrite the
+// newly-selected file with the previous selection's (or an empty)
+// layout.
 let diagramLayoutLoaded = $state(false);
+let loadedDiagramPath: string | null = null;
 
 $effect(() => {
+  const path = fullDiagramPath;
+  if (path === loadedDiagramPath) return;
+  loadedDiagramPath = path;
   diagramLayoutLoaded = false;
-  const fs = openProjectFs(projectStore, data.projectId);
-  Promise.all([
-    readDiagramLayoutFile(fs, CHECKED_NODES_PATH),
-    readDiagramLayoutFile(fs, SAVED_LAYOUT_PATH),
-  ]).then(([loadedChecked, loadedSavedLayout]) => {
-    checked = stripLegacyIndexKeys(loadedChecked);
-    savedLayout = stripLegacyIndexKeys(loadedSavedLayout);
+
+  if (path === null) {
+    checked = {};
+    savedLayout = {};
+    return;
+  }
+
+  readDiagramLayoutFile(fs, path).then((layout) => {
+    // A stale load (e.g. rapid switching between diagrams) could resolve
+    // after a newer one already changed the selection — guard against
+    // overwriting the newer selection's state with the older one.
+    if (loadedDiagramPath !== path) return;
+    checked = stripLegacyIndexKeys(layout.checked);
+    savedLayout = stripLegacyIndexKeys(layout.savedLayout);
     diagramLayoutLoaded = true;
   });
 });
 
 $effect(() => {
   // $state.snapshot() deeply reads (and detaches from reactivity) every
-  // property of `checked` synchronously, right here in the effect body —
-  // which is what makes later in-place mutations like
+  // property of `checked`/`savedLayout` synchronously, right here in the
+  // effect body — which is what makes later in-place mutations like
   // `checked[key] = {...}` cause this effect to re-run at all.
   // writeDiagramLayoutFile() is async, so if it (or JSON.stringify) were
   // the thing reading those properties, that read would happen after an
   // `await`, i.e. outside the synchronous window Svelte uses to record an
   // effect's dependencies — leaving this effect subscribed only to
-  // `checked`'s own top-level reference, never to writes into it.
-  const snapshot = $state.snapshot(checked);
-  if (!diagramLayoutLoaded) return;
-  writeDiagramLayoutFile(
-    openProjectFs(projectStore, data.projectId),
-    CHECKED_NODES_PATH,
-    snapshot,
-  );
+  // `checked`/`savedLayout`'s own top-level references, never to writes
+  // into them.
+  const snapshot = {
+    checked: $state.snapshot(checked),
+    savedLayout: $state.snapshot(savedLayout),
+  };
+  const path = fullDiagramPath;
+  if (!diagramLayoutLoaded || path === null) return;
+  writeDiagramLayoutFile(fs, path, snapshot);
 });
 
-$effect(() => {
-  const snapshot = $state.snapshot(savedLayout);
-  if (!diagramLayoutLoaded) return;
-  writeDiagramLayoutFile(
-    openProjectFs(projectStore, data.projectId),
-    SAVED_LAYOUT_PATH,
-    snapshot,
+function reportDiagramError(error: unknown): void {
+  alert(error instanceof Error ? error.message : String(error));
+}
+
+// Strips leading/trailing slashes and rejects anything containing "/" or
+// only whitespace — prompt() collects a bare name (a new path segment),
+// never a nested path, matching the editor's own FileTree wiring.
+function sanitizeDiagramSegmentName(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === "" || trimmed.includes("/")) return null;
+  return trimmed;
+}
+
+function joinDiagramPath(parentPath: string, name: string): string {
+  return parentPath ? `${parentPath}/${name}` : name;
+}
+
+async function handleCreateDiagram(parentPath: string): Promise<void> {
+  const name = sanitizeDiagramSegmentName(
+    prompt("New diagram name?", "Untitled.json") ?? "",
   );
-});
+  if (name === null) return;
+  const path = joinDiagramPath(parentPath, name);
+  try {
+    await fs.writeFile(
+      `${DIAGRAM_LAYOUT_DIR}/${path}`,
+      JSON.stringify(emptyDiagramLayout()),
+    );
+    await refreshDiagramEntries();
+    selectedDiagramPath = path;
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
+async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
+  const name = sanitizeDiagramSegmentName(
+    prompt("New folder name?", "untitled") ?? "",
+  );
+  if (name === null) return;
+  try {
+    await fs.mkdir(
+      `${DIAGRAM_LAYOUT_DIR}/${joinDiagramPath(parentPath, name)}`,
+    );
+    await refreshDiagramEntries();
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
+async function handleRenameDiagram(path: string): Promise<void> {
+  const segments = path.split("/");
+  const oldName = segments[segments.length - 1];
+  const parentPath = segments.slice(0, -1).join("/");
+  const name = sanitizeDiagramSegmentName(prompt("Rename to?", oldName) ?? "");
+  if (name === null || name === oldName) return;
+  const newPath = joinDiagramPath(parentPath, name);
+  try {
+    await fs.rename(
+      `${DIAGRAM_LAYOUT_DIR}/${path}`,
+      `${DIAGRAM_LAYOUT_DIR}/${newPath}`,
+    );
+    if (selectedDiagramPath === path) selectedDiagramPath = newPath;
+    await refreshDiagramEntries();
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
+async function handleDeleteDiagram(path: string): Promise<void> {
+  if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
+  try {
+    await fs.rm(`${DIAGRAM_LAYOUT_DIR}/${path}`, { recursive: true });
+    if (
+      selectedDiagramPath === path ||
+      selectedDiagramPath?.startsWith(`${path}/`)
+    ) {
+      selectedDiagramPath = null;
+    }
+    await refreshDiagramEntries();
+    if (selectedDiagramPath === null) selectedDiagramPath = firstDiagramPath();
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
 
 // Writes `box` to both `checked` (the current on-canvas state) and
 // savedLayout (the remembered layout), merging over any existing fields.
@@ -1164,12 +1324,32 @@ $effect(() => {
 <svelte:window onkeydown={onDiagramKeyDown} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
+  <!-- Leftmost sidebar: pick which diagram is open on the canvas. -->
+  <aside
+    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300"
+  >
+    <h3
+      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+    >
+      Diagrams
+    </h3>
+    <FileTree
+      entries={diagramEntries}
+      bind:selectedPath={selectedDiagramPath}
+      oncreatefile={handleCreateDiagram}
+      oncreatedirectory={handleCreateDiagramFolder}
+      onrename={handleRenameDiagram}
+      ondelete={handleDeleteDiagram}
+    />
+  </aside>
+
   <!--
-    Left sidebar: inspector for the selected node. Always rendered (even
-    with nothing selected) so it keeps a fixed w-64 slot in this flex row.
-    Toggling it in/out of the DOM would resize the canvas column next to it
-    (since it's flex-1), which changes canvas_width/canvas_height and jumps
-    the whole viewBox on every selection change.
+    Inspector sidebar: properties of the selected node. Always rendered
+    (even with nothing selected) so it keeps a fixed w-64 slot in this
+    flex row. Toggling it in/out of the DOM would resize the canvas
+    column next to it (since it's flex-1), which changes
+    canvas_width/canvas_height and jumps the whole viewBox on every
+    selection change.
   -->
   <aside
     class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300"
@@ -1504,7 +1684,11 @@ $effect(() => {
       Components
     </h3>
 
-    {#if components.length === 0}
+    {#if selectedDiagramPath === null}
+      <p class="text-base-content/50 text-sm">
+        No diagram selected.<br />Create one from the Diagrams sidebar.
+      </p>
+    {:else if components.length === 0}
       <p class="text-base-content/50 text-sm">
         No components found.<br />Open the editor and define some systems.
       </p>

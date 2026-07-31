@@ -14,9 +14,8 @@ import { openProjectFs } from "./vfs/fs";
 import { LocalStorageProjectStore } from "./vfs/localStorageStore";
 import type { Project } from "./vfs/types";
 import {
-  CHECKED_NODES_PATH,
+  DIAGRAM_LAYOUT_DIR,
   sanitizeStoredRecord,
-  SAVED_LAYOUT_PATH,
   writeDiagramLayoutFile,
 } from "./routes/projects/[id]/diagrams/persistence";
 
@@ -106,44 +105,47 @@ async function migrateLegacySystemInputBox(): Promise<void> {
   await migrateLegacyDiagramLayout(project.id);
 }
 
-// One-time migration (extends the one above): before Task 60, diagram
-// layouts lived under these two global localStorage keys — shared by
-// every project in the browser, since there was only ever one project
-// worth of diagram data before this task. Anyone with pre-existing
-// layout data gets it copied into the project just migrated above
-// (there's no other project it could sensibly belong to), then the
+// One-time migration (extends the one above): before diagrams lived in
+// the VFS at all (Task 60), the whole app kept a single implicit
+// diagram's checked/saved-layout records under these two global
+// localStorage keys — shared by every project in the browser, since
+// there was only ever one project worth of diagram data before Task 60.
+// Anyone with pre-existing layout data gets it copied into the project
+// just migrated above, as that project's "main" diagram (there's no
+// other project it could sensibly belong to, and "main" matches the name
+// migrateLegacyDiagramFiles() in persistence.ts gives a Task 60-era
+// project's own VFS-local legacy files — see TASKS.md Task 65), then the
 // legacy keys are removed.
 const LEGACY_CHECKED_NODES_KEY = "DIAGRAM_CHECKED_NODES";
 const LEGACY_SAVED_LAYOUT_KEY = "DIAGRAM_SAVED_LAYOUT";
 
+function parseLegacyDiagramRecord(raw: string | null): Record<string, unknown> {
+  if (raw === null) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null &&
+        !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 async function migrateLegacyDiagramLayout(projectId: string): Promise<void> {
   if (typeof localStorage === "undefined") return;
 
+  const checkedRaw = localStorage.getItem(LEGACY_CHECKED_NODES_KEY);
+  const savedLayoutRaw = localStorage.getItem(LEGACY_SAVED_LAYOUT_KEY);
+  if (checkedRaw === null && savedLayoutRaw === null) return;
+
   const fs = openProjectFs(projectStore, projectId);
-  for (
-    const [legacyKey, path] of [
-      [LEGACY_CHECKED_NODES_KEY, CHECKED_NODES_PATH],
-      [LEGACY_SAVED_LAYOUT_KEY, SAVED_LAYOUT_PATH],
-    ] as const
-  ) {
-    const raw = localStorage.getItem(legacyKey);
-    if (raw === null) continue;
-
-    let record: Record<string, unknown> = {};
-    try {
-      const parsed = JSON.parse(raw);
-      if (
-        typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ) {
-        record = parsed as Record<string, unknown>;
-      }
-    } catch {
-      // Malformed JSON: treat as if nothing was ever saved.
-    }
-
-    await writeDiagramLayoutFile(fs, path, sanitizeStoredRecord(record));
-    localStorage.removeItem(legacyKey);
-  }
+  await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/main.json`, {
+    checked: sanitizeStoredRecord(parseLegacyDiagramRecord(checkedRaw)),
+    savedLayout: sanitizeStoredRecord(parseLegacyDiagramRecord(savedLayoutRaw)),
+  });
+  localStorage.removeItem(LEGACY_CHECKED_NODES_KEY);
+  localStorage.removeItem(LEGACY_SAVED_LAYOUT_KEY);
 }
 
 if (typeof window !== "undefined") {
