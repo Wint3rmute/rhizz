@@ -13,7 +13,7 @@
     "test": "vitest",
     "build-storybook": "storybook build --config-dir .storybook --output-dir storybook-static",
     "lint": "eslint .",
-    "chromatic": "npx chromatic"
+    "chromatic": "npx chromatic --exit-once-uploaded"
   },
   "dependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

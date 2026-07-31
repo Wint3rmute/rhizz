@@ -20,6 +20,8 @@ jobs:
   frontend:
     needs: wasm
     uses: ./.github/workflows/frontend.yml
+    secrets:
+      CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
   docs:
     uses: ./.github/workflows/docs.yml

@@ -2,13 +2,30 @@ name: Frontend
 
 on:
   workflow_call:
+    secrets:
+      # Reusable workflows don't automatically receive the caller's
+      # secrets (even if they're configured in the repo's Settings) —
+      # each one must be explicitly declared here and passed by every
+      # caller (see ci.yml/release.yml's `frontend:` job), or
+      # `secrets.CHROMATIC_PROJECT_TOKEN` below silently resolves to an
+      # empty string instead of erroring loudly.
+      CHROMATIC_PROJECT_TOKEN:
+        required: true
 
 jobs:
   build-frontend:
     name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # 👇 Tells the checkout which commit hash to reference
+          ref: ${{ github.event.pull_request.head.ref }}
+        env:
+          CHROMATIC_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.ref }}
+          CHROMATIC_SLUG: ${{ github.repository }}
 
       - name: Download wasm artifact
         uses: actions/download-artifact@v8
@@ -49,10 +66,17 @@ jobs:
           BASE_PATH: "/${{ github.event.repository.name }}"
 
       - name: Build Storybook
-        run: npm run build-storybook
+        run: deno run build-storybook
         working-directory: ./web
         env:
           BASE_PATH: "/${{ github.event.repository.name }}"
+
+      - name: Upload to Chromatic
+        run: deno run chromatic
+        working-directory: ./web
+        env:
+          BASE_PATH: "/${{ github.event.repository.name }}"
+          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
       - name: Stage frontend artifact
         run: |

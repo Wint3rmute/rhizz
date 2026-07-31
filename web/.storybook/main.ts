@@ -6,11 +6,13 @@
 // served from an arbitrary/unknown root, so a relative base is what
 // actually works there: it resolves against wherever iframe.html/
 // index.html themselves end up, instead of assuming a fixed path.
-const isGitHubActionsCI = process.env.GITHUB_ACTIONS === "true";
-const appBase = process.env.BASE_PATH?.trim() || "";
-const storybookBase = isGitHubActionsCI
-  ? (appBase ? `${appBase.replace(/\/$/, "")}/storybook/` : "/storybook/")
-  : "./";
+// const isGitHubActionsCI = process.env.GITHUB_ACTIONS === "true";
+// const appBase = process.env.BASE_PATH?.trim() || "";
+// const storybookBase = isGitHubActionsCI
+//   ? (appBase ? `${appBase.replace(/\/$/, "")}/storybook/` : "/storybook/")
+//   : "./";
+
+const storybookBase = "/";
 
 export default {
   stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|svelte)"],

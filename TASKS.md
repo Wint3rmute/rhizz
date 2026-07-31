@@ -13,37 +13,13 @@ How to work on this file:
 
 ---
 
-## Task 59 — File-tree sidebar in the editor, wired to `ProjectFs`
-
-Fifth of the VFS sequence (55–60, was 55–59 before Task 58 — an
-unplanned `node:fs`-style API refactor — was inserted; see
-`FINISHED_TASKS.md`). There's now
-a `/projects` landing page, project-scoped routing
-(`/projects/[id]/editor`/`diagrams`/`overview`), and a path-based
-`ProjectFs` (`web/src/vfs/fs.ts`'s `openProjectFs`) that every page
-already uses instead of touching `FsNode`/ids directly. The editor
-currently hardcodes a single well-known path (`"main.hcl"`, see its
-`+page.svelte`) as an interim convention — this task replaces that with a
-real file tree.
-
-- Add a file-tree sidebar to `/projects/[id]/editor` (using `buildTree`
-  from Task 55, fed by `ProjectFs.readdir(".", { recursive: true })`)
-  showing the active project's files/directories.
-- Clicking a file loads its content into the existing `MonacoEditor` via
-  `fs.readFile(path)`; edits call `fs.writeFile(path, content)`
-  (debounced, matching the current write-on-change pattern).
-- Context menu / toolbar actions for create file (`fs.writeFile`), create
-  directory (`fs.mkdir`), rename/move (`fs.rename` — drag-and-drop is a
-  nice-to-have, not required), and delete (`fs.rm`) — all calling
-  straight into `ProjectFs`, never `ProjectStore` directly.
-- Compilation keeps using `readProjectSources(fs)` (`vfs/compile.ts`,
-  already wired up in `diagrams`/`overview`), independent of which file
-  is currently open in the editor.
-- Diagnostics' `file` field already reflects real per-file paths (each
-  `Source.filename` from `readProjectSources`), since Task 58's refactor.
-- Validate with `deno task check`, `deno task build`, `deno task test`.
-
 ## Task 60 — Move diagram layout persistence into the VFS
+
+Sixth of the VFS sequence (55–60). Tasks 55–59 are finished — see
+`FINISHED_TASKS.md`. There's now a real file-tree sidebar in the editor
+(`routes/projects/[id]/editor/FileTree.svelte`), so a project can
+genuinely hold multiple files — diagram layouts can now live alongside
+the `.hcl` sources instead of only ever being global `localStorage`.
 
 - Replace `diagrams/persistence.ts`'s direct `localStorage` reads/writes
   with JSON files under a conventional path in the active project's VFS
@@ -64,6 +40,13 @@ real file tree.
 - Validate with `deno task check`, `deno task build`, `deno task test`
   (existing `persistence.test.ts`/`history.test.ts`/`geometry.test.ts`
   suites should be unaffected apart from the storage plumbing).
+
+## Task 61 - Allow embedding diagrams via unique URLs
+
+- Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
+- Update the `Diagram` component to support the new URL scheme
+  - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
+- The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
 
 ## (For later brainstorming) Task <N> - use UNIX-style paths for component references
 
