@@ -266,7 +266,16 @@ $effect(() => {
 });
 
 $effect(() => {
-  const snapshot = checked;
+  // $state.snapshot() deeply reads (and detaches from reactivity) every
+  // property of `checked` synchronously, right here in the effect body —
+  // which is what makes later in-place mutations like
+  // `checked[key] = {...}` cause this effect to re-run at all.
+  // writeDiagramLayoutFile() is async, so if it (or JSON.stringify) were
+  // the thing reading those properties, that read would happen after an
+  // `await`, i.e. outside the synchronous window Svelte uses to record an
+  // effect's dependencies — leaving this effect subscribed only to
+  // `checked`'s own top-level reference, never to writes into it.
+  const snapshot = $state.snapshot(checked);
   if (!diagramLayoutLoaded) return;
   writeDiagramLayoutFile(
     openProjectFs(projectStore, data.projectId),
@@ -276,7 +285,7 @@ $effect(() => {
 });
 
 $effect(() => {
-  const snapshot = savedLayout;
+  const snapshot = $state.snapshot(savedLayout);
   if (!diagramLayoutLoaded) return;
   writeDiagramLayoutFile(
     openProjectFs(projectStore, data.projectId),
