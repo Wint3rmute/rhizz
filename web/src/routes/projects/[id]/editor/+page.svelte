@@ -1,5 +1,4 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import ModelComponentsOutline from "../../../../components/ModelComponentsOutline.svelte";
 import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
@@ -215,26 +214,6 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
     <aside
       class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
-      <h3 class="font-semibold mb-3 text-base-content">Navigation</h3>
-      <ul class="space-y-2 text-sm text-base-content/70">
-        <li>
-          <a
-            href={resolve("/projects/[id]/overview", { id: data.projectId })}
-            class="block hover:text-base-content"
-          >Overview</a>
-        </li>
-        <li>
-          <a
-            href={resolve("/projects/[id]/diagrams", { id: data.projectId })}
-            class="block hover:text-base-content"
-          >Diagrams</a>
-        </li>
-        <li>
-          <a href={resolve("/projects", {})}
-            class="block hover:text-base-content">Projects</a>
-        </li>
-      </ul>
-      <div class="divider"></div>
       <h3 class="font-semibold mb-3 text-base-content">Files</h3>
       <FileTree
         {entries}
