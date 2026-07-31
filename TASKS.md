@@ -41,7 +41,14 @@ the `.hcl` sources instead of only ever being global `localStorage`.
   (existing `persistence.test.ts`/`history.test.ts`/`geometry.test.ts`
   suites should be unaffected apart from the storage plumbing).
 
-## Task 61 - Allow embedding diagrams via unique URLs
+## Task 63 - Install FontAwesome icons, use them in the FileTree
+
+- Install FontAwesome icons via deno
+- Use the `free-solid-svg-icons` variant
+  - In general, pick the most minimal and free variant
+- Use the icons in the FileTree - one icon for a folder, another icon for a file
+
+## Task 62 - Allow embedding diagrams via unique URLs
 
 - Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
 - Update the `Diagram` component to support the new URL scheme
