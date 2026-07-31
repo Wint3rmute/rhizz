@@ -1,5 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
-import { sanitizeStoredRecord, StoredBoxSchema } from "./persistence";
+import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
+import { openProjectFs } from "../../../../vfs/fs";
+import {
+  DIAGRAM_LAYOUT_DIR,
+  emptyDiagramLayout,
+  readDiagramLayoutFile,
+  sanitizeStoredRecord,
+  StoredBoxSchema,
+  writeDiagramLayoutFile,
+} from "./persistence";
+
+const MAIN_DIAGRAM_PATH = `${DIAGRAM_LAYOUT_DIR}/main.json`;
+
+async function projectFs() {
+  const store = new InMemoryProjectStore();
+  const project = await store.createProject("test");
+  return openProjectFs(store, project.id);
+}
 
 describe("StoredBoxSchema", () => {
   it("accepts a fully-populated valid entry", () => {
@@ -108,5 +125,82 @@ describe("sanitizeStoredRecord", () => {
     sanitizeStoredRecord({ good: { x: 1, y: 2 } });
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
+  it("returns an empty layout when the file has never been saved", async () => {
+    const fs = await projectFs();
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
+  });
+
+  it("round-trips a written layout", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: { "sys/a": { x: 1, y: 2, width: 100, height: 50 } },
+      savedLayout: { "sys/a": { x: 1, y: 2, width: 100, height: 50 } },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout);
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(layout);
+  });
+
+  it("creates the containing directory on first write", async () => {
+    const fs = await projectFs();
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());
+    const entries = await fs.readdir(".", { recursive: true });
+    expect(entries.some((e) => e.path === ".rhizz" && e.isDirectory())).toBe(
+      true,
+    );
+  });
+
+  it("drops malformed entries within checked/savedLayout when reading a hand-edited file", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(
+      MAIN_DIAGRAM_PATH,
+      JSON.stringify({
+        checked: { good: { x: 1, y: 2 }, bad: { x: "nope" } },
+        savedLayout: {},
+      }),
+    );
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
+      checked: { good: { x: 1, y: 2 } },
+      savedLayout: {},
+    });
+    warnSpy.mockRestore();
+  });
+
+  it("returns an empty layout for malformed JSON", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, "not json{");
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("returns an empty layout when the file's top level isn't an object", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, JSON.stringify([1, 2, 3]));
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("treats missing checked/savedLayout keys as empty records", async () => {
+    const fs = await projectFs();
+    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, JSON.stringify({}));
+    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+      emptyDiagramLayout(),
+    );
   });
 });

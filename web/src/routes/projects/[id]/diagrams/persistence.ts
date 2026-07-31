@@ -1,8 +1,11 @@
-// Schema + validation for the diagram data persisted to localStorage
-// (web/src/routes/diagrams/+page.svelte's `checked`/`savedLayout`).
-// Deliberately has zero Svelte/DOM dependency, so it can be unit tested
-// directly (see persistence.test.ts) without mounting a component.
+// Schema + validation for the diagram data persisted into the active
+// project's VFS (web/src/routes/projects/[id]/diagrams/+page.svelte's
+// `checked`/`savedLayout` — see readDiagramLayoutFile/
+// writeDiagramLayoutFile below). Deliberately has zero Svelte/DOM
+// dependency, so it can be unit tested directly (see persistence.test.ts)
+// without mounting a component.
 import { z } from "zod";
+import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 
 // Where a node's label is positioned within its box. Structurally
 // identical to (and interchangeable with) geometry.ts's `TextAlign` type,
@@ -57,4 +60,92 @@ export function sanitizeStoredRecord(
   }
 
   return sanitized;
+}
+
+// A record that isn't guaranteed to be a plain object yet (e.g. straight
+// out of JSON.parse) is treated as empty rather than thrown at
+// sanitizeStoredRecord, which assumes its input is already at least
+// object-shaped.
+function sanitizeMaybeRecord(value: unknown): Record<string, StoredBox> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+  return sanitizeStoredRecord(value as Record<string, unknown>);
+}
+
+// Conventional location for diagram layout data inside a project's VFS —
+// mirrors how vfs/compile.ts identifies source files by their ".hcl"
+// extension, since there's no contentType tag on FsFile to key off (see
+// TASKS.md Task 60). Each project can hold any number of named diagrams
+// (TASKS.md Task 66), one JSON file per diagram, selectable via a
+// FileTree scoped to this directory.
+export const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
+
+// The full persisted content of a single diagram: which components are
+// currently placed on its canvas, and every component's last-known box
+// (even ones currently unchecked) — see +page.svelte's `checked`/
+// `savedLayout` for what actually populates these.
+export interface DiagramLayout {
+  checked: Record<string, StoredBox>;
+  savedLayout: Record<string, StoredBox>;
+}
+
+export function emptyDiagramLayout(): DiagramLayout {
+  return { checked: {}, savedLayout: {} };
+}
+
+// Reads and validates a diagram layout file from the project's VFS,
+// tolerating everything a hand-edited or pre-existing file could throw at
+// it: a missing file (never saved yet — returns an empty layout),
+// malformed JSON, a non-object top level, or individually malformed
+// entries within `checked`/`savedLayout` (each dropped via
+// sanitizeStoredRecord rather than invalidating the whole file).
+export async function readDiagramLayoutFile(
+  fs: ProjectFs,
+  path: string,
+): Promise<DiagramLayout> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(path);
+  } catch (error) {
+    if (error instanceof VfsError && error.code === "ENOENT") {
+      return emptyDiagramLayout();
+    }
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.warn(
+      `Malformed JSON in diagram layout file "${path}"; starting from an empty layout`,
+    );
+    return emptyDiagramLayout();
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    console.warn(
+      `Unrecognized data shape in diagram layout file "${path}"; starting from an empty layout`,
+    );
+    return emptyDiagramLayout();
+  }
+
+  const record = parsed as Record<string, unknown>;
+  return {
+    checked: sanitizeMaybeRecord(record.checked),
+    savedLayout: sanitizeMaybeRecord(record.savedLayout),
+  };
+}
+
+// Writes a diagram layout file into the project's VFS, creating
+// `.rhizz/diagrams/` first if this is the first diagram ever saved for
+// this project.
+export async function writeDiagramLayoutFile(
+  fs: ProjectFs,
+  path: string,
+  layout: DiagramLayout,
+): Promise<void> {
+  await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+  await fs.writeFile(path, JSON.stringify(layout));
 }

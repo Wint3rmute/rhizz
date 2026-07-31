@@ -13,35 +13,14 @@ How to work on this file:
 
 ---
 
-## Task 60 — Move diagram layout persistence into the VFS
+## Task 63 - Install FontAwesome icons, use them in the FileTree
 
-Sixth of the VFS sequence (55–60). Tasks 55–59 are finished — see
-`FINISHED_TASKS.md`. There's now a real file-tree sidebar in the editor
-(`routes/projects/[id]/editor/FileTree.svelte`), so a project can
-genuinely hold multiple files — diagram layouts can now live alongside
-the `.hcl` sources instead of only ever being global `localStorage`.
+- Install FontAwesome icons via deno
+- Use the `free-solid-svg-icons` variant
+  - In general, pick the most minimal and free variant
+- Use the icons in the FileTree - one icon for a folder, another icon for a file
 
-- Replace `diagrams/persistence.ts`'s direct `localStorage` reads/writes
-  with JSON files under a conventional path in the active project's VFS
-  (e.g. `.rhizz/diagrams/<name>.json`, one file per saved view/diagram —
-  identified by path convention, the same way `vfs/compile.ts` identifies
-  source files by their `.hcl` extension; there's no `contentType` tag on
-  `FsFile` to key off since Task 58), so diagram layouts are
-  project-scoped instead of global, and get carried along with the rest
-  of the project's data. Use `ProjectFs` (`fs.readFile`/`fs.writeFile`/
-  `fs.mkdir`), not `ProjectStore` directly.
-  - Keep `StoredBoxSchema`/`sanitizeStoredRecord` as the validation layer
-    for the JSON stored inside the file's content — just change *where*
-    that JSON is read from/written to.
-- Migrate any existing global diagram-layout localStorage data into the
-  first/migrated project created in Task 57 (extend that migration step).
-- No behavior change from the user's point of view beyond "diagrams now
-  belong to a project" — same drag/resize/pin/undo interactions as before.
-- Validate with `deno task check`, `deno task build`, `deno task test`
-  (existing `persistence.test.ts`/`history.test.ts`/`geometry.test.ts`
-  suites should be unaffected apart from the storage plumbing).
-
-## Task 61 - Allow embedding diagrams via unique URLs
+## Task 64 - Allow embedding diagrams via unique URLs
 
 - Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
 - Update the `Diagram` component to support the new URL scheme

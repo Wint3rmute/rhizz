@@ -10,11 +10,18 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
-import { openProjectFs } from "../../../../vfs/fs";
+import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
+import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
-import { sanitizeStoredRecord, type StoredBox } from "./persistence";
+import {
+  DIAGRAM_LAYOUT_DIR,
+  emptyDiagramLayout,
+  readDiagramLayoutFile,
+  type StoredBox,
+  writeDiagramLayoutFile,
+} from "./persistence";
 import {
   createHistoryStack,
   pushHistory,
@@ -71,9 +78,10 @@ const minorGridLines = Array.from(
 
 let { data }: PageProps = $props();
 
+let fs = $derived(openProjectFs(projectStore, data.projectId));
+
 let sources = $state<Source[]>([]);
 $effect(() => {
-  const fs = openProjectFs(projectStore, data.projectId);
   readProjectSources(fs).then((s) => {
     sources = s;
   });
@@ -206,9 +214,11 @@ const DEFAULT_TEXT_ALIGN: TextAlign = "center";
 // positions to the wrong component (see TASKS.md Task 39). If a component
 // is unchecked, it's not present here — but its last-known box is kept in
 // savedLayout below, so re-checking it later restores it to where it was
-// instead of resetting to the default position. Persisted so the diagram
-// layout survives page reloads.
-let checked = persisted<Record<string, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
+// instead of resetting to the default position. Persisted into the active
+// project's VFS (see the load/save $effects below), so the diagram layout
+// travels with the project instead of being shared across every project
+// in the browser (TASKS.md Task 60).
+let checked = $state<Record<string, StoredBox>>({});
 
 // Remembers every component's last-known box, even after it's unchecked
 // (removed from `checked`) — entries here are never deleted, only updated.
@@ -216,31 +226,217 @@ let checked = persisted<Record<string, StoredBox>>("DIAGRAM_CHECKED_NODES", {});
 // handler) so a component's layout survives being temporarily removed
 // from the canvas. Persisted separately from `checked` since the two have
 // different lifetimes (checked entries disappear on uncheck; these don't).
-let savedLayout = persisted<Record<string, StoredBox>>(
-  "DIAGRAM_SAVED_LAYOUT",
-  {},
+let savedLayout = $state<Record<string, StoredBox>>({});
+
+// Which diagram (a `.rhizz/diagrams/<name>.json` file) is currently open
+// on the canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.json" —
+// exactly like the editor's own `selectedPath` is relative to the
+// project root (TASKS.md Task 66). `null` means no diagram exists yet
+// (or none is selected), in which case the canvas below simply has
+// nothing placed on it.
+let selectedDiagramPath = $state<string | null>(null);
+let diagramEntries = $state<Dirent[]>([]);
+
+let fullDiagramPath = $derived(
+  selectedDiagramPath === null
+    ? null
+    : `${DIAGRAM_LAYOUT_DIR}/${selectedDiagramPath}`,
 );
 
-// One-time migration away from the old arena-index-keyed scheme: those
-// keys were plain integers (e.g. "0", "1"), which can never occur as a
-// componentKey() path (a real path always contains at least one "/", from
-// its root system label). There's no reliable way to migrate their values
-// forward — the whole point of this change is that the old index→component
-// mapping could silently be wrong — so this just strips them out rather
-// than let them linger unused in localStorage forever; anyone with
-// pre-existing diagram layouts gets a one-time reset.
-function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
-  const withoutLegacyKeys = Object.fromEntries(
-    Object.entries(record).filter(([key]) => !/^\d+$/.test(key)),
-  );
-  return Object.keys(withoutLegacyKeys).length === Object.keys(record).length
-    ? record
-    : withoutLegacyKeys;
+async function refreshDiagramEntries(): Promise<void> {
+  try {
+    diagramEntries = await fs.readdir(DIAGRAM_LAYOUT_DIR, {
+      recursive: true,
+    });
+  } catch {
+    // No diagram has ever been saved for this project yet, so
+    // DIAGRAM_LAYOUT_DIR itself doesn't exist (ENOENT) — there's simply
+    // nothing to list.
+    diagramEntries = [];
+  }
 }
-checked.value = sanitizeStoredRecord(stripLegacyIndexKeys(checked.value));
-savedLayout.value = sanitizeStoredRecord(
-  stripLegacyIndexKeys(savedLayout.value),
-);
+
+// Picks a sensible default diagram to open: the first ".json" file found
+// (in practice "main.json" — see the auto-seed below), or `null` if the
+// project has no diagrams at all yet.
+function firstDiagramPath(): string | null {
+  return diagramEntries.find((e) => e.isFile() && e.name.endsWith(".json"))
+    ?.path ?? null;
+}
+
+// (Re)loads the diagram file list once per project, when the project
+// first becomes available or changes identity (e.g. after switching
+// projects).
+let loadedDiagramProjectId: string | null = null;
+$effect(() => {
+  const id = data.projectId;
+  if (id === loadedDiagramProjectId) return;
+  loadedDiagramProjectId = id;
+  selectedDiagramPath = null;
+  refreshDiagramEntries()
+    .then(async () => {
+      if (firstDiagramPath() === null) {
+        // A brand new project has no diagram files yet — seed one so
+        // there's always something selected/editable, mirroring how a
+        // fresh project always starts with a "main.hcl" (see
+        // ProjectState.svelte's createProjectWithMainFile) rather than an
+        // empty file list. Without this, checking a component onto the
+        // canvas before ever creating a diagram would silently never be
+        // persisted (fullDiagramPath stays null).
+        await fs.writeFile(
+          `${DIAGRAM_LAYOUT_DIR}/main.json`,
+          JSON.stringify(emptyDiagramLayout()),
+        );
+        await refreshDiagramEntries();
+      }
+      selectedDiagramPath = firstDiagramPath();
+    });
+});
+
+// Guards the write-back $effect below against firing with stale/empty
+// data while the load for the *currently selected diagram* is still in
+// flight — reset to false whenever fullDiagramPath changes, flipped back
+// to true once that file has loaded. Without this, switching from one
+// diagram (or project) to another would briefly overwrite the
+// newly-selected file with the previous selection's (or an empty)
+// layout.
+let diagramLayoutLoaded = $state(false);
+let loadedDiagramPath: string | null = null;
+
+$effect(() => {
+  const path = fullDiagramPath;
+  if (path === loadedDiagramPath) return;
+  loadedDiagramPath = path;
+  diagramLayoutLoaded = false;
+
+  if (path === null) {
+    checked = {};
+    savedLayout = {};
+    return;
+  }
+
+  readDiagramLayoutFile(fs, path).then((layout) => {
+    // A stale load (e.g. rapid switching between diagrams) could resolve
+    // after a newer one already changed the selection — guard against
+    // overwriting the newer selection's state with the older one.
+    if (loadedDiagramPath !== path) return;
+    checked = layout.checked;
+    savedLayout = layout.savedLayout;
+    diagramLayoutLoaded = true;
+    // Frames the newly-opened diagram's content immediately, rather than
+    // leaving the view wherever the previously-open diagram (or the
+    // default pan/zoom) happened to leave it — renderOrder/nodeBox()
+    // already reflect the `checked` assignment above by the time this
+    // runs, since they're plain $derived reads, not effects.
+    zoomToFill();
+  });
+});
+
+$effect(() => {
+  // $state.snapshot() deeply reads (and detaches from reactivity) every
+  // property of `checked`/`savedLayout` synchronously, right here in the
+  // effect body — which is what makes later in-place mutations like
+  // `checked[key] = {...}` cause this effect to re-run at all.
+  // writeDiagramLayoutFile() is async, so if it (or JSON.stringify) were
+  // the thing reading those properties, that read would happen after an
+  // `await`, i.e. outside the synchronous window Svelte uses to record an
+  // effect's dependencies — leaving this effect subscribed only to
+  // `checked`/`savedLayout`'s own top-level references, never to writes
+  // into them.
+  const snapshot = {
+    checked: $state.snapshot(checked),
+    savedLayout: $state.snapshot(savedLayout),
+  };
+  const path = fullDiagramPath;
+  if (!diagramLayoutLoaded || path === null) return;
+  writeDiagramLayoutFile(fs, path, snapshot);
+});
+
+function reportDiagramError(error: unknown): void {
+  alert(error instanceof Error ? error.message : String(error));
+}
+
+// Strips leading/trailing slashes and rejects anything containing "/" or
+// only whitespace — prompt() collects a bare name (a new path segment),
+// never a nested path, matching the editor's own FileTree wiring.
+function sanitizeDiagramSegmentName(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === "" || trimmed.includes("/")) return null;
+  return trimmed;
+}
+
+function joinDiagramPath(parentPath: string, name: string): string {
+  return parentPath ? `${parentPath}/${name}` : name;
+}
+
+async function handleCreateDiagram(parentPath: string): Promise<void> {
+  const name = sanitizeDiagramSegmentName(
+    prompt("New diagram name?", "Untitled.json") ?? "",
+  );
+  if (name === null) return;
+  const path = joinDiagramPath(parentPath, name);
+  try {
+    await fs.writeFile(
+      `${DIAGRAM_LAYOUT_DIR}/${path}`,
+      JSON.stringify(emptyDiagramLayout()),
+    );
+    await refreshDiagramEntries();
+    selectedDiagramPath = path;
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
+async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
+  const name = sanitizeDiagramSegmentName(
+    prompt("New folder name?", "untitled") ?? "",
+  );
+  if (name === null) return;
+  try {
+    await fs.mkdir(
+      `${DIAGRAM_LAYOUT_DIR}/${joinDiagramPath(parentPath, name)}`,
+    );
+    await refreshDiagramEntries();
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
+async function handleRenameDiagram(path: string): Promise<void> {
+  const segments = path.split("/");
+  const oldName = segments[segments.length - 1];
+  const parentPath = segments.slice(0, -1).join("/");
+  const name = sanitizeDiagramSegmentName(prompt("Rename to?", oldName) ?? "");
+  if (name === null || name === oldName) return;
+  const newPath = joinDiagramPath(parentPath, name);
+  try {
+    await fs.rename(
+      `${DIAGRAM_LAYOUT_DIR}/${path}`,
+      `${DIAGRAM_LAYOUT_DIR}/${newPath}`,
+    );
+    if (selectedDiagramPath === path) selectedDiagramPath = newPath;
+    await refreshDiagramEntries();
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
+async function handleDeleteDiagram(path: string): Promise<void> {
+  if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
+  try {
+    await fs.rm(`${DIAGRAM_LAYOUT_DIR}/${path}`, { recursive: true });
+    if (
+      selectedDiagramPath === path ||
+      selectedDiagramPath?.startsWith(`${path}/`)
+    ) {
+      selectedDiagramPath = null;
+    }
+    await refreshDiagramEntries();
+    if (selectedDiagramPath === null) selectedDiagramPath = firstDiagramPath();
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
 
 // Writes `box` to both `checked` (the current on-canvas state) and
 // savedLayout (the remembered layout), merging over any existing fields.
@@ -249,8 +445,8 @@ savedLayout.value = sanitizeStoredRecord(
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
   const key = componentKey(index);
-  checked.value[key] = { ...checked.value[key], ...box };
-  savedLayout.value[key] = { ...savedLayout.value[key], ...box };
+  checked[key] = { ...checked[key], ...box };
+  savedLayout[key] = { ...savedLayout[key], ...box };
 }
 
 // Returns the placed node's box (position + size + text alignment), or null
@@ -264,7 +460,7 @@ function nodeBox(index: number): {
   height: number;
   textAlign: TextAlign;
 } | null {
-  const pos = checked.value[componentKey(index)];
+  const pos = checked[componentKey(index)];
   if (!pos) return null;
   return {
     x: pos.x,
@@ -279,7 +475,7 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  const box = checked.value[componentKey(primarySelected)];
+  const box = checked[componentKey(primarySelected)];
   if (!box) return;
   if (box.textAlign === align) return; // no-op: skip a redundant undo point
   recordUndoPoint();
@@ -364,8 +560,8 @@ const diagramHistory = createHistoryStack<DiagramSnapshot>();
 
 function snapshotDiagram(): DiagramSnapshot {
   return {
-    checked: { ...checked.value },
-    savedLayout: { ...savedLayout.value },
+    checked: { ...checked },
+    savedLayout: { ...savedLayout },
   };
 }
 
@@ -373,8 +569,8 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
   // Copies (rather than reuses) the snapshot's records, so the object
   // sitting in the undo/redo stacks is never the same live object that
   // setNodeBox() et al. go on to mutate afterwards.
-  checked.value = { ...snapshot.checked };
-  savedLayout.value = { ...snapshot.savedLayout };
+  checked = { ...snapshot.checked };
+  savedLayout = { ...snapshot.savedLayout };
   // The restored snapshot may not have (or may no longer make sense for)
   // the same selection, so it's simplest and safest to just clear it.
   selected.clear();
@@ -569,7 +765,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
   for (const i of selected) {
-    const box = checked.value[componentKey(i)];
+    const box = checked[componentKey(i)];
     if (box) startPositions[i] = { x: box.x, y: box.y };
   }
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
@@ -855,7 +1051,7 @@ function parentOf(index: number): number | undefined {
 // up visually hidden behind its parent's fill, depending on arbitrary
 // arena order.
 let renderOrder = $derived(
-  Object.keys(checked.value)
+  Object.keys(checked)
     .map((key) => keyToIndex.get(key))
     .filter((index): index is number => index !== undefined)
     .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
@@ -914,6 +1110,16 @@ function zoomToFill() {
 // spin forever.
 const AUTO_LAYOUT_ALPHA_MIN = 0.005;
 const AUTO_LAYOUT_MAX_FRAMES = 300;
+
+// Also stops early once every node's combined movement in a single frame
+// (summed Euclidean distance, in world units) drops below this —
+// catches layouts that have practically stopped moving well before their
+// alpha decays below AUTO_LAYOUT_ALPHA_MIN (small groups in particular
+// can visually settle almost immediately while alpha keeps decaying for
+// many more frames with no visible effect). Only checked after warmup
+// (see AUTO_LAYOUT_WARMUP_TICKS below) finishes, since forces — and thus
+// movement — are deliberately near-zero during the ramp-up itself.
+const AUTO_LAYOUT_MIN_MOVEMENT = 0.5;
 
 // Fraction of the frame budget spent ramping forces up from ~0 to full
 // strength, instead of applying at full strength from frame 1 — avoids
@@ -989,6 +1195,16 @@ function runAutoLayout() {
   autoLayoutRunning = true;
   let frame = 0;
 
+  // Seeded from each node's starting box, so the very first frame's
+  // movement is measured against where it actually began — updated to
+  // that frame's result at the end of every step() below. Plain,
+  // non-reactive local state (never rendered/read outside this closure),
+  // so it doesn't need SvelteMap's reactivity.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const previousPositions = new Map<number, { x: number; y: number }>(
+    layoutNodes.map((n) => [n.index, { x: n.box.x, y: n.box.y }]),
+  );
+
   function step() {
     frame += 1;
 
@@ -999,6 +1215,20 @@ function runAutoLayout() {
       if (layout.alpha() >= AUTO_LAYOUT_ALPHA_MIN) allSettled = false;
     }
 
+    let totalMovement = 0;
+    for (const result of allResults) {
+      const previous = previousPositions.get(result.index);
+      if (previous) {
+        totalMovement += Math.hypot(
+          result.x - previous.x,
+          result.y - previous.y,
+        );
+      }
+      previousPositions.set(result.index, { x: result.x, y: result.y });
+    }
+    const barelyMoving = frame > AUTO_LAYOUT_WARMUP_TICKS &&
+      totalMovement < AUTO_LAYOUT_MIN_MOVEMENT;
+
     // Only snap the final settling frame, not every intermediate one:
     // snapping every frame while snapping is active would force the
     // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
@@ -1006,7 +1236,8 @@ function runAutoLayout() {
     // written position anyway, only the last write actually matters for
     // the visible result — so it's the only one that needs to respect
     // the grid.
-    const converged = allSettled || frame >= AUTO_LAYOUT_MAX_FRAMES;
+    const converged = allSettled || barelyMoving ||
+      frame >= AUTO_LAYOUT_MAX_FRAMES;
 
     for (const result of allResults) {
       const box = nodeBox(result.index);
@@ -1113,14 +1344,16 @@ $effect(() => {
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
-    Left sidebar: inspector for the selected node. Always rendered (even
-    with nothing selected) so it keeps a fixed w-64 slot in this flex row.
-    Toggling it in/out of the DOM would resize the canvas column next to it
-    (since it's flex-1), which changes canvas_width/canvas_height and jumps
-    the whole viewBox on every selection change.
+    Left sidebar: inspector (top) + diagram picker (bottom), sharing one
+    w-64 column instead of two, to leave more horizontal room for the
+    canvas. Always rendered (even with nothing selected) so it keeps a
+    fixed w-64 slot in this flex row — toggling it in/out of the DOM
+    would resize the canvas column next to it (since it's flex-1), which
+    changes canvas_width/canvas_height and jumps the whole viewBox on
+    every selection change.
   -->
   <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300"
+    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300 flex flex-col"
   >
     <h3
       class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
@@ -1185,6 +1418,22 @@ $effect(() => {
         Select a component on the canvas to edit its properties.
       </p>
     {/if}
+
+    <div class="divider"></div>
+
+    <h3
+      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+    >
+      Diagrams
+    </h3>
+    <FileTree
+      entries={diagramEntries}
+      bind:selectedPath={selectedDiagramPath}
+      oncreatefile={handleCreateDiagram}
+      oncreatedirectory={handleCreateDiagramFolder}
+      onrename={handleRenameDiagram}
+      ondelete={handleDeleteDiagram}
+    />
   </aside>
 
   <!-- Main canvas -->
@@ -1452,7 +1701,11 @@ $effect(() => {
       Components
     </h3>
 
-    {#if components.length === 0}
+    {#if selectedDiagramPath === null}
+      <p class="text-base-content/50 text-sm">
+        No diagram selected.<br />Create one from the Diagrams sidebar.
+      </p>
+    {:else if components.length === 0}
       <p class="text-base-content/50 text-sm">
         No components found.<br />Open the editor and define some systems.
       </p>
@@ -1464,14 +1717,14 @@ $effect(() => {
               type="checkbox"
               id="comp-{index}"
               class="checkbox checkbox-xs"
-              checked={!!checked.value[componentKey(index)]}
+              checked={!!checked[componentKey(index)]}
               onchange={(value) => {
                 recordUndoPoint();
                 if (value.currentTarget.checked) {
                   // Restore the remembered layout if this component has
                   // been placed before (even if it was later unchecked),
                   // instead of always resetting to the default position.
-                  const remembered = savedLayout.value[componentKey(index)];
+                  const remembered = savedLayout[componentKey(index)];
                   let box: Box = {
                     x: remembered?.x ?? 100,
                     y: remembered?.y ?? 100,
@@ -1495,10 +1748,10 @@ $effect(() => {
                   // that were already placed on canvas before it was.
                   reclampChildren(index);
                 } else {
-                  delete checked.value[componentKey(index)];
-                  // savedLayout.value[componentKey(index)] is intentionally
-                  // left alone, so re-checking this component later
-                  // restores it here.
+                  delete checked[componentKey(index)];
+                  // savedLayout[componentKey(index)] is intentionally left
+                  // alone, so re-checking this component later restores it
+                  // here.
                   selected.delete(index);
                 }
               }}

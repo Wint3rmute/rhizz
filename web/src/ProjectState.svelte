@@ -67,39 +67,4 @@ export async function createProjectWithMainFile(
   );
   return project;
 }
-
-// One-time migration: before this task, the whole app kept a single
-// global HCL string under this localStorage key (see Persisted.svelte.ts
-// usage prior to Task 57). Anyone with pre-existing data gets it moved
-// into a real project the first time the app loads after this change
-// ships, then the legacy key is removed — so this only ever does
-// anything once per browser (the `getItem` check below is what makes it
-// a no-op on every subsequent load).
-const LEGACY_SYSTEM_INPUT_KEY = "SYSTEM_INPUT_BOX";
-
-async function migrateLegacySystemInputBox(): Promise<void> {
-  if (typeof localStorage === "undefined") return;
-  const raw = localStorage.getItem(LEGACY_SYSTEM_INPUT_KEY);
-  if (raw === null) return;
-
-  // The legacy value was written by Persisted.svelte.ts, which stores
-  // everything as `JSON.stringify(value)` — so a plain HCL string is
-  // sitting there JSON-quoted (e.g. `"system \"x\" {}"`), not raw. Parse
-  // it back; fall back to the raw value if it's ever not valid JSON (e.g.
-  // hand-edited storage), rather than losing the user's data.
-  let content = raw;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "string") content = parsed;
-  } catch {
-    // keep `raw` as-is
-  }
-
-  await createProjectWithMainFile("Migrated project", content);
-  localStorage.removeItem(LEGACY_SYSTEM_INPUT_KEY);
-}
-
-if (typeof window !== "undefined") {
-  migrateLegacySystemInputBox();
-}
 </script>
