@@ -13,7 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 61 - Allow embedding diagrams via unique URLs
 ## Task 63 - Install FontAwesome icons, use them in the FileTree
 
 - Install FontAwesome icons via deno
@@ -21,12 +20,22 @@ How to work on this file:
   - In general, pick the most minimal and free variant
 - Use the icons in the FileTree - one icon for a folder, another icon for a file
 
-## Task 62 - Allow embedding diagrams via unique URLs
+## Task 64 - Allow embedding diagrams via unique URLs
 
 - Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
 - Update the `Diagram` component to support the new URL scheme
   - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
 - The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
+
+## Task 65 - remove all code related to data migrations
+
+Frontend code contains data migration logic that is no longer needed, it was a legacy approach that is no longer supported. Assume that the data migration logic is no longer needed and can be safely removed, all users are using the latest version of the app.
+
+Examples of this old legacy code to be inspected and surgically removed:
+
+- LEGACY_SYSTEM_INPUT_KEY
+- migrateLegacySystemInputBox
+- stripLegacyIndexKey
 
 ## (For later brainstorming) Task <N> - use UNIX-style paths for component references
 
