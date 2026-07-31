@@ -27,16 +27,6 @@ How to work on this file:
   - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
 - The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
 
-## Task 65 - remove all code related to data migrations
-
-Frontend code contains data migration logic that is no longer needed, it was a legacy approach that is no longer supported. Assume that the data migration logic is no longer needed and can be safely removed, all users are using the latest version of the app.
-
-Examples of this old legacy code to be inspected and surgically removed:
-
-- LEGACY_SYSTEM_INPUT_KEY
-- migrateLegacySystemInputBox
-- stripLegacyIndexKey
-
 ## (For later brainstorming) Task <N> - use UNIX-style paths for component references
 
 Currently, when defining connections between components, path are specified using label + colon notation (e.g. `foo:bar`). While this is convenient for simple cases, it should be replaced with a more standard UNIX-style path notation (e.g. `/foo/bar`).

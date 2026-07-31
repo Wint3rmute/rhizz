@@ -18,7 +18,6 @@ import DiagramToolbar from "./DiagramToolbar.svelte";
 import {
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
-  migrateLegacyDiagramFiles,
   readDiagramLayoutFile,
   type StoredBox,
   writeDiagramLayoutFile,
@@ -229,27 +228,10 @@ let checked = $state<Record<string, StoredBox>>({});
 // different lifetimes (checked entries disappear on uncheck; these don't).
 let savedLayout = $state<Record<string, StoredBox>>({});
 
-// One-time migration away from the old arena-index-keyed scheme: those
-// keys were plain integers (e.g. "0", "1"), which can never occur as a
-// componentKey() path (a real path always contains at least one "/", from
-// its root system label). There's no reliable way to migrate their values
-// forward — the whole point of this change is that the old index→component
-// mapping could silently be wrong — so this just strips them out rather
-// than let them linger unused in storage forever; anyone with pre-existing
-// diagram layouts gets a one-time reset.
-function stripLegacyIndexKeys<T>(record: Record<string, T>): Record<string, T> {
-  const withoutLegacyKeys = Object.fromEntries(
-    Object.entries(record).filter(([key]) => !/^\d+$/.test(key)),
-  );
-  return Object.keys(withoutLegacyKeys).length === Object.keys(record).length
-    ? record
-    : withoutLegacyKeys;
-}
-
 // Which diagram (a `.rhizz/diagrams/<name>.json` file) is currently open
 // on the canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.json" —
 // exactly like the editor's own `selectedPath` is relative to the
-// project root (TASKS.md Task 65). `null` means no diagram exists yet
+// project root (TASKS.md Task 66). `null` means no diagram exists yet
 // (or none is selected), in which case the canvas below simply has
 // nothing placed on it.
 let selectedDiagramPath = $state<string | null>(null);
@@ -275,9 +257,8 @@ async function refreshDiagramEntries(): Promise<void> {
 }
 
 // Picks a sensible default diagram to open: the first ".json" file found
-// (in practice "main.json" for any project migrated from Task 60's
-// single-implicit-diagram scheme), or `null` if the project has no
-// diagrams at all yet.
+// (in practice "main.json" — see the auto-seed below), or `null` if the
+// project has no diagrams at all yet.
 function firstDiagramPath(): string | null {
   return diagramEntries.find((e) => e.isFile() && e.name.endsWith(".json"))
     ?.path ?? null;
@@ -285,20 +266,17 @@ function firstDiagramPath(): string | null {
 
 // (Re)loads the diagram file list once per project, when the project
 // first becomes available or changes identity (e.g. after switching
-// projects) — migrating any Task 60-era legacy files first, so they show
-// up as this project's "main" diagram instead of vanishing.
+// projects).
 let loadedDiagramProjectId: string | null = null;
 $effect(() => {
   const id = data.projectId;
   if (id === loadedDiagramProjectId) return;
   loadedDiagramProjectId = id;
   selectedDiagramPath = null;
-  migrateLegacyDiagramFiles(fs)
-    .then(refreshDiagramEntries)
+  refreshDiagramEntries()
     .then(async () => {
       if (firstDiagramPath() === null) {
-        // A brand new project (or one migrated from Task 60 with no prior
-        // diagram data at all) has no diagram files yet — seed one so
+        // A brand new project has no diagram files yet — seed one so
         // there's always something selected/editable, mirroring how a
         // fresh project always starts with a "main.hcl" (see
         // ProjectState.svelte's createProjectWithMainFile) rather than an
@@ -342,8 +320,8 @@ $effect(() => {
     // after a newer one already changed the selection — guard against
     // overwriting the newer selection's state with the older one.
     if (loadedDiagramPath !== path) return;
-    checked = stripLegacyIndexKeys(layout.checked);
-    savedLayout = stripLegacyIndexKeys(layout.savedLayout);
+    checked = layout.checked;
+    savedLayout = layout.savedLayout;
     diagramLayoutLoaded = true;
   });
 });

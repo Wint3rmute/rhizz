@@ -77,7 +77,7 @@ function sanitizeMaybeRecord(value: unknown): Record<string, StoredBox> {
 // mirrors how vfs/compile.ts identifies source files by their ".hcl"
 // extension, since there's no contentType tag on FsFile to key off (see
 // TASKS.md Task 60). Each project can hold any number of named diagrams
-// (TASKS.md Task 65), one JSON file per diagram, selectable via a
+// (TASKS.md Task 66), one JSON file per diagram, selectable via a
 // FileTree scoped to this directory.
 export const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
 
@@ -148,53 +148,4 @@ export async function writeDiagramLayoutFile(
 ): Promise<void> {
   await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
   await fs.writeFile(path, JSON.stringify(layout));
-}
-
-// --- Task 60 -> Task 65 migration -------------------------------------
-//
-// Before named diagrams existed (Task 65), a project had at most one
-// implicit diagram, stored as two separate flat-record files at these
-// fixed paths (Task 60). Kept only so migrateLegacyDiagramFiles() below
-// can find and migrate any pre-existing data written under that scheme —
-// nothing else in this module should ever read or write them again.
-const LEGACY_CHECKED_NODES_PATH = `${DIAGRAM_LAYOUT_DIR}/checked.json`;
-const LEGACY_SAVED_LAYOUT_PATH = `${DIAGRAM_LAYOUT_DIR}/saved-layout.json`;
-
-async function readLegacyFlatRecord(
-  fs: ProjectFs,
-  path: string,
-): Promise<Record<string, StoredBox> | null> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(path);
-  } catch (error) {
-    if (error instanceof VfsError && error.code === "ENOENT") return null;
-    throw error;
-  }
-  try {
-    return sanitizeMaybeRecord(JSON.parse(raw));
-  } catch {
-    return {};
-  }
-}
-
-// One-time per-project migration: combines any pre-existing
-// checked.json/saved-layout.json (Task 60's single-implicit-diagram
-// scheme) into a single "main" diagram, then removes the legacy files.
-// A no-op (does nothing, touches nothing) once neither legacy file
-// exists anymore — which is the case for every project from its very
-// first diagrams-page load onward.
-export async function migrateLegacyDiagramFiles(fs: ProjectFs): Promise<void> {
-  const [legacyChecked, legacySavedLayout] = await Promise.all([
-    readLegacyFlatRecord(fs, LEGACY_CHECKED_NODES_PATH),
-    readLegacyFlatRecord(fs, LEGACY_SAVED_LAYOUT_PATH),
-  ]);
-  if (legacyChecked === null && legacySavedLayout === null) return;
-
-  await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/main.json`, {
-    checked: legacyChecked ?? {},
-    savedLayout: legacySavedLayout ?? {},
-  });
-  await fs.rm(LEGACY_CHECKED_NODES_PATH, { force: true });
-  await fs.rm(LEGACY_SAVED_LAYOUT_PATH, { force: true });
 }

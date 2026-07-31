@@ -4,7 +4,6 @@ import { openProjectFs } from "../../../../vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
-  migrateLegacyDiagramFiles,
   readDiagramLayoutFile,
   sanitizeStoredRecord,
   StoredBoxSchema,
@@ -203,76 +202,5 @@ describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
     expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
       emptyDiagramLayout(),
     );
-  });
-});
-
-describe("migrateLegacyDiagramFiles", () => {
-  const LEGACY_CHECKED_PATH = `${DIAGRAM_LAYOUT_DIR}/checked.json`;
-  const LEGACY_SAVED_LAYOUT_PATH = `${DIAGRAM_LAYOUT_DIR}/saved-layout.json`;
-
-  it("does nothing when neither legacy file exists", async () => {
-    const fs = await projectFs();
-    await migrateLegacyDiagramFiles(fs);
-    const entries = await fs.readdir(".", { recursive: true }).catch(() => []);
-    expect(entries).toEqual([]);
-  });
-
-  it("combines both legacy files into a new main.json and removes the legacy files", async () => {
-    const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    await fs.writeFile(
-      LEGACY_CHECKED_PATH,
-      JSON.stringify({ "sys/a": { x: 1, y: 2 } }),
-    );
-    await fs.writeFile(
-      LEGACY_SAVED_LAYOUT_PATH,
-      JSON.stringify({ "sys/a": { x: 1, y: 2 }, "sys/b": { x: 3, y: 4 } }),
-    );
-
-    await migrateLegacyDiagramFiles(fs);
-
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
-      checked: { "sys/a": { x: 1, y: 2 } },
-      savedLayout: { "sys/a": { x: 1, y: 2 }, "sys/b": { x: 3, y: 4 } },
-    });
-    await expect(fs.readFile(LEGACY_CHECKED_PATH)).rejects.toThrow();
-    await expect(fs.readFile(LEGACY_SAVED_LAYOUT_PATH)).rejects.toThrow();
-  });
-
-  it("migrates even when only one of the two legacy files exists", async () => {
-    const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    await fs.writeFile(
-      LEGACY_CHECKED_PATH,
-      JSON.stringify({ "sys/a": { x: 1, y: 2 } }),
-    );
-
-    await migrateLegacyDiagramFiles(fs);
-
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
-      checked: { "sys/a": { x: 1, y: 2 } },
-      savedLayout: {},
-    });
-  });
-
-  it("is a no-op on a second call", async () => {
-    const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    await fs.writeFile(
-      LEGACY_CHECKED_PATH,
-      JSON.stringify({ "sys/a": { x: 1, y: 2 } }),
-    );
-
-    await migrateLegacyDiagramFiles(fs);
-    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, {
-      checked: { "sys/z": { x: 9, y: 9 } },
-      savedLayout: {},
-    });
-    await migrateLegacyDiagramFiles(fs); // should not overwrite main.json again
-
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
-      checked: { "sys/z": { x: 9, y: 9 } },
-      savedLayout: {},
-    });
   });
 });

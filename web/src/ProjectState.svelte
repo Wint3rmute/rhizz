@@ -13,11 +13,6 @@
 import { openProjectFs } from "./vfs/fs";
 import { LocalStorageProjectStore } from "./vfs/localStorageStore";
 import type { Project } from "./vfs/types";
-import {
-  DIAGRAM_LAYOUT_DIR,
-  sanitizeStoredRecord,
-  writeDiagramLayoutFile,
-} from "./routes/projects/[id]/diagrams/persistence";
 
 // The single localStorage-backed VFS for the whole app. Every
 // page/component that reads or mutates projects/files goes through this
@@ -71,84 +66,5 @@ export async function createProjectWithMainFile(
     content,
   );
   return project;
-}
-
-// One-time migration: before this task, the whole app kept a single
-// global HCL string under this localStorage key (see Persisted.svelte.ts
-// usage prior to Task 57). Anyone with pre-existing data gets it moved
-// into a real project the first time the app loads after this change
-// ships, then the legacy key is removed — so this only ever does
-// anything once per browser (the `getItem` check below is what makes it
-// a no-op on every subsequent load).
-const LEGACY_SYSTEM_INPUT_KEY = "SYSTEM_INPUT_BOX";
-
-async function migrateLegacySystemInputBox(): Promise<void> {
-  if (typeof localStorage === "undefined") return;
-  const raw = localStorage.getItem(LEGACY_SYSTEM_INPUT_KEY);
-  if (raw === null) return;
-
-  // The legacy value was written by Persisted.svelte.ts, which stores
-  // everything as `JSON.stringify(value)` — so a plain HCL string is
-  // sitting there JSON-quoted (e.g. `"system \"x\" {}"`), not raw. Parse
-  // it back; fall back to the raw value if it's ever not valid JSON (e.g.
-  // hand-edited storage), rather than losing the user's data.
-  let content = raw;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "string") content = parsed;
-  } catch {
-    // keep `raw` as-is
-  }
-
-  const project = await createProjectWithMainFile("Migrated project", content);
-  localStorage.removeItem(LEGACY_SYSTEM_INPUT_KEY);
-  await migrateLegacyDiagramLayout(project.id);
-}
-
-// One-time migration (extends the one above): before diagrams lived in
-// the VFS at all (Task 60), the whole app kept a single implicit
-// diagram's checked/saved-layout records under these two global
-// localStorage keys — shared by every project in the browser, since
-// there was only ever one project worth of diagram data before Task 60.
-// Anyone with pre-existing layout data gets it copied into the project
-// just migrated above, as that project's "main" diagram (there's no
-// other project it could sensibly belong to, and "main" matches the name
-// migrateLegacyDiagramFiles() in persistence.ts gives a Task 60-era
-// project's own VFS-local legacy files — see TASKS.md Task 65), then the
-// legacy keys are removed.
-const LEGACY_CHECKED_NODES_KEY = "DIAGRAM_CHECKED_NODES";
-const LEGACY_SAVED_LAYOUT_KEY = "DIAGRAM_SAVED_LAYOUT";
-
-function parseLegacyDiagramRecord(raw: string | null): Record<string, unknown> {
-  if (raw === null) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null &&
-        !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-async function migrateLegacyDiagramLayout(projectId: string): Promise<void> {
-  if (typeof localStorage === "undefined") return;
-
-  const checkedRaw = localStorage.getItem(LEGACY_CHECKED_NODES_KEY);
-  const savedLayoutRaw = localStorage.getItem(LEGACY_SAVED_LAYOUT_KEY);
-  if (checkedRaw === null && savedLayoutRaw === null) return;
-
-  const fs = openProjectFs(projectStore, projectId);
-  await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/main.json`, {
-    checked: sanitizeStoredRecord(parseLegacyDiagramRecord(checkedRaw)),
-    savedLayout: sanitizeStoredRecord(parseLegacyDiagramRecord(savedLayoutRaw)),
-  });
-  localStorage.removeItem(LEGACY_CHECKED_NODES_KEY);
-  localStorage.removeItem(LEGACY_SAVED_LAYOUT_KEY);
-}
-
-if (typeof window !== "undefined") {
-  migrateLegacySystemInputBox();
 }
 </script>

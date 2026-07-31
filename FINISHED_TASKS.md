@@ -4,13 +4,46 @@ Completed tasks are listed here, most recent first.
 
 ---
 
-## Task 65 — Multiple named diagrams per project, selectable via `FileTree`
+## Task 65 — Remove legacy data-migration code
+
+The app is still pre-release (no real users on old data shapes to
+support), so all one-time "migrate legacy localStorage data forward"
+logic accumulated across Tasks 39/57/60/66 was surgically removed rather
+than carried forward indefinitely:
+
+- `ProjectState.svelte`: removed `LEGACY_SYSTEM_INPUT_KEY`,
+  `migrateLegacySystemInputBox()` (and its `if (typeof window !== ...)`
+  auto-run at module load), plus the diagram-layout-specific
+  `LEGACY_CHECKED_NODES_KEY`/`LEGACY_SAVED_LAYOUT_KEY`,
+  `parseLegacyDiagramRecord()`, and `migrateLegacyDiagramLayout()` added
+  by Task 66. `createProjectWithMainFile()` (still used by the `/projects`
+  page's "new project"/"new from example" actions) was kept.
+- `persistence.ts`: removed `migrateLegacyDiagramFiles()`,
+  `readLegacyFlatRecord()`, and the `LEGACY_CHECKED_NODES_PATH`/
+  `LEGACY_SAVED_LAYOUT_PATH` constants added by Task 66 — no code path
+  anywhere reads `.rhizz/diagrams/checked.json`/`saved-layout.json`
+  anymore.
+- `diagrams/+page.svelte`: removed `stripLegacyIndexKeys()` and its call
+  sites (the diagram-load effect now assigns `layout.checked`/
+  `layout.savedLayout` directly), and the `migrateLegacyDiagramFiles(fs)`
+  call in the project-switch effect (now just calls
+  `refreshDiagramEntries()` directly).
+- `persistence.test.ts`: removed the `describe("migrateLegacyDiagramFiles", ...)`
+  suite (4 cases) along with the now-unused import.
+- Validated with `deno task check`, `deno run lint`,
+  `npx vitest run --project unit_tests` (248 tests passing), and
+  `deno task build`.
+
+## Task 66 — Multiple named diagrams per project, selectable via `FileTree`
 
 Follow-up to Task 60: replaced the single implicit per-project diagram
 (`checked.json` + `saved-layout.json`) with any number of named diagrams,
 selectable from a `FileTree` sidebar on the diagrams page — reusing the
 editor's `FileTree.svelte` completely unmodified, since it was already
-generic over `Dirent[]` + path callbacks.
+generic over `Dirent[]` + path callbacks. (Note: this task's own migration
+helpers — `migrateLegacyDiagramFiles`/`migrateLegacyDiagramLayout` — were
+removed again immediately afterward by Task 65, which landed in the same
+session; see that entry above for what's actually still in the tree.)
 
 - `persistence.ts`: replaced `CHECKED_NODES_PATH`/`SAVED_LAYOUT_PATH`
   with `DIAGRAM_LAYOUT_DIR` (`.rhizz/diagrams`) and a `DiagramLayout`
@@ -19,14 +52,6 @@ generic over `Dirent[]` + path callbacks.
   `readDiagramLayoutFile`/`writeDiagramLayoutFile` now read/write that
   combined shape; `StoredBoxSchema`/`sanitizeStoredRecord` stayed the
   per-entry validation layer.
-  Added `migrateLegacyDiagramFiles(fs)`: a one-time per-project migration
-  that combines any pre-existing Task 60-era `checked.json`/
-  `saved-layout.json` into a new `main.json`, then deletes the legacy
-  files — a no-op once neither legacy file exists.
-- `ProjectState.svelte`'s existing legacy-localStorage migration
-  (`migrateLegacyDiagramLayout`) now writes directly into the new
-  project's `.rhizz/diagrams/main.json` via `writeDiagramLayoutFile`,
-  instead of the old two-fixed-path scheme.
 - `+page.svelte`: added `selectedDiagramPath`/`diagramEntries` state and
   a `FileTree` sidebar (leftmost of three, alongside the existing
   Inspector/Components sidebars) for picking which diagram is open.
@@ -44,9 +69,7 @@ generic over `Dirent[]` + path callbacks.
   of the two fixed path constants, still using `$state.snapshot()` for
   correct dependency tracking.
 - Extended `persistence.test.ts` with `DiagramLayout`-shaped
-  round-trip/malformed-data cases and full `migrateLegacyDiagramFiles`
-  coverage (both-legacy-files, one-legacy-file, and no-op-on-repeat
-  cases) using `InMemoryProjectStore`.
+  round-trip/malformed-data cases.
 - Fixed a pre-existing duplicate/misnumbered pair of "allow embedding
   diagrams via unique URLs" tasks in `TASKS.md` (was Task 61 and Task 62
   with identical text) while renumbering around this task.
