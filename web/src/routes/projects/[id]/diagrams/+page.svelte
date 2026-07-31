@@ -323,6 +323,12 @@ $effect(() => {
     checked = layout.checked;
     savedLayout = layout.savedLayout;
     diagramLayoutLoaded = true;
+    // Frames the newly-opened diagram's content immediately, rather than
+    // leaving the view wherever the previously-open diagram (or the
+    // default pan/zoom) happened to leave it — renderOrder/nodeBox()
+    // already reflect the `checked` assignment above by the time this
+    // runs, since they're plain $derived reads, not effects.
+    zoomToFill();
   });
 });
 
