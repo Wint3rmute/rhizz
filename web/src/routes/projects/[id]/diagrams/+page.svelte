@@ -1302,35 +1302,17 @@ $effect(() => {
 <svelte:window onkeydown={onDiagramKeyDown} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
-  <!-- Leftmost sidebar: pick which diagram is open on the canvas. -->
-  <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300"
-  >
-    <h3
-      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-    >
-      Diagrams
-    </h3>
-    <FileTree
-      entries={diagramEntries}
-      bind:selectedPath={selectedDiagramPath}
-      oncreatefile={handleCreateDiagram}
-      oncreatedirectory={handleCreateDiagramFolder}
-      onrename={handleRenameDiagram}
-      ondelete={handleDeleteDiagram}
-    />
-  </aside>
-
   <!--
-    Inspector sidebar: properties of the selected node. Always rendered
-    (even with nothing selected) so it keeps a fixed w-64 slot in this
-    flex row. Toggling it in/out of the DOM would resize the canvas
-    column next to it (since it's flex-1), which changes
-    canvas_width/canvas_height and jumps the whole viewBox on every
-    selection change.
+    Left sidebar: inspector (top) + diagram picker (bottom), sharing one
+    w-64 column instead of two, to leave more horizontal room for the
+    canvas. Always rendered (even with nothing selected) so it keeps a
+    fixed w-64 slot in this flex row — toggling it in/out of the DOM
+    would resize the canvas column next to it (since it's flex-1), which
+    changes canvas_width/canvas_height and jumps the whole viewBox on
+    every selection change.
   -->
   <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300"
+    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300 flex flex-col"
   >
     <h3
       class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
@@ -1395,6 +1377,22 @@ $effect(() => {
         Select a component on the canvas to edit its properties.
       </p>
     {/if}
+
+    <div class="divider"></div>
+
+    <h3
+      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+    >
+      Diagrams
+    </h3>
+    <FileTree
+      entries={diagramEntries}
+      bind:selectedPath={selectedDiagramPath}
+      oncreatefile={handleCreateDiagram}
+      oncreatedirectory={handleCreateDiagramFolder}
+      onrename={handleRenameDiagram}
+      ondelete={handleDeleteDiagram}
+    />
   </aside>
 
   <!-- Main canvas -->
