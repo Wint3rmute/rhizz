@@ -6,33 +6,61 @@ import CompilationDiagnosticsOutline from "../../../../components/CompilationDia
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
-import { openProjectFs } from "../../../../vfs/fs";
+import { readProjectSources, type Source } from "../../../../vfs/compile";
+import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
+import FileTree from "./FileTree.svelte";
 
 let { data }: PageProps = $props();
 
-// Until Task 58 adds a real file-tree sidebar, every project has exactly
-// one editable file, always at this well-known path (see
-// ProjectState.svelte's createProjectWithMainFile) — this page just
-// reads/writes it directly, the same way any ordinary fs-based program
-// would open a known file by path.
-const MAIN_FILE_PATH = "main.hcl";
-
 let fs = $derived(openProjectFs(projectStore, data.projectId));
 
-let content = $state("");
+let entries = $state<Dirent[]>([]);
+let selectedPath = $state<string | null>(null);
 let loadedProjectId: string | null = null;
-let lastWrittenContent = "";
 
-// Loads the file's content into the editor once, when the project first
-// becomes available (or changes identity — e.g. after switching
-// projects). Missing files (e.g. a project that predates this
-// convention) fall back to empty content rather than erroring.
+async function refreshEntries(): Promise<void> {
+  entries = await fs.readdir(".", { recursive: true });
+}
+
+// Picks a sensible default file to open: the first ".hcl" file found
+// (in practice always "main.hcl" for projects created via
+// ProjectState.svelte's createProjectWithMainFile), or `null` if the
+// project has no source files at all yet.
+function firstHclPath(): string | null {
+  return entries.find((e) => e.isFile() && e.name.endsWith(".hcl"))?.path ??
+    null;
+}
+
+// (Re)loads the whole tree once per project, when the project first
+// becomes available or changes identity (e.g. after switching projects).
 $effect(() => {
   const id = data.projectId;
   if (id === loadedProjectId) return;
   loadedProjectId = id;
-  fs.readFile(MAIN_FILE_PATH)
+  selectedPath = null;
+  refreshEntries().then(() => {
+    selectedPath = firstHclPath();
+  });
+});
+
+let content = $state("");
+let loadedPath: string | null = null;
+let lastWrittenContent = "";
+
+// Loads the selected file's content into the editor whenever the
+// selection changes identity. Missing files fall back to empty content
+// rather than erroring.
+$effect(() => {
+  const path = selectedPath;
+  if (path === loadedPath) return;
+  loadedPath = path;
+  if (path === null) {
+    content = "";
+    lastWrittenContent = "";
+    return;
+  }
+  fs.readFile(path)
     .catch(() => "")
     .then((loaded) => {
       content = loaded;
@@ -45,15 +73,110 @@ $effect(() => {
 // trip) means this only ever fires for an actual edit, never for the
 // load effect's own initial assignment above.
 $effect(() => {
-  if (loadedProjectId !== null && content !== lastWrittenContent) {
+  if (loadedPath !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
-    fs.writeFile(MAIN_FILE_PATH, content);
+    fs.writeFile(loadedPath, content);
   }
 });
 
-let output = $derived.by(() =>
-  compile_system([{ filename: MAIN_FILE_PATH, content }])
-);
+// Compiles the *whole* project (every ".hcl" file), not just whichever
+// one is open — matching rhizz-core's actual "flat merge of a directory"
+// semantics, and how diagrams/overview already compile. The open file's
+// on-disk copy can lag one write behind `content` (the write-back effect
+// above is async), so its entry is patched in-place with the live,
+// in-editor value instead of trusting readProjectSources' own read of
+// it — every *other* file is only ever read fresh here, which is fine
+// since nothing else is editing them concurrently.
+let sources = $state<Source[]>([]);
+$effect(() => {
+  const path = loadedPath;
+  const liveContent = content;
+  readProjectSources(fs).then((loaded) => {
+    sources = path === null
+      ? loaded
+      : loaded.map((s) =>
+        s.filename === path ? { ...s, content: liveContent } : s
+      );
+  });
+});
+
+function reportError(error: unknown): void {
+  alert(error instanceof Error ? error.message : String(error));
+}
+
+// Strips leading/trailing slashes and rejects anything containing "/" or
+// only whitespace — prompt() collects a bare name (a new path segment),
+// never a nested path, so a stray "/" almost certainly means the user
+// meant something a plain rename/create dialog can't express here.
+function sanitizeSegmentName(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === "" || trimmed.includes("/")) return null;
+  return trimmed;
+}
+
+function joinPath(parentPath: string, name: string): string {
+  return parentPath ? `${parentPath}/${name}` : name;
+}
+
+async function handleCreateFile(parentPath: string): Promise<void> {
+  const name = sanitizeSegmentName(
+    prompt("New file name?", "untitled.hcl") ?? "",
+  );
+  if (name === null) return;
+  const path = joinPath(parentPath, name);
+  try {
+    await fs.writeFile(path, "");
+    await refreshEntries();
+    selectedPath = path;
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function handleCreateDirectory(parentPath: string): Promise<void> {
+  const name = sanitizeSegmentName(
+    prompt("New folder name?", "untitled") ?? "",
+  );
+  if (name === null) return;
+  try {
+    await fs.mkdir(joinPath(parentPath, name));
+    await refreshEntries();
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function handleRename(path: string): Promise<void> {
+  const segments = path.split("/");
+  const oldName = segments[segments.length - 1];
+  const parentPath = segments.slice(0, -1).join("/");
+  const name = sanitizeSegmentName(prompt("Rename to?", oldName) ?? "");
+  if (name === null || name === oldName) return;
+  const newPath = joinPath(parentPath, name);
+  try {
+    await fs.rename(path, newPath);
+    if (selectedPath === path) selectedPath = newPath;
+    await refreshEntries();
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+async function handleDelete(path: string): Promise<void> {
+  if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
+  try {
+    await fs.rm(path, { recursive: true });
+    if (selectedPath === path || selectedPath?.startsWith(`${path}/`)) {
+      selectedPath = null;
+    }
+    await refreshEntries();
+    if (selectedPath === null) selectedPath = firstHclPath();
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+let output = $derived.by(() => compile_system(sources));
 
 let model = $derived(output.model());
 let diagnostics = $derived(output.diagnostics());
@@ -111,6 +234,16 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
             class="block hover:text-base-content">Projects</a>
         </li>
       </ul>
+      <div class="divider"></div>
+      <h3 class="font-semibold mb-3 text-base-content">Files</h3>
+      <FileTree
+        {entries}
+        bind:selectedPath
+        oncreatefile={handleCreateFile}
+        oncreatedirectory={handleCreateDirectory}
+        onrename={handleRename}
+        ondelete={handleDelete}
+      />
     </aside>
 
     <main class="md:col-span-6 lg:col-span-8 flex flex-col gap-4">
@@ -139,11 +272,21 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
         class="w-full bg-base-200 p-6 rounded shadow flex flex-col flex-1 text-base-content"
       >
         <h1 class="text-2xl font-semibold mb-4 text-base-content">
-          Editor
+          Editor{#if selectedPath}<span
+              class="text-base-content/50 font-mono text-base ml-2"
+            >{selectedPath}</span>{/if}
         </h1>
-        <div class="flex-1 w-full">
-          <MonacoEditor bind:value={content} language="hcl" />
-        </div>
+        {#if selectedPath === null}
+          <div
+            class="flex-1 flex items-center justify-center text-base-content/50 text-sm"
+          >
+            No file selected — create or pick one from the sidebar.
+          </div>
+        {:else}
+          <div class="flex-1 w-full">
+            <MonacoEditor bind:value={content} language="hcl" />
+          </div>
+        {/if}
       </div>
     </main>
 

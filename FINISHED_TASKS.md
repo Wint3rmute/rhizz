@@ -4,6 +4,75 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 59 — File-tree sidebar in the editor, wired to `ProjectFs`
+
+Fifth of the VFS sequence (55–60). Replaces the editor's interim
+"hardcoded main.hcl" convention (Task 58) with a real, multi-file file
+tree — the last piece needed before a project can hold more than one
+source file in practice.
+
+- Added `web/src/vfs/pathTree.ts`: `buildPathTree(entries: Dirent[])`, a
+  pure path-only tree builder (no ids, no `ProjectStore`) that turns
+  `ProjectFs.readdir(".", { recursive: true })`'s flat output into a
+  nested `PathTreeNode[]` (directories before files, then alphabetical).
+  Deliberately **not** a reuse of `vfs/tree.ts`'s id-based `buildTree()`
+  as the task text originally sketched — that would have required the
+  editor to import `FsNode`/ids again, undoing Task 58's "nothing outside
+  `./vfs` touches an id" boundary. `pathTree.ts` sits alongside
+  `compile.ts` as a small higher-level helper built purely on
+  `ProjectFs`'s public shape (it imports `Dirent`'s *type* from `fs.ts`,
+  never the reverse, so the dependency direction stays one-way). 8 new
+  tests in `pathTree.test.ts`, including an input-order-independence
+  check and a defensive "entry whose parent isn't in the list" case.
+- Added `web/src/routes/projects/[id]/editor/FileTree.svelte`: renders
+  `buildPathTree`'s output as a collapsible tree (expand/collapse state
+  via `SvelteSet`, since it's a real mutated-in-place reactive set, unlike
+  the throwaway ones flagged by `svelte/prefer-svelte-reactivity` in Task
+  "lint fix 3/4"). Per-row hover actions for rename/delete, plus
+  create-file/create-directory on directories and at the root toolbar.
+  Talks to the page only through props (`entries`, bindable
+  `selectedPath`, and `oncreatefile`/`oncreatedirectory`/`onrename`/
+  `ondelete` callbacks) — it never imports `ProjectFs`/`ProjectStore`
+  itself, keeping I/O (and its error handling) owned by `+page.svelte`.
+- Rewrote `editor/+page.svelte`:
+  - Loads the full tree via `fs.readdir(".", { recursive: true })` once
+    per project, defaulting the initial selection to the first `.hcl`
+    file found (so existing single-file projects keep opening exactly
+    the file they always did).
+  - Selecting a file loads it via `fs.readFile`; edits write back via
+    `fs.writeFile` on every change (no debounce yet, matching the
+    pre-existing behavior this replaces).
+  - Create/rename/delete handlers call straight into `ProjectFs`
+    (`writeFile`/`mkdir`/`rename`/`rm`), never `ProjectStore`, with
+    `prompt()`/`confirm()` dialogs and `alert()` error reporting —
+    consistent with the existing dialog style already used on the
+    `/projects` page. Deleting (or renaming away) the currently-open file
+    clears/updates the selection appropriately; deleting the last file
+    falls back to "no file selected", which the editor now renders as an
+    explicit placeholder instead of an empty Monaco instance.
+  - Compilation switched from the single hardcoded-file `compile_system`
+    call to `readProjectSources(fs)` (matching `diagrams`/`overview`'s
+    existing "flat merge of a directory" semantics) — with one
+    refinement beyond the task's literal wording: the currently-open
+    file's entry is patched with the *live* in-editor `content` rather
+    than trusting `readProjectSources`' own (possibly one-write-stale,
+    since the write-back effect is async) read of it, so diagnostics
+    never visibly lag behind typing for the file actually being edited.
+  - Drag-and-drop move wasn't implemented (explicitly a nice-to-have per
+    the task text) — `fs.rename` is exercised via the rename action only.
+- No new dependencies.
+- Validated with `npx svelte-check` (0 errors/warnings), `npx eslint .`
+  (0 problems), `npx vite build` (succeeds), `deno fmt` (clean), and the
+  pure-function Vitest project (241/241 passing, including the 8 new
+  `pathTree.test.ts` cases). The browser-mode Storybook/`addon-vitest`
+  project could not be exercised in this environment — confirmed via
+  extensive bisection to be a pre-existing local Playwright/Chromium
+  environment hang unrelated to any code in this repo (see the "tests
+  hang indefinitely" investigation in conversation history) — so this
+  task adds no new Storybook stories and relies on `svelte-check`/`eslint`/
+  `vite build` plus manual verification for its UI-heavy parts
+  (`FileTree.svelte`'s rendering, the create/rename/delete dialogs).
+
 ## Task 58 — Refactor the VFS into a `node:fs`-style path-based API
 
 Unplanned insertion into the VFS sequence (55–60, was 55–59), prompted by
