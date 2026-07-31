@@ -10,9 +10,10 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --compiler-warnings a11y_click_events_have_key_events:ignore",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "vitest run",
+    "test": "vitest",
     "build-storybook": "storybook build --config-dir .storybook --output-dir storybook-static",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "chromatic": "npx chromatic"
   },
   "dependencies": {
     "@sveltejs/adapter-static": "^3.0.10",
@@ -26,6 +27,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@storybook/addon-docs": "^10.5.5",
+    "@storybook/addon-vitest": "^10.5.5",
     "@storybook/svelte": "^10.5.5",
     "@storybook/sveltekit": "^10.5.5",
     "@sveltejs/adapter-auto": "^7.0.1",
@@ -33,11 +36,14 @@
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@types/d3-force": "^3.0.10",
     "@types/node": "^24.13.3",
+    "@vitest/browser": "3.2.7",
+    "@vitest/coverage-v8": "3.2.7",
     "chromatic": "^18.1.0",
     "eslint": "^10.8.0",
     "eslint-plugin-svelte": "^3.22.0",
     "globals": "^17.8.0",
     "monaco-editor": "^0.55.1",
+    "playwright": "^1.62.0",
     "storybook": "^10.5.5",
     "svelte": "^5.56.8",
     "svelte-check": "^4.7.4",

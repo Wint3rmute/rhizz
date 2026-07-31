@@ -21,4 +21,10 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+export const Empty: Story = {
+  args: {
+    diagnostics: [] as DiagnosticJS[],
+  },
+};
+
 export const Default: Story = {};

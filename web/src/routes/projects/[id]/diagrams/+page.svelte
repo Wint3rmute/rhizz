@@ -13,6 +13,7 @@ import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
+import DiagramToolbar from "./DiagramToolbar.svelte";
 import { sanitizeStoredRecord, type StoredBox } from "./persistence";
 import {
   createHistoryStack,
@@ -1418,58 +1419,17 @@ $effect(() => {
         {/if}
       </svg>
 
-      <div
-        class="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
-      >
-        <div class="join">
-          <button
-            onclick={() => (snapEnabled = !snapEnabled)}
-            class="btn btn-sm join-item {snapActive ? 'btn-primary' : 'btn-ghost'}"
-            title="Snap dragging/resizing to a {snapGridSize.value}-unit grid — or hold Ctrl/Cmd to snap temporarily"
-          >
-            Snap to Grid
-          </button>
-          <select
-            bind:value={snapGridSize.value}
-            class="select select-sm join-item w-20"
-            title="Snap grid size, in world units"
-          >
-            {#each SNAP_GRID_SIZE_OPTIONS as option (option)}
-              <option value={option}>{option}</option>
-            {/each}
-          </select>
-        </div>
-        <button
-          onclick={runAutoLayout}
-          disabled={autoLayoutRunning}
-          class="btn btn-ghost btn-sm {autoLayoutRunning ? 'animate-pulse' : ''}"
-          style="cursor: {autoLayoutRunning ? 'wait' : 'pointer'}"
-          title="Auto-arrange the selection (or all top-level nodes, if nothing is selected) using force-directed layout"
-        >
-          Auto Layout
-        </button>
-        <button
-          onclick={() => (gridVisible = !gridVisible)}
-          class="btn btn-sm {gridVisible ? 'btn-ghost' : 'btn-primary'}"
-          title="Toggle background grid visibility - nice for screenshots"
-        >
-          Toggle Grid
-        </button>
-        <button
-          onclick={zoomToFill}
-          class="btn btn-ghost btn-sm"
-          title="Zoom and pan to fit the whole diagram - useful for screenshots"
-        >
-          Zoom to Fill
-        </button>
-        <button
-          onclick={() => reset_view(editor_state)}
-          class="btn btn-ghost btn-sm"
-          title="Reset pan and zoom. Useful when you get lost in the diagram"
-        >
-          Reset View
-        </button>
-      </div>
+      <DiagramToolbar
+        bind:snapEnabled
+        {snapActive}
+        bind:snapGridSize={snapGridSize.value}
+        snapGridSizeOptions={SNAP_GRID_SIZE_OPTIONS}
+        bind:gridVisible
+        {autoLayoutRunning}
+        onautolayout={runAutoLayout}
+        onzoomtofill={zoomToFill}
+        onresetview={() => reset_view(editor_state)}
+      />
 
       <div
         class="absolute bottom-2 right-2 z-10 pointer-events-none bg-base-100 border border-base-300 rounded-box shadow px-3 py-1 text-sm text-base-content/80"

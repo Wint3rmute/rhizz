@@ -65,17 +65,6 @@ real file tree.
   (existing `persistence.test.ts`/`history.test.ts`/`geometry.test.ts`
   suites should be unaffected apart from the storage plumbing).
 
-## (For later brainstorming) Task <N> - visual regression testing
-
-Now that Tasks 55–60 give us a real virtual filesystem hierarchy for the
-frontend, we can create end-to-end tests which load a project, render a
-diagram and verify that it matches the expected output.
-
-Vitest supports visual regression testing. The goal of this task is to implement
-infrastructure for visual regression testing in the frontend, then ask the
-developer to create diagrams, which can be saved as reference images for future
-comparisons.
-
 ## (For later brainstorming) Task <N> - use UNIX-style paths for component references
 
 Currently, when defining connections between components, path are specified using label + colon notation (e.g. `foo:bar`). While this is convenient for simple cases, it should be replaced with a more standard UNIX-style path notation (e.g. `/foo/bar`).

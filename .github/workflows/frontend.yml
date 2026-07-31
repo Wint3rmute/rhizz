@@ -19,7 +19,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
-          deno-version: 2.9.2
+          deno-version: 2.9.4
           cache-hash: ${{ hashFiles('**/deno.json') }}
 
       - name: Typescript Formatting check
@@ -39,7 +39,7 @@ jobs:
         working-directory: ./web
 
       - name: Test Frontend
-        run: deno run test
+        run: deno run test --project=unit_tests
         working-directory: ./web
 
       - name: Build Frontend
