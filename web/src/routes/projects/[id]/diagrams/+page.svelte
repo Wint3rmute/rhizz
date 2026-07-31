@@ -1111,6 +1111,16 @@ function zoomToFill() {
 const AUTO_LAYOUT_ALPHA_MIN = 0.005;
 const AUTO_LAYOUT_MAX_FRAMES = 300;
 
+// Also stops early once every node's combined movement in a single frame
+// (summed Euclidean distance, in world units) drops below this —
+// catches layouts that have practically stopped moving well before their
+// alpha decays below AUTO_LAYOUT_ALPHA_MIN (small groups in particular
+// can visually settle almost immediately while alpha keeps decaying for
+// many more frames with no visible effect). Only checked after warmup
+// (see AUTO_LAYOUT_WARMUP_TICKS below) finishes, since forces — and thus
+// movement — are deliberately near-zero during the ramp-up itself.
+const AUTO_LAYOUT_MIN_MOVEMENT = 0.5;
+
 // Fraction of the frame budget spent ramping forces up from ~0 to full
 // strength, instead of applying at full strength from frame 1 — avoids
 // the sharp jump an instant full-strength start would otherwise cause.
@@ -1185,6 +1195,16 @@ function runAutoLayout() {
   autoLayoutRunning = true;
   let frame = 0;
 
+  // Seeded from each node's starting box, so the very first frame's
+  // movement is measured against where it actually began — updated to
+  // that frame's result at the end of every step() below. Plain,
+  // non-reactive local state (never rendered/read outside this closure),
+  // so it doesn't need SvelteMap's reactivity.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const previousPositions = new Map<number, { x: number; y: number }>(
+    layoutNodes.map((n) => [n.index, { x: n.box.x, y: n.box.y }]),
+  );
+
   function step() {
     frame += 1;
 
@@ -1195,6 +1215,20 @@ function runAutoLayout() {
       if (layout.alpha() >= AUTO_LAYOUT_ALPHA_MIN) allSettled = false;
     }
 
+    let totalMovement = 0;
+    for (const result of allResults) {
+      const previous = previousPositions.get(result.index);
+      if (previous) {
+        totalMovement += Math.hypot(
+          result.x - previous.x,
+          result.y - previous.y,
+        );
+      }
+      previousPositions.set(result.index, { x: result.x, y: result.y });
+    }
+    const barelyMoving = frame > AUTO_LAYOUT_WARMUP_TICKS &&
+      totalMovement < AUTO_LAYOUT_MIN_MOVEMENT;
+
     // Only snap the final settling frame, not every intermediate one:
     // snapping every frame while snapping is active would force the
     // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
@@ -1202,7 +1236,8 @@ function runAutoLayout() {
     // written position anyway, only the last write actually matters for
     // the visible result — so it's the only one that needs to respect
     // the grid.
-    const converged = allSettled || frame >= AUTO_LAYOUT_MAX_FRAMES;
+    const converged = allSettled || barelyMoving ||
+      frame >= AUTO_LAYOUT_MAX_FRAMES;
 
     for (const result of allResults) {
       const box = nodeBox(result.index);
