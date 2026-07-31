@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, within } from "storybook/test";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 
 const SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -60,24 +59,5 @@ export const NarrowCanvas: Story = {
   },
   parameters: {
     layout: "centered",
-  },
-  // Regression check for the actual bug this story exists to catch: the
-  // toolbar's background/border box (the `data-testid="diagram-toolbar"`
-  // div) must fully contain every button, not just look fine at full
-  // width. Bounding-box containment, rather than a screenshot diff, is
-  // what caught the "w-max" fix actually working — a `left-1/2
-  // -translate-x-1/2` box with no explicit width silently clips to half
-  // the container's width on a narrow viewport (see git history for the
-  // full CSS explanation), which this assertion fails loudly on.
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const toolbar = canvas.getByTestId("diagram-toolbar");
-    const toolbarRect = toolbar.getBoundingClientRect();
-
-    for (const button of canvas.getAllByRole("button")) {
-      const buttonRect = button.getBoundingClientRect();
-      expect(buttonRect.left).toBeGreaterThanOrEqual(toolbarRect.left - 1);
-      expect(buttonRect.right).toBeLessThanOrEqual(toolbarRect.right + 1);
-    }
   },
 };

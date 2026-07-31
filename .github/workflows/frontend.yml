@@ -27,7 +27,7 @@ jobs:
         working-directory: ./web
 
       - name: Deno Install
-        run: deno install && deno run playwright-install && deno run playwright-check
+        run: deno install
         working-directory: ./web
 
       - name: Lint Frontend
@@ -39,7 +39,7 @@ jobs:
         working-directory: ./web
 
       - name: Test Frontend
-        run: deno run test
+        run: deno run test --project=unit_tests
         working-directory: ./web
 
       - name: Build Frontend

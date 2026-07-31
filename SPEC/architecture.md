@@ -17,14 +17,6 @@ rhizz/
   TASKS.md
 ```
 
-**Dependency rules:**
-
-- `rhizz-dot` depends on `rhizz-core` (needs `Model` and `View` types).
-- Frontends depend on `rhizz-core`. Frontends that emit DOT output also depend
-  on `rhizz-dot`.
-- Frontends do **not** depend on each other.
-- Nothing depends on a frontend crate.
-
 ---
 
 ## `rhizz-core`
@@ -164,9 +156,6 @@ const result = compile_sources([
 ```bash
 # Browser / Deno (ES modules)
 wasm-pack build crates/rhizz-wasm --target web
-
-# Node.js (CommonJS)
-wasm-pack build crates/rhizz-wasm --target nodejs
 ```
 
 Output lands in `crates/rhizz-wasm/pkg/` as a ready-to-publish npm package.

@@ -23,6 +23,7 @@ export default defineConfig({
     projects: [{
       extends: true,
       test: {
+        name: "unit_tests",
         // Pure-function tests only for now, so no DOM environment is needed —
         // add jsdom/happy-dom + @testing-library/svelte when actual component
         // tests (rendering .svelte files) become the goal.

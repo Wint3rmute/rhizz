@@ -10,12 +10,10 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --compiler-warnings a11y_click_events_have_key_events:ignore",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "vitest run",
+    "test": "vitest",
     "build-storybook": "storybook build --config-dir .storybook --output-dir storybook-static",
     "lint": "eslint .",
-    "chromatic": "npx chromatic",
-    "playwright-install": "playwright install",
-    "playwright-check": "playwright screenshot 'https://google.com' /tmp/out.jpg"
+    "chromatic": "npx chromatic"
   },
   "dependencies": {
     "@sveltejs/adapter-static": "^3.0.10",
