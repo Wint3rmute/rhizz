@@ -2,6 +2,15 @@ name: Frontend
 
 on:
   workflow_call:
+    secrets:
+      # Reusable workflows don't automatically receive the caller's
+      # secrets (even if they're configured in the repo's Settings) —
+      # each one must be explicitly declared here and passed by every
+      # caller (see ci.yml/release.yml's `frontend:` job), or
+      # `secrets.CHROMATIC_PROJECT_TOKEN` below silently resolves to an
+      # empty string instead of erroring loudly.
+      CHROMATIC_PROJECT_TOKEN:
+        required: true
 
 jobs:
   build-frontend:
