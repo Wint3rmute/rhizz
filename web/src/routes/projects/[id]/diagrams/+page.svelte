@@ -762,11 +762,34 @@ function isDescendantOf(index: number, possibleAncestor: number): boolean {
   return false;
 }
 
-async function readMainContent(): Promise<string> {
+async function getPrimaryHclPath(): Promise<string> {
   try {
-    return await fs.readFile("main.hcl");
+    const entries = await fs.readdir(".", { recursive: true });
+    const hclFiles = entries.filter((e) =>
+      e.isFile() && e.name.endsWith(".hcl")
+    );
+    const preferred = hclFiles.find(
+      (e) =>
+        e.name === "main.hcl" ||
+        e.name === "system.hcl" ||
+        e.name === "systems.hcl",
+    );
+    return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
   } catch {
-    return sources.map((s) => s.content).join("\n");
+    return "main.hcl";
+  }
+}
+
+async function readMainContent(): Promise<{ path: string; content: string }> {
+  const targetPath = await getPrimaryHclPath();
+  try {
+    const content = await fs.readFile(targetPath);
+    return { path: targetPath, content };
+  } catch {
+    return {
+      path: targetPath,
+      content: sources.map((s) => s.content).join("\n"),
+    };
   }
 }
 
@@ -774,7 +797,7 @@ async function executeReparent(
   sourceKey: string,
   targetParentKey: string,
 ): Promise<void> {
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
@@ -782,7 +805,7 @@ async function executeReparent(
   }
 
   if (doc.reparentComponent(sourceKey, targetParentKey)) {
-    await fs.writeFile("main.hcl", doc.systemHcl);
+    await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }
 }
@@ -792,14 +815,14 @@ async function handleAddSystem(): Promise<void> {
     ?.trim();
   if (!name) return;
 
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
     doc.loadFromHcl(mainContent);
   }
   doc.addSystem(name);
-  await fs.writeFile("main.hcl", doc.systemHcl);
+  await fs.writeFile(targetPath, doc.systemHcl);
   sources = await readProjectSources(fs);
 }
 
@@ -872,7 +895,7 @@ async function handleModalCreateComponent(data: {
 }): Promise<void> {
   isCreateModalOpen = false;
 
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
@@ -896,7 +919,7 @@ async function handleModalCreateComponent(data: {
     added.ports = data.ports;
   }
 
-  await fs.writeFile("main.hcl", doc.systemHcl);
+  await fs.writeFile(targetPath, doc.systemHcl);
   sources = await readProjectSources(fs);
 
   const fullKey = `${parent}/${data.label}`;
@@ -963,13 +986,13 @@ async function handleUpdateSelectedComponent(
   patch: Partial<ComponentData>,
 ): Promise<void> {
   if (!selectedKey) return;
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
   const doc = new DocumentStore();
   if (mainContent.trim()) {
     doc.loadFromHcl(mainContent);
   }
   if (doc.updateComponent(selectedKey, patch)) {
-    await fs.writeFile("main.hcl", doc.systemHcl);
+    await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }
 }
@@ -982,7 +1005,7 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   const parentPath = parts.slice(0, -1).join("/");
   const newKey = `${parentPath}/${newLabel}`;
 
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
   const doc = new DocumentStore();
   if (mainContent.trim()) {
     doc.loadFromHcl(mainContent);
@@ -991,7 +1014,7 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   const comp = doc.findComponent(selectedKey);
   if (comp) {
     comp.label = newLabel;
-    await fs.writeFile("main.hcl", doc.systemHcl);
+    await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
 
     if (checked[selectedKey]) {
@@ -1097,7 +1120,7 @@ async function handleCreateConnection(
   const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
   if (!connLabel) return;
 
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
   const doc = new DocumentStore();
   if (mainContent.trim()) {
     doc.loadFromHcl(mainContent);
@@ -1110,7 +1133,7 @@ async function handleCreateConnection(
   });
 
   if (added) {
-    await fs.writeFile("main.hcl", doc.systemHcl);
+    await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }
 }
@@ -1326,25 +1349,30 @@ function onSvgMouseMove(event: MouseEvent) {
         const deltaY = anchorNext.y - anchorStart.y;
         applyGroupDelta(current.startPositions, deltaX, deltaY);
 
-        // Check potential drop/reparent target candidate
-        const candidateBoxes: { index: number; box: Box; depth: number }[] = [];
-        for (const i of renderOrder) {
-          if (i === current.anchorIndex || selected.has(i)) continue;
-          if (components[i]?.leaf) continue;
-          if (isDescendantOf(i, current.anchorIndex)) continue;
-          const b = nodeBox(i);
-          if (b) {
-            candidateBoxes.push({
-              index: i,
-              box: b,
-              depth: depthOf(i, parentOf),
-            });
+        // Check potential drop/reparent target candidate only if Alt is held
+        if (event.altKey) {
+          const candidateBoxes: { index: number; box: Box; depth: number }[] =
+            [];
+          for (const i of renderOrder) {
+            if (i === current.anchorIndex || selected.has(i)) continue;
+            if (components[i]?.leaf) continue;
+            if (isDescendantOf(i, current.anchorIndex)) continue;
+            const b = nodeBox(i);
+            if (b) {
+              candidateBoxes.push({
+                index: i,
+                box: b,
+                depth: depthOf(i, parentOf),
+              });
+            }
           }
-        }
-        const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
-        const currentParent = parentOf(current.anchorIndex);
-        if (foundTarget !== null && foundTarget !== currentParent) {
-          reparentTargetIndex = foundTarget;
+          const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
+          const currentParent = parentOf(current.anchorIndex);
+          if (foundTarget !== null && foundTarget !== currentParent) {
+            reparentTargetIndex = foundTarget;
+          } else {
+            reparentTargetIndex = null;
+          }
         } else {
           reparentTargetIndex = null;
         }

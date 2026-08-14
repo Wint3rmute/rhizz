@@ -46,6 +46,7 @@ $effect(() => {
 let content = $state("");
 let loadedPath: string | null = null;
 let lastWrittenContent = "";
+let fileLoaded = $state(false);
 
 // Loads the selected file's content into the editor whenever the
 // selection changes identity. Missing files fall back to empty content
@@ -54,16 +55,21 @@ $effect(() => {
   const path = selectedPath;
   if (path === loadedPath) return;
   loadedPath = path;
+  fileLoaded = false;
   if (path === null) {
     content = "";
     lastWrittenContent = "";
+    fileLoaded = true;
     return;
   }
   fs.readFile(path)
     .catch(() => "")
     .then((loaded) => {
-      content = loaded;
-      lastWrittenContent = loaded;
+      if (loadedPath === path) {
+        content = loaded;
+        lastWrittenContent = loaded;
+        fileLoaded = true;
+      }
     });
 });
 
@@ -72,7 +78,7 @@ $effect(() => {
 // trip) means this only ever fires for an actual edit, never for the
 // load effect's own initial assignment above.
 $effect(() => {
-  if (loadedPath !== null && content !== lastWrittenContent) {
+  if (fileLoaded && loadedPath !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
     fs.writeFile(loadedPath, content);
   }
