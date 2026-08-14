@@ -57,6 +57,7 @@ import {
   type ConnectionOrientation,
   depthOf,
   elbowPath,
+  findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
   type TextAlign,
@@ -1086,37 +1087,30 @@ function findHoveredTarget(
   point: { x: number; y: number },
   sourceIndex: number,
 ): { compIndex: number; portLabel: string | null } | null {
-  for (const i of renderOrder) {
-    if (i === sourceIndex) continue;
+  const candidates = renderOrder.flatMap((i) => {
+    if (i === sourceIndex) return [];
     const box = nodeBox(i);
-    if (!box) continue;
+    if (!box) return [];
+    const key = componentKey(i);
+    const compData = docStore.findComponent(key);
+    const ports = compData && compData.ports.length > 0
+      ? computePortPositions(box.width, box.height, compData.ports).map((
+        p,
+      ) => ({
+        label: p.label,
+        x: p.x,
+        y: p.y,
+      }))
+      : [];
+    return [{
+      index: i,
+      box,
+      depth: depthOf(i, parentOf),
+      ports,
+    }];
+  });
 
-    if (
-      point.x >= box.x &&
-      point.x <= box.x + box.width &&
-      point.y >= box.y &&
-      point.y <= box.y + box.height
-    ) {
-      const key = componentKey(i);
-      const compData = docStore.findComponent(key);
-      if (compData && compData.ports.length > 0) {
-        const portPositions = computePortPositions(
-          box.width,
-          box.height,
-          compData.ports,
-        );
-        for (const p of portPositions) {
-          const worldPortX = box.x + p.x;
-          const worldPortY = box.y + p.y;
-          if (Math.hypot(point.x - worldPortX, point.y - worldPortY) <= 15) {
-            return { compIndex: i, portLabel: p.label };
-          }
-        }
-      }
-      return { compIndex: i, portLabel: null };
-    }
-  }
-  return null;
+  return findConnectTarget(point, sourceIndex, candidates);
 }
 
 async function handleCreateConnection(
