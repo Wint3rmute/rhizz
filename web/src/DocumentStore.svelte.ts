@@ -382,7 +382,7 @@ export class DocumentStore {
   }
 
   // Finds a component container by path (e.g. "quad" -> SystemData, or "quad/fc" -> ComponentData)
-  private findContainer(
+  findContainer(
     path: string,
   ): { sys: SystemData; parentComp?: ComponentData } | null {
     const parts = path.split("/").filter(Boolean);
