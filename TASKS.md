@@ -13,24 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 72 — Interactive property and message inspector panel
-
-Expand the canvas inspector panel so users can configure component properties, define ports, and specify message payloads/fields with full schema details in the GUI.
-
-- Component properties:
-  - Edit label, description, tags, and toggle atomic status (`leaf`).
-- Port management:
-  - Add/remove ports on a component.
-  - Set port label, description, `protocol` (e.g. SPI, CAN, HTTP), and `role` (`provider`, `consumer`, `peer`).
-- Message and field editor:
-  - Add/remove messages inside ports.
-  - Add typed data fields (`type`, `unit`, `description`, `required`).
-- Real-time score feedback:
-  - As descriptions, ports, and fields are filled in the inspector, the completion score meter in the top navigation updates dynamically.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
 ## Task 73 — Interactive visual wiring (drag-to-connect ports & connections)
 
 Implement visual drag-to-connect interactions directly on the canvas to wire components together.

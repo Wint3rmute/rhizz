@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 72 — Interactive property and message inspector panel
+
+- Created `web/src/routes/projects/[id]/diagrams/NodeInspector.svelte` allowing users to configure component properties, ports, messages, and fields in the GUI.
+- Features:
+  - Component properties: edit name (with canvas position key preservation), description, comma-separated tags, and atomic `leaf` status.
+  - Text alignment controls: `center`, `top-center`, `top-left`.
+  - Port management: add/remove ports, configure port label, protocol, and role (`provider`, `consumer`, `peer`).
+  - Message & field schemas: add/remove messages inside ports, configure typed fields (`type`, `unit`, `required`), and delete fields.
+  - Live persistence & feedback: updates `DocumentStore`, writes to `main.hcl`, and updates completion score and error/warning badges in real time.
+- Wired live completion score and diagnostics across the app via `ProjectState.svelte` and displayed the score badge in `Navbar.svelte`.
+- Added Storybook story `NodeInspector.stories.ts`.
+- Validated with `just test`, `just lint`, `just format`, `just build`, and `deno task --cwd web check`.
+
+---
+
 ## Task 71 — Visual node creation and hierarchy editing on the canvas
 
 - Added visual creation actions to the diagram canvas toolbar (`+ System` and `+ Component`).

@@ -8,13 +8,23 @@ import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
-import { projectStore } from "../../../../ProjectState.svelte";
+import {
+  projectStore,
+  setCurrentDiagnostics,
+  setCurrentScore,
+} from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
+import NodeInspector from "./NodeInspector.svelte";
+import {
+  type ComponentData,
+  DocumentStore,
+} from "../../../../DocumentStore.svelte";
+
 import {
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
@@ -49,7 +59,6 @@ import {
   textPosition,
   unionBox,
 } from "./geometry";
-import { DocumentStore } from "../../../../DocumentStore.svelte";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -649,9 +658,6 @@ function onDiagramKeyDown(event: KeyboardEvent) {
 let primarySelected = $derived(
   selected.size === 1 ? [...selected][0] : null,
 );
-let selectedComponent = $derived(
-  primarySelected !== null ? components[primarySelected] ?? null : null,
-);
 let selectedBox = $derived(
   primarySelected !== null ? nodeBox(primarySelected) : null,
 );
@@ -845,6 +851,81 @@ function onCanvasDblClick(event: MouseEvent) {
       x: coords.x - DEFAULT_NODE_WIDTH / 2,
       y: coords.y - DEFAULT_NODE_HEIGHT / 2,
     }).catch(reportDiagramError);
+  }
+}
+
+let docStore = $derived.by(() => {
+  const mainContent = sources.find((s) =>
+    s.filename.endsWith("main.hcl")
+  )?.content ||
+    sources.map((s) => s.content).join("\n");
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+  return doc;
+});
+
+$effect(() => {
+  const sc = output.model()?.score();
+  setCurrentScore(sc ? { overall_percentage: sc.overall_percentage } : null);
+  setCurrentDiagnostics({
+    errors: output.error_count(),
+    warnings: output.warning_count(),
+  });
+});
+
+let selectedKey = $derived(
+  selected.size === 1 ? componentKey(selected.values().next().value!) : null,
+);
+
+let selectedComponentData = $derived(
+  selectedKey ? docStore.findComponent(selectedKey) : null,
+);
+
+async function handleUpdateSelectedComponent(
+  patch: Partial<ComponentData>,
+): Promise<void> {
+  if (!selectedKey) return;
+  const mainContent = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+  if (doc.updateComponent(selectedKey, patch)) {
+    await fs.writeFile("main.hcl", doc.systemHcl);
+    sources = await readProjectSources(fs);
+  }
+}
+
+async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
+  if (!selectedKey) return;
+  const parts = selectedKey.split("/").filter(Boolean);
+  const oldLabel = parts[parts.length - 1];
+  if (newLabel === oldLabel) return;
+  const parentPath = parts.slice(0, -1).join("/");
+  const newKey = `${parentPath}/${newLabel}`;
+
+  const mainContent = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  const comp = doc.findComponent(selectedKey);
+  if (comp) {
+    comp.label = newLabel;
+    await fs.writeFile("main.hcl", doc.systemHcl);
+    sources = await readProjectSources(fs);
+
+    if (checked[selectedKey]) {
+      checked[newKey] = checked[selectedKey];
+      delete checked[selectedKey];
+    }
+    if (savedLayout[selectedKey]) {
+      savedLayout[newKey] = savedLayout[selectedKey];
+      delete savedLayout[selectedKey];
+    }
   }
 }
 
@@ -1521,50 +1602,17 @@ $effect(() => {
         Drag any of them to move the whole selection, or drag a handle to
         resize the whole selection proportionally.
       </p>
-    {:else if selectedComponent}
-      <div class="font-semibold truncate" title={selectedComponent.label}>
-        {selectedComponent.label}
-      </div>
-      {#if selectedComponent.description}
-        <p class="text-sm text-base-content/60 mt-1">
-          {selectedComponent.description}
-        </p>
-      {/if}
-
-      <div class="divider my-3"></div>
-
-      <div class="text-xs font-semibold text-base-content/70 uppercase tracking-wide mb-2">
-        Text alignment
-      </div>
-      <div class="join w-full">
-        <button
-          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
-            'center'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => setSelectedTextAlign("center")}
-        >
-          Center
-        </button>
-        <button
-          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
-            'top-center'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => setSelectedTextAlign("top-center")}
-        >
-          Top
-        </button>
-        <button
-          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
-            'top-left'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => setSelectedTextAlign("top-left")}
-        >
-          Top-left
-        </button>
-      </div>
+    {:else if selectedKey && selectedComponentData}
+      <NodeInspector
+        componentKey={selectedKey}
+        component={selectedComponentData}
+        textAlign={selectedBox?.textAlign ?? DEFAULT_TEXT_ALIGN}
+        onupdate={(patch) =>
+          void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}
+        onrename={(newLabel) =>
+          void handleRenameSelectedComponent(newLabel).catch(reportDiagramError)}
+        onsettextalign={(align) => setSelectedTextAlign(align)}
+      />
     {:else}
       <p class="text-base-content/50 text-sm">
         Select a component on the canvas to edit its properties.

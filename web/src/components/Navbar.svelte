@@ -2,7 +2,12 @@
 import { resolve } from "$app/paths";
 import type { ProjectJS } from "rhizz";
 import { getTheme, toggleTheme } from "../ThemeState.svelte";
-import { getCurrentProject, getCurrentProjectId } from "../ProjectState.svelte";
+import {
+  getCurrentDiagnostics,
+  getCurrentProject,
+  getCurrentProjectId,
+  getCurrentScore,
+} from "../ProjectState.svelte";
 
 let {
   project = null,
@@ -22,6 +27,13 @@ let {
 // layout data.
 let activeProjectId = $derived(getCurrentProjectId());
 let activeProject = $derived(getCurrentProject());
+let activeScore = $derived(getCurrentScore());
+let stateDiagnostics = $derived(getCurrentDiagnostics());
+
+let effErrorCount = $derived(errorCount ?? stateDiagnostics?.errors ?? null);
+let effWarningCount = $derived(
+  warningCount ?? stateDiagnostics?.warnings ?? null,
+);
 </script>
 
 <div class="navbar bg-base-100 text-base-content border-b border-base-300">
@@ -50,11 +62,19 @@ let activeProject = $derived(getCurrentProject());
       }</span>
   {/if}
   <div class="ml-auto flex items-center gap-3">
-    {#if errorCount !== null && warningCount !== null}
+    {#if activeScore !== null}
       <div
-        class="badge badge-outline {errorCount > 0 ? 'badge-error' : 'badge-success'}"
+        class="badge badge-outline badge-info font-medium"
+        title="Architecture maturity / completion score: {activeScore.overall_percentage.toFixed(1)}%"
       >
-        {errorCount} errors · {warningCount} warnings
+        Score: {activeScore.overall_percentage.toFixed(0)}%
+      </div>
+    {/if}
+    {#if effErrorCount !== null && effWarningCount !== null}
+      <div
+        class="badge badge-outline {effErrorCount > 0 ? 'badge-error' : 'badge-success'}"
+      >
+        {effErrorCount} errors · {effWarningCount} warnings
       </div>
     {/if}
     <button

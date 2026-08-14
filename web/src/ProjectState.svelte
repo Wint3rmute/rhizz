@@ -21,6 +21,10 @@ export const projectStore = new LocalStorageProjectStore();
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);
+let currentScore = $state<{ overall_percentage: number } | null>(null);
+let currentDiagnostics = $state<{ errors: number; warnings: number } | null>(
+  null,
+);
 
 export function getCurrentProjectId(): string | null {
   return currentProjectId;
@@ -28,6 +32,29 @@ export function getCurrentProjectId(): string | null {
 
 export function getCurrentProject(): Project | null {
   return currentProject;
+}
+
+export function getCurrentScore(): { overall_percentage: number } | null {
+  return currentScore;
+}
+
+export function setCurrentScore(
+  score: { overall_percentage: number } | null,
+): void {
+  currentScore = score;
+}
+
+export function getCurrentDiagnostics(): {
+  errors: number;
+  warnings: number;
+} | null {
+  return currentDiagnostics;
+}
+
+export function setCurrentDiagnostics(
+  diags: { errors: number; warnings: number } | null,
+): void {
+  currentDiagnostics = diags;
 }
 
 // Loads `id`'s metadata into the shared reactive state. `currentProject`
