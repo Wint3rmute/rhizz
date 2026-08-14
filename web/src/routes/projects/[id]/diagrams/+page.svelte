@@ -20,9 +20,11 @@ import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
+import CreateComponentModal from "./CreateComponentModal.svelte";
 import {
   type ComponentData,
   DocumentStore,
+  type PortData,
 } from "../../../../DocumentStore.svelte";
 
 import {
@@ -801,14 +803,74 @@ async function handleAddSystem(): Promise<void> {
   sources = await readProjectSources(fs);
 }
 
-async function handleAddComponent(
+let availableParents = $derived.by(() => {
+  const options: {
+    key: string;
+    label: string;
+    isSystem: boolean;
+    path: string;
+  }[] = [];
+
+  for (const sys of systems) {
+    options.push({
+      key: sys.label,
+      label: sys.label,
+      isSystem: true,
+      path: sys.label,
+    });
+  }
+
+  components.forEach((comp, idx) => {
+    if (!comp.leaf) {
+      const key = componentKey(idx);
+      options.push({
+        key,
+        label: comp.label,
+        isSystem: false,
+        path: key,
+      });
+    }
+  });
+
+  return options;
+});
+
+let isCreateModalOpen = $state(false);
+let createModalPosition = $state<{ x: number; y: number } | undefined>(
+  undefined,
+);
+let createModalDefaultParent = $state<string | undefined>(undefined);
+
+function openCreateComponentModal(
   pos?: { x: number; y: number },
-  parentTargetKey?: string,
-  compName?: string,
-): Promise<void> {
-  const name = compName ??
-    prompt("New component name?", `component-${components.length + 1}`)?.trim();
-  if (!name) return;
+  parentKey?: string,
+) {
+  let targetParent = parentKey;
+  if (!targetParent && selected.size === 1) {
+    const selIdx = selected.values().next().value;
+    if (selIdx !== undefined) {
+      targetParent = componentKey(selIdx);
+    }
+  }
+  if (!targetParent) {
+    targetParent = systems[0]?.label || "main";
+  }
+
+  createModalPosition = pos;
+  createModalDefaultParent = targetParent;
+  isCreateModalOpen = true;
+}
+
+async function handleModalCreateComponent(data: {
+  label: string;
+  parentKey: string;
+  description: string;
+  tags: string[];
+  leaf: boolean;
+  ports: PortData[];
+  position?: { x: number; y: number };
+}): Promise<void> {
+  isCreateModalOpen = false;
 
   const mainContent = await readMainContent();
 
@@ -817,29 +879,29 @@ async function handleAddComponent(
     doc.loadFromHcl(mainContent);
   }
 
-  let targetParent = parentTargetKey;
-  if (!targetParent && selected.size === 1) {
-    const selIdx = selected.values().next().value;
-    if (selIdx !== undefined) {
-      targetParent = componentKey(selIdx);
-    }
-  }
-
-  if (!targetParent) {
+  let parent = data.parentKey;
+  if (!parent || !doc.findContainer(parent)) {
     if (doc.systems.length === 0) {
-      doc.addSystem("main");
+      doc.addSystem(parent || "main");
+      parent = parent || "main";
+    } else {
+      parent = doc.systems[0].label;
     }
-    targetParent = doc.systems[0].label;
   }
 
-  doc.addComponent(targetParent, name, true);
+  const added = doc.addComponent(parent, data.label, data.leaf);
+  if (added) {
+    added.description = data.description;
+    added.tags = data.tags;
+    added.ports = data.ports;
+  }
+
   await fs.writeFile("main.hcl", doc.systemHcl);
   sources = await readProjectSources(fs);
 
-  // Position on canvas
-  const fullKey = `${targetParent}/${name}`;
-  const worldX = pos ? snap(pos.x) : 100;
-  const worldY = pos ? snap(pos.y) : 100;
+  const fullKey = `${parent}/${data.label}`;
+  const worldX = data.position ? snap(data.position.x) : 100;
+  const worldY = data.position ? snap(data.position.y) : 100;
 
   checked[fullKey] = {
     x: worldX,
@@ -849,16 +911,22 @@ async function handleAddComponent(
     textAlign: DEFAULT_TEXT_ALIGN,
   };
   savedLayout[fullKey] = { ...checked[fullKey] };
+
+  const newIndex = keyToIndex.get(fullKey);
+  if (newIndex !== undefined) {
+    selected.clear();
+    selected.add(newIndex);
+  }
 }
 
 function onCanvasDblClick(event: MouseEvent) {
   const target = event.target as HTMLElement | SVGElement;
   if (target === root_svg || target.tagName === "rect") {
     const coords = svgPoint(root_svg, event.clientX, event.clientY);
-    void handleAddComponent({
+    openCreateComponentModal({
       x: coords.x - DEFAULT_NODE_WIDTH / 2,
       y: coords.y - DEFAULT_NODE_HEIGHT / 2,
-    }).catch(reportDiagramError);
+    });
   }
 }
 
@@ -2124,8 +2192,7 @@ $effect(() => {
         onzoomtofill={zoomToFill}
         onresetview={() => reset_view(editor_state)}
         onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
-        onaddcomponent={() =>
-          void handleAddComponent().catch(reportDiagramError)}
+        onaddcomponent={() => openCreateComponentModal()}
       />
 
       <div
@@ -2235,3 +2302,12 @@ $effect(() => {
     </ul>
   </aside>
 </div>
+
+<CreateComponentModal
+  isOpen={isCreateModalOpen}
+  {availableParents}
+  defaultParentKey={createModalDefaultParent}
+  initialPosition={createModalPosition}
+  oncreate={(data) => void handleModalCreateComponent(data).catch(reportDiagramError)}
+  onclose={() => (isCreateModalOpen = false)}
+/>
