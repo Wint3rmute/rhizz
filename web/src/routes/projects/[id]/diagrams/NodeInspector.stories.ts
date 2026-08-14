@@ -66,4 +66,7 @@ export const AtomicLeaf: Story = {
       connections: [],
     },
   },
-};
+   globals: {
+    viewport: { value: "phone" },
+  },
+ };
