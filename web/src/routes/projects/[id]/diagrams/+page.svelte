@@ -1947,64 +1947,66 @@ $effect(() => {
               {label}
             </text>
 
-            <!-- Port handles -->
-            {#if portPositions.length > 0}
-              {#each portPositions as port (port.label)}
-                {@const portFill = port.role === "provider"
-                  ? "var(--color-success)"
-                  : port.role === "consumer"
-                  ? "var(--color-warning)"
-                  : "var(--color-info)"}
-                <g transform="translate({port.x}, {port.y})">
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <!-- Port handles (visible when selected or actively dragging a connection) -->
+            {#if selected.has(index) || interaction.type === "connecting"}
+              {#if portPositions.length > 0}
+                {#each portPositions as port (port.label)}
+                  {@const portFill = port.role === "provider"
+                    ? "var(--color-success)"
+                    : port.role === "consumer"
+                    ? "var(--color-warning)"
+                    : "var(--color-info)"}
+                  <g transform="translate({port.x}, {port.y})">
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <circle
+                      r="8"
+                      fill="transparent"
+                      class="cursor-crosshair"
+                      onmousedown={(e) =>
+                        onPortMouseDown(e, index, port.label, {
+                          x: x + port.x,
+                          y: y + port.y,
+                        })}
+                    >
+                      <title
+                      >{port.label} ({port.role}, {port.protocol ||
+                          "untyped"})</title>
+                    </circle>
+                    <circle
+                      r="4"
+                      fill={portFill}
+                      stroke="var(--color-base-100)"
+                      stroke-width="1.5"
+                      style="pointer-events: none"
+                    />
+                  </g>
+                {/each}
+              {:else}
+                <!-- Generic connection handle for component with no ports -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <g transform="translate({width}, {height / 2})">
                   <circle
                     r="8"
                     fill="transparent"
                     class="cursor-crosshair"
                     onmousedown={(e) =>
-                      onPortMouseDown(e, index, port.label, {
-                        x: x + port.x,
-                        y: y + port.y,
+                      onPortMouseDown(e, index, null, {
+                        x: x + width,
+                        y: y + height / 2,
                       })}
                   >
-                    <title
-                    >{port.label} ({port.role}, {port.protocol ||
-                        "untyped"})</title>
+                    <title>Drag to connect component</title>
                   </circle>
                   <circle
-                    r="4"
-                    fill={portFill}
+                    r="3.5"
+                    fill="var(--color-base-content)"
+                    fill-opacity="0.5"
                     stroke="var(--color-base-100)"
-                    stroke-width="1.5"
+                    stroke-width="1"
                     style="pointer-events: none"
                   />
                 </g>
-              {/each}
-            {:else}
-              <!-- Generic connection handle for component with no ports -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <g transform="translate({width}, {height / 2})">
-                <circle
-                  r="8"
-                  fill="transparent"
-                  class="cursor-crosshair"
-                  onmousedown={(e) =>
-                    onPortMouseDown(e, index, null, {
-                      x: x + width,
-                      y: y + height / 2,
-                    })}
-                >
-                  <title>Drag to connect component</title>
-                </circle>
-                <circle
-                  r="3.5"
-                  fill="var(--color-base-content)"
-                  fill-opacity="0.5"
-                  stroke="var(--color-base-100)"
-                  stroke-width="1"
-                  style="pointer-events: none"
-                />
-              </g>
+              {/if}
             {/if}
 
             {#if selected.has(index)}
