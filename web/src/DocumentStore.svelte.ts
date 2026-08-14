@@ -471,6 +471,15 @@ export class DocumentStore {
     const compLabel = parts[parts.length - 1];
     const sourceParentPath = parts.slice(0, -1).join("/");
 
+    // Guard (a): Cannot reparent into same parent or into own subtree / descendant
+    if (sourceParentPath === targetParentPath) return false;
+    if (
+      targetParentPath === sourcePath ||
+      targetParentPath.startsWith(`${sourcePath}/`)
+    ) {
+      return false;
+    }
+
     const srcContainer = this.findContainer(sourceParentPath);
     const targetContainer = this.findContainer(targetParentPath);
     if (!srcContainer || !targetContainer) return false;
@@ -482,10 +491,18 @@ export class DocumentStore {
       ? targetContainer.parentComp.components
       : targetContainer.sys.components;
 
+    // Guard (b): Target container must not already have a child with the same label
+    if (targetList.some((c) => c.label === compLabel)) {
+      return false;
+    }
+
     const idx = srcList.findIndex((c) => c.label === compLabel);
     if (idx === -1) return false;
 
     const [removed] = srcList.splice(idx, 1);
+    if (targetContainer.parentComp?.leaf) {
+      targetContainer.parentComp.leaf = false;
+    }
     targetList.push(removed);
     return true;
   }

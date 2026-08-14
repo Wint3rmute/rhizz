@@ -841,10 +841,10 @@ function onCanvasDblClick(event: MouseEvent) {
   const target = event.target as HTMLElement | SVGElement;
   if (target === root_svg || target.tagName === "rect") {
     const coords = svgPoint(root_svg, event.clientX, event.clientY);
-    handleAddComponent({
+    void handleAddComponent({
       x: coords.x - DEFAULT_NODE_WIDTH / 2,
       y: coords.y - DEFAULT_NODE_HEIGHT / 2,
-    });
+    }).catch(reportDiagramError);
   }
 }
 
@@ -1063,6 +1063,7 @@ function onSvgMouseMove(event: MouseEvent) {
         const candidateBoxes: { index: number; box: Box; depth: number }[] = [];
         for (const i of renderOrder) {
           if (i === current.anchorIndex || selected.has(i)) continue;
+          if (components[i]?.leaf) continue;
           if (isDescendantOf(i, current.anchorIndex)) continue;
           const b = nodeBox(i);
           if (b) {
@@ -1127,7 +1128,7 @@ function onSvgMouseUp() {
       const srcKey = componentKey(current.anchorIndex);
       const targetKey = componentKey(reparentTargetIndex);
       reparentTargetIndex = null;
-      executeReparent(srcKey, targetKey);
+      void executeReparent(srcKey, targetKey).catch(reportDiagramError);
     }
   }
   if (current.type === "marquee") {
@@ -1845,8 +1846,9 @@ $effect(() => {
         onautolayout={runAutoLayout}
         onzoomtofill={zoomToFill}
         onresetview={() => reset_view(editor_state)}
-        onaddsystem={handleAddSystem}
-        onaddcomponent={() => handleAddComponent()}
+        onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
+        onaddcomponent={() =>
+          void handleAddComponent().catch(reportDiagramError)}
       />
 
       <div

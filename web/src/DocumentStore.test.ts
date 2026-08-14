@@ -101,6 +101,27 @@ describe("DocumentStore", () => {
     );
   });
 
+  it("rejects reparenting into own descendant or creating duplicate label", () => {
+    const doc = new DocumentStore();
+    doc.addSystem("demo");
+    doc.addComponent("demo", "parent", false);
+    doc.addComponent("demo/parent", "child", false);
+    doc.addComponent("demo/parent/child", "grandchild", true);
+
+    // Reject cycle: cannot reparent parent into its own grandchild
+    expect(
+      doc.reparentComponent("demo/parent", "demo/parent/child/grandchild"),
+    ).toBe(false);
+
+    // Reject self-reparenting
+    expect(doc.reparentComponent("demo/parent", "demo/parent")).toBe(false);
+
+    // Reject duplicate label collision
+    expect(doc.addComponent("demo", "dup", true)).toBeDefined();
+    expect(doc.addComponent("demo/parent", "dup", true)).toBeDefined();
+    expect(doc.reparentComponent("demo/dup", "demo/parent")).toBe(false);
+  });
+
   it("supports deleting components and connections", () => {
     const doc = new DocumentStore();
     doc.addSystem("demo");
