@@ -21,6 +21,8 @@ interface Props {
   onautolayout: () => void;
   onzoomtofill: () => void;
   onresetview: () => void;
+  onaddsystem?: () => void;
+  onaddcomponent?: () => void;
 }
 
 let {
@@ -33,6 +35,8 @@ let {
   onautolayout,
   onzoomtofill,
   onresetview,
+  onaddsystem,
+  onaddcomponent,
 }: Props = $props();
 </script>
 
@@ -58,6 +62,28 @@ let {
       {/each}
     </select>
   </div>
+  {#if onaddsystem || onaddcomponent}
+    <div class="join">
+      {#if onaddsystem}
+        <button
+          onclick={onaddsystem}
+          class="btn btn-sm btn-primary join-item"
+          title="Add a new system to the model"
+        >
+          + System
+        </button>
+      {/if}
+      {#if onaddcomponent}
+        <button
+          onclick={onaddcomponent}
+          class="btn btn-sm btn-primary join-item"
+          title="Add a new component to the model"
+        >
+          + Component
+        </button>
+      {/if}
+    </div>
+  {/if}
   <button
     onclick={onautolayout}
     disabled={autoLayoutRunning}

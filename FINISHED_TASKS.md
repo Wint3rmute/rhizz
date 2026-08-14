@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 71 — Visual node creation and hierarchy editing on the canvas
+
+- Added visual creation actions to the diagram canvas toolbar (`+ System` and `+ Component`).
+- Implemented double-click on empty canvas space to immediately create and place a new component at the cursor position.
+- Implemented visual hierarchy nesting and reparenting:
+  - Added pure `findReparentTarget` helper in `web/src/routes/projects/[id]/diagrams/geometry.ts` to detect the deepest container enclosing a dragged node.
+  - Live drop-target visual highlight ring (`stroke-dasharray="4 4"`, `animate-pulse`) rendered around candidate parent components during drag.
+  - On drop, reparents the component in the document store, saves the updated HCL to the VFS (`main.hcl`), and updates live compiler diagnostics/score.
+- Added unit tests for `findReparentTarget` in `geometry.test.ts`.
+- Validated with `deno task --cwd web test run --project unit_tests` (260/260 pass), `deno task --cwd web check` (0 errors/warnings), `npm run --prefix web build`, and `cargo test --all`.
+
+---
+
 ## Task 70 — Reactive document store for multi-file workspace (`system.hcl` + `views.hcl`)
 
 - Created `web/src/DocumentStore.svelte.ts` managing reactive in-memory system architecture and diagram view state using Svelte 5 `$state` and `$derived`.

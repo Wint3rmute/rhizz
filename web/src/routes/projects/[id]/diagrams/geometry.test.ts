@@ -8,6 +8,7 @@ import {
   clampWithin,
   depthOf,
   elbowPath,
+  findReparentTarget,
   MIN_NODE_SIZE,
   TEXT_ALIGN_PADDING,
   textPosition,
@@ -347,5 +348,29 @@ describe("depthOf", () => {
   it("counts hops up the parent chain", () => {
     expect(depthOf(1, parentOf)).toBe(1);
     expect(depthOf(2, parentOf)).toBe(2);
+  });
+});
+
+describe("findReparentTarget", () => {
+  const containerA: Box = { x: 0, y: 0, width: 300, height: 300 };
+  const containerB: Box = { x: 50, y: 50, width: 200, height: 200 }; // inside containerA
+  const candidates = [
+    { index: 0, box: containerA, depth: 0 },
+    { index: 1, box: containerB, depth: 1 },
+  ];
+
+  it("finds deepest container enclosing the center of the dragged node", () => {
+    const dragged: Box = { x: 60, y: 60, width: 50, height: 50 }; // center at (85, 85)
+    expect(findReparentTarget(dragged, candidates)).toBe(1);
+  });
+
+  it("finds outer container when outside the inner container", () => {
+    const dragged: Box = { x: 10, y: 10, width: 30, height: 30 }; // center at (25, 25)
+    expect(findReparentTarget(dragged, candidates)).toBe(0);
+  });
+
+  it("returns null when center is outside all containers", () => {
+    const dragged: Box = { x: 400, y: 400, width: 50, height: 50 };
+    expect(findReparentTarget(dragged, candidates)).toBeNull();
   });
 });

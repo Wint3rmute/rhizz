@@ -13,22 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 71 — Visual node creation and hierarchy editing on the canvas
-
-Enable creating and managing systems and components entirely via the visual canvas UI without typing HCL.
-
-- Add a canvas creation toolbar and hotkey/context-menu actions:
-  - Quick-add buttons: "+ System", "+ Component".
-  - Double-click on empty canvas creates a new component at the cursor position.
-- Implement visual hierarchical nesting and reparenting:
-  - Dragging a component over a parent system or parent component highlights the target container.
-  - Dropping the component inside reparents it structurally in the document store and visually clamps it within the parent boundary.
-  - Dragging a child component outside its parent reparents it up one level (or to root system level).
-- State changes instantly update the document store, recalculating completion scores and updating the serialized `system.hcl`.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
 ## Task 72 — Interactive property and message inspector panel
 
 Expand the canvas inspector panel so users can configure component properties, define ports, and specify message payloads/fields with full schema details in the GUI.
