@@ -96,14 +96,26 @@ function handleCreate() {
 }
 </script>
 
+<svelte:window
+  onkeydown={(e) => {
+    if (isOpen && e.key === "Escape") onclose();
+  }}
+/>
+
 {#if isOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div
-    class="modal modal-open z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center"
+    class="modal modal-open z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center cursor-pointer"
     role="dialog"
     aria-modal="true"
+    onclick={(e) => {
+      if (e.target === e.currentTarget) onclose();
+    }}
   >
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
-      class="modal-box max-w-2xl bg-base-100 border border-base-300 shadow-2xl p-6 rounded-box max-h-[90vh] flex flex-col"
+      class="modal-box max-w-2xl bg-base-100 border border-base-300 shadow-2xl p-6 rounded-box max-h-[90vh] flex flex-col cursor-default"
+      onclick={(e) => e.stopPropagation()}
     >
       <div class="flex items-center justify-between pb-3 border-b border-base-300">
         <h3 class="font-bold text-lg flex items-center gap-2">
