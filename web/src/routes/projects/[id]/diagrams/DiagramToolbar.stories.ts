@@ -22,6 +22,8 @@ const meta = {
     onautolayout: () => {},
     onzoomtofill: () => {},
     onresetview: () => {},
+    onaddsystem: () => {},
+    onaddcomponent: () => {},
   },
 } satisfies Meta<typeof DiagramToolbar>;
 

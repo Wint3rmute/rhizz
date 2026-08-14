@@ -4,6 +4,78 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 71 — Visual node creation and hierarchy editing on the canvas
+
+- Added visual creation actions to the diagram canvas toolbar (`+ System` and `+ Component`).
+- Implemented double-click on empty canvas space to immediately create and place a new component at the cursor position.
+- Implemented visual hierarchy nesting and reparenting:
+  - Added pure `findReparentTarget` helper in `web/src/routes/projects/[id]/diagrams/geometry.ts` to detect the deepest container enclosing a dragged node.
+  - Live drop-target visual highlight ring (`stroke-dasharray="4 4"`, `animate-pulse`) rendered around candidate parent components during drag.
+  - On drop, reparents the component in the document store, saves the updated HCL to the VFS (`main.hcl`), and updates live compiler diagnostics/score.
+- Added unit tests for `findReparentTarget` in `geometry.test.ts`.
+- Validated with `deno task --cwd web test run --project unit_tests` (260/260 pass), `deno task --cwd web check` (0 errors/warnings), `npm run --prefix web build`, and `cargo test --all`.
+
+---
+
+## Task 70 — Reactive document store for multi-file workspace (`system.hcl` + `views.hcl`)
+
+- Created `web/src/DocumentStore.svelte.ts` managing reactive in-memory system architecture and diagram view state using Svelte 5 `$state` and `$derived`.
+- Implemented reactive derivations:
+  - `systemHcl`: Automatically formatted, canonical HCL string representing the complete system architecture model.
+  - `viewsHcl`: Automatically formatted HCL for `views.hcl` keeping layout coordinates and filters isolated from the system model.
+  - `compileResult`, `model`, `diagnostics`, and `score`: Real-time compilation and score calculations recalculating on every state mutation.
+- Provided foundational mutation methods:
+  - `addSystem`, `removeSystem`, `getSystem`.
+  - `addComponent`, `updateComponent`, `deleteComponent`, `reparentComponent`.
+  - `addPort`, `updatePort`, `deletePort`.
+  - `addConnection`, `deleteConnection`.
+  - `addView`, `updateNodeLayout`.
+  - `loadFromHcl`: Ingests existing `system.hcl` and `views.hcl` files into the store.
+- Added test suite in `web/src/DocumentStore.test.ts` (7 tests) covering all store mutations, reparenting, diagnostics, view isolation, and HCL round-tripping.
+- Validated with `deno task --cwd web test run --project unit_tests` (257/257 pass), `deno task --cwd web check` (0 errors/warnings), `npm run --prefix web build`, and `cargo test --all`.
+
+---
+
+## Task 69 — Expose HCL serialization and model deserialization in `rhizz-wasm`
+
+- Extended `crates/rhizz-wasm` with full WASM bindings for model and view serialization:
+  - `ModelJS::to_hcl(&self) -> String` and `serialize_model(model: &ModelJS) -> String`.
+  - `ModelJS::from_json(json: &str)` and `ModelJS::to_json(&self)`.
+  - `ModelJS::from_js(val: JsValue)` and `ModelJS::to_js(&self)`.
+  - `serialize_views(views: JsValue) -> Result<String, JsError>`.
+  - `parse_views(hcl: &str) -> Result<JsValue, JsError>`.
+- Updated `web/src/rhizz_wasm_wrapper.ts` with strongly-typed interfaces (`NodeLayout`, `ViewDefinition`, `ViewFilterDefinition`, `ViewOutputDefinition`) and exported helper functions (`serialize_model`, `serialize_views`, `parse_views`, `compile_system`).
+- Added integration tests in `crates/rhizz-wasm/tests/wasm_test.rs` covering WASM-level model serialization, JSON round-tripping, and views parsing/serializing.
+- Added unit tests in `web/src/rhizz_wasm_wrapper.test.ts` verifying compile, serialization, and views parsing through the WASM boundary in Vitest.
+- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, `wasm-pack test --node crates/rhizz-wasm`, `deno task --cwd web check`, `deno task --cwd web test run --project unit_tests`, and `npm run --prefix web build`.
+
+---
+
+## Task 68 — HCL serializer and parser for diagram views and layout metadata in `rhizz-core`
+
+- Implemented `NodeLayout`, `ViewDefinition`, `ViewFilterDefinition`, and `ViewOutputDefinition` in `crates/rhizz-core/src/model.rs`.
+- Implemented `serialize_views(views: &[ViewDefinition]) -> String`, `parse_views(hcl: &str) -> anyhow::Result<Vec<ViewDefinition>>`, and `serialize_resolved_views(views: &[View], model: &Model) -> String` in `crates/rhizz-core/src/serialize.rs`.
+- Guarantees complete separation of concerns: diagram visual coordinates (`x`, `y`, `width`, `height`, `text_align`) and filter/output settings live in `views.hcl`, completely free from `system.hcl`.
+- Enforces sorted deterministic ordering of views (by view label) and node layout blocks (by component path/label).
+- Added comprehensive unit tests for views with `node` placement blocks and round-trip integration tests verifying idempotency across all workspace example `views.hcl` files (`drone`, `social-media`, `software-house`, `web-app`).
+- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, and `cargo fmt`.
+
+---
+
+## Task 67 — Deterministic HCL serializer for core system model in `rhizz-core`
+
+- Implemented canonical HCL serialization in `crates/rhizz-core/src/serialize.rs` via `pub fn serialize_model(model: &Model) -> String`.
+- Exposes `serialize_model` as part of `rhizz_core`'s public API.
+- Serializes `project`, `system`, nested `component`, `port`, `connection`, `message`, and `field` blocks into formatted, standard HCL.
+- Guarantees strict determinism and round-trip stability / idempotency:
+  `serialize(compile(serialize(model))) == serialize(model)`.
+- Enforces sorted deterministic ordering of sibling systems, components, ports, connections, messages, and fields by label.
+- Omit/default handling matches canonical HCL schema (standard levels, default port roles, empty lists/descriptions).
+- Added comprehensive unit tests and integration tests covering deep nested hierarchies, character escaping, and all workspace examples (`drone`, `social-media`, `software-house`, `single-file`, `web-app`).
+- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, and `cargo fmt`.
+
+---
+
 ## Task 65 — Remove legacy data-migration code
 
 The app is still pre-release (no real users on old data shapes to
@@ -489,6 +561,8 @@ designed for here.
   (clean). Commands were run via `nix develop --command deno ...` in this
   environment, using `deno task --cwd <dir>` since this sandbox's `deno`
   didn't support the `-C` shorthand.
+
+---
 
 ## Task 54 — Display current editing state as a bottom-right hint
 

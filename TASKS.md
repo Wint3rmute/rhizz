@@ -13,19 +13,69 @@ How to work on this file:
 
 ---
 
-## Task 63 - Install FontAwesome icons, use them in the FileTree
+## Task 72 — Interactive property and message inspector panel
+
+Expand the canvas inspector panel so users can configure component properties, define ports, and specify message payloads/fields with full schema details in the GUI.
+
+- Component properties:
+  - Edit label, description, tags, and toggle atomic status (`leaf`).
+- Port management:
+  - Add/remove ports on a component.
+  - Set port label, description, `protocol` (e.g. SPI, CAN, HTTP), and `role` (`provider`, `consumer`, `peer`).
+- Message and field editor:
+  - Add/remove messages inside ports.
+  - Add typed data fields (`type`, `unit`, `description`, `required`).
+- Real-time score feedback:
+  - As descriptions, ports, and fields are filled in the inspector, the completion score meter in the top navigation updates dynamically.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 73 — Interactive visual wiring (drag-to-connect ports & connections)
+
+Implement visual drag-to-connect interactions directly on the canvas to wire components together.
+
+- Render distinct interactive port handles along component borders (color-coded by role/protocol).
+- Dragging from a source port handle draws an active interactive connection line to the cursor.
+- Hovering over a compatible target port highlights the port as a valid connection target.
+- Dropping creates a `connection` in the document store wiring the two sibling endpoints (`from = "compA:port1"`, `to = "compB:port2"`).
+- Surface instant compiler diagnostic feedback if incompatible protocols or invalid sibling scopes are connected.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 74 — Multi-file workspace tabs and project import/export
+
+Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
+
+- Tabbed workspace switcher:
+  - "Canvas" (interactive visual modeler, default)
+  - "system.hcl" (live code viewer / editor for the core architectural model)
+  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
+- File Import / Export:
+  - "Export Project" downloads `system.hcl` and `views.hcl`.
+  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 75 — Install FontAwesome icons, use them in the FileTree
 
 - Install FontAwesome icons via deno
 - Use the `free-solid-svg-icons` variant
   - In general, pick the most minimal and free variant
 - Use the icons in the FileTree - one icon for a folder, another icon for a file
 
-## Task 64 - Allow embedding diagrams via unique URLs
+---
+
+## Task 76 — Allow embedding diagrams via unique URLs
 
 - Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
 - Update the `Diagram` component to support the new URL scheme
   - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
 - The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
+
+---
 
 ## (For later brainstorming) Task <N> - use UNIX-style paths for component references
 
@@ -41,6 +91,8 @@ Definition of done:
 - Example models in `examples/` are updated to reflect the new approach. Each example model is checked after changes using the Rhizz CLI.
 - Example model hardcoded in the frontend application is updated to use the new approach
 
+---
+
 ## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
 
 This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.
@@ -49,6 +101,8 @@ I suggest starting out this task with writing a new example in `examples/` that 
 showcasing the compiler's flexibility in gradual validation.
 
 It should later be expanded into unit tests, but that is only after the core idea is implemented and checked by the user.
+
+---
 
 ## (For later brainstorming) Task <N> - pin existing nodes when auto-laying-out newly-added ones
 
@@ -72,6 +126,20 @@ case, but nothing calls it that way yet.
   a remembered position take priority over auto-placing.
 - Validate with `deno task check`, `deno task build`, `deno task test`.
 
+---
+
+## (For later brainstorming) Task <N> - visual regression testing
+
+As we now have a virtual filesystem hierarchy for the frontend, we can create
+end-to-end tests which load the project, render a diagram and verify that it
+matches the expected output.
+
+Vitest supports visual regression testing. The goal of this task is to implement
+infrastructure for visual regression testing in the frontend, then ask the
+developer to create diagrams, which can be saved as reference images for future
+comparisons.
+
+---
 
 ## Task <NUMBER> — Task template
 

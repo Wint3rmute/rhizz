@@ -231,3 +231,29 @@ export function depthOf(
   }
   return depth;
 }
+
+// Determines which candidate container box (if any) the dragged node should be reparented into.
+// Returns the candidate index with the highest depth that contains the dragged box's center,
+// or null if none match.
+export function findReparentTarget(
+  draggedBox: Box,
+  candidates: { index: number; box: Box; depth: number }[],
+): number | null {
+  const center = boxCenter(draggedBox);
+  let bestIndex: number | null = null;
+  let maxDepth = -1;
+
+  for (const { index, box, depth } of candidates) {
+    const containsCenter = center.x >= box.x &&
+      center.x <= box.x + box.width &&
+      center.y >= box.y &&
+      center.y <= box.y + box.height;
+
+    if (containsCenter && depth > maxDepth) {
+      maxDepth = depth;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
+}

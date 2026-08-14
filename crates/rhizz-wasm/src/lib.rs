@@ -408,6 +408,60 @@ impl ModelJS {
     pub fn score(&self) -> ScoreReportJS {
         ScoreReportJS::from(&rhizz_core::score(&self.inner))
     }
+
+    /// Serializes the model into a canonical HCL string.
+    pub fn to_hcl(&self) -> String {
+        rhizz_core::serialize_model(&self.inner)
+    }
+
+    /// Creates a `ModelJS` from a JSON string representation of `Model`.
+    pub fn from_json(json: &str) -> Result<ModelJS, JsError> {
+        let model: rhizz_core::Model = serde_json::from_str(json)
+            .map_err(|e| JsError::new(&format!("invalid model JSON: {e}")))?;
+        Ok(ModelJS { inner: model })
+    }
+
+    /// Exports the model to a JSON string.
+    pub fn to_json(&self) -> Result<String, JsError> {
+        serde_json::to_string(&self.inner)
+            .map_err(|e| JsError::new(&format!("failed to serialize model to JSON: {e}")))
+    }
+
+    /// Creates a `ModelJS` directly from a JS object matching the `Model` schema.
+    pub fn from_js(val: JsValue) -> Result<ModelJS, JsError> {
+        let model: rhizz_core::Model =
+            serde_wasm_bindgen::from_value(val).map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(ModelJS { inner: model })
+    }
+
+    /// Exports the model as a plain JS object.
+    pub fn to_js(&self) -> Result<JsValue, JsError> {
+        serde_wasm_bindgen::to_value(&self.inner).map_err(|e| JsError::new(&e.to_string()))
+    }
+}
+
+// ── Serialization functions ───────────────────────────────────────────────────
+
+/// Serializes a resolved model to canonical HCL.
+#[wasm_bindgen]
+pub fn serialize_model(model: &ModelJS) -> String {
+    model.to_hcl()
+}
+
+/// Serializes an array of [`ViewDefinition`] JS objects into canonical HCL for `views.hcl`.
+#[wasm_bindgen]
+pub fn serialize_views(views: JsValue) -> Result<String, JsError> {
+    let views: Vec<rhizz_core::ViewDefinition> =
+        serde_wasm_bindgen::from_value(views).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(rhizz_core::serialize_views(&views))
+}
+
+/// Parses an HCL string representing `views.hcl` into an array of [`ViewDefinition`] JS objects.
+#[wasm_bindgen]
+pub fn parse_views(hcl: &str) -> Result<JsValue, JsError> {
+    let views = rhizz_core::parse_views(hcl)
+        .map_err(|e| JsError::new(&format!("failed to parse views HCL: {e}")))?;
+    serde_wasm_bindgen::to_value(&views).map_err(|e| JsError::new(&e.to_string()))
 }
 
 // ── CompileResultJS ───────────────────────────────────────────────────────────

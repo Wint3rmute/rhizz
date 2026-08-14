@@ -97,7 +97,7 @@ async function deleteProject(project: Project) {
             class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
           >
             <button
-              class="flex-1 text-left"
+              class="flex-1 text-left cursor-pointer"
               onclick={() => openProject(project)}
             >
               <div class="font-semibold text-base-content">

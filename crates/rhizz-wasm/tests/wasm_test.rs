@@ -12,7 +12,12 @@ fn valid_sources() -> Vec<rhizz_core::Source> {
     vec![
         rhizz_core::Source {
             filename: "project.hcl".to_string(),
-            content: r#"project { name = "test" version = "0.1.0" authors = [] }"#.to_string(),
+            content: r#"project {
+  name    = "test"
+  version = "0.1.0"
+  authors = []
+}"#
+            .to_string(),
         },
         rhizz_core::Source {
             filename: "system.hcl".to_string(),
@@ -138,4 +143,58 @@ fn compile_sources_rejects_non_array_input() {
 
     let err = rhizz_wasm::CompileResultJS::compile(bad);
     assert!(err.is_err(), "should return a JsError for non-array input");
+}
+
+#[wasm_bindgen_test]
+fn model_serialization_via_wasm() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&valid_sources()))
+        .expect("compile_sources should not return a JsError");
+
+    let model = result.model().expect("expected model");
+    let hcl = model.to_hcl();
+    assert!(hcl.contains("system \"web\""));
+    assert!(hcl.contains("component \"server\""));
+
+    let top_level_hcl = rhizz_wasm::serialize_model(&model);
+    assert_eq!(hcl, top_level_hcl);
+
+    // JSON round-trip
+    let json = model.to_json().expect("to_json should succeed");
+    let model_from_json = rhizz_wasm::ModelJS::from_json(&json).expect("from_json should succeed");
+    assert_eq!(model.to_hcl(), model_from_json.to_hcl());
+}
+
+#[wasm_bindgen_test]
+fn views_serialization_and_parsing_via_wasm() {
+    let views_hcl = r#"view "main" {
+  description = "Main diagram"
+  system      = "web"
+
+  filter {
+    max_level = 1
+  }
+
+  output {
+    filename = "main.dot"
+    rankdir  = "TB"
+  }
+
+  node "server" {
+    x          = 150
+    y          = 220
+    width      = 120
+    height     = 80
+    text_align = "center"
+  }
+}
+"#;
+
+    let parsed_js =
+        rhizz_wasm::parse_views(views_hcl).expect("parse_views via WASM should succeed");
+    let serialized_hcl =
+        rhizz_wasm::serialize_views(parsed_js).expect("serialize_views via WASM should succeed");
+
+    assert!(serialized_hcl.contains("view \"main\""));
+    assert!(serialized_hcl.contains("node \"server\""));
+    assert!(serialized_hcl.contains("x          = 150"));
 }

@@ -43,11 +43,13 @@ import {
   type ConnectionOrientation,
   depthOf,
   elbowPath,
+  findReparentTarget,
   MIN_NODE_SIZE,
   type TextAlign,
   textPosition,
   unionBox,
 } from "./geometry";
+import { DocumentStore } from "../../../../DocumentStore.svelte";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -283,13 +285,17 @@ $effect(() => {
         // empty file list. Without this, checking a component onto the
         // canvas before ever creating a diagram would silently never be
         // persisted (fullDiagramPath stays null).
-        await fs.writeFile(
+        await writeDiagramLayoutFile(
+          fs,
           `${DIAGRAM_LAYOUT_DIR}/main.json`,
-          JSON.stringify(emptyDiagramLayout()),
+          emptyDiagramLayout(),
         );
         await refreshDiagramEntries();
       }
       selectedDiagramPath = firstDiagramPath();
+    })
+    .catch((err) => {
+      console.error("Failed to initialize diagram entries:", err);
     });
 });
 
@@ -376,9 +382,10 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
   if (name === null) return;
   const path = joinDiagramPath(parentPath, name);
   try {
-    await fs.writeFile(
+    await writeDiagramLayoutFile(
+      fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
-      JSON.stringify(emptyDiagramLayout()),
+      emptyDiagramLayout(),
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;
@@ -395,6 +402,7 @@ async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
   try {
     await fs.mkdir(
       `${DIAGRAM_LAYOUT_DIR}/${joinDiagramPath(parentPath, name)}`,
+      { recursive: true },
     );
     await refreshDiagramEntries();
   } catch (error) {
@@ -727,6 +735,119 @@ function svgPoint(
   return { x: transformed.x, y: transformed.y };
 }
 
+let reparentTargetIndex = $state<number | null>(null);
+
+function isDescendantOf(index: number, possibleAncestor: number): boolean {
+  let cur = parentOf(index);
+  while (cur !== undefined) {
+    if (cur === possibleAncestor) return true;
+    cur = parentOf(cur);
+  }
+  return false;
+}
+
+async function readMainContent(): Promise<string> {
+  try {
+    return await fs.readFile("main.hcl");
+  } catch {
+    return sources.map((s) => s.content).join("\n");
+  }
+}
+
+async function executeReparent(
+  sourceKey: string,
+  targetParentKey: string,
+): Promise<void> {
+  const mainContent = await readMainContent();
+
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  if (doc.reparentComponent(sourceKey, targetParentKey)) {
+    await fs.writeFile("main.hcl", doc.systemHcl);
+    sources = await readProjectSources(fs);
+  }
+}
+
+async function handleAddSystem(): Promise<void> {
+  const name = prompt("New system name?", `system-${systems.length + 1}`)
+    ?.trim();
+  if (!name) return;
+
+  const mainContent = await readMainContent();
+
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+  doc.addSystem(name);
+  await fs.writeFile("main.hcl", doc.systemHcl);
+  sources = await readProjectSources(fs);
+}
+
+async function handleAddComponent(
+  pos?: { x: number; y: number },
+  parentTargetKey?: string,
+  compName?: string,
+): Promise<void> {
+  const name = compName ??
+    prompt("New component name?", `component-${components.length + 1}`)?.trim();
+  if (!name) return;
+
+  const mainContent = await readMainContent();
+
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  let targetParent = parentTargetKey;
+  if (!targetParent && selected.size === 1) {
+    const selIdx = selected.values().next().value;
+    if (selIdx !== undefined) {
+      targetParent = componentKey(selIdx);
+    }
+  }
+
+  if (!targetParent) {
+    if (doc.systems.length === 0) {
+      doc.addSystem("main");
+    }
+    targetParent = doc.systems[0].label;
+  }
+
+  doc.addComponent(targetParent, name, true);
+  await fs.writeFile("main.hcl", doc.systemHcl);
+  sources = await readProjectSources(fs);
+
+  // Position on canvas
+  const fullKey = `${targetParent}/${name}`;
+  const worldX = pos ? snap(pos.x) : 100;
+  const worldY = pos ? snap(pos.y) : 100;
+
+  checked[fullKey] = {
+    x: worldX,
+    y: worldY,
+    width: DEFAULT_NODE_WIDTH,
+    height: DEFAULT_NODE_HEIGHT,
+    textAlign: DEFAULT_TEXT_ALIGN,
+  };
+  savedLayout[fullKey] = { ...checked[fullKey] };
+}
+
+function onCanvasDblClick(event: MouseEvent) {
+  const target = event.target as HTMLElement | SVGElement;
+  if (target === root_svg || target.tagName === "rect") {
+    const coords = svgPoint(root_svg, event.clientX, event.clientY);
+    void handleAddComponent({
+      x: coords.x - DEFAULT_NODE_WIDTH / 2,
+      y: coords.y - DEFAULT_NODE_HEIGHT / 2,
+    }).catch(reportDiagramError);
+  }
+}
+
 // Middle mouse button, or the left button while Space is held, always
 // pans, regardless of what's under the cursor — including directly over a
 // node, so it must be handled here too (not just in onCanvasMouseDown,
@@ -937,6 +1058,29 @@ function onSvgMouseMove(event: MouseEvent) {
         const deltaX = anchorNext.x - anchorStart.x;
         const deltaY = anchorNext.y - anchorStart.y;
         applyGroupDelta(current.startPositions, deltaX, deltaY);
+
+        // Check potential drop/reparent target candidate
+        const candidateBoxes: { index: number; box: Box; depth: number }[] = [];
+        for (const i of renderOrder) {
+          if (i === current.anchorIndex || selected.has(i)) continue;
+          if (components[i]?.leaf) continue;
+          if (isDescendantOf(i, current.anchorIndex)) continue;
+          const b = nodeBox(i);
+          if (b) {
+            candidateBoxes.push({
+              index: i,
+              box: b,
+              depth: depthOf(i, parentOf),
+            });
+          }
+        }
+        const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
+        const currentParent = parentOf(current.anchorIndex);
+        if (foundTarget !== null && foundTarget !== currentParent) {
+          reparentTargetIndex = foundTarget;
+        } else {
+          reparentTargetIndex = null;
+        }
       }
       return;
     }
@@ -979,6 +1123,14 @@ function onSvgMouseMove(event: MouseEvent) {
 
 function onSvgMouseUp() {
   const current = interaction;
+  if (current.type === "dragging") {
+    if (reparentTargetIndex !== null) {
+      const srcKey = componentKey(current.anchorIndex);
+      const targetKey = componentKey(reparentTargetIndex);
+      reparentTargetIndex = null;
+      void executeReparent(srcKey, targetKey).catch(reportDiagramError);
+    }
+  }
   if (current.type === "marquee") {
     // A marquee with negligible size is just a click: clear the selection
     // (matches the old "click empty canvas to deselect" behavior).
@@ -1543,6 +1695,7 @@ $effect(() => {
           width={canvas_width / editor_state.view.zoom}
           height={canvas_height / editor_state.view.zoom}
           onmousedown={onCanvasMouseDown}
+          ondblclick={onCanvasDblClick}
         />
 
         {#snippet ViewNode(
@@ -1573,6 +1726,21 @@ $effect(() => {
               stroke-width={highlighted ? 2 : 1}
               fill="var(--color-base-200)"
             />
+            {#if reparentTargetIndex === index}
+              <rect
+                x={-4}
+                y={-4}
+                width={width + 8}
+                height={height + 8}
+                rx="8"
+                fill="none"
+                stroke="var(--color-primary)"
+                stroke-width="2"
+                stroke-dasharray="4 4"
+                class="animate-pulse"
+                style="pointer-events: none"
+              />
+            {/if}
             <text
               x={textPos.x}
               y={textPos.y}
@@ -1678,6 +1846,9 @@ $effect(() => {
         onautolayout={runAutoLayout}
         onzoomtofill={zoomToFill}
         onresetview={() => reset_view(editor_state)}
+        onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
+        onaddcomponent={() =>
+          void handleAddComponent().catch(reportDiagramError)}
       />
 
       <div

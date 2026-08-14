@@ -12,15 +12,18 @@ pub mod model;
 pub mod parse;
 pub mod resolve;
 pub mod score;
+pub mod serialize;
 pub mod validate;
 
 pub use diagnostics::{Diagnostic, DiagnosticCode, Level};
 pub use model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId, Field,
-    FieldId, Message, MessageId, Model, Port, PortId, PortRole, Project, System, SystemId, View,
-    ViewFilter, ViewOutput,
+    FieldId, Message, MessageId, Model, NodeLayout, Port, PortId, PortRole, Project, System,
+    SystemId, View, ViewDefinition, ViewFilter, ViewFilterDefinition, ViewOutput,
+    ViewOutputDefinition,
 };
 pub use score::{CategoryScore, ScoreReport, score};
+pub use serialize::{parse_views, serialize_model, serialize_resolved_views, serialize_views};
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
