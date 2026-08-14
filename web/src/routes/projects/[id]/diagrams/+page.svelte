@@ -844,15 +844,13 @@ let availableParents = $derived.by(() => {
   }
 
   components.forEach((comp, idx) => {
-    if (!comp.leaf) {
-      const key = componentKey(idx);
-      options.push({
-        key,
-        label: comp.label,
-        isSystem: false,
-        path: key,
-      });
-    }
+    const key = componentKey(idx);
+    options.push({
+      key,
+      label: comp.label,
+      isSystem: false,
+      path: key,
+    });
   });
 
   return options;
@@ -882,6 +880,20 @@ function openCreateComponentModal(
   createModalPosition = pos;
   createModalDefaultParent = targetParent;
   isCreateModalOpen = true;
+}
+
+function onNodeDblClick(event: MouseEvent, index: number) {
+  event.stopPropagation();
+  event.preventDefault();
+  const parentKey = componentKey(index);
+  const coords = svgPoint(root_svg, event.clientX, event.clientY);
+  openCreateComponentModal(
+    {
+      x: coords.x - DEFAULT_NODE_WIDTH / 2,
+      y: coords.y - DEFAULT_NODE_HEIGHT / 2,
+    },
+    parentKey,
+  );
 }
 
 async function handleModalCreateComponent(data: {
@@ -2005,6 +2017,7 @@ $effect(() => {
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
+            ondblclick={(e) => onNodeDblClick(e, index)}
             style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
           >
             <rect

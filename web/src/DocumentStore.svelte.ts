@@ -435,6 +435,9 @@ export class DocumentStore {
       components: [],
       connections: [],
     };
+    if (container.parentComp?.leaf) {
+      container.parentComp.leaf = false;
+    }
     list.push(newComp);
     return newComp;
   }
