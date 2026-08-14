@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 73 — Interactive visual wiring (drag-to-connect ports & connections)
+
+- Implemented interactive visual connection drag-and-drop between ports and components on the diagram canvas.
+- Features:
+  - Added pure `computePortPositions` in `geometry.ts` to calculate border coordinates for consumer (left), provider (right), and peer (bottom) ports, with unit tests in `geometry.test.ts`.
+  - Rendered color-coded interactive port handles on component boundaries (green for provider, orange for consumer, blue for peer) with hit targets and tooltips.
+  - Added generic connect anchor handle for components without declared ports.
+  - Added `connecting` interaction state with live dashed preview line and arrow tracking the mouse cursor in real time.
+  - Target detection (`findHoveredTarget`): detects drop onto specific ports or component boxes, validates sibling scope, prompts for connection label, creates the connection in `DocumentStore`, and updates the VFS (`main.hcl`).
+  - Emits real-time compilation and compiler diagnostic feedback (e.g. role incompatibility, protocol mismatches) on drop.
+- Validated with `just test` (Rust + Vitest 262/262 pass), `just lint`, `just format`, `just build`, and `deno task --cwd web check`.
+
+---
+
 ## Task 72 — Interactive property and message inspector panel
 
 - Created `web/src/routes/projects/[id]/diagrams/NodeInspector.svelte` allowing users to configure component properties, ports, messages, and fields in the GUI.

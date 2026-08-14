@@ -259,7 +259,7 @@ function levelBadge(level: number): string {
                           >
                             {#each comp.tags as tag, j (j)}
                               <span
-                                class="badge badge-xs badge-ghost text-base-content/60"
+                                class="badge badge-primary text-base-content"
                               >{tag}</span>
                             {/each}
                           </div>

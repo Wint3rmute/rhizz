@@ -50,6 +50,7 @@ import {
   boxCenter,
   boxContains,
   clampWithin,
+  computePortPositions,
   type ConnectionOrientation,
   depthOf,
   elbowPath,
@@ -712,6 +713,13 @@ type Interaction =
     startY: number;
     x: number;
     y: number;
+  }
+  | {
+    type: "connecting";
+    sourceComponentIndex: number;
+    sourcePortLabel: string | null;
+    sourcePoint: { x: number; y: number };
+    currentPoint: { x: number; y: number };
   };
 
 let interaction: Interaction = $state({ type: "idle" });
@@ -926,6 +934,116 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
       savedLayout[newKey] = savedLayout[selectedKey];
       delete savedLayout[selectedKey];
     }
+  }
+}
+
+function onPortMouseDown(
+  event: MouseEvent,
+  compIndex: number,
+  portLabel: string | null,
+  worldPoint: { x: number; y: number },
+) {
+  event.stopPropagation();
+  event.preventDefault();
+  interaction = {
+    type: "connecting",
+    sourceComponentIndex: compIndex,
+    sourcePortLabel: portLabel,
+    sourcePoint: worldPoint,
+    currentPoint: worldPoint,
+  };
+}
+
+function findHoveredTarget(
+  point: { x: number; y: number },
+  sourceIndex: number,
+): { compIndex: number; portLabel: string | null } | null {
+  for (const i of renderOrder) {
+    if (i === sourceIndex) continue;
+    const box = nodeBox(i);
+    if (!box) continue;
+
+    if (
+      point.x >= box.x &&
+      point.x <= box.x + box.width &&
+      point.y >= box.y &&
+      point.y <= box.y + box.height
+    ) {
+      const key = componentKey(i);
+      const compData = docStore.findComponent(key);
+      if (compData && compData.ports.length > 0) {
+        const portPositions = computePortPositions(
+          box.width,
+          box.height,
+          compData.ports,
+        );
+        for (const p of portPositions) {
+          const worldPortX = box.x + p.x;
+          const worldPortY = box.y + p.y;
+          if (Math.hypot(point.x - worldPortX, point.y - worldPortY) <= 15) {
+            return { compIndex: i, portLabel: p.label };
+          }
+        }
+      }
+      return { compIndex: i, portLabel: null };
+    }
+  }
+  return null;
+}
+
+async function handleCreateConnection(
+  sourceCompIndex: number,
+  sourcePortLabel: string | null,
+  targetCompIndex: number,
+  targetPortLabel: string | null,
+): Promise<void> {
+  if (sourceCompIndex === targetCompIndex) return;
+
+  const srcKey = componentKey(sourceCompIndex);
+  const targetKey = componentKey(targetCompIndex);
+
+  const srcParts = srcKey.split("/").filter(Boolean);
+  const targetParts = targetKey.split("/").filter(Boolean);
+
+  const srcCompLabel = srcParts[srcParts.length - 1];
+  const targetCompLabel = targetParts[targetParts.length - 1];
+
+  const srcParentPath = srcParts.slice(0, -1).join("/");
+  const targetParentPath = targetParts.slice(0, -1).join("/");
+
+  if (srcParentPath !== targetParentPath) {
+    alert(
+      "Connections can only wire sibling components within the same system or parent component.",
+    );
+    return;
+  }
+
+  const fromEndpoint = sourcePortLabel
+    ? `${srcCompLabel}:${sourcePortLabel}`
+    : srcCompLabel;
+  const toEndpoint = targetPortLabel
+    ? `${targetCompLabel}:${targetPortLabel}`
+    : targetCompLabel;
+
+  const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
+  const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
+  if (!connLabel) return;
+
+  const mainContent = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  const added = doc.addConnection(srcParentPath, {
+    label: connLabel,
+    from: fromEndpoint,
+    to: toEndpoint,
+  });
+
+  if (added) {
+    await fs.writeFile("main.hcl", doc.systemHcl);
+    sources = await readProjectSources(fs);
   }
 }
 
@@ -1192,6 +1310,14 @@ function onSvgMouseMove(event: MouseEvent) {
       };
       return;
     }
+    case "connecting": {
+      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+      interaction = {
+        ...current,
+        currentPoint: svgCoords,
+      };
+      return;
+    }
     case "marquee": {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
       interaction = { ...current, x: svgCoords.x, y: svgCoords.y };
@@ -1204,6 +1330,20 @@ function onSvgMouseMove(event: MouseEvent) {
 
 function onSvgMouseUp() {
   const current = interaction;
+  if (current.type === "connecting") {
+    const target = findHoveredTarget(
+      current.currentPoint,
+      current.sourceComponentIndex,
+    );
+    if (target) {
+      void handleCreateConnection(
+        current.sourceComponentIndex,
+        current.sourcePortLabel,
+        target.compIndex,
+        target.portLabel,
+      ).catch(reportDiagramError);
+    }
+  }
   if (current.type === "dragging") {
     if (reparentTargetIndex !== null) {
       const srcKey = componentKey(current.anchorIndex);
@@ -1526,6 +1666,8 @@ let currentActivity = $derived.by((): string | null => {
   switch (interaction.type) {
     case "dragging":
       return "Dragging";
+    case "connecting":
+      return "Connecting";
     case "resizing":
       return "Resizing";
     case "marquee": {
@@ -1759,6 +1901,11 @@ $effect(() => {
           {@const highlighted = interaction.type === "marquee"
             ? marqueeCandidates.has(index)
             : selected.has(index)}
+          {@const compKey = componentKey(index)}
+          {@const compData = docStore.findComponent(compKey)}
+          {@const portPositions = compData && compData.ports.length > 0
+            ? computePortPositions(width, height, compData.ports)
+            : []}
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
@@ -1799,6 +1946,67 @@ $effect(() => {
             >
               {label}
             </text>
+
+            <!-- Port handles -->
+            {#if portPositions.length > 0}
+              {#each portPositions as port (port.label)}
+                {@const portFill = port.role === "provider"
+                  ? "var(--color-success)"
+                  : port.role === "consumer"
+                  ? "var(--color-warning)"
+                  : "var(--color-info)"}
+                <g transform="translate({port.x}, {port.y})">
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <circle
+                    r="8"
+                    fill="transparent"
+                    class="cursor-crosshair"
+                    onmousedown={(e) =>
+                      onPortMouseDown(e, index, port.label, {
+                        x: x + port.x,
+                        y: y + port.y,
+                      })}
+                  >
+                    <title
+                    >{port.label} ({port.role}, {port.protocol ||
+                        "untyped"})</title>
+                  </circle>
+                  <circle
+                    r="4"
+                    fill={portFill}
+                    stroke="var(--color-base-100)"
+                    stroke-width="1.5"
+                    style="pointer-events: none"
+                  />
+                </g>
+              {/each}
+            {:else}
+              <!-- Generic connection handle for component with no ports -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <g transform="translate({width}, {height / 2})">
+                <circle
+                  r="8"
+                  fill="transparent"
+                  class="cursor-crosshair"
+                  onmousedown={(e) =>
+                    onPortMouseDown(e, index, null, {
+                      x: x + width,
+                      y: y + height / 2,
+                    })}
+                >
+                  <title>Drag to connect component</title>
+                </circle>
+                <circle
+                  r="3.5"
+                  fill="var(--color-base-content)"
+                  fill-opacity="0.5"
+                  stroke="var(--color-base-100)"
+                  stroke-width="1"
+                  style="pointer-events: none"
+                />
+              </g>
+            {/if}
+
             {#if selected.has(index)}
               <!--
                 Only the outer (bottom-right) corner is rounded, matching
@@ -1868,6 +2076,25 @@ $effect(() => {
             {conn.label}
           </text>
         {/each}
+
+        {#if interaction.type === "connecting"}
+          <path
+            d={elbowPath(
+              interaction.sourcePoint.x,
+              interaction.sourcePoint.y,
+              interaction.currentPoint.x,
+              interaction.currentPoint.y,
+              "horizontal",
+            )}
+            fill="none"
+            stroke="var(--color-primary)"
+            stroke-width="2"
+            stroke-dasharray="4 4"
+            marker-end="url(#arrow)"
+            class="animate-pulse"
+            style="pointer-events: none"
+          />
+        {/if}
 
         {#if marqueeBox}
           <rect

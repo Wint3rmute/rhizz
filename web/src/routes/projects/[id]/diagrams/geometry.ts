@@ -257,3 +257,59 @@ export function findReparentTarget(
 
   return bestIndex;
 }
+
+export interface PortGeometry {
+  label: string;
+  role: "provider" | "consumer" | "peer";
+  protocol?: string;
+  x: number;
+  y: number;
+}
+
+// Computes relative (x, y) coordinates for ports around a node's border.
+// - Consumers on the left border
+// - Providers on the right border
+// - Peers on the bottom border
+export function computePortPositions(
+  width: number,
+  height: number,
+  ports: {
+    label: string;
+    role: "provider" | "consumer" | "peer";
+    protocol?: string;
+  }[],
+): PortGeometry[] {
+  const providers = ports.filter((p) => p.role === "provider");
+  const consumers = ports.filter((p) => p.role === "consumer");
+  const peers = ports.filter(
+    (p) => p.role !== "provider" && p.role !== "consumer",
+  );
+
+  const result: PortGeometry[] = [];
+
+  consumers.forEach((p, i) => {
+    result.push({
+      ...p,
+      x: 0,
+      y: ((i + 1) * height) / (consumers.length + 1),
+    });
+  });
+
+  providers.forEach((p, i) => {
+    result.push({
+      ...p,
+      x: width,
+      y: ((i + 1) * height) / (providers.length + 1),
+    });
+  });
+
+  peers.forEach((p, i) => {
+    result.push({
+      ...p,
+      x: ((i + 1) * width) / (peers.length + 1),
+      y: height,
+    });
+  });
+
+  return result;
+}
