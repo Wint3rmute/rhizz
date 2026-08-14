@@ -910,6 +910,7 @@ async function handleModalCreateComponent(data: {
   tags: string[];
   leaf: boolean;
   ports: PortData[];
+  textAlign?: TextAlign;
   position?: { x: number; y: number };
 }): Promise<void> {
   isCreateModalOpen = false;
@@ -950,7 +951,7 @@ async function handleModalCreateComponent(data: {
     y: worldY,
     width: DEFAULT_NODE_WIDTH,
     height: DEFAULT_NODE_HEIGHT,
-    textAlign: DEFAULT_TEXT_ALIGN,
+    textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
   };
   savedLayout[fullKey] = { ...checked[fullKey] };
 

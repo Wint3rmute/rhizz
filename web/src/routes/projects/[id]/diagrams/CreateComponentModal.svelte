@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { PortData } from "../../../../DocumentStore.svelte";
+import type { TextAlign } from "./geometry";
 import NodeInspector from "./NodeInspector.svelte";
 
 interface ParentOption {
@@ -21,6 +22,7 @@ interface Props {
     tags: string[];
     leaf: boolean;
     ports: PortData[];
+    textAlign?: TextAlign;
     position?: { x: number; y: number };
   }) => void;
   onclose: () => void;
@@ -39,6 +41,7 @@ let label = $state("");
 let selectedParentKey = $state("");
 let parentSearch = $state("");
 let parentDropdownOpen = $state(false);
+let textAlign = $state<TextAlign>("center");
 
 let compDetails = $state({
   label: "",
@@ -56,6 +59,7 @@ $effect(() => {
     selectedParentKey = defaultParentKey || (availableParents[0]?.key ?? "");
     parentSearch = "";
     parentDropdownOpen = false;
+    textAlign = "center";
     compDetails = {
       label: "",
       description: "",
@@ -91,6 +95,7 @@ function handleCreate() {
     tags: compDetails.tags,
     leaf: compDetails.leaf,
     ports: compDetails.ports,
+    textAlign,
     position: initialPosition,
   });
 }
@@ -234,14 +239,16 @@ function handleCreate() {
               ...compDetails,
               label: label || "untitled",
             }}
-            textAlign="center"
+            {textAlign}
             onupdate={(patch) => {
               Object.assign(compDetails, patch);
             }}
             onrename={(newLabel) => {
               label = newLabel;
             }}
-            onsettextalign={() => {}}
+            onsettextalign={(align) => {
+              textAlign = align;
+            }}
           />
         </div>
       </div>
