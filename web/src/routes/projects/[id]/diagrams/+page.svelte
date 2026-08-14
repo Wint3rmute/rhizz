@@ -740,16 +740,19 @@ function isDescendantOf(index: number, possibleAncestor: number): boolean {
   return false;
 }
 
+async function readMainContent(): Promise<string> {
+  try {
+    return await fs.readFile("main.hcl");
+  } catch {
+    return sources.map((s) => s.content).join("\n");
+  }
+}
+
 async function executeReparent(
   sourceKey: string,
   targetParentKey: string,
 ): Promise<void> {
-  let mainContent = "";
-  try {
-    mainContent = await fs.readFile("main.hcl");
-  } catch {
-    mainContent = sources.map((s) => s.content).join("\n");
-  }
+  const mainContent = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
@@ -767,12 +770,7 @@ async function handleAddSystem(): Promise<void> {
     ?.trim();
   if (!name) return;
 
-  let mainContent = "";
-  try {
-    mainContent = await fs.readFile("main.hcl");
-  } catch {
-    mainContent = sources.map((s) => s.content).join("\n");
-  }
+  const mainContent = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
@@ -792,12 +790,7 @@ async function handleAddComponent(
     prompt("New component name?", `component-${components.length + 1}`)?.trim();
   if (!name) return;
 
-  let mainContent = "";
-  try {
-    mainContent = await fs.readFile("main.hcl");
-  } catch {
-    mainContent = sources.map((s) => s.content).join("\n");
-  }
+  const mainContent = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
