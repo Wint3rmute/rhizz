@@ -12,6 +12,7 @@ pub mod model;
 pub mod parse;
 pub mod resolve;
 pub mod score;
+pub mod serialize;
 pub mod validate;
 
 pub use diagnostics::{Diagnostic, DiagnosticCode, Level};
@@ -21,6 +22,7 @@ pub use model::{
     ViewFilter, ViewOutput,
 };
 pub use score::{CategoryScore, ScoreReport, score};
+pub use serialize::serialize_model;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

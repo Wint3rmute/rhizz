@@ -74,22 +74,6 @@ case, but nothing calls it that way yet.
 
 ---
 
-## Task 55 — Deterministic HCL serializer for core system model in `rhizz-core`
-
-Implement a deterministic, stable HCL code generator in Rust (`crates/rhizz-core/src/serialize.rs`) that serializes a resolved `Model` back to a clean, human-readable single-file `system.hcl` document without layout pollution.
-
-- Implement `serialize_model(model: &Model) -> String` producing canonical HCL formatting for `project`, `system`, nested `component`, `port`, `connection`, `message`, and `field` blocks.
-- Guarantee round-trip stability and idempotency: `serialize(parse(serialize(model))) == serialize(model)`.
-- Enforce deterministic ordering across entities:
-  - Standard block ordering: `project` block first, followed by top-level `system` blocks.
-  - Sibling components, ports, connections, messages, and fields sorted deterministically by label/identifier.
-  - Attribute ordering within blocks is standardized (e.g., `description`, `tags`, `level`, `protocol`, `role`, `leaf`, `from`, `to`).
-  - Standardized 2-space indentation and clean multiline/quote formatting.
-- Unit and property tests verifying exact round-trip equality against models from `examples/` (`drone`, `social-media`, `software-house`, `single-file`, `web-app`).
-- Validate with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo fmt --all -- --check`.
-
----
-
 ## Task 56 — HCL serializer and parser for diagram views and layout metadata in `rhizz-core`
 
 Implement view and layout serialization in Rust (`rhizz-core`) so visual layout coordinates (positions, sizes, view configurations) are stored cleanly in separate `views.hcl` files, keeping the core system model pure.
