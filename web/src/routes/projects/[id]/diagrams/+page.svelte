@@ -285,13 +285,17 @@ $effect(() => {
         // empty file list. Without this, checking a component onto the
         // canvas before ever creating a diagram would silently never be
         // persisted (fullDiagramPath stays null).
-        await fs.writeFile(
+        await writeDiagramLayoutFile(
+          fs,
           `${DIAGRAM_LAYOUT_DIR}/main.json`,
-          JSON.stringify(emptyDiagramLayout()),
+          emptyDiagramLayout(),
         );
         await refreshDiagramEntries();
       }
       selectedDiagramPath = firstDiagramPath();
+    })
+    .catch((err) => {
+      console.error("Failed to initialize diagram entries:", err);
     });
 });
 
@@ -378,9 +382,10 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
   if (name === null) return;
   const path = joinDiagramPath(parentPath, name);
   try {
-    await fs.writeFile(
+    await writeDiagramLayoutFile(
+      fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
-      JSON.stringify(emptyDiagramLayout()),
+      emptyDiagramLayout(),
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;
@@ -397,6 +402,7 @@ async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
   try {
     await fs.mkdir(
       `${DIAGRAM_LAYOUT_DIR}/${joinDiagramPath(parentPath, name)}`,
+      { recursive: true },
     );
     await refreshDiagramEntries();
   } catch (error) {

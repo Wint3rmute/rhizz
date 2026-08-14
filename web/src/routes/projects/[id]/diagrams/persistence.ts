@@ -139,13 +139,14 @@ export async function readDiagramLayoutFile(
 }
 
 // Writes a diagram layout file into the project's VFS, creating
-// `.rhizz/diagrams/` first if this is the first diagram ever saved for
-// this project.
+// `.rhizz/diagrams/` (and any nested parent directories) first if needed.
 export async function writeDiagramLayoutFile(
   fs: ProjectFs,
   path: string,
   layout: DiagramLayout,
 ): Promise<void> {
-  await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+  const lastSlash = path.lastIndexOf("/");
+  const dir = lastSlash !== -1 ? path.slice(0, lastSlash) : DIAGRAM_LAYOUT_DIR;
+  await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path, JSON.stringify(layout));
 }
