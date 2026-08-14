@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 69 — Expose HCL serialization and model deserialization in `rhizz-wasm`
+
+- Extended `crates/rhizz-wasm` with full WASM bindings for model and view serialization:
+  - `ModelJS::to_hcl(&self) -> String` and `serialize_model(model: &ModelJS) -> String`.
+  - `ModelJS::from_json(json: &str)` and `ModelJS::to_json(&self)`.
+  - `ModelJS::from_js(val: JsValue)` and `ModelJS::to_js(&self)`.
+  - `serialize_views(views: JsValue) -> Result<String, JsError>`.
+  - `parse_views(hcl: &str) -> Result<JsValue, JsError>`.
+- Updated `web/src/rhizz_wasm_wrapper.ts` with strongly-typed interfaces (`NodeLayout`, `ViewDefinition`, `ViewFilterDefinition`, `ViewOutputDefinition`) and exported helper functions (`serialize_model`, `serialize_views`, `parse_views`, `compile_system`).
+- Added integration tests in `crates/rhizz-wasm/tests/wasm_test.rs` covering WASM-level model serialization, JSON round-tripping, and views parsing/serializing.
+- Added unit tests in `web/src/rhizz_wasm_wrapper.test.ts` verifying compile, serialization, and views parsing through the WASM boundary in Vitest.
+- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, `wasm-pack test --node crates/rhizz-wasm`, `deno task --cwd web check`, `deno task --cwd web test run --project unit_tests`, and `npm run --prefix web build`.
+
+---
+
 ## Task 68 — HCL serializer and parser for diagram views and layout metadata in `rhizz-core`
 
 - Implemented `NodeLayout`, `ViewDefinition`, `ViewFilterDefinition`, and `ViewOutputDefinition` in `crates/rhizz-core/src/model.rs`.

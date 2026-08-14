@@ -13,20 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 69 — Expose HCL serialization and model deserialization in `rhizz-wasm`
-
-Expose the new serialization capabilities from `rhizz-core` to the WebAssembly binding layer (`crates/rhizz-wasm`), allowing the web frontend to convert in-memory models and layouts to formatted HCL strings.
-
-- Add WASM-exported functions:
-  - `serialize_model(model: &ModelJS) -> String` (or method on `ModelJS`: `model.to_hcl() -> String`).
-  - `serialize_views(views: JsValue, layout: JsValue) -> String`.
-  - Helper functions/constructors for building or mutating model structures directly from JS objects.
-- Update `web/src/rhizz_wasm_wrapper.ts` with typed TypeScript helper functions.
-- Add integration tests in `crates/rhizz-wasm/tests/wasm_test.rs` asserting correct serialization via WASM.
-- Validate with `cargo test`, `cargo clippy`, and `deno task check` / `deno task test`.
-
----
-
 ## Task 70 — Reactive document store for multi-file workspace (`system.hcl` + `views.hcl`)
 
 Create a centralized Svelte 5 reactive document store (`web/src/DocumentStore.svelte.ts`) in the frontend that coordinates the active in-memory model, layout state, diagnostics, and bi-directional serialization.
