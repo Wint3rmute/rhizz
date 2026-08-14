@@ -1,4 +1,5 @@
 <script lang="ts">
+import { resolve } from "$app/paths";
 import {
   clamp_zoom,
   create_editor_state,
@@ -106,6 +107,11 @@ let model = $derived(output.model());
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
+
+let compileErrors = $derived.by(() => {
+  return output.diagnostics().filter((d) => d.level === "Error");
+});
+let firstError = $derived(compileErrors[0] ?? null);
 
 // Builds a structurally-stable persistence key for a component: the path
 // of labels from its root system down to it, e.g.
@@ -2242,6 +2248,41 @@ $effect(() => {
           />
         {/if}
       </svg>
+
+      {#if !model && output.error_count() > 0}
+        <div
+          class="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+        >
+          <div
+            class="card bg-base-100/95 border border-error/50 shadow-2xl p-6 text-center max-w-md pointer-events-auto backdrop-blur-xs"
+          >
+            <div class="text-error text-3xl mb-2">⚠️</div>
+            <h3 class="font-bold text-lg text-error mb-1">
+              Model failed to compile
+            </h3>
+            <p class="text-sm text-base-content/70 mb-3">
+              {output.error_count()} error{output.error_count() > 1
+                ? "s"
+                : ""} detected in the system model. Check the code in the editor!
+            </p>
+            {#if firstError}
+              <div
+                class="bg-base-200 p-2.5 rounded text-xs font-mono text-left text-error/90 mb-4 border border-error/20 truncate"
+                title={firstError.message}
+              >
+                <span class="font-bold">[{firstError.code}]</span>
+                {firstError.message}
+              </div>
+            {/if}
+            <a
+              href={resolve("/projects/[id]/editor", { id: data.projectId })}
+              class="btn btn-sm btn-error"
+            >
+              Open Editor to Fix
+            </a>
+          </div>
+        </div>
+      {/if}
 
       <DiagramToolbar
         bind:snapEnabled
