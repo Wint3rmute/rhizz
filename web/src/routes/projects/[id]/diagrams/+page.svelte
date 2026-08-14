@@ -1040,6 +1040,25 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   }
 }
 
+async function handleDeleteSelectedComponent(): Promise<void> {
+  if (!selectedKey) return;
+  const keyToDelete = selectedKey;
+  const { path: targetPath, content: mainContent } = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  if (doc.deleteComponent(keyToDelete)) {
+    await fs.writeFile(targetPath, doc.systemHcl);
+    sources = await readProjectSources(fs);
+
+    delete checked[keyToDelete];
+    delete savedLayout[keyToDelete];
+    selected.clear();
+  }
+}
+
 function onPortMouseDown(
   event: MouseEvent,
   compIndex: number,
@@ -1862,6 +1881,8 @@ $effect(() => {
         onrename={(newLabel) =>
           void handleRenameSelectedComponent(newLabel).catch(reportDiagramError)}
         onsettextalign={(align) => setSelectedTextAlign(align)}
+        ondelete={() =>
+          void handleDeleteSelectedComponent().catch(reportDiagramError)}
       />
     {:else}
       <p class="text-base-content/50 text-sm">

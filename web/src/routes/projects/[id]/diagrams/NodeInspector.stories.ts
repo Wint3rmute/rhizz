@@ -42,6 +42,7 @@ const meta = {
     onupdate: () => {},
     onrename: () => {},
     onsettextalign: () => {},
+    ondelete: () => {},
   },
 } satisfies Meta<typeof NodeInspector>;
 

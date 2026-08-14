@@ -14,6 +14,7 @@ interface Props {
   onupdate: (patch: Partial<ComponentData>) => void;
   onrename: (newLabel: string) => void;
   onsettextalign: (align: TextAlign) => void;
+  ondelete?: () => void;
 }
 
 let {
@@ -23,6 +24,7 @@ let {
   onupdate,
   onrename,
   onsettextalign,
+  ondelete,
 }: Props = $props();
 
 let editLabel = $state("");
@@ -453,4 +455,23 @@ function handleUpdateField(
       </div>
     {/if}
   </div>
+
+  {#if ondelete}
+    <div class="divider my-2"></div>
+    <button
+      onclick={() => {
+        if (
+          confirm(
+            `Delete component "${component.label}"? This will remove it from the system model.`,
+          )
+        ) {
+          ondelete();
+        }
+      }}
+      class="btn btn-xs btn-outline btn-error w-full"
+      title="Delete this component from the system model"
+    >
+      Delete Component
+    </button>
+  {/if}
 </div>
