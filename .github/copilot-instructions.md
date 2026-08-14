@@ -25,20 +25,18 @@ FINISHED_TASKS.md    – completed tasks (most recent first)
 2. Get extra context from recently finished tasks (read the first 50 lines of
    `FINISHED_TASKS.md`).
 3. Implement it using red/green TDD.
-4. Run `cargo test`, `cargo clippy`, `cargo doc` and `cargo build` until
-   everything passes.
-5. Run `cargo fmt` to format the code.
+4. Run `just test`, `just lint`, and `just build` until everything passes.
+5. Run `just format` to format the code.
 6. Move the completed task to `FINISHED_TASKS.md` and report that you are
    finished.
 
 ## Build, Test & Lint Commands
 
 ```bash
-cargo build                       # debug build
-cargo test --all                  # run all tests
-cargo clippy --all-targets --all-features -- -D warnings   # lint (warnings are errors)
-cargo fmt --all -- --check        # check formatting
-cargo fmt                         # auto-format
+just format   # format code (Rust + TypeScript/Svelte)
+just lint     # lint workspace (Clippy + ESLint)
+just test     # run all tests (Rust + Vitest)
+just build    # build release binaries, WASM package, and web frontend
 ```
 
 ## Coding Conventions
@@ -62,5 +60,5 @@ cargo fmt                         # auto-format
 - Unit tests live in `#[cfg(test)]` modules inside each source file.
 - Integration tests exercise the three worked examples under `examples/` (drone,
   social-media, software-house).
-- Use `cargo test --all` to run everything.
+- Use `just test` to run everything.
 - Assert exact diagnostic codes (not just counts) for error/warning tests.
