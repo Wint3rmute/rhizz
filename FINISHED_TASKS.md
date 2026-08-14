@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 70 — Reactive document store for multi-file workspace (`system.hcl` + `views.hcl`)
+
+- Created `web/src/DocumentStore.svelte.ts` managing reactive in-memory system architecture and diagram view state using Svelte 5 `$state` and `$derived`.
+- Implemented reactive derivations:
+  - `systemHcl`: Automatically formatted, canonical HCL string representing the complete system architecture model.
+  - `viewsHcl`: Automatically formatted HCL for `views.hcl` keeping layout coordinates and filters isolated from the system model.
+  - `compileResult`, `model`, `diagnostics`, and `score`: Real-time compilation and score calculations recalculating on every state mutation.
+- Provided foundational mutation methods:
+  - `addSystem`, `removeSystem`, `getSystem`.
+  - `addComponent`, `updateComponent`, `deleteComponent`, `reparentComponent`.
+  - `addPort`, `updatePort`, `deletePort`.
+  - `addConnection`, `deleteConnection`.
+  - `addView`, `updateNodeLayout`.
+  - `loadFromHcl`: Ingests existing `system.hcl` and `views.hcl` files into the store.
+- Added test suite in `web/src/DocumentStore.test.ts` (7 tests) covering all store mutations, reparenting, diagnostics, view isolation, and HCL round-tripping.
+- Validated with `deno task --cwd web test run --project unit_tests` (257/257 pass), `deno task --cwd web check` (0 errors/warnings), `npm run --prefix web build`, and `cargo test --all`.
+
+---
+
 ## Task 69 — Expose HCL serialization and model deserialization in `rhizz-wasm`
 
 - Extended `crates/rhizz-wasm` with full WASM bindings for model and view serialization:

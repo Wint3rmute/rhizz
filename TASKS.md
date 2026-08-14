@@ -13,21 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 70 — Reactive document store for multi-file workspace (`system.hcl` + `views.hcl`)
-
-Create a centralized Svelte 5 reactive document store (`web/src/DocumentStore.svelte.ts`) in the frontend that coordinates the active in-memory model, layout state, diagnostics, and bi-directional serialization.
-
-- Create `DocumentStore` class with Svelte 5 `$state` and `$derived`:
-  - Holds active system entities (`systems`, `components`, `ports`, `connections`, `messages`) and view layouts.
-  - Automatically derives formatted `system.hcl` and `views.hcl` via `rhizz-wasm` serialization.
-  - Maintains live compilation diagnostics and completion score calculations on every state mutation.
-- Decouple layout state (`checked` nodes, positions, sizes) into the `views.hcl` representation while leaving `system.hcl` purely architectural.
-- Provide foundational mutation methods: `addSystem`, `addComponent`, `deleteComponent`, `reparentComponent`, `addPort`, `addConnection`.
-- Unit tests for store mutations and reactive derivations.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
 ## Task 71 — Visual node creation and hierarchy editing on the canvas
 
 Enable creating and managing systems and components entirely via the visual canvas UI without typing HCL.
