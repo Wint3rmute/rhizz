@@ -1,18 +1,27 @@
-//! Canonical, deterministic HCL serialization for system models.
+//! Canonical, deterministic HCL serialization and parsing for system models and views.
 //!
-//! Converts a resolved [`Model`] into a clean, human-readable HCL string.
+//! Converts a resolved [`Model`] or [`ViewDefinition`] list into clean, human-readable HCL strings.
 //!
 //! # Guarantees
 //!
 //! 1. **Determinism**: Sibling entities (systems, components, ports, connections,
-//!    messages, fields) are serialized in sorted order by label, ensuring identical
-//!    output across runs.
+//!    messages, fields, views, nodes) are serialized in sorted order by label,
+//!    ensuring identical output across runs.
 //! 2. **Round-trip stability (Idempotency)**:
-//!    `serialize(compile(serialize(model))) == serialize(model)`
-//! 3. **Pure model serialization**: Only architectural entities are serialized;
-//!    visual layout coordinates and views are handled separately.
+//!    - `serialize_model(compile(serialize_model(model))) == serialize_model(model)`
+//!    - `serialize_views(parse_views(serialize_views(views))) == serialize_views(views)`
+//! 3. **Pure model & view separation**: Architectural entities are serialized into
+//!    system model files, while visual layout coordinates and views are serialized into
+//!    separate `views.hcl` files.
 
-use crate::model::{Component, Connection, Field, Message, Model, Port, PortRole, Project, System};
+use crate::model::{
+    Component, Connection, Field, Message, Model, NodeLayout, Port, PortRole, Project, System,
+    View, ViewDefinition, ViewFilterDefinition, ViewOutputDefinition,
+};
+use anyhow::Context;
+use serde::Deserialize;
+
+// ── Model Serialization ───────────────────────────────────────────────────────
 
 /// Serializes a resolved [`Model`] into a canonical, formatted HCL string.
 pub fn serialize_model(model: &Model) -> String {
@@ -381,6 +390,270 @@ fn serialize_connection(
     out.push_str(&format!("{indent}}}\n"));
 }
 
+// ── Views and Layout Serialization ────────────────────────────────────────────
+
+/// Serializes a slice of [`ViewDefinition`]s into canonical HCL formatted for `views.hcl`.
+pub fn serialize_views(views: &[ViewDefinition]) -> String {
+    let mut out = String::new();
+    let mut sorted_views: Vec<&ViewDefinition> = views.iter().collect();
+    sorted_views.sort_by(|a, b| a.label.cmp(&b.label));
+
+    for (i, view) in sorted_views.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        serialize_single_view(&mut out, view);
+    }
+
+    out
+}
+
+/// Helper to serialize resolved [`View`] models from a [`Model`] into HCL.
+pub fn serialize_resolved_views(views: &[View], model: &Model) -> String {
+    let view_defs: Vec<ViewDefinition> = views
+        .iter()
+        .map(|v| ViewDefinition::from_resolved(v, model))
+        .collect();
+    serialize_views(&view_defs)
+}
+
+fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
+    out.push_str(&format!("view {} {{\n", escape_string(&view.label)));
+
+    if !view.description.is_empty() {
+        out.push_str(&format!(
+            "  description = {}\n",
+            escape_string(&view.description)
+        ));
+    }
+    if !view.tags.is_empty() {
+        out.push_str(&format!(
+            "  tags        = {}\n",
+            format_string_list(&view.tags)
+        ));
+    }
+    if !view.system.is_empty() {
+        out.push_str(&format!(
+            "  system      = {}\n",
+            escape_string(&view.system)
+        ));
+    }
+
+    if should_serialize_filter(&view.filter) {
+        out.push('\n');
+        serialize_view_filter(out, &view.filter);
+    }
+
+    if should_serialize_output(&view.output) {
+        out.push('\n');
+        serialize_view_output(out, &view.output);
+    }
+
+    let mut sorted_nodes: Vec<&NodeLayout> = view.nodes.iter().collect();
+    sorted_nodes.sort_by(|a, b| a.component.cmp(&b.component));
+
+    for node in sorted_nodes {
+        out.push('\n');
+        serialize_node_layout(out, node);
+    }
+
+    out.push_str("}\n");
+}
+
+fn should_serialize_filter(filter: &ViewFilterDefinition) -> bool {
+    !filter.include_tags.is_empty()
+        || !filter.exclude_tags.is_empty()
+        || filter.max_level.is_some()
+        || !filter.components.is_empty()
+        || filter.show_messages.is_some()
+}
+
+fn serialize_view_filter(out: &mut String, filter: &ViewFilterDefinition) {
+    out.push_str("  filter {\n");
+    if !filter.include_tags.is_empty() {
+        out.push_str(&format!(
+            "    include_tags  = {}\n",
+            format_string_list(&filter.include_tags)
+        ));
+    }
+    if !filter.exclude_tags.is_empty() {
+        out.push_str(&format!(
+            "    exclude_tags  = {}\n",
+            format_string_list(&filter.exclude_tags)
+        ));
+    }
+    if let Some(max_level) = filter.max_level {
+        out.push_str(&format!("    max_level     = {max_level}\n"));
+    }
+    if !filter.components.is_empty() {
+        out.push_str(&format!(
+            "    components    = {}\n",
+            format_string_list(&filter.components)
+        ));
+    }
+    if let Some(show_messages) = filter.show_messages {
+        out.push_str(&format!("    show_messages = {show_messages}\n"));
+    }
+    out.push_str("  }\n");
+}
+
+fn should_serialize_output(output: &ViewOutputDefinition) -> bool {
+    !output.filename.is_empty() || !output.rankdir.is_empty()
+}
+
+fn serialize_view_output(out: &mut String, output: &ViewOutputDefinition) {
+    out.push_str("  output {\n");
+    if !output.filename.is_empty() {
+        out.push_str(&format!(
+            "    filename = {}\n",
+            escape_string(&output.filename)
+        ));
+    }
+    if !output.rankdir.is_empty() {
+        out.push_str(&format!(
+            "    rankdir  = {}\n",
+            escape_string(&output.rankdir)
+        ));
+    }
+    out.push_str("  }\n");
+}
+
+fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
+    out.push_str(&format!("  node {} {{\n", escape_string(&node.component)));
+    out.push_str(&format!("    x          = {}\n", format_number(node.x)));
+    out.push_str(&format!("    y          = {}\n", format_number(node.y)));
+    if let Some(w) = node.width {
+        out.push_str(&format!("    width      = {}\n", format_number(w)));
+    }
+    if let Some(h) = node.height {
+        out.push_str(&format!("    height     = {}\n", format_number(h)));
+    }
+    if let Some(ref align) = node.text_align {
+        out.push_str(&format!("    text_align = {}\n", escape_string(align)));
+    }
+    out.push_str("  }\n");
+}
+
+fn format_number(n: f64) -> String {
+    if n.fract() == 0.0 && n.is_finite() {
+        format!("{}", n as i64)
+    } else {
+        format!("{n}")
+    }
+}
+
+// ── Views Parsing ─────────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Default)]
+struct RawViewAttrs {
+    description: Option<String>,
+    tags: Option<Vec<String>>,
+    system: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawFilterAttrs {
+    include_tags: Option<Vec<String>>,
+    exclude_tags: Option<Vec<String>>,
+    max_level: Option<i32>,
+    components: Option<Vec<String>>,
+    show_messages: Option<bool>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawOutputAttrs {
+    filename: Option<String>,
+    rankdir: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawNodeAttrs {
+    x: Option<f64>,
+    y: Option<f64>,
+    width: Option<f64>,
+    height: Option<f64>,
+    text_align: Option<String>,
+}
+
+/// Parses an HCL string representing `views.hcl` into a vector of [`ViewDefinition`]s.
+pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
+    let body: hcl::Body = hcl::from_str(hcl_str).context("failed to parse HCL for views")?;
+    let mut views = Vec::new();
+
+    for block in body.blocks() {
+        if block.identifier() == "view" {
+            let label = block
+                .labels()
+                .first()
+                .map(|l| l.as_str().to_owned())
+                .ok_or_else(|| anyhow::anyhow!("view block is missing a label"))?;
+
+            let attrs: RawViewAttrs = hcl::from_body(block.body().clone())
+                .context("failed to deserialize view attributes")?;
+
+            let mut filter = ViewFilterDefinition::default();
+            let mut output = ViewOutputDefinition::default();
+            let mut nodes = Vec::new();
+
+            for child in block.body().blocks() {
+                match child.identifier() {
+                    "filter" => {
+                        let fa: RawFilterAttrs = hcl::from_body(child.body().clone())
+                            .context("failed to deserialize filter attributes")?;
+                        filter = ViewFilterDefinition {
+                            include_tags: fa.include_tags.unwrap_or_default(),
+                            exclude_tags: fa.exclude_tags.unwrap_or_default(),
+                            max_level: fa.max_level,
+                            components: fa.components.unwrap_or_default(),
+                            show_messages: fa.show_messages,
+                        };
+                    }
+                    "output" => {
+                        let oa: RawOutputAttrs = hcl::from_body(child.body().clone())
+                            .context("failed to deserialize output attributes")?;
+                        output = ViewOutputDefinition {
+                            filename: oa.filename.unwrap_or_default(),
+                            rankdir: oa.rankdir.unwrap_or_default(),
+                        };
+                    }
+                    "node" => {
+                        let node_label = child
+                            .labels()
+                            .first()
+                            .map(|l| l.as_str().to_owned())
+                            .ok_or_else(|| anyhow::anyhow!("node block is missing a label"))?;
+                        let na: RawNodeAttrs = hcl::from_body(child.body().clone())
+                            .context("failed to deserialize node attributes")?;
+                        nodes.push(NodeLayout {
+                            component: node_label,
+                            x: na.x.unwrap_or(0.0),
+                            y: na.y.unwrap_or(0.0),
+                            width: na.width,
+                            height: na.height,
+                            text_align: na.text_align,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+
+            views.push(ViewDefinition {
+                label,
+                description: attrs.description.unwrap_or_default(),
+                tags: attrs.tags.unwrap_or_default(),
+                system: attrs.system.unwrap_or_default(),
+                filter,
+                output,
+                nodes,
+            });
+        }
+    }
+
+    Ok(views)
+}
+
+// ── Shared formatting helpers ─────────────────────────────────────────────────
+
 fn escape_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
@@ -639,6 +912,90 @@ system "root-sys" {
                 serialized1, serialized2,
                 "idempotency failed for example {}",
                 example_name
+            );
+        }
+    }
+
+    #[test]
+    fn test_views_roundtrip_with_nodes() {
+        let hcl = r#"view "overview" {
+  description = "Full overview"
+  tags        = ["arch", "top"]
+  system      = "quadcopter"
+
+  filter {
+    include_tags  = ["core"]
+    exclude_tags  = ["debug"]
+    max_level     = 2
+    components    = ["fc", "esc"]
+    show_messages = true
+  }
+
+  output {
+    filename = "overview.dot"
+    rankdir  = "LR"
+  }
+
+  node "battery" {
+    x          = 100
+    y          = 250
+    width      = 140
+    height     = 90
+    text_align = "center"
+  }
+
+  node "fc/mcu" {
+    x          = 320.5
+    y          = 150
+    width      = 160
+    height     = 100
+    text_align = "top-left"
+  }
+}
+"#;
+
+        let parsed1 = parse_views(hcl).expect("should parse views HCL");
+        assert_eq!(parsed1.len(), 1);
+        let serialized1 = serialize_views(&parsed1);
+
+        let parsed2 = parse_views(&serialized1).expect("should parse serialized views");
+        assert_eq!(parsed1, parsed2);
+
+        let serialized2 = serialize_views(&parsed2);
+        assert_eq!(serialized1, serialized2);
+    }
+
+    #[test]
+    fn test_example_views_roundtrip() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace_dir = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("should find workspace root");
+        let examples_dir = workspace_dir.join("examples");
+
+        for example_name in ["drone", "social-media", "software-house", "web-app"] {
+            let views_path = examples_dir.join(example_name).join("views.hcl");
+            if !views_path.exists() {
+                continue;
+            }
+
+            let content = fs::read_to_string(&views_path).expect("should read views.hcl");
+            let mut parsed1 = parse_views(&content)
+                .unwrap_or_else(|e| panic!("failed parsing {example_name}: {e}"));
+            parsed1.sort_by(|a, b| a.label.cmp(&b.label));
+
+            let serialized1 = serialize_views(&parsed1);
+            let mut parsed2 = parse_views(&serialized1)
+                .unwrap_or_else(|e| panic!("failed parsing re-serialized {example_name}: {e}"));
+            parsed2.sort_by(|a, b| a.label.cmp(&b.label));
+
+            assert_eq!(parsed1, parsed2, "views mismatch for {example_name}");
+
+            let serialized2 = serialize_views(&parsed2);
+            assert_eq!(
+                serialized1, serialized2,
+                "views serialization idempotency failed for {example_name}"
             );
         }
     }

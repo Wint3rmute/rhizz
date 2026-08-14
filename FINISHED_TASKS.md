@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 68 — HCL serializer and parser for diagram views and layout metadata in `rhizz-core`
+
+- Implemented `NodeLayout`, `ViewDefinition`, `ViewFilterDefinition`, and `ViewOutputDefinition` in `crates/rhizz-core/src/model.rs`.
+- Implemented `serialize_views(views: &[ViewDefinition]) -> String`, `parse_views(hcl: &str) -> anyhow::Result<Vec<ViewDefinition>>`, and `serialize_resolved_views(views: &[View], model: &Model) -> String` in `crates/rhizz-core/src/serialize.rs`.
+- Guarantees complete separation of concerns: diagram visual coordinates (`x`, `y`, `width`, `height`, `text_align`) and filter/output settings live in `views.hcl`, completely free from `system.hcl`.
+- Enforces sorted deterministic ordering of views (by view label) and node layout blocks (by component path/label).
+- Added comprehensive unit tests for views with `node` placement blocks and round-trip integration tests verifying idempotency across all workspace example `views.hcl` files (`drone`, `social-media`, `software-house`, `web-app`).
+- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, and `cargo fmt`.
+
+---
+
+## Task 67 — Deterministic HCL serializer for core system model in `rhizz-core`
+
+- Implemented canonical HCL serialization in `crates/rhizz-core/src/serialize.rs` via `pub fn serialize_model(model: &Model) -> String`.
+- Exposes `serialize_model` as part of `rhizz_core`'s public API.
+- Serializes `project`, `system`, nested `component`, `port`, `connection`, `message`, and `field` blocks into formatted, standard HCL.
+- Guarantees strict determinism and round-trip stability / idempotency:
+  `serialize(compile(serialize(model))) == serialize(model)`.
+- Enforces sorted deterministic ordering of sibling systems, components, ports, connections, messages, and fields by label.
+- Omit/default handling matches canonical HCL schema (standard levels, default port roles, empty lists/descriptions).
+- Added comprehensive unit tests and integration tests covering deep nested hierarchies, character escaping, and all workspace examples (`drone`, `social-media`, `software-house`, `single-file`, `web-app`).
+- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, and `cargo fmt`.
+
+---
+
 ## Task 65 — Remove legacy data-migration code
 
 The app is still pre-release (no real users on old data shapes to
@@ -489,18 +514,6 @@ designed for here.
   (clean). Commands were run via `nix develop --command deno ...` in this
   environment, using `deno task --cwd <dir>` since this sandbox's `deno`
   didn't support the `-C` shorthand.
-
-## Task 55 — Deterministic HCL serializer for core system model in `rhizz-core`
-
-- Implemented canonical HCL serialization in `crates/rhizz-core/src/serialize.rs` via `pub fn serialize_model(model: &Model) -> String`.
-- Exposes `serialize_model` as part of `rhizz_core`'s public API.
-- Serializes `project`, `system`, nested `component`, `port`, `connection`, `message`, and `field` blocks into formatted, standard HCL.
-- Guarantees strict determinism and round-trip stability / idempotency:
-  `serialize(compile(serialize(model))) == serialize(model)`.
-- Enforces sorted deterministic ordering of sibling systems, components, ports, connections, messages, and fields by label.
-- Omit/default handling matches canonical HCL schema (standard levels, default port roles, empty lists/descriptions).
-- Added comprehensive unit tests and integration tests covering deep nested hierarchies, character escaping, and all workspace examples (`drone`, `social-media`, `software-house`, `single-file`, `web-app`).
-- Validated with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo doc`, `cargo build`, and `cargo fmt`.
 
 ---
 

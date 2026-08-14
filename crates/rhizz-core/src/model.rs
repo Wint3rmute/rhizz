@@ -311,6 +311,101 @@ pub struct ViewOutput {
     pub rankdir: String,
 }
 
+// ── View definitions and layout models ────────────────────────────────────────
+
+/// Node layout metadata for visual diagrams.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeLayout {
+    /// Component key/path or label identifying the node.
+    pub component: String,
+    /// X coordinate on canvas.
+    pub x: f64,
+    /// Y coordinate on canvas.
+    pub y: f64,
+    /// Optional width in world units.
+    pub width: Option<f64>,
+    /// Optional height in world units.
+    pub height: Option<f64>,
+    /// Optional text alignment ("center", "top-center", "top-left").
+    pub text_align: Option<String>,
+}
+
+/// A view definition containing filter, output settings, and node layouts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ViewDefinition {
+    /// Unique view identifier.
+    pub label: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Filtering tags.
+    pub tags: Vec<String>,
+    /// Target system label.
+    pub system: String,
+    /// Filter settings.
+    pub filter: ViewFilterDefinition,
+    /// Output settings.
+    pub output: ViewOutputDefinition,
+    /// Placed node layouts for this view.
+    pub nodes: Vec<NodeLayout>,
+}
+
+impl ViewDefinition {
+    /// Constructs a `ViewDefinition` from a resolved `View` and its parent `Model`.
+    pub fn from_resolved(view: &View, model: &Model) -> Self {
+        let system_label = model
+            .systems
+            .get(view.system.0)
+            .map(|s| s.label.clone())
+            .unwrap_or_default();
+        Self {
+            label: view.label.clone(),
+            description: view.description.clone(),
+            tags: view.tags.clone(),
+            system: system_label,
+            filter: ViewFilterDefinition {
+                include_tags: view.filter.include_tags.clone(),
+                exclude_tags: view.filter.exclude_tags.clone(),
+                max_level: view.filter.max_level,
+                components: view.filter.components.clone(),
+                show_messages: if view.filter.show_messages {
+                    Some(true)
+                } else {
+                    None
+                },
+            },
+            output: ViewOutputDefinition {
+                filename: view.output.filename.clone(),
+                rankdir: view.output.rankdir.clone(),
+            },
+            nodes: Vec::new(),
+        }
+    }
+}
+
+/// Filter settings for a view definition.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ViewFilterDefinition {
+    /// Tag whitelist (empty = match all).
+    pub include_tags: Vec<String>,
+    /// Tag blacklist.
+    pub exclude_tags: Vec<String>,
+    /// Maximum abstraction level to display.
+    pub max_level: Option<i32>,
+    /// Component whitelist.
+    pub components: Vec<String>,
+    /// Whether to show messages on connection edges.
+    pub show_messages: Option<bool>,
+}
+
+/// Output settings for a view definition.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ViewOutputDefinition {
+    /// Output filename.
+    pub filename: String,
+    /// Graphviz rank direction ("TB", "LR", etc.).
+    pub rankdir: String,
+}
+
 // Diagnostic types live in their own module; re-export here so existing
 // intra-crate imports (e.g. `use crate::model::Diagnostic`) keep working.
 pub use crate::diagnostics::{Diagnostic, DiagnosticCode};
