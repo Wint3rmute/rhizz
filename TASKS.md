@@ -72,6 +72,140 @@ case, but nothing calls it that way yet.
   a remembered position take priority over auto-placing.
 - Validate with `deno task check`, `deno task build`, `deno task test`.
 
+---
+
+## Task 55 — Deterministic HCL serializer for core system model in `rhizz-core`
+
+Implement a deterministic, stable HCL code generator in Rust (`crates/rhizz-core/src/serialize.rs`) that serializes a resolved `Model` back to a clean, human-readable single-file `system.hcl` document without layout pollution.
+
+- Implement `serialize_model(model: &Model) -> String` producing canonical HCL formatting for `project`, `system`, nested `component`, `port`, `connection`, `message`, and `field` blocks.
+- Guarantee round-trip stability and idempotency: `serialize(parse(serialize(model))) == serialize(model)`.
+- Enforce deterministic ordering across entities:
+  - Standard block ordering: `project` block first, followed by top-level `system` blocks.
+  - Sibling components, ports, connections, messages, and fields sorted deterministically by label/identifier.
+  - Attribute ordering within blocks is standardized (e.g., `description`, `tags`, `level`, `protocol`, `role`, `leaf`, `from`, `to`).
+  - Standardized 2-space indentation and clean multiline/quote formatting.
+- Unit and property tests verifying exact round-trip equality against models from `examples/` (`drone`, `social-media`, `software-house`, `single-file`, `web-app`).
+- Validate with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo fmt --all -- --check`.
+
+---
+
+## Task 56 — HCL serializer and parser for diagram views and layout metadata in `rhizz-core`
+
+Implement view and layout serialization in Rust (`rhizz-core`) so visual layout coordinates (positions, sizes, view configurations) are stored cleanly in separate `views.hcl` files, keeping the core system model pure.
+
+- Define schema and serialization for visual view blocks and node placement metadata in HCL (e.g., `view "main" { system = "drone" ... }` and layout mappings for placed nodes).
+- Implement `serialize_views(views: &[View], layout: &LayoutMap) -> String` and companion parser to round-trip view definitions and node coordinates.
+- Ensure strict separation: node `(x, y, width, height)` coordinates are written only to `views.hcl` and never embedded into `system.hcl`.
+- Unit tests verifying round-trip serialization and parsing of `views.hcl` files across all example projects.
+- Validate with `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo fmt`.
+
+---
+
+## Task 57 — Expose HCL serialization and model deserialization in `rhizz-wasm`
+
+Expose the new serialization capabilities from `rhizz-core` to the WebAssembly binding layer (`crates/rhizz-wasm`), allowing the web frontend to convert in-memory models and layouts to formatted HCL strings.
+
+- Add WASM-exported functions:
+  - `serialize_model(model: &ModelJS) -> String` (or method on `ModelJS`: `model.to_hcl() -> String`).
+  - `serialize_views(views: JsValue, layout: JsValue) -> String`.
+  - Helper functions/constructors for building or mutating model structures directly from JS objects.
+- Update `web/src/rhizz_wasm_wrapper.ts` with typed TypeScript helper functions.
+- Add integration tests in `crates/rhizz-wasm/tests/wasm_test.rs` asserting correct serialization via WASM.
+- Validate with `cargo test`, `cargo clippy`, and `deno task check` / `deno task test`.
+
+---
+
+## Task 58 — Reactive document store for multi-file workspace (`system.hcl` + `views.hcl`)
+
+Create a centralized Svelte 5 reactive document store (`web/src/DocumentStore.svelte.ts`) in the frontend that coordinates the active in-memory model, layout state, diagnostics, and bi-directional serialization.
+
+- Create `DocumentStore` class with Svelte 5 `$state` and `$derived`:
+  - Holds active system entities (`systems`, `components`, `ports`, `connections`, `messages`) and view layouts.
+  - Automatically derives formatted `system.hcl` and `views.hcl` via `rhizz-wasm` serialization.
+  - Maintains live compilation diagnostics and completion score calculations on every state mutation.
+- Decouple layout state (`checked` nodes, positions, sizes) into the `views.hcl` representation while leaving `system.hcl` purely architectural.
+- Provide foundational mutation methods: `addSystem`, `addComponent`, `deleteComponent`, `reparentComponent`, `addPort`, `addConnection`.
+- Unit tests for store mutations and reactive derivations.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 59 — Visual node creation and hierarchy editing on the canvas
+
+Enable creating and managing systems and components entirely via the visual canvas UI without typing HCL.
+
+- Add a canvas creation toolbar and hotkey/context-menu actions:
+  - Quick-add buttons: "+ System", "+ Component".
+  - Double-click on empty canvas creates a new component at the cursor position.
+- Implement visual hierarchical nesting and reparenting:
+  - Dragging a component over a parent system or parent component highlights the target container.
+  - Dropping the component inside reparents it structurally in the document store and visually clamps it within the parent boundary.
+  - Dragging a child component outside its parent reparents it up one level (or to root system level).
+- State changes instantly update the document store, recalculating completion scores and updating the serialized `system.hcl`.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 60 — Interactive property and message inspector panel
+
+Expand the canvas inspector panel so users can configure component properties, define ports, and specify message payloads/fields with full schema details in the GUI.
+
+- Component properties:
+  - Edit label, description, tags, and toggle atomic status (`leaf`).
+- Port management:
+  - Add/remove ports on a component.
+  - Set port label, description, `protocol` (e.g. SPI, CAN, HTTP), and `role` (`provider`, `consumer`, `peer`).
+- Message and field editor:
+  - Add/remove messages inside ports.
+  - Add typed data fields (`type`, `unit`, `description`, `required`).
+- Real-time score feedback:
+  - As descriptions, ports, and fields are filled in the inspector, the completion score meter in the top navigation updates dynamically.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 61 — Interactive visual wiring (drag-to-connect ports & connections)
+
+Implement visual drag-to-connect interactions directly on the canvas to wire components together.
+
+- Render distinct interactive port handles along component borders (color-coded by role/protocol).
+- Dragging from a source port handle draws an active interactive connection line to the cursor.
+- Hovering over a compatible target port highlights the port as a valid connection target.
+- Dropping creates a `connection` in the document store wiring the two sibling endpoints (`from = "compA:port1"`, `to = "compB:port2"`).
+- Surface instant compiler diagnostic feedback if incompatible protocols or invalid sibling scopes are connected.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+## Task 62 — Multi-file workspace tabs and project import/export
+
+Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
+
+- Tabbed workspace switcher:
+  - "Canvas" (interactive visual modeler, default)
+  - "system.hcl" (live code viewer / editor for the core architectural model)
+  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
+- File Import / Export:
+  - "Export Project" downloads `system.hcl` and `views.hcl`.
+  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
+
+---
+
+High-level goal: make it possible to store multiple multi-file projects & diagrams,
+with the web application pretending to have a virtual filesystem hierarchy.
+
+## (For later brainstorming) Task <N> - visual regression testing
+
+As we now have a virtual filesystem hierarchy for the frontend, we can create
+end-to-end tests which load the project, render a diagram and verify that it
+matches the expected output.
+
+Vitest supports visual regression testing. The goal of this task is to implement
+infrastructure for visual regression testing in the frontend, then ask the
+developer to create diagrams, which can be saved as reference images for future
+comparisons.
 
 ## Task <NUMBER> — Task template
 
