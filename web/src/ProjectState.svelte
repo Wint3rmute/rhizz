@@ -64,6 +64,8 @@ export function setCurrentDiagnostics(
 // project-scoped content.
 export async function setCurrentProject(id: string): Promise<void> {
   currentProjectId = id;
+  currentScore = null;
+  currentDiagnostics = null;
   const projects = await projectStore.listProjects();
   const found = projects.find((p) => p.id === id) ?? null;
   // A stale async call (e.g. rapid navigation between two projects)

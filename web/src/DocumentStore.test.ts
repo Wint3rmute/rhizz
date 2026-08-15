@@ -50,6 +50,21 @@ describe("DocumentStore", () => {
     expect(model?.components()).toHaveLength(2);
   });
 
+  it("automatically clears leaf flag on parent when adding a child component", () => {
+    const doc = new DocumentStore();
+    doc.addSystem("demo");
+    const parent = doc.addComponent("demo", "parent-comp", true);
+    expect(parent?.leaf).toBe(true);
+    expect(doc.systemHcl).toContain("leaf        = true");
+
+    const child = doc.addComponent("demo/parent-comp", "child-comp", true);
+    expect(child?.leaf).toBe(true);
+    expect(parent?.leaf).toBe(false);
+
+    expect(doc.findComponent("demo/parent-comp")?.leaf).toBe(false);
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
   it("supports adding ports, messages, and fields and updating completion score", () => {
     const doc = new DocumentStore();
     doc.addSystem("demo");

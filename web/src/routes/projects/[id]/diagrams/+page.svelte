@@ -992,6 +992,10 @@ $effect(() => {
     errors: output.error_count(),
     warnings: output.warning_count(),
   });
+  return () => {
+    setCurrentScore(null);
+    setCurrentDiagnostics(null);
+  };
 });
 
 let selectedKey = $derived(
