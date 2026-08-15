@@ -21,6 +21,10 @@ export const projectStore = new LocalStorageProjectStore();
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);
+let currentScore = $state<{ overall_percentage: number } | null>(null);
+let currentDiagnostics = $state<{ errors: number; warnings: number } | null>(
+  null,
+);
 
 export function getCurrentProjectId(): string | null {
   return currentProjectId;
@@ -30,6 +34,29 @@ export function getCurrentProject(): Project | null {
   return currentProject;
 }
 
+export function getCurrentScore(): { overall_percentage: number } | null {
+  return currentScore;
+}
+
+export function setCurrentScore(
+  score: { overall_percentage: number } | null,
+): void {
+  currentScore = score;
+}
+
+export function getCurrentDiagnostics(): {
+  errors: number;
+  warnings: number;
+} | null {
+  return currentDiagnostics;
+}
+
+export function setCurrentDiagnostics(
+  diags: { errors: number; warnings: number } | null,
+): void {
+  currentDiagnostics = diags;
+}
+
 // Loads `id`'s metadata into the shared reactive state. `currentProject`
 // ends up `null` if no project with that id exists (e.g. a stale/bad
 // URL) — callers (see routes/projects/[id]/+layout.svelte) are expected
@@ -37,6 +64,8 @@ export function getCurrentProject(): Project | null {
 // project-scoped content.
 export async function setCurrentProject(id: string): Promise<void> {
   currentProjectId = id;
+  currentScore = null;
+  currentDiagnostics = null;
   const projects = await projectStore.listProjects();
   const found = projects.find((p) => p.id === id) ?? null;
   // A stale async call (e.g. rapid navigation between two projects)

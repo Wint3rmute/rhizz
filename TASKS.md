@@ -13,37 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 72 — Interactive property and message inspector panel
-
-Expand the canvas inspector panel so users can configure component properties, define ports, and specify message payloads/fields with full schema details in the GUI.
-
-- Component properties:
-  - Edit label, description, tags, and toggle atomic status (`leaf`).
-- Port management:
-  - Add/remove ports on a component.
-  - Set port label, description, `protocol` (e.g. SPI, CAN, HTTP), and `role` (`provider`, `consumer`, `peer`).
-- Message and field editor:
-  - Add/remove messages inside ports.
-  - Add typed data fields (`type`, `unit`, `description`, `required`).
-- Real-time score feedback:
-  - As descriptions, ports, and fields are filled in the inspector, the completion score meter in the top navigation updates dynamically.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
-## Task 73 — Interactive visual wiring (drag-to-connect ports & connections)
-
-Implement visual drag-to-connect interactions directly on the canvas to wire components together.
-
-- Render distinct interactive port handles along component borders (color-coded by role/protocol).
-- Dragging from a source port handle draws an active interactive connection line to the cursor.
-- Hovering over a compatible target port highlights the port as a valid connection target.
-- Dropping creates a `connection` in the document store wiring the two sibling endpoints (`from = "compA:port1"`, `to = "compB:port2"`).
-- Surface instant compiler diagnostic feedback if incompatible protocols or invalid sibling scopes are connected.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
 ## Task 74 — Multi-file workspace tabs and project import/export
 
 Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.

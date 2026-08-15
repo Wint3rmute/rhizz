@@ -1,4 +1,5 @@
 <script lang="ts">
+import { resolve } from "$app/paths";
 import {
   clamp_zoom,
   create_editor_state,
@@ -8,13 +9,25 @@ import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
-import { projectStore } from "../../../../ProjectState.svelte";
+import {
+  projectStore,
+  setCurrentDiagnostics,
+  setCurrentScore,
+} from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
+import NodeInspector from "./NodeInspector.svelte";
+import CreateComponentModal from "./CreateComponentModal.svelte";
+import {
+  type ComponentData,
+  DocumentStore,
+  type PortData,
+} from "../../../../DocumentStore.svelte";
+
 import {
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
@@ -40,16 +53,17 @@ import {
   boxCenter,
   boxContains,
   clampWithin,
+  computePortPositions,
   type ConnectionOrientation,
   depthOf,
   elbowPath,
+  findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
   type TextAlign,
   textPosition,
   unionBox,
 } from "./geometry";
-import { DocumentStore } from "../../../../DocumentStore.svelte";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -94,6 +108,11 @@ let model = $derived(output.model());
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
+
+let compileErrors = $derived.by(() => {
+  return output.diagnostics().filter((d) => d.level === "Error");
+});
+let firstError = $derived(compileErrors[0] ?? null);
 
 // Builds a structurally-stable persistence key for a component: the path
 // of labels from its root system down to it, e.g.
@@ -649,9 +668,6 @@ function onDiagramKeyDown(event: KeyboardEvent) {
 let primarySelected = $derived(
   selected.size === 1 ? [...selected][0] : null,
 );
-let selectedComponent = $derived(
-  primarySelected !== null ? components[primarySelected] ?? null : null,
-);
 let selectedBox = $derived(
   primarySelected !== null ? nodeBox(primarySelected) : null,
 );
@@ -706,6 +722,13 @@ type Interaction =
     startY: number;
     x: number;
     y: number;
+  }
+  | {
+    type: "connecting";
+    sourceComponentIndex: number;
+    sourcePortLabel: string | null;
+    sourcePoint: { x: number; y: number };
+    currentPoint: { x: number; y: number };
   };
 
 let interaction: Interaction = $state({ type: "idle" });
@@ -746,11 +769,34 @@ function isDescendantOf(index: number, possibleAncestor: number): boolean {
   return false;
 }
 
-async function readMainContent(): Promise<string> {
+async function getPrimaryHclPath(): Promise<string> {
   try {
-    return await fs.readFile("main.hcl");
+    const entries = await fs.readdir(".", { recursive: true });
+    const hclFiles = entries.filter((e) =>
+      e.isFile() && e.name.endsWith(".hcl")
+    );
+    const preferred = hclFiles.find(
+      (e) =>
+        e.name === "main.hcl" ||
+        e.name === "system.hcl" ||
+        e.name === "systems.hcl",
+    );
+    return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
   } catch {
-    return sources.map((s) => s.content).join("\n");
+    return "main.hcl";
+  }
+}
+
+async function readMainContent(): Promise<{ path: string; content: string }> {
+  const targetPath = await getPrimaryHclPath();
+  try {
+    const content = await fs.readFile(targetPath);
+    return { path: targetPath, content };
+  } catch {
+    return {
+      path: targetPath,
+      content: sources.map((s) => s.content).join("\n"),
+    };
   }
 }
 
@@ -758,7 +804,7 @@ async function executeReparent(
   sourceKey: string,
   targetParentKey: string,
 ): Promise<void> {
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
@@ -766,7 +812,7 @@ async function executeReparent(
   }
 
   if (doc.reparentComponent(sourceKey, targetParentKey)) {
-    await fs.writeFile("main.hcl", doc.systemHcl);
+    await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }
 }
@@ -776,75 +822,355 @@ async function handleAddSystem(): Promise<void> {
     ?.trim();
   if (!name) return;
 
-  const mainContent = await readMainContent();
+  const { path: targetPath, content: mainContent } = await readMainContent();
 
   const doc = new DocumentStore();
   if (mainContent.trim()) {
     doc.loadFromHcl(mainContent);
   }
   doc.addSystem(name);
-  await fs.writeFile("main.hcl", doc.systemHcl);
+  await fs.writeFile(targetPath, doc.systemHcl);
   sources = await readProjectSources(fs);
 }
 
-async function handleAddComponent(
-  pos?: { x: number; y: number },
-  parentTargetKey?: string,
-  compName?: string,
-): Promise<void> {
-  const name = compName ??
-    prompt("New component name?", `component-${components.length + 1}`)?.trim();
-  if (!name) return;
+let availableParents = $derived.by(() => {
+  const options: {
+    key: string;
+    label: string;
+    isSystem: boolean;
+    path: string;
+  }[] = [];
 
-  const mainContent = await readMainContent();
-
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
+  for (const sys of systems) {
+    options.push({
+      key: sys.label,
+      label: sys.label,
+      isSystem: true,
+      path: sys.label,
+    });
   }
 
-  let targetParent = parentTargetKey;
+  components.forEach((comp, idx) => {
+    const key = componentKey(idx);
+    options.push({
+      key,
+      label: comp.label,
+      isSystem: false,
+      path: key,
+    });
+  });
+
+  return options;
+});
+
+let isCreateModalOpen = $state(false);
+let createModalPosition = $state<{ x: number; y: number } | undefined>(
+  undefined,
+);
+let createModalDefaultParent = $state<string | undefined>(undefined);
+
+function openCreateComponentModal(
+  pos?: { x: number; y: number },
+  parentKey?: string,
+) {
+  let targetParent = parentKey;
   if (!targetParent && selected.size === 1) {
     const selIdx = selected.values().next().value;
     if (selIdx !== undefined) {
       targetParent = componentKey(selIdx);
     }
   }
-
   if (!targetParent) {
-    if (doc.systems.length === 0) {
-      doc.addSystem("main");
-    }
-    targetParent = doc.systems[0].label;
+    targetParent = systems[0]?.label || "main";
   }
 
-  doc.addComponent(targetParent, name, true);
-  await fs.writeFile("main.hcl", doc.systemHcl);
+  createModalPosition = pos;
+  createModalDefaultParent = targetParent;
+  isCreateModalOpen = true;
+}
+
+function onNodeDblClick(event: MouseEvent, index: number) {
+  event.stopPropagation();
+  event.preventDefault();
+  const parentKey = componentKey(index);
+  const coords = svgPoint(root_svg, event.clientX, event.clientY);
+  openCreateComponentModal(
+    {
+      x: coords.x - DEFAULT_NODE_WIDTH / 2,
+      y: coords.y - DEFAULT_NODE_HEIGHT / 2,
+    },
+    parentKey,
+  );
+}
+
+async function handleModalCreateComponent(data: {
+  label: string;
+  parentKey: string;
+  description: string;
+  tags: string[];
+  leaf: boolean;
+  ports: PortData[];
+  textAlign?: TextAlign;
+  position?: { x: number; y: number };
+}): Promise<void> {
+  isCreateModalOpen = false;
+
+  const { path: targetPath, content: mainContent } = await readMainContent();
+
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  let parent = data.parentKey;
+  if (!parent || !doc.findContainer(parent)) {
+    if (doc.systems.length === 0) {
+      doc.addSystem(parent || "main");
+      parent = parent || "main";
+    } else {
+      parent = doc.systems[0].label;
+    }
+  }
+
+  const added = doc.addComponent(parent, data.label, data.leaf);
+  if (added) {
+    added.description = data.description;
+    added.tags = data.tags;
+    added.ports = data.ports;
+  }
+
+  await fs.writeFile(targetPath, doc.systemHcl);
   sources = await readProjectSources(fs);
 
-  // Position on canvas
-  const fullKey = `${targetParent}/${name}`;
-  const worldX = pos ? snap(pos.x) : 100;
-  const worldY = pos ? snap(pos.y) : 100;
+  const fullKey = `${parent}/${data.label}`;
+  const worldX = data.position ? snap(data.position.x) : 100;
+  const worldY = data.position ? snap(data.position.y) : 100;
 
   checked[fullKey] = {
     x: worldX,
     y: worldY,
     width: DEFAULT_NODE_WIDTH,
     height: DEFAULT_NODE_HEIGHT,
-    textAlign: DEFAULT_TEXT_ALIGN,
+    textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
   };
   savedLayout[fullKey] = { ...checked[fullKey] };
+
+  const newIndex = keyToIndex.get(fullKey);
+  if (newIndex !== undefined) {
+    selected.clear();
+    selected.add(newIndex);
+  }
 }
 
 function onCanvasDblClick(event: MouseEvent) {
   const target = event.target as HTMLElement | SVGElement;
   if (target === root_svg || target.tagName === "rect") {
     const coords = svgPoint(root_svg, event.clientX, event.clientY);
-    void handleAddComponent({
+    openCreateComponentModal({
       x: coords.x - DEFAULT_NODE_WIDTH / 2,
       y: coords.y - DEFAULT_NODE_HEIGHT / 2,
-    }).catch(reportDiagramError);
+    });
+  }
+}
+
+let docStore = $derived.by(() => {
+  const mainContent = sources.find((s) =>
+    s.filename.endsWith("main.hcl")
+  )?.content ||
+    sources.map((s) => s.content).join("\n");
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+  return doc;
+});
+
+$effect(() => {
+  const sc = output.model()?.score();
+  setCurrentScore(sc ? { overall_percentage: sc.overall_percentage } : null);
+  setCurrentDiagnostics({
+    errors: output.error_count(),
+    warnings: output.warning_count(),
+  });
+  return () => {
+    setCurrentScore(null);
+    setCurrentDiagnostics(null);
+  };
+});
+
+let selectedKey = $derived(
+  selected.size === 1 ? componentKey(selected.values().next().value!) : null,
+);
+
+let selectedComponentData = $derived(
+  selectedKey ? docStore.findComponent(selectedKey) : null,
+);
+
+async function handleUpdateSelectedComponent(
+  patch: Partial<ComponentData>,
+): Promise<void> {
+  if (!selectedKey) return;
+  const { path: targetPath, content: mainContent } = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+  if (doc.updateComponent(selectedKey, patch)) {
+    await fs.writeFile(targetPath, doc.systemHcl);
+    sources = await readProjectSources(fs);
+  }
+}
+
+async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
+  if (!selectedKey) return;
+  const parts = selectedKey.split("/").filter(Boolean);
+  const oldLabel = parts[parts.length - 1];
+  if (newLabel === oldLabel) return;
+  const parentPath = parts.slice(0, -1).join("/");
+  const newKey = `${parentPath}/${newLabel}`;
+
+  const { path: targetPath, content: mainContent } = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  const comp = doc.findComponent(selectedKey);
+  if (comp) {
+    comp.label = newLabel;
+    await fs.writeFile(targetPath, doc.systemHcl);
+    sources = await readProjectSources(fs);
+
+    if (checked[selectedKey]) {
+      checked[newKey] = checked[selectedKey];
+      delete checked[selectedKey];
+    }
+    if (savedLayout[selectedKey]) {
+      savedLayout[newKey] = savedLayout[selectedKey];
+      delete savedLayout[selectedKey];
+    }
+  }
+}
+
+async function handleDeleteSelectedComponent(): Promise<void> {
+  if (!selectedKey) return;
+  const keyToDelete = selectedKey;
+  const { path: targetPath, content: mainContent } = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  if (doc.deleteComponent(keyToDelete)) {
+    await fs.writeFile(targetPath, doc.systemHcl);
+    sources = await readProjectSources(fs);
+
+    delete checked[keyToDelete];
+    delete savedLayout[keyToDelete];
+    selected.clear();
+  }
+}
+
+function onPortMouseDown(
+  event: MouseEvent,
+  compIndex: number,
+  portLabel: string | null,
+  worldPoint: { x: number; y: number },
+) {
+  event.stopPropagation();
+  event.preventDefault();
+  interaction = {
+    type: "connecting",
+    sourceComponentIndex: compIndex,
+    sourcePortLabel: portLabel,
+    sourcePoint: worldPoint,
+    currentPoint: worldPoint,
+  };
+}
+
+function findHoveredTarget(
+  point: { x: number; y: number },
+  sourceIndex: number,
+): { compIndex: number; portLabel: string | null } | null {
+  const candidates = renderOrder.flatMap((i) => {
+    if (i === sourceIndex) return [];
+    const box = nodeBox(i);
+    if (!box) return [];
+    const key = componentKey(i);
+    const compData = docStore.findComponent(key);
+    const ports = compData && compData.ports.length > 0
+      ? computePortPositions(box.width, box.height, compData.ports).map((
+        p,
+      ) => ({
+        label: p.label,
+        x: p.x,
+        y: p.y,
+      }))
+      : [];
+    return [{
+      index: i,
+      box,
+      depth: depthOf(i, parentOf),
+      ports,
+    }];
+  });
+
+  return findConnectTarget(point, sourceIndex, candidates);
+}
+
+async function handleCreateConnection(
+  sourceCompIndex: number,
+  sourcePortLabel: string | null,
+  targetCompIndex: number,
+  targetPortLabel: string | null,
+): Promise<void> {
+  if (sourceCompIndex === targetCompIndex) return;
+
+  const srcKey = componentKey(sourceCompIndex);
+  const targetKey = componentKey(targetCompIndex);
+
+  const srcParts = srcKey.split("/").filter(Boolean);
+  const targetParts = targetKey.split("/").filter(Boolean);
+
+  const srcCompLabel = srcParts[srcParts.length - 1];
+  const targetCompLabel = targetParts[targetParts.length - 1];
+
+  const srcParentPath = srcParts.slice(0, -1).join("/");
+  const targetParentPath = targetParts.slice(0, -1).join("/");
+
+  if (srcParentPath !== targetParentPath) {
+    alert(
+      "Connections can only wire sibling components within the same system or parent component.",
+    );
+    return;
+  }
+
+  const fromEndpoint = sourcePortLabel
+    ? `${srcCompLabel}:${sourcePortLabel}`
+    : srcCompLabel;
+  const toEndpoint = targetPortLabel
+    ? `${targetCompLabel}:${targetPortLabel}`
+    : targetCompLabel;
+
+  const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
+  const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
+  if (!connLabel) return;
+
+  const { path: targetPath, content: mainContent } = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  const added = doc.addConnection(srcParentPath, {
+    label: connLabel,
+    from: fromEndpoint,
+    to: toEndpoint,
+  });
+
+  if (added) {
+    await fs.writeFile(targetPath, doc.systemHcl);
+    sources = await readProjectSources(fs);
   }
 }
 
@@ -1059,25 +1385,30 @@ function onSvgMouseMove(event: MouseEvent) {
         const deltaY = anchorNext.y - anchorStart.y;
         applyGroupDelta(current.startPositions, deltaX, deltaY);
 
-        // Check potential drop/reparent target candidate
-        const candidateBoxes: { index: number; box: Box; depth: number }[] = [];
-        for (const i of renderOrder) {
-          if (i === current.anchorIndex || selected.has(i)) continue;
-          if (components[i]?.leaf) continue;
-          if (isDescendantOf(i, current.anchorIndex)) continue;
-          const b = nodeBox(i);
-          if (b) {
-            candidateBoxes.push({
-              index: i,
-              box: b,
-              depth: depthOf(i, parentOf),
-            });
+        // Check potential drop/reparent target candidate only if Alt is held
+        if (event.altKey) {
+          const candidateBoxes: { index: number; box: Box; depth: number }[] =
+            [];
+          for (const i of renderOrder) {
+            if (i === current.anchorIndex || selected.has(i)) continue;
+            if (components[i]?.leaf) continue;
+            if (isDescendantOf(i, current.anchorIndex)) continue;
+            const b = nodeBox(i);
+            if (b) {
+              candidateBoxes.push({
+                index: i,
+                box: b,
+                depth: depthOf(i, parentOf),
+              });
+            }
           }
-        }
-        const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
-        const currentParent = parentOf(current.anchorIndex);
-        if (foundTarget !== null && foundTarget !== currentParent) {
-          reparentTargetIndex = foundTarget;
+          const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
+          const currentParent = parentOf(current.anchorIndex);
+          if (foundTarget !== null && foundTarget !== currentParent) {
+            reparentTargetIndex = foundTarget;
+          } else {
+            reparentTargetIndex = null;
+          }
         } else {
           reparentTargetIndex = null;
         }
@@ -1111,6 +1442,14 @@ function onSvgMouseMove(event: MouseEvent) {
       };
       return;
     }
+    case "connecting": {
+      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+      interaction = {
+        ...current,
+        currentPoint: svgCoords,
+      };
+      return;
+    }
     case "marquee": {
       const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
       interaction = { ...current, x: svgCoords.x, y: svgCoords.y };
@@ -1123,6 +1462,20 @@ function onSvgMouseMove(event: MouseEvent) {
 
 function onSvgMouseUp() {
   const current = interaction;
+  if (current.type === "connecting") {
+    const target = findHoveredTarget(
+      current.currentPoint,
+      current.sourceComponentIndex,
+    );
+    if (target) {
+      void handleCreateConnection(
+        current.sourceComponentIndex,
+        current.sourcePortLabel,
+        target.compIndex,
+        target.portLabel,
+      ).catch(reportDiagramError);
+    }
+  }
   if (current.type === "dragging") {
     if (reparentTargetIndex !== null) {
       const srcKey = componentKey(current.anchorIndex);
@@ -1445,6 +1798,8 @@ let currentActivity = $derived.by((): string | null => {
   switch (interaction.type) {
     case "dragging":
       return "Dragging";
+    case "connecting":
+      return "Connecting";
     case "resizing":
       return "Resizing";
     case "marquee": {
@@ -1521,50 +1876,19 @@ $effect(() => {
         Drag any of them to move the whole selection, or drag a handle to
         resize the whole selection proportionally.
       </p>
-    {:else if selectedComponent}
-      <div class="font-semibold truncate" title={selectedComponent.label}>
-        {selectedComponent.label}
-      </div>
-      {#if selectedComponent.description}
-        <p class="text-sm text-base-content/60 mt-1">
-          {selectedComponent.description}
-        </p>
-      {/if}
-
-      <div class="divider my-3"></div>
-
-      <div class="text-xs font-semibold text-base-content/70 uppercase tracking-wide mb-2">
-        Text alignment
-      </div>
-      <div class="join w-full">
-        <button
-          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
-            'center'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => setSelectedTextAlign("center")}
-        >
-          Center
-        </button>
-        <button
-          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
-            'top-center'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => setSelectedTextAlign("top-center")}
-        >
-          Top
-        </button>
-        <button
-          class="btn btn-xs join-item flex-1 {selectedBox?.textAlign ===
-            'top-left'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => setSelectedTextAlign("top-left")}
-        >
-          Top-left
-        </button>
-      </div>
+    {:else if selectedKey && selectedComponentData}
+      <NodeInspector
+        componentKey={selectedKey}
+        component={selectedComponentData}
+        textAlign={selectedBox?.textAlign ?? DEFAULT_TEXT_ALIGN}
+        onupdate={(patch) =>
+          void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}
+        onrename={(newLabel) =>
+          void handleRenameSelectedComponent(newLabel).catch(reportDiagramError)}
+        onsettextalign={(align) => setSelectedTextAlign(align)}
+        ondelete={() =>
+          void handleDeleteSelectedComponent().catch(reportDiagramError)}
+      />
     {:else}
       <p class="text-base-content/50 text-sm">
         Select a component on the canvas to edit its properties.
@@ -1711,9 +2035,15 @@ $effect(() => {
           {@const highlighted = interaction.type === "marquee"
             ? marqueeCandidates.has(index)
             : selected.has(index)}
+          {@const compKey = componentKey(index)}
+          {@const compData = docStore.findComponent(compKey)}
+          {@const portPositions = compData && compData.ports.length > 0
+            ? computePortPositions(width, height, compData.ports)
+            : []}
           <g
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
+            ondblclick={(e) => onNodeDblClick(e, index)}
             style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
           >
             <rect
@@ -1751,6 +2081,69 @@ $effect(() => {
             >
               {label}
             </text>
+
+            <!-- Port handles (visible when selected or actively dragging a connection) -->
+            {#if selected.has(index) || interaction.type === "connecting"}
+              {#if portPositions.length > 0}
+                {#each portPositions as port (port.label)}
+                  {@const portFill = port.role === "provider"
+                    ? "var(--color-success)"
+                    : port.role === "consumer"
+                    ? "var(--color-warning)"
+                    : "var(--color-info)"}
+                  <g transform="translate({port.x}, {port.y})">
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <circle
+                      r="8"
+                      fill="transparent"
+                      class="cursor-crosshair"
+                      onmousedown={(e) =>
+                        onPortMouseDown(e, index, port.label, {
+                          x: x + port.x,
+                          y: y + port.y,
+                        })}
+                    >
+                      <title
+                      >{port.label} ({port.role}, {port.protocol ||
+                          "untyped"})</title>
+                    </circle>
+                    <circle
+                      r="4"
+                      fill={portFill}
+                      stroke="var(--color-base-100)"
+                      stroke-width="1.5"
+                      style="pointer-events: none"
+                    />
+                  </g>
+                {/each}
+              {:else}
+                <!-- Generic connection handle for component with no ports -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <g transform="translate({width}, {height / 2})">
+                  <circle
+                    r="8"
+                    fill="transparent"
+                    class="cursor-crosshair"
+                    onmousedown={(e) =>
+                      onPortMouseDown(e, index, null, {
+                        x: x + width,
+                        y: y + height / 2,
+                      })}
+                  >
+                    <title>Drag to connect component</title>
+                  </circle>
+                  <circle
+                    r="3.5"
+                    fill="var(--color-base-content)"
+                    fill-opacity="0.5"
+                    stroke="var(--color-base-100)"
+                    stroke-width="1"
+                    style="pointer-events: none"
+                  />
+                </g>
+              {/if}
+            {/if}
+
             {#if selected.has(index)}
               <!--
                 Only the outer (bottom-right) corner is rounded, matching
@@ -1821,6 +2214,25 @@ $effect(() => {
           </text>
         {/each}
 
+        {#if interaction.type === "connecting"}
+          <path
+            d={elbowPath(
+              interaction.sourcePoint.x,
+              interaction.sourcePoint.y,
+              interaction.currentPoint.x,
+              interaction.currentPoint.y,
+              "horizontal",
+            )}
+            fill="none"
+            stroke="var(--color-primary)"
+            stroke-width="2"
+            stroke-dasharray="4 4"
+            marker-end="url(#arrow)"
+            class="animate-pulse"
+            style="pointer-events: none"
+          />
+        {/if}
+
         {#if marqueeBox}
           <rect
             x={marqueeBox.x}
@@ -1836,6 +2248,41 @@ $effect(() => {
         {/if}
       </svg>
 
+      {#if !model && output.error_count() > 0}
+        <div
+          class="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+        >
+          <div
+            class="card bg-base-100/95 border border-error/50 shadow-2xl p-6 text-center max-w-md pointer-events-auto backdrop-blur-xs"
+          >
+            <div class="text-error text-3xl mb-2">⚠️</div>
+            <h3 class="font-bold text-lg text-error mb-1">
+              Model failed to compile
+            </h3>
+            <p class="text-sm text-base-content/70 mb-3">
+              {output.error_count()} error{output.error_count() > 1
+                ? "s"
+                : ""} detected in the system model. Check the code in the editor!
+            </p>
+            {#if firstError}
+              <div
+                class="bg-base-200 p-2.5 rounded text-xs font-mono text-left text-error/90 mb-4 border border-error/20 truncate"
+                title={firstError.message}
+              >
+                <span class="font-bold">[{firstError.code}]</span>
+                {firstError.message}
+              </div>
+            {/if}
+            <a
+              href={resolve("/projects/[id]/editor", { id: data.projectId })}
+              class="btn btn-sm btn-error"
+            >
+              Open Editor to Fix
+            </a>
+          </div>
+        </div>
+      {/if}
+
       <DiagramToolbar
         bind:snapEnabled
         {snapActive}
@@ -1847,8 +2294,7 @@ $effect(() => {
         onzoomtofill={zoomToFill}
         onresetview={() => reset_view(editor_state)}
         onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
-        onaddcomponent={() =>
-          void handleAddComponent().catch(reportDiagramError)}
+        onaddcomponent={() => openCreateComponentModal()}
       />
 
       <div
@@ -1958,3 +2404,12 @@ $effect(() => {
     </ul>
   </aside>
 </div>
+
+<CreateComponentModal
+  isOpen={isCreateModalOpen}
+  {availableParents}
+  defaultParentKey={createModalDefaultParent}
+  initialPosition={createModalPosition}
+  oncreate={(data) => void handleModalCreateComponent(data).catch(reportDiagramError)}
+  onclose={() => (isCreateModalOpen = false)}
+/>

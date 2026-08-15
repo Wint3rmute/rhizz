@@ -63,11 +63,10 @@ let {
     </select>
   </div>
   {#if onaddsystem || onaddcomponent}
-    <div class="join">
       {#if onaddsystem}
         <button
           onclick={onaddsystem}
-          class="btn btn-sm btn-primary join-item"
+          class="btn btn-ghost btn-sm"
           title="Add a new system to the model"
         >
           + System
@@ -76,13 +75,12 @@ let {
       {#if onaddcomponent}
         <button
           onclick={onaddcomponent}
-          class="btn btn-sm btn-primary join-item"
+          class="btn btn-ghost btn-sm"
           title="Add a new component to the model"
         >
           + Component
         </button>
       {/if}
-    </div>
   {/if}
   <button
     onclick={onautolayout}

@@ -6,8 +6,10 @@ import {
   boxContains,
   clampResizeWithin,
   clampWithin,
+  computePortPositions,
   depthOf,
   elbowPath,
+  findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
   TEXT_ALIGN_PADDING,
@@ -372,5 +374,80 @@ describe("findReparentTarget", () => {
   it("returns null when center is outside all containers", () => {
     const dragged: Box = { x: 400, y: 400, width: 50, height: 50 };
     expect(findReparentTarget(dragged, candidates)).toBeNull();
+  });
+});
+
+describe("computePortPositions", () => {
+  it("computes positions for consumer on left, provider on right, peer on bottom", () => {
+    const ports = [
+      { label: "in", role: "consumer" as const, protocol: "spi" },
+      { label: "out", role: "provider" as const, protocol: "spi" },
+      { label: "bus", role: "peer" as const, protocol: "can" },
+    ];
+
+    const positions = computePortPositions(120, 80, ports);
+    expect(positions).toHaveLength(3);
+
+    const consumer = positions.find((p) => p.label === "in");
+    expect(consumer?.x).toBe(0);
+    expect(consumer?.y).toBe(40);
+
+    const provider = positions.find((p) => p.label === "out");
+    expect(provider?.x).toBe(120);
+    expect(provider?.y).toBe(40);
+
+    const peer = positions.find((p) => p.label === "bus");
+    expect(peer?.x).toBe(60);
+    expect(peer?.y).toBe(80);
+  });
+});
+
+describe("findConnectTarget", () => {
+  const parentBox: Box = { x: 0, y: 0, width: 400, height: 400 };
+  const child1Box: Box = { x: 20, y: 50, width: 100, height: 80 };
+  const child2Box: Box = { x: 200, y: 50, width: 100, height: 80 };
+
+  const candidates = [
+    {
+      index: 0, // Parent
+      box: parentBox,
+      depth: 0,
+      ports: [],
+    },
+    {
+      index: 1, // Child 1 (Source)
+      box: child1Box,
+      depth: 1,
+      ports: [{ label: "out", x: 100, y: 40 }],
+    },
+    {
+      index: 2, // Child 2 (Target)
+      box: child2Box,
+      depth: 1,
+      ports: [{ label: "in", x: 0, y: 40 }],
+    },
+  ];
+
+  it("prioritizes child component over parent container when hovering inside child", () => {
+    // Point at (250, 90) is inside both Parent (index 0, depth 0) and Child 2 (index 2, depth 1)
+    const target = findConnectTarget({ x: 250, y: 90 }, 1, candidates);
+    expect(target).toEqual({ compIndex: 2, portLabel: null });
+  });
+
+  it("snaps to port when hovering near port handle of child", () => {
+    // Child 2 port "in" is at world (200 + 0, 50 + 40) = (200, 90)
+    const target = findConnectTarget({ x: 205, y: 92 }, 1, candidates);
+    expect(target).toEqual({ compIndex: 2, portLabel: "in" });
+  });
+
+  it("targets parent only when hovering outside all children", () => {
+    // Point at (350, 350) is inside Parent but outside both children
+    const target = findConnectTarget({ x: 350, y: 350 }, 1, candidates);
+    expect(target).toEqual({ compIndex: 0, portLabel: null });
+  });
+
+  it("returns null when hovering outside all nodes", () => {
+    const target = findConnectTarget({ x: 500, y: 500 }, 1, candidates);
+    expect(target).toBeNull();
   });
 });

@@ -26,6 +26,7 @@
               pkgs.wasm-pack
               pkgs.deno
               pkgs.lld
+              pkgs.playwright
             ];
           };
         });

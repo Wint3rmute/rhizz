@@ -1,6 +1,5 @@
 <script lang="ts">
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import ModelComponentsOutline from "../../../../components/ModelComponentsOutline.svelte";
 import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
@@ -46,6 +45,7 @@ $effect(() => {
 let content = $state("");
 let loadedPath: string | null = null;
 let lastWrittenContent = "";
+let fileLoaded = $state(false);
 
 // Loads the selected file's content into the editor whenever the
 // selection changes identity. Missing files fall back to empty content
@@ -54,16 +54,21 @@ $effect(() => {
   const path = selectedPath;
   if (path === loadedPath) return;
   loadedPath = path;
+  fileLoaded = false;
   if (path === null) {
     content = "";
     lastWrittenContent = "";
+    fileLoaded = true;
     return;
   }
   fs.readFile(path)
     .catch(() => "")
     .then((loaded) => {
-      content = loaded;
-      lastWrittenContent = loaded;
+      if (loadedPath === path) {
+        content = loaded;
+        lastWrittenContent = loaded;
+        fileLoaded = true;
+      }
     });
 });
 
@@ -72,7 +77,7 @@ $effect(() => {
 // trip) means this only ever fires for an actual edit, never for the
 // load effect's own initial assignment above.
 $effect(() => {
-  if (loadedPath !== null && content !== lastWrittenContent) {
+  if (fileLoaded && loadedPath !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
     fs.writeFile(loadedPath, content);
   }
@@ -272,10 +277,6 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
     <aside
       class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
-      {#if model !== undefined}
-        <ModelComponentsOutline {model} />
-        <div class="divider"></div>
-      {/if}
       <CompilationDiagnosticsOutline {diagnostics} />
     </aside>
   </div>

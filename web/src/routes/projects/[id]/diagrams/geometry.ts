@@ -257,3 +257,137 @@ export function findReparentTarget(
 
   return bestIndex;
 }
+
+export interface PortGeometry {
+  label: string;
+  role: "provider" | "consumer" | "peer";
+  protocol?: string;
+  x: number;
+  y: number;
+}
+
+// Computes relative (x, y) coordinates for ports around a node's border.
+// - Consumers on the left border
+// - Providers on the right border
+// - Peers on the bottom border
+export function computePortPositions(
+  width: number,
+  height: number,
+  ports: {
+    label: string;
+    role: "provider" | "consumer" | "peer";
+    protocol?: string;
+  }[],
+): PortGeometry[] {
+  const providers = ports.filter((p) => p.role === "provider");
+  const consumers = ports.filter((p) => p.role === "consumer");
+  const peers = ports.filter(
+    (p) => p.role !== "provider" && p.role !== "consumer",
+  );
+
+  const result: PortGeometry[] = [];
+
+  consumers.forEach((p, i) => {
+    result.push({
+      ...p,
+      x: 0,
+      y: ((i + 1) * height) / (consumers.length + 1),
+    });
+  });
+
+  providers.forEach((p, i) => {
+    result.push({
+      ...p,
+      x: width,
+      y: ((i + 1) * height) / (providers.length + 1),
+    });
+  });
+
+  peers.forEach((p, i) => {
+    result.push({
+      ...p,
+      x: ((i + 1) * width) / (peers.length + 1),
+      y: height,
+    });
+  });
+
+  return result;
+}
+
+export interface ConnectTargetCandidate {
+  index: number;
+  box: Box;
+  depth: number;
+  ports: { label: string; x: number; y: number }[];
+}
+
+// Determines the target component and optional port under the cursor when dropping a connection.
+// Prioritizes specific port handles first, followed by the deepest (topmost nested) component box.
+export function findConnectTarget(
+  point: { x: number; y: number },
+  sourceIndex: number,
+  candidates: ConnectTargetCandidate[],
+  portSnapRadius = 15,
+): { compIndex: number; portLabel: string | null } | null {
+  // Pass 1: Check if cursor is directly over a specific port
+  let bestPortHit: {
+    compIndex: number;
+    portLabel: string;
+    distance: number;
+    depth: number;
+  } | null = null;
+
+  for (const candidate of candidates) {
+    if (candidate.index === sourceIndex) continue;
+    for (const port of candidate.ports) {
+      const worldX = candidate.box.x + port.x;
+      const worldY = candidate.box.y + port.y;
+      const dist = Math.hypot(point.x - worldX, point.y - worldY);
+      if (dist <= portSnapRadius) {
+        if (
+          !bestPortHit ||
+          dist < bestPortHit.distance ||
+          candidate.depth > bestPortHit.depth
+        ) {
+          bestPortHit = {
+            compIndex: candidate.index,
+            portLabel: port.label,
+            distance: dist,
+            depth: candidate.depth,
+          };
+        }
+      }
+    }
+  }
+
+  if (bestPortHit) {
+    return {
+      compIndex: bestPortHit.compIndex,
+      portLabel: bestPortHit.portLabel,
+    };
+  }
+
+  // Pass 2: Check which component box contains the point, picking the deepest (topmost) component
+  let bestBoxHit: { compIndex: number; depth: number } | null = null;
+
+  for (const candidate of candidates) {
+    if (candidate.index === sourceIndex) continue;
+    const { box, depth, index } = candidate;
+    if (
+      point.x >= box.x &&
+      point.x <= box.x + box.width &&
+      point.y >= box.y &&
+      point.y <= box.y + box.height
+    ) {
+      if (!bestBoxHit || depth > bestBoxHit.depth) {
+        bestBoxHit = { compIndex: index, depth };
+      }
+    }
+  }
+
+  if (bestBoxHit) {
+    return { compIndex: bestBoxHit.compIndex, portLabel: null };
+  }
+
+  return null;
+}

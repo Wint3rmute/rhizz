@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 73 — Interactive visual wiring (drag-to-connect ports & connections)
+
+- Implemented interactive visual connection drag-and-drop between ports and components on the diagram canvas.
+- Features:
+  - Added pure `computePortPositions` in `geometry.ts` to calculate border coordinates for consumer (left), provider (right), and peer (bottom) ports, with unit tests in `geometry.test.ts`.
+  - Rendered color-coded interactive port handles on component boundaries (green for provider, orange for consumer, blue for peer) with hit targets and tooltips.
+  - Added generic connect anchor handle for components without declared ports.
+  - Added `connecting` interaction state with live dashed preview line and arrow tracking the mouse cursor in real time.
+  - Target detection (`findHoveredTarget`): detects drop onto specific ports or component boxes, validates sibling scope, prompts for connection label, creates the connection in `DocumentStore`, and updates the VFS (`main.hcl`).
+  - Emits real-time compilation and compiler diagnostic feedback (e.g. role incompatibility, protocol mismatches) on drop.
+- Validated with `just test` (Rust + Vitest 262/262 pass), `just lint`, `just format`, `just build`, and `deno task --cwd web check`.
+
+---
+
+## Task 72 — Interactive property and message inspector panel
+
+- Created `web/src/routes/projects/[id]/diagrams/NodeInspector.svelte` allowing users to configure component properties, ports, messages, and fields in the GUI.
+- Features:
+  - Component properties: edit name (with canvas position key preservation), description, comma-separated tags, and atomic `leaf` status.
+  - Text alignment controls: `center`, `top-center`, `top-left`.
+  - Port management: add/remove ports, configure port label, protocol, and role (`provider`, `consumer`, `peer`).
+  - Message & field schemas: add/remove messages inside ports, configure typed fields (`type`, `unit`, `required`), and delete fields.
+  - Live persistence & feedback: updates `DocumentStore`, writes to `main.hcl`, and updates completion score and error/warning badges in real time.
+- Wired live completion score and diagnostics across the app via `ProjectState.svelte` and displayed the score badge in `Navbar.svelte`.
+- Added Storybook story `NodeInspector.stories.ts`.
+- Validated with `just test`, `just lint`, `just format`, `just build`, and `deno task --cwd web check`.
+
+---
+
 ## Task 71 — Visual node creation and hierarchy editing on the canvas
 
 - Added visual creation actions to the diagram canvas toolbar (`+ System` and `+ Component`).

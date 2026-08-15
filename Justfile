@@ -2,8 +2,8 @@
 
 format:
     @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
-        nix develop --command sh -lc 'cargo fmt --all' && \
-        nix develop --command sh -lc 'cd web && deno fmt'; \
+        nix develop --command cargo fmt --all && \
+        nix develop --command deno fmt web; \
     else \
         cargo fmt --all && \
         (cd web && deno fmt); \
@@ -12,7 +12,7 @@ format:
 lint:
     @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
         nix develop --command cargo clippy --all-targets --all-features -- -D warnings && \
-        nix develop --command sh -lc 'cd web && deno run lint'; \
+        nix develop --command sh -lc 'cd web && deno run lint && deno task check'; \
     else \
         cargo clippy --all-targets --all-features -- -D warnings && \
         (cd web && deno lint); \
