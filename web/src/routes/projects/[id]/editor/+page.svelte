@@ -1,6 +1,5 @@
 <script lang="ts">
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import ModelComponentsOutline from "../../../../components/ModelComponentsOutline.svelte";
 import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
@@ -278,10 +277,6 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
     <aside
       class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
     >
-      {#if model !== undefined}
-        <ModelComponentsOutline {model} />
-        <div class="divider"></div>
-      {/if}
       <CompilationDiagnosticsOutline {diagnostics} />
     </aside>
   </div>

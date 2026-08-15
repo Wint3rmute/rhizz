@@ -52,6 +52,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {},
+  globals: {
+    viewport: { value: "phone" },
+  },
 };
 
 export const AtomicLeaf: Story = {
