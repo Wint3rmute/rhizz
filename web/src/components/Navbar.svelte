@@ -47,10 +47,17 @@ let effWarningCount = $derived(
       href={resolve("/projects/[id]/diagrams", { id: activeProjectId })}
       class="btn btn-ghost"
     >Diagrams</a>
+    <a href={resolve("/diagrams-viewer", {})} class="btn btn-ghost">
+      Diagram Viewer
+    </a>
     <a
       href={resolve("/projects/[id]/overview", { id: activeProjectId })}
       class="btn btn-ghost"
     >System Overview</a>
+  {:else}
+    <a href={resolve("/diagrams-viewer", {})} class="btn btn-ghost">
+      Diagram Viewer
+    </a>
   {/if}
 
   {#if activeProject}

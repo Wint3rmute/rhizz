@@ -5,7 +5,10 @@ import {
   createProjectWithMainFile,
   projectStore,
 } from "../../ProjectState.svelte";
-import { EXAMPLE_SYSTEM_HCL } from "../../example_system";
+import {
+  EXAMPLE_SYSTEM_HCL,
+  seedExampleProjectDiagrams,
+} from "../../example_system";
 import type { Project } from "../../vfs/types";
 
 let projects = $state<Project[]>([]);
@@ -43,8 +46,9 @@ async function createFromExample() {
   const name = prompt("Project name?", "Example project");
   if (!name) return;
   const project = await createProjectWithMainFile(name, EXAMPLE_SYSTEM_HCL);
-  await refresh();
-  await openProject(project);
+await seedExampleProjectDiagrams(project.id);
+await refresh();
+await openProject(project);
 }
 
 async function renameProject(project: Project) {

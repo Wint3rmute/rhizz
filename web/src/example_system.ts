@@ -1,3 +1,8 @@
+import { projectStore } from "./ProjectState.svelte";
+import { openProjectFs } from "./vfs/fs";
+import { DIAGRAM_LAYOUT_DIR, writeDiagramLayoutFile } from "./routes/projects/[id]/diagrams/persistence";
+import type { DiagramLayout } from "./routes/projects/[id]/diagrams/persistence";
+
 // Mirrors examples/single-file/project.hcl — used by the "help" button on
 // the /editor route to let users try the app with a working example.
 export const EXAMPLE_SYSTEM_HCL = `project {
@@ -183,3 +188,83 @@ view "cloud-path" {
   }
 }
 `;
+
+export const EXAMPLE_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
+  "overview.json": {
+    checked: {
+      "home-monitor/sensor": { x: 40, y: 60, width: 150, height: 90 },
+      "home-monitor/controller": {
+        x: 260,
+        y: 40,
+        width: 260,
+        height: 240,
+        textAlign: "top-left",
+      },
+      "home-monitor/controller/mcu": {
+        x: 310,
+        y: 95,
+        width: 150,
+        height: 90,
+      },
+      "home-monitor/controller/power-supply": {
+        x: 300,
+        y: 205,
+        width: 180,
+        height: 90,
+      },
+      "home-monitor/broker": { x: 620, y: 70, width: 180, height: 100 },
+    },
+    savedLayout: {
+      "home-monitor/sensor": { x: 40, y: 60, width: 150, height: 90 },
+      "home-monitor/controller": {
+        x: 260,
+        y: 40,
+        width: 260,
+        height: 240,
+        textAlign: "top-left",
+      },
+      "home-monitor/controller/mcu": {
+        x: 310,
+        y: 95,
+        width: 150,
+        height: 90,
+      },
+      "home-monitor/controller/power-supply": {
+        x: 300,
+        y: 205,
+        width: 180,
+        height: 90,
+      },
+      "home-monitor/broker": { x: 620, y: 70, width: 180, height: 100 },
+    },
+  },
+  "cloud-path.json": {
+    checked: {
+      "home-monitor/sensor": { x: 50, y: 80, width: 150, height: 90 },
+      "home-monitor/controller": {
+        x: 260,
+        y: 40,
+        width: 200,
+        height: 170,
+      },
+      "home-monitor/broker": { x: 560, y: 80, width: 180, height: 100 },
+    },
+    savedLayout: {
+      "home-monitor/sensor": { x: 50, y: 80, width: 150, height: 90 },
+      "home-monitor/controller": {
+        x: 260,
+        y: 40,
+        width: 200,
+        height: 170,
+      },
+      "home-monitor/broker": { x: 560, y: 80, width: 180, height: 100 },
+    },
+  },
+};
+
+export async function seedExampleProjectDiagrams(projectId: string): Promise<void> {
+  const fs = openProjectFs(projectStore, projectId);
+  for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
+    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${name}`, layout);
+  }
+}
