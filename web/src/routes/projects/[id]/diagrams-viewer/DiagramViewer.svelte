@@ -219,8 +219,8 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
     <aside
       class="w-full shrink-0 bg-base-100 text-base-content border-b border-base-300 p-2 md:w-64 md:border-b-0 md:border-r md:p-4 md:overflow-y-auto flex flex-col"
     >
-      <!-- Mobile: horizontal diagrams selection -->
-      <div class="flex md:hidden items-center gap-2 overflow-x-auto py-1">
+      <!-- Mobile: horizontal scrollable diagrams selection -->
+      <div class="flex md:hidden items-center gap-2 overflow-x-auto py-1 scroll-smooth">
         <span
           class="font-semibold text-xs text-base-content/70 uppercase tracking-wide shrink-0"
         >
@@ -229,11 +229,11 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
         {#if diagramEntries.length === 0}
           <span class="text-base-content/50 text-xs">No diagrams</span>
         {:else}
-          <div class="flex flex-row gap-1.5 shrink-0">
+          <div class="flex flex-row gap-1.5 shrink-0 items-center">
             {#each diagramEntries as entry (entry.path)}
               <button
                 type="button"
-                class="btn btn-xs {selectedDiagramPath === entry.path ? 'btn-primary' : 'btn-ghost'}"
+                class="btn btn-xs shrink-0 whitespace-nowrap {selectedDiagramPath === entry.path ? 'btn-primary' : 'btn-ghost'}"
                 onclick={() => (selectedDiagramPath = entry.path)}
               >
                 {entry.name}

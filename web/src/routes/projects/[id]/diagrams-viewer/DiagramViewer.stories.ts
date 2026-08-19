@@ -29,6 +29,35 @@ const seededProject = await (async () => {
   return created;
 })();
 
+const manyDiagramsProject = await (async () => {
+  const existing = await projectStore.listProjects();
+  const match = existing.find(
+    (project) => project.name === "Many diagrams story",
+  );
+  if (match) return match;
+  const created = await createProjectWithMainFile(
+    "Many diagrams story",
+    EXAMPLE_SYSTEM_HCL,
+  );
+  const fs = openProjectFs(projectStore, created.id);
+  const sampleLayout = EXAMPLE_SYSTEM_DIAGRAMS["overview.json"];
+  const diagramNames = [
+    "overview.json",
+    "cloud-path.json",
+    "sensor-network.json",
+    "power-distribution.json",
+    "data-pipeline.json",
+  ];
+  for (const name of diagramNames) {
+    await writeDiagramLayoutFile(
+      fs,
+      `${DIAGRAM_LAYOUT_DIR}/${name}`,
+      sampleLayout,
+    );
+  }
+  return created;
+})();
+
 const meta = {
   title: "Pages/DiagramViewer",
   component: DiagramViewer,
@@ -56,5 +85,17 @@ export const Mobile: Story = {
   },
   parameters: {
     viewport: { defaultViewport: "mobile1" },
+  },
+};
+
+export const MobileManyDiagrams: Story = {
+  globals: {
+    viewport: { value: "mobile1" },
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile1" },
+  },
+  args: {
+    projectId: manyDiagramsProject.id,
   },
 };
