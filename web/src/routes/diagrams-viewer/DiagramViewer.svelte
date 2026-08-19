@@ -7,7 +7,6 @@
   import { readProjectSources, type Source } from "../../vfs/compile";
   import { type Dirent, openProjectFs } from "../../vfs/fs";
   import { buildPathTree, type PathTreeNode } from "../../vfs/pathTree";
-  import type { Project } from "../../vfs/types";
   import DiagramStaticView, {
     type DiagramStaticBox,
   } from "../projects/[id]/diagrams/DiagramStaticView.svelte";
@@ -24,18 +23,11 @@
     projectId?: string | null;
   } = $props();
 
-  let projects = $state<Project[]>([]);
-  let selectedProjectId = $state<string | null>(getCurrentProjectId());
+  let effectiveProjectId = $derived(projectId ?? getCurrentProjectId());
   let diagramEntries = $state<Dirent[]>([]);
   let selectedDiagramPath = $state<string | null>(null);
   let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
   let sources = $state<Source[]>([]);
-
-  $effect(() => {
-    if (projectId !== null && projectId !== undefined) {
-      selectedProjectId = projectId;
-    }
-  });
 
   const collapsedPaths = new SvelteSet<string>();
 
@@ -45,42 +37,15 @@
   }
 
   $effect(() => {
-    let cancelled = false;
-    projectStore.listProjects().then((projectList) => {
-      if (cancelled) return;
-      const sorted = projectList.toSorted((a, b) =>
-        b.updatedAt.localeCompare(a.updatedAt)
-      );
-      projects = sorted;
-
-      if (projectId !== null && projectId !== undefined) {
-        selectedProjectId = projectId;
-        return;
-      }
-
-      if (
-        selectedProjectId === null ||
-        !sorted.some((project) => project.id === selectedProjectId)
-      ) {
-        selectedProjectId = sorted[0]?.id ?? null;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  });
-
-  $effect(() => {
-    const currentProjectId = selectedProjectId;
-    if (!currentProjectId) {
+    const id = effectiveProjectId;
+    if (!id) {
       diagramEntries = [];
       selectedDiagramPath = null;
       return;
     }
 
     let cancelled = false;
-    const fs = openProjectFs(projectStore, currentProjectId);
+    const fs = openProjectFs(projectStore, id);
     fs.readdir(DIAGRAM_LAYOUT_DIR)
       .then((entries) => {
         if (cancelled) return;
@@ -107,17 +72,17 @@
   });
 
   $effect(() => {
-    const currentProjectId = selectedProjectId;
-    const currentDiagramPath = selectedDiagramPath;
+    const id = effectiveProjectId;
+    const path = selectedDiagramPath;
 
-    if (!currentProjectId || !currentDiagramPath) {
+    if (!id || !path) {
       selectedLayout = emptyDiagramLayout();
       return;
     }
 
     let cancelled = false;
-    const fs = openProjectFs(projectStore, currentProjectId);
-    readDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${currentDiagramPath}`)
+    const fs = openProjectFs(projectStore, id);
+    readDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${path}`)
       .then((layout) => {
         if (cancelled) return;
         selectedLayout = layout;
@@ -133,14 +98,14 @@
   });
 
   $effect(() => {
-    const currentProjectId = selectedProjectId;
-    if (!currentProjectId) {
+    const id = effectiveProjectId;
+    if (!id) {
       sources = [];
       return;
     }
 
     let cancelled = false;
-    const fs = openProjectFs(projectStore, currentProjectId);
+    const fs = openProjectFs(projectStore, id);
     readProjectSources(fs)
       .then((loadedSources) => {
         if (cancelled) return;
@@ -258,14 +223,13 @@
 
 <div class="flex-1 w-full overflow-y-auto bg-base-100 text-base-content">
   <div class="w-full px-2 py-2 sm:px-4 sm:py-4">
-    {#if projects.length === 0}
+    {#if !effectiveProjectId}
       <div class="card bg-base-200 shadow-sm">
         <div class="card-body items-center text-center gap-3 py-10">
           <div class="text-4xl">🗂️</div>
-          <h2 class="card-title">No projects yet</h2>
+          <h2 class="card-title">No project selected</h2>
           <p class="text-base-content/60 text-sm">
-            Create a project from the example system or from the Projects page to
-            browse its diagrams.
+            Select or create a project from the Projects page to browse its diagrams.
           </p>
           <a href={resolve("/projects", {})} class="btn btn-primary btn-sm">
             Open Projects
@@ -274,22 +238,6 @@
       </div>
     {:else}
       <div class="flex flex-col gap-2">
-        <div class="card bg-base-200 shadow-sm">
-          <div class="card-body gap-3 p-3 sm:p-4">
-            <label class="flex flex-col gap-1 text-sm">
-              <span class="text-base-content/70">Project</span>
-              <select
-                class="select select-bordered select-sm w-full"
-                bind:value={selectedProjectId}
-              >
-                {#each projects as project (project.id)}
-                  <option value={project.id}>{project.name}</option>
-                {/each}
-              </select>
-            </label>
-          </div>
-        </div>
-
         {#if tree.length === 0}
           <div class="card bg-base-200 shadow-sm">
             <div class="card-body items-center text-center py-10">
