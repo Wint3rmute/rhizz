@@ -153,8 +153,15 @@ $effect(() => {
   };
 });
 
-let output = $derived.by(() => compile_system(sources));
-let model = $derived(output.model());
+let output = $derived.by(() => {
+  if (sources.length === 0) return null;
+  try {
+    return compile_system(sources);
+  } catch {
+    return null;
+  }
+});
+let model = $derived(output ? output.model() : undefined);
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import init from "rhizz";
 import {
   createProjectWithMainFile,
   projectStore,
@@ -14,6 +15,9 @@ import {
   writeDiagramLayoutFile,
 } from "../diagrams/persistence";
 import DiagramViewer from "./DiagramViewer.svelte";
+
+// Initialize WASM module before evaluating story models
+await init();
 
 const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.json"];
 const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.json"];
@@ -73,6 +77,7 @@ export const Desktop: Story = {
   },
   loaders: [
     async () => {
+      await init();
       const fs = openProjectFs(projectStore, seededProject.id);
       for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
         await writeDiagramLayoutFile(
@@ -95,6 +100,7 @@ export const Mobile: Story = {
   },
   loaders: [
     async () => {
+      await init();
       const fs = openProjectFs(projectStore, seededProject.id);
       for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
         await writeDiagramLayoutFile(
@@ -120,6 +126,7 @@ export const MobileManyDiagrams: Story = {
   },
   loaders: [
     async () => {
+      await init();
       const fs = openProjectFs(projectStore, manyDiagramsProject.id);
       for (const [name, layout] of Object.entries(manyDiagramsMap)) {
         await writeDiagramLayoutFile(
