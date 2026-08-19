@@ -2,20 +2,22 @@
   import type { ComponentJS, SystemJS } from "rhizz";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { resolve } from "$app/paths";
-  import { getCurrentProjectId, projectStore } from "../../ProjectState.svelte";
-  import { compile_system } from "../../rhizz_wasm_wrapper";
-  import { readProjectSources, type Source } from "../../vfs/compile";
-  import { type Dirent, openProjectFs } from "../../vfs/fs";
-  import { buildPathTree, type PathTreeNode } from "../../vfs/pathTree";
+  import { page } from "$app/state";
+  import { replaceState } from "$app/navigation";
+  import { getCurrentProjectId, projectStore } from "../../../../ProjectState.svelte";
+  import { compile_system } from "../../../../rhizz_wasm_wrapper";
+  import { readProjectSources, type Source } from "../../../../vfs/compile";
+  import { type Dirent, openProjectFs } from "../../../../vfs/fs";
+  import { buildPathTree, type PathTreeNode } from "../../../../vfs/pathTree";
   import DiagramStaticView, {
     type DiagramStaticBox,
-  } from "../projects/[id]/diagrams/DiagramStaticView.svelte";
+  } from "../diagrams/DiagramStaticView.svelte";
   import {
     DIAGRAM_LAYOUT_DIR,
     emptyDiagramLayout,
     readDiagramLayoutFile,
     type DiagramLayout,
-  } from "../projects/[id]/diagrams/persistence";
+  } from "../diagrams/persistence";
 
   let {
     projectId = null,
@@ -36,6 +38,15 @@
     else collapsedPaths.add(path);
   }
 
+  function selectDiagram(path: string) {
+    selectedDiagramPath = path;
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("diagram", path);
+      replaceState(url.toString(), {});
+    }
+  }
+
   $effect(() => {
     const id = effectiveProjectId;
     if (!id) {
@@ -53,11 +64,25 @@
           entry.isFile() && entry.name.endsWith(".json")
         );
         diagramEntries = files;
-        if (
+
+        const urlParam = page.url.searchParams.get("diagram");
+        const matchingParam = urlParam && files.some((e) => e.path === urlParam)
+          ? urlParam
+          : null;
+
+        if (matchingParam) {
+          selectedDiagramPath = matchingParam;
+        } else if (
           selectedDiagramPath === null ||
           !files.some((entry) => entry.path === selectedDiagramPath)
         ) {
-          selectedDiagramPath = files[0]?.path ?? null;
+          const first = files[0]?.path ?? null;
+          selectedDiagramPath = first;
+          if (first && typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.set("diagram", first);
+            replaceState(url.toString(), {});
+          }
         }
       })
       .catch(() => {
@@ -208,7 +233,7 @@
         type="button"
         class="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-base-300"
         style="padding-left: {depth * 12}px"
-        onclick={() => (selectedDiagramPath = node.path)}
+        onclick={() => selectDiagram(node.path)}
       >
         <span class="text-base-content/60" aria-hidden="true">📄</span>
         <span

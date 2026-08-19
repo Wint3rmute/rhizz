@@ -2,16 +2,16 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import {
   createProjectWithMainFile,
   projectStore,
-} from "../../ProjectState.svelte";
+} from "../../../../ProjectState.svelte";
 import {
   EXAMPLE_SYSTEM_DIAGRAMS,
   EXAMPLE_SYSTEM_HCL,
-} from "../../example_system";
-import { openProjectFs } from "../../vfs/fs";
+} from "../../../../example_system";
+import { openProjectFs } from "../../../../vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,
   writeDiagramLayoutFile,
-} from "../projects/[id]/diagrams/persistence";
+} from "../diagrams/persistence";
 import DiagramViewer from "./DiagramViewer.svelte";
 
 const seededProject = await (async () => {
