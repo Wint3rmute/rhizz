@@ -31,9 +31,9 @@ build:
     @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
         nix develop --command cargo build --release && \
         nix develop --command wasm-pack build crates/rhizz-wasm --target web --release && \
-        (cd web && nix develop --command sh -lc 'deno run build'); \
+        nix develop --command sh -lc 'cd web && npx vite build'; \
     else \
         cargo build && \
         wasm-pack build crates/rhizz-wasm --target web && \
-        (cd web && deno run build); \
+        (cd web && npx vite build); \
     fi

@@ -46,9 +46,9 @@ async function createFromExample() {
   const name = prompt("Project name?", "Example project");
   if (!name) return;
   const project = await createProjectWithMainFile(name, EXAMPLE_SYSTEM_HCL);
-await seedExampleProjectDiagrams(project.id);
-await refresh();
-await openProject(project);
+  await seedExampleProjectDiagrams(project.id);
+  await refresh();
+  await openProject(project);
 }
 
 async function renameProject(project: Project) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import DiagramViewer from "./DiagramViewer.svelte";
+import DiagramViewer from "./DiagramViewer.svelte";
 </script>
 
 <DiagramViewer />

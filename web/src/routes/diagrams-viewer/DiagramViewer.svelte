@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { SvelteSet } from "svelte/reactivity";
+  import type { ComponentJS, SystemJS } from "rhizz";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { resolve } from "$app/paths";
   import { getCurrentProjectId, projectStore } from "../../ProjectState.svelte";
   import { compile_system } from "../../rhizz_wasm_wrapper";
@@ -12,6 +13,7 @@
   } from "../projects/[id]/diagrams/DiagramStaticView.svelte";
   import {
     DIAGRAM_LAYOUT_DIR,
+    emptyDiagramLayout,
     readDiagramLayoutFile,
     type DiagramLayout,
   } from "../projects/[id]/diagrams/persistence";
@@ -26,7 +28,7 @@
   let selectedProjectId = $state<string | null>(getCurrentProjectId());
   let diagramEntries = $state<Dirent[]>([]);
   let selectedDiagramPath = $state<string | null>(null);
-  let selectedLayout = $state<DiagramLayout>({ checked: {}, savedLayout: {} });
+  let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
   let sources = $state<Source[]>([]);
 
   $effect(() => {
@@ -43,7 +45,9 @@
   }
 
   $effect(() => {
+    let cancelled = false;
     projectStore.listProjects().then((projectList) => {
+      if (cancelled) return;
       const sorted = projectList.toSorted((a, b) =>
         b.updatedAt.localeCompare(a.updatedAt)
       );
@@ -61,18 +65,25 @@
         selectedProjectId = sorted[0]?.id ?? null;
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   $effect(() => {
-    if (!selectedProjectId) {
+    const currentProjectId = selectedProjectId;
+    if (!currentProjectId) {
       diagramEntries = [];
       selectedDiagramPath = null;
       return;
     }
 
-    const fs = openProjectFs(projectStore, selectedProjectId);
+    let cancelled = false;
+    const fs = openProjectFs(projectStore, currentProjectId);
     fs.readdir(DIAGRAM_LAYOUT_DIR)
       .then((entries) => {
+        if (cancelled) return;
         const files = entries.filter((entry) =>
           entry.isFile() && entry.name.endsWith(".json")
         );
@@ -85,41 +96,64 @@
         }
       })
       .catch(() => {
+        if (cancelled) return;
         diagramEntries = [];
         selectedDiagramPath = null;
       });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   $effect(() => {
-    if (!selectedProjectId || !selectedDiagramPath) {
-      selectedLayout = { checked: {}, savedLayout: {} };
+    const currentProjectId = selectedProjectId;
+    const currentDiagramPath = selectedDiagramPath;
+
+    if (!currentProjectId || !currentDiagramPath) {
+      selectedLayout = emptyDiagramLayout();
       return;
     }
 
-    const fs = openProjectFs(projectStore, selectedProjectId);
-    readDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${selectedDiagramPath}`)
+    let cancelled = false;
+    const fs = openProjectFs(projectStore, currentProjectId);
+    readDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${currentDiagramPath}`)
       .then((layout) => {
+        if (cancelled) return;
         selectedLayout = layout;
       })
       .catch(() => {
-        selectedLayout = { checked: {}, savedLayout: {} };
+        if (cancelled) return;
+        selectedLayout = emptyDiagramLayout();
       });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   $effect(() => {
-    if (!selectedProjectId) {
+    const currentProjectId = selectedProjectId;
+    if (!currentProjectId) {
       sources = [];
       return;
     }
 
-    const fs = openProjectFs(projectStore, selectedProjectId);
+    let cancelled = false;
+    const fs = openProjectFs(projectStore, currentProjectId);
     readProjectSources(fs)
       .then((loadedSources) => {
+        if (cancelled) return;
         sources = loadedSources;
       })
       .catch(() => {
+        if (cancelled) return;
         sources = [];
       });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   let output = $derived.by(() => compile_system(sources));
@@ -129,13 +163,13 @@
   let connections = $derived(model ? model.connections() : []);
 
   function componentKey(index: number): string {
-    const allComponents = components;
-    const allSystems = systems;
+    const allComponents: ComponentJS[] = components;
+    const allSystems: SystemJS[] = systems;
     const parts: string[] = [];
     let current: number | undefined = index;
 
     while (current !== undefined) {
-      const component = allComponents[current];
+      const component: ComponentJS | undefined = allComponents[current];
       if (!component) return `#${index}`;
       parts.unshift(component.label);
       if (component.parent_component_index !== undefined) {
@@ -153,7 +187,7 @@
   }
 
   let keyToIndex = $derived.by(() => {
-    const map = new Map<string, number>();
+    const map = new SvelteMap<string, number>();
     components.forEach((_: unknown, index: number) => {
       map.set(componentKey(index), index);
     });
@@ -167,19 +201,12 @@
     for (const [key, box] of Object.entries(selectedLayout.checked)) {
       const index = keyToIndex.get(key);
       if (index === undefined) continue;
-      const storedBox = box as {
-        x: number;
-        y: number;
-        width?: number;
-        height?: number;
-        textAlign?: "center" | "top-center" | "top-left";
-      };
       next[index] = {
-        x: storedBox.x,
-        y: storedBox.y,
-        width: storedBox.width ?? 100,
-        height: storedBox.height ?? 100,
-        textAlign: storedBox.textAlign ?? "center",
+        x: box.x,
+        y: box.y,
+        width: box.width ?? 100,
+        height: box.height ?? 100,
+        textAlign: box.textAlign ?? "center",
       };
     }
     return next;
@@ -188,18 +215,21 @@
 
 {#snippet renderTree(node: PathTreeNode, depth: number)}
   {#if node.isDirectory}
+    {@const isCollapsed = collapsedPaths.has(node.path)}
     <li>
       <button
+        type="button"
         class="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-base-300"
         style="padding-left: {depth * 12}px"
+        aria-expanded={!isCollapsed}
         onclick={() => toggleCollapsed(node.path)}
       >
-        <span class="w-4 text-xs text-base-content/60">
-          {collapsedPaths.has(node.path) ? "▸" : "▾"}
+        <span class="w-4 text-xs text-base-content/60" aria-hidden="true">
+          {isCollapsed ? "▸" : "▾"}
         </span>
         <span>{node.name}</span>
       </button>
-      {#if !collapsedPaths.has(node.path)}
+      {#if !isCollapsed}
         <ul>
           {#each node.children as child (child.path)}
             {@render renderTree(child, depth + 1)}
@@ -210,11 +240,12 @@
   {:else if node.name.endsWith(".json")}
     <li>
       <button
+        type="button"
         class="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-base-300"
         style="padding-left: {depth * 12}px"
         onclick={() => (selectedDiagramPath = node.path)}
       >
-        <span class="text-base-content/60">📄</span>
+        <span class="text-base-content/60" aria-hidden="true">📄</span>
         <span
           class={selectedDiagramPath === node.path ? "font-semibold text-primary" : ""}
         >

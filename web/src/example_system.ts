@@ -1,6 +1,9 @@
 import { projectStore } from "./ProjectState.svelte";
 import { openProjectFs } from "./vfs/fs";
-import { DIAGRAM_LAYOUT_DIR, writeDiagramLayoutFile } from "./routes/projects/[id]/diagrams/persistence";
+import {
+  DIAGRAM_LAYOUT_DIR,
+  writeDiagramLayoutFile,
+} from "./routes/projects/[id]/diagrams/persistence";
 import type { DiagramLayout } from "./routes/projects/[id]/diagrams/persistence";
 
 // Mirrors examples/single-file/project.hcl — used by the "help" button on
@@ -262,7 +265,9 @@ export const EXAMPLE_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
   },
 };
 
-export async function seedExampleProjectDiagrams(projectId: string): Promise<void> {
+export async function seedExampleProjectDiagrams(
+  projectId: string,
+): Promise<void> {
   const fs = openProjectFs(projectStore, projectId);
   for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
     await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${name}`, layout);
