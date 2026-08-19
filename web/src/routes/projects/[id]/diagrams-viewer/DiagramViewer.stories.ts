@@ -10,53 +10,47 @@ import {
 import { openProjectFs } from "../../../../vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,
+  type DiagramLayout,
   writeDiagramLayoutFile,
 } from "../diagrams/persistence";
 import DiagramViewer from "./DiagramViewer.svelte";
 
-const seededProject = await (async () => {
-  const existing = await projectStore.listProjects();
-  const match = existing.find((project) => project.name === "Viewer story");
-  if (match) return match;
-  const created = await createProjectWithMainFile(
-    "Viewer story",
-    EXAMPLE_SYSTEM_HCL,
-  );
-  const fs = openProjectFs(projectStore, created.id);
-  for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
-    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${name}`, layout);
-  }
-  return created;
-})();
+const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.json"];
+const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.json"];
 
-const manyDiagramsProject = await (async () => {
+const manyDiagramsMap: Record<string, DiagramLayout> = {
+  "overview.json": sampleOverview,
+  "cloud-path.json": sampleCloud,
+  "sensor-network.json": sampleOverview,
+  "power-distribution.json": sampleCloud,
+  "data-pipeline.json": sampleOverview,
+};
+
+async function ensureProjectWithDiagrams(
+  name: string,
+  diagrams: Record<string, DiagramLayout>,
+) {
   const existing = await projectStore.listProjects();
-  const match = existing.find(
-    (project) => project.name === "Many diagrams story",
-  );
-  if (match) return match;
-  const created = await createProjectWithMainFile(
-    "Many diagrams story",
-    EXAMPLE_SYSTEM_HCL,
-  );
-  const fs = openProjectFs(projectStore, created.id);
-  const sampleLayout = EXAMPLE_SYSTEM_DIAGRAMS["overview.json"];
-  const diagramNames = [
-    "overview.json",
-    "cloud-path.json",
-    "sensor-network.json",
-    "power-distribution.json",
-    "data-pipeline.json",
-  ];
-  for (const name of diagramNames) {
-    await writeDiagramLayoutFile(
-      fs,
-      `${DIAGRAM_LAYOUT_DIR}/${name}`,
-      sampleLayout,
-    );
+  let project = existing.find((p) => p.name === name);
+  if (!project) {
+    project = await createProjectWithMainFile(name, EXAMPLE_SYSTEM_HCL);
   }
-  return created;
-})();
+  const fs = openProjectFs(projectStore, project.id);
+  for (const [dName, layout] of Object.entries(diagrams)) {
+    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);
+  }
+  return project;
+}
+
+const seededProject = await ensureProjectWithDiagrams(
+  "Viewer story",
+  EXAMPLE_SYSTEM_DIAGRAMS,
+);
+
+const manyDiagramsProject = await ensureProjectWithDiagrams(
+  "Many diagrams story",
+  manyDiagramsMap,
+);
 
 const meta = {
   title: "Pages/DiagramViewer",
@@ -77,6 +71,19 @@ export const Desktop: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
+  loaders: [
+    async () => {
+      const fs = openProjectFs(projectStore, seededProject.id);
+      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
+        await writeDiagramLayoutFile(
+          fs,
+          `${DIAGRAM_LAYOUT_DIR}/${name}`,
+          layout,
+        );
+      }
+      return {};
+    },
+  ],
 };
 
 export const Mobile: Story = {
@@ -86,6 +93,19 @@ export const Mobile: Story = {
   parameters: {
     viewport: { defaultViewport: "mobile1" },
   },
+  loaders: [
+    async () => {
+      const fs = openProjectFs(projectStore, seededProject.id);
+      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
+        await writeDiagramLayoutFile(
+          fs,
+          `${DIAGRAM_LAYOUT_DIR}/${name}`,
+          layout,
+        );
+      }
+      return {};
+    },
+  ],
 };
 
 export const MobileManyDiagrams: Story = {
@@ -98,4 +118,17 @@ export const MobileManyDiagrams: Story = {
   args: {
     projectId: manyDiagramsProject.id,
   },
+  loaders: [
+    async () => {
+      const fs = openProjectFs(projectStore, manyDiagramsProject.id);
+      for (const [name, layout] of Object.entries(manyDiagramsMap)) {
+        await writeDiagramLayoutFile(
+          fs,
+          `${DIAGRAM_LAYOUT_DIR}/${name}`,
+          layout,
+        );
+      }
+      return {};
+    },
+  ],
 };
