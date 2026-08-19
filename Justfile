@@ -24,3 +24,4 @@ build:
     {{run}} cargo build --release
     {{run}} wasm-pack build crates/rhizz-wasm --target web --release
     {{run}} sh -lc 'cd web && npx vite build'
+    {{run}} sh -lc 'cd web && dx storybook build'
