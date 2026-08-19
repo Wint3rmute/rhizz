@@ -43,7 +43,7 @@ function closeMenu() {
 <header
   class="bg-base-100 text-base-content border-b border-base-300 w-full shrink-0 z-30">
   <div class="navbar min-h-12 px-2 sm:px-4 flex items-center justify-between">
-    <!-- Brand + project title -->
+    <!-- Left section: Brand + Desktop navigation links + Project title -->
     <div class="flex items-center gap-2 min-w-0">
       <a
         href={resolve("/projects", {})}
@@ -51,41 +51,42 @@ function closeMenu() {
       >
         ← rhizz
       </a>
+
+      <!-- Desktop navigation links (positioned next to ← rhizz button) -->
+      <div class="hidden md:flex items-center gap-1">
+        {#if activeProjectId}
+          <a
+            href={resolve("/projects/[id]/editor", { id: activeProjectId })}
+            class="btn btn-ghost btn-sm"
+          >Editor</a>
+          <a
+            href={resolve("/projects/[id]/diagrams", { id: activeProjectId })}
+            class="btn btn-ghost btn-sm"
+          >Diagrams</a>
+          <a
+            href={resolve("/projects/[id]/diagrams-viewer", { id: activeProjectId })}
+            class="btn btn-ghost btn-sm"
+          >Diagram Viewer</a>
+          <a
+            href={resolve("/projects/[id]/overview", { id: activeProjectId })}
+            class="btn btn-ghost btn-sm"
+          >System Overview</a>
+        {/if}
+      </div>
+
       {#if activeProject}
-        <span class="text-xs sm:text-sm text-base-content/70 truncate max-w-[140px] sm:max-w-[200px]">
+        <span class="ml-2 text-xs sm:text-sm text-base-content/70 truncate max-w-[140px] sm:max-w-[200px]">
           {activeProject.name}
         </span>
       {:else if project}
-        <span class="text-xs sm:text-sm text-base-content/70 truncate max-w-[140px] sm:max-w-[200px]">
+        <span class="ml-2 text-xs sm:text-sm text-base-content/70 truncate max-w-[140px] sm:max-w-[200px]">
           {project.name}
         </span>
       {/if}
     </div>
 
-    <!-- Desktop navigation links (hidden on mobile) -->
-    <div class="hidden md:flex items-center gap-1">
-      {#if activeProjectId}
-        <a
-          href={resolve("/projects/[id]/editor", { id: activeProjectId })}
-          class="btn btn-ghost btn-sm"
-        >Editor</a>
-        <a
-          href={resolve("/projects/[id]/diagrams", { id: activeProjectId })}
-          class="btn btn-ghost btn-sm"
-        >Diagrams</a>
-        <a
-          href={resolve("/projects/[id]/diagrams-viewer", { id: activeProjectId })}
-          class="btn btn-ghost btn-sm"
-        >Diagram Viewer</a>
-        <a
-          href={resolve("/projects/[id]/overview", { id: activeProjectId })}
-          class="btn btn-ghost btn-sm"
-        >System Overview</a>
-      {/if}
-    </div>
-
     <!-- Right section: Desktop badges & controls, Mobile hamburger button -->
-    <div class="flex items-center gap-2">
+    <div class="ml-auto flex items-center gap-2">
       <!-- Desktop badges and theme toggle -->
       <div class="hidden md:flex items-center gap-2">
         {#if activeScore !== null}
