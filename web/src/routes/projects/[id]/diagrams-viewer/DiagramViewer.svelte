@@ -199,7 +199,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
 });
 </script>
 
-<div class="flex flex-row flex-1 w-full h-full overflow-hidden">
+<div class="flex flex-col md:flex-row flex-1 w-full h-full overflow-hidden">
   {#if !effectiveProjectId}
     <div class="flex-1 flex items-center justify-center p-4">
       <div class="card bg-base-200 shadow-xl">
@@ -215,29 +215,56 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
       </div>
     </div>
   {:else}
-    <!-- Left sidebar: Flat diagrams list, responsive width (compact on mobile, w-64 on desktop) -->
+    <!-- Diagrams selector: horizontal scrollable bar on mobile (< md), vertical sidebar on desktop (>= md) -->
     <aside
-      class="w-36 sm:w-48 md:w-64 shrink-0 bg-base-100 text-base-content p-2 sm:p-3 md:p-4 overflow-y-auto border-r border-base-300 flex flex-col"
+      class="w-full shrink-0 bg-base-100 text-base-content border-b border-base-300 p-2 md:w-64 md:border-b-0 md:border-r md:p-4 md:overflow-y-auto flex flex-col"
     >
-      <h3
-        class="font-semibold text-xs sm:text-sm mb-2 sm:mb-3 text-base-content/70 uppercase tracking-wide truncate"
-      >
-        Diagrams
-      </h3>
-      {#if diagramEntries.length === 0}
-        <p class="text-base-content/50 text-xs sm:text-sm">
-          No diagrams in this project.
-        </p>
-      {:else}
-        <FileTree
-          entries={diagramEntries}
-          bind:selectedPath={selectedDiagramPath}
-        />
-      {/if}
+      <!-- Mobile: horizontal diagrams selection -->
+      <div class="flex md:hidden items-center gap-2 overflow-x-auto py-1">
+        <span
+          class="font-semibold text-xs text-base-content/70 uppercase tracking-wide shrink-0"
+        >
+          Diagrams:
+        </span>
+        {#if diagramEntries.length === 0}
+          <span class="text-base-content/50 text-xs">No diagrams</span>
+        {:else}
+          <div class="flex flex-row gap-1.5 shrink-0">
+            {#each diagramEntries as entry (entry.path)}
+              <button
+                type="button"
+                class="btn btn-xs {selectedDiagramPath === entry.path ? 'btn-primary' : 'btn-ghost'}"
+                onclick={() => (selectedDiagramPath = entry.path)}
+              >
+                {entry.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Desktop: vertical FileTree sidebar -->
+      <div class="hidden md:flex flex-col flex-1">
+        <h3
+          class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+        >
+          Diagrams
+        </h3>
+        {#if diagramEntries.length === 0}
+          <p class="text-base-content/50 text-sm">
+            No diagrams in this project.
+          </p>
+        {:else}
+          <FileTree
+            entries={diagramEntries}
+            bind:selectedPath={selectedDiagramPath}
+          />
+        {/if}
+      </div>
     </aside>
 
-    <!-- Main canvas: Flat, edge-to-edge canvas without grid or nested frames -->
-    <div class="flex flex-col flex-1 min-w-0 h-full">
+    <!-- Main canvas: full-width on mobile (< md), flex-1 on desktop (>= md) -->
+    <div class="flex flex-col flex-1 min-w-0 min-h-0 h-full">
       <div class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden">
         {#if selectedDiagramPath}
           <div class="w-full h-full">
@@ -249,7 +276,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
           </div>
         {:else}
           <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">
-            Select a diagram from the sidebar to view it.
+            Select a diagram to view it.
           </div>
         {/if}
       </div>
