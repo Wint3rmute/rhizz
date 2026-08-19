@@ -1,39 +1,26 @@
 # Common development tasks for the workspace.
 
+has_nix := if shell('command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; } && echo 1 || echo 0') == "1" {
+    "true"
+} else {
+    "false"
+}
+
+run := if has_nix == "true" { "nix develop --command" } else { "" }
+
 format:
-    @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
-        nix develop --command cargo fmt --all && \
-        nix develop --command deno fmt web; \
-    else \
-        cargo fmt --all && \
-        (cd web && deno fmt); \
-    fi
+    {{run}} cargo fmt --all
+    {{run}} deno fmt web
 
 lint:
-    @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
-        nix develop --command cargo clippy --all-targets --all-features -- -D warnings && \
-        nix develop --command sh -lc 'cd web && deno run lint && deno task check'; \
-    else \
-        cargo clippy --all-targets --all-features -- -D warnings && \
-        (cd web && deno lint); \
-    fi
+    {{run}} cargo clippy --all-targets --all-features -- -D warnings
+    {{run}} sh -lc 'cd web && deno run lint && deno task check'
 
 test:
-    @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
-        nix develop --command cargo test --quiet --all && \
-        nix develop --command sh -lc 'cd web && deno run test --project=unit_tests'; \
-    else \
-        cargo test --all; \
-        (cd web && deno run npm:vitest run); \
-    fi
+    {{run}} cargo test --quiet --all
+    {{run}} sh -lc 'cd web && deno run test --project=unit_tests'
 
 build:
-    @if command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; }; then \
-        nix develop --command cargo build --release && \
-        nix develop --command wasm-pack build crates/rhizz-wasm --target web --release && \
-        nix develop --command sh -lc 'cd web && npx vite build'; \
-    else \
-        cargo build && \
-        wasm-pack build crates/rhizz-wasm --target web && \
-        (cd web && npx vite build); \
-    fi
+    {{run}} cargo build --release
+    {{run}} wasm-pack build crates/rhizz-wasm --target web --release
+    {{run}} sh -lc 'cd web && npx vite build'
