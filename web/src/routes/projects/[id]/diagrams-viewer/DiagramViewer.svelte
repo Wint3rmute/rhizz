@@ -2,8 +2,6 @@
 import type { ComponentJS, SystemJS } from "rhizz";
 import { SvelteMap } from "svelte/reactivity";
 import { resolve } from "$app/paths";
-import { page } from "$app/state";
-import { replaceState } from "$app/navigation";
 import {
   getCurrentProjectId,
   projectStore,
@@ -34,6 +32,28 @@ let selectedDiagramPath = $state<string | null>(null);
 let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
 let sources = $state<Source[]>([]);
 
+function getInitialDiagramParam(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get("diagram");
+  } catch {
+    return null;
+  }
+}
+
+function syncUrlDiagram(path: string | null) {
+  if (typeof window === "undefined" || !path) return;
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("diagram") !== path) {
+      url.searchParams.set("diagram", path);
+      window.history.replaceState({}, "", url.toString());
+    }
+  } catch {
+    // Ignore in sandboxed / non-standard environments
+  }
+}
+
 $effect(() => {
   const id = effectiveProjectId;
   if (!id) {
@@ -52,7 +72,7 @@ $effect(() => {
       );
       diagramEntries = files;
 
-      const urlParam = page.url.searchParams.get("diagram");
+      const urlParam = getInitialDiagramParam();
       const matchingParam = urlParam && files.some((e) => e.path === urlParam)
         ? urlParam
         : null;
@@ -65,11 +85,7 @@ $effect(() => {
       ) {
         const first = files[0]?.path ?? null;
         selectedDiagramPath = first;
-        if (first && typeof window !== "undefined") {
-          const url = new URL(window.location.href);
-          url.searchParams.set("diagram", first);
-          replaceState(url.toString(), {});
-        }
+        syncUrlDiagram(first);
       }
     })
     .catch(() => {
@@ -84,14 +100,7 @@ $effect(() => {
 });
 
 $effect(() => {
-  const path = selectedDiagramPath;
-  if (path && typeof window !== "undefined") {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("diagram") !== path) {
-      url.searchParams.set("diagram", path);
-      replaceState(url.toString(), {});
-    }
-  }
+  syncUrlDiagram(selectedDiagramPath);
 });
 
 $effect(() => {
