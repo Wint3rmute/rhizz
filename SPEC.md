@@ -2,27 +2,20 @@
 
 ## 1. Project Structure
 
-All `.hcl` files in a project directory (recursively) are merged into a single
-model (flat merge, similar to Terraform).
+A project consists of a single system model file (`system.hcl` or `main.hcl`) containing the system architecture model, and optionally a view definition file (`views.hcl`).
+
+To support both code-first and UI-first editing with seamless bidirectional translation, the modeling language uses a single unified system model file:
 
 ```
 project/
 ├── project.hcl          # optional project metadata
-├── systems.hcl          # system definitions
-├── views.hcl            # view definitions
-├── components/          # top-level (reusable) component definitions
-│   ├── flight-controller.hcl
-│   └── esc.hcl
-└── lib/                 # more components — directory layout is free-form
-    └── sensors.hcl
+├── system.hcl           # single system architecture model
+└── views.hcl            # view definitions and visual layout metadata
 ```
 
-File organization is a convention — the tooling treats all `.hcl` files equally
-regardless of directory depth. All files are parsed and merged into a single
-`RawFile`.
+All architecture entities (`system`, `component`, `port`, `connection`, `message`, `field`) are maintained in the system model file. This single-file model structure enables bidirectional translation: visual editing in the UI deterministically serializes the complete model back to HCL without cross-file resolution ambiguity.
 
-The merge strategy is described in
-[SPEC/models.md § Merge](SPEC/models.md#merge).
+View configurations and visual layout positions remain separated in `views.hcl`.
 
 ---
 
