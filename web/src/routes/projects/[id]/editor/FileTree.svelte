@@ -20,11 +20,11 @@ let {
   entries: Dirent[];
   selectedPath: string | null;
   /** `parentPath` is "" for the project root. */
-  oncreatefile: (parentPath: string) => void;
+  oncreatefile?: (parentPath: string) => void;
   /** `parentPath` is "" for the project root. */
-  oncreatedirectory: (parentPath: string) => void;
-  onrename: (path: string) => void;
-  ondelete: (path: string) => void;
+  oncreatedirectory?: (parentPath: string) => void;
+  onrename?: (path: string) => void;
+  ondelete?: (path: string) => void;
 } = $props();
 
 let tree = $derived(buildPathTree(entries));
@@ -65,32 +65,42 @@ function toggleCollapsed(path: string) {
         >{entry.name}</button>
       {/if}
 
-      <span
-        class="hidden shrink-0 gap-1 group-hover/row:flex"
-      >
-        {#if entry.isDirectory}
-          <button
-            class="text-xs text-base-content/60 hover:text-base-content"
-            title="New file"
-            onclick={() => oncreatefile(entry.path)}
-          >+📄</button>
-          <button
-            class="text-xs text-base-content/60 hover:text-base-content"
-            title="New folder"
-            onclick={() => oncreatedirectory(entry.path)}
-          >+📁</button>
-        {/if}
-        <button
-          class="text-xs text-base-content/60 hover:text-base-content"
-          title="Rename"
-          onclick={() => onrename(entry.path)}
-        >✎</button>
-        <button
-          class="text-xs text-base-content/60 hover:text-error"
-          title="Delete"
-          onclick={() => ondelete(entry.path)}
-        >🗑</button>
-      </span>
+      {#if oncreatefile || oncreatedirectory || onrename || ondelete}
+        <span
+          class="hidden shrink-0 gap-1 group-hover/row:flex"
+        >
+          {#if entry.isDirectory}
+            {#if oncreatefile}
+              <button
+                class="text-xs text-base-content/60 hover:text-base-content"
+                title="New file"
+                onclick={() => oncreatefile(entry.path)}
+              >+📄</button>
+            {/if}
+            {#if oncreatedirectory}
+              <button
+                class="text-xs text-base-content/60 hover:text-base-content"
+                title="New folder"
+                onclick={() => oncreatedirectory(entry.path)}
+              >+📁</button>
+            {/if}
+          {/if}
+          {#if onrename}
+            <button
+              class="text-xs text-base-content/60 hover:text-base-content"
+              title="Rename"
+              onclick={() => onrename(entry.path)}
+            >✎</button>
+          {/if}
+          {#if ondelete}
+            <button
+              class="text-xs text-base-content/60 hover:text-error"
+              title="Delete"
+              onclick={() => ondelete(entry.path)}
+            >🗑</button>
+          {/if}
+        </span>
+      {/if}
     </div>
     {#if entry.isDirectory && !collapsedPaths.has(entry.path)}
       <ul>
@@ -103,16 +113,22 @@ function toggleCollapsed(path: string) {
 {/snippet}
 
 <div class="flex flex-col gap-2">
-  <div class="flex gap-2">
-    <button
-      class="btn btn-ghost btn-xs"
-      onclick={() => oncreatefile("")}
-    >+ File</button>
-    <button
-      class="btn btn-ghost btn-xs"
-      onclick={() => oncreatedirectory("")}
-    >+ Folder</button>
-  </div>
+  {#if oncreatefile || oncreatedirectory}
+    <div class="flex gap-2">
+      {#if oncreatefile}
+        <button
+          class="btn btn-ghost btn-xs"
+          onclick={() => oncreatefile("")}
+        >+ File</button>
+      {/if}
+      {#if oncreatedirectory}
+        <button
+          class="btn btn-ghost btn-xs"
+          onclick={() => oncreatedirectory("")}
+        >+ Folder</button>
+      {/if}
+    </div>
+  {/if}
   {#if tree.length === 0}
     <p class="text-sm text-base-content/50">No files yet.</p>
   {:else}
