@@ -33,6 +33,12 @@ export default {
   },
   async viteFinal(config) {
     config.base = storybookBase;
+    config.server = config.server || {};
+    config.server.fs = config.server.fs || {};
+    config.server.fs.allow = [
+      ...(config.server.fs.allow || ["."]),
+      "../crates/rhizz-wasm/pkg",
+    ];
     return config;
   },
 };
