@@ -215,17 +215,17 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
       </div>
     </div>
   {:else}
-    <!-- Left sidebar: Flat diagrams list matching diagrams editor style -->
+    <!-- Left sidebar: Flat diagrams list, responsive width (compact on mobile, w-64 on desktop) -->
     <aside
-      class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300 flex flex-col"
+      class="w-36 sm:w-48 md:w-64 shrink-0 bg-base-100 text-base-content p-2 sm:p-3 md:p-4 overflow-y-auto border-r border-base-300 flex flex-col"
     >
       <h3
-        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+        class="font-semibold text-xs sm:text-sm mb-2 sm:mb-3 text-base-content/70 uppercase tracking-wide truncate"
       >
         Diagrams
       </h3>
       {#if diagramEntries.length === 0}
-        <p class="text-base-content/50 text-sm">
+        <p class="text-base-content/50 text-xs sm:text-sm">
           No diagrams in this project.
         </p>
       {:else}
@@ -236,7 +236,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
       {/if}
     </aside>
 
-    <!-- Main canvas: Flat, edge-to-edge canvas matching diagrams editor style without grid/nested frames -->
+    <!-- Main canvas: Flat, edge-to-edge canvas without grid or nested frames -->
     <div class="flex flex-col flex-1 min-w-0 h-full">
       <div class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden">
         {#if selectedDiagramPath}
@@ -248,7 +248,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
             />
           </div>
         {:else}
-          <div class="flex h-full w-full items-center justify-center text-base-content/60">
+          <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">
             Select a diagram from the sidebar to view it.
           </div>
         {/if}
