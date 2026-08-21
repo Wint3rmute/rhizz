@@ -617,7 +617,6 @@ export class DocumentStore {
       tags: [],
       system,
       filter: { include_tags: [], exclude_tags: [], components: [] },
-      output: { filename: `${label}.dot`, rankdir: "TB" },
       nodes: [],
     };
     this.views.push(v);

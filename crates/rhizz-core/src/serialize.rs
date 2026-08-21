@@ -16,7 +16,7 @@
 
 use crate::model::{
     Component, Connection, Field, Message, Model, NodeLayout, Port, PortRole, Project, System,
-    View, ViewDefinition, ViewFilterDefinition, ViewOutputDefinition,
+    View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -444,11 +444,6 @@ fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
         serialize_view_filter(out, &view.filter);
     }
 
-    if should_serialize_output(&view.output) {
-        out.push('\n');
-        serialize_view_output(out, &view.output);
-    }
-
     let mut sorted_nodes: Vec<&NodeLayout> = view.nodes.iter().collect();
     sorted_nodes.sort_by(|a, b| a.component.cmp(&b.component));
 
@@ -497,27 +492,6 @@ fn serialize_view_filter(out: &mut String, filter: &ViewFilterDefinition) {
     out.push_str("  }\n");
 }
 
-fn should_serialize_output(output: &ViewOutputDefinition) -> bool {
-    !output.filename.is_empty() || !output.rankdir.is_empty()
-}
-
-fn serialize_view_output(out: &mut String, output: &ViewOutputDefinition) {
-    out.push_str("  output {\n");
-    if !output.filename.is_empty() {
-        out.push_str(&format!(
-            "    filename = {}\n",
-            escape_string(&output.filename)
-        ));
-    }
-    if !output.rankdir.is_empty() {
-        out.push_str(&format!(
-            "    rankdir  = {}\n",
-            escape_string(&output.rankdir)
-        ));
-    }
-    out.push_str("  }\n");
-}
-
 fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
     out.push_str(&format!("  node {} {{\n", escape_string(&node.component)));
     out.push_str(&format!("    x          = {}\n", format_number(node.x)));
@@ -561,12 +535,6 @@ struct RawFilterAttrs {
 }
 
 #[derive(Deserialize, Default)]
-struct RawOutputAttrs {
-    filename: Option<String>,
-    rankdir: Option<String>,
-}
-
-#[derive(Deserialize, Default)]
 struct RawNodeAttrs {
     x: Option<f64>,
     y: Option<f64>,
@@ -592,7 +560,6 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                 .context("failed to deserialize view attributes")?;
 
             let mut filter = ViewFilterDefinition::default();
-            let mut output = ViewOutputDefinition::default();
             let mut nodes = Vec::new();
 
             for child in block.body().blocks() {
@@ -606,14 +573,6 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             max_level: fa.max_level,
                             components: fa.components.unwrap_or_default(),
                             show_messages: fa.show_messages,
-                        };
-                    }
-                    "output" => {
-                        let oa: RawOutputAttrs = hcl::from_body(child.body().clone())
-                            .context("failed to deserialize output attributes")?;
-                        output = ViewOutputDefinition {
-                            filename: oa.filename.unwrap_or_default(),
-                            rankdir: oa.rankdir.unwrap_or_default(),
                         };
                     }
                     "node" => {
@@ -643,7 +602,6 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                 tags: attrs.tags.unwrap_or_default(),
                 system: attrs.system.unwrap_or_default(),
                 filter,
-                output,
                 nodes,
             });
         }
@@ -931,11 +889,6 @@ system "root-sys" {
     show_messages = true
   }
 
-  output {
-    filename = "overview.dot"
-    rankdir  = "LR"
-  }
-
   node "battery" {
     x          = 100
     y          = 250
@@ -957,12 +910,10 @@ system "root-sys" {
         let parsed1 = parse_views(hcl).expect("should parse views HCL");
         assert_eq!(parsed1.len(), 1);
         let serialized1 = serialize_views(&parsed1);
+        assert_eq!(serialized1, hcl);
 
         let parsed2 = parse_views(&serialized1).expect("should parse serialized views");
         assert_eq!(parsed1, parsed2);
-
-        let serialized2 = serialize_views(&parsed2);
-        assert_eq!(serialized1, serialized2);
     }
 
     #[test]

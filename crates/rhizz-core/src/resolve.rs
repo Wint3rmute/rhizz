@@ -1,7 +1,7 @@
 use crate::model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
     Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole,
-    Project, Scope, ScopeIndex, System, SystemId, View, ViewFilter, ViewOutput,
+    Project, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
@@ -833,21 +833,12 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
             show_messages: f.show_messages.unwrap_or(false),
         }
     };
-    let output = {
-        let o = lv.inner.output.unwrap_or_default();
-        ViewOutput {
-            filename: o.filename.unwrap_or_else(|| format!("{}.dot", lv.label)),
-            rankdir: o.rankdir.unwrap_or_else(|| "TB".to_owned()),
-        }
-    };
-
     r.model.views.push(View {
         label: lv.label,
         description: lv.inner.description.unwrap_or_default(),
         tags: lv.inner.tags,
         system,
         filter,
-        output,
     });
 }
 

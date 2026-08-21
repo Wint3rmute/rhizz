@@ -109,10 +109,6 @@ export function layoutToHcl(
       exclude_tags: [],
       components: [],
     },
-    output: {
-      filename: `${viewName}.dot`,
-      rankdir: "TB",
-    },
     nodes,
   };
 

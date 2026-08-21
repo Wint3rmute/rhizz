@@ -283,8 +283,6 @@ pub struct View {
     pub system: SystemId,
     /// Filter predicates controlling what appears in the view.
     pub filter: ViewFilter,
-    /// Output settings (filename, layout direction).
-    pub output: ViewOutput,
 }
 
 /// Filter predicates for a view.
@@ -300,15 +298,6 @@ pub struct ViewFilter {
     pub components: Vec<String>,
     /// Whether to list messages on connection edges.
     pub show_messages: bool,
-}
-
-/// Output settings for a view.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ViewOutput {
-    /// Output file path.
-    pub filename: String,
-    /// Graphviz rank direction (`"TB"`, `"LR"`, etc.).
-    pub rankdir: String,
 }
 
 // ── View definitions and layout models ────────────────────────────────────────
@@ -350,9 +339,6 @@ pub struct ViewDefinition {
     /// Filter settings.
     #[serde(default)]
     pub filter: ViewFilterDefinition,
-    /// Output settings.
-    #[serde(default)]
-    pub output: ViewOutputDefinition,
     /// Placed node layouts for this view.
     #[serde(default)]
     pub nodes: Vec<NodeLayout>,
@@ -382,10 +368,6 @@ impl ViewDefinition {
                     None
                 },
             },
-            output: ViewOutputDefinition {
-                filename: view.output.filename.clone(),
-                rankdir: view.output.rankdir.clone(),
-            },
             nodes: Vec::new(),
         }
     }
@@ -409,17 +391,6 @@ pub struct ViewFilterDefinition {
     /// Whether to show messages on connection edges.
     #[serde(default)]
     pub show_messages: Option<bool>,
-}
-
-/// Output settings for a view definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct ViewOutputDefinition {
-    /// Output filename.
-    #[serde(default)]
-    pub filename: String,
-    /// Graphviz rank direction ("TB", "LR", etc.).
-    #[serde(default)]
-    pub rankdir: String,
 }
 
 // Diagnostic types live in their own module; re-export here so existing

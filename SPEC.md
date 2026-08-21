@@ -326,11 +326,6 @@ view "power-distribution" {
     components     = []          # empty = all (whitelist, optional)
     show_messages  = false
   }
-
-  output {
-    filename = "power-distribution.dot"
-    rankdir  = "LR"             # Graphviz rank direction: TB, LR, BT, RL
-  }
 }
 ```
 
@@ -343,13 +338,6 @@ view "power-distribution" {
 | `max_level`     | integer      | no       | `∞`              | Maximum abstraction level to display                                      |
 | `components`    | list(string) | no       | `[]` (all)       | Whitelist of component labels to include                                  |
 | `show_messages` | bool         | no       | `true`           | Whether to list messages (from connected ports) as connection edge labels |
-
-**`output` sub-block:**
-
-| Attribute  | Type   | Required | Default              | Description               |
-| ---------- | ------ | -------- | -------------------- | ------------------------- |
-| `filename` | string | no       | `"{view-label}.dot"` | Output file path          |
-| `rankdir`  | string | no       | `"TB"`               | Graphviz layout direction |
 
 ---
 
@@ -762,11 +750,6 @@ view "full-system" {
   filter {
     max_level = 1
   }
-
-  output {
-    filename = "full-system.dot"
-    rankdir  = "TB"
-  }
 }
 
 view "power-only" {
@@ -777,11 +760,6 @@ view "power-only" {
     include_tags  = ["power"]
     show_messages = false
   }
-
-  output {
-    filename = "power.dot"
-    rankdir  = "LR"
-  }
 }
 
 view "fc-internals" {
@@ -791,11 +769,6 @@ view "fc-internals" {
   filter {
     components = ["flight-controller"]
     max_level  = 3
-  }
-
-  output {
-    filename = "fc-internals.dot"
-    rankdir  = "LR"
   }
 }
 ```
