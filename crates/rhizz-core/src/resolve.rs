@@ -683,7 +683,11 @@ fn resolve_endpoint(
         let is_last_segment = segment_idx == raw_segments.len() - 1;
 
         // Try looking up component in current_scope
-        if let Some(comp_cid) = r.scope_index.components.get(&(current_scope, seg.to_string())) {
+        if let Some(comp_cid) = r
+            .scope_index
+            .components
+            .get(&(current_scope, seg.to_string()))
+        {
             let cid = *comp_cid;
             if is_last_segment {
                 // Resolved as a bare component
@@ -699,25 +703,22 @@ fn resolve_endpoint(
         }
 
         // If not found as a component, and this is the last segment, check if current_scope is a component with this port
-        if is_last_segment {
-            if let Scope::Component(cid) = current_scope {
-                if let Some(pid) = r.scope_index.ports.get(&(cid, seg.to_string())) {
-                    return Some(ConnectionEndpoint {
-                        component: cid,
-                        port: Some(*pid),
-                    });
-                } else {
-                    let comp_label = &r.model.components[cid.0].label;
-                    r.push_error(
-                        DiagnosticCode::E010,
-                        format!(
-                            "connection '{}': component '{}' has no port '{}' (in '{}')",
-                            conn_label, comp_label, seg, field
-                        ),
-                    );
-                    return None;
-                }
+        if let (true, Scope::Component(cid)) = (is_last_segment, current_scope) {
+            if let Some(pid) = r.scope_index.ports.get(&(cid, seg.to_string())) {
+                return Some(ConnectionEndpoint {
+                    component: cid,
+                    port: Some(*pid),
+                });
             }
+            let comp_label = &r.model.components[cid.0].label;
+            r.push_error(
+                DiagnosticCode::E010,
+                format!(
+                    "connection '{}': component '{}' has no port '{}' (in '{}')",
+                    conn_label, comp_label, seg, field
+                ),
+            );
+            return None;
         }
 
         // Component not found in current scope
@@ -1764,7 +1765,10 @@ system "drone" {
         assert_eq!(conn.label, "internal-power");
         assert_eq!(model.components[conn.from.component.0].label, "battery");
         assert_eq!(model.ports[conn.from.port.unwrap().0].label, "power-out");
-        assert_eq!(model.components[conn.to.component.0].label, "power-regulator");
+        assert_eq!(
+            model.components[conn.to.component.0].label,
+            "power-regulator"
+        );
         assert_eq!(model.ports[conn.to.port.unwrap().0].label, "v-in");
     }
 

@@ -13,7 +13,29 @@ How to work on this file:
 
 ---
 
-## Task 74 — Multi-file workspace tabs and project import/export
+## Task 74 — Use UNIX-style paths for component and port references
+
+Replace colon-separated reference notation (e.g. `comp:port`) with standard UNIX-style path notation (e.g. `comp/port`, `/system/comp/subcomp/port`, `../sibling/port`) across the compiler, serializers, frontend, examples, and specifications.
+
+- **Path Syntax & Resolution**:
+  - Relative paths (e.g. `sensor/i2c`, `controller/mcu/spi`, `../power/main`, `sensor` for bare component without port).
+  - Absolute paths starting with `/` (e.g. `/quadcopter/flight-controller/mcu/spi`).
+  - Scoped traversal (`.` for current scope, `..` for parent scope).
+- **Resolver & Diagnostics**:
+  - Update `resolve_connection` in `rhizz-core/src/resolve.rs` to parse path segments and resolve both relative and absolute paths down to target components and ports.
+  - Update diagnostics (`E002`, `E010`, `E011`) to report path-based reference errors.
+- **Serialization & Round-Trip**:
+  - Update `serialize_connection` in `rhizz-core/src/serialize.rs` to output UNIX-style paths.
+  - Update `DocumentStore.svelte.ts` and interactive connection wiring in the web frontend.
+- **Examples, Tests & Specs**:
+  - Add comprehensive unit tests in `rhizz-core` covering relative paths, absolute paths, `..` traversal, and port resolution.
+  - Update all example models under `examples/` (`drone`, `social-media`, `software-house`, `single-file`, `web-app`) and `web/src/example_system.ts`.
+  - Update `SPEC.md`, `SPEC/models.md`, and diagnostic docs.
+- Validate with `just test`, `just lint`, `just build`, and `just format`.
+
+---
+
+## Task 75 — Multi-file workspace tabs and project import/export
 
 Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
 
@@ -28,7 +50,7 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
 
 ---
 
-## Task 75 — Install FontAwesome icons, use them in the FileTree
+## Task 76 — Install FontAwesome icons, use them in the FileTree
 
 - Install FontAwesome icons via deno
 - Use the `free-solid-svg-icons` variant
@@ -37,28 +59,12 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
 
 ---
 
-## Task 76 — Allow embedding diagrams via unique URLs
+## Task 77 — Allow embedding diagrams via unique URLs
 
 - Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
 - Update the `Diagram` component to support the new URL scheme
   - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
 - The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
-
----
-
-## (For later brainstorming) Task <N> - use UNIX-style paths for component references
-
-Currently, when defining connections between components, path are specified using label + colon notation (e.g. `foo:bar`). While this is convenient for simple cases, it should be replaced with a more standard UNIX-style path notation (e.g. `/foo/bar`).
-
-Both relative and absolute paths should be supported.
-
-Definition of done:
-
-- All documentation (SPEC.md and other markdown documents) are updated to reflect the new approach
-- The rhizz-core module is updated
-- Code is checked for presence of unit tests which check that both relative and absolute paths are supported. Existing tests are updated to reflect the new approach.
-- Example models in `examples/` are updated to reflect the new approach. Each example model is checked after changes using the Rhizz CLI.
-- Example model hardcoded in the frontend application is updated to use the new approach
 
 ---
 
