@@ -53,13 +53,6 @@ export function sanitizeStoredRecord(
   return sanitized;
 }
 
-function sanitizeMaybeRecord(value: unknown): Record<string, StoredBox> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return {};
-  }
-  return sanitizeStoredRecord(value as Record<string, unknown>);
-}
-
 // Conventional location for diagram layout data inside a project's VFS.
 export const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
 
@@ -143,7 +136,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
 
 /**
  * Reads and validates a diagram layout file from the project's VFS.
- * Supports canonical HCL format (parsed via `parse_views`) and legacy JSON format.
+ * Strictly parses canonical HCL view definitions via `parse_views`.
  */
 export async function readDiagramLayoutFile(
   fs: ProjectFs,
@@ -159,30 +152,13 @@ export async function readDiagramLayoutFile(
     throw error;
   }
 
-  // 1. Try parsing as HCL view definitions
   try {
     const views = parse_views(raw);
     if (Array.isArray(views) && views.length > 0) {
       return viewsToLayout(views);
     }
   } catch {
-    // Not valid HCL or legacy JSON format - proceed to fallback
-  }
-
-  // 2. Legacy fallback: JSON parsing
-  try {
-    const parsed = JSON.parse(raw);
-    if (
-      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-    ) {
-      const record = parsed as Record<string, unknown>;
-      return {
-        checked: sanitizeMaybeRecord(record.checked),
-        savedLayout: sanitizeMaybeRecord(record.savedLayout),
-      };
-    }
-  } catch {
-    // Malformed JSON / unrecognized format
+    // Malformed HCL content
   }
 
   return emptyDiagramLayout();

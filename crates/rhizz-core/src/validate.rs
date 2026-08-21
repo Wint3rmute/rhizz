@@ -458,7 +458,7 @@ mod tests {
               }
               component "b" { leaf = true }
               connection "mixed" {
-                from = "a:p"
+                from = "a/p"
                 to   = "b"
               }
             }
@@ -496,8 +496,8 @@ mod tests {
                 }
               }
               connection "mismatch" {
-                from = "a:p1"
-                to   = "b:p2"
+                from = "a/p1"
+                to   = "b/p2"
               }
             }
         "#;
@@ -534,8 +534,8 @@ mod tests {
                 }
               }
               connection "clash" {
-                from = "a:p1"
-                to   = "b:p2"
+                from = "a/p1"
+                to   = "b/p2"
               }
             }
         "#;

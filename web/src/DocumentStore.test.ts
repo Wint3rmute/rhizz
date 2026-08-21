@@ -209,8 +209,8 @@ system "arm" {
 
   connection "can-bus" {
     description = "CAN link"
-    from        = "base:ctrl-out"
-    to          = "gripper:ctrl"
+    from        = "base/ctrl-out"
+    to          = "gripper/ctrl"
   }
 }
 `;

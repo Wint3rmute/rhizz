@@ -68,9 +68,7 @@ $effect(() => {
     .then((entries) => {
       if (cancelled) return;
       const files = entries.filter(
-        (entry) =>
-          entry.isFile() &&
-          (entry.name.endsWith(".hcl") || entry.name.endsWith(".json")),
+        (entry) => entry.isFile() && entry.name.endsWith(".hcl"),
       );
       diagramEntries = files;
 

@@ -277,14 +277,13 @@ async function refreshDiagramEntries(): Promise<void> {
   }
 }
 
-// Picks a sensible default diagram to open: the first ".hcl" (or legacy ".json") file found
+// Picks a sensible default diagram to open: the first ".hcl" file found
 // (in practice "main.hcl" — see the auto-seed below), or `null` if the
 // project has no diagrams at all yet.
 function firstDiagramPath(): string | null {
   return (
     diagramEntries.find(
-      (e) =>
-        e.isFile() && (e.name.endsWith(".hcl") || e.name.endsWith(".json")),
+      (e) => e.isFile() && e.name.endsWith(".hcl"),
     )?.path ?? null
   );
 }

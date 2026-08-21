@@ -98,15 +98,15 @@ system "acme-software" {
     connection "code-review" {
       description = "Pull request review flow between teams"
       tags        = ["process", "collaboration"]
-      from        = "frontend-team:review"
-      to          = "backend-team:review"
+      from        = "frontend-team/review"
+      to          = "backend-team/review"
     }
 
     connection "deploy-pipeline" {
       description = "Platform team provides CI/CD to all engineering"
       tags        = ["process", "infra"]
-      from        = "platform-team:deploy-out"
-      to          = "frontend-team:deploy-in"
+      from        = "platform-team/deploy-out"
+      to          = "frontend-team/deploy-in"
     }
   }
 

@@ -701,8 +701,8 @@ system "demo" {
 
   connection "c1" {
     description  = "Link"
-    from         = "comp-a:p1"
-    to           = "comp-b:p2"
+    from         = "comp-a/p1"
+    to           = "comp-b/p2"
   }
 }
 "#;

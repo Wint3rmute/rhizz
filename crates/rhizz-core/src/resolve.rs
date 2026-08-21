@@ -588,18 +588,19 @@ fn resolve_endpoint(
         return None;
     }
 
-    // Support legacy colon notation `comp:port` by converting it to `comp/port`
-    let normalized_raw = if raw.contains(':') && !raw.contains('/') {
-        raw.replace(':', "/")
-    } else {
-        raw.to_string()
-    };
+    if raw.contains(':') {
+        r.push_error(
+            DiagnosticCode::E002,
+            format!(
+                "connection '{}' has invalid non-UNIX path '{}' in '{}' (colon notation is not supported; use '/' path notation)",
+                conn_label, raw, field
+            ),
+        );
+        return None;
+    }
 
-    let is_absolute = normalized_raw.starts_with('/');
-    let raw_segments: Vec<&str> = normalized_raw
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let is_absolute = raw.starts_with('/');
+    let raw_segments: Vec<&str> = raw.split('/').filter(|s| !s.is_empty()).collect();
 
     if raw_segments.is_empty() {
         r.push_error(
@@ -1367,7 +1368,7 @@ mod tests {
               component "a" { leaf = true }
               component "b" { leaf = true }
               connection "c" {
-                from = "a:nonexistent"
+                from = "a/nonexistent"
                 to   = "b"
               }
             }
@@ -1390,7 +1391,7 @@ mod tests {
               component "a" { leaf = true }
               connection "c" {
                 from = "a"
-                to   = "ghost:port"
+                to   = "ghost/port"
               }
             }
         "#;
@@ -1401,6 +1402,31 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E011),
             "expected E011, got: {:?}",
+            diags
+        );
+    }
+
+    #[test]
+    fn non_unix_path_with_colon_emits_error() {
+        let src = r#"
+            system "s" {
+              component "a" { leaf = true }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a:port"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(result.is_err());
+        let diags = result.unwrap_err();
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E002 && d.message.contains("colon")),
+            "expected E002 error for colon notation, got: {:?}",
             diags
         );
     }

@@ -234,27 +234,6 @@ describe("HCL View conversion and persistence", () => {
     );
   });
 
-  it("gracefully falls back and parses legacy JSON diagram files", async () => {
-    const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    const legacyPath = `${DIAGRAM_LAYOUT_DIR}/legacy.json`;
-    await fs.writeFile(
-      legacyPath,
-      JSON.stringify({
-        checked: { "sys/legacy": { x: 50, y: 75, width: 120, height: 80 } },
-        savedLayout: {},
-      }),
-    );
-
-    const read = await readDiagramLayoutFile(fs, legacyPath);
-    expect(read.checked["sys/legacy"]).toEqual({
-      x: 50,
-      y: 75,
-      width: 120,
-      height: 80,
-    });
-  });
-
   it("returns an empty layout for unparseable garbage", async () => {
     const fs = await projectFs();
     await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
