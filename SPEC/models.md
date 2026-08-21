@@ -9,8 +9,7 @@ Two model layers:
 2. **Resolved models** — validated, cross-referenced IR used by all downstream
    passes (validation, scoring, view generation).
 
-Parsing pipeline: `.hcl` files → `hcl::from_str` → raw models → merge → resolve
-→ resolved models.
+Parsing pipeline: `.hcl` files (`system.hcl` + view files) → `hcl::from_str` → raw models → merge → resolve → resolved models.
 
 ---
 
@@ -28,7 +27,8 @@ with a thin conversion layer.
 
 ```rust
 /// Top-level file content — the result of parsing one .hcl file.
-/// Multiple `RawFile`s are merged before resolution.
+/// `RawFile`s from the system model file (`system.hcl`) and any view definition
+/// files are merged into a unified raw representation before resolution.
 #[derive(Debug, Default)]
 struct RawFile {
     project: Option<RawProject>,
@@ -171,10 +171,12 @@ pub fn compile(sources: &[Source]) -> CompileResult
 
 ## Merge
 
-Straightforward: accumulate all `RawFile`s into a single `RawFile`.
+Straightforward: accumulate `RawFile`s (the single `system.hcl` model file and any view definition files) into a unified `RawFile`.
 
 - `project`: at most one across all files (error E010 if >1).
 - `systems`, `components`, `views`: concatenate vecs.
+
+While canonical projects maintain a single `system.hcl` architecture model file alongside view definitions, `rhizz-core`'s compiler accepts multiple `Source` inputs and merges their raw representations before resolution, keeping the core parser decoupled from physical file storage conventions.
 
 No deduplication logic — duplicate detection happens during
 resolution/validation.

@@ -10,8 +10,7 @@
 rhizz <command> [options] [path]
 ```
 
-`path` defaults to `.` (current directory). All `.hcl` files in the directory
-are discovered and merged.
+`path` defaults to `.` (current directory). The project's system model file (`system.hcl` or `main.hcl`) and any view definition files (`views.hcl` or individual view files) are discovered and compiled.
 
 ---
 
@@ -19,7 +18,7 @@ are discovered and merged.
 
 | Command | Description                                                                 | Exit code                       |
 | ------- | --------------------------------------------------------------------------- | ------------------------------- |
-| `check` | Parse all `.hcl` files, validate, print errors/warnings.                    | `0` if no errors, `1` otherwise |
+| `check` | Parse project `.hcl` files (`system.hcl`, view files), validate, print errors/warnings. | `0` if no errors, `1` otherwise |
 | `score` | Run `check`, then print the completion report.                              | `0` if no errors, `1` otherwise |
 | `views` | Run `check`, then generate `.dot` files for all (or selected) views.        | `0` if no errors, `1` otherwise |
 | `build` | Run `check` + `score` + `views` in sequence. Default when no command given. | `0` if no errors, `1` otherwise |
@@ -47,14 +46,14 @@ remains human-readable for fatal parse errors.
 ```jsonc
 {
   "errors": [
-    { "code": "E002", "file": "interfaces.hcl", "line": 14, "message": "..." }
+    { "code": "E002", "file": "system.hcl", "line": 14, "message": "..." }
   ],
   "warnings": [
-    { "code": "W001", "file": "fc.hcl", "line": 31, "message": "..." }
+    { "code": "W001", "file": "system.hcl", "line": 31, "message": "..." }
   ],
   // present only if check passed:
   "score": {
-    "system": "consumer-drone",
+    "system": "mini-drone",
     "components": { "complete": 8, "total": 12 },
     "ports": { "complete": 4, "total": 8 },
     "connections": { "complete": 3, "total": 7 },
@@ -63,7 +62,7 @@ remains human-readable for fatal parse errors.
   },
   // present only if views were generated:
   "views": [
-    { "name": "power-distribution", "file": "out/power-distribution.dot" }
+    { "name": "power-only", "file": "out/power.dot" }
   ]
 }
 ```

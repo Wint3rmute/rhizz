@@ -2,27 +2,17 @@
 
 ## 1. Project Structure
 
-All `.hcl` files in a project directory (recursively) are merged into a single
-model (flat merge, similar to Terraform).
+A project consists of a single system model file (`system.hcl` or `main.hcl`) containing the system architecture model (including optional `project` metadata), and optional view definition files (`views.hcl` or as many view files as the user creates):
 
 ```
 project/
-├── project.hcl          # optional project metadata
-├── systems.hcl          # system definitions
-├── views.hcl            # view definitions
-├── components/          # top-level (reusable) component definitions
-│   ├── flight-controller.hcl
-│   └── esc.hcl
-└── lib/                 # more components — directory layout is free-form
-    └── sensors.hcl
+├── system.hcl           # single system architecture model (optional project {} + systems/components)
+└── views.hcl            # view definitions and visual layout metadata (or multiple view files)
 ```
 
-File organization is a convention — the tooling treats all `.hcl` files equally
-regardless of directory depth. All files are parsed and merged into a single
-`RawFile`.
+All architecture entities (`project`, `system`, `component`, `port`, `connection`, `message`, `field`) are maintained in the system model file. This single-file model structure enables bidirectional translation: visual editing in the UI deterministically serializes the complete model back to HCL without cross-file resolution ambiguity.
 
-The merge strategy is described in
-[SPEC/models.md § Merge](SPEC/models.md#merge).
+View configurations, filters, and visual layout positions remain separated in `views.hcl` (and any additional view definition files).
 
 ---
 
@@ -501,12 +491,12 @@ validation, scoring, and view rendering logic lives in `rhizz-core` and
 rhizz <command> [options] [path]
 ```
 
-| Command             | Description                                                            |
-| ------------------- | ---------------------------------------------------------------------- |
-| `mbse check <path>` | Parse, validate, and report errors/warnings. Exit code 0 if no errors. |
-| `mbse score <path>` | Run `check`, then print the completion report.                         |
-| `mbse views <path>` | Run `check`, then generate all defined views as `.dot` files.          |
-| `mbse build <path>` | Run all of the above in sequence (default command).                    |
+| Command              | Description                                                            |
+| -------------------- | ---------------------------------------------------------------------- |
+| `rhizz check <path>` | Parse, validate, and report errors/warnings. Exit code 0 if no errors. |
+| `rhizz score <path>` | Run `check`, then print the completion report.                         |
+| `rhizz views <path>` | Run `check`, then generate all defined views as `.dot` files.          |
+| `rhizz build <path>` | Run all of the above in sequence (default command).                    |
 
 ### Options
 
@@ -521,30 +511,30 @@ rhizz <command> [options] [path]
 ### Example Session
 
 ```bash
-$ mbse build ./drone-project/
+$ rhizz build ./drone-project/
 
-  Parsing 6 files...
-  ✓ Parsed: project.hcl, systems.hcl, fc.hcl, propulsion.hcl, connections.hcl, views.hcl
+  Parsing 2 files...
+  ✓ Parsed: system.hcl, views.hcl
 
   Validation:
-  ✗ E002  connections.hcl:14  connection "uart-link" references undefined component "gps-module"
-  ⚠ W001  fc.hcl:31           component "power-regulator" has no child components (leaf=false)
-  ⚠ W004  propulsion.hcl:8    component "motor" is missing a description
+  ✗ E002  system.hcl:14  connection "uart-link" references undefined component "gps-module"
+  ⚠ W001  system.hcl:31  component "power-regulator" has no child components (leaf=false)
+  ⚠ W004  system.hcl:82  component "motor" is missing a description
 
   1 error, 2 warnings — aborting (fix errors to continue)
 ```
 
 ```bash
-$ mbse build ./drone-project/   # after fix
+$ rhizz build ./drone-project/   # after fix
 
-  Parsing 6 files... ✓
+  Parsing 2 files... ✓
 
   Validation:
-  ⚠ W001  fc.hcl:31           component "power-regulator" has no child components (leaf=false)
-  ⚠ W004  propulsion.hcl:8    component "motor" is missing a description
+  ⚠ W001  system.hcl:31  component "power-regulator" has no child components (leaf=false)
+  ⚠ W004  system.hcl:82  component "motor" is missing a description
   0 errors, 2 warnings
 
-  Completion Report — consumer-drone
+  Completion Report — mini-drone
   ───────────────────────────────────
   Components:   8/12 complete  (66.7%)
   Ports:        4/8  complete  (50.0%)
@@ -554,8 +544,9 @@ $ mbse build ./drone-project/   # after fix
   Overall:      20/37           54.1%
 
   Views:
-  ✓ out/power-distribution.dot
-  ✓ out/data-flow-overview.dot
+  ✓ out/full-system.dot
+  ✓ out/power-only.dot
+  ✓ out/fc-internals.dot
 
   Done.
 ```
@@ -564,20 +555,16 @@ $ mbse build ./drone-project/   # after fix
 
 ## 8. Full Example
 
-A minimal but complete drone project across three files:
+A minimal but complete drone project defined in `system.hcl` and `views.hcl`:
 
-### `project.hcl`
+### `system.hcl`
 
 ```hcl
 project {
   name    = "mini-drone"
   version = "0.1.0"
 }
-```
 
-### `drone.hcl`
-
-```hcl
 system "mini-drone" {
   description = "Minimal quadcopter drone"
   tags        = ["product", "drone"]
