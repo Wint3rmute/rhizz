@@ -336,4 +336,86 @@ system "demo" {}
         );
         assert_eq!(model.project.name, "explicit-name");
     }
+
+    #[test]
+    fn single_system_model_file_emits_no_system_split_warning() {
+        let sources = vec![
+            Source {
+                filename: "system.hcl".to_string(),
+                content: r#"
+project { name = "single-sys" }
+system "main" {
+  description = "Main system"
+  component "sensor" {
+    description = "Sensor component"
+    leaf = true
+  }
+}
+"#
+                .to_string(),
+            },
+            Source {
+                filename: "views.hcl".to_string(),
+                content: r#"
+view "overview" {
+  system = "main"
+}
+"#
+                .to_string(),
+            },
+        ];
+
+        let result = compile(&sources);
+        assert!(result.model.is_some(), "model should compile successfully");
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::W000),
+            "no W000 multi-system warning should be emitted for single system file"
+        );
+    }
+
+    #[test]
+    fn multiple_system_files_emit_w000_warning() {
+        let sources = vec![
+            Source {
+                filename: "system1.hcl".to_string(),
+                content: r#"
+system "sys1" {
+  description = "System 1"
+}
+"#
+                .to_string(),
+            },
+            Source {
+                filename: "system2.hcl".to_string(),
+                content: r#"
+system "sys2" {
+  description = "System 2"
+}
+"#
+                .to_string(),
+            },
+        ];
+
+        let result = compile(&sources);
+        assert!(
+            result.model.is_some(),
+            "model should still resolve despite warning"
+        );
+        let split_warning = result
+            .diagnostics
+            .iter()
+            .find(|d| d.code == DiagnosticCode::W000);
+        assert!(
+            split_warning.is_some(),
+            "W000 warning should be emitted when multiple files define system blocks"
+        );
+        let msg = &split_warning.unwrap().message;
+        assert!(
+            msg.contains("system1.hcl") && msg.contains("system2.hcl"),
+            "warning message should list the conflicting files: {msg}"
+        );
+    }
 }
