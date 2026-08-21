@@ -41,8 +41,11 @@ just build    # build release binaries, WASM package, and web frontend
 
 ## Coding Conventions
 
-- The crate has `#![deny(clippy::all)]`; all Clippy warnings must be fixed,
-  never suppressed unless there is a strong reason.
+- All linter (clippy/eslint) warnings must be fixed, never suppressed unless
+  there is a strong reason.
+
+### Rust-specific
+
 - Use `anyhow::Result` for fallible functions that surface errors to the caller.
 - Prefer `thiserror` for library-facing error types when type-safe matching is
   needed.
@@ -52,13 +55,13 @@ just build    # build release binaries, WASM package, and web frontend
     (non-blocking).
 - All identifier types (`ComponentId`, `InterfaceId`, …) are newtypes over a
   numeric arena index.
-- Follow the existing module boundaries: parsing, resolution, validation,
-  scoring, and rendering are separate modules.
+- Follow the existing module boundaries: parsing, resolution, validation and
+  scoring are separate modules.
 
 ## Testing Approach
 
 - Unit tests live in `#[cfg(test)]` modules inside each source file.
 - Integration tests exercise the three worked examples under `examples/` (drone,
   social-media, software-house).
-- Use `just test` to run everything.
+- Use `just test` to run all tests.
 - Assert exact diagnostic codes (not just counts) for error/warning tests.

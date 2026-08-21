@@ -58,6 +58,7 @@ pub struct CompileResult {
 #[instrument(skip(sources), fields(source_count = sources.len()))]
 pub fn compile(sources: &[Source]) -> CompileResult {
     let mut merged = parse::RawFile::default();
+    let mut system_files = Vec::new();
 
     for source in sources {
         let path = Path::new(&source.filename);
@@ -70,6 +71,9 @@ pub fn compile(sources: &[Source]) -> CompileResult {
                 };
             }
         };
+        if !file.systems.is_empty() {
+            system_files.push(path.to_path_buf());
+        }
         if let Err(e) = parse::merge_into(&mut merged, file, path) {
             return CompileResult {
                 model: None,
@@ -77,6 +81,9 @@ pub fn compile(sources: &[Source]) -> CompileResult {
             };
         }
     }
+
+    let mut pre_diagnostics = Vec::new();
+    validate_single_system_model(&system_files, &mut pre_diagnostics);
 
     if let Some(project_name) = default_project_name(sources) {
         let project = merged
@@ -88,14 +95,40 @@ pub fn compile(sources: &[Source]) -> CompileResult {
     }
 
     match resolve::resolve(merged) {
-        Ok((model, diagnostics)) => CompileResult {
-            model: Some(model),
-            diagnostics,
-        },
-        Err(diagnostics) => CompileResult {
-            model: None,
-            diagnostics,
-        },
+        Ok((model, mut diagnostics)) => {
+            pre_diagnostics.append(&mut diagnostics);
+            CompileResult {
+                model: Some(model),
+                diagnostics: pre_diagnostics,
+            }
+        }
+        Err(mut diagnostics) => {
+            pre_diagnostics.append(&mut diagnostics);
+            CompileResult {
+                model: None,
+                diagnostics: pre_diagnostics,
+            }
+        }
+    }
+}
+
+/// Thin validation layer checking project file structure conventions for MVP.
+///
+/// Emits a warning if multiple files define `system` blocks, encouraging
+/// the single `system.hcl` model file convention.
+fn validate_single_system_model(system_files: &[PathBuf], diagnostics: &mut Vec<Diagnostic>) {
+    if system_files.len() > 1 {
+        let file_list = system_files
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        diagnostics.push(Diagnostic::warning(
+            DiagnosticCode::W000,
+            format!(
+                "multiple files define system blocks ({file_list}); system architecture models should be consolidated in a single system model file (e.g. system.hcl)"
+            ),
+        ));
     }
 }
 
