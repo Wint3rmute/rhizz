@@ -58,6 +58,7 @@ pub struct CompileResult {
 #[instrument(skip(sources), fields(source_count = sources.len()))]
 pub fn compile(sources: &[Source]) -> CompileResult {
     let mut merged = parse::RawFile::default();
+    let mut system_files = Vec::new();
 
     for source in sources {
         let path = Path::new(&source.filename);
@@ -70,12 +71,23 @@ pub fn compile(sources: &[Source]) -> CompileResult {
                 };
             }
         };
+        if !file.systems.is_empty() {
+            system_files.push(path.to_path_buf());
+        }
         if let Err(e) = parse::merge_into(&mut merged, file, path) {
             return CompileResult {
                 model: None,
                 diagnostics: vec![Diagnostic::error(DiagnosticCode::E010, e.to_string())],
             };
         }
+    }
+
+    let mut pre_diagnostics = Vec::new();
+    if validate_single_system_model(&system_files, &mut pre_diagnostics) {
+        return CompileResult {
+            model: None,
+            diagnostics: pre_diagnostics,
+        };
     }
 
     if let Some(project_name) = default_project_name(sources) {
@@ -88,14 +100,47 @@ pub fn compile(sources: &[Source]) -> CompileResult {
     }
 
     match resolve::resolve(merged) {
-        Ok((model, diagnostics)) => CompileResult {
-            model: Some(model),
-            diagnostics,
-        },
-        Err(diagnostics) => CompileResult {
-            model: None,
-            diagnostics,
-        },
+        Ok((model, mut diagnostics)) => {
+            pre_diagnostics.append(&mut diagnostics);
+            CompileResult {
+                model: Some(model),
+                diagnostics: pre_diagnostics,
+            }
+        }
+        Err(mut diagnostics) => {
+            pre_diagnostics.append(&mut diagnostics);
+            CompileResult {
+                model: None,
+                diagnostics: pre_diagnostics,
+            }
+        }
+    }
+}
+
+/// Thin validation layer checking project file structure conventions for MVP.
+///
+/// To be removed after MVP stage, once we're stable. Emits a blocking error if
+/// multiple files define `system` blocks, requiring the single `system.hcl`
+/// model file convention.
+fn validate_single_system_model(
+    system_files: &[PathBuf],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> bool {
+    if system_files.len() > 1 {
+        let file_list = system_files
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        diagnostics.push(Diagnostic::error(
+            DiagnosticCode::E000,
+            format!(
+                "multiple files define system blocks ({file_list}); system architecture models must be consolidated in a single system model file (e.g. system.hcl)"
+            ),
+        ));
+        true
+    } else {
+        false
     }
 }
 
@@ -302,5 +347,87 @@ system "demo" {}
             result.diagnostics
         );
         assert_eq!(model.project.name, "explicit-name");
+    }
+
+    #[test]
+    fn single_system_model_file_emits_no_system_split_error() {
+        let sources = vec![
+            Source {
+                filename: "system.hcl".to_string(),
+                content: r#"
+project { name = "single-sys" }
+system "main" {
+  description = "Main system"
+  component "sensor" {
+    description = "Sensor component"
+    leaf = true
+  }
+}
+"#
+                .to_string(),
+            },
+            Source {
+                filename: "views.hcl".to_string(),
+                content: r#"
+view "overview" {
+  system = "main"
+}
+"#
+                .to_string(),
+            },
+        ];
+
+        let result = compile(&sources);
+        assert!(result.model.is_some(), "model should compile successfully");
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E000),
+            "no E000 multi-system error should be emitted for single system file"
+        );
+    }
+
+    #[test]
+    fn multiple_system_files_emit_blocking_error() {
+        let sources = vec![
+            Source {
+                filename: "system1.hcl".to_string(),
+                content: r#"
+system "sys1" {
+  description = "System 1"
+}
+"#
+                .to_string(),
+            },
+            Source {
+                filename: "system2.hcl".to_string(),
+                content: r#"
+system "sys2" {
+  description = "System 2"
+}
+"#
+                .to_string(),
+            },
+        ];
+
+        let result = compile(&sources);
+        assert!(
+            result.model.is_none(),
+            "model should not be produced when blocking error occurs"
+        );
+        let split_error = result
+            .diagnostics
+            .iter()
+            .find(|d| d.code == DiagnosticCode::E000 && d.is_error());
+        assert!(
+            split_error.is_some(),
+            "E000 error should be emitted when multiple files define system blocks"
+        );
+        let msg = &split_error.unwrap().message;
+        assert!(
+            msg.contains("system1.hcl") && msg.contains("system2.hcl"),
+            "error message should list the conflicting files: {msg}"
+        );
     }
 }
