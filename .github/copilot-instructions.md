@@ -21,6 +21,16 @@ FINISHED_TASKS.md    – completed tasks (most recent first)
 
 ## Development Workflow
 
+### Direct commands
+
+1. Analyze the task and make an implementation plan.
+2. Implement it using red/green TDD.
+3. Run `just test`, `just lint`, and `just build` until everything passes.
+4. Run `just format` to format the code.
+5. Commit your code, use conventional commits.
+
+### Tasks from `TASKS.md`
+
 1. Read the next task from `TASKS.md`.
 2. Get extra context from recently finished tasks (read the first 50 lines of
    `FINISHED_TASKS.md`).
