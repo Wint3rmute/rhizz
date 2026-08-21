@@ -547,9 +547,13 @@ fn process_connections_in_scope(
 
 /// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
 ///
-/// Supports two forms:
-/// - `"comp"` -- bare component label (E002 if not found)
-/// - `"comp:port"` -- typed reference (E011 if comp not found, E010 if port not found)
+/// Supports UNIX-style path notation:
+/// - Relative sibling bare component: `"comp"` or `"./comp"`
+/// - Relative sibling port: `"comp/port"`
+/// - Nested subcomponents: `"comp/subcomp/port"` or `"comp/subcomp"`
+/// - Parent traversal: `"../sibling/port"`
+/// - Absolute root path: `"/system-name/comp/subcomp/port"`
+/// - Legacy colon notation: `"comp:port"`
 ///
 /// Returns `None` and emits the appropriate error if resolution fails.
 fn resolve_endpoint(
@@ -570,60 +574,169 @@ fn resolve_endpoint(
             );
             return None;
         }
-        Some(s) => s,
+        Some(s) => s.trim(),
     };
 
-    if let Some((comp_part, port_part)) = raw.split_once(':') {
-        // Typed reference: comp:port
-        let comp_cid = match r.scope_index.components.get(&(scope, comp_part.to_owned())) {
-            Some(cid) => *cid,
-            None => {
-                r.push_error(
-                    DiagnosticCode::E011,
-                    format!(
-                        "connection '{}' references undefined component '{}' in '{}' (comp:port)",
-                        conn_label, comp_part, field
-                    ),
-                );
-                return None;
-            }
-        };
-        let port_pid = match r.scope_index.ports.get(&(comp_cid, port_part.to_owned())) {
-            Some(pid) => *pid,
-            None => {
-                r.push_error(
-                    DiagnosticCode::E010,
-                    format!(
-                        "connection '{}': component '{}' has no port '{}' (in '{}')",
-                        conn_label, comp_part, port_part, field
-                    ),
-                );
-                return None;
-            }
-        };
-        Some(ConnectionEndpoint {
-            component: comp_cid,
-            port: Some(port_pid),
-        })
+    if raw.is_empty() {
+        r.push_error(
+            DiagnosticCode::E002,
+            format!(
+                "connection '{}' has empty '{}' attribute",
+                conn_label, field
+            ),
+        );
+        return None;
+    }
+
+    // Support legacy colon notation `comp:port` by converting it to `comp/port`
+    let normalized_raw = if raw.contains(':') && !raw.contains('/') {
+        raw.replace(':', "/")
     } else {
-        // Bare component reference
-        match r.scope_index.components.get(&(scope, raw.clone())) {
-            Some(cid) => Some(ConnectionEndpoint {
-                component: *cid,
-                port: None,
-            }),
+        raw.to_string()
+    };
+
+    let is_absolute = normalized_raw.starts_with('/');
+    let raw_segments: Vec<&str> = normalized_raw
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if raw_segments.is_empty() {
+        r.push_error(
+            DiagnosticCode::E002,
+            format!(
+                "connection '{}' references empty path in '{}'",
+                conn_label, field
+            ),
+        );
+        return None;
+    }
+
+    let mut current_scope = scope;
+    let mut segment_idx = 0;
+
+    if is_absolute {
+        let system_label = raw_segments[0];
+        match r.system_label_index.get(system_label) {
+            Some(sid) => {
+                current_scope = Scope::System(*sid);
+                segment_idx = 1;
+            }
             None => {
                 r.push_error(
                     DiagnosticCode::E002,
                     format!(
-                        "connection '{}' references undefined component '{}' in '{}'",
-                        conn_label, raw, field
+                        "connection '{}' references undefined system '{}' in path '{}'",
+                        conn_label, system_label, raw
                     ),
                 );
-                None
+                return None;
             }
         }
     }
+
+    if segment_idx >= raw_segments.len() {
+        // Absolute path pointed to just the system itself
+        r.push_error(
+            DiagnosticCode::E002,
+            format!(
+                "connection '{}' references system instead of component in path '{}'",
+                conn_label, raw
+            ),
+        );
+        return None;
+    }
+
+    // Traverse component segments
+    while segment_idx < raw_segments.len() {
+        let seg = raw_segments[segment_idx];
+
+        if seg == "." {
+            segment_idx += 1;
+            continue;
+        }
+
+        if seg == ".." {
+            match current_scope {
+                Scope::Component(cid) => {
+                    let parent = r.model.components[cid.0].parent;
+                    current_scope = match parent {
+                        ComponentParent::Component(parent_cid) => Scope::Component(parent_cid),
+                        ComponentParent::System(parent_sid) => Scope::System(parent_sid),
+                    };
+                    segment_idx += 1;
+                    continue;
+                }
+                Scope::System(_) => {
+                    r.push_error(
+                        DiagnosticCode::E002,
+                        format!(
+                            "connection '{}' cannot navigate above root system with '..' in path '{}'",
+                            conn_label, raw
+                        ),
+                    );
+                    return None;
+                }
+            }
+        }
+
+        let is_last_segment = segment_idx == raw_segments.len() - 1;
+
+        // Try looking up component in current_scope
+        if let Some(comp_cid) = r.scope_index.components.get(&(current_scope, seg.to_string())) {
+            let cid = *comp_cid;
+            if is_last_segment {
+                // Resolved as a bare component
+                return Some(ConnectionEndpoint {
+                    component: cid,
+                    port: None,
+                });
+            } else {
+                current_scope = Scope::Component(cid);
+                segment_idx += 1;
+                continue;
+            }
+        }
+
+        // If not found as a component, and this is the last segment, check if current_scope is a component with this port
+        if is_last_segment {
+            if let Scope::Component(cid) = current_scope {
+                if let Some(pid) = r.scope_index.ports.get(&(cid, seg.to_string())) {
+                    return Some(ConnectionEndpoint {
+                        component: cid,
+                        port: Some(*pid),
+                    });
+                } else {
+                    let comp_label = &r.model.components[cid.0].label;
+                    r.push_error(
+                        DiagnosticCode::E010,
+                        format!(
+                            "connection '{}': component '{}' has no port '{}' (in '{}')",
+                            conn_label, comp_label, seg, field
+                        ),
+                    );
+                    return None;
+                }
+            }
+        }
+
+        // Component not found in current scope
+        let err_code = if raw_segments.len() > 1 {
+            DiagnosticCode::E011
+        } else {
+            DiagnosticCode::E002
+        };
+        r.push_error(
+            err_code,
+            format!(
+                "connection '{}' references undefined component '{}' in '{}'",
+                conn_label, seg, field
+            ),
+        );
+        return None;
+    }
+
+    None
 }
 
 /// Resolve `encapsulates` labels for an already-allocated connection.
@@ -1555,5 +1668,133 @@ system "sys2" {
             "expected no W012 when top-level component referenced multiple times, got: {:?}",
             warnings
         );
+    }
+
+    // ── UNIX-style Path Connections ──────────────────────────────────────────
+
+    #[test]
+    fn resolve_unix_style_relative_sibling_ports() {
+        let src = r#"
+system "drone" {
+  component "sensor" {
+    leaf = true
+    port "i2c" { role = "provider" }
+  }
+  component "controller" {
+    leaf = true
+    port "i2c-in" { role = "consumer" }
+  }
+  connection "sensor-bus" {
+    from = "sensor/i2c"
+    to   = "controller/i2c-in"
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, diags) = resolve(raw).expect("should resolve unix-style relative paths");
+        assert!(diags.iter().all(|d| !d.is_error()));
+
+        let conn = &model.connections[0];
+        assert_eq!(conn.label, "sensor-bus");
+        assert_eq!(model.components[conn.from.component.0].label, "sensor");
+        assert_eq!(model.ports[conn.from.port.unwrap().0].label, "i2c");
+        assert_eq!(model.components[conn.to.component.0].label, "controller");
+        assert_eq!(model.ports[conn.to.port.unwrap().0].label, "i2c-in");
+    }
+
+    #[test]
+    fn resolve_unix_style_nested_subcomponent_paths() {
+        let src = r#"
+system "drone" {
+  component "controller" {
+    component "mcu" {
+      leaf = true
+      port "spi" { role = "provider" }
+    }
+  }
+  component "sensor" {
+    component "imu" {
+      leaf = true
+      port "spi-in" { role = "consumer" }
+    }
+  }
+  connection "spi-bus" {
+    from = "controller/mcu/spi"
+    to   = "sensor/imu/spi-in"
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, diags) = resolve(raw).expect("should resolve nested subcomponent paths");
+        assert!(diags.iter().all(|d| !d.is_error()));
+
+        let conn = &model.connections[0];
+        assert_eq!(conn.label, "spi-bus");
+        assert_eq!(model.components[conn.from.component.0].label, "mcu");
+        assert_eq!(model.ports[conn.from.port.unwrap().0].label, "spi");
+        assert_eq!(model.components[conn.to.component.0].label, "imu");
+        assert_eq!(model.ports[conn.to.port.unwrap().0].label, "spi-in");
+    }
+
+    #[test]
+    fn resolve_unix_style_parent_traversal() {
+        let src = r#"
+system "drone" {
+  component "battery" {
+    leaf = true
+    port "power-out" { role = "provider" }
+  }
+  component "controller" {
+    component "power-regulator" {
+      leaf = true
+      port "v-in" { role = "consumer" }
+    }
+    connection "internal-power" {
+      from = "../battery/power-out"
+      to   = "power-regulator/v-in"
+    }
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, diags) = resolve(raw).expect("should resolve parent traversal ..");
+        assert!(diags.iter().all(|d| !d.is_error()));
+
+        let conn = &model.connections[0];
+        assert_eq!(conn.label, "internal-power");
+        assert_eq!(model.components[conn.from.component.0].label, "battery");
+        assert_eq!(model.ports[conn.from.port.unwrap().0].label, "power-out");
+        assert_eq!(model.components[conn.to.component.0].label, "power-regulator");
+        assert_eq!(model.ports[conn.to.port.unwrap().0].label, "v-in");
+    }
+
+    #[test]
+    fn resolve_unix_style_absolute_paths() {
+        let src = r#"
+system "drone" {
+  component "sensor" {
+    leaf = true
+    port "data" { role = "provider" }
+  }
+  component "fc" {
+    leaf = true
+    port "data-in" { role = "consumer" }
+  }
+  connection "global-link" {
+    from = "/drone/sensor/data"
+    to   = "/drone/fc/data-in"
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, diags) = resolve(raw).expect("should resolve absolute path");
+        assert!(diags.iter().all(|d| !d.is_error()));
+
+        let conn = &model.connections[0];
+        assert_eq!(conn.label, "global-link");
+        assert_eq!(model.components[conn.from.component.0].label, "sensor");
+        assert_eq!(model.ports[conn.from.port.unwrap().0].label, "data");
+        assert_eq!(model.components[conn.to.component.0].label, "fc");
+        assert_eq!(model.ports[conn.to.port.unwrap().0].label, "data-in");
     }
 }
