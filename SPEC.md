@@ -1,5 +1,16 @@
 # `rhizz` Specification v0.4
 
+Rhizz is a code-first system architecture modeling tool. It combines:
+
+- Architecture modeling
+- Model-based Systems Engineering (MBSE)
+- Code-first approach
+- Gradual compilation (or rather validation) of your model
+
+The goal of Rhizz is to make Software Architecture something more than drawing
+diagrams and writing lengthy design documents. It provides a formalized modeling
+language for defining system architectures at various levels of abstraction.
+
 ## 1. Project Structure
 
 A project consists of a single system model file (`system.hcl` or `main.hcl`) containing the system architecture model (including optional `project` metadata), and optional view definition files (`views.hcl` or as many view files as the user creates):
@@ -21,11 +32,11 @@ View configurations, filters, and visual layout positions remain separated in `v
 > **Impl:** see [SPEC/models.md](SPEC/models.md) — raw deserialization structs,
 > HCL parsing strategy, and resolved model types.
 
-### 2.1 `project` Block (Optional, Singleton)
+### 2.1 `project` Block (Optional)
 
 ```hcl
 project {
-  name    = "drone-v1"
+  name    = "military-drone"
   version = "0.1.0"
   authors = ["Alice", "Bob"]
 }
