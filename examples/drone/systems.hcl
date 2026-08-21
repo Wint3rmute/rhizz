@@ -111,43 +111,43 @@ system "quadcopter" {
   connection "motor-control" {
     description = "DShot600 motor signals"
     tags        = ["motor", "data"]
-    from        = "flight-controller:motor-out"
-    to          = "esc:motor-in"
+    from        = "flight-controller/motor-out"
+    to          = "esc/motor-in"
   }
 
   connection "gps-serial" {
     description = "UART link: FC ↔ GPS"
     tags        = ["data", "navigation"]
-    from        = "flight-controller:gps-serial"
-    to          = "gps:serial"
+    from        = "flight-controller/gps-serial"
+    to          = "gps/serial"
   }
 
   connection "rc-link" {
     description = "CRSF serial: receiver → FC"
     tags        = ["rf", "control"]
-    from        = "radio-rx:crsf"
-    to          = "flight-controller:rc-in"
+    from        = "radio-rx/crsf"
+    to          = "flight-controller/rc-in"
   }
 
   connection "power-main" {
     description = "Battery → ESC main power"
     tags        = ["power"]
-    from        = "battery:power-out"
-    to          = "esc:power-in"
+    from        = "battery/power-out"
+    to          = "esc/power-in"
   }
 
   connection "power-bec" {
     description = "ESC 5V BEC → flight controller"
     tags        = ["power"]
-    from        = "esc:bec-out"
+    from        = "esc/bec-out"
     to          = "flight-controller"
   }
 
   connection "video-feed" {
     description = "Analog video: camera → VTX"
     tags        = ["video"]
-    from        = "camera:video-out"
-    to          = "vtx:video-in"
+    from        = "camera/video-out"
+    to          = "vtx/video-in"
   }
 }
 

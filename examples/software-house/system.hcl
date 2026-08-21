@@ -191,7 +191,7 @@ system "acme-software" {
     connection "design-handoff" {
       description = "Designers deliver specs to PMs for grooming"
       tags        = ["process"]
-      from        = "designers:design-out"
+      from        = "designers/design-out"
       to          = "product-managers"
     }
   }
@@ -269,7 +269,7 @@ system "acme-software" {
     connection "test-handoff" {
       description = "Automation team provides regression suites to manual QA"
       tags        = ["process", "testing"]
-      from        = "automation-qa:suites-out"
+      from        = "automation-qa/suites-out"
       to          = "manual-qa"
     }
   }
@@ -300,28 +300,28 @@ system "acme-software" {
   connection "sprint-planning" {
     description = "Bi-weekly sprint planning: Product → Engineering"
     tags        = ["process", "agile"]
-    from        = "product:sprint-out"
-    to          = "engineering:sprint-in"
+    from        = "product/sprint-out"
+    to          = "engineering/sprint-in"
   }
 
   connection "bug-reports" {
     description = "QA files bugs against Engineering"
     tags        = ["process", "quality"]
-    from        = "qa:bug-out"
-    to          = "engineering:bug-in"
+    from        = "qa/bug-out"
+    to          = "engineering/bug-in"
   }
 
   connection "release-sign-off" {
     description = "QA approves a build for release"
     tags        = ["process", "quality"]
-    from        = "qa:signoff-out"
-    to          = "product:signoff-in"
+    from        = "qa/signoff-out"
+    to          = "product/signoff-in"
   }
 
   connection "customer-feedback" {
     description = "Sales relays customer feedback to Product"
     tags        = ["process", "business"]
-    from        = "sales:feedback-out"
-    to          = "product:feedback-in"
+    from        = "sales/feedback-out"
+    to          = "product/feedback-in"
   }
 }

@@ -121,8 +121,8 @@ system "home-monitor" {
     connection "power-rail" {
       description = "Power delivery from supply to MCU"
       tags        = ["power"]
-      from        = "power-supply:power-out"
-      to          = "mcu:power-in"
+      from        = "power-supply/power-out"
+      to          = "mcu/power-in"
     }
   }
 
@@ -149,15 +149,15 @@ system "home-monitor" {
   connection "read-sensor" {
     description = "I2C acquisition from sensor to controller"
     tags        = ["data"]
-    from        = "sensor:i2c"
-    to          = "controller:i2c-in"
+    from        = "sensor/i2c"
+    to          = "controller/i2c-in"
   }
 
   connection "send-telemetry" {
     description = "MQTT upload from controller to cloud broker"
     tags        = ["data", "cloud"]
-    from        = "controller:mqtt-out"
-    to          = "broker:mqtt-in"
+    from        = "controller/mqtt-out"
+    to          = "broker/mqtt-in"
   }
 }
 

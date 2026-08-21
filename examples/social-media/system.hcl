@@ -240,49 +240,49 @@ system "buzzvid" {
   connection "client-api" {
     description = "HTTPS REST/gRPC: mobile app ↔ API gateway"
     tags        = ["network", "api"]
-    from        = "mobile-app:api"
-    to          = "api-gateway:public"
+    from        = "mobile-app/api"
+    to          = "api-gateway/public"
   }
 
   connection "gateway-to-backend" {
     description = "Internal RPC: gateway → backend services"
     tags        = ["network", "internal"]
-    from        = "api-gateway:internal"
-    to          = "backend:rpc"
+    from        = "api-gateway/internal"
+    to          = "backend/rpc"
   }
 
   connection "backend-to-db" {
     description = "SQL queries: backend → database"
     tags        = ["data"]
-    from        = "backend:db"
-    to          = "database:sql"
+    from        = "backend/db"
+    to          = "database/sql"
   }
 
   connection "backend-to-storage" {
     description = "Object put/get: video service → blob store"
     tags        = ["video", "data"]
-    from        = "backend:storage"
-    to          = "object-store:s3"
+    from        = "backend/storage"
+    to          = "object-store/s3"
   }
 
   connection "cdn-origin" {
     description = "CDN pulls transcoded segments from object store"
     tags        = ["video", "infra"]
-    from        = "cdn:origin"
-    to          = "object-store:s3"
+    from        = "cdn/origin"
+    to          = "object-store/s3"
   }
 
   connection "client-streaming" {
     description = "HLS/DASH video streaming: CDN → mobile app"
     tags        = ["video", "network"]
-    from        = "cdn:stream-out"
-    to          = "mobile-app:stream-in"
+    from        = "cdn/stream-out"
+    to          = "mobile-app/stream-in"
   }
 
   connection "push-notify" {
     description = "Push notifications: backend → mobile app"
     tags        = ["notification"]
-    from        = "backend:push-out"
-    to          = "mobile-app:push-in"
+    from        = "backend/push-out"
+    to          = "mobile-app/push-in"
   }
 }

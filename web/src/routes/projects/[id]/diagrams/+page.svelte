@@ -1152,10 +1152,10 @@ async function handleCreateConnection(
   }
 
   const fromEndpoint = sourcePortLabel
-    ? `${srcCompLabel}:${sourcePortLabel}`
+    ? `${srcCompLabel}/${sourcePortLabel}`
     : srcCompLabel;
   const toEndpoint = targetPortLabel
-    ? `${targetCompLabel}:${targetPortLabel}`
+    ? `${targetCompLabel}/${targetPortLabel}`
     : targetCompLabel;
 
   const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
