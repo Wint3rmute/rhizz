@@ -52,7 +52,9 @@ project {
 
 ### 2.2 `system` Block
 
-Top-level block. One or more per project. Contains components and connections.
+Top-level block. One or more per project. One of possible realizations of your
+project, be it a final product, one of your product variants, a prototype or a
+testing setup.
 
 ```hcl
 system "consumer-drone" {
@@ -80,10 +82,10 @@ system "consumer-drone" {
 
 ### 2.3 `component` Block
 
-Defined inside a `system`, another `component`, **or at the top level**.
-Represents a physical or logical building block. Components declare their
-external interface via `port` blocks; ports are allowed on both leaf and
-non-leaf components.
+Represents a physical or logical building block. Defined inside a `system`, inside
+another `component`, or at the top level. Components declare their external
+interface via `port` blocks; ports are allowed on both leaf and non-leaf
+components.
 
 ```hcl
 component "flight-controller" {
