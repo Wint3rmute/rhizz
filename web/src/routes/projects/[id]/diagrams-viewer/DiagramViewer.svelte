@@ -67,8 +67,10 @@ $effect(() => {
   fs.readdir(DIAGRAM_LAYOUT_DIR)
     .then((entries) => {
       if (cancelled) return;
-      const files = entries.filter((entry) =>
-        entry.isFile() && entry.name.endsWith(".json")
+      const files = entries.filter(
+        (entry) =>
+          entry.isFile() &&
+          (entry.name.endsWith(".hcl") || entry.name.endsWith(".json")),
       );
       diagramEntries = files;
 
