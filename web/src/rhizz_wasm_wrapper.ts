@@ -23,18 +23,12 @@ export interface ViewFilterDefinition {
   show_messages?: boolean;
 }
 
-export interface ViewOutputDefinition {
-  filename?: string;
-  rankdir?: string;
-}
-
 export interface ViewDefinition {
   label: string;
   description?: string;
   tags?: string[];
   system: string;
   filter?: ViewFilterDefinition;
-  output?: ViewOutputDefinition;
   nodes?: NodeLayout[];
 }
 

@@ -5,11 +5,6 @@ view "org-chart" {
   filter {
     max_level = 1
   }
-
-  output {
-    filename = "org-chart.dot"
-    rankdir  = "TB"
-  }
 }
 
 view "engineering-teams" {
@@ -20,11 +15,6 @@ view "engineering-teams" {
     components = ["engineering"]
     max_level  = 3
   }
-
-  output {
-    filename = "engineering-teams.dot"
-    rankdir  = "LR"
-  }
 }
 
 view "processes-only" {
@@ -34,10 +24,5 @@ view "processes-only" {
   filter {
     include_tags  = ["process"]
     show_messages = true
-  }
-
-  output {
-    filename = "processes.dot"
-    rankdir  = "LR"
   }
 }

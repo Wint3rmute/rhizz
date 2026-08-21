@@ -109,11 +109,6 @@ view "overview" {
     max_level     = 2
     show_messages = true
   }
-
-  output {
-    filename = "overview.dot"
-    rankdir  = "LR"
-  }
 }
 
 view "cloud-path" {
@@ -123,10 +118,5 @@ view "cloud-path" {
   filter {
     include_tags  = ["cloud"]
     show_messages = false
-  }
-
-  output {
-    filename = "cloud-path.dot"
-    rankdir  = "LR"
   }
 }

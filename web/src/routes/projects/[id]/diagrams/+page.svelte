@@ -277,12 +277,16 @@ async function refreshDiagramEntries(): Promise<void> {
   }
 }
 
-// Picks a sensible default diagram to open: the first ".json" file found
-// (in practice "main.json" — see the auto-seed below), or `null` if the
+// Picks a sensible default diagram to open: the first ".hcl" (or legacy ".json") file found
+// (in practice "main.hcl" — see the auto-seed below), or `null` if the
 // project has no diagrams at all yet.
 function firstDiagramPath(): string | null {
-  return diagramEntries.find((e) => e.isFile() && e.name.endsWith(".json"))
-    ?.path ?? null;
+  return (
+    diagramEntries.find(
+      (e) =>
+        e.isFile() && (e.name.endsWith(".hcl") || e.name.endsWith(".json")),
+    )?.path ?? null
+  );
 }
 
 // (Re)loads the diagram file list once per project, when the project
@@ -306,8 +310,9 @@ $effect(() => {
         // persisted (fullDiagramPath stays null).
         await writeDiagramLayoutFile(
           fs,
-          `${DIAGRAM_LAYOUT_DIR}/main.json`,
+          `${DIAGRAM_LAYOUT_DIR}/main.hcl`,
           emptyDiagramLayout(),
+          systems[0]?.label || "",
         );
         await refreshDiagramEntries();
       }
@@ -374,7 +379,7 @@ $effect(() => {
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
-  writeDiagramLayoutFile(fs, path, snapshot);
+  writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -396,7 +401,7 @@ function joinDiagramPath(parentPath: string, name: string): string {
 
 async function handleCreateDiagram(parentPath: string): Promise<void> {
   const name = sanitizeDiagramSegmentName(
-    prompt("New diagram name?", "Untitled.json") ?? "",
+    prompt("New diagram name?", "Untitled.hcl") ?? "",
   );
   if (name === null) return;
   const path = joinDiagramPath(parentPath, name);
@@ -405,6 +410,7 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
       fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
       emptyDiagramLayout(),
+      systems[0]?.label || "",
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;

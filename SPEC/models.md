@@ -386,7 +386,6 @@ struct View {
     tags: Vec<String>,
     system: SystemId,
     filter: ViewFilter,
-    output: ViewOutput,
 }
 
 #[derive(Debug)]
@@ -396,12 +395,6 @@ struct ViewFilter {
     max_level: Option<i32>,
     components: Vec<String>,   // whitelist by label, empty = all
     show_messages: bool,
-}
-
-#[derive(Debug)]
-struct ViewOutput {
-    filename: String,
-    rankdir: String,
 }
 ```
 

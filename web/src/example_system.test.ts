@@ -8,7 +8,7 @@ describe("EXAMPLE_SYSTEM_DIAGRAMS", () => {
 
     expect(names.length).toBeGreaterThanOrEqual(2);
     expect(names).toEqual(
-      expect.arrayContaining(["overview.json", "cloud-path.json"]),
+      expect.arrayContaining(["overview.hcl", "cloud-path.hcl"]),
     );
 
     for (const layout of Object.values(EXAMPLE_SYSTEM_DIAGRAMS)) {

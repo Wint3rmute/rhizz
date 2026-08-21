@@ -5,11 +5,6 @@ view "drone-overview" {
   filter {
     max_level = 1
   }
-
-  output {
-    filename = "drone-overview.dot"
-    rankdir  = "TB"
-  }
 }
 
 view "power-paths" {
@@ -19,11 +14,6 @@ view "power-paths" {
   filter {
     include_tags  = ["power"]
     show_messages = false
-  }
-
-  output {
-    filename = "power-paths.dot"
-    rankdir  = "LR"
   }
 }
 
@@ -35,11 +25,6 @@ view "fc-internals" {
     components = ["flight-controller"]
     max_level  = 3
   }
-
-  output {
-    filename = "fc-internals.dot"
-    rankdir  = "LR"
-  }
 }
 
 view "ground-station" {
@@ -48,10 +33,5 @@ view "ground-station" {
 
   filter {
     max_level = 1
-  }
-
-  output {
-    filename = "ground-station.dot"
-    rankdir  = "LR"
   }
 }

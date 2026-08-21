@@ -32,8 +32,8 @@ wiring for a stakeholder review — all without touching the model itself:
 view "power-paths" {
   system = "quadcopter"
   filter { include_tags = ["power"]; show_messages = false }
-  output { filename = "power-paths.dot"; rankdir = "LR" }
 }
+```
 ```
 
 ## CLI

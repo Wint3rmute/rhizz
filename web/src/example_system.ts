@@ -169,11 +169,6 @@ view "overview" {
     max_level     = 2
     show_messages = true
   }
-
-  output {
-    filename = "overview.dot"
-    rankdir  = "LR"
-  }
 }
 
 view "cloud-path" {
@@ -184,16 +179,11 @@ view "cloud-path" {
     include_tags  = ["cloud"]
     show_messages = false
   }
-
-  output {
-    filename = "cloud-path.dot"
-    rankdir  = "LR"
-  }
 }
 `;
 
 export const EXAMPLE_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
-  "overview.json": {
+  "overview.hcl": {
     checked: {
       "home-monitor/sensor": { x: 40, y: 60, width: 150, height: 90 },
       "home-monitor/controller": {
@@ -241,7 +231,7 @@ export const EXAMPLE_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
       "home-monitor/broker": { x: 620, y: 70, width: 180, height: 100 },
     },
   },
-  "cloud-path.json": {
+  "cloud-path.hcl": {
     checked: {
       "home-monitor/sensor": { x: 50, y: 80, width: 150, height: 90 },
       "home-monitor/controller": {

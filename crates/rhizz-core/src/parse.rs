@@ -268,15 +268,6 @@ struct FilterAttrs {
     show_messages: Option<bool>,
 }
 
-/// Serde helper for deserializing output sub-block attributes.
-#[derive(Deserialize, Default)]
-struct OutputAttrs {
-    /// Output filename.
-    filename: Option<String>,
-    /// Graphviz rank direction.
-    rankdir: Option<String>,
-}
-
 // ── Raw view types ────────────────────────────────────────────────────────────
 
 /// Raw view block before resolution.
@@ -290,8 +281,6 @@ pub struct RawView {
     pub system: Option<String>,
     /// Optional filter sub-block.
     pub filter: Option<RawViewFilter>,
-    /// Optional output sub-block.
-    pub output: Option<RawViewOutput>,
 }
 
 /// Raw filter sub-block of a view.
@@ -307,15 +296,6 @@ pub struct RawViewFilter {
     pub components: Vec<String>,
     /// Whether to show messages on edges.
     pub show_messages: Option<bool>,
-}
-
-/// Raw output sub-block of a view.
-#[derive(Debug, Clone, Default)]
-pub struct RawViewOutput {
-    /// Output filename.
-    pub filename: Option<String>,
-    /// Graphviz rank direction.
-    pub rankdir: Option<String>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -486,27 +466,16 @@ fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
 fn parse_view(body: &hcl::Body) -> Result<RawView> {
     let a: ViewAttrs = attrs(body)?;
     let mut filter = None;
-    let mut output = None;
     for block in body.blocks() {
-        match block.identifier() {
-            "filter" => {
-                let fa: FilterAttrs = attrs(block.body())?;
-                filter = Some(RawViewFilter {
-                    include_tags: fa.include_tags.unwrap_or_default(),
-                    exclude_tags: fa.exclude_tags.unwrap_or_default(),
-                    max_level: fa.max_level,
-                    components: fa.components.unwrap_or_default(),
-                    show_messages: fa.show_messages,
-                });
-            }
-            "output" => {
-                let oa: OutputAttrs = attrs(block.body())?;
-                output = Some(RawViewOutput {
-                    filename: oa.filename,
-                    rankdir: oa.rankdir,
-                });
-            }
-            _ => {}
+        if block.identifier() == "filter" {
+            let fa: FilterAttrs = attrs(block.body())?;
+            filter = Some(RawViewFilter {
+                include_tags: fa.include_tags.unwrap_or_default(),
+                exclude_tags: fa.exclude_tags.unwrap_or_default(),
+                max_level: fa.max_level,
+                components: fa.components.unwrap_or_default(),
+                show_messages: fa.show_messages,
+            });
         }
     }
     Ok(RawView {
@@ -514,7 +483,6 @@ fn parse_view(body: &hcl::Body) -> Result<RawView> {
         tags: a.tags.unwrap_or_default(),
         system: a.system,
         filter,
-        output,
     })
 }
 
@@ -722,7 +690,6 @@ mod tests {
             .find(|v| v.label == "drone-overview")
             .unwrap();
         assert!(ov.inner.filter.is_some());
-        assert!(ov.inner.output.is_some());
     }
 
     #[test]

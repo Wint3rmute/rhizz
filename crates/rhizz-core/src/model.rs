@@ -283,8 +283,6 @@ pub struct View {
     pub system: SystemId,
     /// Filter predicates controlling what appears in the view.
     pub filter: ViewFilter,
-    /// Output settings (filename, layout direction).
-    pub output: ViewOutput,
 }
 
 /// Filter predicates for a view.
@@ -302,15 +300,6 @@ pub struct ViewFilter {
     pub show_messages: bool,
 }
 
-/// Output settings for a view.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ViewOutput {
-    /// Output file path.
-    pub filename: String,
-    /// Graphviz rank direction (`"TB"`, `"LR"`, etc.).
-    pub rankdir: String,
-}
-
 // ── View definitions and layout models ────────────────────────────────────────
 
 /// Node layout metadata for visual diagrams.
@@ -323,10 +312,13 @@ pub struct NodeLayout {
     /// Y coordinate on canvas.
     pub y: f64,
     /// Optional width in world units.
+    #[serde(default)]
     pub width: Option<f64>,
     /// Optional height in world units.
+    #[serde(default)]
     pub height: Option<f64>,
     /// Optional text alignment ("center", "top-center", "top-left").
+    #[serde(default)]
     pub text_align: Option<String>,
 }
 
@@ -336,16 +328,19 @@ pub struct ViewDefinition {
     /// Unique view identifier.
     pub label: String,
     /// Human-readable description.
+    #[serde(default)]
     pub description: String,
     /// Filtering tags.
+    #[serde(default)]
     pub tags: Vec<String>,
     /// Target system label.
+    #[serde(default)]
     pub system: String,
     /// Filter settings.
+    #[serde(default)]
     pub filter: ViewFilterDefinition,
-    /// Output settings.
-    pub output: ViewOutputDefinition,
     /// Placed node layouts for this view.
+    #[serde(default)]
     pub nodes: Vec<NodeLayout>,
 }
 
@@ -373,10 +368,6 @@ impl ViewDefinition {
                     None
                 },
             },
-            output: ViewOutputDefinition {
-                filename: view.output.filename.clone(),
-                rankdir: view.output.rankdir.clone(),
-            },
             nodes: Vec::new(),
         }
     }
@@ -386,24 +377,20 @@ impl ViewDefinition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ViewFilterDefinition {
     /// Tag whitelist (empty = match all).
+    #[serde(default)]
     pub include_tags: Vec<String>,
     /// Tag blacklist.
+    #[serde(default)]
     pub exclude_tags: Vec<String>,
     /// Maximum abstraction level to display.
+    #[serde(default)]
     pub max_level: Option<i32>,
     /// Component whitelist.
+    #[serde(default)]
     pub components: Vec<String>,
     /// Whether to show messages on connection edges.
+    #[serde(default)]
     pub show_messages: Option<bool>,
-}
-
-/// Output settings for a view definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct ViewOutputDefinition {
-    /// Output filename.
-    pub filename: String,
-    /// Graphviz rank direction ("TB", "LR", etc.).
-    pub rankdir: String,
 }
 
 // Diagnostic types live in their own module; re-export here so existing

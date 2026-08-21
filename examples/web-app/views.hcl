@@ -8,11 +8,6 @@ view "architect-overview" {
   filter {
     show_messages = true
   }
-
-  output {
-    filename = "architect-overview.mmd"
-    rankdir  = "TB"
-  }
 }
 
 # ── Frontend developer ────────────────────────────────────────────────────────
@@ -27,11 +22,6 @@ view "frontend-internals" {
     max_level     = 3
     show_messages = true
   }
-
-  output {
-    filename = "frontend-internals.mmd"
-    rankdir  = "TB"
-  }
 }
 
 # ── Backend developer ─────────────────────────────────────────────────────────
@@ -44,66 +34,5 @@ view "backend-internals" {
   filter {
     components    = ["backend"]
     show_messages = true
-  }
-
-  output {
-    filename = "backend-internals.mmd"
-    rankdir  = "TB"
-  }
-}
-
-# ── Database administrator ────────────────────────────────────────────────────
-# Shows the backend and database components together with the full SQL message
-# schema, so a DBA can see exactly what queries the backend sends.
-view "data-layer" {
-  description = "Database layer: backend-to-database connection and SQL messages"
-  system      = "Web Application"
-
-  filter {
-    components    = ["backend", "database"]
-    show_messages = true
-  }
-
-  output {
-    filename = "data-layer.mmd"
-    rankdir  = "TB"
-  }
-}
-
-# ── DevOps ────────────────────────────────────────────────────────────────────
-# Infrastructure-centric view of the three deployed services (frontend, backend,
-# database) and the protocols that connect them.  Payloads are hidden to keep
-# the diagram clean for deployment and networking decisions.
-view "devops-topology" {
-  description = "Deployed services and connection protocols for DevOps"
-  system      = "Web Application"
-
-  filter {
-    max_level     = 1
-    show_messages = false
-  }
-
-  output {
-    filename = "devops-topology.mmd"
-    rankdir  = "TB"
-  }
-}
-
-# ── Product owner ─────────────────────────────────────────────────────────────
-# Feature-centric view showing the user-facing pages and top-level services
-# without technical message details.  Helps product owners reason about features
-# and user flows at the right level of abstraction.
-view "product-overview" {
-  description = "User-facing features and pages for product owners"
-  system      = "Web Application"
-
-  filter {
-    max_level     = 2
-    show_messages = false
-  }
-
-  output {
-    filename = "product-overview.mmd"
-    rankdir  = "TB"
   }
 }

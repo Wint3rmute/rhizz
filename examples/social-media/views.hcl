@@ -5,11 +5,6 @@ view "full-platform" {
   filter {
     max_level = 1
   }
-
-  output {
-    filename = "full-platform.dot"
-    rankdir  = "TB"
-  }
 }
 
 view "backend-services" {
@@ -20,11 +15,6 @@ view "backend-services" {
     components = ["backend"]
     max_level  = 3
   }
-
-  output {
-    filename = "backend-services.dot"
-    rankdir  = "LR"
-  }
 }
 
 view "video-pipeline" {
@@ -34,10 +24,5 @@ view "video-pipeline" {
   filter {
     include_tags  = ["video"]
     show_messages = false
-  }
-
-  output {
-    filename = "video-pipeline.dot"
-    rankdir  = "LR"
   }
 }
