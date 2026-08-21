@@ -83,7 +83,12 @@ pub fn compile(sources: &[Source]) -> CompileResult {
     }
 
     let mut pre_diagnostics = Vec::new();
-    validate_single_system_model(&system_files, &mut pre_diagnostics);
+    if validate_single_system_model(&system_files, &mut pre_diagnostics) {
+        return CompileResult {
+            model: None,
+            diagnostics: pre_diagnostics,
+        };
+    }
 
     if let Some(project_name) = default_project_name(sources) {
         let project = merged
@@ -114,21 +119,28 @@ pub fn compile(sources: &[Source]) -> CompileResult {
 
 /// Thin validation layer checking project file structure conventions for MVP.
 ///
-/// Emits a warning if multiple files define `system` blocks, encouraging
-/// the single `system.hcl` model file convention.
-fn validate_single_system_model(system_files: &[PathBuf], diagnostics: &mut Vec<Diagnostic>) {
+/// To be removed after MVP stage, once we're stable. Emits a blocking error if
+/// multiple files define `system` blocks, requiring the single `system.hcl`
+/// model file convention.
+fn validate_single_system_model(
+    system_files: &[PathBuf],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> bool {
     if system_files.len() > 1 {
         let file_list = system_files
             .iter()
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        diagnostics.push(Diagnostic::warning(
-            DiagnosticCode::W000,
+        diagnostics.push(Diagnostic::error(
+            DiagnosticCode::E000,
             format!(
-                "multiple files define system blocks ({file_list}); system architecture models should be consolidated in a single system model file (e.g. system.hcl)"
+                "multiple files define system blocks ({file_list}); system architecture models must be consolidated in a single system model file (e.g. system.hcl)"
             ),
         ));
+        true
+    } else {
+        false
     }
 }
 
@@ -338,7 +350,7 @@ system "demo" {}
     }
 
     #[test]
-    fn single_system_model_file_emits_no_system_split_warning() {
+    fn single_system_model_file_emits_no_system_split_error() {
         let sources = vec![
             Source {
                 filename: "system.hcl".to_string(),
@@ -371,13 +383,13 @@ view "overview" {
             !result
                 .diagnostics
                 .iter()
-                .any(|d| d.code == DiagnosticCode::W000),
-            "no W000 multi-system warning should be emitted for single system file"
+                .any(|d| d.code == DiagnosticCode::E000),
+            "no E000 multi-system error should be emitted for single system file"
         );
     }
 
     #[test]
-    fn multiple_system_files_emit_w000_warning() {
+    fn multiple_system_files_emit_blocking_error() {
         let sources = vec![
             Source {
                 filename: "system1.hcl".to_string(),
@@ -401,21 +413,21 @@ system "sys2" {
 
         let result = compile(&sources);
         assert!(
-            result.model.is_some(),
-            "model should still resolve despite warning"
+            result.model.is_none(),
+            "model should not be produced when blocking error occurs"
         );
-        let split_warning = result
+        let split_error = result
             .diagnostics
             .iter()
-            .find(|d| d.code == DiagnosticCode::W000);
+            .find(|d| d.code == DiagnosticCode::E000 && d.is_error());
         assert!(
-            split_warning.is_some(),
-            "W000 warning should be emitted when multiple files define system blocks"
+            split_error.is_some(),
+            "E000 error should be emitted when multiple files define system blocks"
         );
-        let msg = &split_warning.unwrap().message;
+        let msg = &split_error.unwrap().message;
         assert!(
             msg.contains("system1.hcl") && msg.contains("system2.hcl"),
-            "warning message should list the conflicting files: {msg}"
+            "error message should list the conflicting files: {msg}"
         );
     }
 }
