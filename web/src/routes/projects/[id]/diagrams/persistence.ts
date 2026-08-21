@@ -1,24 +1,21 @@
 // Schema + validation for the diagram data persisted into the active
 // project's VFS (web/src/routes/projects/[id]/diagrams/+page.svelte's
-// `checked`/`savedLayout` — see readDiagramLayoutFile/
-// writeDiagramLayoutFile below). Deliberately has zero Svelte/DOM
-// dependency, so it can be unit tested directly (see persistence.test.ts)
-// without mounting a component.
+// `checked`/`savedLayout`).
+// Converts views to/from canonical HCL using rhizz-core's `serialize_views`
+// and `parse_views` (backed by hcl-rs).
 import { z } from "zod";
 import { type ProjectFs, VfsError } from "../../../../vfs/fs";
+import {
+  parse_views,
+  serialize_views,
+  type ViewDefinition,
+} from "../../../../rhizz_wasm_wrapper";
 
-// Where a node's label is positioned within its box. Structurally
-// identical to (and interchangeable with) geometry.ts's `TextAlign` type,
-// which stays the canonical type for anything unrelated to persistence
-// (e.g. textPosition()'s geometry math) — this schema only needs to agree
-// with it on shape, not share a literal import, since both are plain
-// string-literal unions.
-const TextAlignSchema = z.enum(["center", "top-center", "top-left"]);
+// Where a node's label is positioned within its box.
+export const TextAlignSchema = z.enum(["center", "top-center", "top-left"]);
+export type TextAlign = z.infer<typeof TextAlignSchema>;
 
 // Position + size + style of a node, as stored in checked/savedLayout.
-// width/height/textAlign are optional so entries persisted before those
-// features existed still parse; see +page.svelte's nodeBox() for the
-// backfilled read path.
 export const StoredBoxSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -29,13 +26,7 @@ export const StoredBoxSchema = z.object({
 
 export type StoredBox = z.infer<typeof StoredBoxSchema>;
 
-// Validates a raw, untrusted record (e.g. straight from
-// JSON.parse(localStorage.getItem(...))) against StoredBoxSchema,
-// dropping any entry that doesn't match instead of letting a
-// corrupted/hand-edited/malformed entry propagate NaN/undefined into the
-// geometry math downstream. Each entry is parsed independently (rather
-// than parsing the whole record as one z.record(...) schema), so one bad
-// entry doesn't invalidate the rest of an otherwise-valid record.
+// Validates a raw record against StoredBoxSchema, dropping malformed entries.
 export function sanitizeStoredRecord(
   record: Record<string, unknown>,
 ): Record<string, StoredBox> {
@@ -62,10 +53,6 @@ export function sanitizeStoredRecord(
   return sanitized;
 }
 
-// A record that isn't guaranteed to be a plain object yet (e.g. straight
-// out of JSON.parse) is treated as empty rather than thrown at
-// sanitizeStoredRecord, which assumes its input is already at least
-// object-shaped.
 function sanitizeMaybeRecord(value: unknown): Record<string, StoredBox> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return {};
@@ -73,18 +60,11 @@ function sanitizeMaybeRecord(value: unknown): Record<string, StoredBox> {
   return sanitizeStoredRecord(value as Record<string, unknown>);
 }
 
-// Conventional location for diagram layout data inside a project's VFS —
-// mirrors how vfs/compile.ts identifies source files by their ".hcl"
-// extension, since there's no contentType tag on FsFile to key off (see
-// TASKS.md Task 60). Each project can hold any number of named diagrams
-// (TASKS.md Task 66), one JSON file per diagram, selectable via a
-// FileTree scoped to this directory.
+// Conventional location for diagram layout data inside a project's VFS.
 export const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
 
 // The full persisted content of a single diagram: which components are
-// currently placed on its canvas, and every component's last-known box
-// (even ones currently unchecked) — see +page.svelte's `checked`/
-// `savedLayout` for what actually populates these.
+// currently placed on its canvas, and every component's last-known box.
 export interface DiagramLayout {
   checked: Record<string, StoredBox>;
   savedLayout: Record<string, StoredBox>;
@@ -94,12 +74,81 @@ export function emptyDiagramLayout(): DiagramLayout {
   return { checked: {}, savedLayout: {} };
 }
 
-// Reads and validates a diagram layout file from the project's VFS,
-// tolerating everything a hand-edited or pre-existing file could throw at
-// it: a missing file (never saved yet — returns an empty layout),
-// malformed JSON, a non-object top level, or individually malformed
-// entries within `checked`/`savedLayout` (each dropped via
-// sanitizeStoredRecord rather than invalidating the whole file).
+/**
+ * Extracts a clean view name from a file path (e.g. ".rhizz/diagrams/overview.hcl" -> "overview").
+ */
+export function viewNameFromPath(path: string): string {
+  const filename = path.split("/").pop() || "diagram";
+  return filename.replace(/\.(hcl|json)$/, "");
+}
+
+/**
+ * Converts a DiagramLayout into a canonical HCL view block using rhizz-core's `serialize_views`.
+ */
+export function layoutToHcl(
+  layout: DiagramLayout,
+  viewName = "diagram",
+  systemName = "main",
+): string {
+  const nodes = Object.entries(layout.checked).map(([component, box]) => ({
+    component,
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+    text_align: box.textAlign,
+  }));
+
+  const viewDef: ViewDefinition = {
+    label: viewName,
+    description: "",
+    tags: [],
+    system: systemName,
+    filter: {
+      include_tags: [],
+      exclude_tags: [],
+      components: [],
+    },
+    output: {
+      filename: `${viewName}.dot`,
+      rankdir: "TB",
+    },
+    nodes,
+  };
+
+  return serialize_views([viewDef]);
+}
+
+/**
+ * Converts parsed ViewDefinition objects into a DiagramLayout.
+ */
+export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
+  const checked: Record<string, StoredBox> = {};
+  const savedLayout: Record<string, StoredBox> = {};
+
+  for (const view of views) {
+    for (const node of view.nodes || []) {
+      const parsedBox = StoredBoxSchema.safeParse({
+        x: node.x,
+        y: node.y,
+        width: node.width,
+        height: node.height,
+        textAlign: node.text_align,
+      });
+      if (parsedBox.success) {
+        checked[node.component] = parsedBox.data;
+        savedLayout[node.component] = parsedBox.data;
+      }
+    }
+  }
+
+  return { checked, savedLayout };
+}
+
+/**
+ * Reads and validates a diagram layout file from the project's VFS.
+ * Supports canonical HCL format (parsed via `parse_views`) and legacy JSON format.
+ */
 export async function readDiagramLayoutFile(
   fs: ProjectFs,
   path: string,
@@ -114,39 +163,49 @@ export async function readDiagramLayoutFile(
     throw error;
   }
 
-  let parsed: unknown;
+  // 1. Try parsing as HCL view definitions
   try {
-    parsed = JSON.parse(raw);
+    const views = parse_views(raw);
+    if (Array.isArray(views) && views.length > 0) {
+      return viewsToLayout(views);
+    }
   } catch {
-    console.warn(
-      `Malformed JSON in diagram layout file "${path}"; starting from an empty layout`,
-    );
-    return emptyDiagramLayout();
+    // Not valid HCL or legacy JSON format - proceed to fallback
   }
 
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    console.warn(
-      `Unrecognized data shape in diagram layout file "${path}"; starting from an empty layout`,
-    );
-    return emptyDiagramLayout();
+  // 2. Legacy fallback: JSON parsing
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ) {
+      const record = parsed as Record<string, unknown>;
+      return {
+        checked: sanitizeMaybeRecord(record.checked),
+        savedLayout: sanitizeMaybeRecord(record.savedLayout),
+      };
+    }
+  } catch {
+    // Malformed JSON / unrecognized format
   }
 
-  const record = parsed as Record<string, unknown>;
-  return {
-    checked: sanitizeMaybeRecord(record.checked),
-    savedLayout: sanitizeMaybeRecord(record.savedLayout),
-  };
+  return emptyDiagramLayout();
 }
 
-// Writes a diagram layout file into the project's VFS, creating
-// `.rhizz/diagrams/` (and any nested parent directories) first if needed.
+/**
+ * Writes a diagram layout file into the project's VFS formatted as canonical HCL.
+ */
 export async function writeDiagramLayoutFile(
   fs: ProjectFs,
   path: string,
   layout: DiagramLayout,
+  systemName = "main",
 ): Promise<void> {
   const lastSlash = path.lastIndexOf("/");
   const dir = lastSlash !== -1 ? path.slice(0, lastSlash) : DIAGRAM_LAYOUT_DIR;
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path, JSON.stringify(layout));
+
+  const viewName = viewNameFromPath(path);
+  const hclContent = layoutToHcl(layout, viewName, systemName);
+  await fs.writeFile(path, hclContent);
 }

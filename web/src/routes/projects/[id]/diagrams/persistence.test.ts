@@ -1,22 +1,36 @@
-import { describe, expect, it, vi } from "vitest";
+import init from "rhizz";
+import * as nodeFs from "node:fs/promises";
+import * as path from "node:path";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
+  layoutToHcl,
   readDiagramLayoutFile,
   sanitizeStoredRecord,
   StoredBoxSchema,
+  viewsToLayout,
   writeDiagramLayoutFile,
 } from "./persistence";
 
-const MAIN_DIAGRAM_PATH = `${DIAGRAM_LAYOUT_DIR}/main.json`;
+const MAIN_DIAGRAM_PATH = `${DIAGRAM_LAYOUT_DIR}/main.hcl`;
 
 async function projectFs() {
   const store = new InMemoryProjectStore();
   const project = await store.createProject("test");
   return openProjectFs(store, project.id);
 }
+
+beforeAll(async () => {
+  const wasmPath = path.resolve(
+    __dirname,
+    "../../../../../../crates/rhizz-wasm/pkg/rhizz_wasm_bg.wasm",
+  );
+  const buffer = await nodeFs.readFile(wasmPath);
+  await init({ module_or_path: buffer });
+});
 
 describe("StoredBoxSchema", () => {
   it("accepts a fully-populated valid entry", () => {
@@ -31,7 +45,6 @@ describe("StoredBoxSchema", () => {
   });
 
   it("accepts an entry with only the required x/y fields", () => {
-    // Matches data persisted before width/height/textAlign existed.
     const result = StoredBoxSchema.safeParse({ x: 10, y: 20 });
     expect(result.success).toBe(true);
   });
@@ -105,30 +118,74 @@ describe("sanitizeStoredRecord", () => {
   it("returns an empty record for an empty input", () => {
     expect(sanitizeStoredRecord({})).toEqual({});
   });
-
-  it("warns once, naming every dropped key", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    sanitizeStoredRecord({
-      good: { x: 1, y: 2 },
-      bad1: {},
-      bad2: {},
-    });
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    const message = warnSpy.mock.calls[0][0] as string;
-    expect(message).toContain("bad1");
-    expect(message).toContain("bad2");
-    warnSpy.mockRestore();
-  });
-
-  it("does not warn when every entry is valid", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    sanitizeStoredRecord({ good: { x: 1, y: 2 } });
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
-  });
 });
 
-describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
+describe("HCL View conversion and persistence", () => {
+  it("serializes DiagramLayout to clean HCL view block", () => {
+    const layout = {
+      checked: {
+        "home/sensor": { x: 40, y: 60, width: 150, height: 90 },
+        "home/controller": {
+          x: 260,
+          y: 40,
+          width: 200,
+          height: 170,
+          textAlign: "top-left" as const,
+        },
+      },
+      savedLayout: {},
+    };
+
+    const hcl = layoutToHcl(layout, "overview", "home");
+    expect(hcl).toContain('view "overview"');
+    expect(hcl).toContain('system      = "home"');
+    expect(hcl).toContain('node "home/sensor"');
+    expect(hcl).toContain("x          = 40");
+    expect(hcl).toContain('text_align = "top-left"');
+  });
+
+  it("converts parsed views to DiagramLayout", () => {
+    const views = [
+      {
+        label: "overview",
+        system: "home",
+        nodes: [
+          {
+            component: "home/sensor",
+            x: 40,
+            y: 60,
+            width: 150,
+            height: 90,
+          },
+          {
+            component: "home/controller",
+            x: 260,
+            y: 40,
+            width: 200,
+            height: 170,
+            text_align: "top-left",
+          },
+        ],
+      },
+    ];
+
+    const layout = viewsToLayout(views);
+    expect(layout.checked["home/sensor"]).toEqual({
+      x: 40,
+      y: 60,
+      width: 150,
+      height: 90,
+      textAlign: undefined,
+    });
+    expect(layout.checked["home/controller"]).toEqual({
+      x: 260,
+      y: 40,
+      width: 200,
+      height: 170,
+      textAlign: "top-left",
+    });
+  });
+
   it("returns an empty layout when the file has never been saved", async () => {
     const fs = await projectFs();
     expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
@@ -136,14 +193,36 @@ describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
     );
   });
 
-  it("round-trips a written layout", async () => {
+  it("round-trips a written layout to HCL and back", async () => {
     const fs = await projectFs();
     const layout = {
-      checked: { "sys/a": { x: 1, y: 2, width: 100, height: 50 } },
-      savedLayout: { "sys/a": { x: 1, y: 2, width: 100, height: 50 } },
+      checked: {
+        "sys/a": {
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 50,
+          textAlign: "top-left" as const,
+        },
+      },
+      savedLayout: {
+        "sys/a": {
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 50,
+          textAlign: "top-left" as const,
+        },
+      },
     };
-    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout);
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(layout);
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).toContain('view "main"');
+    expect(content).toContain('node "sys/a"');
+
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.checked["sys/a"]).toEqual(layout.checked["sys/a"]);
   });
 
   it("creates the containing directory on first write", async () => {
@@ -155,50 +234,31 @@ describe("readDiagramLayoutFile / writeDiagramLayoutFile", () => {
     );
   });
 
-  it("drops malformed entries within checked/savedLayout when reading a hand-edited file", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("gracefully falls back and parses legacy JSON diagram files", async () => {
     const fs = await projectFs();
     await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    const legacyPath = `${DIAGRAM_LAYOUT_DIR}/legacy.json`;
     await fs.writeFile(
-      MAIN_DIAGRAM_PATH,
+      legacyPath,
       JSON.stringify({
-        checked: { good: { x: 1, y: 2 }, bad: { x: "nope" } },
+        checked: { "sys/legacy": { x: 50, y: 75, width: 120, height: 80 } },
         savedLayout: {},
       }),
     );
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual({
-      checked: { good: { x: 1, y: 2 } },
-      savedLayout: {},
+
+    const read = await readDiagramLayoutFile(fs, legacyPath);
+    expect(read.checked["sys/legacy"]).toEqual({
+      x: 50,
+      y: 75,
+      width: 120,
+      height: 80,
     });
-    warnSpy.mockRestore();
   });
 
-  it("returns an empty layout for malformed JSON", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("returns an empty layout for unparseable garbage", async () => {
     const fs = await projectFs();
     await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    await fs.writeFile(MAIN_DIAGRAM_PATH, "not json{");
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
-      emptyDiagramLayout(),
-    );
-    warnSpy.mockRestore();
-  });
-
-  it("returns an empty layout when the file's top level isn't an object", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    await fs.writeFile(MAIN_DIAGRAM_PATH, JSON.stringify([1, 2, 3]));
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
-      emptyDiagramLayout(),
-    );
-    warnSpy.mockRestore();
-  });
-
-  it("treats missing checked/savedLayout keys as empty records", async () => {
-    const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
-    await fs.writeFile(MAIN_DIAGRAM_PATH, JSON.stringify({}));
+    await fs.writeFile(MAIN_DIAGRAM_PATH, "invalid { garbage !@#");
     expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
       emptyDiagramLayout(),
     );

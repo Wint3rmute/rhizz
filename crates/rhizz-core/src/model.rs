@@ -323,10 +323,13 @@ pub struct NodeLayout {
     /// Y coordinate on canvas.
     pub y: f64,
     /// Optional width in world units.
+    #[serde(default)]
     pub width: Option<f64>,
     /// Optional height in world units.
+    #[serde(default)]
     pub height: Option<f64>,
     /// Optional text alignment ("center", "top-center", "top-left").
+    #[serde(default)]
     pub text_align: Option<String>,
 }
 
@@ -336,16 +339,22 @@ pub struct ViewDefinition {
     /// Unique view identifier.
     pub label: String,
     /// Human-readable description.
+    #[serde(default)]
     pub description: String,
     /// Filtering tags.
+    #[serde(default)]
     pub tags: Vec<String>,
     /// Target system label.
+    #[serde(default)]
     pub system: String,
     /// Filter settings.
+    #[serde(default)]
     pub filter: ViewFilterDefinition,
     /// Output settings.
+    #[serde(default)]
     pub output: ViewOutputDefinition,
     /// Placed node layouts for this view.
+    #[serde(default)]
     pub nodes: Vec<NodeLayout>,
 }
 
@@ -386,14 +395,19 @@ impl ViewDefinition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ViewFilterDefinition {
     /// Tag whitelist (empty = match all).
+    #[serde(default)]
     pub include_tags: Vec<String>,
     /// Tag blacklist.
+    #[serde(default)]
     pub exclude_tags: Vec<String>,
     /// Maximum abstraction level to display.
+    #[serde(default)]
     pub max_level: Option<i32>,
     /// Component whitelist.
+    #[serde(default)]
     pub components: Vec<String>,
     /// Whether to show messages on connection edges.
+    #[serde(default)]
     pub show_messages: Option<bool>,
 }
 
@@ -401,8 +415,10 @@ pub struct ViewFilterDefinition {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ViewOutputDefinition {
     /// Output filename.
+    #[serde(default)]
     pub filename: String,
     /// Graphviz rank direction ("TB", "LR", etc.).
+    #[serde(default)]
     pub rankdir: String,
 }
 

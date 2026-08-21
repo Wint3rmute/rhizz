@@ -19,15 +19,15 @@ import DiagramViewer from "./DiagramViewer.svelte";
 // Initialize WASM module before evaluating story models
 await init();
 
-const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.json"];
-const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.json"];
+const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
+const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.hcl"];
 
 const manyDiagramsMap: Record<string, DiagramLayout> = {
-  "overview.json": sampleOverview,
-  "cloud-path.json": sampleCloud,
-  "sensor-network.json": sampleOverview,
-  "power-distribution.json": sampleCloud,
-  "data-pipeline.json": sampleOverview,
+  "overview.hcl": sampleOverview,
+  "cloud-path.hcl": sampleCloud,
+  "sensor-network.hcl": sampleOverview,
+  "power-distribution.hcl": sampleCloud,
+  "data-pipeline.hcl": sampleOverview,
 };
 
 async function ensureProjectWithDiagrams(
