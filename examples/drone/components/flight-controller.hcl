@@ -111,8 +111,8 @@ component "flight-controller" {
   connection "spi-imu" {
     description = "SPI bus: MCU ↔ IMU"
     tags        = ["data"]
-    from        = "mcu:spi"
-    to          = "imu:spi"
+    from        = "mcu/spi"
+    to          = "imu/spi"
   }
 
   connection "i2c-baro" {

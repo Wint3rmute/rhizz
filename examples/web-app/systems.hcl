@@ -162,21 +162,21 @@ system "Web Application" {
 
             connection "mode-switch" {
                 description = "Match event bridge: new matches open a chat thread"
-                from = "swipe_mode:match-out"
-                to   = "chat_mode:match-in"
+                from = "swipe_mode/match-out"
+                to   = "chat_mode/match-in"
             }
         }
 
         connection "login-to-app" {
             description = "Navigation from the login page into the main application"
-            from = "login_page:nav-out"
-            to   = "main_app:nav-in"
+            from = "login_page/nav-out"
+            to   = "main_app/nav-in"
         }
 
         connection "app-to-settings" {
             description = "Navigation from the main application to the settings page"
-            from = "main_app:settings-out"
-            to   = "settings_page:nav-in"
+            from = "main_app/settings-out"
+            to   = "settings_page/nav-in"
         }
     }
 
@@ -264,19 +264,19 @@ system "Web Application" {
 
     connection "database-connection" {
         description = "TLS connection from the backend to the database"
-        from = "backend:db-out"
-        to   = "database:db-in"
+        from = "backend/db-out"
+        to   = "database/db-in"
     }
 
     connection "rest-api" {
         description = "REST API served by the backend to the frontend"
-        from = "frontend:api-out"
-        to   = "backend:api-in"
+        from = "frontend/api-out"
+        to   = "backend/api-in"
     }
 
     connection "auth" {
         description = "JWT authentication API"
-        from = "frontend:auth-out"
-        to   = "backend:auth-in"
+        from = "frontend/auth-out"
+        to   = "backend/auth-in"
     }
 }

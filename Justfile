@@ -25,3 +25,7 @@ build:
     {{run}} wasm-pack build crates/rhizz-wasm --target web --release
     {{run}} sh -lc 'cd web && npx vite build'
     {{run}} sh -lc 'cd web && dx storybook build'
+
+# Starts a dev server. If you're an AI, never use this. It will just hang forever.
+dev:
+    {{run}} sh -lc 'cd web && deno run dev'

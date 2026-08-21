@@ -356,7 +356,7 @@ fn serialize_connection(
 
     let from_comp = &model.components[conn.from.component.0].label;
     let from_str = match conn.from.port {
-        Some(pid) => format!("{from_comp}:{}", model.ports[pid.0].label),
+        Some(pid) => format!("{from_comp}/{}", model.ports[pid.0].label),
         None => from_comp.clone(),
     };
     out.push_str(&format!(
@@ -366,7 +366,7 @@ fn serialize_connection(
 
     let to_comp = &model.components[conn.to.component.0].label;
     let to_str = match conn.to.port {
-        Some(pid) => format!("{to_comp}:{}", model.ports[pid.0].label),
+        Some(pid) => format!("{to_comp}/{}", model.ports[pid.0].label),
         None => to_comp.clone(),
     };
     out.push_str(&format!(
@@ -701,8 +701,8 @@ system "demo" {
 
   connection "c1" {
     description  = "Link"
-    from         = "comp-a:p1"
-    to           = "comp-b:p2"
+    from         = "comp-a/p1"
+    to           = "comp-b/p2"
   }
 }
 "#;
@@ -786,8 +786,8 @@ system "root-sys" {
 
     connection "pcie-link" {
       description  = "Internal PCIe bus"
-      from         = "leaf-node:data-port"
-      to           = "peer-node:data-port"
+      from         = "leaf-node/data-port"
+      to           = "peer-node/data-port"
     }
   }
 }

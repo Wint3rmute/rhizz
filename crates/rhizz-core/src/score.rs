@@ -463,8 +463,8 @@ mod tests {
                 }
               }
               connection "c" {
-                from = "a:p1"
-                to   = "b:p2"
+                from = "a/p1"
+                to   = "b/p2"
               }
             }
         "#;
@@ -490,7 +490,7 @@ mod tests {
               }
               component "b" { leaf = true }
               connection "c" {
-                from = "a:p1"
+                from = "a/p1"
                 to   = "b"
               }
             }

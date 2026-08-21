@@ -13,22 +13,7 @@ How to work on this file:
 
 ---
 
-## Task 74 — Multi-file workspace tabs and project import/export
-
-Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
-
-- Tabbed workspace switcher:
-  - "Canvas" (interactive visual modeler, default)
-  - "system.hcl" (live code viewer / editor for the core architectural model)
-  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
-- File Import / Export:
-  - "Export Project" downloads `system.hcl` and `views.hcl`.
-  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
-## Task 75 — Install FontAwesome icons, use them in the FileTree
+## Task 76 — Install FontAwesome icons, use them in the FileTree
 
 - Install FontAwesome icons via deno
 - Use the `free-solid-svg-icons` variant
@@ -37,28 +22,12 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
 
 ---
 
-## Task 76 — Allow embedding diagrams via unique URLs
+## Task 77 — Allow embedding diagrams via unique URLs
 
 - Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
 - Update the `Diagram` component to support the new URL scheme
   - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
 - The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
-
----
-
-## (For later brainstorming) Task <N> - use UNIX-style paths for component references
-
-Currently, when defining connections between components, path are specified using label + colon notation (e.g. `foo:bar`). While this is convenient for simple cases, it should be replaced with a more standard UNIX-style path notation (e.g. `/foo/bar`).
-
-Both relative and absolute paths should be supported.
-
-Definition of done:
-
-- All documentation (SPEC.md and other markdown documents) are updated to reflect the new approach
-- The rhizz-core module is updated
-- Code is checked for presence of unit tests which check that both relative and absolute paths are supported. Existing tests are updated to reflect the new approach.
-- Example models in `examples/` are updated to reflect the new approach. Each example model is checked after changes using the Rhizz CLI.
-- Example model hardcoded in the frontend application is updated to use the new approach
 
 ---
 
@@ -107,6 +76,21 @@ Vitest supports visual regression testing. The goal of this task is to implement
 infrastructure for visual regression testing in the frontend, then ask the
 developer to create diagrams, which can be saved as reference images for future
 comparisons.
+
+---
+
+## (For later) Task <N> — Multi-file workspace tabs and project import/export
+
+Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
+
+- Tabbed workspace switcher:
+  - "Canvas" (interactive visual modeler, default)
+  - "system.hcl" (live code viewer / editor for the core architectural model)
+  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
+- File Import / Export:
+  - "Export Project" downloads `system.hcl` and `views.hcl`.
+  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
 
 ---
 

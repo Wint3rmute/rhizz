@@ -89,15 +89,15 @@ system "home-monitor" {
   connection "read-sensor" {
     description = "I2C acquisition from sensor to controller"
     tags        = ["data"]
-    from        = "sensor:i2c"
-    to          = "controller:i2c-in"
+    from        = "sensor/i2c"
+    to          = "controller/i2c-in"
   }
 
   connection "send-telemetry" {
     description = "MQTT upload from controller to cloud broker"
     tags        = ["data", "cloud"]
-    from        = "controller:mqtt-out"
-    to          = "broker:mqtt-in"
+    from        = "controller/mqtt-out"
+    to          = "broker/mqtt-in"
   }
 }
 

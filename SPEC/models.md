@@ -85,8 +85,8 @@ struct RawPort {
     messages: Vec<Labeled<RawMessage>>,
 }
 
-/// A connection wiring two sibling components together.
-/// `from` and `to` are either `"comp"` (bare) or `"comp:port"` (typed).
+/// A connection wiring components/ports together.
+/// `from` and `to` are UNIX-style path strings (e.g. `"comp"`, `"comp/port"`, `"../sibling/port"`, `"/system/comp/port"`).
 #[derive(Debug, Clone)]
 struct RawConnection {
     description: Option<String>,

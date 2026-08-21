@@ -219,18 +219,15 @@ port "spi" {
 
 ### 2.5 `connection` Block
 
-Defined inside a `system` or `component`. Wires two **sibling** components
-together. The `from` and `to` fields accept either a bare component label or a
-`component:port` reference. When a port is named, protocol and role
-compatibility is validated at resolution time. The connection carries no
-messages and no direction — both are derived from the connected ports.
+Defined inside a `system` or `component`. Wires components and ports together.
+The `from` and `to` fields accept standard UNIX-style path references (e.g. `comp`, `comp/port`, `comp/subcomp/port`, `../sibling/port`, `/system/comp/port`). When a port is named, protocol and role compatibility is validated at resolution time. The connection carries no messages and no direction — both are derived from the connected ports.
 
 ```hcl
 connection "spi-bus" {
   description  = "SPI link between MCU and IMU"
   tags         = ["electronics", "data"]
   level        = 2
-  from         = "mcu:spi"   # typed — references port "spi" on component "mcu"
+  from         = "mcu/spi"   # typed — references port "spi" on component "mcu"
   to           = "imu"       # untyped — W007 will fire
   encapsulates = []
 }
@@ -239,8 +236,8 @@ connection "spi-bus" {
 | Attribute      | Type         | Required | Default          | Description                                                    |
 | -------------- | ------------ | -------- | ---------------- | -------------------------------------------------------------- |
 | _label_        | string       | **yes**  | —                | Unique identifier within parent scope                          |
-| `from`         | string       | **yes**  | —                | `"comp"` or `"comp:port"` — source component and optional port |
-| `to`           | string       | **yes**  | —                | `"comp"` or `"comp:port"` — target component and optional port |
+| `from`         | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or UNIX path — source endpoint        |
+| `to`           | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or UNIX path — target endpoint        |
 | `description`  | string       | no       | `""`             | Human-readable description                                     |
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
@@ -346,18 +343,16 @@ view "power-distribution" {
 > **Impl:** see [Scope lookup helper](SPEC/models.md#scope-lookup-helper) and
 > [Resolution pass](SPEC/models.md#resolution-pass) in models.md.
 
-All references are **name-based within the same parent scope**:
+All references use **name-based or UNIX-style path notation**:
 
 | Context                                           | Reference resolves to                                      |
 | ------------------------------------------------- | ---------------------------------------------------------- |
 | `connection.from` / `connection.to` (bare label)  | Sibling `component` labels in the same parent scope        |
-| `connection.from` / `connection.to` (`comp:port`) | Sibling `component` label + named `port` on that component |
+| `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component          |
+| `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path  |
 | `encapsulates`                                    | Sibling `connection` labels in the same parent scope       |
 | `component.source`                                | Top-level `component` label                                |
 | `view.system`                                     | Top-level `system` label                                   |
-
-**No cross-scope references in v1.** If a connection spans abstraction levels,
-model it at the appropriate parent scope.
 
 ---
 
@@ -713,29 +708,29 @@ system "mini-drone" {
   connection "dshot-bus" {
     description = "DShot600 motor control signal"
     tags        = ["electronics", "motor", "data"]
-    from        = "flight-controller:dshot"
-    to          = "esc:dshot"
+    from        = "flight-controller/dshot"
+    to          = "esc/dshot"
   }
 
   connection "power-main" {
     description = "Main battery power rail"
     tags        = ["power"]
-    from        = "battery:power-out"
-    to          = "esc:power-in"
+    from        = "battery/power-out"
+    to          = "esc/power-in"
   }
 
   connection "power-bec" {
     description = "5V BEC output to flight controller"
     tags        = ["power"]
-    from        = "esc:bec-out"
+    from        = "esc/bec-out"
     to          = "flight-controller"   # untyped — W007
   }
 
   connection "crsf-link" {
     description = "Crossfire serial protocol for RC input"
     tags        = ["rf", "control", "data"]
-    from        = "radio-rx:crsf"
-    to          = "flight-controller:crsf"
+    from        = "radio-rx/crsf"
+    to          = "flight-controller/crsf"
   }
 }
 ```
