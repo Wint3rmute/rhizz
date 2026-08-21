@@ -37,6 +37,20 @@ describe("readProjectSources", () => {
     ]);
   });
 
+  it("excludes .hcl files inside .rhizz/ directory from compilation sources", async () => {
+    await fs.mkdir(".rhizz/diagrams", { recursive: true });
+    await fs.writeFile(
+      ".rhizz/diagrams/overview.hcl",
+      'view "overview" { system = "main" }',
+    );
+    await fs.writeFile("main.hcl", "# empty project without system main");
+
+    const sources = await readProjectSources(fs);
+    expect(sources).toEqual([
+      { filename: "main.hcl", content: "# empty project without system main" },
+    ]);
+  });
+
   it("returns an empty array for a project with no .hcl files", async () => {
     await fs.writeFile("notes.txt", "just some notes");
     expect(await readProjectSources(fs)).toEqual([]);

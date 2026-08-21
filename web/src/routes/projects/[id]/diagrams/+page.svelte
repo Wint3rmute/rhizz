@@ -312,6 +312,7 @@ $effect(() => {
           fs,
           `${DIAGRAM_LAYOUT_DIR}/main.hcl`,
           emptyDiagramLayout(),
+          systems[0]?.label || "",
         );
         await refreshDiagramEntries();
       }
@@ -378,7 +379,7 @@ $effect(() => {
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
-  writeDiagramLayoutFile(fs, path, snapshot);
+  writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -409,6 +410,7 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
       fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
       emptyDiagramLayout(),
+      systems[0]?.label || "",
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;

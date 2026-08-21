@@ -88,7 +88,7 @@ export function viewNameFromPath(path: string): string {
 export function layoutToHcl(
   layout: DiagramLayout,
   viewName = "diagram",
-  systemName = "main",
+  systemName = "",
 ): string {
   const nodes = Object.entries(layout.checked).map(([component, box]) => ({
     component,
@@ -199,7 +199,7 @@ export async function writeDiagramLayoutFile(
   fs: ProjectFs,
   path: string,
   layout: DiagramLayout,
-  systemName = "main",
+  systemName = "",
 ): Promise<void> {
   const lastSlash = path.lastIndexOf("/");
   const dir = lastSlash !== -1 ? path.slice(0, lastSlash) : DIAGRAM_LAYOUT_DIR;

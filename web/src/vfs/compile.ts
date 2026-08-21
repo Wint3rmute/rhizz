@@ -21,7 +21,13 @@ export interface Source {
 export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
   const entries = await fs.readdir(".", { recursive: true });
   const hclPaths = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".hcl"))
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        entry.name.endsWith(".hcl") &&
+        !entry.path.startsWith(".rhizz/") &&
+        !entry.path.startsWith(".git/"),
+    )
     .map((entry) => entry.path);
 
   return Promise.all(
