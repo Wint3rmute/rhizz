@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 74 — Use UNIX-style paths for component and port references
+
+- Replaced colon-separated connection reference notation (e.g. `comp:port`) with standard UNIX-style path notation (`comp/port`, `/system/comp/subcomp/port`, `../sibling/port`).
+- **Path Resolution & Validation**:
+  - Implemented path resolution in `crates/rhizz-core/src/resolve.rs` supporting relative sibling paths (`sensor/i2c`), nested subcomponents (`controller/mcu/spi`), parent traversal (`../battery/power-out`), and absolute root paths (`/system/comp/port`).
+  - Added strict validation rejecting invalid non-UNIX colon notation with blocking `E002` errors.
+- **Serialization**:
+  - Updated connection serialization in `crates/rhizz-core/src/serialize.rs` to output UNIX-style `comp/port` paths.
+  - Updated `DocumentStore.svelte.ts` and interactive connection wiring on the diagram canvas to use `/` paths.
+- **Examples & Docs**:
+  - Updated all worked examples (`examples/drone`, `examples/social-media`, `examples/software-house`, `examples/single-file`, `examples/web-app`).
+  - Updated `SPEC.md`, `SPEC/models.md`, and diagnostic documentation (`E010.md`, `E011.md`).
+- **Tests**:
+  - Added unit tests in `resolve.rs` verifying relative, nested, parent traversal, absolute paths, and colon rejection.
+- Validated with `just test` (all 64 core tests + 266 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 73 — Interactive visual wiring (drag-to-connect ports & connections)
 
 - Implemented interactive visual connection drag-and-drop between ports and components on the diagram canvas.

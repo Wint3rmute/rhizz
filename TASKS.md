@@ -13,43 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 74 — Use UNIX-style paths for component and port references
-
-Replace colon-separated reference notation (e.g. `comp:port`) with standard UNIX-style path notation (e.g. `comp/port`, `/system/comp/subcomp/port`, `../sibling/port`) across the compiler, serializers, frontend, examples, and specifications.
-
-- **Path Syntax & Resolution**:
-  - Relative paths (e.g. `sensor/i2c`, `controller/mcu/spi`, `../power/main`, `sensor` for bare component without port).
-  - Absolute paths starting with `/` (e.g. `/quadcopter/flight-controller/mcu/spi`).
-  - Scoped traversal (`.` for current scope, `..` for parent scope).
-- **Resolver & Diagnostics**:
-  - Update `resolve_connection` in `rhizz-core/src/resolve.rs` to parse path segments and resolve both relative and absolute paths down to target components and ports.
-  - Update diagnostics (`E002`, `E010`, `E011`) to report path-based reference errors.
-- **Serialization & Round-Trip**:
-  - Update `serialize_connection` in `rhizz-core/src/serialize.rs` to output UNIX-style paths.
-  - Update `DocumentStore.svelte.ts` and interactive connection wiring in the web frontend.
-- **Examples, Tests & Specs**:
-  - Add comprehensive unit tests in `rhizz-core` covering relative paths, absolute paths, `..` traversal, and port resolution.
-  - Update all example models under `examples/` (`drone`, `social-media`, `software-house`, `single-file`, `web-app`) and `web/src/example_system.ts`.
-  - Update `SPEC.md`, `SPEC/models.md`, and diagnostic docs.
-- Validate with `just test`, `just lint`, `just build`, and `just format`.
-
----
-
-## Task 75 — Multi-file workspace tabs and project import/export
-
-Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
-
-- Tabbed workspace switcher:
-  - "Canvas" (interactive visual modeler, default)
-  - "system.hcl" (live code viewer / editor for the core architectural model)
-  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
-- File Import / Export:
-  - "Export Project" downloads `system.hcl` and `views.hcl`.
-  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
-
 ## Task 76 — Install FontAwesome icons, use them in the FileTree
 
 - Install FontAwesome icons via deno
@@ -113,6 +76,21 @@ Vitest supports visual regression testing. The goal of this task is to implement
 infrastructure for visual regression testing in the frontend, then ask the
 developer to create diagrams, which can be saved as reference images for future
 comparisons.
+
+---
+
+## (For later) Task <N> — Multi-file workspace tabs and project import/export
+
+Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
+
+- Tabbed workspace switcher:
+  - "Canvas" (interactive visual modeler, default)
+  - "system.hcl" (live code viewer / editor for the core architectural model)
+  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
+- File Import / Export:
+  - "Export Project" downloads `system.hcl` and `views.hcl`.
+  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
+- Validate with `deno task check`, `deno task test`, `deno task build`.
 
 ---
 
