@@ -13,20 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 75 — Allow embedding diagrams via unique URLs
-
-- Add a unique URL scheme for embedding diagrams (e.g. `/projects/[id]/diagrams/embed/[...diagram]`)
-- Build a standalone, chromeless embed page (no global navbar/sidebars, ideal for `<iframe>` embedding in docs/wikis).
-- Support interactive pan and zoom (wheel zoom, click-drag pan, touch gestures, and zoom-to-fill) without editing capabilities.
-- Add a minimal bottom toolbar featuring:
-  - Zoom-to-fill and reset view controls.
-  - "Open in Rhizz ↗" link targeting the full interactive diagram/viewer in the project.
-- Re-use and refactor existing canvas components for clean modularity.
-- Add Storybook stories and unit/route tests.
-- Validate with `just test`, `just lint`, `just build`, and `just format`.
-
----
-
 ## Task 76 — Install FontAwesome icons, use them in the FileTree
 
 - Install FontAwesome icons via deno
