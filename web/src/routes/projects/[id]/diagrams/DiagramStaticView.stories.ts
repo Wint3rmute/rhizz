@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import DiagramStaticView, {
-  type DiagramStaticBox,
-  type DiagramStaticComponent,
-  type DiagramStaticConnection,
-} from "./DiagramStaticView.svelte";
+import DiagramStaticView from "./DiagramStaticView.svelte";
+import type {
+  DiagramStaticBox,
+  DiagramStaticComponent,
+  DiagramStaticConnection,
+} from "./types";
 
 // Renders "fullscreen" so the auto-fit viewBox has real room to work
 // with, matching how the real canvas fills its own flex-1 column.

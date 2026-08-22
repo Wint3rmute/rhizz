@@ -4,7 +4,7 @@ import type {
   DiagramStaticBox,
   DiagramStaticComponent,
   DiagramStaticConnection,
-} from "./DiagramStaticView.svelte";
+} from "./types";
 
 const meta = {
   title: "Diagrams/DiagramEmbedView",

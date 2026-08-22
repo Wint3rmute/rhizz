@@ -6,7 +6,7 @@ import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";
 import { openProjectFs } from "../../../../../../vfs/fs";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
-import type { DiagramStaticBox } from "../../DiagramStaticView.svelte";
+import type { DiagramStaticBox } from "../../types";
 import {
   buildKeyToIndexMap,
   DIAGRAM_LAYOUT_DIR,
