@@ -5,3 +5,6 @@
 # LLMs sometimes create this when running under copilot, ignore.
 # Only Deno-based dependencies.
 web/package-lock.json
+
+# macos temporaries
+.DS_Store
