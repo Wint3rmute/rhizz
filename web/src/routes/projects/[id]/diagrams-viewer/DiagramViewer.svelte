@@ -10,9 +10,8 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import FileTree from "../editor/FileTree.svelte";
-import DiagramStaticView, {
-  type DiagramStaticBox,
-} from "../diagrams/DiagramStaticView.svelte";
+import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
+import type { DiagramStaticBox } from "../diagrams/types";
 import {
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,

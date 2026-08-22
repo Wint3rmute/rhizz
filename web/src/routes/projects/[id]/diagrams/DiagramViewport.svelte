@@ -21,7 +21,7 @@ let {
   toolbarExtra?: Snippet;
 } = $props();
 
-const editor_state = create_editor_state(stateKey);
+let editor_state = $derived.by(() => create_editor_state(stateKey));
 let root_svg: SVGElement;
 
 let canvas_width = $state(800);
