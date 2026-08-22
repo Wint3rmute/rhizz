@@ -21,6 +21,7 @@ import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
+import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
 import {
   type ComponentData,
   DocumentStore,
@@ -2271,100 +2272,110 @@ $effect(() => {
     </div>
   </div>
 
-  <!-- Right sidebar: component list -->
+  <!-- Right sidebar: component list and embed action -->
   <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300"
+    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300 flex flex-col justify-between gap-4"
   >
-    <h3
-      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-    >
-      Components
-    </h3>
+    <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+      <h3
+        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+      >
+        Components
+      </h3>
 
-    {#if selectedDiagramPath === null}
-      <p class="text-base-content/50 text-sm">
-        No diagram selected.<br />Create one from the Diagrams sidebar.
-      </p>
-    {:else if components.length === 0}
-      <p class="text-base-content/50 text-sm">
-        No components found.<br />Open the editor and define some systems.
-      </p>
-    {:else}
-      <ul class="space-y-1">
-        {#each components as component, index (index)}
-          <li class="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              id="comp-{index}"
-              class="checkbox checkbox-xs"
-              checked={!!checked[getComponentKey(index)]}
-              onchange={(value) => {
-                recordUndoPoint();
-                if (value.currentTarget.checked) {
-                  // Restore the remembered layout if this component has
-                  // been placed before (even if it was later unchecked),
-                  // instead of always resetting to the default position.
-                  const remembered = savedLayout[getComponentKey(index)];
-                  let box: Box = {
-                    x: remembered?.x ?? 100,
-                    y: remembered?.y ?? 100,
-                    width: remembered?.width ?? DEFAULT_NODE_WIDTH,
-                    height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
-                  };
-                  const parentBox = activeParentBox(index);
-                  if (parentBox) {
-                    box = clampWithin(
-                      box,
-                      parentBox,
-                      CHILD_CONTAINMENT_MARGIN,
-                      CHILD_CONTAINMENT_TOP_MARGIN,
-                    );
+      {#if selectedDiagramPath === null}
+        <p class="text-base-content/50 text-sm">
+          No diagram selected.<br />Create one from the Diagrams sidebar.
+        </p>
+      {:else if components.length === 0}
+        <p class="text-base-content/50 text-sm">
+          No components found.<br />Open the editor and define some systems.
+        </p>
+      {:else}
+        <ul class="space-y-1">
+          {#each components as component, index (index)}
+            <li class="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                id="comp-{index}"
+                class="checkbox checkbox-xs"
+                checked={!!checked[getComponentKey(index)]}
+                onchange={(value) => {
+                  recordUndoPoint();
+                  if (value.currentTarget.checked) {
+                    // Restore the remembered layout if this component has
+                    // been placed before (even if it was later unchecked),
+                    // instead of always resetting to the default position.
+                    const remembered = savedLayout[getComponentKey(index)];
+                    let box: Box = {
+                      x: remembered?.x ?? 100,
+                      y: remembered?.y ?? 100,
+                      width: remembered?.width ?? DEFAULT_NODE_WIDTH,
+                      height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
+                    };
+                    const parentBox = activeParentBox(index);
+                    if (parentBox) {
+                      box = clampWithin(
+                        box,
+                        parentBox,
+                        CHILD_CONTAINMENT_MARGIN,
+                        CHILD_CONTAINMENT_TOP_MARGIN,
+                      );
+                    }
+                    setNodeBox(index, {
+                      ...box,
+                      textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
+                    });
+                    // In case this component is itself the parent of children
+                    // that were already placed on canvas before it was.
+                    reclampChildren(index);
+                  } else {
+                    delete checked[getComponentKey(index)];
+                    // savedLayout[getComponentKey(index)] is intentionally left
+                    // alone, so re-checking this component later restores it
+                    // here.
+                    selected.delete(index);
                   }
-                  setNodeBox(index, {
-                    ...box,
-                    textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
-                  });
-                  // In case this component is itself the parent of children
-                  // that were already placed on canvas before it was.
-                  reclampChildren(index);
-                } else {
-                  delete checked[getComponentKey(index)];
-                  // savedLayout[getComponentKey(index)] is intentionally left
-                  // alone, so re-checking this component later restores it
-                  // here.
-                  selected.delete(index);
-                }
-              }}
-            />
-            <label
-              for="comp-{index}"
-              class="cursor-pointer truncate"
-              title={component.label}
-            >
-              {#if !component.leaf}
-                <span class="text-base-content/60 mr-1">▸</span>
-              {/if}
-              {component.label}
-            </label>
+                }}
+              />
+              <label
+                for="comp-{index}"
+                class="cursor-pointer truncate"
+                title={component.label}
+              >
+                {#if !component.leaf}
+                  <span class="text-base-content/60 mr-1">▸</span>
+                {/if}
+                {component.label}
+              </label>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      <br />
+      <h3
+        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+      >
+        Connections
+      </h3>
+
+      <ul class="space-y-1">
+        {#each connections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
+          <li class="flex items-center gap-2 text-sm truncate" title={connection.label}>
+            {connection.label}
           </li>
         {/each}
       </ul>
-    {/if}
+    </div>
 
-    <br />
-    <h3
-      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-    >
-      Connections
-    </h3>
-
-    <ul class="space-y-1">
-      {#each connections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
-        <li class="flex items-center gap-2 text-sm">
-          {connection.label}
-        </li>
-      {/each}
-    </ul>
+    <!-- Embed Diagram Button -->
+    <div class="pt-3 border-t border-base-300 shrink-0">
+      <EmbedDiagramButton
+        projectId={data.projectId}
+        diagramPath={selectedDiagramPath}
+      />
+    </div>
   </aside>
 </div>
 
