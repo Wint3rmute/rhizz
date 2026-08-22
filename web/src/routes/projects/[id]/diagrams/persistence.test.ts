@@ -275,7 +275,13 @@ describe("componentKey and model mapping helpers", () => {
   it("maps layout checked records to placed node boxes", () => {
     const keyToIndex = buildKeyToIndexMap(components, systems);
     const checked = {
-      "drone/fc": { x: 50, y: 60, width: 200, height: 150, textAlign: "top-left" as const },
+      "drone/fc": {
+        x: 50,
+        y: 60,
+        width: 200,
+        height: 150,
+        textAlign: "top-left" as const,
+      },
       "drone/fc/mcu": { x: 80, y: 100 },
       "drone/unknown": { x: 10, y: 10 },
     };
