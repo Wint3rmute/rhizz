@@ -10,6 +10,7 @@ import {
   serialize_views,
   type ViewDefinition,
 } from "../../../../rhizz_wasm_wrapper";
+import type { Box } from "./geometry";
 
 // Where a node's label is positioned within its box.
 export const TextAlignSchema = z.enum(["center", "top-center", "top-left"]);
@@ -65,6 +66,92 @@ export interface DiagramLayout {
 
 export function emptyDiagramLayout(): DiagramLayout {
   return { checked: {}, savedLayout: {} };
+}
+
+/**
+ * Minimal structural interface for components needed to resolve hierarchical keys.
+ */
+export interface ComponentHierarchyItem {
+  label: string;
+  parent_component_index?: number;
+  parent_system_index?: number;
+}
+
+/**
+ * Minimal structural interface for systems needed to resolve hierarchical keys.
+ */
+export interface SystemHierarchyItem {
+  label: string;
+}
+
+/**
+ * Builds a structurally-stable persistence key for a component: the path
+ * of labels from its root system down to it, e.g. "drone/controller/mcu".
+ *
+ * Falls back to a `#<index>`-prefixed key if the chain can't be resolved.
+ */
+export function componentKey(
+  index: number,
+  components: ComponentHierarchyItem[],
+  systems: SystemHierarchyItem[],
+): string {
+  const parts: string[] = [];
+  let current: number | undefined = index;
+
+  while (current !== undefined) {
+    const component: ComponentHierarchyItem | undefined = components[current];
+    if (!component) return `#${index}`;
+    parts.unshift(component.label);
+    if (component.parent_component_index !== undefined) {
+      current = component.parent_component_index;
+      continue;
+    }
+    const system = component.parent_system_index !== undefined
+      ? systems[component.parent_system_index]
+      : undefined;
+    if (system) parts.unshift(system.label);
+    current = undefined;
+  }
+
+  return parts.join("/");
+}
+
+/**
+ * Builds a reverse lookup Map from component persistence keys to arena indices.
+ */
+export function buildKeyToIndexMap(
+  components: ComponentHierarchyItem[],
+  systems: SystemHierarchyItem[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  components.forEach((_, index) => {
+    map.set(componentKey(index, components, systems), index);
+  });
+  return map;
+}
+
+/**
+ * Maps layout checked records to placed node bounding boxes keyed by arena index.
+ */
+export function mapLayoutToBoxes(
+  checked: Record<string, StoredBox>,
+  keyToIndex: Map<string, number>,
+  defaultWidth = 100,
+  defaultHeight = 100,
+): Record<number, Box & { textAlign: TextAlign }> {
+  const result: Record<number, Box & { textAlign: TextAlign }> = {};
+  for (const [key, box] of Object.entries(checked)) {
+    const index = keyToIndex.get(key);
+    if (index === undefined) continue;
+    result[index] = {
+      x: box.x,
+      y: box.y,
+      width: box.width ?? defaultWidth,
+      height: box.height ?? defaultHeight,
+      textAlign: box.textAlign ?? "center",
+    };
+  }
+  return result;
 }
 
 /**

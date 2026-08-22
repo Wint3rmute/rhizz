@@ -7,10 +7,8 @@ import {
 } from "../../../../ViewEditorState.svelte";
 import {
   type Box,
-  boxBoundaryPoint,
-  boxCenter,
-  type ConnectionOrientation,
-  depthOf,
+  computeRenderOrder,
+  computeVisibleConnections,
   elbowPath,
   type TextAlign,
   textPosition,
@@ -60,26 +58,11 @@ function parentOf(index: number): number | undefined {
 
 // Order nodes shallowest first so parents render behind children.
 let renderOrder = $derived(
-  Object.keys(boxes)
-    .map(Number)
-    .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
+  computeRenderOrder(Object.keys(boxes).map(Number), parentOf),
 );
 
 let visibleConnections = $derived(
-  connections.flatMap((conn) => {
-    const boxA = nodeBox(conn.from);
-    const boxB = nodeBox(conn.to);
-    if (!boxA || !boxB) return [];
-    const centerA = boxCenter(boxA);
-    const centerB = boxCenter(boxB);
-    const orientation: ConnectionOrientation =
-      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
-        ? "horizontal"
-        : "vertical";
-    const a = boxBoundaryPoint(boxA, centerB, orientation);
-    const b = boxBoundaryPoint(boxB, centerA, orientation);
-    return [{ conn, a, b, orientation }];
-  }),
+  computeVisibleConnections(connections, (i) => nodeBox(i)),
 );
 
 const ZOOM_TO_FILL_FRACTION = 0.85;

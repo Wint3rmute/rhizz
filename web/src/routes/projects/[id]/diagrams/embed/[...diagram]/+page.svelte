@@ -8,9 +8,11 @@ import { openProjectFs } from "../../../../../../vfs/fs";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import type { DiagramStaticBox } from "../../DiagramStaticView.svelte";
 import {
+  buildKeyToIndexMap,
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
+  mapLayoutToBoxes,
   readDiagramLayoutFile,
 } from "../../persistence";
 import type { PageProps } from "./$types";
@@ -77,52 +79,12 @@ let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
-function componentKey(index: number): string {
-  const allComponents: ComponentJS[] = components;
-  const allSystems: SystemJS[] = systems;
-  const parts: string[] = [];
-  let current: number | undefined = index;
-
-  while (current !== undefined) {
-    const component: ComponentJS | undefined = allComponents[current];
-    if (!component) return `#${index}`;
-    parts.unshift(component.label);
-    if (component.parent_component_index !== undefined) {
-      current = component.parent_component_index;
-      continue;
-    }
-    const system = component.parent_system_index !== undefined
-      ? allSystems[component.parent_system_index]
-      : undefined;
-    if (system) parts.unshift(system.label);
-    current = undefined;
-  }
-
-  return parts.join("/");
-}
-
 let keyToIndex = $derived.by(() => {
-  const map = new SvelteMap<string, number>();
-  components.forEach((_: unknown, index: number) => {
-    map.set(componentKey(index), index);
-  });
-  return map;
+  return buildKeyToIndexMap(components, systems);
 });
 
 let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
-  const next: Record<number, DiagramStaticBox> = {};
-  for (const [key, box] of Object.entries(layout.checked)) {
-    const index = keyToIndex.get(key);
-    if (index === undefined) continue;
-    next[index] = {
-      x: box.x,
-      y: box.y,
-      width: box.width ?? 100,
-      height: box.height ?? 100,
-      textAlign: box.textAlign ?? "center",
-    };
-  }
-  return next;
+  return mapLayoutToBoxes(layout.checked, keyToIndex);
 });
 </script>
 

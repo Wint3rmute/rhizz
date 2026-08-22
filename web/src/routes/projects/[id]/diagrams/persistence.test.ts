@@ -5,9 +5,12 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
+  buildKeyToIndexMap,
+  componentKey,
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
   layoutToHcl,
+  mapLayoutToBoxes,
   readDiagramLayoutFile,
   sanitizeStoredRecord,
   StoredBoxSchema,
@@ -241,5 +244,57 @@ describe("HCL View conversion and persistence", () => {
     expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
       emptyDiagramLayout(),
     );
+  });
+});
+
+describe("componentKey and model mapping helpers", () => {
+  const systems = [{ label: "drone" }];
+  const components = [
+    { label: "fc", parent_system_index: 0 },
+    { label: "mcu", parent_component_index: 0 },
+    { label: "imu", parent_component_index: 0 },
+  ];
+
+  it("builds hierarchical path keys for components", () => {
+    expect(componentKey(0, components, systems)).toBe("drone/fc");
+    expect(componentKey(1, components, systems)).toBe("drone/fc/mcu");
+    expect(componentKey(2, components, systems)).toBe("drone/fc/imu");
+  });
+
+  it("falls back to #<index> when component index is out of bounds", () => {
+    expect(componentKey(99, components, systems)).toBe("#99");
+  });
+
+  it("builds reverse lookup map from keys to indices", () => {
+    const map = buildKeyToIndexMap(components, systems);
+    expect(map.get("drone/fc")).toBe(0);
+    expect(map.get("drone/fc/mcu")).toBe(1);
+    expect(map.get("drone/fc/imu")).toBe(2);
+  });
+
+  it("maps layout checked records to placed node boxes", () => {
+    const keyToIndex = buildKeyToIndexMap(components, systems);
+    const checked = {
+      "drone/fc": { x: 50, y: 60, width: 200, height: 150, textAlign: "top-left" as const },
+      "drone/fc/mcu": { x: 80, y: 100 },
+      "drone/unknown": { x: 10, y: 10 },
+    };
+
+    const boxes = mapLayoutToBoxes(checked, keyToIndex);
+    expect(boxes[0]).toEqual({
+      x: 50,
+      y: 60,
+      width: 200,
+      height: 150,
+      textAlign: "top-left",
+    });
+    expect(boxes[1]).toEqual({
+      x: 80,
+      y: 100,
+      width: 100,
+      height: 100,
+      textAlign: "center",
+    });
+    expect(boxes[2]).toBeUndefined();
   });
 });

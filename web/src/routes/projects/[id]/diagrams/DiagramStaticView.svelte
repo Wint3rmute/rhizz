@@ -16,9 +16,8 @@
 // real types.
 import {
   type Box,
-  boxBoundaryPoint,
-  boxCenter,
-  type ConnectionOrientation,
+  computeRenderOrder,
+  computeVisibleConnections,
   depthOf,
   elbowPath,
   type TextAlign,
@@ -69,26 +68,11 @@ function parentOf(index: number): number | undefined {
 // (larger, drawn-later-otherwise) parent — same ordering +page.svelte's
 // `renderOrder` uses.
 let renderOrder = $derived(
-  Object.keys(boxes)
-    .map(Number)
-    .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
+  computeRenderOrder(Object.keys(boxes).map(Number), parentOf),
 );
 
 let visibleConnections = $derived(
-  connections.flatMap((conn) => {
-    const boxA = nodeBox(conn.from);
-    const boxB = nodeBox(conn.to);
-    if (!boxA || !boxB) return [];
-    const centerA = boxCenter(boxA);
-    const centerB = boxCenter(boxB);
-    const orientation: ConnectionOrientation =
-      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
-        ? "horizontal"
-        : "vertical";
-    const a = boxBoundaryPoint(boxA, centerB, orientation);
-    const b = boxBoundaryPoint(boxB, centerA, orientation);
-    return [{ conn, a, b, orientation }];
-  }),
+  computeVisibleConnections(connections, (i) => nodeBox(i)),
 );
 
 // Auto-fits the viewBox to whatever's actually placed, rather than

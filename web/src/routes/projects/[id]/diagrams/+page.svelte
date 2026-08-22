@@ -29,6 +29,8 @@ import {
 } from "../../../../DocumentStore.svelte";
 
 import {
+  buildKeyToIndexMap,
+  componentKey,
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
   readDiagramLayoutFile,
@@ -54,6 +56,8 @@ import {
   boxContains,
   clampWithin,
   computePortPositions,
+  computeRenderOrder,
+  computeVisibleConnections,
   type ConnectionOrientation,
   depthOf,
   elbowPath,
@@ -119,34 +123,9 @@ let firstError = $derived(compileErrors[0] ?? null);
 // "home-monitor/controller/mcu". Unlike the component's arena index (its
 // position in model.components(), which shifts whenever components are
 // reordered or inserted earlier in the HCL source), this key only changes
-// if the component itself (or an ancestor) is renamed or reparented — a
-// much rarer, more intentional edit. System labels are globally unique
-// (unlike component labels, which are only unique within their parent
-// scope — SPEC.md §2.3), so prefixing with the root system's label keeps
-// the whole path collision-free even across multiple systems.
-//
-// Falls back to a `#<index>`-prefixed key (which can never collide with a
-// real path, since real paths always contain at least one "/") if the
-// chain can't be resolved — shouldn't happen for a resolved model, but
-// keeps this total rather than throwing.
-function componentKey(index: number): string {
-  const parts: string[] = [];
-  let current: number | undefined = index;
-  while (current !== undefined) {
-    const component: ComponentJS | undefined = components[current];
-    if (!component) return `#${index}`;
-    parts.unshift(component.label);
-    if (component.parent_component_index !== undefined) {
-      current = component.parent_component_index;
-      continue;
-    }
-    const system = component.parent_system_index !== undefined
-      ? systems[component.parent_system_index]
-      : undefined;
-    if (system) parts.unshift(system.label);
-    current = undefined;
-  }
-  return parts.join("/");
+// if the component itself (or an ancestor) is renamed or reparented.
+function getComponentKey(index: number): string {
+  return componentKey(index, components, systems);
 }
 
 // Reverse lookup from a persistence key back to the component's current
@@ -155,13 +134,7 @@ function componentKey(index: number): string {
 // that no longer exists (renamed, removed, or reparented) and are simply
 // not rendered.
 let keyToIndex = $derived.by(() => {
-  // Built fresh and returned as-is on every recomputation; reactivity
-  // already comes from the surrounding $derived.by, not from mutating
-  // this Map later.
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const map = new Map<string, number>();
-  components.forEach((_, index) => map.set(componentKey(index), index));
-  return map;
+  return buildKeyToIndexMap(components, systems);
 });
 
 // Default node size, in world (SVG) units, for newly-placed nodes and for
@@ -476,7 +449,7 @@ async function handleDeleteDiagram(path: string): Promise<void> {
 // keeps the remembered layout up to date, instead of relying on each call
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
-  const key = componentKey(index);
+  const key = getComponentKey(index);
   checked[key] = { ...checked[key], ...box };
   savedLayout[key] = { ...savedLayout[key], ...box };
 }
@@ -492,7 +465,7 @@ function nodeBox(index: number): {
   height: number;
   textAlign: TextAlign;
 } | null {
-  const pos = checked[componentKey(index)];
+  const pos = checked[getComponentKey(index)];
   if (!pos) return null;
   return {
     x: pos.x,
@@ -507,7 +480,7 @@ function nodeBox(index: number): {
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
   if (primarySelected === null) return;
-  const box = checked[componentKey(primarySelected)];
+  const box = checked[getComponentKey(primarySelected)];
   if (!box) return;
   if (box.textAlign === align) return; // no-op: skip a redundant undo point
   recordUndoPoint();
@@ -856,7 +829,7 @@ let availableParents = $derived.by(() => {
   }
 
   components.forEach((comp, idx) => {
-    const key = componentKey(idx);
+    const key = getComponentKey(idx);
     options.push({
       key,
       label: comp.label,
@@ -882,7 +855,7 @@ function openCreateComponentModal(
   if (!targetParent && selected.size === 1) {
     const selIdx = selected.values().next().value;
     if (selIdx !== undefined) {
-      targetParent = componentKey(selIdx);
+      targetParent = getComponentKey(selIdx);
     }
   }
   if (!targetParent) {
@@ -897,7 +870,7 @@ function openCreateComponentModal(
 function onNodeDblClick(event: MouseEvent, index: number) {
   event.stopPropagation();
   event.preventDefault();
-  const parentKey = componentKey(index);
+  const parentKey = getComponentKey(index);
   const coords = svgPoint(root_svg, event.clientX, event.clientY);
   openCreateComponentModal(
     {
@@ -1004,7 +977,7 @@ $effect(() => {
 });
 
 let selectedKey = $derived(
-  selected.size === 1 ? componentKey(selected.values().next().value!) : null,
+  selected.size === 1 ? getComponentKey(selected.values().next().value!) : null,
 );
 
 let selectedComponentData = $derived(
@@ -1101,7 +1074,7 @@ function findHoveredTarget(
     if (i === sourceIndex) return [];
     const box = nodeBox(i);
     if (!box) return [];
-    const key = componentKey(i);
+    const key = getComponentKey(i);
     const compData = docStore.findComponent(key);
     const ports = compData && compData.ports.length > 0
       ? computePortPositions(box.width, box.height, compData.ports).map((
@@ -1131,8 +1104,8 @@ async function handleCreateConnection(
 ): Promise<void> {
   if (sourceCompIndex === targetCompIndex) return;
 
-  const srcKey = componentKey(sourceCompIndex);
-  const targetKey = componentKey(targetCompIndex);
+  const srcKey = getComponentKey(sourceCompIndex);
+  const targetKey = getComponentKey(targetCompIndex);
 
   const srcParts = srcKey.split("/").filter(Boolean);
   const targetParts = targetKey.split("/").filter(Boolean);
@@ -1217,7 +1190,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
   for (const i of selected) {
-    const box = checked[componentKey(i)];
+    const box = checked[getComponentKey(i)];
     if (box) startPositions[i] = { x: box.x, y: box.y };
   }
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
@@ -1483,8 +1456,8 @@ function onSvgMouseUp() {
   }
   if (current.type === "dragging") {
     if (reparentTargetIndex !== null) {
-      const srcKey = componentKey(current.anchorIndex);
-      const targetKey = componentKey(reparentTargetIndex);
+      const srcKey = getComponentKey(current.anchorIndex);
+      const targetKey = getComponentKey(reparentTargetIndex);
       reparentTargetIndex = null;
       void executeReparent(srcKey, targetKey).catch(reportDiagramError);
     }
@@ -1535,20 +1508,7 @@ function onWheel(event: WheelEvent) {
 // either box's own aspect ratio) so both endpoints — and the elbow shape
 // joining them — always agree on the same horizontal/vertical choice.
 let visibleConnections = $derived(
-  connections.flatMap((conn) => {
-    const boxA = nodeBox(conn.from);
-    const boxB = nodeBox(conn.to);
-    if (!boxA || !boxB) return [];
-    const centerA = boxCenter(boxA);
-    const centerB = boxCenter(boxB);
-    const orientation: ConnectionOrientation =
-      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
-        ? "horizontal"
-        : "vertical";
-    const a = boxBoundaryPoint(boxA, centerB, orientation);
-    const b = boxBoundaryPoint(boxB, centerA, orientation);
-    return [{ conn, a, b, orientation }];
-  }),
+  computeVisibleConnections(connections, (i) => nodeBox(i)),
 );
 
 // Looks up a component's direct parent index, for depthOf below.
@@ -1561,10 +1521,12 @@ function parentOf(index: number): number | undefined {
 // up visually hidden behind its parent's fill, depending on arbitrary
 // arena order.
 let renderOrder = $derived(
-  Object.keys(checked)
-    .map((key) => keyToIndex.get(key))
-    .filter((index): index is number => index !== undefined)
-    .sort((a, b) => depthOf(a, parentOf) - depthOf(b, parentOf)),
+  computeRenderOrder(
+    Object.keys(checked)
+      .map((key) => keyToIndex.get(key))
+      .filter((index): index is number => index !== undefined),
+    parentOf,
+  ),
 );
 
 // Nodes that would be selected if the marquee were released right now —
@@ -2040,7 +2002,7 @@ $effect(() => {
           {@const highlighted = interaction.type === "marquee"
             ? marqueeCandidates.has(index)
             : selected.has(index)}
-          {@const compKey = componentKey(index)}
+          {@const compKey = getComponentKey(index)}
           {@const compData = docStore.findComponent(compKey)}
           {@const portPositions = compData && compData.ports.length > 0
             ? computePortPositions(width, height, compData.ports)
@@ -2339,14 +2301,14 @@ $effect(() => {
               type="checkbox"
               id="comp-{index}"
               class="checkbox checkbox-xs"
-              checked={!!checked[componentKey(index)]}
+              checked={!!checked[getComponentKey(index)]}
               onchange={(value) => {
                 recordUndoPoint();
                 if (value.currentTarget.checked) {
                   // Restore the remembered layout if this component has
                   // been placed before (even if it was later unchecked),
                   // instead of always resetting to the default position.
-                  const remembered = savedLayout[componentKey(index)];
+                  const remembered = savedLayout[getComponentKey(index)];
                   let box: Box = {
                     x: remembered?.x ?? 100,
                     y: remembered?.y ?? 100,
@@ -2370,8 +2332,8 @@ $effect(() => {
                   // that were already placed on canvas before it was.
                   reclampChildren(index);
                 } else {
-                  delete checked[componentKey(index)];
-                  // savedLayout[componentKey(index)] is intentionally left
+                  delete checked[getComponentKey(index)];
+                  // savedLayout[getComponentKey(index)] is intentionally left
                   // alone, so re-checking this component later restores it
                   // here.
                   selected.delete(index);
