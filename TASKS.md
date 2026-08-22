@@ -22,15 +22,6 @@ How to work on this file:
 
 ---
 
-## Task 77 — Allow embedding diagrams via unique URLs
-
-- Add a unique URL scheme for embedding diagrams (e.g. `/projects/[project-id]/diagrams/embed/[diagram-id]`)
-- Update the `Diagram` component to support the new URL scheme
-  - Re-use existing components. On conflict, refactor the `Diagram` to smaller reusable components
-- The embedded diagram should have pan/zoom functionality and a link to the full diagram, but no editing capabilities. Reuse the style of the current bottom bar, but with limited button layout
-
----
-
 ## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
 
 This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.

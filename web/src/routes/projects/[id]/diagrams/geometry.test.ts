@@ -7,6 +7,8 @@ import {
   clampResizeWithin,
   clampWithin,
   computePortPositions,
+  computeRenderOrder,
+  computeVisibleConnections,
   depthOf,
   elbowPath,
   findConnectTarget,
@@ -374,6 +376,59 @@ describe("findReparentTarget", () => {
   it("returns null when center is outside all containers", () => {
     const dragged: Box = { x: 400, y: 400, width: 50, height: 50 };
     expect(findReparentTarget(dragged, candidates)).toBeNull();
+  });
+});
+
+describe("computeRenderOrder", () => {
+  const parents: Record<number, number | undefined> = {
+    0: undefined,
+    1: 0,
+    2: 1,
+    3: undefined,
+  };
+  const parentOf = (index: number) => parents[index];
+
+  it("sorts indices shallowest first", () => {
+    expect(computeRenderOrder([2, 1, 0, 3], parentOf)).toEqual([0, 3, 1, 2]);
+  });
+});
+
+describe("computeVisibleConnections", () => {
+  const boxes: Record<number, Box> = {
+    0: { x: 0, y: 0, width: 100, height: 50 },
+    1: { x: 200, y: 0, width: 100, height: 50 },
+    2: { x: 0, y: 200, width: 100, height: 50 },
+  };
+
+  it("computes horizontal connection endpoints between side-by-side boxes", () => {
+    const connections = [{ from: 0, to: 1, label: "bus" }];
+    const visible = computeVisibleConnections(connections, (i) => boxes[i]);
+
+    expect(visible).toHaveLength(1);
+    expect(visible[0].orientation).toBe("horizontal");
+    expect(visible[0].a).toEqual({ x: 100, y: 25 });
+    expect(visible[0].b).toEqual({ x: 200, y: 25 });
+  });
+
+  it("computes vertical connection endpoints between vertically stacked boxes", () => {
+    const connections = [{ from: 0, to: 2, label: "power" }];
+    const visible = computeVisibleConnections(connections, (i) => boxes[i]);
+
+    expect(visible).toHaveLength(1);
+    expect(visible[0].orientation).toBe("vertical");
+    expect(visible[0].a).toEqual({ x: 50, y: 50 });
+    expect(visible[0].b).toEqual({ x: 50, y: 200 });
+  });
+
+  it("filters out connections when either endpoint box is not placed", () => {
+    const connections = [
+      { from: 0, to: 99, label: "missing" },
+      { from: 0, to: 1, label: "valid" },
+    ];
+    const visible = computeVisibleConnections(connections, (i) => boxes[i]);
+
+    expect(visible).toHaveLength(1);
+    expect(visible[0].conn.label).toBe("valid");
   });
 });
 

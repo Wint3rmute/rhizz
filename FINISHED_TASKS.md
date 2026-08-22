@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 75 — Allow embedding diagrams via unique URLs
+
+- Implemented unique URL routing scheme for embeddable diagrams: `/projects/[id]/diagrams/embed/[...diagram]`
+- Created `web/src/routes/projects/[id]/diagrams/DiagramEmbedView.svelte`:
+  - Standalone, chromeless full-bleed container suitable for `<iframe>` embedding in external documentation and websites.
+  - Interactive pan and zoom (mouse drag, wheel zoom, touch drag, and two-finger pinch-to-zoom).
+  - Auto-fit framing on load (`zoomToFill()`).
+  - Read-only: disabled node dragging, node resizing, port wiring, and double-click component creation.
+  - Minimal floating toolbar: `Fit` (zoom-to-fill), `Reset` (100% zoom), zoom percentage readout, and `Open in Rhizz ↗` external link targeting the full project diagram.
+- Added Storybook stories (`DiagramEmbedView.stories.ts`) for Desktop and Mobile viewports.
+- Added unit tests in `DiagramEmbedView.test.ts`.
+- Validated with `just test` (all 64 core tests + 268 Vitest tests pass), `just lint`, `just format`, `just build`, and `npx storybook build`.
+
+---
+
 ## Task 74 — Use UNIX-style paths for component and port references
 
 - Replaced colon-separated connection reference notation (e.g. `comp:port`) with standard UNIX-style path notation (`comp/port`, `/system/comp/subcomp/port`, `../sibling/port`).

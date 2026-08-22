@@ -82,6 +82,38 @@ export function unionBox(boxes: Box[]): Box {
   return { x, y, width: right - x, height: bottom - y };
 }
 
+export interface VisibleConnection<T> {
+  conn: T;
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+  orientation: ConnectionOrientation;
+}
+
+// Computes boundary connection points and orientation for visible connections
+// between placed node boxes.
+export function computeVisibleConnections<
+  T extends { from: number; to: number },
+  B extends Box,
+>(
+  connections: T[],
+  getBox: (index: number) => B | null | undefined,
+): VisibleConnection<T>[] {
+  return connections.flatMap((conn) => {
+    const boxA = getBox(conn.from);
+    const boxB = getBox(conn.to);
+    if (!boxA || !boxB) return [];
+    const centerA = boxCenter(boxA);
+    const centerB = boxCenter(boxB);
+    const orientation: ConnectionOrientation =
+      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
+        ? "horizontal"
+        : "vertical";
+    const a = boxBoundaryPoint(boxA, centerB, orientation);
+    const b = boxBoundaryPoint(boxB, centerA, orientation);
+    return [{ conn, a, b, orientation }];
+  });
+}
+
 // Whether `inner` lies fully inside `outer`. Used for marquee-select: a
 // node is only selected once its entire bounding box is enclosed by the
 // marquee rectangle, not merely overlapping it — the mental model users
@@ -230,6 +262,17 @@ export function depthOf(
     current = parentOf(current);
   }
   return depth;
+}
+
+// Orders placed component indices shallowest-first so parents are painted
+// before their children.
+export function computeRenderOrder(
+  placedIndices: number[],
+  parentOf: (index: number) => number | undefined,
+): number[] {
+  return [...placedIndices].sort(
+    (a, b) => depthOf(a, parentOf) - depthOf(b, parentOf),
+  );
 }
 
 // Determines which candidate container box (if any) the dragged node should be reparented into.
