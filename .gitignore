@@ -8,3 +8,7 @@ web/package-lock.json
 
 # macos temporaries
 .DS_Store
+
+# Don't trace flake inputs, let each user follow their nixpkgs.
+# Can be pinned after MVP phase
+flake.lock
