@@ -1,7 +1,7 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:svelte-check@^4.7.5": "4.7.6_svelte@5.56.9_typescript@6.0.3"
+    "npm:svelte-check@^4.7.6": "4.7.6_svelte@5.56.10_typescript@6.0.3"
   },
   "npm": {
     "@jridgewell/gen-mapping@0.3.13": {
@@ -65,14 +65,14 @@
     "clsx@2.1.1": {
       "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="
     },
-    "devalue@5.9.0": {
-      "integrity": "sha512-RWrqdArjvPbsATEhOPUo6Wndc/iWnkWKlhIrdlF3zMMYo/c3CVtoaVAyLtWxz5h8nSlkHzxnzV2uLydPXmtF+A=="
+    "devalue@5.9.1": {
+      "integrity": "sha512-+17vil3EVQRzvtDJSFuTWEb8XJRvXqAiV3qZyQWD398QeXUa6CxsUyMdD1fxzEhUrd4FojitFz7lhIHBTlV4fw=="
     },
     "esm-env@1.2.2": {
       "integrity": "sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA=="
     },
-    "esrap@2.3.4": {
-      "integrity": "sha512-CHnJXZDfBeOAjLIGNy/0BEsmDu5+irHgUXRW9pGptxCbO3uyjJ98crilzFgiBqizW94UodjX3GAPLg/dhEnUfA==",
+    "esrap@2.3.6": {
+      "integrity": "sha512-yc0OC12UjPqLoc+fe+v5GNs4TOjAigUw3sTikfC+xeBPGUw7gDRz3DtYaqEhxyMVJojcSWJw7jT0QWR+CbuE/A==",
       "dependencies": [
         "@jridgewell/sourcemap-codec"
       ]
@@ -110,7 +110,7 @@
         "mri"
       ]
     },
-    "svelte-check@4.7.6_svelte@5.56.9_typescript@6.0.3": {
+    "svelte-check@4.7.6_svelte@5.56.10_typescript@6.0.3": {
       "integrity": "sha512-t2scM//ZuVbSY/T2w6FSBw1v9s2NEmh/g+sy1lqtosW5ylBV5AF4wFb1Ts9Kf3MbfPDUDJDZ9L436YT0SPTdvw==",
       "dependencies": [
         "@jridgewell/trace-mapping",
@@ -124,8 +124,8 @@
       ],
       "bin": true
     },
-    "svelte@5.56.9": {
-      "integrity": "sha512-VT8kSnlEg8069w7AiCcAk3Yf5xvMnrGTagVOmU/OpOLHaHnNqXhWZCH/4EVga/bT/HtWhvE6/fHrXLErx7OnJA==",
+    "svelte@5.56.10": {
+      "integrity": "sha512-Lcxbj8I/KAbpY+VjtY4ENQBV0dDCipfGAhqb51XQZ67CIQqXgsv/8dPkbILaj4Fb6/b6JAEM/PIVbILXgDQy2g==",
       "dependencies": [
         "@jridgewell/remapping",
         "@jridgewell/sourcemap-codec",
@@ -155,42 +155,7 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:svelte-check@^4.7.5"
-    ],
-    "packageJson": {
-      "dependencies": [
-        "npm:@eslint/js@^10.0.1",
-        "npm:@storybook/addon-docs@^10.5.5",
-        "npm:@storybook/addon-vitest@^10.5.5",
-        "npm:@storybook/svelte@^10.5.5",
-        "npm:@storybook/sveltekit@^10.5.5",
-        "npm:@sveltejs/adapter-auto@^7.0.1",
-        "npm:@sveltejs/adapter-static@^3.0.10",
-        "npm:@sveltejs/kit@^2.70.1",
-        "npm:@sveltejs/vite-plugin-svelte@^6.2.4",
-        "npm:@tailwindcss/vite@^4.3.3",
-        "npm:@types/d3-force@^3.0.10",
-        "npm:@types/node@^24.13.3",
-        "npm:@vitest/browser@3.2.7",
-        "npm:@vitest/coverage-v8@3.2.7",
-        "npm:chromatic@^18.1.0",
-        "npm:d3-force@3",
-        "npm:daisyui@^5.7.7",
-        "npm:eslint-plugin-svelte@^3.22.0",
-        "npm:eslint@^10.8.0",
-        "npm:globals@^17.8.0",
-        "npm:monaco-editor@~0.55.1",
-        "npm:playwright@^1.62.0",
-        "npm:storybook@^10.5.5",
-        "npm:svelte-check@^4.7.4",
-        "npm:svelte@^5.56.8",
-        "npm:tailwindcss@^4.3.3",
-        "npm:typescript-eslint@^8.65.0",
-        "npm:typescript@^6.0.3",
-        "npm:vite@^7.3.6",
-        "npm:vitest@^3.2.7",
-        "npm:zod@^4.4.3"
-      ]
-    }
+      "npm:svelte-check@^4.7.6"
+    ]
   }
 }
