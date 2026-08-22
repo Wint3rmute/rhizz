@@ -16,7 +16,6 @@ import {
 } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
-import type { ComponentJS } from "rhizz";
 import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
@@ -51,14 +50,11 @@ import {
 } from "./forceLayout";
 import {
   type Box,
-  boxBoundaryPoint,
-  boxCenter,
   boxContains,
   clampWithin,
   computePortPositions,
   computeRenderOrder,
   computeVisibleConnections,
-  type ConnectionOrientation,
   depthOf,
   elbowPath,
   findConnectTarget,

@@ -1,6 +1,4 @@
 <script lang="ts">
-import type { ComponentJS, SystemJS } from "rhizz";
-import { SvelteMap } from "svelte/reactivity";
 import { projectStore } from "../../../../../../ProjectState.svelte";
 import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";
