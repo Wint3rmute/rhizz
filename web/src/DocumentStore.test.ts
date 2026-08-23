@@ -246,4 +246,44 @@ system "arm" {
     expect(doc.systemHcl).toContain('connection "can-bus"');
     expect(doc.viewsHcl).toContain('view "wiring"');
   });
+
+  it("preserves UNIX path notation in connections after loading and editing (no colon regression)", () => {
+    const systemHcl = `system "demo" {
+  component "sensor" {
+    leaf = true
+    port "out" {
+      role = "provider"
+    }
+  }
+
+  component "actuator" {
+    leaf = true
+    port "in" {
+      role = "consumer"
+    }
+  }
+
+  connection "link" {
+    from = "sensor/out"
+    to   = "actuator/in"
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    // Edit a component in the diagram (e.g. update description)
+    doc.updateComponent("demo/sensor", {
+      description: "Updated sensor description",
+    });
+
+    // Verify generated HCL contains UNIX path ("sensor/out", NOT "sensor:out")
+    expect(doc.systemHcl).toContain('from         = "sensor/out"');
+    expect(doc.systemHcl).toContain('to           = "actuator/in"');
+    expect(doc.systemHcl).not.toContain("sensor:out");
+    expect(doc.systemHcl).not.toContain("actuator:in");
+
+    // Verify round-trip compilation produces 0 errors
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
 });
