@@ -121,6 +121,58 @@ fn model_is_none_on_error() {
 }
 
 #[wasm_bindgen_test]
+fn protocols_and_ports_return_typed_wrappers() {
+    let sources = vec![rhizz_core::Source {
+        filename: "main.hcl".to_string(),
+        content: r#"
+                protocol "http" {
+                    description = "HTTP protocol"
+                    tags        = ["web"]
+                    roles       = ["provider", "consumer"]
+
+                    message "request" {
+                        field "url" { type = "string" }
+                    }
+                }
+
+                system "web" {
+                    component "server" {
+                        leaf = true
+                        port "api" {
+                            protocol = "http"
+                            role     = "provider"
+                            external = true
+                            required = false
+                        }
+                    }
+                }
+            "#
+        .to_string(),
+    }];
+
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
+        .expect("compile should succeed");
+    assert_eq!(result.error_count(), 0);
+
+    let model = result.model().expect("model should be present");
+
+    let protos = model.protocols();
+    assert_eq!(protos.len(), 1);
+    assert_eq!(protos[0].label(), "http");
+    assert_eq!(protos[0].description(), "HTTP protocol");
+    assert_eq!(protos[0].tags(), vec!["web"]);
+    assert_eq!(protos[0].roles(), vec!["provider", "consumer"]);
+
+    let ports = model.ports();
+    assert_eq!(ports.len(), 1);
+    assert_eq!(ports[0].label(), "api");
+    assert_eq!(ports[0].protocol(), "http");
+    assert_eq!(ports[0].role(), "provider");
+    assert!(ports[0].external());
+    assert!(!ports[0].required());
+}
+
+#[wasm_bindgen_test]
 fn compile_invalid_hcl_returns_error_diagnostic() {
     let sources = vec![rhizz_core::Source {
         filename: "bad.hcl".to_string(),

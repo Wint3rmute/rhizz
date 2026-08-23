@@ -17,22 +17,9 @@ const meta = {
           description: "High speed sensor bus",
           protocol: "spi",
           role: "provider",
+          external: true,
+          required: true,
           tags: ["bus"],
-          messages: [
-            {
-              label: "reading",
-              description: "IMU raw telemetry",
-              fields: [
-                {
-                  label: "accel_x",
-                  type: "float32",
-                  description: "X acceleration",
-                  unit: "g",
-                  required: true,
-                },
-              ],
-            },
-          ],
         },
       ],
       components: [],

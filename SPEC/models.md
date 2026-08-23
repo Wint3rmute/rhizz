@@ -394,7 +394,7 @@ enum Scope {
 struct ScopeIndex {
     components:  HashMap<(Scope, String), ComponentId>,
     connections: HashMap<(Scope, String), ConnectionId>,
-    /// Maps (component_id, port_label) → PortId for `comp:port` resolution.
+    /// Maps (component_id, port_label) → PortId for `comp/port` resolution.
     ports:       HashMap<(ComponentId, String), PortId>,
 }
 ```

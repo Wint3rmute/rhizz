@@ -240,6 +240,152 @@ impl ConnectionJS {
     }
 }
 
+// ── PortJS ───────────────────────────────────────────────────────────────────
+
+/// A port exposed to JavaScript.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct PortJS {
+    label: String,
+    description: String,
+    protocol: String,
+    role: String,
+    external: bool,
+    required: bool,
+    tags: Vec<String>,
+    owner_component_index: usize,
+}
+
+#[wasm_bindgen]
+impl PortJS {
+    /// Port label.
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+
+    /// Human-readable description.
+    #[wasm_bindgen(getter)]
+    pub fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    /// Referenced protocol name.
+    #[wasm_bindgen(getter)]
+    pub fn protocol(&self) -> String {
+        self.protocol.clone()
+    }
+
+    /// Port role ("provider", "consumer", "peer").
+    #[wasm_bindgen(getter)]
+    pub fn role(&self) -> String {
+        self.role.clone()
+    }
+
+    /// Whether this port is an external boundary interface.
+    #[wasm_bindgen(getter)]
+    pub fn external(&self) -> bool {
+        self.external
+    }
+
+    /// Whether this port is required when instantiated in a system.
+    #[wasm_bindgen(getter)]
+    pub fn required(&self) -> bool {
+        self.required
+    }
+
+    /// Filtering tags.
+    #[wasm_bindgen(getter)]
+    pub fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+
+    /// Index of the owning component in `model.components()`.
+    #[wasm_bindgen(getter)]
+    pub fn owner_component_index(&self) -> usize {
+        self.owner_component_index
+    }
+}
+
+impl From<&rhizz_core::Port> for PortJS {
+    fn from(p: &rhizz_core::Port) -> Self {
+        let role_str = match p.role {
+            rhizz_core::PortRole::Provider => "provider",
+            rhizz_core::PortRole::Consumer => "consumer",
+            rhizz_core::PortRole::Peer => "peer",
+        };
+        Self {
+            label: p.label.clone(),
+            description: p.description.clone(),
+            protocol: p.protocol.clone(),
+            role: role_str.to_string(),
+            external: p.external,
+            required: p.required,
+            tags: p.tags.clone(),
+            owner_component_index: p.owner.0,
+        }
+    }
+}
+
+// ── ProtocolJS ───────────────────────────────────────────────────────────────
+
+/// A top-level protocol definition exposed to JavaScript.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct ProtocolJS {
+    label: String,
+    description: String,
+    tags: Vec<String>,
+    roles: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl ProtocolJS {
+    /// Protocol label.
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+
+    /// Human-readable description.
+    #[wasm_bindgen(getter)]
+    pub fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    /// Filtering tags.
+    #[wasm_bindgen(getter)]
+    pub fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+
+    /// Permitted port roles.
+    #[wasm_bindgen(getter)]
+    pub fn roles(&self) -> Vec<String> {
+        self.roles.clone()
+    }
+}
+
+impl From<&rhizz_core::Protocol> for ProtocolJS {
+    fn from(proto: &rhizz_core::Protocol) -> Self {
+        let roles = proto
+            .roles
+            .iter()
+            .map(|r| match r {
+                rhizz_core::PortRole::Provider => "provider".to_string(),
+                rhizz_core::PortRole::Consumer => "consumer".to_string(),
+                rhizz_core::PortRole::Peer => "peer".to_string(),
+            })
+            .collect();
+        Self {
+            label: proto.label.clone(),
+            description: proto.description.clone(),
+            tags: proto.tags.clone(),
+            roles,
+        }
+    }
+}
+
 // ── SystemJS ──────────────────────────────────────────────────────────────────
 
 /// A top-level system exposed to JavaScript.
@@ -388,6 +534,16 @@ impl ModelJS {
             .iter()
             .map(ConnectionJS::from)
             .collect()
+    }
+
+    /// Returns all top-level protocols as typed wrappers.
+    pub fn protocols(&self) -> Vec<ProtocolJS> {
+        self.inner.protocols.iter().map(ProtocolJS::from).collect()
+    }
+
+    /// Returns all ports as typed wrappers.
+    pub fn ports(&self) -> Vec<PortJS> {
+        self.inner.ports.iter().map(PortJS::from).collect()
     }
 
     /// Returns the component with the given label, or `undefined` if not found.

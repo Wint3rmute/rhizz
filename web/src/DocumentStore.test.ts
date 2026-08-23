@@ -65,17 +65,10 @@ describe("DocumentStore", () => {
     expect(doc.compileResult.error_count()).toBe(0);
   });
 
-  it("supports adding ports, messages, and fields and updating completion score", () => {
+  it("supports adding protocols, ports, messages, and fields and updating completion score", () => {
     const doc = new DocumentStore();
-    doc.addSystem("demo");
-    doc.addComponent("demo", "sensor", true);
-    doc.updateComponent("demo/sensor", { description: "IMU sensor" });
-
-    const port = doc.addPort("demo/sensor", "spi", "spi", "provider");
-    expect(port).toBeDefined();
-    expect(port?.protocol).toBe("spi");
-
-    port?.messages.push({
+    const proto = doc.addProtocol("spi", "SPI protocol");
+    proto.messages.push({
       label: "data",
       description: "Sensor data",
       fields: [
@@ -84,13 +77,24 @@ describe("DocumentStore", () => {
       ],
     });
 
+    doc.addSystem("demo");
+    doc.addComponent("demo", "sensor", true);
+    doc.updateComponent("demo/sensor", { description: "IMU sensor" });
+
+    const port = doc.addPort("demo/sensor", "spi", "spi", "provider", true);
+    expect(port).toBeDefined();
+    expect(port?.protocol).toBe("spi");
+    expect(port?.external).toBe(true);
+
     const hcl = doc.systemHcl;
-    expect(hcl).toContain('port "spi"');
-    expect(hcl).toContain('protocol    = "spi"');
-    expect(hcl).toContain('role        = "provider"');
+    expect(hcl).toContain('protocol "spi"');
     expect(hcl).toContain('message "data"');
     expect(hcl).toContain('field "x"');
     expect(hcl).toContain('unit        = "g"');
+    expect(hcl).toContain('port "spi"');
+    expect(hcl).toContain('protocol    = "spi"');
+    expect(hcl).toContain('role        = "provider"');
+    expect(hcl).toContain("external    = true");
 
     expect(doc.compileResult.error_count()).toBe(0);
     const score = doc.score;
@@ -284,6 +288,49 @@ system "arm" {
     expect(doc.systemHcl).not.toContain("actuator:in");
 
     // Verify round-trip compilation produces 0 errors
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
+  it("preserves lowercase protocol roles during HCL -> model -> HCL roundtrip without E009 error", () => {
+    const systemHcl = `protocol "i2c" {
+  description = "I2C bus"
+  roles       = ["provider", "consumer"]
+}
+
+system "demo" {
+  component "sensor" {
+    leaf = true
+    port "data" {
+      protocol = "i2c"
+      role     = "provider"
+    }
+  }
+
+  component "mcu" {
+    leaf = true
+    port "data-in" {
+      protocol = "i2c"
+      role     = "consumer"
+    }
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    // Add a connection (triggers HCL serialization and re-compilation)
+    doc.addConnection("demo", {
+      label: "bus-link",
+      from: "sensor/data",
+      to: "mcu/data-in",
+    });
+
+    // Verify HCL contains lowercase roles
+    expect(doc.systemHcl).toContain('roles       = ["provider", "consumer"]');
+    expect(doc.systemHcl).not.toContain('"Provider"');
+    expect(doc.systemHcl).not.toContain('"Consumer"');
+
+    // Verify round-trip compilation produces 0 errors (no E009)
     expect(doc.compileResult.error_count()).toBe(0);
   });
 });

@@ -42,18 +42,19 @@ Prose description of the condition.
 
 ## How the files are used
 
-### 1. Rust doc comments (`include_str!`)
+### 1. Automatic Code & Doc Generation (`build.rs`)
 
-Each `DiagnosticCode` const in `diagnostics.rs` pulls its documentation from the
-corresponding Markdown file at compile time:
+Each `DiagnosticCode` const is generated at build time by `crates/rhizz-core/build.rs`, which scans `SPEC/diagnostics/` and produces the corresponding `pub const` definitions with embedded Markdown doc comments:
 
 ```rust
-#[doc = include_str!("../../../../SPEC/diagnostics/E001.md")]
-pub const E001: Self = Self { code: "E001", level: Level::Error };
+#[doc = include_str!(r#"/path/to/SPEC/diagnostics/E001.md"#)]
+pub const E001: Self = Self {
+    code: "E001",
+    level: Level::Error,
+};
 ```
 
-This means `cargo doc` renders the full description, HCL examples, and fix
-guidance for every code — with zero hand-written doc comments to keep in sync.
+This means `cargo doc` renders the full description, HCL examples, and fix guidance for every code with zero hand-written `const` boilerplate or manual `include_str!` mappings to maintain.
 
 ### 2. Spec reference
 
@@ -84,10 +85,6 @@ the call-site message describes the _specific instance_.
 
 ## Adding a new diagnostic code
 
-1. Create `SPEC/diagnostics/Xxxx.md` following the format above.
-2. Add a `pub const` to `DiagnosticCode` in `diagnostics.rs` with
-   `#[doc = include_str!(...)]`.
-3. Emit it via `Diagnostic::error()` or `Diagnostic::warning()` at the
-   appropriate point in parsing, resolution, or validation.
-4. Update the code range in `SPEC/architecture.md` if the new code extends the
-   current range.
+1. Create `SPEC/diagnostics/Xxxx.md` following the format above (`Exxx.md` for errors, `Wxxx.md` for warnings).
+2. Cargo's `build.rs` automatically picks up the new file, generates `DiagnosticCode::Xxxx`, and embeds its documentation.
+3. Emit it via `Diagnostic::error(DiagnosticCode::Xxxx, ...)` or `Diagnostic::warning(DiagnosticCode::Xxxx, ...)` at the appropriate point in parsing, resolution, or validation.

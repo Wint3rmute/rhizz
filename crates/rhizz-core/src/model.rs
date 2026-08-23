@@ -85,6 +85,7 @@ pub(crate) struct ScopeIndex {
 
 /// The role a port plays in a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PortRole {
     /// Provides data / service.
     Provider,
@@ -244,7 +245,7 @@ pub struct Port {
 pub struct ConnectionEndpoint {
     /// The referenced component.
     pub component: ComponentId,
-    /// The referenced port, if a `comp:port` reference was used.
+    /// The referenced port, if a `comp/port` reference was used.
     pub port: Option<PortId>,
 }
 

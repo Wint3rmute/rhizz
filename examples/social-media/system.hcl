@@ -2,11 +2,72 @@
 #
 # Demonstrates:
 #  - Software component decomposition (backend broken into services)
+#  - Reusable protocol definitions with structured message schemas
 #  - Port/connection model with typed and untyped endpoints
 #  - Leaf vs non-leaf at the software level
-#  - Intentional incompleteness: the "recommendation-engine" service
-#    has no children yet (W001) and some ports have no messages (W011)
-#    — the model compiles but scores < 100%.
+
+# ── Protocols ─────────────────────────────
+
+protocol "https" {
+  description = "HTTP REST API"
+  roles       = ["provider", "consumer"]
+
+  message "get-feed" {
+    description = "Request next page of video feed"
+    tags        = ["api"]
+
+    field "cursor" {
+      type        = "string"
+      description = "Pagination cursor"
+    }
+    field "feed_type" {
+      type        = "string"
+      description = "for_you | following"
+    }
+  }
+
+  message "upload-video" {
+    description = "Initiate video upload"
+    tags        = ["api", "video"]
+
+    field "title" {
+      type        = "string"
+      description = "Video title"
+    }
+    field "chunk_size" {
+      type        = "uint32"
+      unit        = "bytes"
+      description = "Upload chunk size"
+    }
+  }
+}
+
+protocol "hls" {
+  description = "HLS video streaming"
+  roles       = ["provider", "consumer"]
+}
+
+protocol "push" {
+  description = "Push notifications"
+  roles       = ["provider", "consumer"]
+}
+
+protocol "grpc" {
+  description = "Internal gRPC microservice communication"
+  roles       = ["provider", "consumer"]
+}
+
+protocol "sql" {
+  description = "SQL relational database protocol"
+  roles       = ["provider", "consumer"]
+}
+
+protocol "s3" {
+  description = "Object storage protocol"
+  roles       = ["provider", "consumer"]
+}
+
+# ── System ────────────────────────────────
 
 system "buzzvid" {
   description = "Short-video social media platform"
@@ -24,42 +85,15 @@ system "buzzvid" {
       description = "Client-side API endpoint"
       protocol    = "https"
       role        = "consumer"
+      external    = true
       tags        = ["network", "api"]
-
-      message "get-feed" {
-        description = "Request next page of video feed"
-        tags        = ["api"]
-
-        field "cursor" {
-          type        = "string"
-          description = "Pagination cursor"
-        }
-        field "feed_type" {
-          type        = "string"
-          description = "for_you | following"
-        }
-      }
-
-      message "upload-video" {
-        description = "Initiate video upload"
-        tags        = ["api", "video"]
-
-        field "title" {
-          type        = "string"
-          description = "Video title"
-        }
-        field "chunk_size" {
-          type        = "uint32"
-          unit        = "bytes"
-          description = "Upload chunk size"
-        }
-      }
     }
 
     port "stream-in" {
       description = "HLS/DASH video stream input"
       protocol    = "hls"
       role        = "consumer"
+      external    = true
       tags        = ["video", "network"]
     }
 
@@ -67,6 +101,7 @@ system "buzzvid" {
       description = "Push notification receiver"
       protocol    = "push"
       role        = "consumer"
+      external    = true
       tags        = ["notification"]
     }
 

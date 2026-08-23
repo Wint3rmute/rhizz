@@ -4,6 +4,70 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 82 — `web`: Update frontend TypeScript types and worked examples
+
+- **Frontend Data Model & DocumentStore (`web/src/DocumentStore.svelte.ts`)**:
+  - Added `ProtocolData` interface (`label`, `description`, `tags`, `roles`, `messages`).
+  - Updated `PortData` interface with `external` and `required` attributes and stripped direct message arrays.
+  - Implemented `addProtocol`, `getProtocol`, `deleteProtocol` store mutations and protocol serialization.
+  - Updated `loadFromHcl` to ingest protocols, messages, and port attributes.
+- **Node Inspector (`web/src/routes/projects/[id]/diagrams/NodeInspector.svelte`)**:
+  - Updated port configuration panel with `External (Boundary)` and `Required` toggle controls.
+- **Worked Examples (`examples/`)**:
+  - Updated `examples/drone` (added `protocols.hcl` with `dshot600`, `uart`, `crsf`, `spi`, `power-dc`, `analog-video`, `i2c`).
+  - Updated `examples/social-media` (added `https`, `hls`, `push`, `grpc`, `sql`, `s3` protocols).
+  - Updated `examples/software-house` (added `pr-review`, `cicd`, `agile`, `design`, `tickets`, `release`, `test-suites`, `feedback` protocols).
+  - Updated `examples/web-app` (added `jwt`, `https`, `ui-nav`, `websocket`, `postgresql` protocols).
+- **Tests**:
+  - Updated `web/src/DocumentStore.test.ts` verifying protocol and port creation, serialization, and round-tripping.
+  - Updated `NodeInspector.stories.ts`.
+- Validated with `just test` (all 78 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
+## Task 81 — `rhizz-wasm`: Export protocol types and updated port metadata to JavaScript
+
+- **WASM Bindings (`crates/rhizz-wasm/src/lib.rs`)**:
+  - Added `ProtocolJS` wrapper exposing `label`, `description`, `tags`, and `roles`.
+  - Added `PortJS` wrapper exposing `label`, `description`, `protocol`, `role`, `external`, `required`, `tags`, and `owner_component_index`.
+  - Added `protocols()` and `ports()` methods to `ModelJS`.
+- **Tests**:
+  - Added WASM test `protocols_and_ports_return_typed_wrappers` in `crates/rhizz-wasm/tests/wasm_test.rs`.
+- Validated with `just test` (all 78 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
+## Task 80 — `rhizz-core`: HCL serialization for protocols and port attributes
+
+- **HCL Serialization (`crates/rhizz-core/src/serialize.rs`)**:
+  - Implemented `serialize_protocol` formatting top-level `protocol` blocks with description, tags, roles, and child messages/fields.
+  - Updated `serialize_port` to format `external = true` and `required = false` attributes, while stripping child message blocks (now owned by protocols).
+  - Serialized protocols in sorted deterministic order at the project root level.
+- **Tests**:
+  - Added unit test `test_protocol_and_port_attributes_roundtrip` verifying idempotent serialization and round-trip parsing of protocol blocks and port attributes.
+- Validated with `just test` (all 78 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
+## Task 79 — `rhizz-core`: Locality of port verification & completion scoring for protocols
+
+- **Port Locality Verification (`crates/rhizz-core/src/validate.rs`)**:
+  - Updated `W010` unconnected port diagnostic checks:
+    - Optional external ports (`external = true, required = false`) are allowed to remain open without triggering `W010`.
+    - Required external ports (`external = true, required = true`) and internal ports (`external = false`) emit `W010` when unconnected.
+- **Orphan Protocol Detection (`crates/rhizz-core/src/resolve.rs`)**:
+  - Tracked referenced protocols across all component ports.
+  - Emitted warning `W012` for any top-level `protocol` not referenced by any port in the project.
+- **Completion Scoring (`crates/rhizz-core/src/score.rs`)**:
+  - Ports referencing a protocol inherit its message schema for scoring (scores 1.0 when all protocol messages are complete, 0.5 when partially complete, 0.0 when incomplete or missing messages).
+- **Tests**:
+  - Added unit tests in `validate.rs`: `w010_optional_external_port_no_warning`, `w010_required_external_port_emits_warning`, `w010_internal_port_unconnected_emits_warning`.
+  - Added unit tests in `resolve.rs`: `w012_unreferenced_top_level_protocol_emits_warning`, `w012_referenced_protocol_no_warning`.
+  - Added unit tests in `score.rs`: `port_with_complete_protocol_messages_scores_complete`, `port_with_empty_protocol_scores_incomplete`.
+- Validated with `just test` (all 77 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 78 — `rhizz-core`: Resolution pass, protocol linking, and connection LCA placement validation
 
 - **Protocol Resolution & Linking (`crates/rhizz-core/src/resolve.rs`)**:

@@ -1,11 +1,6 @@
 <script lang="ts">
 import type { TextAlign } from "./geometry";
-import type {
-  ComponentData,
-  FieldData,
-  MessageData,
-  PortData,
-} from "../../../../DocumentStore.svelte";
+import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
 
 interface Props {
   componentKey: string;
@@ -98,97 +93,6 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
     i === portIdx ? { ...p, ...patch } : p
   );
   onupdate({ ports: newPorts });
-}
-
-// ── Message Operations ────────────────────────────────────────────────────────
-
-function handleAddMessage(portIdx: number) {
-  const port = component.ports[portIdx];
-  if (!port) return;
-  const msgName = prompt("Message name?", `msg-${port.messages.length + 1}`)
-    ?.trim();
-  if (!msgName) return;
-
-  const newMessages: MessageData[] = [
-    ...port.messages,
-    {
-      label: msgName,
-      description: "",
-      tags: [],
-      fields: [],
-    },
-  ];
-  handleUpdatePort(portIdx, { messages: newMessages });
-}
-
-function handleDeleteMessage(portIdx: number, msgIdx: number) {
-  const port = component.ports[portIdx];
-  if (!port) return;
-  const newMessages = port.messages.filter((_, i) => i !== msgIdx);
-  handleUpdatePort(portIdx, { messages: newMessages });
-}
-
-function handleUpdateMessage(
-  portIdx: number,
-  msgIdx: number,
-  patch: Partial<MessageData>,
-) {
-  const port = component.ports[portIdx];
-  if (!port) return;
-  const newMessages = port.messages.map((m, i) =>
-    i === msgIdx ? { ...m, ...patch } : m
-  );
-  handleUpdatePort(portIdx, { messages: newMessages });
-}
-
-// ── Field Operations ──────────────────────────────────────────────────────────
-
-function handleAddField(portIdx: number, msgIdx: number) {
-  const port = component.ports[portIdx];
-  const msg = port?.messages[msgIdx];
-  if (!msg) return;
-  const fieldName = prompt("Field name?", `field-${msg.fields.length + 1}`)
-    ?.trim();
-  if (!fieldName) return;
-
-  const newFields: FieldData[] = [
-    ...msg.fields,
-    {
-      label: fieldName,
-      type: "float32",
-      description: "",
-      unit: "",
-      required: false,
-    },
-  ];
-  handleUpdateMessage(portIdx, msgIdx, { fields: newFields });
-}
-
-function handleDeleteField(
-  portIdx: number,
-  msgIdx: number,
-  fieldIdx: number,
-) {
-  const port = component.ports[portIdx];
-  const msg = port?.messages[msgIdx];
-  if (!msg) return;
-  const newFields = msg.fields.filter((_, i) => i !== fieldIdx);
-  handleUpdateMessage(portIdx, msgIdx, { fields: newFields });
-}
-
-function handleUpdateField(
-  portIdx: number,
-  msgIdx: number,
-  fieldIdx: number,
-  patch: Partial<FieldData>,
-) {
-  const port = component.ports[portIdx];
-  const msg = port?.messages[msgIdx];
-  if (!msg) return;
-  const newFields = msg.fields.map((f, i) =>
-    i === fieldIdx ? { ...f, ...patch } : f
-  );
-  handleUpdateMessage(portIdx, msgIdx, { fields: newFields });
 }
 </script>
 
@@ -371,84 +275,32 @@ function handleUpdateField(
               </div>
             </div>
 
-            <!-- Messages inside Port -->
-            <div class="space-y-2 pt-2 border-t border-base-300/50">
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] font-semibold text-base-content/70">Messages</span>
-                <button
-                  onclick={() => handleAddMessage(portIdx)}
-                  class="btn btn-[10px] btn-xs btn-ghost text-primary"
-                >
-                  + Msg
-                </button>
-              </div>
+            <div class="flex items-center gap-4 pt-1">
+              <label class="label cursor-pointer justify-start gap-1.5 p-0">
+                <input
+                  type="checkbox"
+                  checked={Boolean(port.external)}
+                  onchange={(e) =>
+                    handleUpdatePort(portIdx, {
+                      external: (e.target as HTMLInputElement).checked,
+                    })}
+                  class="checkbox checkbox-xs checkbox-primary"
+                />
+                <span class="label-text text-xs">External (Boundary)</span>
+              </label>
 
-              {#each port.messages as msg, msgIdx (msgIdx)}
-                <div class="bg-base-100 p-2 rounded border border-base-300/80 space-y-2">
-                  <div class="flex items-center justify-between gap-1">
-                    <input
-                      type="text"
-                      value={msg.label}
-                      onchange={(e) =>
-                        handleUpdateMessage(portIdx, msgIdx, {
-                          label: (e.target as HTMLInputElement).value.trim(),
-                        })}
-                      class="input input-xs input-ghost font-medium flex-1 px-1"
-                      placeholder="Message name"
-                    />
-                    <button
-                      onclick={() => handleDeleteMessage(portIdx, msgIdx)}
-                      class="btn btn-xs btn-ghost btn-square text-error"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <!-- Fields inside Message -->
-                  <div class="space-y-1.5 pl-1 border-l-2 border-primary/30">
-                    <div class="flex items-center justify-between">
-                      <span class="text-[10px] text-base-content/60 font-semibold">Fields</span>
-                      <button
-                        onclick={() => handleAddField(portIdx, msgIdx)}
-                        class="btn btn-[9px] btn-xs btn-ghost text-primary py-0 h-4 min-h-0"
-                      >
-                        + Field
-                      </button>
-                    </div>
-
-                    {#each msg.fields as field, fIdx (fIdx)}
-                      <div class="grid grid-cols-5 gap-1 items-center bg-base-200/60 p-1 rounded text-xs">
-                        <input
-                          type="text"
-                          value={field.label}
-                          onchange={(e) =>
-                            handleUpdateField(portIdx, msgIdx, fIdx, {
-                              label: (e.target as HTMLInputElement).value.trim(),
-                            })}
-                          class="input input-xs input-bordered col-span-2 px-1 text-[11px]"
-                          placeholder="Name"
-                        />
-                        <input
-                          type="text"
-                          value={field.type}
-                          onchange={(e) =>
-                            handleUpdateField(portIdx, msgIdx, fIdx, {
-                              type: (e.target as HTMLInputElement).value.trim(),
-                            })}
-                          class="input input-xs input-bordered col-span-2 px-1 text-[11px]"
-                          placeholder="Type"
-                        />
-                        <button
-                          onclick={() => handleDeleteField(portIdx, msgIdx, fIdx)}
-                          class="btn btn-xs btn-ghost btn-square text-error justify-self-end"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {/each}
+              <label class="label cursor-pointer justify-start gap-1.5 p-0">
+                <input
+                  type="checkbox"
+                  checked={port.required !== false}
+                  onchange={(e) =>
+                    handleUpdatePort(portIdx, {
+                      required: (e.target as HTMLInputElement).checked,
+                    })}
+                  class="checkbox checkbox-xs"
+                />
+                <span class="label-text text-xs">Required</span>
+              </label>
             </div>
           </div>
         {/each}

@@ -451,6 +451,65 @@ mod tests {
         assert_eq!(report.ports.incomplete, 0);
     }
 
+    #[test]
+    fn port_with_complete_protocol_messages_scores_complete() {
+        let src = r#"
+            protocol "proto" {
+              message "m1" {
+                description = "has fields"
+                field "x" { type = "uint8" }
+              }
+            }
+
+            system "s" {
+              component "a" {
+                leaf = true
+                port "p" {
+                  protocol = "proto"
+                  role     = "provider"
+                }
+              }
+              component "b" { leaf = true }
+              connection "c" {
+                from = "a"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        assert_eq!(report.ports.complete, 1);
+        assert_eq!(report.ports.partial, 0);
+        assert_eq!(report.ports.incomplete, 0);
+        assert_eq!(report.messages.complete, 1);
+    }
+
+    #[test]
+    fn port_with_empty_protocol_scores_incomplete() {
+        let src = r#"
+            protocol "empty-proto" {
+              description = "no messages defined"
+            }
+
+            system "s" {
+              component "a" {
+                leaf = true
+                port "p" {
+                  protocol = "empty-proto"
+                  role     = "provider"
+                }
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        assert_eq!(report.ports.incomplete, 1);
+        assert_eq!(report.ports.complete, 0);
+        assert_eq!(report.ports.partial, 0);
+    }
+
     // ── unit: connection scoring ──────────────────────────────────────────────
 
     #[test]

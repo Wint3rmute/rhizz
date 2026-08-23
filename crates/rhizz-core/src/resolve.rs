@@ -22,6 +22,8 @@ struct Resolver {
     system_label_index: HashMap<String, SystemId>,
     /// Maps protocol label -> ProtocolId for port protocol resolution.
     protocol_label_index: HashMap<String, ProtocolId>,
+    /// Protocol labels that were referenced by at least one port.
+    used_protocol_labels: HashSet<String>,
     /// Top-level component labels that were referenced by at least one `source` attribute.
     used_top_level_labels: HashSet<String>,
 }
@@ -219,7 +221,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         resolve_view(&mut r, lv);
     }
 
-    // ── W012: orphan top-level components ─────────────────────────────────────
+    // ── W012: orphan top-level components & protocols ────────────────────────
     {
         let mut orphan_labels: Vec<&str> = top_level_components
             .keys()
@@ -232,6 +234,23 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
                 DiagnosticCode::W012,
                 format!(
                     "top-level component '{}' is not referenced by any 'source'",
+                    label
+                ),
+            );
+        }
+
+        let mut orphan_proto_labels: Vec<String> = r
+            .protocol_label_index
+            .keys()
+            .filter(|label| !r.used_protocol_labels.contains(*label))
+            .cloned()
+            .collect();
+        orphan_proto_labels.sort();
+        for label in orphan_proto_labels {
+            r.push_warning(
+                DiagnosticCode::W012,
+                format!(
+                    "top-level protocol '{}' is not referenced by any port",
                     label
                 ),
             );
@@ -501,6 +520,7 @@ fn process_ports(
 
         let proto_id = if let Some(ref proto_name) = lp.inner.protocol {
             if !proto_name.is_empty() {
+                r.used_protocol_labels.insert(proto_name.clone());
                 if let Some(&pid) = r.protocol_label_index.get(proto_name) {
                     let proto = &r.model.protocols[pid.0];
                     if !proto.roles.is_empty() && !proto.roles.contains(&role) {
@@ -1804,6 +1824,60 @@ system "sys2" {
         assert!(
             !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
             "expected no W012 when top-level component referenced multiple times, got: {:?}",
+            warnings
+        );
+    }
+
+    #[test]
+    fn w012_unreferenced_top_level_protocol_emits_warning() {
+        let src = r#"
+protocol "unused-proto" {
+    description = "never referenced"
+}
+system "sys" {
+    component "a" { leaf = true }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (_model, warnings) = resolve(raw).expect("should resolve");
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W012),
+            "expected W012 for unreferenced top-level protocol, got: {:?}",
+            warnings
+        );
+        let w = warnings
+            .iter()
+            .find(|d| d.code == DiagnosticCode::W012)
+            .unwrap();
+        assert!(
+            w.message.contains("unused-proto"),
+            "W012 message should mention the protocol label, got: {}",
+            w.message
+        );
+    }
+
+    #[test]
+    fn w012_referenced_protocol_no_warning() {
+        let src = r#"
+protocol "used-proto" {
+    description = "used by port"
+}
+system "sys" {
+    component "a" {
+        leaf = true
+        port "p" {
+            protocol = "used-proto"
+        }
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (_model, warnings) = resolve(raw).expect("should resolve");
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
+            "expected no W012 for referenced protocol, got: {:?}",
             warnings
         );
     }
