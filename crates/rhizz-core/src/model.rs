@@ -30,6 +30,13 @@ pub struct PortId(
     pub usize,
 );
 
+/// Arena index for a protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ProtocolId(
+    /// Inner index into [`Model::protocols`].
+    pub usize,
+);
+
 /// Arena index for a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ConnectionId(
@@ -109,6 +116,8 @@ pub struct Model {
     pub systems: Vec<System>,
     /// All components, indexed by [`ComponentId`].
     pub components: Vec<Component>,
+    /// All protocols, indexed by [`ProtocolId`].
+    pub protocols: Vec<Protocol>,
     /// All ports, indexed by [`PortId`].
     pub ports: Vec<Port>,
     /// All connections, indexed by [`ConnectionId`].
@@ -131,6 +140,7 @@ impl Default for Model {
             },
             systems: vec![],
             components: vec![],
+            protocols: vec![],
             ports: vec![],
             connections: vec![],
             messages: vec![],
@@ -191,6 +201,21 @@ pub struct Component {
     pub connections: Vec<ConnectionId>,
 }
 
+/// A resolved top-level protocol schema.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Protocol {
+    /// Unique identifier for this protocol.
+    pub label: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Filtering tags.
+    pub tags: Vec<String>,
+    /// Valid port roles permitted by this protocol.
+    pub roles: Vec<PortRole>,
+    /// Messages defined in this protocol.
+    pub messages: Vec<MessageId>,
+}
+
 /// A resolved port on a component.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Port {
@@ -200,8 +225,14 @@ pub struct Port {
     pub description: String,
     /// Free-form protocol name.
     pub protocol: String,
+    /// Optional resolved reference to a top-level protocol.
+    pub protocol_id: Option<ProtocolId>,
     /// Provider, consumer, or peer.
     pub role: PortRole,
+    /// Whether this port is an external boundary interface.
+    pub external: bool,
+    /// Whether this port is required when instantiated in a system.
+    pub required: bool,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// The component that owns this port.

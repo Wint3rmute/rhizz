@@ -22,22 +22,6 @@ How to work on this file:
 
 ---
 
-## Task 77 — `rhizz-core`: Data models & HCL parser for `protocol` blocks and port `external`/`required` attributes
-
-- Update raw (AST) models in `crates/rhizz-core/src/parse.rs`:
-  - Add `RawProtocol` struct (`description: Option<String>`, `tags: Option<Vec<String>>`, `roles: Option<Vec<String>>`, `messages: Vec<Labeled<RawMessage>>`).
-  - Add `protocols: Vec<Labeled<RawProtocol>>` to `RawFile`.
-  - Add `external: Option<bool>` and `required: Option<bool>` to `RawPort`.
-  - Implement parsing for top-level `protocol` blocks and port attributes.
-- Update resolved IR models in `crates/rhizz-core/src/model.rs`:
-  - Add `ProtocolId(usize)` index type.
-  - Add `Protocol` struct to `Model` (`label`, `description`, `tags`, `roles`, `messages`).
-  - Update `Port` struct with `protocol_id: Option<ProtocolId>`, `external: bool`, `required: bool`.
-- Add unit tests in `parse.rs` verifying parsing of top-level `protocol` blocks, protocol messages/fields, and port `external`/`required` attributes.
-- Validate with `just test`, `just lint`, `just format`.
-
----
-
 ## Task 78 — `rhizz-core`: Resolution pass, protocol linking, and connection LCA placement validation
 
 - Update resolution in `crates/rhizz-core/src/resolve.rs`:

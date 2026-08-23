@@ -35,6 +35,8 @@ pub struct RawFile {
     pub systems: Vec<Labeled<RawSystem>>,
     /// All parsed top-level component blocks.
     pub components: Vec<Labeled<RawComponent>>,
+    /// All parsed top-level protocol blocks.
+    pub protocols: Vec<Labeled<RawProtocol>>,
     /// All parsed view blocks.
     pub views: Vec<Labeled<RawView>>,
 }
@@ -86,6 +88,19 @@ pub struct RawComponent {
     pub connections: Vec<Labeled<RawConnection>>,
 }
 
+/// Raw protocol block before resolution.
+#[derive(Debug, Clone, Default)]
+pub struct RawProtocol {
+    /// Optional description text.
+    pub description: Option<String>,
+    /// Filtering tags.
+    pub tags: Vec<String>,
+    /// Permitted port roles (e.g. `["provider", "consumer"]`).
+    pub roles: Option<Vec<String>>,
+    /// Child message blocks.
+    pub messages: Vec<Labeled<RawMessage>>,
+}
+
 /// Raw port block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawPort {
@@ -95,6 +110,10 @@ pub struct RawPort {
     pub protocol: Option<String>,
     /// Role string (`"provider"`, `"consumer"`, `"peer"`).
     pub role: Option<String>,
+    /// Whether this port is an external boundary interface.
+    pub external: Option<bool>,
+    /// Whether this port is required when instantiated in a system.
+    pub required: Option<bool>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Nested message blocks.
@@ -186,6 +205,17 @@ struct ComponentAttrs {
     leaf: Option<bool>,
 }
 
+/// Serde helper for deserializing protocol attributes.
+#[derive(Deserialize, Default)]
+struct ProtocolAttrs {
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional tags list.
+    pub tags: Option<Vec<String>>,
+    /// Optional roles list.
+    pub roles: Option<Vec<String>>,
+}
+
 /// Serde helper for deserializing port attributes.
 #[derive(Deserialize, Default)]
 struct PortAttrs {
@@ -195,6 +225,10 @@ struct PortAttrs {
     protocol: Option<String>,
     /// Optional role string.
     role: Option<String>,
+    /// Optional external flag.
+    external: Option<bool>,
+    /// Optional required flag.
+    required: Option<bool>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
 }
@@ -372,7 +406,29 @@ fn parse_port(body: &hcl::Body) -> Result<RawPort> {
         description: a.description,
         protocol: a.protocol,
         role: a.role,
+        external: a.external,
+        required: a.required,
         tags: a.tags.unwrap_or_default(),
+        messages,
+    })
+}
+
+/// Parse a `protocol` block body into a [`RawProtocol`].
+fn parse_protocol(body: &hcl::Body) -> Result<RawProtocol> {
+    let a: ProtocolAttrs = attrs(body)?;
+    let mut messages = Vec::new();
+    for block in body.blocks() {
+        if block.identifier() == "message" {
+            let label = first_label(block)?;
+            let inner =
+                parse_message(block.body()).with_context(|| format!("in message '{label}'"))?;
+            messages.push(Labeled { label, inner });
+        }
+    }
+    Ok(RawProtocol {
+        description: a.description,
+        tags: a.tags.unwrap_or_default(),
+        roles: a.roles,
         messages,
     })
 }
@@ -520,6 +576,12 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
                     .with_context(|| format!("in component '{label}'"))?;
                 file.components.push(Labeled { label, inner });
             }
+            "protocol" => {
+                let label = first_label(block)?;
+                let inner = parse_protocol(block.body())
+                    .with_context(|| format!("in protocol '{label}'"))?;
+                file.protocols.push(Labeled { label, inner });
+            }
             "view" => {
                 let label = first_label(block)?;
                 let inner =
@@ -550,6 +612,7 @@ pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result
     }
     dst.systems.extend(src.systems);
     dst.components.extend(src.components);
+    dst.protocols.extend(src.protocols);
     dst.views.extend(src.views);
     Ok(())
 }
@@ -1026,5 +1089,106 @@ mod tests {
         let labels: Vec<&str> = merged.components.iter().map(|c| c.label.as_str()).collect();
         assert!(labels.contains(&"comp-a"));
         assert!(labels.contains(&"comp-b"));
+    }
+
+    // ── Protocol & Port attributes parsing ─────────────────────────────────
+
+    #[test]
+    fn parse_protocol_block() {
+        let src = r#"
+            protocol "spi" {
+                description = "Serial Peripheral Interface"
+                tags        = ["serial", "bus"]
+                roles       = ["provider", "consumer"]
+
+                message "transaction" {
+                    description = "SPI transfer"
+                    field "cs" {
+                        type        = "uint8"
+                        description = "Chip select"
+                    }
+                    field "data" {
+                        type = "bytes"
+                    }
+                }
+            }
+        "#;
+        let path = PathBuf::from("protocols.hcl");
+        let raw = parse_file(src, &path).unwrap();
+
+        assert_eq!(raw.protocols.len(), 1);
+        let proto = &raw.protocols[0];
+        assert_eq!(proto.label, "spi");
+        assert_eq!(
+            proto.inner.description.as_deref(),
+            Some("Serial Peripheral Interface")
+        );
+        assert_eq!(proto.inner.tags, vec!["serial", "bus"]);
+        assert_eq!(
+            proto.inner.roles.as_ref().unwrap(),
+            &vec!["provider".to_string(), "consumer".to_string()]
+        );
+        assert_eq!(proto.inner.messages.len(), 1);
+        assert_eq!(proto.inner.messages[0].label, "transaction");
+        assert_eq!(proto.inner.messages[0].inner.fields.len(), 2);
+        assert_eq!(proto.inner.messages[0].inner.fields[0].label, "cs");
+        assert_eq!(
+            proto.inner.messages[0].inner.fields[0]
+                .inner
+                .field_type
+                .as_deref(),
+            Some("uint8")
+        );
+    }
+
+    #[test]
+    fn parse_port_external_required_attributes() {
+        let src = r#"
+            component "controller" {
+                port "p1" {
+                    protocol = "spi"
+                    role     = "provider"
+                    external = true
+                    required = false
+                }
+                port "p2" {
+                    role = "consumer"
+                }
+            }
+        "#;
+        let path = PathBuf::from("comp.hcl");
+        let raw = parse_file(src, &path).unwrap();
+
+        assert_eq!(raw.components.len(), 1);
+        let ports = &raw.components[0].inner.ports;
+        assert_eq!(ports.len(), 2);
+
+        assert_eq!(ports[0].label, "p1");
+        assert_eq!(ports[0].inner.external, Some(true));
+        assert_eq!(ports[0].inner.required, Some(false));
+
+        assert_eq!(ports[1].label, "p2");
+        assert_eq!(ports[1].inner.external, None);
+        assert_eq!(ports[1].inner.required, None);
+    }
+
+    #[test]
+    fn merge_protocols_from_multiple_files() {
+        let src1 = r#"protocol "proto-a" { description = "first" }"#;
+        let src2 = r#"protocol "proto-b" { description = "second" }"#;
+        let path1 = PathBuf::from("file1.hcl");
+        let path2 = PathBuf::from("file2.hcl");
+
+        let file1 = parse_file(src1, &path1).unwrap();
+        let file2 = parse_file(src2, &path2).unwrap();
+
+        let mut merged = RawFile::default();
+        merge_into(&mut merged, file1, &path1).unwrap();
+        merge_into(&mut merged, file2, &path2).unwrap();
+
+        assert_eq!(merged.protocols.len(), 2);
+        let labels: Vec<&str> = merged.protocols.iter().map(|p| p.label.as_str()).collect();
+        assert!(labels.contains(&"proto-a"));
+        assert!(labels.contains(&"proto-b"));
     }
 }
