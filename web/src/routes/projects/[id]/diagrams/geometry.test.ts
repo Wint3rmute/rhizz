@@ -6,6 +6,7 @@ import {
   boxContains,
   clampResizeWithin,
   clampWithin,
+  computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
   computeVisibleConnections,
@@ -504,5 +505,87 @@ describe("findConnectTarget", () => {
   it("returns null when hovering outside all nodes", () => {
     const target = findConnectTarget({ x: 500, y: 500 }, 1, candidates);
     expect(target).toBeNull();
+  });
+});
+
+describe("computeLcaConnection", () => {
+  it("connects sibling components at system level", () => {
+    const result = computeLcaConnection(
+      "drone/flight-controller",
+      "dshot",
+      "drone/esc",
+      "dshot",
+    );
+    expect(result).toEqual({
+      lcaScopePath: "drone",
+      from: "flight-controller/dshot",
+      to: "esc/dshot",
+    });
+  });
+
+  it("connects subcomponent to sibling component (cross-level)", () => {
+    const result = computeLcaConnection(
+      "drone/flight-controller/mcu",
+      "spi",
+      "drone/imu",
+      "spi",
+    );
+    expect(result).toEqual({
+      lcaScopePath: "drone",
+      from: "flight-controller/mcu/spi",
+      to: "imu/spi",
+    });
+  });
+
+  it("connects sibling subcomponents within a composite component", () => {
+    const result = computeLcaConnection(
+      "drone/flight-controller/mcu",
+      "spi",
+      "drone/flight-controller/imu",
+      "spi",
+    );
+    expect(result).toEqual({
+      lcaScopePath: "drone/flight-controller",
+      from: "mcu/spi",
+      to: "imu/spi",
+    });
+  });
+
+  it("connects deep components in different hierarchy branches", () => {
+    const result = computeLcaConnection(
+      "drone/avionics/sensors/gps",
+      "data",
+      "drone/propulsion/esc/motor1",
+      "pwm",
+    );
+    expect(result).toEqual({
+      lcaScopePath: "drone",
+      from: "avionics/sensors/gps/data",
+      to: "propulsion/esc/motor1/pwm",
+    });
+  });
+
+  it("handles untyped bare components without ports", () => {
+    const result = computeLcaConnection(
+      "drone/flight-controller/mcu",
+      null,
+      "drone/imu",
+      null,
+    );
+    expect(result).toEqual({
+      lcaScopePath: "drone",
+      from: "flight-controller/mcu",
+      to: "imu",
+    });
+  });
+
+  it("rejects cross-system connections", () => {
+    const result = computeLcaConnection(
+      "drone1/sensor",
+      "out",
+      "drone2/controller",
+      "in",
+    );
+    expect(result).toBeNull();
   });
 });

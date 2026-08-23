@@ -500,7 +500,37 @@ fn process_ports(
         };
 
         let proto_id = if let Some(ref proto_name) = lp.inner.protocol {
-            r.protocol_label_index.get(proto_name).copied()
+            if !proto_name.is_empty() {
+                if let Some(&pid) = r.protocol_label_index.get(proto_name) {
+                    let proto = &r.model.protocols[pid.0];
+                    if !proto.roles.is_empty() && !proto.roles.contains(&role) {
+                        let role_str = match role {
+                            PortRole::Provider => "provider",
+                            PortRole::Consumer => "consumer",
+                            PortRole::Peer => "peer",
+                        };
+                        r.push_warning(
+                            DiagnosticCode::W013,
+                            format!(
+                                "port '{}' in component '{}' declares role '{}' which is not permitted by protocol '{}'",
+                                lp.label, comp_label, role_str, proto_name
+                            ),
+                        );
+                    }
+                    Some(pid)
+                } else {
+                    r.push_warning(
+                        DiagnosticCode::W014,
+                        format!(
+                            "port '{}' in component '{}' references undefined protocol '{}'",
+                            lp.label, comp_label, proto_name
+                        ),
+                    );
+                    None
+                }
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -580,6 +610,21 @@ fn process_connections_in_scope(
         let from_ep = from.unwrap_or_else(|| sentinel.clone());
         let to_ep = to.unwrap_or(sentinel);
 
+        // Validate Lowest Common Ancestor (LCA) placement
+        if from_ep.component.0 != usize::MAX && to_ep.component.0 != usize::MAX {
+            let from_ok = is_ancestor_or_self(&r.model, scope, from_ep.component);
+            let to_ok = is_ancestor_or_self(&r.model, scope, to_ep.component);
+            if !from_ok || !to_ok {
+                r.push_error(
+                    DiagnosticCode::E015,
+                    format!(
+                        "connection '{}' is declared in '{}' which is not an ancestor of both endpoints (declared outside Lowest Common Ancestor)",
+                        lc.label, scope_name
+                    ),
+                );
+            }
+        }
+
         r.model.connections.push(Connection {
             label: lc.label.clone(),
             description: lc.inner.description.clone().unwrap_or_default(),
@@ -594,6 +639,24 @@ fn process_connections_in_scope(
     }
 
     conn_ids
+}
+
+/// Checks whether `ancestor_scope` is an ancestor of `cid` or is `Scope::Component(cid)`.
+fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -> bool {
+    let mut current_cid = cid;
+    loop {
+        if Scope::Component(current_cid) == ancestor_scope {
+            return true;
+        }
+        match model.components[current_cid.0].parent {
+            ComponentParent::Component(parent_cid) => {
+                current_cid = parent_cid;
+            }
+            ComponentParent::System(parent_sid) => {
+                return Scope::System(parent_sid) == ancestor_scope;
+            }
+        }
+    }
 }
 
 /// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
@@ -1812,7 +1875,7 @@ system "drone" {
     }
 
     #[test]
-    fn resolve_unix_style_parent_traversal() {
+    fn connection_declared_outside_lca_emits_e015() {
         let src = r#"
 system "drone" {
   component "battery" {
@@ -1824,6 +1887,8 @@ system "drone" {
       leaf = true
       port "v-in" { role = "consumer" }
     }
+    # E015: 'controller' is not an ancestor of 'battery'.
+    # This connection belongs in system "drone" (the LCA).
     connection "internal-power" {
       from = "../battery/power-out"
       to   = "power-regulator/v-in"
@@ -1832,18 +1897,114 @@ system "drone" {
 }
 "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let (model, diags) = resolve(raw).expect("should resolve parent traversal ..");
+        let result = resolve(raw);
+        assert!(result.is_err(), "expected error for LCA violation");
+        let diags = result.unwrap_err();
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E015),
+            "expected E015 for connection outside LCA, got: {:?}",
+            diags
+        );
+    }
+
+    #[test]
+    fn resolve_protocol_definition_and_linking() {
+        let src = r#"
+protocol "spi" {
+  description = "SPI bus"
+  tags        = ["serial"]
+  roles       = ["provider", "consumer"]
+
+  message "frame" {
+    description = "Data frame"
+    field "data" { type = "bytes" }
+  }
+}
+
+system "drone" {
+  component "mcu" {
+    leaf = true
+    port "spi" {
+      protocol = "spi"
+      role     = "provider"
+    }
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, diags) = resolve(raw).expect("protocol definition should resolve");
         assert!(diags.iter().all(|d| !d.is_error()));
 
-        let conn = &model.connections[0];
-        assert_eq!(conn.label, "internal-power");
-        assert_eq!(model.components[conn.from.component.0].label, "battery");
-        assert_eq!(model.ports[conn.from.port.unwrap().0].label, "power-out");
-        assert_eq!(
-            model.components[conn.to.component.0].label,
-            "power-regulator"
+        assert_eq!(model.protocols.len(), 1);
+        let proto = &model.protocols[0];
+        assert_eq!(proto.label, "spi");
+        assert_eq!(proto.description, "SPI bus");
+        assert_eq!(proto.tags, vec!["serial"]);
+        assert_eq!(proto.roles, vec![PortRole::Provider, PortRole::Consumer]);
+        assert_eq!(proto.messages.len(), 1);
+
+        let msg = &model.messages[proto.messages[0].0];
+        assert_eq!(msg.label, "frame");
+        assert_eq!(msg.fields.len(), 1);
+
+        let port = &model.ports[0];
+        assert_eq!(port.protocol, "spi");
+        assert_eq!(port.protocol_id, Some(ProtocolId(0)));
+    }
+
+    #[test]
+    fn w014_undefined_protocol_warning() {
+        let src = r#"
+system "drone" {
+  component "mcu" {
+    leaf = true
+    port "spi" {
+      protocol = "nonexistent-protocol"
+      role     = "provider"
+    }
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, warnings) =
+            resolve(raw).expect("undefined protocol should not block compilation");
+
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W014),
+            "expected W014 warning, got: {:?}",
+            warnings
         );
-        assert_eq!(model.ports[conn.to.port.unwrap().0].label, "v-in");
+        let port = &model.ports[0];
+        assert_eq!(port.protocol, "nonexistent-protocol");
+        assert_eq!(port.protocol_id, None);
+    }
+
+    #[test]
+    fn w013_role_not_permitted_by_protocol_warning() {
+        let src = r#"
+protocol "serial" {
+  roles = ["provider", "consumer"]
+}
+
+system "drone" {
+  component "mcu" {
+    leaf = true
+    port "uart" {
+      protocol = "serial"
+      role     = "peer"
+    }
+  }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (_model, warnings) =
+            resolve(raw).expect("disallowed role should emit warning without blocking");
+
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W013),
+            "expected W013 warning, got: {:?}",
+            warnings
+        );
     }
 
     #[test]

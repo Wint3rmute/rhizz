@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 78 — `rhizz-core`: Resolution pass, protocol linking, and connection LCA placement validation
+
+- **Protocol Resolution & Linking (`crates/rhizz-core/src/resolve.rs`)**:
+  - Indexed top-level `protocol` blocks, validating duplicate labels (`E001`) and processing protocol child messages/fields.
+  - Resolved `port.protocol`: links matching `ProtocolId` when defined; emits warning `W014` (`Undefined protocol reference`) when undefined without halting compilation.
+  - Validated port `role` against protocol `roles`: emits non-blocking warning `W013` (`Port role not permitted by protocol`) when the port role is disallowed.
+- **Connection LCA Placement Validation (`crates/rhizz-core/src/resolve.rs`)**:
+  - Implemented `is_ancestor_or_self` helper checking parent hierarchy chains.
+  - Enforced Lowest Common Ancestor placement: verified that the declaring scope is an ancestor of both `from` and `to` endpoints; emits blocking error `E015` (`Connection declared outside Lowest Common Ancestor`) when declared in an invalid child scope.
+- **Tests**:
+  - Added unit tests in `resolve.rs`:
+    - `resolve_protocol_definition_and_linking`: verifies protocol resolution, message/field indexing, and port linking.
+    - `w014_undefined_protocol_warning`: verifies `W014` warning emission for undefined protocols.
+    - `w013_role_not_permitted_by_protocol_warning`: verifies `W013` warning emission for disallowed port roles.
+    - `connection_declared_outside_lca_emits_e015`: verifies blocking `E015` error when connection is declared outside LCA.
+- Validated with `just test` (all 70 core tests + 277 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 77 — `rhizz-core`: Data models & HCL parser for `protocol` blocks and port `external`/`required` attributes
 
 - **Raw (AST) Models (`crates/rhizz-core/src/parse.rs`)**:

@@ -22,20 +22,6 @@ How to work on this file:
 
 ---
 
-## Task 78 — `rhizz-core`: Resolution pass, protocol linking, and connection LCA placement validation
-
-- Update resolution in `crates/rhizz-core/src/resolve.rs`:
-  - Index top-level `protocol` blocks, detect duplicate labels with `E001`, and process protocol child messages/fields.
-  - Resolve `port.protocol`: if matching top-level protocol exists, link `protocol_id`; if not found, emit warning `W014` (Undefined protocol reference).
-  - Validate port `role` against protocol `roles` list: emit warning `W013` (Port role not permitted by protocol) if disallowed.
-  - Implement Connection Lowest Common Ancestor (LCA) placement check:
-    - Ensure the declaring scope is an ancestor (or LCA) of both `from` and `to` endpoints.
-    - Emit error `E015` (Connection declared outside Lowest Common Ancestor) if declared in an invalid child scope.
-- Add unit tests in `resolve.rs` verifying protocol linking, `W013`, `W014`, and `E015`.
-- Validate with `just test`, `just lint`, `just format`.
-
----
-
 ## Task 79 — `rhizz-core`: Locality of port verification & completion scoring for protocols
 
 - Update port verification in `crates/rhizz-core/src/validate.rs` and `resolve.rs`:
