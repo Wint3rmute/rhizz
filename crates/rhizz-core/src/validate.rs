@@ -143,7 +143,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W007 -- one side of a connection is typed (comp:port), the other is not
+    // W007 -- one side of a connection is typed (comp/port), the other is not
     for conn in &model.connections {
         let from_typed = conn.from.port.is_some();
         let to_typed = conn.to.port.is_some();
@@ -151,7 +151,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W007,
                 format!(
-                    "connection '{}': one side is typed (comp:port) but the other is bare",
+                    "connection '{}': one side is typed (comp/port) but the other is bare",
                     conn.label
                 ),
             ));

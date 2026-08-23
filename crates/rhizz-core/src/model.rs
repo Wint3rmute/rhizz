@@ -245,7 +245,7 @@ pub struct Port {
 pub struct ConnectionEndpoint {
     /// The referenced component.
     pub component: ComponentId,
-    /// The referenced port, if a `comp:port` reference was used.
+    /// The referenced port, if a `comp/port` reference was used.
     pub port: Option<PortId>,
 }
 

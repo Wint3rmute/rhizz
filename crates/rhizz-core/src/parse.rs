@@ -127,9 +127,9 @@ pub struct RawConnection {
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
     pub level: Option<i32>,
-    /// Source reference (`"comp"` or `"comp:port"`).
+    /// Source reference (`"comp"` or `"comp/port"`).
     pub from: Option<String>,
-    /// Target reference (`"comp"` or `"comp:port"`).
+    /// Target reference (`"comp"` or `"comp/port"`).
     pub to: Option<String>,
     /// Labels of sibling connections this one encapsulates.
     pub encapsulates: Vec<String>,
