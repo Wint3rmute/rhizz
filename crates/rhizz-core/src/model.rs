@@ -85,6 +85,7 @@ pub(crate) struct ScopeIndex {
 
 /// The role a port plays in a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PortRole {
     /// Provides data / service.
     Provider,

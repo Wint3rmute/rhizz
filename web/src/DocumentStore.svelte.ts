@@ -779,7 +779,9 @@ export class DocumentStore {
       label: proto.label,
       description: proto.description || "",
       tags: proto.tags || [],
-      roles: proto.roles || [],
+      roles: (proto.roles || []).map((r: string) =>
+        r.toLowerCase() as "provider" | "consumer" | "peer"
+      ),
       messages: (proto.messages || []).map((mid: number): MessageData => {
         const m = msgs[mid];
         return {
