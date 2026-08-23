@@ -262,7 +262,10 @@ fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
         ));
     }
     if !proto.tags.is_empty() {
-        out.push_str(&format!("  tags        = {}\n", format_string_list(&proto.tags)));
+        out.push_str(&format!(
+            "  tags        = {}\n",
+            format_string_list(&proto.tags)
+        ));
     }
     if !proto.roles.is_empty() {
         let role_strs: Vec<String> = proto
@@ -274,7 +277,10 @@ fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
                 PortRole::Peer => "peer".to_string(),
             })
             .collect();
-        out.push_str(&format!("  roles       = {}\n", format_string_list(&role_strs)));
+        out.push_str(&format!(
+            "  roles       = {}\n",
+            format_string_list(&role_strs)
+        ));
     }
 
     let mut messages: Vec<&Message> = proto
@@ -710,27 +716,30 @@ mod tests {
   version = "1.0.0"
 }
 
+protocol "proto" {
+  description = "A protocol"
+
+  message "m1" {
+    description = "Message 1"
+
+    field "f1" {
+      type        = "uint32"
+      description = "Field 1"
+    }
+  }
+}
+
 system "demo" {
   description = "A demo system"
   tags        = ["demo"]
 
   component "comp-a" {
-    description = "Component A"
     leaf        = true
 
     port "p1" {
       description = "Port 1"
       protocol    = "proto"
       role        = "provider"
-
-      message "m1" {
-        description = "Message 1"
-
-        field "f1" {
-          type        = "uint32"
-          description = "Field 1"
-        }
-      }
     }
   }
 
@@ -744,9 +753,9 @@ system "demo" {
   }
 
   connection "c1" {
-    description  = "Link"
-    from         = "comp-a/p1"
-    to           = "comp-b/p2"
+    description = "Link"
+    from        = "comp-a/p1"
+    to          = "comp-b/p2"
   }
 }
 "#;
@@ -755,7 +764,11 @@ system "demo" {
             filename: "system.hcl".to_string(),
             content: hcl.to_string(),
         }]);
-        assert!(res1.diagnostics.iter().all(|d| !d.is_error()));
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res1: {:?}",
+            res1.diagnostics
+        );
         let model1 = res1.model.expect("model should resolve");
 
         let serialized1 = serialize_model(&model1);
@@ -780,6 +793,27 @@ system "demo" {
   authors = ["Alice \"The Architect\"", "Bob"]
 }
 
+protocol "pcie" {
+  description = "PCIe protocol"
+
+  message "telemetry" {
+    description = "Diagnostics & status"
+    level       = 3
+
+    field "err_count" {
+      type        = "uint32"
+      description = "Error count"
+      required    = true
+    }
+
+    field "temperature" {
+      type        = "float32"
+      description = "Die temperature"
+      unit        = "degC"
+    }
+  }
+}
+
 system "root-sys" {
   description = "A \"complex\" system with\nmultiple lines"
   tags        = ["tag-a", "tag-b"]
@@ -799,23 +833,6 @@ system "root-sys" {
         protocol    = "pcie"
         role        = "peer"
         tags        = ["bus"]
-
-        message "telemetry" {
-          description = "Diagnostics & status"
-          level       = 3
-
-          field "err_count" {
-            type        = "uint32"
-            description = "Error count"
-            required    = true
-          }
-
-          field "temperature" {
-            type        = "float32"
-            description = "Die temperature"
-            unit        = "degC"
-          }
-        }
       }
     }
 

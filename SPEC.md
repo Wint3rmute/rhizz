@@ -470,9 +470,9 @@ aggregated.
 | ------------------------ | ------------------------------------------------------- | --------------------------------------------- | ------------------- |
 | **Component** (leaf)     | Has description AND all defined ports complete          | Has description but ≥1 port incomplete        | No description      |
 | **Component** (non-leaf) | ≥1 child component, all children complete               | ≥1 child component, not all children complete | No child components |
-| **Port**                 | ≥1 message (inline or via protocol), all messages complete | ≥1 message, not all messages complete     | No messages         |
+| **Port**                 | Bound protocol has ≥1 message, all messages complete    | Bound protocol has ≥1 message, not all complete | No bound protocol or protocol has no messages |
 | **Connection**           | Both sides typed (`comp/port`) with matching `protocol` | One side typed                                | Both sides untyped  |
-| **Message**              | ≥1 field (defined on protocol or inline on port)        | —                                             | No fields           |
+| **Message**              | ≥1 field (defined inside a protocol)                    | —                                             | No fields           |
 
 A leaf component with a description and no ports scores Complete (1.0) — ports
 are optional detail. A port referencing a `protocol` block inherits that
@@ -530,7 +530,7 @@ The view renderer applies the filter, then produces a DOT file:
 | Component (leaf)     | Box node, solid border                                                  |
 | Component (non-leaf) | `subgraph cluster_*` containing children                                |
 | Connection           | Edge with direction inferred from port roles (see table above)          |
-| Message              | Items in edge label (from connected port(s), if `show_messages = true`) |
+| Message              | Items in edge label (from connected protocol(s), if `show_messages = true`) |
 | Encapsulation        | Dashed edge between connections, or annotation on label                 |
 
 Example generated DOT fragment:
@@ -885,7 +885,7 @@ view "fc-internals" {
 | Reusable top-level `protocol` blocks                            | Extracts message and field schemas from individual components, enabling protocol reuse across ports and components                                                                                                      |
 | Port `external` and `required` attributes                       | Enables locality of verification: components can be checked in isolation as reusable units without false unused-port warnings, while ensuring required interfaces are bound when instantiated in a system             |
 | Ports are optional (`comp/port` syntax is additive)             | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally                                                                                                        |
-| Messages live on protocols and ports, not connections           | Protocol schema travels with the protocol definition or component; enables genuine reuse                                                                                                                                |
+| Messages live exclusively on protocols, not components or ports | Messages represent communication exchanged between components across protocols; keeping schemas on protocols prevents duplication and makes components purely structural                                                 |
 | Top-level components + `source` label reference                 | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
 | Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable                                                                                                                                         |
 | `type` on fields is a free-form string                          | Supports gradual specification — no type system to fight during early design                                                                                                                                            |

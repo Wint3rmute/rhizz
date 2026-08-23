@@ -362,7 +362,6 @@ struct Field {
 5. Walk each component's `port` blocks:
    - Allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
    - Resolve `protocol` string: if it matches a registered `protocol` block, link `protocol_id`.
-   - Walk inline messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
    - Set `external` (default `false`) and `required` (default `true`).
 6. Walk `connection` blocks in each scope:
    - Parse `from` and `to` paths relative to the declaring scope.
