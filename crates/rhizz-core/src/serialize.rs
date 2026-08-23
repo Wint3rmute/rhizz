@@ -15,8 +15,8 @@
 //!    separate `views.hcl` files.
 
 use crate::model::{
-    Component, Connection, Field, Message, Model, NodeLayout, Port, PortRole, Project, System,
-    View, ViewDefinition, ViewFilterDefinition,
+    Component, Connection, Field, Message, Model, NodeLayout, Port, PortRole, Project, Protocol,
+    System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -32,7 +32,18 @@ pub fn serialize_model(model: &Model) -> String {
         serialize_project(&mut out, &model.project);
     }
 
-    // 2. System blocks (sorted by label for determinism)
+    // 2. Protocol blocks (sorted by label for determinism)
+    let mut protocols: Vec<&Protocol> = model.protocols.iter().collect();
+    protocols.sort_by(|a, b| a.label.cmp(&b.label));
+
+    for proto in &protocols {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        serialize_protocol(&mut out, proto, model);
+    }
+
+    // 3. System blocks (sorted by label for determinism)
     let mut systems: Vec<&System> = model.systems.iter().collect();
     systems.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -165,7 +176,7 @@ fn serialize_component(
 
     for port in ports {
         out.push('\n');
-        serialize_port(out, port, model, depth + 1, comp.level);
+        serialize_port(out, port, depth + 1);
     }
 
     // Child components (sorted by label)
@@ -197,7 +208,7 @@ fn serialize_component(
     out.push_str(&format!("{indent}}}\n"));
 }
 
-fn serialize_port(out: &mut String, port: &Port, model: &Model, depth: usize, parent_level: i32) {
+fn serialize_port(out: &mut String, port: &Port, depth: usize) {
     let indent = "  ".repeat(depth);
     out.push_str(&format!("{indent}port {} {{\n", escape_string(&port.label)));
 
@@ -231,9 +242,42 @@ fn serialize_port(out: &mut String, port: &Port, model: &Model, depth: usize, pa
             format_string_list(&port.tags)
         ));
     }
+    if port.external {
+        out.push_str(&format!("{inner_indent}external    = true\n"));
+    }
+    if !port.required {
+        out.push_str(&format!("{inner_indent}required    = false\n"));
+    }
 
-    // Messages (sorted by label)
-    let mut messages: Vec<&Message> = port
+    out.push_str(&format!("{indent}}}\n"));
+}
+
+fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
+    out.push_str(&format!("protocol {} {{\n", escape_string(&proto.label)));
+
+    if !proto.description.is_empty() {
+        out.push_str(&format!(
+            "  description = {}\n",
+            escape_string(&proto.description)
+        ));
+    }
+    if !proto.tags.is_empty() {
+        out.push_str(&format!("  tags        = {}\n", format_string_list(&proto.tags)));
+    }
+    if !proto.roles.is_empty() {
+        let role_strs: Vec<String> = proto
+            .roles
+            .iter()
+            .map(|r| match r {
+                PortRole::Provider => "provider".to_string(),
+                PortRole::Consumer => "consumer".to_string(),
+                PortRole::Peer => "peer".to_string(),
+            })
+            .collect();
+        out.push_str(&format!("  roles       = {}\n", format_string_list(&role_strs)));
+    }
+
+    let mut messages: Vec<&Message> = proto
         .messages
         .iter()
         .map(|id| &model.messages[id.0])
@@ -242,10 +286,10 @@ fn serialize_port(out: &mut String, port: &Port, model: &Model, depth: usize, pa
 
     for msg in messages {
         out.push('\n');
-        serialize_message(out, msg, model, depth + 1, parent_level);
+        serialize_message(out, msg, model, 1, 0);
     }
 
-    out.push_str(&format!("{indent}}}\n"));
+    out.push_str("}\n");
 }
 
 fn serialize_message(

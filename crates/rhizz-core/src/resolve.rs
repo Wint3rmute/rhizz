@@ -1,7 +1,7 @@
 use crate::model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
     Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole,
-    Project, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
+    Project, ProtocolId, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
@@ -20,6 +20,8 @@ struct Resolver {
     diagnostics: Vec<Diagnostic>,
     /// Maps system label -> SystemId for view resolution.
     system_label_index: HashMap<String, SystemId>,
+    /// Maps protocol label -> ProtocolId for port protocol resolution.
+    protocol_label_index: HashMap<String, ProtocolId>,
     /// Top-level component labels that were referenced by at least one `source` attribute.
     used_top_level_labels: HashSet<String>,
 }
@@ -53,6 +55,50 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         version: p.version.unwrap_or_else(|| "0.0.0".to_owned()),
         authors: p.authors,
     };
+
+    // ── Protocols ─────────────────────────────────────────────────────────────
+    let mut proto_seen: HashSet<String> = HashSet::new();
+    for lp in raw.protocols {
+        if !proto_seen.insert(lp.label.clone()) {
+            r.push_error(
+                DiagnosticCode::E001,
+                format!("duplicate protocol label '{}'", lp.label),
+            );
+            continue;
+        }
+
+        let proto_id = ProtocolId(r.model.protocols.len());
+        r.protocol_label_index.insert(lp.label.clone(), proto_id);
+
+        let roles = lp
+            .inner
+            .roles
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|s| match s.as_str() {
+                "provider" => Some(PortRole::Provider),
+                "consumer" => Some(PortRole::Consumer),
+                "peer" => Some(PortRole::Peer),
+                other => {
+                    r.push_error(
+                        DiagnosticCode::E009,
+                        format!("protocol '{}' has invalid role '{}'", lp.label, other),
+                    );
+                    None
+                }
+            })
+            .collect();
+
+        let msg_ids = process_messages(&mut r, &lp.inner.messages, 0, &lp.label);
+
+        r.model.protocols.push(crate::model::Protocol {
+            label: lp.label.clone(),
+            description: lp.inner.description.unwrap_or_default(),
+            tags: lp.inner.tags,
+            roles,
+            messages: msg_ids,
+        });
+    }
 
     // ── Systems ───────────────────────────────────────────────────────────────
     //
@@ -421,7 +467,7 @@ fn process_ports(
     r: &mut Resolver,
     ports: &[Labeled<crate::parse::RawPort>],
     owner: ComponentId,
-    parent_level: i32,
+    _parent_level: i32,
     comp_label: &str,
 ) -> Vec<PortId> {
     let mut label_seen: HashSet<String> = HashSet::new();
@@ -453,8 +499,11 @@ fn process_ports(
             }
         };
 
-        // Process messages inside this port.
-        let msg_ids = process_messages(r, &lp.inner.messages, parent_level, &lp.label);
+        let proto_id = if let Some(ref proto_name) = lp.inner.protocol {
+            r.protocol_label_index.get(proto_name).copied()
+        } else {
+            None
+        };
 
         let pid = PortId(r.model.ports.len());
         // Register in scope_index so connection endpoints can find it.
@@ -464,13 +513,12 @@ fn process_ports(
             label: lp.label.clone(),
             description: lp.inner.description.clone().unwrap_or_default(),
             protocol: lp.inner.protocol.clone().unwrap_or_default(),
-            protocol_id: None,
+            protocol_id: proto_id,
             role,
             external: lp.inner.external.unwrap_or(false),
             required: lp.inner.required.unwrap_or(true),
             tags: lp.inner.tags.clone(),
             owner,
-            messages: msg_ids,
         });
         port_ids.push(pid);
     }
@@ -829,7 +877,7 @@ fn process_messages(
     r: &mut Resolver,
     messages: &[Labeled<RawMessage>],
     parent_level: i32,
-    port_label: &str,
+    proto_label: &str,
 ) -> Vec<MessageId> {
     let mut label_seen: HashSet<String> = HashSet::new();
     let mut msg_ids: Vec<MessageId> = Vec::new();
@@ -839,8 +887,8 @@ fn process_messages(
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate message label '{}' in port '{}'",
-                    lm.label, port_label
+                    "duplicate message label '{}' in protocol '{}'",
+                    lm.label, proto_label
                 ),
             );
             continue;
@@ -1071,10 +1119,7 @@ mod tests {
             .find(|pid| model.ports[pid.0].label == "motor-out")
             .expect("motor-out port on FC");
         let motor_out_port = &model.ports[fc_motor_out.0];
-        assert_eq!(motor_out_port.messages.len(), 1);
-        let throttle = &model.messages[motor_out_port.messages[0].0];
-        assert_eq!(throttle.label, "throttle");
-        assert_eq!(throttle.fields.len(), 2);
+        assert_eq!(motor_out_port.label, "motor-out");
 
         // ground-control system exists
         let gc = &model.systems[gc_sid.0];

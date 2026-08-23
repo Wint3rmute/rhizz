@@ -116,8 +116,6 @@ pub struct RawPort {
     pub required: Option<bool>,
     /// Filtering tags.
     pub tags: Vec<String>,
-    /// Nested message blocks.
-    pub messages: Vec<Labeled<RawMessage>>,
 }
 
 /// Raw connection block before resolution.
@@ -393,15 +391,6 @@ fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
 /// Parse a `port` block body into a [`RawPort`].
 fn parse_port(body: &hcl::Body) -> Result<RawPort> {
     let a: PortAttrs = attrs(body)?;
-    let mut messages = Vec::new();
-    for block in body.blocks() {
-        if block.identifier() == "message" {
-            let label = first_label(block)?;
-            let inner =
-                parse_message(block.body()).with_context(|| format!("in message '{label}'"))?;
-            messages.push(Labeled { label, inner });
-        }
-    }
     Ok(RawPort {
         description: a.description,
         protocol: a.protocol,
@@ -409,7 +398,6 @@ fn parse_port(body: &hcl::Body) -> Result<RawPort> {
         external: a.external,
         required: a.required,
         tags: a.tags.unwrap_or_default(),
-        messages,
     })
 }
 
@@ -717,23 +705,12 @@ mod tests {
         assert!(tl_fc_child_labels.contains(&"imu"));
         assert!(tl_fc_child_labels.contains(&"barometer"));
 
-        // FC top-level definition should have ports with messages
+        // FC top-level definition should have ports
         let fc_port_labels: Vec<&str> =
             tl_fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
-
-        // motor-out port should have a message
-        let motor_port = tl_fc
-            .inner
-            .ports
-            .iter()
-            .find(|p| p.label == "motor-out")
-            .unwrap();
-        assert_eq!(motor_port.inner.messages.len(), 1);
-        assert_eq!(motor_port.inner.messages[0].label, "throttle");
-        assert_eq!(motor_port.inner.messages[0].inner.fields.len(), 2);
 
         // Connections at system level
         let conn_labels: Vec<&str> = quad
@@ -812,7 +789,7 @@ mod tests {
             .unwrap();
         assert!(rec.inner.components.is_empty());
 
-        // mobile-app should have ports with messages
+        // mobile-app should have ports
         let app = bv
             .inner
             .components
@@ -825,14 +802,7 @@ mod tests {
             .iter()
             .find(|p| p.label == "api")
             .expect("api port missing");
-        let msg_labels: Vec<&str> = api_port
-            .inner
-            .messages
-            .iter()
-            .map(|m| m.label.as_str())
-            .collect();
-        assert!(msg_labels.contains(&"get-feed"));
-        assert!(msg_labels.contains(&"upload-video"));
+        assert_eq!(api_port.label, "api");
 
         // Top-level connections
         let conn_labels: Vec<&str> = bv
@@ -908,7 +878,7 @@ mod tests {
         assert!(conn_labels.contains(&"sprint-planning"));
         assert!(conn_labels.contains(&"bug-reports"));
 
-        // Product has ports with messages
+        // Product has ports
         let product = acme
             .inner
             .components
@@ -921,13 +891,7 @@ mod tests {
             .iter()
             .find(|p| p.label == "sprint-out")
             .expect("sprint-out port missing");
-        assert_eq!(sprint_port.inner.messages.len(), 1);
-        let msg = &sprint_port.inner.messages[0];
-        assert_eq!(msg.label, "sprint-backlog");
-        let field_labels: Vec<&str> = msg.inner.fields.iter().map(|f| f.label.as_str()).collect();
-        assert!(field_labels.contains(&"sprint_id"));
-        assert!(field_labels.contains(&"stories"));
-        assert!(field_labels.contains(&"capacity"));
+        assert_eq!(sprint_port.label, "sprint-out");
 
         assert_eq!(raw.views.len(), 3);
     }
@@ -982,29 +946,19 @@ mod tests {
     #[test]
     fn parse_field_type_attribute() {
         let src = r#"
-            system "s" {
-                component "a" {
-                    leaf = true
-                    port "p" {
-                        message "m" {
-                            field "f" {
-                                type        = "uint8"
-                                unit        = "ms"
-                                description = "desc"
-                            }
-                        }
+            protocol "proto" {
+                message "m" {
+                    field "f" {
+                        type        = "uint8"
+                        unit        = "ms"
+                        description = "desc"
                     }
                 }
-                component "b" { leaf = true }
             }
         "#;
         let path = PathBuf::from("test.hcl");
         let raw = parse_file(src, &path).unwrap();
-        let field = &raw.systems[0].inner.components[0].inner.ports[0]
-            .inner
-            .messages[0]
-            .inner
-            .fields[0];
+        let field = &raw.protocols[0].inner.messages[0].inner.fields[0];
         assert_eq!(field.inner.field_type.as_deref(), Some("uint8"));
         assert_eq!(field.inner.unit.as_deref(), Some("ms"));
     }

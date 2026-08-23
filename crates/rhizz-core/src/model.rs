@@ -237,8 +237,6 @@ pub struct Port {
     pub tags: Vec<String>,
     /// The component that owns this port.
     pub owner: ComponentId,
-    /// Messages carried by this port.
-    pub messages: Vec<MessageId>,
 }
 
 /// One endpoint of a connection — a component and an optional port on that component.

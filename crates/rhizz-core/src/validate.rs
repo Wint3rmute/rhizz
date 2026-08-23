@@ -219,12 +219,12 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W011 -- port has no messages defined
-    for port in &model.ports {
-        if port.messages.is_empty() {
+    // W011 -- protocol has no messages defined
+    for proto in &model.protocols {
+        if proto.messages.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W011,
-                format!("port '{}' has no messages defined", port.label),
+                format!("protocol '{}' has no messages defined", proto.label),
             ));
         }
     }
@@ -367,14 +367,18 @@ mod tests {
     #[test]
     fn w002_message_no_fields() {
         let src = r#"
+            protocol "proto" {
+              message "empty-msg" {
+                description = "a message with no fields"
+              }
+            }
+
             system "s" {
               component "a" {
                 leaf = true
                 port "p" {
-                  role = "provider"
-                  message "empty-msg" {
-                    description = "a message with no fields"
-                  }
+                  protocol = "proto"
+                  role     = "provider"
                 }
               }
               component "b" { leaf = true }
