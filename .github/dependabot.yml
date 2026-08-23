@@ -8,12 +8,12 @@ updates:
   - package-ecosystem: "cargo" # See documentation for possible values
     directory: "/" # Location of package manifests
     schedule:
-      interval: "weekly"
+      interval: "monthly"
   - package-ecosystem: "deno"
     directory: "/web"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
   - package-ecosystem: "nix"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
