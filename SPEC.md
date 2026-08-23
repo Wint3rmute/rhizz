@@ -170,14 +170,14 @@ system "quadcopter" {
 
 #### Attributes
 
-| Attribute     | Type         | Required | Default          | Description                                                                                                                         |
-| ------------- | ------------ | -------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)                                                                   |
-| `source`      | string       | no       | —                | Label of a top-level `component` to use as this component's body. Mutually exclusive with all other attributes and children (E012). |
-| `description` | string       | no       | `""`             | Human-readable description                                                                                                          |
-| `tags`        | list(string) | no       | `[]`             | Filtering tags                                                                                                                      |
-| `level`       | integer      | no       | parent level + 1 | Abstraction level                                                                                                                   |
-| `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `component` or `connection` blocks                                           |
+| Attribute     | Type         | Required | Default          | Description                                                                |
+| ------------- | ------------ | -------- | ---------------- | ---------------------------------------------------------------------------|
+| _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)          |
+| `source`      | string       | no       | —                | Label of a top-level `component` to use as this component's body.          |
+| `description` | string       | no       | `""`             | Human-readable description                                                 |
+| `tags`        | list(string) | no       | `[]`             | Filtering tags                                                             |
+| `level`       | integer      | no       | parent level + 1 | Abstraction level                                                          |
+| `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `component`s        |
 
 **Children:** `port` (any), `component` (if not leaf), `connection` (if not
 leaf, between child components)
