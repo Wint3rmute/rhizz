@@ -20,6 +20,17 @@ How to work on this file:
   - In general, pick the most minimal and free variant
 - Use the icons in the FileTree - one icon for a folder, another icon for a file
 
+## Task 77 - Allow customizing the starting point of a connection in Diagrams
+
+When editing a diagram, allow the user to specify the starting point of a
+connection. One of: top, bottom, left, right. The starting point shall be
+diagram-specific, different diagrams may have different starting points for each
+connection.
+
+When creating a new connection, add drag-and-drop handles on each possible
+position (top, bottom, left, right). After creating a connection, make its
+starting point configurarable via the inspector panel.
+
 ---
 
 ## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
