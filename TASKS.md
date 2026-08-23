@@ -22,17 +22,6 @@ How to work on this file:
 
 ---
 
-## Task 81 — `rhizz-wasm`: Export protocol types and updated port metadata to JavaScript
-
-- Update `crates/rhizz-wasm/src/lib.rs`:
-  - Add `ProtocolJS` wrapper exposing `label`, `description`, `tags`, and `roles`.
-  - Expose `protocols` list getter on `ModelJS`.
-  - Add `external` and `required` boolean getters on `PortJS`.
-- Update WASM integration tests in `crates/rhizz-wasm/tests/wasm_test.rs`.
-- Validate with `just test`, `just lint`, `just format`, `just build`.
-
----
-
 ## Task 82 — `web`: Update frontend TypeScript types and worked examples
 
 - Update TypeScript types in `web/src/rhizz_wasm_wrapper.ts` and VFS compiler wrappers to handle `protocols` and new port attributes.

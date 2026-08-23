@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 81 — `rhizz-wasm`: Export protocol types and updated port metadata to JavaScript
+
+- **WASM Bindings (`crates/rhizz-wasm/src/lib.rs`)**:
+  - Added `ProtocolJS` wrapper exposing `label`, `description`, `tags`, and `roles`.
+  - Added `PortJS` wrapper exposing `label`, `description`, `protocol`, `role`, `external`, `required`, `tags`, and `owner_component_index`.
+  - Added `protocols()` and `ports()` methods to `ModelJS`.
+- **Tests**:
+  - Added WASM test `protocols_and_ports_return_typed_wrappers` in `crates/rhizz-wasm/tests/wasm_test.rs`.
+- Validated with `just test` (all 78 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 80 — `rhizz-core`: HCL serialization for protocols and port attributes
 
 - **HCL Serialization (`crates/rhizz-core/src/serialize.rs`)**:
