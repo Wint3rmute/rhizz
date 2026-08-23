@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 80 — `rhizz-core`: HCL serialization for protocols and port attributes
+
+- **HCL Serialization (`crates/rhizz-core/src/serialize.rs`)**:
+  - Implemented `serialize_protocol` formatting top-level `protocol` blocks with description, tags, roles, and child messages/fields.
+  - Updated `serialize_port` to format `external = true` and `required = false` attributes, while stripping child message blocks (now owned by protocols).
+  - Serialized protocols in sorted deterministic order at the project root level.
+- **Tests**:
+  - Added unit test `test_protocol_and_port_attributes_roundtrip` verifying idempotent serialization and round-trip parsing of protocol blocks and port attributes.
+- Validated with `just test` (all 78 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 79 — `rhizz-core`: Locality of port verification & completion scoring for protocols
 
 - **Port Locality Verification (`crates/rhizz-core/src/validate.rs`)**:

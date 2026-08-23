@@ -22,16 +22,6 @@ How to work on this file:
 
 ---
 
-## Task 80 — `rhizz-core`: HCL serialization for protocols and port attributes
-
-- Update bidirectional HCL serializer in `crates/rhizz-core/src/serialize.rs`:
-  - Serialize top-level `protocol` blocks with description, tags, roles, and child messages/fields.
-  - Serialize `external = true` and `required = false` attributes on `port` blocks.
-- Add round-trip tests (parse -> resolve -> serialize -> parse) in `serialize.rs`.
-- Validate with `just test`, `just lint`, `just format`.
-
----
-
 ## Task 81 — `rhizz-wasm`: Export protocol types and updated port metadata to JavaScript
 
 - Update `crates/rhizz-wasm/src/lib.rs`:

@@ -886,6 +886,82 @@ system "root-sys" {
     }
 
     #[test]
+    fn test_protocol_and_port_attributes_roundtrip() {
+        let hcl = r#"protocol "telemetry" {
+  description = "Telemetry streaming protocol"
+  tags        = ["data", "telemetry"]
+  roles       = ["provider", "consumer"]
+
+  message "status" {
+    description = "System status packet"
+
+    field "battery_mv" {
+      type        = "uint32"
+      description = "Battery millivolts"
+      unit        = "mV"
+    }
+
+    field "uptime_sec" {
+      type        = "uint64"
+      description = "Uptime in seconds"
+      unit        = "s"
+      required    = true
+    }
+  }
+}
+
+system "monitored-device" {
+  component "hub" {
+    leaf        = true
+
+    port "telem-in" {
+      description = "Telemetry input"
+      protocol    = "telemetry"
+      role        = "consumer"
+      external    = true
+    }
+
+    port "debug-port" {
+      role        = "peer"
+      external    = true
+      required    = false
+    }
+  }
+}
+"#;
+
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res1: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("model1 should resolve");
+
+        let serialized1 = serialize_model(&model1);
+
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized1.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res2: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("model2 should resolve");
+
+        let serialized2 = serialize_model(&model2);
+        assert_eq!(
+            serialized1, serialized2,
+            "protocol and port attributes serialization must be idempotent"
+        );
+    }
+
+    #[test]
     fn test_examples_idempotent_roundtrip() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let workspace_dir = manifest_dir
