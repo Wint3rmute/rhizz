@@ -212,10 +212,13 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     }
     for (idx, port) in model.ports.iter().enumerate() {
         if !used_ports.contains(&idx) {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W010,
-                format!("port '{}' is not referenced by any connection", port.label),
-            ));
+            // Unconnected ports emit W010 unless marked as an optional external port (external = true, required = false)
+            if !port.external || port.required {
+                warnings.push(Diagnostic::warning(
+                    DiagnosticCode::W010,
+                    format!("port '{}' is not referenced by any connection", port.label),
+                ));
+            }
         }
     }
 
@@ -551,6 +554,76 @@ mod tests {
                 .iter()
                 .any(|d| d.code == DiagnosticCode::W009 && d.message.contains("clash")),
             "expected W009 for clash, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    // ── W010: Port locality & required external ports ─────────────────────────
+
+    #[test]
+    fn w010_optional_external_port_no_warning() {
+        let src = r#"
+            system "s" {
+              component "sensor" {
+                leaf = true
+                port "debug-uart" {
+                  external = true
+                  required = false
+                }
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W010),
+            "optional external port should not emit W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w010_required_external_port_emits_warning() {
+        let src = r#"
+            system "s" {
+              component "sensor" {
+                leaf = true
+                port "data-out" {
+                  external = true
+                  required = true
+                }
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W010),
+            "unconnected required external port must emit W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w010_internal_port_unconnected_emits_warning() {
+        let src = r#"
+            system "s" {
+              component "sensor" {
+                leaf = true
+                port "internal-bus" {
+                  external = false
+                }
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W010),
+            "unconnected internal port must emit W010, got: {:?}",
             warning_codes(&warnings)
         );
     }

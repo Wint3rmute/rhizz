@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 79 — `rhizz-core`: Locality of port verification & completion scoring for protocols
+
+- **Port Locality Verification (`crates/rhizz-core/src/validate.rs`)**:
+  - Updated `W010` unconnected port diagnostic checks:
+    - Optional external ports (`external = true, required = false`) are allowed to remain open without triggering `W010`.
+    - Required external ports (`external = true, required = true`) and internal ports (`external = false`) emit `W010` when unconnected.
+- **Orphan Protocol Detection (`crates/rhizz-core/src/resolve.rs`)**:
+  - Tracked referenced protocols across all component ports.
+  - Emitted warning `W012` for any top-level `protocol` not referenced by any port in the project.
+- **Completion Scoring (`crates/rhizz-core/src/score.rs`)**:
+  - Ports referencing a protocol inherit its message schema for scoring (scores 1.0 when all protocol messages are complete, 0.5 when partially complete, 0.0 when incomplete or missing messages).
+- **Tests**:
+  - Added unit tests in `validate.rs`: `w010_optional_external_port_no_warning`, `w010_required_external_port_emits_warning`, `w010_internal_port_unconnected_emits_warning`.
+  - Added unit tests in `resolve.rs`: `w012_unreferenced_top_level_protocol_emits_warning`, `w012_referenced_protocol_no_warning`.
+  - Added unit tests in `score.rs`: `port_with_complete_protocol_messages_scores_complete`, `port_with_empty_protocol_scores_incomplete`.
+- Validated with `just test` (all 77 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 78 — `rhizz-core`: Resolution pass, protocol linking, and connection LCA placement validation
 
 - **Protocol Resolution & Linking (`crates/rhizz-core/src/resolve.rs`)**:
