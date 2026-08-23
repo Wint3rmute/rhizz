@@ -22,6 +22,80 @@ How to work on this file:
 
 ---
 
+## Task 77 — `rhizz-core`: Data models & HCL parser for `protocol` blocks and port `external`/`required` attributes
+
+- Update raw (AST) models in `crates/rhizz-core/src/parse.rs`:
+  - Add `RawProtocol` struct (`description: Option<String>`, `tags: Option<Vec<String>>`, `roles: Option<Vec<String>>`, `messages: Vec<Labeled<RawMessage>>`).
+  - Add `protocols: Vec<Labeled<RawProtocol>>` to `RawFile`.
+  - Add `external: Option<bool>` and `required: Option<bool>` to `RawPort`.
+  - Implement parsing for top-level `protocol` blocks and port attributes.
+- Update resolved IR models in `crates/rhizz-core/src/model.rs`:
+  - Add `ProtocolId(usize)` index type.
+  - Add `Protocol` struct to `Model` (`label`, `description`, `tags`, `roles`, `messages`).
+  - Update `Port` struct with `protocol_id: Option<ProtocolId>`, `external: bool`, `required: bool`.
+- Add unit tests in `parse.rs` verifying parsing of top-level `protocol` blocks, protocol messages/fields, and port `external`/`required` attributes.
+- Validate with `just test`, `just lint`, `just format`.
+
+---
+
+## Task 78 — `rhizz-core`: Resolution pass, protocol linking, and connection LCA placement validation
+
+- Update resolution in `crates/rhizz-core/src/resolve.rs`:
+  - Index top-level `protocol` blocks, detect duplicate labels with `E001`, and process protocol child messages/fields.
+  - Resolve `port.protocol`: if matching top-level protocol exists, link `protocol_id`; if not found, emit warning `W014` (Undefined protocol reference).
+  - Validate port `role` against protocol `roles` list: emit warning `W013` (Port role not permitted by protocol) if disallowed.
+  - Implement Connection Lowest Common Ancestor (LCA) placement check:
+    - Ensure the declaring scope is an ancestor (or LCA) of both `from` and `to` endpoints.
+    - Emit error `E015` (Connection declared outside Lowest Common Ancestor) if declared in an invalid child scope.
+- Add unit tests in `resolve.rs` verifying protocol linking, `W013`, `W014`, and `E015`.
+- Validate with `just test`, `just lint`, `just format`.
+
+---
+
+## Task 79 — `rhizz-core`: Locality of port verification & completion scoring for protocols
+
+- Update port verification in `crates/rhizz-core/src/validate.rs` and `resolve.rs`:
+  - **In isolation (top-level components):** Unconnected `external = true` ports do not trigger `W010`. Unconnected `external = false` ports emit `W010`.
+  - **In system instantiation (in-system components):** Unconnected `external = true, required = true` ports emit `W010`.
+  - Detect orphan top-level protocols not referenced by any port, emitting `W012`.
+- Update completion scoring in `crates/rhizz-core/src/score.rs`:
+  - Ports referencing a protocol inherit that protocol's messages for completeness scoring (score 1.0 if protocol messages are complete).
+  - Top-level protocol messages are scored under the `Messages` category.
+- Add unit tests in `validate.rs` and `score.rs`.
+- Validate with `just test`, `just lint`, `just format`.
+
+---
+
+## Task 80 — `rhizz-core`: HCL serialization for protocols and port attributes
+
+- Update bidirectional HCL serializer in `crates/rhizz-core/src/serialize.rs`:
+  - Serialize top-level `protocol` blocks with description, tags, roles, and child messages/fields.
+  - Serialize `external = true` and `required = false` attributes on `port` blocks.
+- Add round-trip tests (parse -> resolve -> serialize -> parse) in `serialize.rs`.
+- Validate with `just test`, `just lint`, `just format`.
+
+---
+
+## Task 81 — `rhizz-wasm`: Export protocol types and updated port metadata to JavaScript
+
+- Update `crates/rhizz-wasm/src/lib.rs`:
+  - Add `ProtocolJS` wrapper exposing `label`, `description`, `tags`, and `roles`.
+  - Expose `protocols` list getter on `ModelJS`.
+  - Add `external` and `required` boolean getters on `PortJS`.
+- Update WASM integration tests in `crates/rhizz-wasm/tests/wasm_test.rs`.
+- Validate with `just test`, `just lint`, `just format`, `just build`.
+
+---
+
+## Task 82 — `web`: Update frontend TypeScript types and worked examples
+
+- Update TypeScript types in `web/src/rhizz_wasm_wrapper.ts` and VFS compiler wrappers to handle `protocols` and new port attributes.
+- Update worked examples under `examples/` (`examples/drone`, `examples/social-media`, `examples/software-house`) to showcase `protocol` blocks, `external = true` boundary ports, and LCA connection placement.
+- Verify all web unit tests and Svelte type-checking pass (`deno run test`, `deno task check`).
+- Validate with `just test`, `just lint`, `just format`, `just build`.
+
+---
+
 ## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
 
 This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.

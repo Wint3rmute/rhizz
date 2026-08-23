@@ -1,4 +1,4 @@
-# `rhizz` Specification v0.4
+# `rhizz` Specification v0.5
 
 Rhizz is a code-first system architecture modeling tool. It combines:
 
@@ -13,7 +13,10 @@ language for defining system architectures at various levels of abstraction.
 
 ## 1. Project Structure
 
-A project consists of a single system model file (`system.hcl` or `main.hcl`) containing the system architecture model (including optional `project` metadata), and optional view definition files (`views.hcl` or as many view files as the user creates):
+A project consists of a single system model file (`system.hcl` or `main.hcl`)
+containing the system architecture model (including optional `project`
+metadata), and optional view definition files (`views.hcl` or as many view files
+as the user creates):
 
 ```
 project/
@@ -21,10 +24,15 @@ project/
 └── views.hcl            # view definitions and visual layout metadata (or multiple view files)
 ```
 
-All architecture entities (`project`, `system`, `component`, `port`, `connection`, `message`, `field`) are maintained in the system model file. This single-file model structure enables bidirectional translation: visual editing in the UI deterministically serializes the complete model back to HCL without cross-file resolution ambiguity.
+All architecture entities (`project`, `system`, `component`, `protocol`, `port`,
+`connection`, `message`, `field`) are maintained in the system model file. This
+single-file model structure enables bidirectional translation: visual editing in
+the UI deterministically serializes the complete model back to HCL without
+cross-file resolution ambiguity.
 
-View configurations, filters, and visual layout positions remain separated in `views.hcl` (and any additional view definition files).
-
+View configurations, filters, and visual layout positions remain separated in
+`views.hcl` (and any additional view definition files).
+-
 ---
 
 ## 2. HCL Schema
@@ -184,18 +192,17 @@ leaf, between child components)
 
 ---
 
-### 2.4 `port` Block
+### 2.4 `protocol` Block
 
-Defined inside a `component`. Declares a typed connection point exposed by that
-component. Ports carry `message` blocks that describe the protocol schema,
-keeping protocol definitions co-located with the component that owns them.
+Top-level block (alongside `system`, `component`, `view`, and `project`).
+Defines a reusable protocol schema that can be referenced by multiple ports
+across components.
 
 ```hcl
-port "spi" {
-  description = "SPI master interface"
-  protocol    = "spi"
-  role        = "provider"
-  tags        = ["electronics", "data"]
+protocol "spi" {
+  description = "Serial Peripheral Interface"
+  tags        = ["electronics", "serial", "bus"]
+  roles       = ["provider", "consumer"]
 
   message "transaction" {
     description = "SPI transfer frame"
@@ -205,39 +212,108 @@ port "spi" {
 }
 ```
 
-| Attribute     | Type         | Required | Default  | Description                                                              |
-| ------------- | ------------ | -------- | -------- | ------------------------------------------------------------------------ |
-| _label_       | string       | **yes**  | —        | Unique identifier within the parent component                            |
-| `protocol`    | string       | no       | `""`     | Free-form protocol name; matched against the connected port's `protocol` |
-| `role`        | string       | no       | `"peer"` | `"provider"`, `"consumer"`, or `"peer"`                                  |
-| `description` | string       | no       | `""`     | Human-readable description                                               |
-| `tags`        | list(string) | no       | `[]`     | Filtering tags                                                           |
+| Attribute     | Type         | Required | Default                             | Description                                      |
+| ------------- | ------------ | -------- | ----------------------------------- | ------------------------------------------------ |
+| _label_       | string       | **yes**  | —                                   | Unique protocol identifier across the project    |
+| `description` | string       | no       | `""`                                | Human-readable description                       |
+| `tags`        | list(string) | no       | `[]`                                | Filtering tags                                   |
+| `roles`       | list(string) | no       | `["provider", "consumer", "peer"]`  | Valid port roles permitted by this protocol      |
 
 **Children:** `message`
 
 ---
 
-### 2.5 `connection` Block
+### 2.5 `port` Block
 
-Defined inside a `system` or `component`. Wires components and ports together.
-The `from` and `to` fields accept standard UNIX-style path references (e.g. `comp`, `comp/port`, `comp/subcomp/port`, `../sibling/port`, `/system/comp/port`). When a port is named, protocol and role compatibility is validated at resolution time. The connection carries no messages and no direction — both are derived from the connected ports.
+Defined inside a `component`. Declares a typed connection point exposed by that
+component. A port binds to a protocol via its `protocol` attribute (referencing
+a top-level `protocol` block or specifying a freeform protocol name). Ports can
+also define inline `message` blocks for component-specific protocols.
+
+Ports carry metadata (`external`, `required`) that defines their visibility and
+contract for verification in isolation vs. system instantiation.
 
 ```hcl
-connection "spi-bus" {
-  description  = "SPI link between MCU and IMU"
-  tags         = ["electronics", "data"]
-  level        = 2
-  from         = "mcu/spi"   # typed — references port "spi" on component "mcu"
-  to           = "imu"       # untyped — W007 will fire
-  encapsulates = []
+port "spi" {
+  description = "SPI master interface"
+  protocol    = "spi"      # references top-level protocol "spi" or freeform string
+  role        = "provider"
+  external    = true       # public boundary port (expected to connect outside this component)
+  required    = true       # mandatory to be connected when instantiated in a system
+  tags        = ["electronics", "data"]
+
+  # Optional inline message (when not defined on top-level protocol)
+  message "transaction" {
+    description = "SPI transfer frame"
+    field "cs"   { type = "uint8";  description = "Chip select line" }
+    field "data" { type = "bytes";  description = "Payload"          }
+  }
+}
+```
+
+| Attribute     | Type         | Required | Default  | Description                                                                     |
+| ------------- | ------------ | -------- | -------- | ------------------------------------------------------------------------------- |
+| _label_       | string       | **yes**  | —        | Unique identifier within the parent component                                   |
+| `protocol`    | string       | no       | `""`     | Reference to a top-level `protocol` label, or a free-form protocol name         |
+| `role`        | string       | no       | `"peer"` | `"provider"`, `"consumer"`, or `"peer"`                                         |
+| `external`    | bool         | no       | `false`  | Whether this port is an external interface point intended for outside wiring    |
+| `required`    | bool         | no       | `true`   | Whether this port must be connected when instantiated inside an outer system    |
+| `description` | string       | no       | `""`     | Human-readable description                                                      |
+| `tags`        | list(string) | no       | `[]`     | Filtering tags                                                                  |
+
+**Children:** `message` (optional inline message definitions)
+
+---
+
+### 2.6 `connection` Block
+
+Defined inside a `system` or `component`. Wires components and ports together across any hierarchy level.
+
+#### Connection Placement Rule
+
+A `connection` block belongs to the enclosing scope that orchestrates the
+communication between endpoints. It must be specified in the **Lowest Common
+Ancestor (LCA)** component or `system` enclosing both endpoints (or an ancestor
+above it). A connection cannot be placed inside a child component referencing a
+sibling or outside component.
+
+#### Addressing & Resolution
+
+The `from` and `to` fields accept UNIX-style path references evaluated relative
+to the block declaring the connection (e.g. `mcu/spi`, `sensors/imu/spi`,
+`../sibling/port`, `/system/comp/port`). When a port is named, protocol and role
+compatibility is validated at resolution time. The connection carries no
+messages and no direction — both are derived from the connected ports.
+
+```hcl
+system "drone" {
+  component "flight-controller" {
+    component "mcu" {
+      port "spi" { protocol = "spi"; role = "provider"; external = true }
+    }
+  }
+
+  component "imu" {
+    port "spi" { protocol = "spi"; role = "consumer"; external = true }
+  }
+
+  # Declared in system "drone" (the Lowest Common Ancestor of 'mcu' and 'imu')
+  connection "spi-bus" {
+    description  = "SPI link between MCU and IMU across hierarchy levels"
+    tags         = ["electronics", "data"]
+    level        = 2
+    from         = "flight-controller/mcu/spi"
+    to           = "imu/spi"
+    encapsulates = []
+  }
 }
 ```
 
 | Attribute      | Type         | Required | Default          | Description                                                    |
 | -------------- | ------------ | -------- | ---------------- | -------------------------------------------------------------- |
 | _label_        | string       | **yes**  | —                | Unique identifier within parent scope                          |
-| `from`         | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or UNIX path — source endpoint        |
-| `to`           | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or UNIX path — target endpoint        |
+| `from`         | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or relative path from declaring scope |
+| `to`           | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or relative path from declaring scope |
 | `description`  | string       | no       | `""`             | Human-readable description                                     |
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
@@ -246,15 +322,15 @@ connection "spi-bus" {
 **No `direction` attribute** — direction is inferred from the `role` values of
 the connected ports (see §6).
 
-**No child blocks** — messages belong to `port` blocks, not connections.
+**No child blocks** — messages belong to `protocol` or `port` blocks, not connections.
 
 ---
 
-### 2.6 `message` Block
+### 2.7 `message` Block
 
-Defined inside a `port`. Represents a discrete unit of information exchanged
-over that port's protocol. Keeping messages on the port ensures the protocol
-schema travels with the component.
+Defined inside a `protocol` (reusable across ports) or inside a `port`
+(component-specific). Represents a discrete unit of information exchanged over
+that protocol.
 
 ```hcl
 message "position-report" {
@@ -269,18 +345,18 @@ message "position-report" {
 }
 ```
 
-| Attribute     | Type         | Required | Default      | Description                              |
-| ------------- | ------------ | -------- | ------------ | ---------------------------------------- |
-| _label_       | string       | **yes**  | —            | Unique identifier within the parent port |
-| `description` | string       | no       | `""`         | Human-readable description               |
-| `tags`        | list(string) | no       | `[]`         | Filtering tags                           |
-| `level`       | integer      | no       | parent level | Abstraction level                        |
+| Attribute     | Type         | Required | Default      | Description                                      |
+| ------------- | ------------ | -------- | ------------ | ------------------------------------------------ |
+| _label_       | string       | **yes**  | —            | Unique identifier within the parent protocol/port|
+| `description` | string       | no       | `""`         | Human-readable description                       |
+| `tags`        | list(string) | no       | `[]`         | Filtering tags                                   |
+| `level`       | integer      | no       | parent level | Abstraction level                                |
 
 **Children:** `field`
 
 ---
 
-### 2.7 `field` Block
+### 2.8 `field` Block
 
 Defined inside a `message`. Describes a single data element.
 
@@ -303,7 +379,7 @@ field "altitude" {
 
 ---
 
-### 2.8 `view` Block
+### 2.9 `view` Block
 
 Top-level block (not nested inside a system). Defines a filtered perspective
 rendered as a Graphviz diagram.
@@ -345,14 +421,15 @@ view "power-distribution" {
 
 All references use **name-based or UNIX-style path notation**:
 
-| Context                                           | Reference resolves to                                      |
-| ------------------------------------------------- | ---------------------------------------------------------- |
-| `connection.from` / `connection.to` (bare label)  | Sibling `component` labels in the same parent scope        |
-| `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component          |
-| `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path  |
-| `encapsulates`                                    | Sibling `connection` labels in the same parent scope       |
-| `component.source`                                | Top-level `component` label                                |
-| `view.system`                                     | Top-level `system` label                                   |
+| Context                                           | Reference resolves to                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------- |
+| `port.protocol`                                   | Top-level `protocol` label (or freeform protocol name if undefined)    |
+| `connection.from` / `connection.to` (bare label)  | Component path evaluated relative to declaring scope                   |
+| `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component                      |
+| `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path from scope   |
+| `encapsulates`                                    | Sibling `connection` labels in the same parent scope                   |
+| `component.source`                                | Top-level `component` label                                            |
+| `view.system`                                     | Top-level `system` label                                               |
 
 ---
 
@@ -366,6 +443,22 @@ All references use **name-based or UNIX-style path notation**:
 Each diagnostic code is documented in its own file under
 [`SPEC/diagnostics/`](SPEC/diagnostics/) (e.g. `E001.md`, `W003.md`). Error
 codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
+
+### Locality of Component Verification
+
+Rhizz supports verifying components in isolation (e.g. library components or
+unit-level checks) vs. verifying a fully instantiated system:
+
+1. **Component in Isolation:**
+   - Unconnected ports with `external = true` are **expected** to be open (they form the component's public interface). No unused port warning (W010) is emitted for them.
+   - Unconnected ports with `external = false` (internal ports) that are not wired between subcomponents emit W010.
+2. **System Instantiation:**
+   - When a component is instantiated inside a `system` or parent composite component, any port with `external = true` and `required = true` **must** be connected by the enclosing system/ancestor.
+   - Unconnected required external ports emit warning W010 (or error in strict mode).
+
+### Connection Placement Validation
+- A connection must be declared within the Lowest Common Ancestor (LCA) enclosing both `from` and `to` endpoints, or an ancestor above it.
+- Declaring a connection inside a child component that references sibling or external components is an error (E011/E015).
 
 ---
 
@@ -387,12 +480,14 @@ aggregated.
 | ------------------------ | ------------------------------------------------------- | --------------------------------------------- | ------------------- |
 | **Component** (leaf)     | Has description AND all defined ports complete          | Has description but ≥1 port incomplete        | No description      |
 | **Component** (non-leaf) | ≥1 child component, all children complete               | ≥1 child component, not all children complete | No child components |
-| **Port**                 | ≥1 message, all messages complete                       | ≥1 message, not all messages complete         | No messages         |
-| **Connection**           | Both sides typed (`comp:port`) with matching `protocol` | One side typed                                | Both sides untyped  |
-| **Message**              | ≥1 field                                                | —                                             | No fields           |
+| **Port**                 | ≥1 message (inline or via protocol), all messages complete | ≥1 message, not all messages complete     | No messages         |
+| **Connection**           | Both sides typed (`comp/port`) with matching `protocol` | One side typed                                | Both sides untyped  |
+| **Message**              | ≥1 field (defined on protocol or inline on port)        | —                                             | No fields           |
 
 A leaf component with a description and no ports scores Complete (1.0) — ports
-are optional detail.
+are optional detail. A port referencing a `protocol` block inherits that
+protocol's messages for completeness scoring. Top-level protocol messages are
+scored under the Messages category.
 
 ### Aggregate Score
 
@@ -774,9 +869,11 @@ view "fc-internals" {
 
 | Decision                                                        | Rationale                                                                                                                                                                                                               |
 | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connections reference **sibling** components only               | Keeps scoping simple; cross-level wiring is modeled at the appropriate parent                                                                                                                                           |
-| Ports are optional (`comp:port` syntax is additive)             | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally                                                                                                        |
-| Messages live on ports, not connections                         | Protocol schema travels with the component; enables genuine component reuse in future                                                                                                                                   |
+| Connections declared in Lowest Common Ancestor (LCA) or higher  | Connects components across any hierarchy level cleanly while ensuring the connection belongs to the orchestrating ancestor, not either endpoint                                                                         |
+| Reusable top-level `protocol` blocks                            | Extracts message and field schemas from individual components, enabling protocol reuse across ports and components                                                                                                      |
+| Port `external` and `required` attributes                       | Enables locality of verification: components can be checked in isolation as reusable units without false unused-port warnings, while ensuring required interfaces are bound when instantiated in a system             |
+| Ports are optional (`comp/port` syntax is additive)             | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally                                                                                                        |
+| Messages live on protocols and ports, not connections           | Protocol schema travels with the protocol definition or component; enables genuine reuse                                                                                                                                |
 | Top-level components + `source` label reference                 | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
 | Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable                                                                                                                                         |
 | `type` on fields is a free-form string                          | Supports gradual specification — no type system to fight during early design                                                                                                                                            |
@@ -790,7 +887,6 @@ view "fc-internals" {
 
 - Cross-system references and shared component libraries (cross-project imports)
 - Component templates with attribute overriding at instantiation sites
-- Protocol schema reuse across components (port type definitions)
 - Constraint / requirement blocks linked to components
 - Temporal / sequence diagrams (message ordering)
 - Per-message direction on bidirectional ports

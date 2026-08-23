@@ -34,6 +34,7 @@ struct RawFile {
     project: Option<RawProject>,
     systems: Vec<Labeled<RawSystem>>,
     components: Vec<Labeled<RawComponent>>,  // top-level (reusable) components
+    protocols: Vec<Labeled<RawProtocol>>,    // top-level (reusable) protocols
     views: Vec<Labeled<RawView>>,
 }
 
@@ -75,12 +76,23 @@ struct RawComponent {
     connections: Vec<Labeled<RawConnection>>,
 }
 
-/// A port declared on a component. Carries protocol schema via `message` children.
+/// A reusable protocol schema defined at the top level.
+#[derive(Debug, Clone)]
+struct RawProtocol {
+    description: Option<String>,
+    tags: Option<Vec<String>>,
+    roles: Option<Vec<String>>,
+    messages: Vec<Labeled<RawMessage>>,
+}
+
+/// A port declared on a component. Binds to a protocol or defines inline messages.
 #[derive(Debug, Clone)]
 struct RawPort {
     description: Option<String>,
     protocol: Option<String>,
     role: Option<String>,   // "provider" | "consumer" | "peer"
+    external: Option<bool>, // true if intended to interface outside this component
+    required: Option<bool>, // true if mandatory when instantiated in a system
     tags: Option<Vec<String>>,
     messages: Vec<Labeled<RawMessage>>,
 }
@@ -200,6 +212,9 @@ struct ComponentId(usize);
 struct PortId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ProtocolId(usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ConnectionId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -220,11 +235,21 @@ struct Model {
     project: Project,
     systems: Vec<System>,         // indexed by SystemId
     components: Vec<Component>,   // indexed by ComponentId
+    protocols: Vec<Protocol>,     // indexed by ProtocolId
     ports: Vec<Port>,             // indexed by PortId
     connections: Vec<Connection>, // indexed by ConnectionId
     messages: Vec<Message>,       // indexed by MessageId
     fields: Vec<Field>,           // indexed by FieldId
     views: Vec<View>,
+}
+
+#[derive(Debug)]
+struct Protocol {
+    label: String,
+    description: String,
+    tags: Vec<String>,
+    roles: Vec<PortRole>,
+    messages: Vec<MessageId>,
 }
 
 #[derive(Debug)]
@@ -276,7 +301,10 @@ struct Port {
     label: String,
     description: String,
     protocol: String,
+    protocol_id: Option<ProtocolId>, // Resolved reference to top-level protocol (if matching)
     role: PortRole,
+    external: bool,                  // Whether port is an external boundary interface
+    required: bool,                  // Whether port is required when instantiated in a system
     tags: Vec<String>,
     owner: ComponentId,
     messages: Vec<MessageId>,
@@ -323,30 +351,33 @@ struct Field {
 
 `fn resolve(raw: RawFile) -> Result<Model, Vec<Diagnostic>>`
 
-1. Index top-level components by label. Detect duplicate labels (E001).
-2. Register all systems (allocate `SystemId`). Detect duplicate labels (E001).
-3. Walk each system's components depth-first:
+1. Index top-level `protocol` blocks by label. Detect duplicate labels (E001).
+   - Walk messages and fields defined inside top-level protocols; allocate `MessageId` and `FieldId`.
+2. Index top-level `component` blocks by label. Detect duplicate labels (E001).
+3. Register all systems (allocate `SystemId`). Detect duplicate labels (E001).
+4. Walk each system's components depth-first:
    - If a component has `source`, validate exclusivity (E012), look up the
      top-level component (E014 if missing), check for cycles (E013), and clone
      its body.
    - Allocate `ComponentId`, set `parent`, resolve `level` (inherit
      `parent.level + 1` if unset).
-4. Walk each component's `port` blocks — allocate `PortId`, validate `role`
-   string (E009), link to owner `ComponentId`.
-5. Walk `connection` blocks in each scope — parse `from`/`to` strings:
-   - If the string contains `:`, split on the first `:` to get
-     `(comp_label, port_label)`; resolve `comp_label` to a sibling `ComponentId`
-     (E011 if missing), then look up `port_label` on that component (E010 if
-     missing).
-   - If the string is a bare label, resolve to a sibling `ComponentId` (E002 if
-     missing). The `port` field of `ConnectionEndpoint` is `None`.
-6. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for
-   cycles).
-7. Walk messages/fields inside ports — allocate ids. Validate `field.type`
-   presence (E007).
+5. Walk each component's `port` blocks:
+   - Allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
+   - Resolve `protocol` string: if it matches a registered `protocol` block, link `protocol_id`.
+   - Walk inline messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
+   - Set `external` (default `false`) and `required` (default `true`).
+6. Walk `connection` blocks in each scope:
+   - Parse `from` and `to` paths relative to the declaring scope.
+   - Validate **Lowest Common Ancestor (LCA)**: ensure declaring scope is an ancestor (or LCA) of both `from` and `to` target components.
+   - Resolve target components and optional ports (E011 for missing component, E010 for missing port).
+7. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
 8. Resolve views — look up `system` label → `SystemId` (E006 if missing).
-9. Detect orphan top-level components — any top-level component not referenced
-   by `source` in any system → W012.
+9. Validation checks:
+   - Unconnected port verification:
+     - In isolated components: unconnected `external = true` ports are permitted. Unconnected internal (`external = false`) ports emit W010.
+     - In instantiated systems: unconnected `external = true, required = true` ports emit W010.
+   - Protocol / role compatibility on typed connections (W008, W009).
+10. Detect orphan top-level components/protocols — any top-level component not referenced by `source` → W012.
 
 Collect errors/warnings as `Diagnostic` values. If any errors exist, return
 `Err`. Warnings are returned alongside the model.
