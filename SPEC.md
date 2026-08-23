@@ -226,9 +226,12 @@ protocol "spi" {
 ### 2.5 `port` Block
 
 Defined inside a `component`. Declares a typed connection point exposed by that
-component. A port binds to a protocol via its `protocol` attribute (referencing a top-level `protocol` block or specifying a freeform protocol name). Ports can also define inline `message` blocks for component-specific protocols.
+component. A port binds to a protocol via its `protocol` attribute (referencing
+a top-level `protocol` block or specifying a freeform protocol name). Ports can
+also define inline `message` blocks for component-specific protocols.
 
-Ports carry metadata (`external`, `required`) that defines their visibility and contract for verification in isolation vs. system instantiation.
+Ports carry metadata (`external`, `required`) that defines their visibility and
+contract for verification in isolation vs. system instantiation.
 
 ```hcl
 port "spi" {
@@ -268,11 +271,19 @@ Defined inside a `system` or `component`. Wires components and ports together ac
 
 #### Connection Placement Rule
 
-A `connection` block belongs to the enclosing scope that orchestrates the communication between endpoints. It must be specified in the **Lowest Common Ancestor (LCA)** component or `system` enclosing both endpoints (or an ancestor above it). A connection cannot be placed inside a child component referencing a sibling or outside component.
+A `connection` block belongs to the enclosing scope that orchestrates the
+communication between endpoints. It must be specified in the **Lowest Common
+Ancestor (LCA)** component or `system` enclosing both endpoints (or an ancestor
+above it). A connection cannot be placed inside a child component referencing a
+sibling or outside component.
 
 #### Addressing & Resolution
 
-The `from` and `to` fields accept UNIX-style path references evaluated relative to the block declaring the connection (e.g. `mcu/spi`, `sensors/imu/spi`, `../sibling/port`, `/system/comp/port`). When a port is named, protocol and role compatibility is validated at resolution time. The connection carries no messages and no direction — both are derived from the connected ports.
+The `from` and `to` fields accept UNIX-style path references evaluated relative
+to the block declaring the connection (e.g. `mcu/spi`, `sensors/imu/spi`,
+`../sibling/port`, `/system/comp/port`). When a port is named, protocol and role
+compatibility is validated at resolution time. The connection carries no
+messages and no direction — both are derived from the connected ports.
 
 ```hcl
 system "drone" {
@@ -317,7 +328,9 @@ the connected ports (see §6).
 
 ### 2.7 `message` Block
 
-Defined inside a `protocol` (reusable across ports) or inside a `port` (component-specific). Represents a discrete unit of information exchanged over that protocol.
+Defined inside a `protocol` (reusable across ports) or inside a `port`
+(component-specific). Represents a discrete unit of information exchanged over
+that protocol.
 
 ```hcl
 message "position-report" {
@@ -433,7 +446,8 @@ codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
 
 ### Locality of Component Verification
 
-Rhizz supports verifying components in isolation (e.g. library components or unit-level checks) vs. verifying a fully instantiated system:
+Rhizz supports verifying components in isolation (e.g. library components or
+unit-level checks) vs. verifying a fully instantiated system:
 
 1. **Component in Isolation:**
    - Unconnected ports with `external = true` are **expected** to be open (they form the component's public interface). No unused port warning (W010) is emitted for them.
