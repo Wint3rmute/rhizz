@@ -1,7 +1,21 @@
+//! Build script for `rhizz-core`.
+//!
+//! Automatically generates diagnostic code constants and doc comments on `DiagnosticCode`
+//! by scanning Markdown specification files in `SPEC/diagnostics/`.
+//!
+//! # Code Generation Pipeline
+//!
+//! 1. Scans `SPEC/diagnostics/` for files matching `Exxx.md` (error codes) and `Wxxx.md` (warning codes).
+//! 2. Emits Cargo `rerun-if-changed` instructions for each diagnostic markdown file and directory.
+//! 3. Generates `pub const Exxx` / `pub const Wxxx` definitions inside an `impl DiagnosticCode` block.
+//! 4. Embeds the full Markdown content as Rust doc comments via `#[doc = include_str!(...)]`.
+//! 5. Writes the generated code to `$OUT_DIR/diagnostic_codes.rs`, which is included in `src/diagnostics.rs`.
+
 use std::env;
 use std::fs;
 use std::path::Path;
 
+/// Generates the `DiagnosticCode` implementation file from markdown documentation.
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let diagnostics_dir = Path::new(&manifest_dir).join("../../SPEC/diagnostics");
