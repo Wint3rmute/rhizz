@@ -30,7 +30,7 @@ const manyDiagramsMap: Record<string, DiagramLayout> = {
   "data-pipeline.hcl": sampleOverview,
 };
 
-export const CROSS_LEVEL_SYSTEM_HCL = `project {
+const CROSS_LEVEL_SYSTEM_HCL = `project {
   name    = "cross-level-demo"
   version = "0.1.0"
 }
@@ -118,7 +118,7 @@ view "overview" {
 }
 `;
 
-export const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
+const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
   "overview.hcl": {
     checked: {
       "demo-system/battery": { x: 40, y: 80, width: 150, height: 90 },
