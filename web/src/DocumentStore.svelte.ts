@@ -31,13 +31,22 @@ export interface MessageData {
   fields: FieldData[];
 }
 
+export interface ProtocolData {
+  label: string;
+  description?: string;
+  tags?: string[];
+  roles?: ("provider" | "consumer" | "peer")[];
+  messages: MessageData[];
+}
+
 export interface PortData {
   label: string;
   description?: string;
   protocol?: string;
   role: "provider" | "consumer" | "peer";
+  external?: boolean;
+  required?: boolean;
   tags?: string[];
-  messages: MessageData[];
 }
 
 export interface ConnectionData {
@@ -86,6 +95,7 @@ export class DocumentStore {
     authors: [],
   });
 
+  protocols = $state<ProtocolData[]>([]);
   systems = $state<SystemData[]>([]);
   views = $state<ViewDefinition[]>([]);
 
@@ -110,6 +120,15 @@ export class DocumentStore {
         lines.push(`  authors = ${formatStringList(this.project.authors)}`);
       }
       lines.push("}\n");
+    }
+
+    // Protocol blocks
+    const sortedProtocols = [...this.protocols].sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+    for (const proto of sortedProtocols) {
+      this.serializeProtocol(lines, proto);
+      lines.push("");
     }
 
     // System blocks
@@ -211,7 +230,7 @@ export class DocumentStore {
     );
     for (const port of sortedPorts) {
       lines.push("");
-      this.serializePort(lines, port, depth + 1, curLevel);
+      this.serializePort(lines, port, depth + 1);
     }
 
     // Sub-components
@@ -235,11 +254,35 @@ export class DocumentStore {
     lines.push(`${indent}}`);
   }
 
+  private serializeProtocol(lines: string[], proto: ProtocolData) {
+    lines.push(`protocol ${escapeHclString(proto.label)} {`);
+    const inner = "  ";
+
+    if (proto.description) {
+      lines.push(`${inner}description = ${escapeHclString(proto.description)}`);
+    }
+    if (proto.tags && proto.tags.length > 0) {
+      lines.push(`${inner}tags        = ${formatStringList(proto.tags)}`);
+    }
+    if (proto.roles && proto.roles.length > 0) {
+      lines.push(`${inner}roles       = ${formatStringList(proto.roles)}`);
+    }
+
+    const sortedMsgs = [...proto.messages].sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+    for (const msg of sortedMsgs) {
+      lines.push("");
+      this.serializeMessage(lines, msg, 1, 0);
+    }
+
+    lines.push("}");
+  }
+
   private serializePort(
     lines: string[],
     port: PortData,
     depth: number,
-    parentLevel: number,
   ) {
     const indent = "  ".repeat(depth);
     lines.push(`${indent}port ${escapeHclString(port.label)} {`);
@@ -255,13 +298,11 @@ export class DocumentStore {
     if (port.tags && port.tags.length > 0) {
       lines.push(`${inner}tags        = ${formatStringList(port.tags)}`);
     }
-
-    const sortedMsgs = [...port.messages].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const msg of sortedMsgs) {
-      lines.push("");
-      this.serializeMessage(lines, msg, depth + 1, parentLevel);
+    if (port.external) {
+      lines.push(`${inner}external    = true`);
+    }
+    if (port.required === false) {
+      lines.push(`${inner}required    = false`);
     }
 
     lines.push(`${indent}}`);
@@ -515,6 +556,8 @@ export class DocumentStore {
     label: string,
     protocol = "",
     role: "provider" | "consumer" | "peer" = "peer",
+    external = false,
+    required = true,
   ): PortData | null {
     const comp = this.findComponent(compPath);
     if (!comp) return null;
@@ -526,11 +569,47 @@ export class DocumentStore {
       description: "",
       protocol,
       role,
+      external,
+      required,
       tags: [],
-      messages: [],
     };
     comp.ports.push(newPort);
     return newPort;
+  }
+
+  addProtocol(
+    label: string,
+    description = "",
+    roles: ("provider" | "consumer" | "peer")[] = [
+      "provider",
+      "consumer",
+      "peer",
+    ],
+  ): ProtocolData {
+    const existing = this.protocols.find((p) => p.label === label);
+    if (existing) return existing;
+    const proto: ProtocolData = {
+      label,
+      description,
+      tags: [],
+      roles,
+      messages: [],
+    };
+    this.protocols.push(proto);
+    return proto;
+  }
+
+  getProtocol(label: string): ProtocolData | undefined {
+    return this.protocols.find((p) => p.label === label);
+  }
+
+  deleteProtocol(label: string): boolean {
+    const idx = this.protocols.findIndex((p) => p.label === label);
+    if (idx !== -1) {
+      this.protocols.splice(idx, 1);
+      return true;
+    }
+    return false;
   }
 
   updatePort(
@@ -684,10 +763,43 @@ export class DocumentStore {
     };
 
     const comps = raw.components;
+    const protos = raw.protocols || [];
     const ports = raw.ports;
     const conns = raw.connections;
     const msgs = raw.messages;
     const flds = raw.fields;
+
+    this.protocols = protos.map((proto: {
+      label: string;
+      description?: string;
+      tags?: string[];
+      roles?: ("provider" | "consumer" | "peer")[];
+      messages?: number[];
+    }): ProtocolData => ({
+      label: proto.label,
+      description: proto.description || "",
+      tags: proto.tags || [],
+      roles: proto.roles || [],
+      messages: (proto.messages || []).map((mid: number): MessageData => {
+        const m = msgs[mid];
+        return {
+          label: m.label,
+          description: m.description || "",
+          tags: m.tags || [],
+          level: m.level,
+          fields: (m.fields || []).map((fid: number): FieldData => {
+            const f = flds[fid];
+            return {
+              label: f.label,
+              type: f.field_type || "string",
+              description: f.description || "",
+              unit: f.unit || "",
+              required: Boolean(f.required),
+            };
+          }),
+        };
+      }),
+    }));
 
     const buildComp = (cid: number): ComponentData => {
       const c = comps[cid];
@@ -707,26 +819,9 @@ export class DocumentStore {
               | "provider"
               | "consumer"
               | "peer",
+            external: Boolean(p.external),
+            required: p.required !== undefined ? Boolean(p.required) : true,
             tags: p.tags || [],
-            messages: (p.messages || []).map((mid: number): MessageData => {
-              const m = msgs[mid];
-              return {
-                label: m.label,
-                description: m.description || "",
-                tags: m.tags || [],
-                level: m.level,
-                fields: (m.fields || []).map((fid: number): FieldData => {
-                  const f = flds[fid];
-                  return {
-                    label: f.label,
-                    type: f.field_type || "string",
-                    description: f.description || "",
-                    unit: f.unit || "",
-                    required: Boolean(f.required),
-                  };
-                }),
-              };
-            }),
           };
         }),
         components: (c.children || []).map((childId: number) =>

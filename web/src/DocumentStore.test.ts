@@ -65,17 +65,10 @@ describe("DocumentStore", () => {
     expect(doc.compileResult.error_count()).toBe(0);
   });
 
-  it("supports adding ports, messages, and fields and updating completion score", () => {
+  it("supports adding protocols, ports, messages, and fields and updating completion score", () => {
     const doc = new DocumentStore();
-    doc.addSystem("demo");
-    doc.addComponent("demo", "sensor", true);
-    doc.updateComponent("demo/sensor", { description: "IMU sensor" });
-
-    const port = doc.addPort("demo/sensor", "spi", "spi", "provider");
-    expect(port).toBeDefined();
-    expect(port?.protocol).toBe("spi");
-
-    port?.messages.push({
+    const proto = doc.addProtocol("spi", "SPI protocol");
+    proto.messages.push({
       label: "data",
       description: "Sensor data",
       fields: [
@@ -84,13 +77,24 @@ describe("DocumentStore", () => {
       ],
     });
 
+    doc.addSystem("demo");
+    doc.addComponent("demo", "sensor", true);
+    doc.updateComponent("demo/sensor", { description: "IMU sensor" });
+
+    const port = doc.addPort("demo/sensor", "spi", "spi", "provider", true);
+    expect(port).toBeDefined();
+    expect(port?.protocol).toBe("spi");
+    expect(port?.external).toBe(true);
+
     const hcl = doc.systemHcl;
-    expect(hcl).toContain('port "spi"');
-    expect(hcl).toContain('protocol    = "spi"');
-    expect(hcl).toContain('role        = "provider"');
+    expect(hcl).toContain('protocol "spi"');
     expect(hcl).toContain('message "data"');
     expect(hcl).toContain('field "x"');
     expect(hcl).toContain('unit        = "g"');
+    expect(hcl).toContain('port "spi"');
+    expect(hcl).toContain('protocol    = "spi"');
+    expect(hcl).toContain('role        = "provider"');
+    expect(hcl).toContain("external    = true");
 
     expect(doc.compileResult.error_count()).toBe(0);
     const score = doc.score;

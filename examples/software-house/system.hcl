@@ -8,13 +8,143 @@
 #  - Process modeling via connections with port-based message payloads
 #  - Mixed completeness: QA is fully decomposed, Sales is a leaf,
 #    Operations is non-leaf with no children yet (W001)
+# Acme Software — an organizational architecture model of a software house.
+#
+# Demonstrates:
+#  - Non-technical architecture modeling (people/teams/departments)
+#  - Multi-level hierarchy (software-house → department → team)
+#  - Ports and connections used to model communication channels and handoffs
+#  - Protocol definitions describing team communication schemas
+
+# ── Protocols ─────────────────────────────
+
+protocol "pr-review" {
+  description = "Code review process"
+  roles       = ["peer"]
+
+  message "review-request" {
+    description = "Request for code review"
+    tags        = ["process"]
+
+    field "pr_url" {
+      type        = "string"
+      description = "Pull request URL"
+    }
+    field "urgency" {
+      type        = "enum(low,normal,high)"
+      description = "Review priority"
+    }
+  }
+}
+
+protocol "cicd" {
+  description = "Continuous integration and deployment"
+  roles       = ["provider", "consumer"]
+}
+
+protocol "agile" {
+  description = "Agile sprint management"
+  roles       = ["provider", "consumer"]
+
+  message "sprint-backlog" {
+    description = "Prioritized list of stories for the sprint"
+    tags        = ["agile"]
+
+    field "sprint_id" {
+      type        = "string"
+      description = "Sprint identifier"
+    }
+    field "stories" {
+      type        = "string[]"
+      description = "Ordered story IDs"
+    }
+    field "capacity" {
+      type        = "uint8"
+      unit        = "points"
+      description = "Team capacity"
+    }
+  }
+}
+
+protocol "design" {
+  description = "UI/UX design spec delivery"
+  roles       = ["provider", "consumer"]
+
+  message "design-spec" {
+    description = "Figma link + acceptance criteria"
+    tags        = ["process"]
+
+    field "figma_url" {
+      type        = "string"
+      description = "Design file URL"
+    }
+    field "feature_id" {
+      type        = "string"
+      description = "Feature tracker ID"
+    }
+  }
+}
+
+protocol "tickets" {
+  description = "Issue tracking and bug reporting"
+  roles       = ["provider", "consumer"]
+
+  message "bug-ticket" {
+    description = "Bug report with reproduction steps"
+    tags        = ["quality"]
+
+    field "ticket_id" {
+      type        = "string"
+      description = "Issue tracker ID"
+    }
+    field "severity" {
+      type        = "enum(critical,major,minor)"
+      description = "Bug severity"
+    }
+    field "repro_steps" {
+      type        = "string"
+      description = "Steps to reproduce"
+    }
+  }
+}
+
+protocol "release" {
+  description = "Software release governance"
+  roles       = ["provider", "consumer"]
+
+  message "sign-off" {
+    description = "Release approval or rejection"
+    tags        = ["quality"]
+
+    field "build_id" {
+      type        = "string"
+      description = "Build/version identifier"
+    }
+    field "approved" {
+      type        = "bool"
+      description = "Pass or fail"
+    }
+  }
+}
+
+protocol "test-suites" {
+  description = "Test suite distribution"
+  roles       = ["provider", "consumer"]
+}
+
+protocol "feedback" {
+  description = "Customer feedback stream"
+  roles       = ["provider", "consumer"]
+}
+
+# ── System ────────────────────────────────
 
 system "acme-software" {
-  description = "Acme Software Ltd — organization model"
-  tags        = ["organization", "processes"]
+  description = "Mid-sized product software company"
+  tags        = ["organization", "software"]
   level       = 0
 
-  # ── Departments (components) ──────────────
+  # ── Components ────────────────────────────
 
   component "engineering" {
     description = "Product engineering department"
@@ -22,21 +152,23 @@ system "acme-software" {
     leaf        = false
 
     port "sprint-in" {
-      description = "Receives sprint backlogs from product"
+      description = "Sprint backlog intake"
       protocol    = "agile"
       role        = "consumer"
+      external    = true
       tags        = ["process", "agile"]
     }
 
     port "bug-in" {
-      description = "Receives bug reports from QA"
+      description = "Bug intake from QA"
       protocol    = "tickets"
       role        = "consumer"
+      external    = true
       tags        = ["process", "quality"]
     }
 
     component "frontend-team" {
-      description = "Web and mobile UI engineers"
+      description = "Web and mobile client engineers"
       tags        = ["team", "technical"]
       leaf        = true
 
@@ -45,20 +177,6 @@ system "acme-software" {
         protocol    = "pr-review"
         role        = "peer"
         tags        = ["process", "collaboration"]
-
-        message "review-request" {
-          description = "Request for code review"
-          tags        = ["process"]
-
-          field "pr_url" {
-            type        = "string"
-            description = "Pull request URL"
-          }
-          field "urgency" {
-            type        = "enum(low,normal,high)"
-            description = "Review priority"
-          }
-        }
       }
 
       port "deploy-in" {
@@ -119,44 +237,28 @@ system "acme-software" {
       description = "Sends sprint backlogs to engineering"
       protocol    = "agile"
       role        = "provider"
+      external    = true
       tags        = ["process", "agile"]
-
-      message "sprint-backlog" {
-        description = "Prioritized list of stories for the sprint"
-        tags        = ["agile"]
-
-        field "sprint_id" {
-          type        = "string"
-          description = "Sprint identifier"
-        }
-        field "stories" {
-          type        = "string[]"
-          description = "Ordered story IDs"
-        }
-        field "capacity" {
-          type        = "uint8"
-          unit        = "points"
-          description = "Team capacity"
-        }
-      }
-    }
-
-    port "feedback-in" {
-      description = "Receives customer feedback from sales"
-      protocol    = "feedback"
-      role        = "consumer"
-      tags        = ["process", "business"]
     }
 
     port "signoff-in" {
-      description = "Receives release sign-offs from QA"
+      description = "Release sign-off from QA"
       protocol    = "release"
       role        = "consumer"
+      external    = true
       tags        = ["process", "quality"]
     }
 
+    port "feedback-in" {
+      description = "Customer feedback from Sales"
+      protocol    = "feedback"
+      role        = "consumer"
+      external    = true
+      tags        = ["process", "business"]
+    }
+
     component "product-managers" {
-      description = "PMs owning roadmap and prioritization"
+      description = "Technical and growth PMs"
       tags        = ["team", "business"]
       leaf        = true
     }
@@ -170,21 +272,8 @@ system "acme-software" {
         description = "Design spec delivery"
         protocol    = "design"
         role        = "provider"
+        external    = true
         tags        = ["process"]
-
-        message "design-spec" {
-          description = "Figma link + acceptance criteria"
-          tags        = ["process"]
-
-          field "figma_url" {
-            type        = "string"
-            description = "Design file URL"
-          }
-          field "feature_id" {
-            type        = "string"
-            description = "Feature tracker ID"
-          }
-        }
       }
     }
 
@@ -205,46 +294,16 @@ system "acme-software" {
       description = "Files bug reports against engineering"
       protocol    = "tickets"
       role        = "provider"
+      external    = true
       tags        = ["process", "quality"]
-
-      message "bug-ticket" {
-        description = "Bug report with reproduction steps"
-        tags        = ["quality"]
-
-        field "ticket_id" {
-          type        = "string"
-          description = "Issue tracker ID"
-        }
-        field "severity" {
-          type        = "enum(critical,major,minor)"
-          description = "Bug severity"
-        }
-        field "repro_steps" {
-          type        = "string"
-          description = "Steps to reproduce"
-        }
-      }
     }
 
     port "signoff-out" {
       description = "Approves releases"
       protocol    = "release"
       role        = "provider"
+      external    = true
       tags        = ["process", "quality"]
-
-      message "sign-off" {
-        description = "Release approval or rejection"
-        tags        = ["quality"]
-
-        field "build_id" {
-          type        = "string"
-          description = "Build/version identifier"
-        }
-        field "approved" {
-          type        = "bool"
-          description = "Pass or fail"
-        }
-      }
     }
 
     component "manual-qa" {

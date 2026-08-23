@@ -22,15 +22,6 @@ How to work on this file:
 
 ---
 
-## Task 82 — `web`: Update frontend TypeScript types and worked examples
-
-- Update TypeScript types in `web/src/rhizz_wasm_wrapper.ts` and VFS compiler wrappers to handle `protocols` and new port attributes.
-- Update worked examples under `examples/` (`examples/drone`, `examples/social-media`, `examples/software-house`) to showcase `protocol` blocks, `external = true` boundary ports, and LCA connection placement.
-- Verify all web unit tests and Svelte type-checking pass (`deno run test`, `deno task check`).
-- Validate with `just test`, `just lint`, `just format`, `just build`.
-
----
-
 ## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
 
 This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.

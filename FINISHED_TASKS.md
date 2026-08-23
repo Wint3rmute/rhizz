@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 82 — `web`: Update frontend TypeScript types and worked examples
+
+- **Frontend Data Model & DocumentStore (`web/src/DocumentStore.svelte.ts`)**:
+  - Added `ProtocolData` interface (`label`, `description`, `tags`, `roles`, `messages`).
+  - Updated `PortData` interface with `external` and `required` attributes and stripped direct message arrays.
+  - Implemented `addProtocol`, `getProtocol`, `deleteProtocol` store mutations and protocol serialization.
+  - Updated `loadFromHcl` to ingest protocols, messages, and port attributes.
+- **Node Inspector (`web/src/routes/projects/[id]/diagrams/NodeInspector.svelte`)**:
+  - Updated port configuration panel with `External (Boundary)` and `Required` toggle controls.
+- **Worked Examples (`examples/`)**:
+  - Updated `examples/drone` (added `protocols.hcl` with `dshot600`, `uart`, `crsf`, `spi`, `power-dc`, `analog-video`, `i2c`).
+  - Updated `examples/social-media` (added `https`, `hls`, `push`, `grpc`, `sql`, `s3` protocols).
+  - Updated `examples/software-house` (added `pr-review`, `cicd`, `agile`, `design`, `tickets`, `release`, `test-suites`, `feedback` protocols).
+  - Updated `examples/web-app` (added `jwt`, `https`, `ui-nav`, `websocket`, `postgresql` protocols).
+- **Tests**:
+  - Updated `web/src/DocumentStore.test.ts` verifying protocol and port creation, serialization, and round-tripping.
+  - Updated `NodeInspector.stories.ts`.
+- Validated with `just test` (all 78 core tests + 283 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 81 — `rhizz-wasm`: Export protocol types and updated port metadata to JavaScript
 
 - **WASM Bindings (`crates/rhizz-wasm/src/lib.rs`)**:
