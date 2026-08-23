@@ -119,6 +119,11 @@ impl DiagnosticCode {
         code: "E014",
         level: Level::Error,
     };
+    #[doc = include_str!("../../../SPEC/diagnostics/E015.md")]
+    pub const E015: Self = Self {
+        code: "E015",
+        level: Level::Error,
+    };
 
     // ── Warnings ──────────────────────────────────────────────────────────────
     #[doc = include_str!("../../../SPEC/diagnostics/W000.md")]
@@ -184,6 +189,16 @@ impl DiagnosticCode {
     #[doc = include_str!("../../../SPEC/diagnostics/W012.md")]
     pub const W012: Self = Self {
         code: "W012",
+        level: Level::Warning,
+    };
+    #[doc = include_str!("../../../SPEC/diagnostics/W013.md")]
+    pub const W013: Self = Self {
+        code: "W013",
+        level: Level::Warning,
+    };
+    #[doc = include_str!("../../../SPEC/diagnostics/W014.md")]
+    pub const W014: Self = Self {
+        code: "W014",
         level: Level::Warning,
     };
 

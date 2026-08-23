@@ -466,12 +466,14 @@ aggregated.
 | ------------------------ | ------------------------------------------------------- | --------------------------------------------- | ------------------- |
 | **Component** (leaf)     | Has description AND all defined ports complete          | Has description but ≥1 port incomplete        | No description      |
 | **Component** (non-leaf) | ≥1 child component, all children complete               | ≥1 child component, not all children complete | No child components |
-| **Port**                 | ≥1 message, all messages complete                       | ≥1 message, not all messages complete         | No messages         |
-| **Connection**           | Both sides typed (`comp:port`) with matching `protocol` | One side typed                                | Both sides untyped  |
-| **Message**              | ≥1 field                                                | —                                             | No fields           |
+| **Port**                 | ≥1 message (inline or via protocol), all messages complete | ≥1 message, not all messages complete     | No messages         |
+| **Connection**           | Both sides typed (`comp/port`) with matching `protocol` | One side typed                                | Both sides untyped  |
+| **Message**              | ≥1 field (defined on protocol or inline on port)        | —                                             | No fields           |
 
 A leaf component with a description and no ports scores Complete (1.0) — ports
-are optional detail.
+are optional detail. A port referencing a `protocol` block inherits that
+protocol's messages for completeness scoring. Top-level protocol messages are
+scored under the Messages category.
 
 ### Aggregate Score
 
