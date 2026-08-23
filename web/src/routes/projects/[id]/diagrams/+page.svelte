@@ -53,6 +53,7 @@ import {
   type Box,
   boxContains,
   clampWithin,
+  computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
   computeVisibleConnections,
@@ -1110,22 +1111,17 @@ async function handleCreateConnection(
   const srcCompLabel = srcParts[srcParts.length - 1];
   const targetCompLabel = targetParts[targetParts.length - 1];
 
-  const srcParentPath = srcParts.slice(0, -1).join("/");
-  const targetParentPath = targetParts.slice(0, -1).join("/");
+  const lca = computeLcaConnection(
+    srcKey,
+    sourcePortLabel,
+    targetKey,
+    targetPortLabel,
+  );
 
-  if (srcParentPath !== targetParentPath) {
-    alert(
-      "Connections can only wire sibling components within the same system or parent component.",
-    );
+  if (!lca) {
+    alert("Cannot connect components across different systems.");
     return;
   }
-
-  const fromEndpoint = sourcePortLabel
-    ? `${srcCompLabel}/${sourcePortLabel}`
-    : srcCompLabel;
-  const toEndpoint = targetPortLabel
-    ? `${targetCompLabel}/${targetPortLabel}`
-    : targetCompLabel;
 
   const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
   const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
@@ -1137,10 +1133,10 @@ async function handleCreateConnection(
     doc.loadFromHcl(mainContent);
   }
 
-  const added = doc.addConnection(srcParentPath, {
+  const added = doc.addConnection(lca.lcaScopePath, {
     label: connLabel,
-    from: fromEndpoint,
-    to: toEndpoint,
+    from: lca.from,
+    to: lca.to,
   });
 
   if (added) {

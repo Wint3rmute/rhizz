@@ -434,3 +434,59 @@ export function findConnectTarget(
 
   return null;
 }
+
+export interface LcaConnectionEndpoints {
+  lcaScopePath: string;
+  from: string;
+  to: string;
+}
+
+// Computes the Lowest Common Ancestor (LCA) scope path and the relative `from` and `to`
+// endpoint strings for connecting two components across any hierarchy level.
+export function computeLcaConnection(
+  srcKey: string,
+  sourcePortLabel: string | null,
+  targetKey: string,
+  targetPortLabel: string | null,
+): LcaConnectionEndpoints | null {
+  const srcParts = srcKey.split("/").filter(Boolean);
+  const targetParts = targetKey.split("/").filter(Boolean);
+
+  if (srcParts.length === 0 || targetParts.length === 0) return null;
+  if (srcParts[0] !== targetParts[0]) {
+    // Cross-system connections are not supported
+    return null;
+  }
+
+  // Find longest common prefix length
+  let prefixLen = 0;
+  while (
+    prefixLen < srcParts.length &&
+    prefixLen < targetParts.length &&
+    srcParts[prefixLen] === targetParts[prefixLen]
+  ) {
+    prefixLen++;
+  }
+
+  const lcaScopePath = srcParts.slice(0, prefixLen).join("/");
+
+  const fromRelParts = srcParts.slice(prefixLen);
+  const toRelParts = targetParts.slice(prefixLen);
+
+  const fromComp = fromRelParts.join("/");
+  const toComp = toRelParts.join("/");
+
+  const from = sourcePortLabel
+    ? (fromComp ? `${fromComp}/${sourcePortLabel}` : sourcePortLabel)
+    : fromComp;
+
+  const to = targetPortLabel
+    ? (toComp ? `${toComp}/${targetPortLabel}` : targetPortLabel)
+    : toComp;
+
+  return {
+    lcaScopePath,
+    from,
+    to,
+  };
+}
