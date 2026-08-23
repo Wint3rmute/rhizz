@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 77 — `rhizz-core`: Data models & HCL parser for `protocol` blocks and port `external`/`required` attributes
+
+- **Raw (AST) Models (`crates/rhizz-core/src/parse.rs`)**:
+  - Added `RawProtocol` struct (`description`, `tags`, `roles`, `messages`).
+  - Added `protocols: Vec<Labeled<RawProtocol>>` to `RawFile`.
+  - Added `external: Option<bool>` and `required: Option<bool>` to `RawPort` and `PortAttrs`.
+  - Added `ProtocolAttrs` helper and `parse_protocol()` parser for top-level `protocol` blocks.
+  - Updated `parse_file()` and `merge_into()` to process and merge `protocol` blocks across files.
+- **Resolved IR Models (`crates/rhizz-core/src/model.rs`)**:
+  - Added `ProtocolId(pub usize)` arena index type.
+  - Added `Protocol` struct (`label`, `description`, `tags`, `roles`, `messages`).
+  - Added `protocols: Vec<Protocol>` to `Model`.
+  - Added `protocol_id: Option<ProtocolId>`, `external: bool`, and `required: bool` fields to `Port`.
+- **Tests**:
+  - Added unit tests in `parse.rs` verifying parsing of top-level `protocol` blocks (with description, tags, roles, nested messages/fields), port `external`/`required` attributes, and merging multi-file protocols.
+- Validated with `just test` (all 67 core tests + 276 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 75 — Allow embedding diagrams via unique URLs
 
 - Implemented unique URL routing scheme for embeddable diagrams: `/projects/[id]/diagrams/embed/[...diagram]`

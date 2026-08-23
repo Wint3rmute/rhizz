@@ -32,15 +32,20 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single port.
 fn score_port(idx: usize, model: &Model) -> f64 {
     let port = &model.ports[idx];
-    if port.messages.is_empty() {
-        // No messages -> incomplete.
-        0.0
-    } else {
-        let all_complete = port
-            .messages
-            .iter()
-            .all(|&mid| !model.messages[mid.0].fields.is_empty());
-        if all_complete { 1.0 } else { 0.5 }
+    match port.protocol_id {
+        None => 0.0,
+        Some(proto_id) => {
+            let proto = &model.protocols[proto_id.0];
+            if proto.messages.is_empty() {
+                0.0
+            } else {
+                let all_complete = proto
+                    .messages
+                    .iter()
+                    .all(|&mid| !model.messages[mid.0].fields.is_empty());
+                if all_complete { 1.0 } else { 0.5 }
+            }
+        }
     }
 }
 
@@ -412,18 +417,22 @@ mod tests {
     #[test]
     fn port_with_incomplete_message_scores_partial() {
         let src = r#"
+            protocol "proto" {
+              message "m1" {
+                description = "has fields"
+                field "x" { type = "uint8" }
+              }
+              message "m2" {
+                description = "no fields"
+              }
+            }
+
             system "s" {
               component "a" {
                 leaf = true
                 port "p" {
-                  role = "provider"
-                  message "m1" {
-                    description = "has fields"
-                    field "x" { type = "uint8" }
-                  }
-                  message "m2" {
-                    description = "no fields"
-                  }
+                  protocol = "proto"
+                  role     = "provider"
                 }
               }
               component "b" { leaf = true }

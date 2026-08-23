@@ -14,6 +14,46 @@ export const EXAMPLE_SYSTEM_HCL = `project {
   authors = ["rhizz-examples"]
 }
 
+# ── Protocols ─────────────────────────────
+
+protocol "i2c" {
+  description = "I2C sensor communication bus"
+  roles       = ["provider", "consumer"]
+
+  message "reading" {
+    description = "Temperature and humidity measurement"
+    field "celsius"  { type = "float32" }
+    field "humidity" { type = "float32" }
+  }
+}
+
+protocol "mqtt" {
+  description = "MQTT telemetry protocol"
+  roles       = ["provider", "consumer"]
+
+  message "telemetry" {
+    description = "Environmental telemetry payload"
+    field "celsius"   { type = "float32" }
+    field "humidity"  { type = "float32" }
+    field "timestamp" { type = "uint64"  }
+  }
+}
+
+protocol "power" {
+  description = "DC power delivery rail"
+  roles       = ["provider", "consumer"]
+
+  message "status" {
+    description = "Power rail health"
+    field "voltage" {
+      type = "float32"
+      unit = "V"
+    }
+  }
+}
+
+# ── Top-level Reusable Component ──────────
+
 # Reusable top-level component — imported into the system via source = "temp-sensor".
 component "temp-sensor" {
   description = "BME280 I2C temperature and humidity sensor"
@@ -24,15 +64,12 @@ component "temp-sensor" {
     description = "I2C data output"
     protocol    = "i2c"
     role        = "provider"
+    external    = true
     tags        = ["data"]
-
-    message "reading" {
-      description = "Temperature and humidity measurement"
-      field "celsius"  { type = "float32" }
-      field "humidity" { type = "float32" }
-    }
   }
 }
+
+# ── System Definition ─────────────────────
 
 system "home-monitor" {
   description = "Smart home environmental monitoring node"
@@ -52,27 +89,16 @@ system "home-monitor" {
       description = "I2C bus to sensor"
       protocol    = "i2c"
       role        = "consumer"
+      external    = true
       tags        = ["data"]
-
-      message "reading" {
-        description = "Raw sensor reading"
-        field "celsius"  { type = "float32" }
-        field "humidity" { type = "float32" }
-      }
     }
 
     port "mqtt-out" {
       description = "Outbound MQTT telemetry"
       protocol    = "mqtt"
       role        = "provider"
+      external    = true
       tags        = ["data", "cloud"]
-
-      message "telemetry" {
-        description = "Aggregated telemetry payload"
-        field "celsius"   { type = "float32" }
-        field "humidity"  { type = "float32" }
-        field "timestamp" { type = "uint64"  }
-      }
     }
 
     # ── Internal decomposition ──────────────
@@ -86,14 +112,6 @@ system "home-monitor" {
         protocol    = "power"
         role        = "consumer"
         tags        = ["power"]
-
-        message "status" {
-          description = "Power rail health"
-          field "voltage" {
-            type = "float32"
-            unit = "V"
-          }
-        }
       }
     }
 
@@ -107,14 +125,6 @@ system "home-monitor" {
         protocol    = "power"
         role        = "provider"
         tags        = ["power"]
-
-        message "status" {
-          description = "Power rail health"
-          field "voltage" {
-            type = "float32"
-            unit = "V"
-          }
-        }
       }
     }
 
@@ -135,14 +145,8 @@ system "home-monitor" {
       description = "Inbound MQTT telemetry"
       protocol    = "mqtt"
       role        = "consumer"
+      external    = true
       tags        = ["data", "cloud"]
-
-      message "telemetry" {
-        description = "Device telemetry event"
-        field "celsius"   { type = "float32" }
-        field "humidity"  { type = "float32" }
-        field "timestamp" { type = "uint64"  }
-      }
     }
   }
 

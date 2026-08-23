@@ -742,11 +742,11 @@ export class DocumentStore {
       const cn = conns[connId];
       const fromComp = comps[cn.from.component].label;
       const fromStr = cn.from.port !== null && cn.from.port !== undefined
-        ? `${fromComp}:${ports[cn.from.port].label}`
+        ? `${fromComp}/${ports[cn.from.port].label}`
         : fromComp;
       const toComp = comps[cn.to.component].label;
       const toStr = cn.to.port !== null && cn.to.port !== undefined
-        ? `${toComp}:${ports[cn.to.port].label}`
+        ? `${toComp}/${ports[cn.to.port].label}`
         : toComp;
 
       return {

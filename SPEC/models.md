@@ -85,7 +85,7 @@ struct RawProtocol {
     messages: Vec<Labeled<RawMessage>>,
 }
 
-/// A port declared on a component. Binds to a protocol or defines inline messages.
+/// A port declared on a component. Binds to a protocol and declares port-specific metadata.
 #[derive(Debug, Clone)]
 struct RawPort {
     description: Option<String>,
@@ -94,7 +94,6 @@ struct RawPort {
     external: Option<bool>, // true if intended to interface outside this component
     required: Option<bool>, // true if mandatory when instantiated in a system
     tags: Option<Vec<String>>,
-    messages: Vec<Labeled<RawMessage>>,
 }
 
 /// A connection wiring components/ports together.
@@ -307,7 +306,6 @@ struct Port {
     required: bool,                  // Whether port is required when instantiated in a system
     tags: Vec<String>,
     owner: ComponentId,
-    messages: Vec<MessageId>,
 }
 
 /// One endpoint of a connection — a component and an optional port on that component.
@@ -364,7 +362,6 @@ struct Field {
 5. Walk each component's `port` blocks:
    - Allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
    - Resolve `protocol` string: if it matches a registered `protocol` block, link `protocol_id`.
-   - Walk inline messages/fields inside ports — allocate ids. Validate `field.type` presence (E007).
    - Set `external` (default `false`) and `required` (default `true`).
 6. Walk `connection` blocks in each scope:
    - Parse `from` and `to` paths relative to the declaring scope.
