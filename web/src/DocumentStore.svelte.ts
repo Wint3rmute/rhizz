@@ -62,6 +62,7 @@ export interface ConnectionData {
 export interface ComponentData {
   label: string;
   description?: string;
+  icon?: string;
   tags?: string[];
   level?: number;
   leaf: boolean;
@@ -213,6 +214,9 @@ export class DocumentStore {
 
     if (comp.description) {
       lines.push(`${inner}description = ${escapeHclString(comp.description)}`);
+    }
+    if (comp.icon) {
+      lines.push(`${inner}icon        = ${escapeHclString(comp.icon)}`);
     }
     if (comp.tags && comp.tags.length > 0) {
       lines.push(`${inner}tags        = ${formatStringList(comp.tags)}`);
@@ -470,6 +474,7 @@ export class DocumentStore {
     const newComp: ComponentData = {
       label,
       description: "",
+      icon: "",
       tags: [],
       leaf,
       ports: [],
@@ -808,6 +813,7 @@ export class DocumentStore {
       return {
         label: c.label,
         description: c.description || "",
+        icon: c.icon || "",
         tags: c.tags || [],
         level: c.level,
         leaf: Boolean(c.leaf),

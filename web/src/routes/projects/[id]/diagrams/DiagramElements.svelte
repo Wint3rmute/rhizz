@@ -7,6 +7,7 @@ import {
   type TextAlign,
   textPosition,
 } from "./geometry";
+import { resolveIcon } from "../../../../iconHelper";
 import type {
   DiagramStaticBox,
   DiagramStaticComponent,
@@ -66,6 +67,7 @@ let visibleConnections = $derived(
   {@const component = components[index]}
   {#if box && component}
     {@const textPos = textPosition(box.textAlign, box.width, box.height)}
+    {@const icon = resolveIcon(component.icon)}
     <g transform="translate({box.x}, {box.y})">
       <rect
         width={box.width}
@@ -75,16 +77,86 @@ let visibleConnections = $derived(
         stroke-width="1"
         fill="var(--color-base-200)"
       />
-      <text
-        x={textPos.x}
-        y={textPos.y}
-        fill="var(--color-base-content)"
-        text-anchor={textPos.anchor}
-        dominant-baseline={textPos.baseline}
-        style="pointer-events: none; user-select: none"
-      >
-        {component.label}
-      </text>
+      {#if icon}
+        {#if box.textAlign === "top-left"}
+          <svg
+            x={8}
+            y={8}
+            width="14"
+            height="14"
+            viewBox="0 0 {icon.width} {icon.height}"
+            fill="var(--color-base-content)"
+            opacity="0.85"
+          >
+            <path d={icon.svgPath} />
+          </svg>
+          <text
+            x={26}
+            y={textPos.y}
+            fill="var(--color-base-content)"
+            text-anchor="start"
+            dominant-baseline={textPos.baseline}
+            style="pointer-events: none; user-select: none"
+          >
+            {component.label}
+          </text>
+        {:else if box.textAlign === "top-center"}
+          <svg
+            x={box.width / 2 - 7}
+            y={6}
+            width="14"
+            height="14"
+            viewBox="0 0 {icon.width} {icon.height}"
+            fill="var(--color-base-content)"
+            opacity="0.85"
+          >
+            <path d={icon.svgPath} />
+          </svg>
+          <text
+            x={textPos.x}
+            y={textPos.y + 14}
+            fill="var(--color-base-content)"
+            text-anchor={textPos.anchor}
+            dominant-baseline={textPos.baseline}
+            style="pointer-events: none; user-select: none"
+          >
+            {component.label}
+          </text>
+        {:else}
+          <svg
+            x={box.width / 2 - 9}
+            y={box.height / 2 - 20}
+            width="18"
+            height="18"
+            viewBox="0 0 {icon.width} {icon.height}"
+            fill="var(--color-base-content)"
+            opacity="0.85"
+          >
+            <path d={icon.svgPath} />
+          </svg>
+          <text
+            x={box.width / 2}
+            y={box.height / 2 + 10}
+            fill="var(--color-base-content)"
+            text-anchor="middle"
+            dominant-baseline="middle"
+            style="pointer-events: none; user-select: none"
+          >
+            {component.label}
+          </text>
+        {/if}
+      {:else}
+        <text
+          x={textPos.x}
+          y={textPos.y}
+          fill="var(--color-base-content)"
+          text-anchor={textPos.anchor}
+          dominant-baseline={textPos.baseline}
+          style="pointer-events: none; user-select: none"
+        >
+          {component.label}
+        </text>
+      {/if}
     </g>
   {/if}
 {/each}

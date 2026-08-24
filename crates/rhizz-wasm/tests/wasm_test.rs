@@ -29,6 +29,7 @@ fn valid_sources() -> Vec<rhizz_core::Source> {
 
                     component "server" {
                         description = "HTTP server"
+                        icon        = "server"
                         tags        = []
                         leaf        = true
                     }
@@ -75,6 +76,7 @@ fn components_returns_typed_wrappers() {
     let server = server.unwrap();
     assert!(server.leaf(), "server should be a leaf component");
     assert_eq!(server.description(), "HTTP server");
+    assert_eq!(server.icon(), Some("server".to_string()));
 }
 
 #[wasm_bindgen_test]

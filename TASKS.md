@@ -13,13 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 76 — Install FontAwesome icons, use them in the FileTree
-
-- Install FontAwesome icons via deno
-- Use the `free-solid-svg-icons` variant
-  - In general, pick the most minimal and free variant from npm
-- Use the icons in the FileTree - one icon for a folder, another icon for a file
-
 ## Task 77 - Allow customizing the starting point of a connection in Diagrams
 
 When editing a diagram, allow the user to specify the starting point of a

@@ -186,6 +186,8 @@ pub struct Component {
     pub label: String,
     /// Human-readable description.
     pub description: String,
+    /// Optional icon name (e.g. FontAwesome icon identifier).
+    pub icon: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Abstraction level.

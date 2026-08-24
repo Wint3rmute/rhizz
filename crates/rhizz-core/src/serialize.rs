@@ -157,6 +157,12 @@ fn serialize_component(
             escape_string(&comp.description)
         ));
     }
+    if let Some(icon) = comp.icon.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!(
+            "{inner_indent}icon        = {}\n",
+            escape_string(icon)
+        ));
+    }
     if !comp.tags.is_empty() {
         out.push_str(&format!(
             "{inner_indent}tags        = {}\n",
