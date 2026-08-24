@@ -64,9 +64,9 @@ function closeMenu() {
             class="btn btn-ghost btn-sm"
           >Diagrams</a>
           <a
-            href={resolve("/projects/[id]/diagrams-viewer", { id: activeProjectId })}
+            href={resolve("/projects/[id]/explore", { id: activeProjectId })}
             class="btn btn-ghost btn-sm"
-          >Diagram Viewer</a>
+          >Explore</a>
           <a
             href={resolve("/projects/[id]/overview", { id: activeProjectId })}
             class="btn btn-ghost btn-sm"
@@ -149,11 +149,11 @@ function closeMenu() {
             📐 Diagrams
           </a>
           <a
-            href={resolve("/projects/[id]/diagrams-viewer", { id: activeProjectId })}
+            href={resolve("/projects/[id]/explore", { id: activeProjectId })}
             class="btn btn-ghost btn-sm justify-start w-full text-left"
             onclick={closeMenu}
           >
-            📊 Diagram Viewer
+            🧭 Explore
           </a>
           <a
             href={resolve("/projects/[id]/overview", { id: activeProjectId })}
