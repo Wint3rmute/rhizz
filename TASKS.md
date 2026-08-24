@@ -17,7 +17,7 @@ How to work on this file:
 
 - Install FontAwesome icons via deno
 - Use the `free-solid-svg-icons` variant
-  - In general, pick the most minimal and free variant
+  - In general, pick the most minimal and free variant from npm
 - Use the icons in the FileTree - one icon for a folder, another icon for a file
 
 ## Task 77 - Allow customizing the starting point of a connection in Diagrams
