@@ -247,7 +247,7 @@ struct Protocol {
     label: String,
     description: String,
     tags: Vec<String>,
-    roles: Vec<PortRole>,
+    roles: Vec<String>,
     messages: Vec<MessageId>,
 }
 
@@ -289,19 +289,12 @@ struct Component {
 
 /// The role a port plays in a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PortRole {
-    Provider,
-    Consumer,
-    Peer,
-}
-
-#[derive(Debug)]
 struct Port {
     label: String,
     description: String,
     protocol: String,
     protocol_id: Option<ProtocolId>, // Resolved reference to top-level protocol (if matching)
-    role: PortRole,
+    role: Option<String>,
     external: bool,                  // Whether port is an external boundary interface
     required: bool,                  // Whether port is required when instantiated in a system
     tags: Vec<String>,
@@ -435,8 +428,8 @@ struct ViewFilter {
 - **Arena-indexed rather than nested** — flattening the tree into indexed vecs
   makes iteration, filtering, and scoring trivial. Parent/child relationships
   are explicit via ids.
-- **`PortRole` as enum, not string** — parse once during resolution, enforce at
-  the type level. The `from`/`to` strings in `RawConnection` are parsed into
+- **`roles` as free-form strings** — defined at protocol level and validated
+  per port against the referenced protocol. The `from`/`to` strings in `RawConnection` are parsed into
   `ConnectionEndpoint` (component id + optional port id) during the resolution
   pass.
 - **`ConnectionEndpoint.port` is `Option<PortId>`** — `None` means a bare

@@ -1,19 +1,19 @@
-# Implementation Tasks
+# Tasks
 
 How to work on this file:
 
 - Read the next task from this file
 - Get extra context from recently finished tasks - read the first 50 lines of
-  `FINISHED_TASKS.md`
+  `TASKS/FINISHED.md`
 - Implement the task, use red/green TDD
-- Run tests & linters (`cargo test`, `cargo clippy`, `cargo doc`, `cargo build`)
+- Run tests & linters (`just test`, `just lint`, `just build`)
   until it's all working
 - Once all linters/builds/tests pass, run `cargo fmt`
-- Move the completed task to `FINISHED_TASKS.md` and report that you're finished
+- Move the completed task to `FINISHED.md` and report that you're finished
 
 ---
 
-## Better examples
+## Task 78 - Better examples
 
 There's a bit of a split brain situation with examples right now. Some examples
 are in the `examples/` directory, but an example project for the web app lives
@@ -72,7 +72,7 @@ It should later be expanded into unit tests, but that is only after the core ide
 
 ## (For later brainstorming) Task <N> - pin existing nodes when auto-laying-out newly-added ones
 
-Split out from Task 50 (now finished — see `FINISHED_TASKS.md`) as the one
+Split out from Task 50 (now finished — see `FINISHED.md`) as the one
 remaining concrete piece of its original scope. `forceLayout.ts` already
 supports pinning a node in place via `fixed: true` on a `LayoutNode` (sets
 d3-force's `fx`/`fy`, ignored by all forces) — added specifically for this

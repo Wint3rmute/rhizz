@@ -169,7 +169,7 @@ fn protocols_and_ports_return_typed_wrappers() {
     assert_eq!(ports.len(), 1);
     assert_eq!(ports[0].label(), "api");
     assert_eq!(ports[0].protocol(), "http");
-    assert_eq!(ports[0].role(), "provider");
+    assert_eq!(ports[0].role(), Some("provider".to_string()));
     assert!(ports[0].external());
     assert!(!ports[0].required());
 }

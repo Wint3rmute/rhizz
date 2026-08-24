@@ -218,7 +218,7 @@ protocol "spi" {
 | _label_       | string       | **yes**  | —                                   | Unique protocol identifier across the project    |
 | `description` | string       | no       | `""`                                | Human-readable description                       |
 | `tags`        | list(string) | no       | `[]`                                | Filtering tags                                   |
-| `roles`       | list(string) | no       | `["provider", "consumer", "peer"]`  | Valid port roles permitted by this protocol      |
+| `roles`       | list(string) | no       | `[]`                                | Valid port roles permitted by this protocol (empty = any) |
 
 **Children:** `message`
 
@@ -236,7 +236,7 @@ Ports carry only port-specific realization metadata (`protocol`, `role`, `extern
 port "spi" {
   description = "SPI master interface"
   protocol    = "spi"      # references top-level protocol "spi"
-  role        = "provider" # "provider", "consumer", or "peer"
+  role        = "master"   # must match one of the roles declared on protocol "spi"
   external    = true       # public boundary port (expected to connect outside this component)
   required    = true       # mandatory to be connected when instantiated in a system
   tags        = ["electronics", "data"]
@@ -247,7 +247,7 @@ port "spi" {
 | ------------- | ------------ | -------- | -------- | ------------------------------------------------------------------------------- |
 | _label_       | string       | **yes**  | —        | Unique identifier within the parent component                                   |
 | `protocol`    | string       | no       | `""`     | Reference to a top-level `protocol` label, or a free-form protocol name         |
-| `role`        | string       | no       | `"peer"` | `"provider"`, `"consumer"`, or `"peer"`                                         |
+| `role`        | string       | no       | —        | Role string; validated against referenced protocol's `roles` if specified       |
 | `external`    | bool         | no       | `false`  | Whether this port is an external interface point intended for outside wiring    |
 | `required`    | bool         | no       | `true`   | Whether this port must be connected when instantiated inside an outer system    |
 | `description` | string       | no       | `""`     | Human-readable description                                                      |

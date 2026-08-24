@@ -29,9 +29,9 @@ FINISHED_TASKS.md    – completed tasks (most recent first)
 4. Run `just format` to format the code.
 5. Commit your code, use conventional commits.
 
-### Tasks from `TASKS.md`
+### Tasks from `TASKS/TODO.md`
 
-1. Read the next task from `TASKS.md`.
+1. Follow the instructions from `TODO.md`.
 2. Get extra context from recently finished tasks (read the first 50 lines of
    `FINISHED_TASKS.md`).
 3. Implement it using red/green TDD.
