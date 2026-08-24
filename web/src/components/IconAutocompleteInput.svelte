@@ -17,27 +17,96 @@ let {
   onchange,
 }: Props = $props();
 
-let isFocused = $state(false);
-let suggestions = $derived(isFocused ? searchIcons(value, 8) : []);
+let isOpen = $state(false);
+let highlightedIndex = $state(-1);
+let listElement: HTMLUListElement | null = $state(null);
+
+let suggestions = $derived(isOpen ? searchIcons(value, 10) : []);
 let activeIcon = $derived(resolveIcon(value));
+
+$effect(() => {
+  // Reset highlighted index when suggestions change
+  if (suggestions.length > 0) {
+    if (highlightedIndex >= suggestions.length) {
+      highlightedIndex = 0;
+    }
+  } else {
+    highlightedIndex = -1;
+  }
+});
 
 function handleSelect(iconName: string) {
   value = iconName;
-  isFocused = false;
+  isOpen = false;
+  highlightedIndex = -1;
   onchange?.(iconName);
 }
 
 function handleInput(e: Event) {
   const inputVal = (e.target as HTMLInputElement).value;
   value = inputVal;
+  isOpen = true;
+  highlightedIndex = 0;
   onchange?.(inputVal.trim());
 }
 
+function handleKeyDown(e: KeyboardEvent) {
+  if (!isOpen || suggestions.length === 0) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      isOpen = true;
+      highlightedIndex = 0;
+      e.preventDefault();
+    }
+    return;
+  }
+
+  switch (e.key) {
+    case "ArrowDown":
+      e.preventDefault();
+      highlightedIndex = (highlightedIndex + 1) % suggestions.length;
+      scrollToHighlighted();
+      break;
+    case "ArrowUp":
+      e.preventDefault();
+      highlightedIndex = (highlightedIndex - 1 + suggestions.length) %
+        suggestions.length;
+      scrollToHighlighted();
+      break;
+    case "Enter":
+      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+        e.preventDefault();
+        handleSelect(suggestions[highlightedIndex].name);
+      }
+      break;
+    case "Tab":
+      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+        handleSelect(suggestions[highlightedIndex].name);
+      } else if (suggestions.length > 0) {
+        handleSelect(suggestions[0].name);
+      }
+      break;
+    case "Escape":
+      e.preventDefault();
+      isOpen = false;
+      highlightedIndex = -1;
+      break;
+  }
+}
+
+function scrollToHighlighted() {
+  if (!listElement) return;
+  const items = listElement.querySelectorAll("li");
+  if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+    items[highlightedIndex].scrollIntoView({ block: "nearest" });
+  }
+}
+
 function handleBlur() {
-  // Slight delay so mousedown on suggestion list item fires before dropdown closes
+  // Delay closing so click on suggestion item registers first
   setTimeout(() => {
-    isFocused = false;
-  }, 150);
+    isOpen = false;
+    highlightedIndex = -1;
+  }, 180);
 }
 </script>
 
@@ -80,9 +149,20 @@ function handleBlur() {
       <input
         {id}
         type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={isOpen && suggestions.length > 0}
+        aria-controls="{id}-listbox"
+        aria-activedescendant={highlightedIndex >= 0
+          ? `${id}-option-${highlightedIndex}`
+          : undefined}
         bind:value
         oninput={handleInput}
-        onfocus={() => (isFocused = true)}
+        onkeydown={handleKeyDown}
+        onfocus={() => {
+          isOpen = true;
+          if (suggestions.length > 0) highlightedIndex = 0;
+        }}
         onblur={handleBlur}
         class="input input-sm input-bordered w-full font-mono text-xs pr-7"
         {placeholder}
@@ -100,20 +180,28 @@ function handleBlur() {
         </button>
       {/if}
 
-      {#if isFocused && suggestions.length > 0}
+      {#if isOpen && suggestions.length > 0}
         <ul
+          id="{id}-listbox"
+          role="listbox"
+          bind:this={listElement}
           class="absolute top-full left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-box bg-base-200 p-1 shadow-lg border border-base-300 space-y-0.5 text-xs font-mono"
           data-testid="icon-suggestions-list"
         >
-          {#each suggestions as { name, icon } (name)}
-            <li>
+          {#each suggestions as { name, icon }, i (name)}
+            <li
+              id="{id}-option-{i}"
+              role="option"
+              aria-selected={highlightedIndex === i}
+            >
               <button
                 type="button"
-                class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded hover:bg-base-300 text-left transition-colors {value
-                  .toLowerCase()
-                  .replace(/^fa-?/, '') === name
-                  ? 'bg-primary/15 text-primary font-bold'
-                  : ''}"
+                tabindex="-1"
+                class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded text-left transition-colors {highlightedIndex ===
+                i
+                  ? 'bg-primary text-primary-content font-bold'
+                  : 'hover:bg-base-300 text-base-content'}"
+                onmouseenter={() => (highlightedIndex = i)}
                 onmousedown={() => handleSelect(name)}
               >
                 <svg
