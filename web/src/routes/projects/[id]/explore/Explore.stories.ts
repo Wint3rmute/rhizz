@@ -14,7 +14,7 @@ import {
   type DiagramLayout,
   writeDiagramLayoutFile,
 } from "../diagrams/persistence";
-import DiagramViewer from "./DiagramViewer.svelte";
+import Explore from "./Explore.svelte";
 
 // Initialize WASM module before evaluating story models
 await init();
@@ -191,15 +191,15 @@ const crossLevelProject = await ensureProjectWithDiagrams(
 );
 
 const meta = {
-  title: "Pages/DiagramViewer",
-  component: DiagramViewer,
+  title: "Pages/Explore",
+  component: Explore,
   parameters: {
     layout: "fullscreen",
   },
   args: {
     projectId: seededProject.id,
   },
-} satisfies Meta<typeof DiagramViewer>;
+} satisfies Meta<typeof Explore>;
 
 export default meta;
 

@@ -221,7 +221,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
         <div class="card-body items-center text-center">
           <h2 class="card-title">No project selected</h2>
           <p class="text-base-content/60 text-sm">
-            Select or create a project from the Projects page to browse its diagrams.
+            Select or create a project from the Projects page to explore its diagrams.
           </p>
           <a href={resolve("/projects", {})} class="btn btn-primary mt-2">
             Back to projects
@@ -291,7 +291,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
           </div>
         {:else}
           <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">
-            Select a diagram to view it.
+            Select a diagram to explore it.
           </div>
         {/if}
       </div>
