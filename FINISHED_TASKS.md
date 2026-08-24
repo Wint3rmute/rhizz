@@ -4,6 +4,28 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 77 — Allow customizing the starting point of a connection in Diagrams
+
+- **Diagram-Specific Connection Layout & Persistence (`persistence.ts`, `rhizz-core`)**:
+  - Added `ConnectionSide` type (`"top" | "bottom" | "left" | "right"`).
+  - Added `ConnectionLayout` model (`connection`, `start_side`) to `ViewDefinition` in `crates/rhizz-core/src/model.rs` and `web/src/rhizz_wasm_wrapper.ts`.
+  - Updated `serialize_views` and `parse_views` in `crates/rhizz-core/src/serialize.rs` to format and parse `connection "name" { start_side = "..." }` blocks inside `view` definitions.
+  - Updated `DiagramLayout` and `readDiagramLayoutFile`/`writeDiagramLayoutFile` to persist and restore connection layout settings per diagram.
+- **Routing & Directional Geometry (`geometry.ts`)**:
+  - Implemented `boxSidePoint(box, side)` computing border anchor coordinates.
+  - Updated `computeVisibleConnections` to route starting points from custom sides (`top`/`bottom` -> vertical leave, `left`/`right` -> horizontal leave) while automatically orienting the arrival side facing the line.
+  - Implemented `computeDirectionalHandles` generating 4 drag handles (top, right, bottom, left) on components.
+- **Interactive Canvas & Inspector (`+page.svelte`)**:
+  - Rendered 4 directional drag-to-connect handles on selected components on the canvas.
+  - Made connection lines interactive and selectable on click with glowing highlight (`#arrow-selected`).
+  - Added connection inspection panel allowing users to configure starting points (`Auto`, `Top`, `Right`, `Bottom`, `Left`) or delete connections.
+- **Tests**:
+  - Added unit tests in `geometry.test.ts` (verifying `boxSidePoint`, `computeDirectionalHandles`, and side routing in `computeVisibleConnections`).
+  - Added unit tests in `persistence.test.ts` (verifying HCL view connection layout serialization and roundtripping).
+- Validated with `just test` (all 78 core tests + 300 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 76 — Install FontAwesome icons, use them in the FileTree and Diagrams
 
 - **Core Model & Parser (`crates/rhizz-core`)**:

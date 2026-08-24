@@ -11,6 +11,7 @@ export interface DiagramStaticConnection {
   from: number;
   to: number;
   label: string;
+  startSide?: "top" | "bottom" | "left" | "right";
 }
 
 /** A placed node's position/size/label alignment — `textAlign` defaults to "center" when omitted. */

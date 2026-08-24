@@ -228,6 +228,31 @@ describe("HCL View conversion and persistence", () => {
     expect(read.checked["sys/a"]).toEqual(layout.checked["sys/a"]);
   });
 
+  it("persists and reads connection startSide configuration", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+        "sys/b": { x: 200, y: 20, width: 100, height: 50 },
+      },
+      savedLayout: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+        "sys/b": { x: 200, y: 20, width: 100, height: 50 },
+      },
+      connections: {
+        "link-ab": { startSide: "bottom" as const },
+      },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).toContain('connection "link-ab"');
+    expect(content).toContain('start_side = "bottom"');
+
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.connections?.["link-ab"]).toEqual({ startSide: "bottom" });
+  });
+
   it("creates the containing directory on first write", async () => {
     const fs = await projectFs();
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());

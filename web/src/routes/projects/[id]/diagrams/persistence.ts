@@ -16,6 +16,14 @@ import type { Box } from "./geometry";
 export const TextAlignSchema = z.enum(["center", "top-center", "top-left"]);
 export type TextAlign = z.infer<typeof TextAlignSchema>;
 
+export const ConnectionSideSchema = z.enum(["top", "bottom", "left", "right"]);
+export type ConnectionSide = z.infer<typeof ConnectionSideSchema>;
+
+export const StoredConnectionSchema = z.object({
+  startSide: ConnectionSideSchema.optional(),
+});
+export type StoredConnection = z.infer<typeof StoredConnectionSchema>;
+
 // Position + size + style of a node, as stored in checked/savedLayout.
 export const StoredBoxSchema = z.object({
   x: z.number(),
@@ -58,14 +66,15 @@ export function sanitizeStoredRecord(
 export const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
 
 // The full persisted content of a single diagram: which components are
-// currently placed on its canvas, and every component's last-known box.
+// currently placed on its canvas, every component's last-known box, and connection starting points.
 export interface DiagramLayout {
   checked: Record<string, StoredBox>;
   savedLayout: Record<string, StoredBox>;
+  connections?: Record<string, StoredConnection>;
 }
 
 export function emptyDiagramLayout(): DiagramLayout {
-  return { checked: {}, savedLayout: {} };
+  return { checked: {}, savedLayout: {}, connections: {} };
 }
 
 /**
@@ -179,6 +188,13 @@ export function layoutToHcl(
     text_align: box.textAlign,
   }));
 
+  const connections = Object.entries(layout.connections || {}).map(
+    ([connection, data]) => ({
+      connection,
+      start_side: data.startSide,
+    }),
+  );
+
   const viewDef: ViewDefinition = {
     label: viewName,
     description: "",
@@ -190,6 +206,7 @@ export function layoutToHcl(
       components: [],
     },
     nodes,
+    connections,
   };
 
   return serialize_views([viewDef]);
@@ -201,6 +218,7 @@ export function layoutToHcl(
 export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
   const savedLayout: Record<string, StoredBox> = {};
+  const connections: Record<string, StoredConnection> = {};
 
   for (const view of views) {
     for (const node of view.nodes || []) {
@@ -216,9 +234,17 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
         savedLayout[node.component] = parsedBox.data;
       }
     }
+    for (const conn of view.connections || []) {
+      if (conn.start_side) {
+        const parsedSide = ConnectionSideSchema.safeParse(conn.start_side);
+        if (parsedSide.success) {
+          connections[conn.connection] = { startSide: parsedSide.data };
+        }
+      }
+    }
   }
 
-  return { checked, savedLayout };
+  return { checked, savedLayout, connections };
 }
 
 /**

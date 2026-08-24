@@ -354,6 +354,16 @@ pub struct NodeLayout {
     pub text_align: Option<String>,
 }
 
+/// Connection layout metadata for visual diagrams.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ConnectionLayout {
+    /// Connection label or key.
+    pub connection: String,
+    /// Optional starting side ("top", "bottom", "left", "right").
+    #[serde(default)]
+    pub start_side: Option<String>,
+}
+
 /// A view definition containing filter, output settings, and node layouts.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ViewDefinition {
@@ -374,6 +384,9 @@ pub struct ViewDefinition {
     /// Placed node layouts for this view.
     #[serde(default)]
     pub nodes: Vec<NodeLayout>,
+    /// Placed connection layouts for this view.
+    #[serde(default)]
+    pub connections: Vec<ConnectionLayout>,
 }
 
 impl ViewDefinition {
@@ -401,6 +414,7 @@ impl ViewDefinition {
                 },
             },
             nodes: Vec::new(),
+            connections: Vec::new(),
         }
     }
 }
