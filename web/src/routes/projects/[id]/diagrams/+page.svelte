@@ -32,9 +32,11 @@ import {
   buildKeyToIndexMap,
   componentKey,
   DIAGRAM_LAYOUT_DIR,
+  type DiagramLayout,
   emptyDiagramLayout,
   readDiagramLayoutFile,
   type StoredBox,
+  type StoredConnection,
   writeDiagramLayoutFile,
 } from "./persistence";
 import {
@@ -50,9 +52,9 @@ import {
   type LayoutNode,
 } from "./forceLayout";
 import {
-  type Box,
   boxContains,
   clampWithin,
+  computeDirectionalHandles,
   computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
@@ -62,10 +64,10 @@ import {
   findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
-  type TextAlign,
   textPosition,
   unionBox,
 } from "./geometry";
+import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
@@ -220,6 +222,7 @@ let checked = $state<Record<string, StoredBox>>({});
 // from the canvas. Persisted separately from `checked` since the two have
 // different lifetimes (checked entries disappear on uncheck; these don't).
 let savedLayout = $state<Record<string, StoredBox>>({});
+let savedConnections = $state<Record<string, StoredConnection>>({});
 
 // Which diagram (a `.rhizz/diagrams/<name>.json` file) is currently open
 // on the canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.json" —
@@ -313,6 +316,7 @@ $effect(() => {
   if (path === null) {
     checked = {};
     savedLayout = {};
+    savedConnections = {};
     return;
   }
 
@@ -323,6 +327,7 @@ $effect(() => {
     if (loadedDiagramPath !== path) return;
     checked = layout.checked;
     savedLayout = layout.savedLayout;
+    savedConnections = layout.connections ?? {};
     diagramLayoutLoaded = true;
     // Frames the newly-opened diagram's content immediately, rather than
     // leaving the view wherever the previously-open diagram (or the
@@ -344,9 +349,10 @@ $effect(() => {
   // effect's dependencies — leaving this effect subscribed only to
   // `checked`/`savedLayout`'s own top-level references, never to writes
   // into them.
-  const snapshot = {
+  const snapshot: DiagramLayout = {
     checked: $state.snapshot(checked),
     savedLayout: $state.snapshot(savedLayout),
+    connections: $state.snapshot(savedConnections),
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
@@ -556,6 +562,7 @@ const selected = new SvelteSet<number>();
 type DiagramSnapshot = {
   checked: Record<string, StoredBox>;
   savedLayout: Record<string, StoredBox>;
+  connections: Record<string, StoredConnection>;
 };
 
 // How many undo steps (and, independently, redo steps) are kept.
@@ -566,18 +573,16 @@ function snapshotDiagram(): DiagramSnapshot {
   return {
     checked: { ...checked },
     savedLayout: { ...savedLayout },
+    connections: { ...savedConnections },
   };
 }
 
 function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
-  // Copies (rather than reuses) the snapshot's records, so the object
-  // sitting in the undo/redo stacks is never the same live object that
-  // setNodeBox() et al. go on to mutate afterwards.
   checked = { ...snapshot.checked };
   savedLayout = { ...snapshot.savedLayout };
-  // The restored snapshot may not have (or may no longer make sense for)
-  // the same selection, so it's simplest and safest to just clear it.
+  savedConnections = { ...(snapshot.connections || {}) };
   selected.clear();
+  selectedConnection = null;
 }
 
 // Records the diagram's current state as an undo point, right *before* a
@@ -704,6 +709,7 @@ type Interaction =
     type: "connecting";
     sourceComponentIndex: number;
     sourcePortLabel: string | null;
+    startSide?: ConnectionSide;
     sourcePoint: { x: number; y: number };
     currentPoint: { x: number; y: number };
   };
@@ -1053,6 +1059,7 @@ function onPortMouseDown(
   compIndex: number,
   portLabel: string | null,
   worldPoint: { x: number; y: number },
+  startSide?: ConnectionSide,
 ) {
   event.stopPropagation();
   event.preventDefault();
@@ -1060,6 +1067,7 @@ function onPortMouseDown(
     type: "connecting",
     sourceComponentIndex: compIndex,
     sourcePortLabel: portLabel,
+    startSide,
     sourcePoint: worldPoint,
     currentPoint: worldPoint,
   };
@@ -1100,6 +1108,7 @@ async function handleCreateConnection(
   sourcePortLabel: string | null,
   targetCompIndex: number,
   targetPortLabel: string | null,
+  startSide?: ConnectionSide,
 ): Promise<void> {
   if (sourceCompIndex === targetCompIndex) return;
 
@@ -1141,6 +1150,10 @@ async function handleCreateConnection(
   });
 
   if (added) {
+    recordUndoPoint();
+    if (startSide) {
+      savedConnections[connLabel] = { startSide };
+    }
     await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }
@@ -1151,6 +1164,7 @@ async function handleCreateConnection(
 // node, so it must be handled here too (not just in onCanvasMouseDown,
 // which only sees clicks on empty canvas).
 function onNodeMouseDown(event: MouseEvent, index: number) {
+  selectedConnection = null;
   // Auto-layout is actively writing node positions every frame; letting a
   // drag/select start at the same time would silently fight it (clicks
   // would visibly do nothing useful) — see the cursor style on <svg>
@@ -1198,6 +1212,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
+  selectedConnection = null;
   // See onNodeMouseDown's matching guard above.
   if (autoLayoutRunning) return;
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
@@ -1445,6 +1460,7 @@ function onSvgMouseUp() {
         current.sourcePortLabel,
         target.compIndex,
         target.portLabel,
+        current.startSide,
       ).catch(reportDiagramError);
     }
   }
@@ -1493,16 +1509,119 @@ function onWheel(event: WheelEvent) {
   editor_state.view.y = mouseSvg.y - fracY * newHeight;
 }
 
+let selectedConnection = $state<string | null>(null);
+
+let selectedConnectionData = $derived.by(() => {
+  if (!selectedConnection) return null;
+  const conn = connections.find((c) => c.label === selectedConnection);
+  if (!conn) return null;
+  const fromKey = getComponentKey(conn.from);
+  const toKey = getComponentKey(conn.to);
+  const fromCompLabel = components[conn.from]?.label ?? fromKey;
+  const toCompLabel = components[conn.to]?.label ?? toKey;
+  return {
+    label: conn.label,
+    from: fromKey,
+    to: toKey,
+    fromCompLabel,
+    toCompLabel,
+    startSide: savedConnections[conn.label]?.startSide,
+    endSide: savedConnections[conn.label]?.endSide,
+  };
+});
+
+function setConnectionStartSide(side: ConnectionSide | undefined) {
+  if (!selectedConnection) return;
+  recordUndoPoint();
+  const existing = savedConnections[selectedConnection] || {};
+  if (side) {
+    savedConnections[selectedConnection] = { ...existing, startSide: side };
+  } else {
+    const updated = { ...existing };
+    delete updated.startSide;
+    if (updated.endSide) {
+      savedConnections[selectedConnection] = updated;
+    } else {
+      delete savedConnections[selectedConnection];
+    }
+  }
+}
+
+function setConnectionEndSide(side: ConnectionSide | undefined) {
+  if (!selectedConnection) return;
+  recordUndoPoint();
+  const existing = savedConnections[selectedConnection] || {};
+  if (side) {
+    savedConnections[selectedConnection] = { ...existing, endSide: side };
+  } else {
+    const updated = { ...existing };
+    delete updated.endSide;
+    if (updated.startSide) {
+      savedConnections[selectedConnection] = updated;
+    } else {
+      delete savedConnections[selectedConnection];
+    }
+  }
+}
+
+async function handleDeleteSelectedConnection(): Promise<void> {
+  if (!selectedConnection) return;
+  const label = selectedConnection;
+  if (
+    !confirm(
+      `Delete connection "${label}"? This will remove it from the system model.`,
+    )
+  ) {
+    return;
+  }
+  const { path: targetPath, content: mainContent } = await readMainContent();
+  const doc = new DocumentStore();
+  if (mainContent.trim()) {
+    doc.loadFromHcl(mainContent);
+  }
+
+  let foundScope: string | null = null;
+  for (const sys of doc.systems) {
+    if (sys.connections.some((c) => c.label === label)) {
+      foundScope = sys.label;
+      break;
+    }
+    const searchComps = (comps: ComponentData[], parentPath: string) => {
+      for (const comp of comps) {
+        const curPath = `${parentPath}/${comp.label}`;
+        if (comp.connections.some((c) => c.label === label)) {
+          foundScope = curPath;
+          return;
+        }
+        searchComps(comp.components, curPath);
+      }
+    };
+    searchComps(sys.components, sys.label);
+    if (foundScope) break;
+  }
+
+  if (foundScope) {
+    doc.deleteConnection(foundScope, label);
+    await fs.writeFile(targetPath, doc.systemHcl);
+    sources = await readProjectSources(fs);
+  }
+
+  delete savedConnections[label];
+  selectedConnection = null;
+}
+
 // Only connections where both endpoints are currently on the canvas.
-// conn.from/conn.to are already component arena indices, matching the same
-// index space `checked` is keyed by. Endpoints are anchored to each box's
-// boundary (the edge facing the other node), not its centre, so the arrow
-// terminates on the node's perimeter instead of passing into its interior.
-// Orientation is decided once from the raw centre-to-centre delta (not
-// either box's own aspect ratio) so both endpoints — and the elbow shape
-// joining them — always agree on the same horizontal/vertical choice.
 let visibleConnections = $derived(
-  computeVisibleConnections(connections, (i) => nodeBox(i)),
+  computeVisibleConnections(
+    connections.map((conn) => ({
+      from: conn.from,
+      to: conn.to,
+      label: conn.label,
+      startSide: savedConnections[conn.label]?.startSide,
+      endSide: savedConnections[conn.label]?.endSide,
+    })),
+    (i) => nodeBox(i),
+  ),
 );
 
 // Looks up a component's direct parent index, for depthOf below.
@@ -1850,9 +1969,111 @@ $effect(() => {
         ondelete={() =>
           void handleDeleteSelectedComponent().catch(reportDiagramError)}
       />
+    {:else if selectedConnectionData}
+      <div class="space-y-4 text-sm" data-testid="connection-inspector">
+        <div>
+          <div class="text-[11px] text-base-content/50 font-mono uppercase">Connection</div>
+          <h4 class="text-base font-bold text-base-content truncate">{selectedConnectionData.label}</h4>
+        </div>
+
+        <div class="space-y-2 bg-base-200 p-2.5 rounded-box border border-base-300 text-xs font-mono">
+          <div class="flex items-center justify-between">
+            <span class="text-base-content/60">From:</span>
+            <span class="font-semibold truncate max-w-[150px]">{selectedConnectionData.from}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-base-content/60">To:</span>
+            <span class="font-semibold truncate max-w-[150px]">{selectedConnectionData.to}</span>
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1">
+          <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            {selectedConnectionData.fromCompLabel} starting point
+          </span>
+          <div class="grid grid-cols-5 gap-1 w-full">
+            <button
+              class="btn btn-xs {selectedConnectionData.startSide === undefined ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionStartSide(undefined)}
+            >
+              Auto
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.startSide === 'top' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionStartSide('top')}
+            >
+              Top
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.startSide === 'right' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionStartSide('right')}
+            >
+              Right
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.startSide === 'bottom' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionStartSide('bottom')}
+            >
+              Bottom
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.startSide === 'left' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionStartSide('left')}
+            >
+              Left
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1">
+          <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            {selectedConnectionData.toCompLabel} starting point
+          </span>
+          <div class="grid grid-cols-5 gap-1 w-full">
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === undefined ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide(undefined)}
+            >
+              Auto
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'top' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('top')}
+            >
+              Top
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'right' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('right')}
+            >
+              Right
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'bottom' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('bottom')}
+            >
+              Bottom
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'left' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('left')}
+            >
+              Left
+            </button>
+          </div>
+        </div>
+
+        <div class="divider my-2"></div>
+        <button
+          class="btn btn-xs btn-outline btn-error w-full"
+          onclick={() => void handleDeleteSelectedConnection().catch(reportDiagramError)}
+        >
+          Delete connection
+        </button>
+      </div>
     {:else}
       <p class="text-base-content/50 text-sm">
-        Select a component on the canvas to edit its properties.
+        Select a component or connection on the canvas to edit its properties.
       </p>
     {/if}
 
@@ -1970,6 +2191,19 @@ $effect(() => {
               points="0 0, 8 3, 0 6"
               fill="var(--color-base-content)"
               fill-opacity="0.5"
+            />
+          </marker>
+          <marker
+            id="arrow-selected"
+            markerWidth="8"
+            markerHeight="6"
+            refX="8"
+            refY="3"
+            orient="auto"
+          >
+            <polygon
+              points="0 0, 8 3, 0 6"
+              fill="var(--color-primary)"
             />
           </marker>
         </defs>
@@ -2116,8 +2350,35 @@ $effect(() => {
               </text>
             {/if}
 
-            <!-- Port handles (visible when selected or actively dragging a connection) -->
+            <!-- Port & Directional handles (visible when selected or actively dragging a connection) -->
             {#if selected.has(index) || interaction.type === "connecting"}
+              <!-- 4 Directional handles for starting connection from any border side -->
+              {#each computeDirectionalHandles(width, height) as handle (handle.side)}
+                <g transform="translate({handle.x}, {handle.y})">
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <circle
+                    r="8"
+                    fill="transparent"
+                    class="cursor-crosshair"
+                    onmousedown={(e) =>
+                      onPortMouseDown(e, index, null, {
+                        x: x + handle.x,
+                        y: y + handle.y,
+                      }, handle.side)}
+                  >
+                    <title>Drag connection from {handle.side}</title>
+                  </circle>
+                  <circle
+                    r="3.5"
+                    fill="var(--color-primary)"
+                    fill-opacity="0.85"
+                    stroke="var(--color-base-100)"
+                    stroke-width="1"
+                    style="pointer-events: none"
+                  />
+                </g>
+              {/each}
+
               {#if portPositions.length > 0}
                 {#each portPositions as port (port.label)}
                   {@const portFill = port.role === "provider"
@@ -2150,31 +2411,6 @@ $effect(() => {
                     />
                   </g>
                 {/each}
-              {:else}
-                <!-- Generic connection handle for component with no ports -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <g transform="translate({width}, {height / 2})">
-                  <circle
-                    r="8"
-                    fill="transparent"
-                    class="cursor-crosshair"
-                    onmousedown={(e) =>
-                      onPortMouseDown(e, index, null, {
-                        x: x + width,
-                        y: y + height / 2,
-                      })}
-                  >
-                    <title>Drag to connect component</title>
-                  </circle>
-                  <circle
-                    r="3.5"
-                    fill="var(--color-base-content)"
-                    fill-opacity="0.5"
-                    stroke="var(--color-base-100)"
-                    stroke-width="1"
-                    style="pointer-events: none"
-                  />
-                </g>
               {/if}
             {/if}
 
@@ -2226,26 +2462,49 @@ $effect(() => {
           is a bigger feature, not needed at this stage).
         -->
         {#each visibleConnections as { conn, a, b, orientation } (`${conn.label}-${conn.from}-${conn.to}`)}
-          <path
-            d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
-            stroke="var(--color-base-content)"
-            stroke-opacity="0.35"
-            stroke-width="1.5"
-            fill="none"
-            marker-end="url(#arrow)"
-            style="pointer-events: none"
-          />
-          <text
-            x={(a.x + b.x) / 2}
-            y={(a.y + b.y) / 2 - 6}
-            fill="var(--color-base-content)"
-            fill-opacity="0.5"
-            font-size="10"
-            text-anchor="middle"
-            style="pointer-events: none; user-select: none"
+          {@const isConnSelected = selectedConnection === conn.label}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <g
+            class="cursor-pointer"
+            onclick={(e) => {
+              e.stopPropagation();
+              selectedConnection = conn.label;
+              selected.clear();
+            }}
           >
-            {conn.label}
-          </text>
+            <!-- Thicker invisible hit target -->
+            <path
+              d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+              stroke="transparent"
+              stroke-width="14"
+              fill="none"
+            />
+            <path
+              d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+              stroke={isConnSelected
+                ? "var(--color-primary)"
+                : "var(--color-base-content)"}
+              stroke-opacity={isConnSelected ? 1 : 0.35}
+              stroke-width={isConnSelected ? 2.5 : 1.5}
+              fill="none"
+              marker-end="url(#{isConnSelected ? 'arrow-selected' : 'arrow'})"
+            />
+            <text
+              x={(a.x + b.x) / 2}
+              y={(a.y + b.y) / 2 - 6}
+              fill={isConnSelected
+                ? "var(--color-primary)"
+                : "var(--color-base-content)"}
+              fill-opacity={isConnSelected ? 1 : 0.5}
+              font-size="10"
+              font-weight={isConnSelected ? "bold" : "normal"}
+              text-anchor="middle"
+              style="user-select: none"
+            >
+              {conn.label}
+            </text>
+          </g>
         {/each}
 
         {#if interaction.type === "connecting"}

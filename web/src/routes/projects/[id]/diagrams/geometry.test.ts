@@ -4,12 +4,15 @@ import {
   boxBoundaryPoint,
   boxCenter,
   boxContains,
+  boxSidePoint,
   clampResizeWithin,
   clampWithin,
+  computeDirectionalHandles,
   computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
   computeVisibleConnections,
+  type ConnectionSide,
   depthOf,
   elbowPath,
   findConnectTarget,
@@ -430,6 +433,88 @@ describe("computeVisibleConnections", () => {
 
     expect(visible).toHaveLength(1);
     expect(visible[0].conn.label).toBe("valid");
+  });
+
+  it("respects custom startSide on connection routing", () => {
+    const connTop = [{
+      from: 0,
+      to: 1,
+      label: "top-link",
+      startSide: "top" as ConnectionSide,
+    }];
+    const visTop = computeVisibleConnections(connTop, (i) => boxes[i]);
+    expect(visTop[0].orientation).toBe("vertical");
+    expect(visTop[0].a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
+    expect(visTop[0].b).toEqual({ x: 250, y: 0 }); // box 1 top midpoint (auto-oriented facing top)
+
+    const connBottom = [{
+      from: 0,
+      to: 1,
+      label: "bottom-link",
+      startSide: "bottom" as ConnectionSide,
+    }];
+    const visBottom = computeVisibleConnections(connBottom, (i) => boxes[i]);
+    expect(visBottom[0].orientation).toBe("vertical");
+    expect(visBottom[0].a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
+    expect(visBottom[0].b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
+
+    const connBoth = [{
+      from: 0,
+      to: 1,
+      label: "both-link",
+      startSide: "top" as ConnectionSide,
+      endSide: "right" as ConnectionSide,
+    }];
+    const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
+    expect(visBoth[0].a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
+    expect(visBoth[0].b).toEqual({ x: 300, y: 25 }); // box 1 right midpoint
+  });
+});
+
+describe("boxSidePoint", () => {
+  const box: Box = { x: 100, y: 50, width: 200, height: 80 };
+
+  it("returns top border midpoint", () => {
+    expect(boxSidePoint(box, "top")).toEqual({ x: 200, y: 50 });
+  });
+
+  it("returns bottom border midpoint", () => {
+    expect(boxSidePoint(box, "bottom")).toEqual({ x: 200, y: 130 });
+  });
+
+  it("returns left border midpoint", () => {
+    expect(boxSidePoint(box, "left")).toEqual({ x: 100, y: 90 });
+  });
+
+  it("returns right border midpoint", () => {
+    expect(boxSidePoint(box, "right")).toEqual({ x: 300, y: 90 });
+  });
+});
+
+describe("computeDirectionalHandles", () => {
+  it("computes 4 border midpoint handles for a node box", () => {
+    const handles = computeDirectionalHandles(120, 80);
+    expect(handles).toHaveLength(4);
+    expect(handles.find((h) => h.side === "top")).toEqual({
+      side: "top",
+      x: 60,
+      y: 0,
+    });
+    expect(handles.find((h) => h.side === "right")).toEqual({
+      side: "right",
+      x: 120,
+      y: 40,
+    });
+    expect(handles.find((h) => h.side === "bottom")).toEqual({
+      side: "bottom",
+      x: 60,
+      y: 80,
+    });
+    expect(handles.find((h) => h.side === "left")).toEqual({
+      side: "left",
+      x: 0,
+      y: 40,
+    });
   });
 });
 

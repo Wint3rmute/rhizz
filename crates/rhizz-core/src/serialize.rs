@@ -15,8 +15,8 @@
 //!    separate `views.hcl` files.
 
 use crate::model::{
-    Component, Connection, Field, Message, Model, NodeLayout, Port, PortRole, Project, Protocol,
-    System, View, ViewDefinition, ViewFilterDefinition,
+    Component, Connection, ConnectionLayout, Field, Message, Model, NodeLayout, Port, PortRole,
+    Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -508,6 +508,14 @@ fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
         serialize_node_layout(out, node);
     }
 
+    let mut sorted_conns: Vec<&ConnectionLayout> = view.connections.iter().collect();
+    sorted_conns.sort_by(|a, b| a.connection.cmp(&b.connection));
+
+    for conn in sorted_conns {
+        out.push('\n');
+        serialize_connection_layout(out, conn);
+    }
+
     out.push_str("}\n");
 }
 
@@ -564,6 +572,20 @@ fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
     out.push_str("  }\n");
 }
 
+fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
+    out.push_str(&format!(
+        "  connection {} {{\n",
+        escape_string(&conn.connection)
+    ));
+    if let Some(side) = conn.start_side.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!("    start_side = {}\n", escape_string(side)));
+    }
+    if let Some(side) = conn.end_side.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!("    end_side   = {}\n", escape_string(side)));
+    }
+    out.push_str("  }\n");
+}
+
 fn format_number(n: f64) -> String {
     if n.fract() == 0.0 && n.is_finite() {
         format!("{}", n as i64)
@@ -599,6 +621,12 @@ struct RawNodeAttrs {
     text_align: Option<String>,
 }
 
+#[derive(Deserialize, Default)]
+struct RawConnectionLayoutAttrs {
+    start_side: Option<String>,
+    end_side: Option<String>,
+}
+
 /// Parses an HCL string representing `views.hcl` into a vector of [`ViewDefinition`]s.
 pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
     let body: hcl::Body = hcl::from_str(hcl_str).context("failed to parse HCL for views")?;
@@ -617,6 +645,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
 
             let mut filter = ViewFilterDefinition::default();
             let mut nodes = Vec::new();
+            let mut connections = Vec::new();
 
             for child in block.body().blocks() {
                 match child.identifier() {
@@ -648,6 +677,22 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             text_align: na.text_align,
                         });
                     }
+                    "connection" => {
+                        let conn_label = child
+                            .labels()
+                            .first()
+                            .map(|l| l.as_str().to_owned())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("connection layout block is missing a label")
+                            })?;
+                        let ca: RawConnectionLayoutAttrs = hcl::from_body(child.body().clone())
+                            .context("failed to deserialize connection layout attributes")?;
+                        connections.push(ConnectionLayout {
+                            connection: conn_label,
+                            start_side: ca.start_side,
+                            end_side: ca.end_side,
+                        });
+                    }
                     _ => {}
                 }
             }
@@ -659,6 +704,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                 system: attrs.system.unwrap_or_default(),
                 filter,
                 nodes,
+                connections,
             });
         }
     }

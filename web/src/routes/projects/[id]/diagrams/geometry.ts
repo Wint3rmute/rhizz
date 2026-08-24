@@ -12,6 +12,7 @@ export type Box = { x: number; y: number; width: number; height: number };
 // mostly side-by-side) or vertically (via the top/bottom side, jogging
 // horizontally in the middle — for boxes that are mostly stacked).
 export type ConnectionOrientation = "horizontal" | "vertical";
+export type ConnectionSide = "top" | "bottom" | "left" | "right";
 
 // Nodes can't be resized smaller than this (world units), so a node never
 // shrinks into an unusable sliver. Used by clampResizeWithin below.
@@ -89,10 +90,32 @@ export interface VisibleConnection<T> {
   orientation: ConnectionOrientation;
 }
 
+// Computes the anchor point on a specific border side of `box`.
+export function boxSidePoint(
+  box: Box,
+  side: ConnectionSide,
+): { x: number; y: number } {
+  switch (side) {
+    case "top":
+      return { x: box.x + box.width / 2, y: box.y };
+    case "bottom":
+      return { x: box.x + box.width / 2, y: box.y + box.height };
+    case "left":
+      return { x: box.x, y: box.y + box.height / 2 };
+    case "right":
+      return { x: box.x + box.width, y: box.y + box.height / 2 };
+  }
+}
+
 // Computes boundary connection points and orientation for visible connections
 // between placed node boxes.
 export function computeVisibleConnections<
-  T extends { from: number; to: number },
+  T extends {
+    from: number;
+    to: number;
+    startSide?: ConnectionSide;
+    endSide?: ConnectionSide;
+  },
   B extends Box,
 >(
   connections: T[],
@@ -102,6 +125,37 @@ export function computeVisibleConnections<
     const boxA = getBox(conn.from);
     const boxB = getBox(conn.to);
     if (!boxA || !boxB) return [];
+
+    if (conn.startSide && conn.endSide) {
+      const a = boxSidePoint(boxA, conn.startSide);
+      const b = boxSidePoint(boxB, conn.endSide);
+      const orientation: ConnectionOrientation =
+        conn.startSide === "left" || conn.startSide === "right"
+          ? "horizontal"
+          : "vertical";
+      return [{ conn, a, b, orientation }];
+    }
+
+    if (conn.startSide) {
+      const a = boxSidePoint(boxA, conn.startSide);
+      const orientation: ConnectionOrientation =
+        conn.startSide === "left" || conn.startSide === "right"
+          ? "horizontal"
+          : "vertical";
+      const b = boxBoundaryPoint(boxB, a, orientation);
+      return [{ conn, a, b, orientation }];
+    }
+
+    if (conn.endSide) {
+      const b = boxSidePoint(boxB, conn.endSide);
+      const orientation: ConnectionOrientation =
+        conn.endSide === "left" || conn.endSide === "right"
+          ? "horizontal"
+          : "vertical";
+      const a = boxBoundaryPoint(boxA, b, orientation);
+      return [{ conn, a, b, orientation }];
+    }
+
     const centerA = boxCenter(boxA);
     const centerB = boxCenter(boxB);
     const orientation: ConnectionOrientation =
@@ -355,6 +409,25 @@ export function computePortPositions(
   });
 
   return result;
+}
+
+export interface DirectionalHandle {
+  side: ConnectionSide;
+  x: number;
+  y: number;
+}
+
+// Computes 4 connection handle positions (top, right, bottom, left border midpoints)
+export function computeDirectionalHandles(
+  width: number,
+  height: number,
+): DirectionalHandle[] {
+  return [
+    { side: "top", x: width / 2, y: 0 },
+    { side: "right", x: width, y: height / 2 },
+    { side: "bottom", x: width / 2, y: height },
+    { side: "left", x: 0, y: height / 2 },
+  ];
 }
 
 export interface ConnectTargetCandidate {

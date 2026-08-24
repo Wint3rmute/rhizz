@@ -15,6 +15,12 @@ export interface NodeLayout {
   text_align?: "center" | "top-center" | "top-left" | string;
 }
 
+export interface ConnectionLayout {
+  connection: string;
+  start_side?: "top" | "bottom" | "left" | "right" | string;
+  end_side?: "top" | "bottom" | "left" | "right" | string;
+}
+
 export interface ViewFilterDefinition {
   include_tags?: string[];
   exclude_tags?: string[];
@@ -30,6 +36,7 @@ export interface ViewDefinition {
   system: string;
   filter?: ViewFilterDefinition;
   nodes?: NodeLayout[];
+  connections?: ConnectionLayout[];
 }
 
 export function compile_system(

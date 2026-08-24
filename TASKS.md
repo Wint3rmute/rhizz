@@ -13,19 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 77 - Allow customizing the starting point of a connection in Diagrams
-
-When editing a diagram, allow the user to specify the starting point of a
-connection. One of: top, bottom, left, right. The starting point shall be
-diagram-specific, different diagrams may have different starting points for each
-connection.
-
-When creating a new connection, add drag-and-drop handles on each possible
-position (top, bottom, left, right). After creating a connection, make its
-starting point configurarable via the inspector panel.
-
----
-
 ## (For later brainstorming) Task <N> - relax requirements regarding adding new connections
 
 This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.
