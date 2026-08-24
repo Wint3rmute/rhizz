@@ -34,7 +34,6 @@ view "power-paths" {
   filter { include_tags = ["power"]; show_messages = false }
 }
 ```
-```
 
 ## CLI
 
