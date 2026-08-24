@@ -457,6 +457,17 @@ describe("computeVisibleConnections", () => {
     expect(visBottom[0].orientation).toBe("vertical");
     expect(visBottom[0].a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
     expect(visBottom[0].b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
+
+    const connBoth = [{
+      from: 0,
+      to: 1,
+      label: "both-link",
+      startSide: "top" as ConnectionSide,
+      endSide: "right" as ConnectionSide,
+    }];
+    const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
+    expect(visBoth[0].a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
+    expect(visBoth[0].b).toEqual({ x: 300, y: 25 }); // box 1 right midpoint
   });
 });
 

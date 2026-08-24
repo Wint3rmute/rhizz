@@ -580,6 +580,9 @@ fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
     if let Some(side) = conn.start_side.as_deref().filter(|s| !s.is_empty()) {
         out.push_str(&format!("    start_side = {}\n", escape_string(side)));
     }
+    if let Some(side) = conn.end_side.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!("    end_side   = {}\n", escape_string(side)));
+    }
     out.push_str("  }\n");
 }
 
@@ -621,6 +624,7 @@ struct RawNodeAttrs {
 #[derive(Deserialize, Default)]
 struct RawConnectionLayoutAttrs {
     start_side: Option<String>,
+    end_side: Option<String>,
 }
 
 /// Parses an HCL string representing `views.hcl` into a vector of [`ViewDefinition`]s.
@@ -686,6 +690,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                         connections.push(ConnectionLayout {
                             connection: conn_label,
                             start_side: ca.start_side,
+                            end_side: ca.end_side,
                         });
                     }
                     _ => {}

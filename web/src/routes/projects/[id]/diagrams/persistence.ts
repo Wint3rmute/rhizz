@@ -21,6 +21,7 @@ export type ConnectionSide = z.infer<typeof ConnectionSideSchema>;
 
 export const StoredConnectionSchema = z.object({
   startSide: ConnectionSideSchema.optional(),
+  endSide: ConnectionSideSchema.optional(),
 });
 export type StoredConnection = z.infer<typeof StoredConnectionSchema>;
 
@@ -192,6 +193,7 @@ export function layoutToHcl(
     ([connection, data]) => ({
       connection,
       start_side: data.startSide,
+      end_side: data.endSide,
     }),
   );
 
@@ -235,11 +237,21 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
       }
     }
     for (const conn of view.connections || []) {
+      const entry: StoredConnection = {};
       if (conn.start_side) {
-        const parsedSide = ConnectionSideSchema.safeParse(conn.start_side);
-        if (parsedSide.success) {
-          connections[conn.connection] = { startSide: parsedSide.data };
+        const parsedStart = ConnectionSideSchema.safeParse(conn.start_side);
+        if (parsedStart.success) {
+          entry.startSide = parsedStart.data;
         }
+      }
+      if (conn.end_side) {
+        const parsedEnd = ConnectionSideSchema.safeParse(conn.end_side);
+        if (parsedEnd.success) {
+          entry.endSide = parsedEnd.data;
+        }
+      }
+      if (entry.startSide || entry.endSide) {
+        connections[conn.connection] = entry;
       }
     }
   }

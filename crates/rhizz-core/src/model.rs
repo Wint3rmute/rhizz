@@ -362,6 +362,9 @@ pub struct ConnectionLayout {
     /// Optional starting side ("top", "bottom", "left", "right").
     #[serde(default)]
     pub start_side: Option<String>,
+    /// Optional ending side ("top", "bottom", "left", "right").
+    #[serde(default)]
+    pub end_side: Option<String>,
 }
 
 /// A view definition containing filter, output settings, and node layouts.

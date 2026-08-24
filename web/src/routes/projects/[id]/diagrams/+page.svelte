@@ -1517,21 +1517,50 @@ let selectedConnectionData = $derived.by(() => {
   if (!conn) return null;
   const fromKey = getComponentKey(conn.from);
   const toKey = getComponentKey(conn.to);
+  const fromCompLabel = components[conn.from]?.label ?? fromKey;
+  const toCompLabel = components[conn.to]?.label ?? toKey;
   return {
     label: conn.label,
     from: fromKey,
     to: toKey,
+    fromCompLabel,
+    toCompLabel,
     startSide: savedConnections[conn.label]?.startSide,
+    endSide: savedConnections[conn.label]?.endSide,
   };
 });
 
 function setConnectionStartSide(side: ConnectionSide | undefined) {
   if (!selectedConnection) return;
   recordUndoPoint();
+  const existing = savedConnections[selectedConnection] || {};
   if (side) {
-    savedConnections[selectedConnection] = { startSide: side };
+    savedConnections[selectedConnection] = { ...existing, startSide: side };
   } else {
-    delete savedConnections[selectedConnection];
+    const updated = { ...existing };
+    delete updated.startSide;
+    if (updated.endSide) {
+      savedConnections[selectedConnection] = updated;
+    } else {
+      delete savedConnections[selectedConnection];
+    }
+  }
+}
+
+function setConnectionEndSide(side: ConnectionSide | undefined) {
+  if (!selectedConnection) return;
+  recordUndoPoint();
+  const existing = savedConnections[selectedConnection] || {};
+  if (side) {
+    savedConnections[selectedConnection] = { ...existing, endSide: side };
+  } else {
+    const updated = { ...existing };
+    delete updated.endSide;
+    if (updated.startSide) {
+      savedConnections[selectedConnection] = updated;
+    } else {
+      delete savedConnections[selectedConnection];
+    }
   }
 }
 
@@ -1589,6 +1618,7 @@ let visibleConnections = $derived(
       to: conn.to,
       label: conn.label,
       startSide: savedConnections[conn.label]?.startSide,
+      endSide: savedConnections[conn.label]?.endSide,
     })),
     (i) => nodeBox(i),
   ),
@@ -1959,7 +1989,7 @@ $effect(() => {
 
         <div class="space-y-1.5 pt-1">
           <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
-            Starting point
+            {selectedConnectionData.fromCompLabel} starting point
           </span>
           <div class="grid grid-cols-5 gap-1 w-full">
             <button
@@ -1989,6 +2019,44 @@ $effect(() => {
             <button
               class="btn btn-xs {selectedConnectionData.startSide === 'left' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
               onclick={() => setConnectionStartSide('left')}
+            >
+              Left
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1">
+          <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            {selectedConnectionData.toCompLabel} starting point
+          </span>
+          <div class="grid grid-cols-5 gap-1 w-full">
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === undefined ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide(undefined)}
+            >
+              Auto
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'top' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('top')}
+            >
+              Top
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'right' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('right')}
+            >
+              Right
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'bottom' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('bottom')}
+            >
+              Bottom
+            </button>
+            <button
+              class="btn btn-xs {selectedConnectionData.endSide === 'left' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
+              onclick={() => setConnectionEndSide('left')}
             >
               Left
             </button>

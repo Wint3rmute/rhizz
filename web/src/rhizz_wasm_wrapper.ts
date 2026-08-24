@@ -18,6 +18,7 @@ export interface NodeLayout {
 export interface ConnectionLayout {
   connection: string;
   start_side?: "top" | "bottom" | "left" | "right" | string;
+  end_side?: "top" | "bottom" | "left" | "right" | string;
 }
 
 export interface ViewFilterDefinition {

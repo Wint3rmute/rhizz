@@ -110,7 +110,12 @@ export function boxSidePoint(
 // Computes boundary connection points and orientation for visible connections
 // between placed node boxes.
 export function computeVisibleConnections<
-  T extends { from: number; to: number; startSide?: ConnectionSide },
+  T extends {
+    from: number;
+    to: number;
+    startSide?: ConnectionSide;
+    endSide?: ConnectionSide;
+  },
   B extends Box,
 >(
   connections: T[],
@@ -121,6 +126,16 @@ export function computeVisibleConnections<
     const boxB = getBox(conn.to);
     if (!boxA || !boxB) return [];
 
+    if (conn.startSide && conn.endSide) {
+      const a = boxSidePoint(boxA, conn.startSide);
+      const b = boxSidePoint(boxB, conn.endSide);
+      const orientation: ConnectionOrientation =
+        conn.startSide === "left" || conn.startSide === "right"
+          ? "horizontal"
+          : "vertical";
+      return [{ conn, a, b, orientation }];
+    }
+
     if (conn.startSide) {
       const a = boxSidePoint(boxA, conn.startSide);
       const orientation: ConnectionOrientation =
@@ -128,6 +143,16 @@ export function computeVisibleConnections<
           ? "horizontal"
           : "vertical";
       const b = boxBoundaryPoint(boxB, a, orientation);
+      return [{ conn, a, b, orientation }];
+    }
+
+    if (conn.endSide) {
+      const b = boxSidePoint(boxB, conn.endSide);
+      const orientation: ConnectionOrientation =
+        conn.endSide === "left" || conn.endSide === "right"
+          ? "horizontal"
+          : "vertical";
+      const a = boxBoundaryPoint(boxA, b, orientation);
       return [{ conn, a, b, orientation }];
     }
 
