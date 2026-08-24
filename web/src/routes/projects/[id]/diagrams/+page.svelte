@@ -2057,9 +2057,11 @@ $effect(() => {
                   {label}
                 </text>
               {:else if textAlign === "top-center"}
+                {@const estimatedWidth = Math.min(width - 16, label.length * 7.5 + 18)}
+                {@const startX = Math.max(8, (width - estimatedWidth) / 2)}
                 <svg
-                  x={width / 2 - 7}
-                  y={6}
+                  x={startX}
+                  y={8}
                   width="14"
                   height="14"
                   viewBox="0 0 {icon.width} {icon.height}"
@@ -2069,10 +2071,10 @@ $effect(() => {
                   <path d={icon.svgPath} />
                 </svg>
                 <text
-                  x={textPos.x}
-                  y={textPos.y + 14}
+                  x={startX + 18}
+                  y={textPos.y}
                   fill="var(--color-base-content)"
-                  text-anchor={textPos.anchor}
+                  text-anchor="start"
                   dominant-baseline={textPos.baseline}
                   style="pointer-events: none; user-select: none"
                 >

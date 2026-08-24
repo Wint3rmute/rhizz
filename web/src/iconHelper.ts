@@ -21,7 +21,10 @@ export function normalizeIconName(name: string): string {
   let clean = name.trim();
   if (clean.startsWith("fa-")) {
     clean = clean.slice(3);
-  } else if (clean.startsWith("fa") && clean.length > 2 && clean[2] === clean[2].toUpperCase()) {
+  } else if (
+    clean.startsWith("fa") && clean.length > 2 &&
+    clean[2] === clean[2].toUpperCase()
+  ) {
     clean = clean.slice(2);
   }
 
