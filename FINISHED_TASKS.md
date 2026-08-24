@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 76 — Install FontAwesome icons, use them in the FileTree and Diagrams
+
+- **Core Model & Parser (`crates/rhizz-core`)**:
+  - Added optional `icon` attribute to `Component`, `RawComponent`, and `ComponentAttrs`.
+  - Updated HCL parser, resolver, and bidirectional serializer to parse and format `icon = "..."`.
+- **WASM Bindings (`crates/rhizz-wasm`)**:
+  - Added `icon()` getter to `ComponentJS`.
+- **Frontend & Diagrams (`web/`)**:
+  - Created `web/src/iconHelper.ts` resolving any FontAwesome solid icon (supporting camelCase, kebab-case, or `fa-` prefixes) into SVG geometry (`width`, `height`, `svgPath`).
+  - Updated `FileTree.svelte` to render FontAwesome folder (`faFolder`/`faFolderOpen`) and file (`faFileCode`) SVG icons.
+  - Updated `DiagramElements.svelte` and interactive canvas `ViewNode` in `+page.svelte` to render component SVG icons inside diagram boxes.
+  - Updated `NodeInspector.svelte` with an Icon input field to view and edit component icons.
+- **Tests**:
+  - Added unit tests in `crates/rhizz-core/src/parse.rs`, `crates/rhizz-wasm/tests/wasm_test.rs`, and `web/src/iconHelper.test.ts`.
+- Validated with `just test` (all 78 core tests + 288 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 82 — `web`: Update frontend TypeScript types and worked examples
 
 - **Frontend Data Model & DocumentStore (`web/src/DocumentStore.svelte.ts`)**:

@@ -74,6 +74,8 @@ pub struct RawComponent {
     pub source: Option<String>,
     /// Optional description text.
     pub description: Option<String>,
+    /// Optional icon name (e.g. FontAwesome icon identifier).
+    pub icon: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
@@ -195,6 +197,8 @@ struct ComponentAttrs {
     source: Option<String>,
     /// Optional description.
     description: Option<String>,
+    /// Optional icon name.
+    icon: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
     /// Optional abstraction level.
@@ -466,6 +470,7 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
     Ok(RawComponent {
         source: a.source,
         description: a.description,
+        icon: a.icon,
         tags: a.tags.unwrap_or_default(),
         level: a.level,
         leaf: a.leaf,
@@ -970,6 +975,7 @@ mod tests {
         let src = r#"
             component "my-comp" {
                 description = "a standalone component"
+                icon        = "microchip"
                 tags        = ["x"]
                 level       = 2
                 leaf        = true
@@ -984,6 +990,7 @@ mod tests {
             comp.inner.description.as_deref(),
             Some("a standalone component")
         );
+        assert_eq!(comp.inner.icon.as_deref(), Some("microchip"));
         assert_eq!(comp.inner.tags, vec!["x"]);
         assert_eq!(comp.inner.level, Some(2));
         assert_eq!(comp.inner.leaf, Some(true));

@@ -8,6 +8,11 @@
 import { SvelteSet } from "svelte/reactivity";
 import type { Dirent } from "../../../../vfs/fs";
 import { buildPathTree, type PathTreeNode } from "../../../../vfs/pathTree";
+import {
+  fileCodeIcon,
+  folderIcon,
+  folderOpenIcon,
+} from "../../../../iconHelper";
 
 let {
   entries,
@@ -52,9 +57,23 @@ function toggleCollapsed(path: string) {
           onclick={() => toggleCollapsed(entry.path)}
           title={collapsedPaths.has(entry.path) ? "Expand" : "Collapse"}
         >{collapsedPaths.has(entry.path) ? "▸" : "▾"}</button>
+        <svg
+          viewBox="0 0 {collapsedPaths.has(entry.path) ? folderIcon.width : folderOpenIcon.width} {collapsedPaths.has(entry.path) ? folderIcon.height : folderOpenIcon.height}"
+          class="w-3.5 h-3.5 shrink-0 fill-current text-warning/80"
+          aria-hidden="true"
+        >
+          <path d={collapsedPaths.has(entry.path) ? folderIcon.svgPath : folderOpenIcon.svgPath} />
+        </svg>
         <span class="flex-1 truncate text-sm font-medium">{entry.name}</span>
       {:else}
         <span class="w-4 shrink-0"></span>
+        <svg
+          viewBox="0 0 {fileCodeIcon.width} {fileCodeIcon.height}"
+          class="w-3.5 h-3.5 shrink-0 fill-current text-base-content/50"
+          aria-hidden="true"
+        >
+          <path d={fileCodeIcon.svgPath} />
+        </svg>
         <button
           class="flex-1 truncate text-left text-sm {selectedPath ===
             entry.path

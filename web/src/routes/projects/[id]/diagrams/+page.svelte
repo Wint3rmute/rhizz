@@ -66,6 +66,7 @@ import {
   textPosition,
   unionBox,
 } from "./geometry";
+import { resolveIcon } from "../../../../iconHelper";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -1997,6 +1998,7 @@ $effect(() => {
             : selected.has(index)}
           {@const compKey = getComponentKey(index)}
           {@const compData = docStore.findComponent(compKey)}
+          {@const icon = resolveIcon(compData?.icon ?? components[index]?.icon)}
           {@const portPositions = compData && compData.ports.length > 0
             ? computePortPositions(width, height, compData.ports)
             : []}
@@ -2031,16 +2033,88 @@ $effect(() => {
                 style="pointer-events: none"
               />
             {/if}
-            <text
-              x={textPos.x}
-              y={textPos.y}
-              fill="var(--color-base-content)"
-              text-anchor={textPos.anchor}
-              dominant-baseline={textPos.baseline}
-              style="pointer-events: none; user-select: none"
-            >
-              {label}
-            </text>
+            {#if icon}
+              {#if textAlign === "top-left"}
+                <svg
+                  x={8}
+                  y={8}
+                  width="14"
+                  height="14"
+                  viewBox="0 0 {icon.width} {icon.height}"
+                  fill="var(--color-base-content)"
+                  opacity="0.85"
+                >
+                  <path d={icon.svgPath} />
+                </svg>
+                <text
+                  x={26}
+                  y={textPos.y}
+                  fill="var(--color-base-content)"
+                  text-anchor="start"
+                  dominant-baseline={textPos.baseline}
+                  style="pointer-events: none; user-select: none"
+                >
+                  {label}
+                </text>
+              {:else if textAlign === "top-center"}
+                {@const estimatedWidth = Math.min(width - 16, label.length * 7.5 + 18)}
+                {@const startX = Math.max(8, (width - estimatedWidth) / 2)}
+                <svg
+                  x={startX}
+                  y={8}
+                  width="14"
+                  height="14"
+                  viewBox="0 0 {icon.width} {icon.height}"
+                  fill="var(--color-base-content)"
+                  opacity="0.85"
+                >
+                  <path d={icon.svgPath} />
+                </svg>
+                <text
+                  x={startX + 18}
+                  y={textPos.y}
+                  fill="var(--color-base-content)"
+                  text-anchor="start"
+                  dominant-baseline={textPos.baseline}
+                  style="pointer-events: none; user-select: none"
+                >
+                  {label}
+                </text>
+              {:else}
+                <svg
+                  x={width / 2 - 9}
+                  y={height / 2 - 20}
+                  width="18"
+                  height="18"
+                  viewBox="0 0 {icon.width} {icon.height}"
+                  fill="var(--color-base-content)"
+                  opacity="0.85"
+                >
+                  <path d={icon.svgPath} />
+                </svg>
+                <text
+                  x={width / 2}
+                  y={height / 2 + 10}
+                  fill="var(--color-base-content)"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                  style="pointer-events: none; user-select: none"
+                >
+                  {label}
+                </text>
+              {/if}
+            {:else}
+              <text
+                x={textPos.x}
+                y={textPos.y}
+                fill="var(--color-base-content)"
+                text-anchor={textPos.anchor}
+                dominant-baseline={textPos.baseline}
+                style="pointer-events: none; user-select: none"
+              >
+                {label}
+              </text>
+            {/if}
 
             <!-- Port handles (visible when selected or actively dragging a connection) -->
             {#if selected.has(index) || interaction.type === "connecting"}

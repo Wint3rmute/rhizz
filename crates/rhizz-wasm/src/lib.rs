@@ -424,6 +424,7 @@ impl From<&rhizz_core::System> for SystemJS {
 pub struct ComponentJS {
     label: String,
     description: String,
+    icon: Option<String>,
     tags: Vec<String>,
     level: i32,
     leaf: bool,
@@ -445,6 +446,12 @@ impl ComponentJS {
     #[wasm_bindgen(getter)]
     pub fn description(&self) -> String {
         self.description.clone()
+    }
+
+    /// Optional FontAwesome icon name.
+    #[wasm_bindgen(getter)]
+    pub fn icon(&self) -> Option<String> {
+        self.icon.clone()
     }
 
     /// Filtering tags.
@@ -487,6 +494,7 @@ impl From<&rhizz_core::Component> for ComponentJS {
         Self {
             label: c.label.clone(),
             description: c.description.clone(),
+            icon: c.icon.clone(),
             tags: c.tags.clone(),
             level: c.level,
             leaf: c.leaf,

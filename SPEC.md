@@ -183,6 +183,7 @@ system "quadcopter" {
 | _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)          |
 | `source`      | string       | no       | —                | Label of a top-level `component` to use as this component's body.          |
 | `description` | string       | no       | `""`             | Human-readable description                                                 |
+| `icon`        | string       | no       | `""`             | Optional FontAwesome icon name (e.g. `"microchip"`, `"server"`, `"wifi"`) |
 | `tags`        | list(string) | no       | `[]`             | Filtering tags                                                             |
 | `level`       | integer      | no       | parent level + 1 | Abstraction level                                                          |
 | `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `component`s        |

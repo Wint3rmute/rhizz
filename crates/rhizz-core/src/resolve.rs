@@ -341,6 +341,7 @@ fn register_component(
                 r.model.components.push(Component {
                     label: lc.label.clone(),
                     description: String::new(),
+                    icon: None,
                     tags: vec![],
                     level: parent_level + 1,
                     leaf: false,
@@ -372,6 +373,7 @@ fn register_component(
                     r.model.components.push(Component {
                         label: lc.label.clone(),
                         description: String::new(),
+                        icon: None,
                         tags: vec![],
                         level: parent_level + 1,
                         leaf: false,
@@ -420,6 +422,7 @@ fn register_component(
     r.model.components.push(Component {
         label: lc.label.clone(),
         description: body.description.clone().unwrap_or_default(),
+        icon: body.icon.clone(),
         tags: body.tags.clone(),
         level,
         leaf,

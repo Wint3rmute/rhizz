@@ -2,6 +2,7 @@ import type { Box, TextAlign } from "./geometry";
 
 export interface DiagramStaticComponent {
   label: string;
+  icon?: string;
   /** Index (into `components`) of this component's parent, if it has one — used only to decide render order (children drawn on top of their parent). */
   parent_component_index?: number;
 }

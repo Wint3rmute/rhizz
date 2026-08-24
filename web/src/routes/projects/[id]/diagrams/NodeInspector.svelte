@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
+import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
 
 interface Props {
   componentKey: string;
@@ -76,8 +77,9 @@ function handleAddPort() {
       description: "",
       protocol: "data",
       role: "peer" as const,
+      external: false,
+      required: true,
       tags: [],
-      messages: [],
     },
   ];
   onupdate({ ports: newPorts });
@@ -134,6 +136,12 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
         placeholder="Human-readable description..."
       ></textarea>
     </div>
+
+    <IconAutocompleteInput
+      id="comp-icon-input"
+      value={component.icon || ""}
+      onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
+    />
 
     <div class="form-control">
       <label class="label py-1" for="comp-tags-input">
