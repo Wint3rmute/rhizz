@@ -34,6 +34,7 @@ protocol "mqtt" {
 # Reusable top-level component — imported into the system via source = "temp-sensor".
 component "temp-sensor" {
   description = "BME280 I2C temperature and humidity sensor"
+  icon        = "temperature-half"
   tags        = ["sensor", "data"]
   leaf        = true
 
@@ -59,6 +60,7 @@ system "home-monitor" {
 
   component "controller" {
     description = "ARM Cortex-M4 processing hub"
+    icon        = "microchip"
     tags        = ["compute", "data"]
     leaf        = true
 
@@ -81,6 +83,7 @@ system "home-monitor" {
 
   component "broker" {
     description = "Cloud MQTT broker and time-series storage"
+    icon        = "cloud"
     tags        = ["cloud", "data"]
     leaf        = true
 
