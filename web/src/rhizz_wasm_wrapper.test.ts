@@ -96,4 +96,45 @@ system "quad" {
     const views2 = parse_views(serialized);
     expect(views2).toEqual(views);
   });
+
+  it("extracts connections from compiled model for diagram rendering", () => {
+    const sources = [
+      {
+        filename: "main.hcl",
+        content: `system "demo" {
+  component "c1" { leaf = true }
+  component "c2" { leaf = true }
+  connection "link" {
+    from = "c1"
+    to   = "c2"
+  }
+}
+`,
+      },
+    ];
+
+    const result = compile_system(sources);
+    expect(result.error_count()).toBe(0);
+    const model = result.model();
+    expect(model).toBeDefined();
+    if (!model) return;
+
+    const wasmConns = model.connections();
+    expect(wasmConns).toHaveLength(1);
+
+    // Direct getter access
+    expect(wasmConns[0].from).toBe(0);
+    expect(wasmConns[0].to).toBe(1);
+    expect(wasmConns[0].label).toBe("link");
+
+    // Explicit mapping to plain object for computeVisibleConnections
+    const mappedConns = wasmConns.map((
+      c: { from: number; to: number; label: string },
+    ) => ({
+      from: c.from,
+      to: c.to,
+      label: c.label,
+    }));
+    expect(mappedConns[0]).toEqual({ from: 0, to: 1, label: "link" });
+  });
 });

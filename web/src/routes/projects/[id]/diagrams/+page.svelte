@@ -1585,7 +1585,9 @@ async function handleDeleteSelectedConnection(): Promise<void> {
 let visibleConnections = $derived(
   computeVisibleConnections(
     connections.map((conn) => ({
-      ...conn,
+      from: conn.from,
+      to: conn.to,
+      label: conn.label,
       startSide: savedConnections[conn.label]?.startSide,
     })),
     (i) => nodeBox(i),
