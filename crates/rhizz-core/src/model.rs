@@ -354,6 +354,38 @@ pub struct NodeLayout {
     pub text_align: Option<String>,
 }
 
+/// The boundary side of a component box where a connection attaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionSide {
+    /// Top border midpoint.
+    Top,
+    /// Bottom border midpoint.
+    Bottom,
+    /// Left border midpoint.
+    Left,
+    /// Right border midpoint.
+    Right,
+}
+
+impl ConnectionSide {
+    /// Returns the lowercase string representation of this side.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConnectionSide::Top => "top",
+            ConnectionSide::Bottom => "bottom",
+            ConnectionSide::Left => "left",
+            ConnectionSide::Right => "right",
+        }
+    }
+}
+
+impl std::fmt::Display for ConnectionSide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 /// Connection layout metadata for visual diagrams.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ConnectionLayout {
@@ -361,10 +393,10 @@ pub struct ConnectionLayout {
     pub connection: String,
     /// Optional starting side ("top", "bottom", "left", "right").
     #[serde(default)]
-    pub start_side: Option<String>,
+    pub start_side: Option<ConnectionSide>,
     /// Optional ending side ("top", "bottom", "left", "right").
     #[serde(default)]
-    pub end_side: Option<String>,
+    pub end_side: Option<ConnectionSide>,
 }
 
 /// A view definition containing filter, output settings, and node layouts.

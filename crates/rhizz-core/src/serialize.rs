@@ -15,8 +15,8 @@
 //!    separate `views.hcl` files.
 
 use crate::model::{
-    Component, Connection, ConnectionLayout, Field, Message, Model, NodeLayout, Port, PortRole,
-    Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
+    Component, Connection, ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout,
+    Port, PortRole, Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -577,11 +577,17 @@ fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
         "  connection {} {{\n",
         escape_string(&conn.connection)
     ));
-    if let Some(side) = conn.start_side.as_deref().filter(|s| !s.is_empty()) {
-        out.push_str(&format!("    start_side = {}\n", escape_string(side)));
+    if let Some(side) = conn.start_side {
+        out.push_str(&format!(
+            "    start_side = {}\n",
+            escape_string(side.as_str())
+        ));
     }
-    if let Some(side) = conn.end_side.as_deref().filter(|s| !s.is_empty()) {
-        out.push_str(&format!("    end_side   = {}\n", escape_string(side)));
+    if let Some(side) = conn.end_side {
+        out.push_str(&format!(
+            "    end_side   = {}\n",
+            escape_string(side.as_str())
+        ));
     }
     out.push_str("  }\n");
 }
@@ -625,6 +631,16 @@ struct RawNodeAttrs {
 struct RawConnectionLayoutAttrs {
     start_side: Option<String>,
     end_side: Option<String>,
+}
+
+fn parse_connection_side(s: Option<String>) -> Option<ConnectionSide> {
+    match s.as_deref() {
+        Some("top") => Some(ConnectionSide::Top),
+        Some("bottom") => Some(ConnectionSide::Bottom),
+        Some("left") => Some(ConnectionSide::Left),
+        Some("right") => Some(ConnectionSide::Right),
+        _ => None,
+    }
 }
 
 /// Parses an HCL string representing `views.hcl` into a vector of [`ViewDefinition`]s.
@@ -689,8 +705,8 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             .context("failed to deserialize connection layout attributes")?;
                         connections.push(ConnectionLayout {
                             connection: conn_label,
-                            start_side: ca.start_side,
-                            end_side: ca.end_side,
+                            start_side: parse_connection_side(ca.start_side),
+                            end_side: parse_connection_side(ca.end_side),
                         });
                     }
                     _ => {}
