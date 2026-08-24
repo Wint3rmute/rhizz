@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
+import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
 
 interface Props {
   componentKey: string;
@@ -24,14 +25,12 @@ let {
 
 let editLabel = $state("");
 let editDescription = $state("");
-let editIcon = $state("");
 let editTagsStr = $state("");
 let editLeaf = $state(false);
 
 $effect(() => {
   editLabel = component.label;
   editDescription = component.description || "";
-  editIcon = component.icon || "";
   editTagsStr = (component.tags || []).join(", ");
   editLeaf = component.leaf;
 });
@@ -48,13 +47,6 @@ function handleLabelBlur() {
 function handleDescriptionBlur() {
   if (editDescription !== (component.description || "")) {
     onupdate({ description: editDescription });
-  }
-}
-
-function handleIconBlur() {
-  const trimmed = editIcon.trim();
-  if (trimmed !== (component.icon || "")) {
-    onupdate({ icon: trimmed || undefined });
   }
 }
 
@@ -145,22 +137,11 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       ></textarea>
     </div>
 
-    <div class="form-control">
-      <label class="label py-1" for="comp-icon-input">
-        <span
-          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Icon (FontAwesome)
-        </span>
-      </label>
-      <input
-        id="comp-icon-input"
-        type="text"
-        bind:value={editIcon}
-        onblur={handleIconBlur}
-        class="input input-sm input-bordered w-full font-mono text-xs"
-        placeholder="e.g. microchip, server, database, wifi"
-      />
-    </div>
+    <IconAutocompleteInput
+      id="comp-icon-input"
+      value={component.icon || ""}
+      onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
+    />
 
     <div class="form-control">
       <label class="label py-1" for="comp-tags-input">

@@ -79,3 +79,46 @@ export const fileCodeIcon: ResolvedIcon = {
   height: solidIcons.faFileCode.icon[1],
   svgPath: toSvgPath(solidIcons.faFileCode.icon[4]),
 };
+
+// All available FontAwesome solid icon names in kebab-case
+export const ALL_ICON_NAMES: string[] = Object.keys(solidIcons)
+  .filter(
+    (key) =>
+      key.startsWith("fa") &&
+      key.length > 2 &&
+      key[2] === key[2].toUpperCase() &&
+      key !== "fas",
+  )
+  .map((key) => {
+    const nameWithoutFa = key.slice(2);
+    return nameWithoutFa
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .toLowerCase();
+  })
+  .sort();
+
+/**
+ * Searches available FontAwesome solid icons matching query substring.
+ */
+export function searchIcons(
+  query?: string | null,
+  limit = 8,
+): { name: string; icon: ResolvedIcon }[] {
+  if (!query || query.trim().length === 0) {
+    return [];
+  }
+  const q = query.toLowerCase().trim().replace(/^fa-?/, "");
+  const results: { name: string; icon: ResolvedIcon }[] = [];
+
+  for (const name of ALL_ICON_NAMES) {
+    if (name.includes(q)) {
+      const icon = resolveIcon(name);
+      if (icon) {
+        results.push({ name, icon });
+        if (results.length >= limit) break;
+      }
+    }
+  }
+
+  return results;
+}
