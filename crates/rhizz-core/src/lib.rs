@@ -19,8 +19,8 @@ pub use diagnostics::{Diagnostic, DiagnosticCode, Level};
 pub use model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
     ConnectionLayout, ConnectionSide, Field, FieldId, Message, MessageId, Model, NodeLayout, Port,
-    PortId, PortRole, Project, Protocol, ProtocolId, System, SystemId, View, ViewDefinition,
-    ViewFilter, ViewFilterDefinition,
+    PortId, Project, Protocol, ProtocolId, System, SystemId, View, ViewDefinition, ViewFilter,
+    ViewFilterDefinition,
 };
 pub use score::{CategoryScore, ScoreReport, score};
 pub use serialize::{parse_views, serialize_model, serialize_resolved_views, serialize_views};

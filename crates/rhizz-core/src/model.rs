@@ -81,20 +81,6 @@ pub(crate) struct ScopeIndex {
     pub(crate) ports: HashMap<(ComponentId, String), PortId>,
 }
 
-// ── PortRole ──────────────────────────────────────────────────────────────────
-
-/// The role a port plays in a connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PortRole {
-    /// Provides data / service.
-    Provider,
-    /// Consumes data / service.
-    Consumer,
-    /// Symmetric peer (bidirectional).
-    Peer,
-}
-
 // ── ComponentParent ───────────────────────────────────────────────────────────
 
 /// Identifies the direct parent of a component in the hierarchy.
@@ -214,7 +200,7 @@ pub struct Protocol {
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Valid port roles permitted by this protocol.
-    pub roles: Vec<PortRole>,
+    pub roles: Vec<String>,
     /// Messages defined in this protocol.
     pub messages: Vec<MessageId>,
 }
@@ -230,8 +216,8 @@ pub struct Port {
     pub protocol: String,
     /// Optional resolved reference to a top-level protocol.
     pub protocol_id: Option<ProtocolId>,
-    /// Provider, consumer, or peer.
-    pub role: PortRole,
+    /// Optional role string, validated against protocol roles if defined.
+    pub role: Option<String>,
     /// Whether this port is an external boundary interface.
     pub external: bool,
     /// Whether this port is required when instantiated in a system.

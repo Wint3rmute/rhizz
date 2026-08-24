@@ -16,7 +16,7 @@
 
 use crate::model::{
     Component, Connection, ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout,
-    Port, PortRole, Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
+    Port, Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -232,15 +232,12 @@ fn serialize_port(out: &mut String, port: &Port, depth: usize) {
             escape_string(&port.protocol)
         ));
     }
-    let role_str = match port.role {
-        PortRole::Provider => "provider",
-        PortRole::Consumer => "consumer",
-        PortRole::Peer => "peer",
-    };
-    out.push_str(&format!(
-        "{inner_indent}role        = {}\n",
-        escape_string(role_str)
-    ));
+    if let Some(role_str) = &port.role {
+        out.push_str(&format!(
+            "{inner_indent}role        = {}\n",
+            escape_string(role_str)
+        ));
+    }
 
     if !port.tags.is_empty() {
         out.push_str(&format!(
@@ -274,18 +271,9 @@ fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
         ));
     }
     if !proto.roles.is_empty() {
-        let role_strs: Vec<String> = proto
-            .roles
-            .iter()
-            .map(|r| match r {
-                PortRole::Provider => "provider".to_string(),
-                PortRole::Consumer => "consumer".to_string(),
-                PortRole::Peer => "peer".to_string(),
-            })
-            .collect();
         out.push_str(&format!(
             "  roles       = {}\n",
-            format_string_list(&role_strs)
+            format_string_list(&proto.roles)
         ));
     }
 

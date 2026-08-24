@@ -1,7 +1,7 @@
 use crate::model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
-    Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, PortRole,
-    Project, ProtocolId, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
+    Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, Project,
+    ProtocolId, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
@@ -72,24 +72,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         let proto_id = ProtocolId(r.model.protocols.len());
         r.protocol_label_index.insert(lp.label.clone(), proto_id);
 
-        let roles = lp
-            .inner
-            .roles
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|s| match s.as_str() {
-                "provider" => Some(PortRole::Provider),
-                "consumer" => Some(PortRole::Consumer),
-                "peer" => Some(PortRole::Peer),
-                other => {
-                    r.push_error(
-                        DiagnosticCode::E009,
-                        format!("protocol '{}' has invalid role '{}'", lp.label, other),
-                    );
-                    None
-                }
-            })
-            .collect();
+        let roles = lp.inner.roles.unwrap_or_default();
 
         let msg_ids = process_messages(&mut r, &lp.inner.messages, 0, &lp.label);
 
@@ -507,38 +490,35 @@ fn process_ports(
             continue;
         }
 
-        // E009 -- invalid port.role
-        let role = match lp.inner.role.as_deref() {
-            None | Some("peer") => PortRole::Peer,
-            Some("provider") => PortRole::Provider,
-            Some("consumer") => PortRole::Consumer,
-            Some(other) => {
-                r.push_error(
-                    DiagnosticCode::E009,
-                    format!("port '{}' has invalid role '{}'", lp.label, other),
-                );
-                PortRole::Peer // placeholder so we keep going
-            }
-        };
+        let role = lp.inner.role.clone();
 
         let proto_id = if let Some(ref proto_name) = lp.inner.protocol {
             if !proto_name.is_empty() {
                 r.used_protocol_labels.insert(proto_name.clone());
                 if let Some(&pid) = r.protocol_label_index.get(proto_name) {
                     let proto = &r.model.protocols[pid.0];
-                    if !proto.roles.is_empty() && !proto.roles.contains(&role) {
-                        let role_str = match role {
-                            PortRole::Provider => "provider",
-                            PortRole::Consumer => "consumer",
-                            PortRole::Peer => "peer",
-                        };
-                        r.push_warning(
-                            DiagnosticCode::W013,
-                            format!(
-                                "port '{}' in component '{}' declares role '{}' which is not permitted by protocol '{}'",
-                                lp.label, comp_label, role_str, proto_name
-                            ),
-                        );
+                    if !proto.roles.is_empty() {
+                        match &role {
+                            Some(r_str) if proto.roles.contains(r_str) => {}
+                            Some(invalid_role) => {
+                                r.push_error(
+                                    DiagnosticCode::E009,
+                                    format!(
+                                        "port '{}' in component '{}' has role '{}' which is not permitted by protocol '{}' (permitted: {:?})",
+                                        lp.label, comp_label, invalid_role, proto_name, proto.roles
+                                    ),
+                                );
+                            }
+                            None => {
+                                r.push_error(
+                                    DiagnosticCode::E009,
+                                    format!(
+                                        "port '{}' in component '{}' must specify a role for protocol '{}' (permitted: {:?})",
+                                        lp.label, comp_label, proto_name, proto.roles
+                                    ),
+                                );
+                            }
+                        }
                     }
                     Some(pid)
                 } else {
@@ -1475,11 +1455,16 @@ mod tests {
     #[test]
     fn e009_invalid_port_role() {
         let src = r#"
+            protocol "bus" {
+              roles = ["primary", "secondary"]
+            }
+
             system "s" {
               component "a" {
                 leaf = true
                 port "p" {
-                  role = "sideways"
+                  protocol = "bus"
+                  role     = "sideways"
                 }
               }
             }
@@ -2017,7 +2002,10 @@ system "drone" {
         assert_eq!(proto.label, "spi");
         assert_eq!(proto.description, "SPI bus");
         assert_eq!(proto.tags, vec!["serial"]);
-        assert_eq!(proto.roles, vec![PortRole::Provider, PortRole::Consumer]);
+        assert_eq!(
+            proto.roles,
+            vec!["provider".to_string(), "consumer".to_string()]
+        );
         assert_eq!(proto.messages.len(), 1);
 
         let msg = &model.messages[proto.messages[0].0];
@@ -2057,7 +2045,7 @@ system "drone" {
     }
 
     #[test]
-    fn w013_role_not_permitted_by_protocol_warning() {
+    fn e009_role_not_permitted_by_protocol_error() {
         let src = r#"
 protocol "serial" {
   roles = ["provider", "consumer"]
@@ -2074,13 +2062,13 @@ system "drone" {
 }
 "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let (_model, warnings) =
-            resolve(raw).expect("disallowed role should emit warning without blocking");
-
+        let result = resolve(raw);
+        assert!(result.is_err());
+        let diags = result.unwrap_err();
         assert!(
-            warnings.iter().any(|d| d.code == DiagnosticCode::W013),
-            "expected W013 warning, got: {:?}",
-            warnings
+            diags.iter().any(|d| d.code == DiagnosticCode::E009),
+            "expected E009 error, got: {:?}",
+            diags
         );
     }
 

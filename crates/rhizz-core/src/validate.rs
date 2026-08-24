@@ -1,6 +1,6 @@
 //! Validation pass -- warning pass over the resolved Model.
 
-use crate::model::{ComponentParent, Diagnostic, DiagnosticCode, Model, PortRole};
+use crate::model::{ComponentParent, Diagnostic, DiagnosticCode, Model};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -169,31 +169,6 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
                     format!(
                         "connection '{}': protocol mismatch ('{}' vs '{}')",
                         conn.label, from_proto, to_proto
-                    ),
-                ));
-            }
-        }
-    }
-
-    // W009 -- port roles are incompatible or ambiguous
-    // Compatible pairs: provider<->consumer, peer<->peer
-    // Incompatible: provider<->provider, consumer<->consumer, provider<->peer, consumer<->peer
-    for conn in &model.connections {
-        if let (Some(from_pid), Some(to_pid)) = (conn.from.port, conn.to.port) {
-            let from_role = model.ports[from_pid.0].role;
-            let to_role = model.ports[to_pid.0].role;
-            let compatible = matches!(
-                (from_role, to_role),
-                (PortRole::Provider, PortRole::Consumer)
-                    | (PortRole::Consumer, PortRole::Provider)
-                    | (PortRole::Peer, PortRole::Peer)
-            );
-            if !compatible {
-                warnings.push(Diagnostic::warning(
-                    DiagnosticCode::W009,
-                    format!(
-                        "connection '{}': port roles are incompatible ({:?} <-> {:?})",
-                        conn.label, from_role, to_role
                     ),
                 ));
             }
@@ -516,44 +491,6 @@ mod tests {
                 .iter()
                 .any(|d| d.code == DiagnosticCode::W008 && d.message.contains("mismatch")),
             "expected W008 for mismatch, got: {:?}",
-            warning_codes(&warnings)
-        );
-    }
-
-    // ── W009 ───────────────────────────────────────────────────────────────
-
-    #[test]
-    fn w009_incompatible_roles() {
-        let src = r#"
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p1" {
-                  protocol = "spi"
-                  role = "provider"
-                }
-              }
-              component "b" {
-                leaf = true
-                port "p2" {
-                  protocol = "spi"
-                  role = "provider"
-                }
-              }
-              connection "clash" {
-                from = "a/p1"
-                to   = "b/p2"
-              }
-            }
-        "#;
-        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let (model, _) = resolve(raw).unwrap();
-        let warnings = validate(&model);
-        assert!(
-            warnings
-                .iter()
-                .any(|d| d.code == DiagnosticCode::W009 && d.message.contains("clash")),
-            "expected W009 for clash, got: {:?}",
             warning_codes(&warnings)
         );
     }

@@ -249,7 +249,7 @@ pub struct PortJS {
     label: String,
     description: String,
     protocol: String,
-    role: String,
+    role: Option<String>,
     external: bool,
     required: bool,
     tags: Vec<String>,
@@ -276,9 +276,9 @@ impl PortJS {
         self.protocol.clone()
     }
 
-    /// Port role ("provider", "consumer", "peer").
+    /// Port role.
     #[wasm_bindgen(getter)]
-    pub fn role(&self) -> String {
+    pub fn role(&self) -> Option<String> {
         self.role.clone()
     }
 
@@ -309,16 +309,11 @@ impl PortJS {
 
 impl From<&rhizz_core::Port> for PortJS {
     fn from(p: &rhizz_core::Port) -> Self {
-        let role_str = match p.role {
-            rhizz_core::PortRole::Provider => "provider",
-            rhizz_core::PortRole::Consumer => "consumer",
-            rhizz_core::PortRole::Peer => "peer",
-        };
         Self {
             label: p.label.clone(),
             description: p.description.clone(),
             protocol: p.protocol.clone(),
-            role: role_str.to_string(),
+            role: p.role.clone(),
             external: p.external,
             required: p.required,
             tags: p.tags.clone(),
@@ -368,20 +363,11 @@ impl ProtocolJS {
 
 impl From<&rhizz_core::Protocol> for ProtocolJS {
     fn from(proto: &rhizz_core::Protocol) -> Self {
-        let roles = proto
-            .roles
-            .iter()
-            .map(|r| match r {
-                rhizz_core::PortRole::Provider => "provider".to_string(),
-                rhizz_core::PortRole::Consumer => "consumer".to_string(),
-                rhizz_core::PortRole::Peer => "peer".to_string(),
-            })
-            .collect();
         Self {
             label: proto.label.clone(),
             description: proto.description.clone(),
             tags: proto.tags.clone(),
-            roles,
+            roles: proto.roles.clone(),
         }
     }
 }
