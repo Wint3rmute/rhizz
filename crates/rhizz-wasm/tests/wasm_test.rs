@@ -21,7 +21,7 @@ fn valid_sources() -> Vec<rhizz_core::Source> {
         },
         rhizz_core::Source {
             filename: "system.hcl".to_string(),
-            content: r#"
+            content: r##"
                 system "web" {
                     description = "Simple web system"
                     tags        = []
@@ -30,11 +30,14 @@ fn valid_sources() -> Vec<rhizz_core::Source> {
                     component "server" {
                         description = "HTTP server"
                         icon        = "server"
+                        color       = "#00ff00"
+                        border      = "dashed"
+                        font        = "bold"
                         tags        = []
                         leaf        = true
                     }
                 }
-            "#
+            "##
             .to_string(),
         },
     ]
@@ -77,6 +80,34 @@ fn components_returns_typed_wrappers() {
     assert!(server.leaf(), "server should be a leaf component");
     assert_eq!(server.description(), "HTTP server");
     assert_eq!(server.icon(), Some("server".to_string()));
+    assert_eq!(server.color(), Some("#00ff00".to_string()));
+    assert_eq!(server.border(), Some("dashed".to_string()));
+    assert_eq!(server.font(), Some("bold".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn component_visual_attributes_default_to_none() {
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&[rhizz_core::Source {
+        filename: "system.hcl".to_string(),
+        content: r#"system "bare" {
+    component "plain" {
+        leaf = true
+    }
+}
+"#
+        .to_string(),
+    }]))
+    .expect("compile_sources should not return a JsError");
+
+    let model = result.model().expect("expected a model to be present");
+    let comps = model.components();
+    let plain = comps
+        .iter()
+        .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "plain")
+        .expect("expected component 'plain'");
+    assert_eq!(plain.color(), None);
+    assert_eq!(plain.border(), None);
+    assert_eq!(plain.font(), None);
 }
 
 #[wasm_bindgen_test]
