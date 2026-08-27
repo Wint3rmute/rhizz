@@ -2,6 +2,7 @@
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
 import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
+import { COLOR_OPTIONS } from "./visuals";
 
 interface Props {
   componentKey: string;
@@ -27,14 +28,12 @@ let editLabel = $state("");
 let editDescription = $state("");
 let editTagsStr = $state("");
 let editLeaf = $state(false);
-let editColor = $state("");
 
 $effect(() => {
   editLabel = component.label;
   editDescription = component.description || "";
   editTagsStr = (component.tags || []).join(", ");
   editLeaf = component.leaf;
-  editColor = component.color || "";
 });
 
 function handleLabelBlur() {
@@ -66,10 +65,14 @@ function handleLeafChange(e: Event) {
   onupdate({ leaf: checked });
 }
 
-function handleColorBlur() {
-  if (editColor !== (component.color || "")) {
-    onupdate({ color: editColor.trim() || undefined });
-  }
+function handleColorChange(color: string | undefined) {
+  onupdate({ color });
+}
+
+// daisyUI background utility class for a theme token (e.g. "primary" ->
+// "bg-primary"), used to render the color swatch.
+function colorSwatchClass(option: string): string {
+  return `bg-${option}`;
 }
 
 function handleBorderChange(e: Event) {
@@ -160,21 +163,34 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
     />
 
     <div class="grid grid-cols-2 gap-2">
-      <div class="form-control">
+      <div class="form-control col-span-2">
         <label class="label py-1" for="comp-color-input">
           <span
             class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
             Color
           </span>
         </label>
-        <input
-          id="comp-color-input"
-          type="text"
-          bind:value={editColor}
-          onblur={handleColorBlur}
-          class="input input-sm input-bordered w-full"
-          placeholder="e.g. #ff0000 or red"
-        />
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            class="btn btn-xs btn-ghost {!component.color ? 'btn-primary' : ''}"
+            title="No color (default)"
+            onclick={() => handleColorChange(undefined)}
+          >
+            None
+          </button>
+          {#each COLOR_OPTIONS as option (option)}
+            <button
+              type="button"
+              class="btn btn-xs btn-circle {colorSwatchClass(option)} {component.color ===
+              option
+                ? 'ring-2 ring-offset-1 ring-offset-base-100'
+                : ''}"
+              title={option}
+              onclick={() => handleColorChange(option)}
+            ></button>
+          {/each}
+        </div>
       </div>
 
       <div class="form-control">

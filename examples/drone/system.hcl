@@ -209,7 +209,7 @@ system "quadcopter" {
 
   component "gps" {
     description = "u-blox M10 GNSS receiver"
-    color       = "#2e7d32"
+    color       = "success"
     border      = "dashed"
     font        = "italic"
     tags        = ["electronics", "sensor", "navigation"]

@@ -6,6 +6,21 @@
 export type BorderStyle = "solid" | "dashed" | "dotted";
 export type FontStyle = "bold" | "italic" | "underline";
 
+// The limited set of color choices offered by the inspector. Each maps to a
+// daisyUI theme token, so the rendered color follows the active theme (and
+// automatically adapts to dark mode) instead of being a fixed CSS color.
+export const COLOR_OPTIONS = [
+  "primary",
+  "secondary",
+  "accent",
+  "success",
+  "warning",
+  "error",
+  "info",
+] as const;
+
+export type ColorOption = (typeof COLOR_OPTIONS)[number];
+
 export interface ComponentVisuals {
   color?: string;
   border?: string;
@@ -23,6 +38,18 @@ export interface SvgFont {
   fontWeight?: string;
   fontStyle?: string;
   textDecoration?: string;
+}
+
+function isColorOption(c: string): c is ColorOption {
+  return (COLOR_OPTIONS as readonly string[]).includes(c);
+}
+
+// Maps a stored color to an SVG stroke value. daisyUI tokens become CSS
+// variables (so they follow the theme / dark mode); anything else is passed
+// through as-is (hex or named CSS color).
+export function colorToSvgStroke(color?: string): string | undefined {
+  if (!color) return undefined;
+  return isColorOption(color) ? `var(--color-${color})` : color;
 }
 
 // Maps a border style to an SVG stroke dash-array. Solid (and any unknown
@@ -56,6 +83,6 @@ export function fontStyleToSvg(font?: string): SvgFont {
 export function borderStyleToSvg(visuals: ComponentVisuals): SvgBorder {
   return {
     dasharray: borderStyleToDasharray(visuals.border),
-    stroke: visuals.color || undefined,
+    stroke: colorToSvgStroke(visuals.color),
   };
 }
