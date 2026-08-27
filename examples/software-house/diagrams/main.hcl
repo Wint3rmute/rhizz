@@ -3,9 +3,9 @@ view "main" {
 
   node "acme-software/engineering" {
     x          = 240
-    y          = 380
+    y          = 360
     width      = 300
-    height     = 300
+    height     = 320
     text_align = "top-center"
   }
 
@@ -19,7 +19,7 @@ view "main" {
 
   node "acme-software/engineering/frontend-team" {
     x          = 320
-    y          = 510
+    y          = 500
     width      = 123.09543101916026
     height     = 62
     text_align = "center"
@@ -27,7 +27,7 @@ view "main" {
 
   node "acme-software/engineering/platform-team" {
     x          = 320
-    y          = 410
+    y          = 390
     width      = 123.09543101916026
     height     = 62
     text_align = "center"
@@ -35,31 +35,31 @@ view "main" {
 
   node "acme-software/operations" {
     x          = 50
-    y          = 620
+    y          = 560
     width      = 100
     height     = 100
     text_align = "center"
   }
 
   node "acme-software/product" {
-    x          = -280
-    y          = 380
-    width      = 250
-    height     = 300
+    x          = -270
+    y          = 360
+    width      = 240
+    height     = 320
     text_align = "top-center"
   }
 
   node "acme-software/product/designers" {
-    x          = -240
-    y          = 420
-    width      = 80
-    height     = 62
+    x          = -220
+    y          = 440
+    width      = 140
+    height     = 60
     text_align = "center"
   }
 
   node "acme-software/product/product-managers" {
-    x          = -250
-    y          = 560
+    x          = -230
+    y          = 570
     width      = 160
     height     = 60
     text_align = "center"
@@ -74,7 +74,7 @@ view "main" {
   }
 
   node "acme-software/qa/automation-qa" {
-    x          = 110
+    x          = 150
     y          = 850
     width      = 140
     height     = 60
@@ -82,7 +82,7 @@ view "main" {
   }
 
   node "acme-software/qa/manual-qa" {
-    x          = -70
+    x          = -90
     y          = 850
     width      = 120
     height     = 60
@@ -90,8 +90,8 @@ view "main" {
   }
 
   node "acme-software/sales" {
-    x          = -540
-    y          = 480
+    x          = -510
+    y          = 470
     width      = 100
     height     = 100
     text_align = "center"
