@@ -325,6 +325,9 @@ fn register_component(
                     label: lc.label.clone(),
                     description: String::new(),
                     icon: None,
+                    color: None,
+                    border: None,
+                    font: None,
                     tags: vec![],
                     level: parent_level + 1,
                     leaf: false,
@@ -357,6 +360,9 @@ fn register_component(
                         label: lc.label.clone(),
                         description: String::new(),
                         icon: None,
+                        color: None,
+                        border: None,
+                        font: None,
                         tags: vec![],
                         level: parent_level + 1,
                         leaf: false,
@@ -406,6 +412,9 @@ fn register_component(
         label: lc.label.clone(),
         description: body.description.clone().unwrap_or_default(),
         icon: body.icon.clone(),
+        color: body.color.clone(),
+        border: body.border,
+        font: body.font.clone(),
         tags: body.tags.clone(),
         level,
         leaf,
@@ -1226,8 +1235,8 @@ mod tests {
             w004_labels
         );
 
-        // 4 views should resolve
-        assert_eq!(model.views.len(), 4);
+        // 5 views should resolve (4 in views.hcl + 1 in diagrams/main.hcl)
+        assert_eq!(model.views.len(), 5);
     }
 
     // ── social-media ───────────────────────────────────────────────────────

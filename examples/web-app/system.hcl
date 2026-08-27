@@ -1,3 +1,9 @@
+project {
+    name    = "web-app"
+    version = "0.3.0"
+    authors = ["rhizz-examples"]
+}
+
 protocol "jwt" {
     description = "JWT authentication protocol"
     roles       = ["provider", "consumer"]

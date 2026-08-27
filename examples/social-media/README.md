@@ -22,6 +22,5 @@ client, backend services, and infrastructure.
 
 | File          | Contents                                                     |
 | ------------- | ------------------------------------------------------------ |
-| `project.hcl` | Project metadata                                             |
-| `system.hcl`  | The `buzzvid` system with all components and interfaces      |
+| `system.hcl`  | The `buzzvid` system (incl. project metadata) with all components and interfaces |
 | `views.hcl`   | Three view definitions filtering by component scope and tags |

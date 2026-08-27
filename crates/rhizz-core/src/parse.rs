@@ -1,5 +1,6 @@
 // Public API consumed by the resolve module.
 
+use crate::model::BorderStyle;
 /// Raw (deserialization) model and file-level parsing.
 ///
 /// Two concerns live here:
@@ -8,7 +9,7 @@
 ///
 /// No validation, no resolution — that is Task 2+.
 use anyhow::{Context, Result, anyhow, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
 use tracing::instrument;
 
@@ -76,6 +77,12 @@ pub struct RawComponent {
     pub description: Option<String>,
     /// Optional icon name (e.g. FontAwesome icon identifier).
     pub icon: Option<String>,
+    /// Optional border color for diagram rendering.
+    pub color: Option<String>,
+    /// Optional border style (solid, dashed, dotted); solid when unset.
+    pub border: Option<BorderStyle>,
+    /// Optional single-word font style (bold, italic); unstyled when unset.
+    pub font: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
@@ -199,6 +206,13 @@ struct ComponentAttrs {
     description: Option<String>,
     /// Optional icon name.
     icon: Option<String>,
+    /// Optional border color.
+    color: Option<String>,
+    /// Optional border style.
+    #[serde(default, deserialize_with = "deserialize_border_style")]
+    border: Option<BorderStyle>,
+    /// Optional single-word font style.
+    font: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
     /// Optional abstraction level.
@@ -350,6 +364,21 @@ fn attrs<T: for<'de> Deserialize<'de> + Default>(body: &hcl::Body) -> Result<T> 
     hcl::from_body(body.clone()).context("failed to deserialize block attributes")
 }
 
+/// Deserializes a `border` attribute value into a [`BorderStyle`], accepting
+/// the lowercase names `solid`, `dashed`, or `dotted`. Unknown values map to
+/// `Solid` so a renderer always has a valid style.
+fn deserialize_border_style<'de, D>(d: D) -> Result<Option<BorderStyle>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(d)?;
+    Ok(Some(match s.as_str() {
+        "dashed" => BorderStyle::Dashed,
+        "dotted" => BorderStyle::Dotted,
+        _ => BorderStyle::Solid,
+    }))
+}
+
 // ── Block parsers ─────────────────────────────────────────────────────────────
 
 /// Parse a `project` block body into a [`RawProject`].
@@ -471,6 +500,9 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
         source: a.source,
         description: a.description,
         icon: a.icon,
+        color: a.color,
+        border: a.border,
+        font: a.font,
         tags: a.tags.unwrap_or_default(),
         level: a.level,
         leaf: a.leaf,
@@ -677,7 +709,7 @@ mod tests {
         assert!(comp_labels.contains(&"esc"));
         assert!(comp_labels.contains(&"battery"));
 
-        // flight-controller uses source = "flight-controller"; no inline body at parse time
+        // flight-controller is now inlined (single-file model); no source attr
         let fc = quad
             .inner
             .components
@@ -686,33 +718,27 @@ mod tests {
             .unwrap();
         assert_eq!(
             fc.inner.source.as_deref(),
-            Some("flight-controller"),
-            "flight-controller component should have source attribute"
+            None,
+            "flight-controller should be inlined in the single-file model"
         );
         assert!(
-            fc.inner.components.is_empty(),
-            "sourced component should have no inline children at parse time"
+            !fc.inner.components.is_empty(),
+            "inlined flight-controller should have child components"
         );
 
-        // The full definition lives in the top-level components map
-        let tl_fc = raw
-            .components
-            .iter()
-            .find(|c| c.label == "flight-controller")
-            .expect("top-level flight-controller component missing");
-        let tl_fc_child_labels: Vec<&str> = tl_fc
+        // The inlined flight-controller carries its children and ports directly
+        let fc_child_labels: Vec<&str> = fc
             .inner
             .components
             .iter()
             .map(|c| c.label.as_str())
             .collect();
-        assert!(tl_fc_child_labels.contains(&"mcu"));
-        assert!(tl_fc_child_labels.contains(&"imu"));
-        assert!(tl_fc_child_labels.contains(&"barometer"));
+        assert!(fc_child_labels.contains(&"mcu"));
+        assert!(fc_child_labels.contains(&"imu"));
+        assert!(fc_child_labels.contains(&"barometer"));
 
-        // FC top-level definition should have ports
-        let fc_port_labels: Vec<&str> =
-            tl_fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
+        // FC definition should have ports
+        let fc_port_labels: Vec<&str> = fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
@@ -728,7 +754,7 @@ mod tests {
         assert!(conn_labels.contains(&"rc-link"));
 
         // Views
-        assert_eq!(raw.views.len(), 4, "expected 4 views");
+        assert_eq!(raw.views.len(), 5, "expected 5 views");
         let ov = raw
             .views
             .iter()
@@ -993,7 +1019,32 @@ mod tests {
         assert_eq!(comp.inner.icon.as_deref(), Some("microchip"));
         assert_eq!(comp.inner.tags, vec!["x"]);
         assert_eq!(comp.inner.level, Some(2));
-        assert_eq!(comp.inner.leaf, Some(true));
+    }
+
+    #[test]
+    fn parse_top_level_component_visual_attributes() {
+        let src = r##"
+            component "styled" {
+                color  = "#ff0000"
+                border = "dashed"
+                font   = "bold"
+            }
+            component "plain" {
+            }
+        "##;
+        let path = PathBuf::from("test.hcl");
+        let raw = parse_file(src, &path).unwrap();
+
+        let styled = raw.components.iter().find(|c| c.label == "styled").unwrap();
+        assert_eq!(styled.inner.color.as_deref(), Some("#ff0000"));
+        assert_eq!(styled.inner.border, Some(BorderStyle::Dashed));
+        assert_eq!(styled.inner.font.as_deref(), Some("bold"));
+
+        // Unspecified attributes default to None (renderer falls back).
+        let plain = raw.components.iter().find(|c| c.label == "plain").unwrap();
+        assert_eq!(plain.inner.color, None);
+        assert_eq!(plain.inner.border, None);
+        assert_eq!(plain.inner.font, None);
     }
 
     #[test]

@@ -4,6 +4,52 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 84 — Visual attributes for components (color, border, font)
+
+Make it possible to define model-level visual attributes on components so diagrams can be styled.
+
+- **Core model & parser (`rhizz-core`)**
+  - Added `BorderStyle` enum (`solid`/`dashed`/`dotted`, `solid` default; serde lowercase + `Display`/`as_str`) and `color`/`border`/`font` fields on `Component`.
+  - Parse them in `ComponentAttrs`/`RawComponent`; a `border` deserializer maps unknown values to `Solid`. Resolver propagates them (including through the top-level `source` body); the two placeholder/error paths default to `None`.
+- **Serializer (`rhizz-core`)**
+  - Emit `color`/`font` when set and `border` when not `Solid` (so output stays minimal and idempotent). Added a visual-attribute roundtrip test.
+- **WASM (`rhizz-wasm`)**
+  - Expose `color`/`border`/`font` getters on `ComponentJS`; assert values and defaults in `wasm-pack test` (13 tests pass).
+- **Frontend data model (`web/src/DocumentStore.svelte.ts`)**
+  - Add `color`/`border`/`font` to `ComponentData` + the raw-model payload; load them in `loadFromRawModel` and emit them in `serializeComponent` (dropping the `solid` default). Roundtrip test added.
+- **Rendering (`web/src/routes/projects/[id]/diagrams/`)**
+  - Added pure `visuals.ts` helpers mapping border→SVG dash-array and font→SVG text presentation (unit-tested).
+  - Applied in both the interactive canvas (`+page.svelte`) and the static/embed `DiagramElements.svelte`: component rect uses border color/dash-array; label uses the font style. `DiagramStaticComponent` carries the new fields.
+- **Editor (`NodeInspector.svelte`)**
+  - Added Color (text), Border (solid/dashed/dotted select), and Font (unstyled/bold/italic/underline select) controls wired through `onupdate`.
+- **Docs/example**
+  - Documented `color`/`border`/`font` in the `component` attribute table in `SPEC.md`; annotated the drone example's `gps` component to demonstrate the feature.
+- Validated with `just test` (all Rust + wasm-pack + 326 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
+## Task 83 — Reuse the FileTree tree to display the component hierarchy in the Diagrams sidebar
+
+- **Reusable Tree Shell (`web/src/components/Tree.svelte`, `treeTypes.ts`)**:
+  - Extracted the collapsible-tree chrome shared by file and component hierarchies: expand/collapse (`▸/▾` based on `isExpandable`, folded per-node via a `SvelteSet` of collapsed ids), depth-based indentation, single-row selection (`aria-current`), and an empty-state message.
+  - Injected tree-specific chrome (icons, checkboxes, CRUD buttons) through `leading`/`rowTail` snippets — the shell has no file-vs-component knowledge. `leading` receives the row's `collapsed` state so a provider can render a collapsible-aware icon (e.g. open/closed folder). Added an optional `onselect` hook fired after a label click.
+  - Defined the `TreeNode` shape (`id`, `name`, `isExpandable`, `children`) in `treeTypes.ts`, decoupled from any particular data source.
+- **Refactored `FileTree` into a thin adapter** (`editor/FileTree.svelte`):
+  - Now builds `TreeNode[]` from `buildPathTree` and renders via `Tree`. Public props (`entries`, `bind:selectedPath`, `oncreatefile/oncreatedirectory/onrename/ondelete`) are unchanged, so all three call sites (editor, explore, diagrams) and `FileTree.stories.ts` keep working without modification.
+- **Component-Hierarchy Builder + Tests (`diagrams/componentTree.ts`, `componentTree.test.ts`)**:
+  - Added pure `buildComponentTree(systems, components)` translating the WASM model's flat arena-index parent links into a nested `TreeNode[]` (systems as roots; orphans kept as roots defensively). Component nodes are keyed by arena index (unique; labels are only unique within a parent scope, SPEC §2.3), systems by `sys:<index>`.
+  - Three-pass build (materialize nodes → attach to parents → set `isExpandable`) so a parent always exists before its children attach regardless of input order.
+  - Added 7 unit tests (empty model, roots=systems, nesting, arena-keying, input-order independence, orphan fallback, expandable-only-non-leaf).
+- **New `ComponentHierarchyTree` component (`diagrams/ComponentHierarchyTree.svelte`)** + story:
+  - Renders the component hierarchy in the Diagrams right sidebar with expand/collapse. Each component row has a placement checkbox (routes through the shared `toggleComponentChecked`), a label that selects the node (mutates the canvas `selected` set so the node highlights and the inspector opens), and a component icon when present.
+- **Wiring in the Diagrams page (`diagrams/+page.svelte`)**:
+  - Replaced the flat, non-collapsible "Components" `<ul>` with `ComponentHierarchyTree`.
+  - Extracted the sidebar checkbox's check/uncheck logic (remembered-layout restore, active-parent clamping, `reclampChildren`, undo point, selection deselect) into a single `toggleComponentChecked(index)`.
+  - Added `checkedIndices` (a `SvelteSet` derived from `checked` via the reverse key→index map) to drive checkbox state.
+- **Tests/validation**: `componentTree.test.ts` added to the unit suite (7 tests); added `ComponentHierarchyTree.stories.ts`. Validated with `just test` (all Rust tests + 319 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 79 — Allow resizing of components by dragging from any edge or corner
 
 - **Pure Geometry Computation (`geometry.ts`, `geometry.test.ts`)**:

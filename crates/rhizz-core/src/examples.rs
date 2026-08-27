@@ -7,7 +7,7 @@
 /// A single source file in an embedded example project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExampleFile {
-    /// Relative path within the project (e.g. `"project.hcl"` or `"components/flight-controller.hcl"`).
+    /// Relative path within the project (e.g. `"system.hcl"` or `"views.hcl"`).
     pub path: &'static str,
     /// UTF-8 HCL content.
     pub content: &'static str,
@@ -47,7 +47,7 @@ mod tests {
             .expect("apollo-11 missing");
         assert_eq!(apollo.name, "Apollo 11 Mission Stack");
         assert!(!apollo.files.is_empty());
-        assert!(apollo.files.iter().any(|f| f.path == "project.hcl"));
+        assert!(apollo.files.iter().any(|f| f.path == "system.hcl"));
 
         for p in projects {
             assert!(!p.id.is_empty());

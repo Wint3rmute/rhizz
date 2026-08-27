@@ -18,6 +18,7 @@ import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
+import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
@@ -71,6 +72,7 @@ import {
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
+import { borderStyleToSvg, fontStyleToSvg } from "./visuals";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -138,6 +140,17 @@ function getComponentKey(index: number): string {
 // not rendered.
 let keyToIndex = $derived.by(() => {
   return buildKeyToIndexMap(components, systems);
+});
+
+// The set of arena indices currently placed on the canvas, derived from
+// `checked` (keyed by structural componentKey) via the reverse key→index map.
+let checkedIndices = $derived.by(() => {
+  const placed = new SvelteSet<number>();
+  for (const key of Object.keys(checked)) {
+    const index = keyToIndex.get(key);
+    if (index !== undefined) placed.add(index);
+  }
+  return placed;
 });
 
 // Default node size, in world (SVG) units, for newly-placed nodes and for
@@ -491,6 +504,48 @@ function setSelectedTextAlign(align: TextAlign) {
   setNodeBox(primarySelected, { textAlign: align });
 }
 
+// Places (checks) or unplaces (unchecks) a component on the canvas. This is
+// the single source of truth for the sidebar's checkbox — both the old flat
+// list and the new ComponentHierarchyTree route through it.
+function toggleComponentChecked(index: number) {
+  recordUndoPoint();
+  if (checked[getComponentKey(index)]) {
+    // Unplace.
+    delete checked[getComponentKey(index)];
+    // savedLayout[getComponentKey(index)] is intentionally left alone, so
+    // re-checking this component later restores it where it was.
+    selected.delete(index);
+    return;
+  }
+
+  // Restore the remembered layout if this component has been placed before
+  // (even if it was later unchecked), instead of always resetting to the
+  // default position.
+  const remembered = savedLayout[getComponentKey(index)];
+  let box: Box = {
+    x: remembered?.x ?? 100,
+    y: remembered?.y ?? 100,
+    width: remembered?.width ?? DEFAULT_NODE_WIDTH,
+    height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
+  };
+  const parentBox = activeParentBox(index);
+  if (parentBox) {
+    box = clampWithin(
+      box,
+      parentBox,
+      CHILD_CONTAINMENT_MARGIN,
+      CHILD_CONTAINMENT_TOP_MARGIN,
+    );
+  }
+  setNodeBox(index, {
+    ...box,
+    textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
+  });
+  // In case this component is itself the parent of children that were
+  // already placed on canvas before it was.
+  reclampChildren(index);
+}
+
 // Padding kept between a child node's edges and its active parent's edges,
 // in world units.
 const CHILD_CONTAINMENT_MARGIN = 10;
@@ -760,13 +815,12 @@ async function getPrimaryHclPath(): Promise<string> {
       !e.path.startsWith(".rhizz/") &&
       !e.path.startsWith("diagrams/")
     );
-    const preferred = hclFiles.find(
-      (e) =>
-        e.name === "system.hcl" ||
-        e.name === "systems.hcl" ||
-        e.name === "project.hcl" ||
-        e.name === "main.hcl",
-    );
+    // Prefer the file that actually holds the system model, in priority
+    // order. A bare "project.hcl" only carries project metadata, so it must
+    // never shadow a real system file just because it sorts earlier.
+    const preferred = ["system.hcl", "systems.hcl", "main.hcl", "project.hcl"]
+      .map((name) => hclFiles.find((e) => e.name === name))
+      .find(Boolean);
     return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
   } catch {
     return "main.hcl";
@@ -2282,6 +2336,11 @@ $effect(() => {
           {@const compKey = getComponentKey(index)}
           {@const compData = docStore.findComponent(compKey)}
           {@const icon = resolveIcon(compData?.icon ?? components[index]?.icon)}
+          {@const borderSvg = borderStyleToSvg({
+            color: compData?.color || components[index]?.color,
+            border: compData?.border ?? components[index]?.border,
+          })}
+          {@const fontSvg = fontStyleToSvg(compData?.font ?? components[index]?.font)}
           {@const portPositions = compData && compData.ports.length > 0
             ? computePortPositions(width, height, compData.ports)
             : []}
@@ -2297,8 +2356,9 @@ $effect(() => {
               rx="5"
               stroke={highlighted
                 ? "var(--color-primary)"
-                : "var(--color-base-content)"}
+                : (borderSvg.stroke ?? "var(--color-base-content)")}
               stroke-width={highlighted ? 2 : 1}
+              stroke-dasharray={highlighted ? undefined : borderSvg.dasharray}
               fill="var(--color-base-200)"
             />
             {#if reparentTargetIndex === index}
@@ -2335,6 +2395,9 @@ $effect(() => {
                   fill="var(--color-base-content)"
                   text-anchor="start"
                   dominant-baseline={textPos.baseline}
+                  font-weight={fontSvg.fontWeight}
+                  font-style={fontSvg.fontStyle}
+                  text-decoration={fontSvg.textDecoration}
                   style="pointer-events: none; user-select: none"
                 >
                   {label}
@@ -2359,6 +2422,9 @@ $effect(() => {
                   fill="var(--color-base-content)"
                   text-anchor="start"
                   dominant-baseline={textPos.baseline}
+                  font-weight={fontSvg.fontWeight}
+                  font-style={fontSvg.fontStyle}
+                  text-decoration={fontSvg.textDecoration}
                   style="pointer-events: none; user-select: none"
                 >
                   {label}
@@ -2381,6 +2447,9 @@ $effect(() => {
                   fill="var(--color-base-content)"
                   text-anchor="middle"
                   dominant-baseline="middle"
+                  font-weight={fontSvg.fontWeight}
+                  font-style={fontSvg.fontStyle}
+                  text-decoration={fontSvg.textDecoration}
                   style="pointer-events: none; user-select: none"
                 >
                   {label}
@@ -2393,6 +2462,9 @@ $effect(() => {
                 fill="var(--color-base-content)"
                 text-anchor={textPos.anchor}
                 dominant-baseline={textPos.baseline}
+                font-weight={fontSvg.fontWeight}
+                font-style={fontSvg.fontStyle}
+                text-decoration={fontSvg.textDecoration}
                 style="pointer-events: none; user-select: none"
               >
                 {label}
@@ -2743,68 +2815,17 @@ $effect(() => {
           No components found.<br />Open the editor and define some systems.
         </p>
       {:else}
-        <ul class="space-y-1">
-          {#each components as component, index (index)}
-            <li class="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                id="comp-{index}"
-                class="checkbox checkbox-xs"
-                checked={!!checked[getComponentKey(index)]}
-                onchange={(value) => {
-                  recordUndoPoint();
-                  if (value.currentTarget.checked) {
-                    // Restore the remembered layout if this component has
-                    // been placed before (even if it was later unchecked),
-                    // instead of always resetting to the default position.
-                    const remembered = savedLayout[getComponentKey(index)];
-                    let box: Box = {
-                      x: remembered?.x ?? 100,
-                      y: remembered?.y ?? 100,
-                      width: remembered?.width ?? DEFAULT_NODE_WIDTH,
-                      height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
-                    };
-                    const parentBox = activeParentBox(index);
-                    if (parentBox) {
-                      box = clampWithin(
-                        box,
-                        parentBox,
-                        CHILD_CONTAINMENT_MARGIN,
-                        CHILD_CONTAINMENT_TOP_MARGIN,
-                      );
-                    }
-                    setNodeBox(index, {
-                      ...box,
-                      textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
-                    });
-                    // In case this component is itself the parent of children
-                    // that were already placed on canvas before it was.
-                    reclampChildren(index);
-                  } else {
-                    delete checked[getComponentKey(index)];
-                    // savedLayout[getComponentKey(index)] is intentionally left
-                    // alone, so re-checking this component later restores it
-                    // here.
-                    selected.delete(index);
-                  }
-                }}
-              />
-              <label
-                for="comp-{index}"
-                class="cursor-pointer truncate"
-                title={component.label}
-              >
-                {#if !component.leaf}
-                  <span class="text-base-content/60 mr-1">▸</span>
-                {/if}
-                {component.label}
-              </label>
-            </li>
-          {/each}
-        </ul>
+        <ComponentHierarchyTree
+          {systems}
+          {components}
+          {selected}
+          isChecked={(index) => checkedIndices.has(index)}
+          onToggleChecked={(index) => toggleComponentChecked(index)}
+        />
       {/if}
 
-      <br />
+        <div class="divider"></div>
+
       <h3
         class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
       >

@@ -11,21 +11,19 @@ station.
   NAV-PVT), and RC link (CRSF) all carry structured message payloads
 - **Multi-system projects** — `quadcopter` and `ground-control` coexist in the
   same project, each with their own component tree
+- **Visual attributes** — the `gps` component sets `color`, `border`, and `font`
+  to demonstrate how diagrams can be styled
 - **In-progress modeling** — the `ground-station-pc` component is non-leaf with
-  no children and no description, triggering W001 and W005 warnings while still
+  no children and no description, triggering W001 and W004 warnings while still
   compiling cleanly
-- **`source` references** — the `flight-controller` component in `systems.hcl`
-  uses `source = "flight-controller"` to pull its full definition from
-  `components/flight-controller.hcl`, demonstrating reusable top-level
-  components
+- **Single-file model** — the complete architecture (protocols + systems +
+  components) lives in one `system.hcl`, kept separate from view definitions
 - **Views** — four perspectives: top-level overview, power distribution, FC
   internals, and ground station layout
 
 ## Files
 
-| File                               | Contents                                                                    |
-| ---------------------------------- | --------------------------------------------------------------------------- |
-| `project.hcl`                      | Project metadata                                                            |
-| `systems.hcl`                      | Both systems: `quadcopter` (complete) and `ground-control` (in-progress)    |
-| `views.hcl`                        | Four view definitions with different filters                                |
-| `components/flight-controller.hcl` | Top-level `flight-controller` component definition, referenced via `source` |
+| File        | Contents                                                                 |
+| ----------- | ------------------------------------------------------------------------ |
+| `system.hcl`  | Complete system model: project metadata, protocols, and both systems (`quadcopter`, `ground-control`) |
+| `views.hcl`   | Four view definitions with different filters                            |

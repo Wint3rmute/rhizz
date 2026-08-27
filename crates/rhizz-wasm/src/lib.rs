@@ -415,6 +415,9 @@ pub struct ComponentJS {
     tags: Vec<String>,
     level: i32,
     leaf: bool,
+    color: Option<String>,
+    border: Option<String>,
+    font: Option<String>,
     /// Set when the parent is another component; `None` when the parent is a system.
     parent_component_index: Option<usize>,
     /// Set when the parent is a top-level system; `None` when the parent is a component.
@@ -439,6 +442,24 @@ impl ComponentJS {
     #[wasm_bindgen(getter)]
     pub fn icon(&self) -> Option<String> {
         self.icon.clone()
+    }
+
+    /// Optional border color.
+    #[wasm_bindgen(getter)]
+    pub fn color(&self) -> Option<String> {
+        self.color.clone()
+    }
+
+    /// Optional border style (solid, dashed, dotted).
+    #[wasm_bindgen(getter)]
+    pub fn border(&self) -> Option<String> {
+        self.border.clone()
+    }
+
+    /// Optional single-word font style (bold, italic).
+    #[wasm_bindgen(getter)]
+    pub fn font(&self) -> Option<String> {
+        self.font.clone()
     }
 
     /// Filtering tags.
@@ -485,6 +506,9 @@ impl From<&rhizz_core::Component> for ComponentJS {
             tags: c.tags.clone(),
             level: c.level,
             leaf: c.leaf,
+            color: c.color.clone(),
+            border: c.border.map(|b| b.as_str().to_string()),
+            font: c.font.clone(),
             parent_component_index,
             parent_system_index,
         }

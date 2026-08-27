@@ -8,6 +8,7 @@ import {
   textPosition,
 } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
+import { borderStyleToSvg, fontStyleToSvg } from "./visuals";
 import type {
   DiagramStaticBox,
   DiagramStaticComponent,
@@ -66,15 +67,21 @@ let visibleConnections = $derived(
   {@const box = nodeBox(index)}
   {@const component = components[index]}
   {#if box && component}
-    {@const textPos = textPosition(box.textAlign, box.width, box.height)}
+{@const textPos = textPosition(box.textAlign, box.width, box.height)}
     {@const icon = resolveIcon(component.icon)}
+    {@const borderSvg = borderStyleToSvg({
+      color: component.color,
+      border: component.border,
+    })}
+    {@const fontSvg = fontStyleToSvg(component.font)}
     <g transform="translate({box.x}, {box.y})">
       <rect
         width={box.width}
         height={box.height}
         rx="5"
-        stroke="var(--color-base-content)"
+        stroke={borderSvg.stroke ?? "var(--color-base-content)"}
         stroke-width="1"
+        stroke-dasharray={borderSvg.dasharray}
         fill="var(--color-base-200)"
       />
       {#if icon}
@@ -96,6 +103,9 @@ let visibleConnections = $derived(
             fill="var(--color-base-content)"
             text-anchor="start"
             dominant-baseline={textPos.baseline}
+            font-weight={fontSvg.fontWeight}
+            font-style={fontSvg.fontStyle}
+            text-decoration={fontSvg.textDecoration}
             style="pointer-events: none; user-select: none"
           >
             {component.label}
@@ -120,6 +130,9 @@ let visibleConnections = $derived(
             fill="var(--color-base-content)"
             text-anchor="start"
             dominant-baseline={textPos.baseline}
+            font-weight={fontSvg.fontWeight}
+            font-style={fontSvg.fontStyle}
+            text-decoration={fontSvg.textDecoration}
             style="pointer-events: none; user-select: none"
           >
             {component.label}
@@ -142,6 +155,9 @@ let visibleConnections = $derived(
             fill="var(--color-base-content)"
             text-anchor="middle"
             dominant-baseline="middle"
+            font-weight={fontSvg.fontWeight}
+            font-style={fontSvg.fontStyle}
+            text-decoration={fontSvg.textDecoration}
             style="pointer-events: none; user-select: none"
           >
             {component.label}
@@ -154,6 +170,9 @@ let visibleConnections = $derived(
           fill="var(--color-base-content)"
           text-anchor={textPos.anchor}
           dominant-baseline={textPos.baseline}
+          font-weight={fontSvg.fontWeight}
+          font-style={fontSvg.fontStyle}
+          text-decoration={fontSvg.textDecoration}
           style="pointer-events: none; user-select: none"
         >
           {component.label}

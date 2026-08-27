@@ -2,6 +2,7 @@
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
 import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
+import { COLOR_OPTIONS } from "./visuals";
 
 interface Props {
   componentKey: string;
@@ -62,6 +63,19 @@ function handleLeafChange(e: Event) {
   const checked = (e.target as HTMLInputElement).checked;
   editLeaf = checked;
   onupdate({ leaf: checked });
+}
+
+function handleColorChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value;
+  onupdate({ color: value === "none" ? undefined : value });
+}
+
+function handleBorderChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value;
+  const border = value === "solid" ? undefined : (value as "dashed" | "dotted");
+  onupdate({
+    border,
+  });
 }
 
 // ── Port Operations ───────────────────────────────────────────────────────────
@@ -142,6 +156,70 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       value={component.icon || ""}
       onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
     />
+
+    <div class="form-control">
+      <label class="label py-1" for="comp-color-input">
+        <span
+          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Color
+        </span>
+      </label>
+      <select
+        id="comp-color-input"
+        value={component.color || "none"}
+        onchange={handleColorChange}
+        class="select select-sm select-bordered w-full"
+      >
+        <option value="none">None</option>
+        {#each COLOR_OPTIONS as option (option)}
+          <option value={option}>{option}</option>
+        {/each}
+      </select>
+    </div>
+
+    <div class="form-control">
+      <label class="label py-1" for="comp-border-input">
+        <span
+          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Border
+        </span>
+      </label>
+      <select
+        id="comp-border-input"
+        value={component.border || "solid"}
+        onchange={handleBorderChange}
+        class="select select-sm select-bordered w-full"
+      >
+        <option value="solid">Solid</option>
+        <option value="dashed">Dashed</option>
+        <option value="dotted">Dotted</option>
+      </select>
+    </div>
+
+    <div class="form-control">
+      <label class="label py-1" for="comp-font-input">
+        <span
+          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Font
+        </span>
+      </label>
+      <select
+        id="comp-font-input"
+        value={component.font || "unstyled"}
+        onchange={(e) => {
+          const v = (e.target as HTMLSelectElement).value;
+          onupdate({
+            font: v === "unstyled" ? undefined : v,
+          });
+        }}
+        class="select select-sm select-bordered w-full"
+      >
+        <option value="unstyled">Unstyled</option>
+        <option value="bold">Bold</option>
+        <option value="italic">Italic</option>
+        <option value="underline">Underline</option>
+      </select>
+    </div>
 
     <div class="form-control">
       <label class="label py-1" for="comp-tags-input">

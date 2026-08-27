@@ -13,17 +13,56 @@ How to work on this file:
 
 ---
 
-## (For later brainstorming) Task <N> - Use the FileTree.svelte component to display component hierachy
+## For later Task <N> — Make clippy more strict
 
-The `FileTree.svelte` component is now only displaying the files in the project. It serves its purpose well,
-so it could be used to display the component hierarchy as well. Right now, the hierarchy is displayed
-in a poorly designed side panel, which is hard to navigate and does not allow expanding/collapsing of components.
+Add these to your Cargo.toml:
 
-Definition of done:
+```
+[lints.clippy]
+pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
+nursery = { level = "deny", priority = -1 }    # BETA LINTS
+# DENY PANICS
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+as_conversions = "deny"
+```
 
-1. Analyze the current coode of the FileTree, determine if could be reused.
-2. If it can be generalised, refactor it to be reusable for both file and component hierarchies.
-3. Use the refactored components to display both file and component hierarchies in the Diagrams Editor.
+and these in your clippy.toml:
+
+```
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+```
+
+After making those changes, run `cargo clippy` and make a plan to address any
+new lint warnings. Fix the warnings gradually, starting with the most severe
+ones. Try to fix one file at a time, and commit the changes after each fix.
+
+---
+
+## For later Task <N> — Make selection box less obstructive
+
+The current selection box is breaking the style edit flow - it overrides the
+style with a constant solid bold border. Instead of the current approach, use a
+50% transparent dotted outline, so that changes in the style are not obscured by
+the selection box.
+
+## For later Task <N> — Adding annotation to plots
+
+Make it possible to attach a text marker to a component with a specified offset.
+This attachment should be saved on the view-level not on the system model.
 
 ## (For later brainstorming) Task <N> - map errors to different usage modes
 
@@ -57,16 +96,6 @@ formalized to require assigning each warning to a specific preset. If a warning
 is assigned to business-level, it should be shown on business level and all
 lower levels. Similarly, if a warning is assigned to architectural-level, it
 should be shown on architectural level and all lower levels.
-
-## (For later brainstorming) Task <N> - relax requirements regarding adding new
-connections
-
-This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.
-
-I suggest starting out this task with writing a new example in `examples/` that demonstrates all possible incomplete definitions and how the compiler handles them,
-showcasing the compiler's flexibility in gradual validation.
-
-It should later be expanded into unit tests, but that is only after the core idea is implemented and checked by the user.
 
 ---
 
@@ -128,20 +157,6 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
   - "Export Project" downloads `system.hcl` and `views.hcl`.
   - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
 - Validate with `deno task check`, `deno task test`, `deno task build`.
-
-## For later Task <N> — Visual attributes for components and connections
-
-Make it possible to define system-model-level attributes specifying how
-a component shall be rendered in diagrams. Currently, an icon is the only
-customizable element. I want to add the following new attributes:
-
-- Color
-- Border style (solid, dashed, dotted)
-
-## For later Task <N> — Adding annotation to plots
-
-Make it possible to attach a text marker to a component with a specified offset.
-This attachment should be saved on the view-level not on the system model.
 
 ---
 
