@@ -333,4 +333,41 @@ system "demo" {
     // Verify round-trip compilation produces 0 errors (no E009)
     expect(doc.compileResult.error_count()).toBe(0);
   });
+
+  it("loads components across multi-file sources and finds them by persistence key", () => {
+    const sources = [
+      {
+        filename: "project.hcl",
+        content: `project { name = "apollo-11" }
+system "apollo-11" {
+  component "cm" {
+    description = "Command module"
+    leaf = true
+  }
+}
+`,
+      },
+      {
+        filename: "diagrams/main.hcl",
+        content: `view "main" {
+  system = "apollo-11"
+  node "apollo-11/cm" {
+    x = 100
+    y = 200
+  }
+}
+`,
+      },
+    ];
+
+    const doc = new DocumentStore();
+    doc.loadFromSources(sources);
+
+    expect(doc.systems).toHaveLength(1);
+    expect(doc.systems[0].label).toBe("apollo-11");
+    const comp = doc.findComponent("apollo-11/cm");
+    expect(comp).toBeDefined();
+    expect(comp?.label).toBe("cm");
+    expect(comp?.description).toBe("Command module");
+  });
 });

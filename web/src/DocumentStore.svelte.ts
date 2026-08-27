@@ -89,6 +89,72 @@ function formatStringList(items?: string[]): string {
   return `[${items.map((it) => escapeHclString(it)).join(", ")}]`;
 }
 
+export interface RawModelPayload {
+  project?: {
+    name?: string;
+    version?: string;
+    authors?: string[];
+  };
+  components?: Array<{
+    label: string;
+    description?: string;
+    icon?: string;
+    tags?: string[];
+    level?: number;
+    leaf?: boolean;
+    ports?: number[];
+    children?: number[];
+    connections?: number[];
+  }>;
+  protocols?: Array<{
+    label: string;
+    description?: string;
+    tags?: string[];
+    roles?: string[];
+    messages?: number[];
+  }>;
+  ports?: Array<{
+    label: string;
+    description?: string;
+    protocol?: string;
+    role?: string;
+    external?: boolean;
+    required?: boolean;
+    tags?: string[];
+  }>;
+  connections?: Array<{
+    label: string;
+    description?: string;
+    tags?: string[];
+    level?: number;
+    from: { component: number; port?: number | null };
+    to: { component: number; port?: number | null };
+    encapsulates?: number[];
+  }>;
+  messages?: Array<{
+    label: string;
+    description?: string;
+    tags?: string[];
+    level?: number;
+    fields?: number[];
+  }>;
+  fields?: Array<{
+    label: string;
+    field_type?: string;
+    description?: string;
+    unit?: string;
+    required?: boolean;
+  }>;
+  systems?: Array<{
+    label: string;
+    description?: string;
+    tags?: string[];
+    level?: number;
+    components?: number[];
+    connections?: number[];
+  }>;
+}
+
 export class DocumentStore {
   project = $state<ProjectMetadata>({
     name: "untitled",
@@ -745,40 +811,29 @@ export class DocumentStore {
     }
   }
 
-  // ── Load / Ingestion from HCL ───────────────────────────────────────────────
+  // ── Load / Ingestion from HCL / Model ────────────────────────────────────────
 
-  loadFromHcl(systemHcl: string, viewsHcl?: string): void {
-    const res = compile_system([{
-      filename: "system.hcl",
-      content: systemHcl,
-    }]);
-    const model = res.model();
-    if (!model) {
-      console.warn(
-        "Compilation had errors during loadFromHcl, loading partial state",
-      );
-      return;
-    }
+  loadFromRawModel(raw: RawModelPayload, viewsHcl?: string): void {
+    if (!raw) return;
 
-    const raw = model.to_js();
     this.project = {
-      name: raw.project.name || "untitled",
-      version: raw.project.version || "0.1.0",
-      authors: raw.project.authors || [],
+      name: raw.project?.name || "untitled",
+      version: raw.project?.version || "0.1.0",
+      authors: raw.project?.authors || [],
     };
 
-    const comps = raw.components;
+    const comps = raw.components || [];
     const protos = raw.protocols || [];
-    const ports = raw.ports;
-    const conns = raw.connections;
-    const msgs = raw.messages;
-    const flds = raw.fields;
+    const ports = raw.ports || [];
+    const conns = raw.connections || [];
+    const msgs = raw.messages || [];
+    const flds = raw.fields || [];
 
     this.protocols = protos.map((proto: {
       label: string;
       description?: string;
       tags?: string[];
-      roles?: ("provider" | "consumer" | "peer")[];
+      roles?: string[];
       messages?: number[];
     }): ProtocolData => ({
       label: proto.label,
@@ -892,5 +947,27 @@ export class DocumentStore {
         console.warn("Failed to parse views HCL:", err);
       }
     }
+  }
+
+  loadFromSources(
+    sources: { filename: string; content: string }[],
+    viewsHcl?: string,
+  ): void {
+    const res = compile_system(sources);
+    const model = res.model();
+    if (!model) {
+      console.warn(
+        "Compilation had errors during loadFromSources, loading partial state",
+      );
+      return;
+    }
+    this.loadFromRawModel(model.to_js(), viewsHcl);
+  }
+
+  loadFromHcl(systemHcl: string, viewsHcl?: string): void {
+    this.loadFromSources(
+      [{ filename: "system.hcl", content: systemHcl }],
+      viewsHcl,
+    );
   }
 }

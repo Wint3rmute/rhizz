@@ -755,13 +755,17 @@ async function getPrimaryHclPath(): Promise<string> {
   try {
     const entries = await fs.readdir(".", { recursive: true });
     const hclFiles = entries.filter((e) =>
-      e.isFile() && e.name.endsWith(".hcl")
+      e.isFile() &&
+      e.name.endsWith(".hcl") &&
+      !e.path.startsWith(".rhizz/") &&
+      !e.path.startsWith("diagrams/")
     );
     const preferred = hclFiles.find(
       (e) =>
-        e.name === "main.hcl" ||
         e.name === "system.hcl" ||
-        e.name === "systems.hcl",
+        e.name === "systems.hcl" ||
+        e.name === "project.hcl" ||
+        e.name === "main.hcl",
     );
     return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
   } catch {
@@ -956,13 +960,12 @@ function onCanvasDblClick(event: MouseEvent) {
 }
 
 let docStore = $derived.by(() => {
-  const mainContent = sources.find((s) =>
-    s.filename.endsWith("main.hcl")
-  )?.content ||
-    sources.map((s) => s.content).join("\n");
+  const model = output.model();
   const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
+  if (model) {
+    doc.loadFromRawModel(model.to_js());
+  } else if (sources.length > 0) {
+    doc.loadFromSources(sources);
   }
   return doc;
 });
