@@ -191,12 +191,9 @@ function snap(value: number): number {
   return Math.round(value / gridSize) * gridSize;
 }
 
-// Size of the resize-handle square rendered at a selected node's
-// bottom-right corner, in world units. Its outer corner is rounded to
-// match the node's own `rx` so it hugs the node's rounded corner instead
-// of poking past it.
-const RESIZE_HANDLE_SIZE = 10;
-const RESIZE_HANDLE_RADIUS = 5;
+// Hit area dimensions for edge and corner resize handles
+const CORNER_HANDLE_SIZE = 10;
+const EDGE_HANDLE_THICKNESS = 6;
 
 // Default text alignment for newly-placed nodes and for backfilling
 // entries persisted before per-node text alignment existed.
@@ -2403,10 +2400,10 @@ $effect(() => {
             <!-- Top edge -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={RESIZE_HANDLE_SIZE}
-              y={-3}
-              width={Math.max(1, width - 2 * RESIZE_HANDLE_SIZE)}
-              height={6}
+              x={CORNER_HANDLE_SIZE}
+              y={-EDGE_HANDLE_THICKNESS / 2}
+              width={Math.max(1, width - 2 * CORNER_HANDLE_SIZE)}
+              height={EDGE_HANDLE_THICKNESS}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'ns-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "top")}
@@ -2414,10 +2411,10 @@ $effect(() => {
             <!-- Bottom edge -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={RESIZE_HANDLE_SIZE}
-              y={height - 3}
-              width={Math.max(1, width - 2 * RESIZE_HANDLE_SIZE)}
-              height={6}
+              x={CORNER_HANDLE_SIZE}
+              y={height - EDGE_HANDLE_THICKNESS / 2}
+              width={Math.max(1, width - 2 * CORNER_HANDLE_SIZE)}
+              height={EDGE_HANDLE_THICKNESS}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'ns-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom")}
@@ -2425,10 +2422,10 @@ $effect(() => {
             <!-- Left edge -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={-3}
-              y={RESIZE_HANDLE_SIZE}
-              width={6}
-              height={Math.max(1, height - 2 * RESIZE_HANDLE_SIZE)}
+              x={-EDGE_HANDLE_THICKNESS / 2}
+              y={CORNER_HANDLE_SIZE}
+              width={EDGE_HANDLE_THICKNESS}
+              height={Math.max(1, height - 2 * CORNER_HANDLE_SIZE)}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'ew-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "left")}
@@ -2436,10 +2433,10 @@ $effect(() => {
             <!-- Right edge -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={width - 3}
-              y={RESIZE_HANDLE_SIZE}
-              width={6}
-              height={Math.max(1, height - 2 * RESIZE_HANDLE_SIZE)}
+              x={width - EDGE_HANDLE_THICKNESS / 2}
+              y={CORNER_HANDLE_SIZE}
+              width={EDGE_HANDLE_THICKNESS}
+              height={Math.max(1, height - 2 * CORNER_HANDLE_SIZE)}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'ew-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "right")}
@@ -2449,10 +2446,10 @@ $effect(() => {
             <!-- Top-Left corner -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={-5}
-              y={-5}
-              width={10}
-              height={10}
+              x={-CORNER_HANDLE_SIZE / 2}
+              y={-CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "top-left")}
@@ -2460,10 +2457,10 @@ $effect(() => {
             <!-- Top-Right corner -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={width - 5}
-              y={-5}
-              width={10}
-              height={10}
+              x={width - CORNER_HANDLE_SIZE / 2}
+              y={-CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'nesw-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "top-right")}
@@ -2471,21 +2468,21 @@ $effect(() => {
             <!-- Bottom-Left corner -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={-5}
-              y={height - 5}
-              width={10}
-              height={10}
+              x={-CORNER_HANDLE_SIZE / 2}
+              y={height - CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'nesw-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-left")}
             />
-            <!-- Bottom-Right corner (hit area) -->
+            <!-- Bottom-Right corner -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <rect
-              x={width - 5}
-              y={height - 5}
-              width={10}
-              height={10}
+              x={width - CORNER_HANDLE_SIZE / 2}
+              y={height - CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
               fill="transparent"
               style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
               onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-right")}
@@ -2555,26 +2552,7 @@ $effect(() => {
               {/if}
             {/if}
 
-            {#if selected.has(index)}
-              <!--
-                Only the outer (bottom-right) corner is rounded, matching
-                the node's own rx, so the handle hugs the node's rounded
-                corner instead of poking past it. rect's rx rounds all four
-                corners uniformly, so a path with a single arc is used
-                instead of a rect.
-              -->
-              <path
-                d="M {width - RESIZE_HANDLE_SIZE},{height -
-                  RESIZE_HANDLE_SIZE} L {width},{height - RESIZE_HANDLE_SIZE}
-                  L {width},{height - RESIZE_HANDLE_RADIUS}
-                  A {RESIZE_HANDLE_RADIUS},{RESIZE_HANDLE_RADIUS} 0 0,1 {width -
-                  RESIZE_HANDLE_RADIUS},{height} L {width -
-                  RESIZE_HANDLE_SIZE},{height} Z"
-                fill="var(--color-primary)"
-                style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
-                onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-right")}
-              />
-            {/if}
+
           </g>
         {/snippet}
 
