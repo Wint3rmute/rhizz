@@ -18,6 +18,7 @@ import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
+import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
@@ -138,6 +139,17 @@ function getComponentKey(index: number): string {
 // not rendered.
 let keyToIndex = $derived.by(() => {
   return buildKeyToIndexMap(components, systems);
+});
+
+// The set of arena indices currently placed on the canvas, derived from
+// `checked` (keyed by structural componentKey) via the reverse key→index map.
+let checkedIndices = $derived.by(() => {
+  const placed = new SvelteSet<number>();
+  for (const key of Object.keys(checked)) {
+    const index = keyToIndex.get(key);
+    if (index !== undefined) placed.add(index);
+  }
+  return placed;
 });
 
 // Default node size, in world (SVG) units, for newly-placed nodes and for
@@ -489,6 +501,48 @@ function setSelectedTextAlign(align: TextAlign) {
   if (box.textAlign === align) return; // no-op: skip a redundant undo point
   recordUndoPoint();
   setNodeBox(primarySelected, { textAlign: align });
+}
+
+// Places (checks) or unplaces (unchecks) a component on the canvas. This is
+// the single source of truth for the sidebar's checkbox — both the old flat
+// list and the new ComponentHierarchyTree route through it.
+function toggleComponentChecked(index: number) {
+  recordUndoPoint();
+  if (checked[getComponentKey(index)]) {
+    // Unplace.
+    delete checked[getComponentKey(index)];
+    // savedLayout[getComponentKey(index)] is intentionally left alone, so
+    // re-checking this component later restores it where it was.
+    selected.delete(index);
+    return;
+  }
+
+  // Restore the remembered layout if this component has been placed before
+  // (even if it was later unchecked), instead of always resetting to the
+  // default position.
+  const remembered = savedLayout[getComponentKey(index)];
+  let box: Box = {
+    x: remembered?.x ?? 100,
+    y: remembered?.y ?? 100,
+    width: remembered?.width ?? DEFAULT_NODE_WIDTH,
+    height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
+  };
+  const parentBox = activeParentBox(index);
+  if (parentBox) {
+    box = clampWithin(
+      box,
+      parentBox,
+      CHILD_CONTAINMENT_MARGIN,
+      CHILD_CONTAINMENT_TOP_MARGIN,
+    );
+  }
+  setNodeBox(index, {
+    ...box,
+    textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
+  });
+  // In case this component is itself the parent of children that were
+  // already placed on canvas before it was.
+  reclampChildren(index);
 }
 
 // Padding kept between a child node's edges and its active parent's edges,
@@ -2743,65 +2797,13 @@ $effect(() => {
           No components found.<br />Open the editor and define some systems.
         </p>
       {:else}
-        <ul class="space-y-1">
-          {#each components as component, index (index)}
-            <li class="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                id="comp-{index}"
-                class="checkbox checkbox-xs"
-                checked={!!checked[getComponentKey(index)]}
-                onchange={(value) => {
-                  recordUndoPoint();
-                  if (value.currentTarget.checked) {
-                    // Restore the remembered layout if this component has
-                    // been placed before (even if it was later unchecked),
-                    // instead of always resetting to the default position.
-                    const remembered = savedLayout[getComponentKey(index)];
-                    let box: Box = {
-                      x: remembered?.x ?? 100,
-                      y: remembered?.y ?? 100,
-                      width: remembered?.width ?? DEFAULT_NODE_WIDTH,
-                      height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
-                    };
-                    const parentBox = activeParentBox(index);
-                    if (parentBox) {
-                      box = clampWithin(
-                        box,
-                        parentBox,
-                        CHILD_CONTAINMENT_MARGIN,
-                        CHILD_CONTAINMENT_TOP_MARGIN,
-                      );
-                    }
-                    setNodeBox(index, {
-                      ...box,
-                      textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
-                    });
-                    // In case this component is itself the parent of children
-                    // that were already placed on canvas before it was.
-                    reclampChildren(index);
-                  } else {
-                    delete checked[getComponentKey(index)];
-                    // savedLayout[getComponentKey(index)] is intentionally left
-                    // alone, so re-checking this component later restores it
-                    // here.
-                    selected.delete(index);
-                  }
-                }}
-              />
-              <label
-                for="comp-{index}"
-                class="cursor-pointer truncate"
-                title={component.label}
-              >
-                {#if !component.leaf}
-                  <span class="text-base-content/60 mr-1">▸</span>
-                {/if}
-                {component.label}
-              </label>
-            </li>
-          {/each}
-        </ul>
+        <ComponentHierarchyTree
+          {systems}
+          {components}
+          {selected}
+          isChecked={(index) => checkedIndices.has(index)}
+          onToggleChecked={(index) => toggleComponentChecked(index)}
+        />
       {/if}
 
       <br />
