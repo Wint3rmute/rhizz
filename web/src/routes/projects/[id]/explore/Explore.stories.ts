@@ -346,21 +346,15 @@ export const Apollo11: Story = {
       if (apolloProject && apolloExample) {
         const fs = openProjectFs(projectStore, apolloProject.id);
         for (const file of apolloExample.files) {
-          const lastSlash = file.path.lastIndexOf("/");
+          const targetPath = file.path.startsWith("diagrams/")
+            ? `.rhizz/${file.path}`
+            : file.path;
+          const lastSlash = targetPath.lastIndexOf("/");
           if (lastSlash !== -1) {
-            const dir = file.path.slice(0, lastSlash);
+            const dir = targetPath.slice(0, lastSlash);
             await fs.mkdir(dir, { recursive: true });
           }
-          await fs.writeFile(file.path, file.content);
-          if (file.path.startsWith("diagrams/")) {
-            const rhizzDiagramPath = `.rhizz/${file.path}`;
-            const rhizzDir = rhizzDiagramPath.slice(
-              0,
-              rhizzDiagramPath.lastIndexOf("/"),
-            );
-            await fs.mkdir(rhizzDir, { recursive: true });
-            await fs.writeFile(rhizzDiagramPath, file.content);
-          }
+          await fs.writeFile(targetPath, file.content);
         }
       }
       return {};
@@ -381,21 +375,15 @@ export const SoftwareHouse: Story = {
       if (softwareHouseProject && softwareHouseExample) {
         const fs = openProjectFs(projectStore, softwareHouseProject.id);
         for (const file of softwareHouseExample.files) {
-          const lastSlash = file.path.lastIndexOf("/");
+          const targetPath = file.path.startsWith("diagrams/")
+            ? `.rhizz/${file.path}`
+            : file.path;
+          const lastSlash = targetPath.lastIndexOf("/");
           if (lastSlash !== -1) {
-            const dir = file.path.slice(0, lastSlash);
+            const dir = targetPath.slice(0, lastSlash);
             await fs.mkdir(dir, { recursive: true });
           }
-          await fs.writeFile(file.path, file.content);
-          if (file.path.startsWith("diagrams/")) {
-            const rhizzDiagramPath = `.rhizz/${file.path}`;
-            const rhizzDir = rhizzDiagramPath.slice(
-              0,
-              rhizzDiagramPath.lastIndexOf("/"),
-            );
-            await fs.mkdir(rhizzDir, { recursive: true });
-            await fs.writeFile(rhizzDiagramPath, file.content);
-          }
+          await fs.writeFile(targetPath, file.content);
         }
       }
       return {};
