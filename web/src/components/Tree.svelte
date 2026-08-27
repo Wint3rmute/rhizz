@@ -21,6 +21,8 @@ let {
   leading,
   rowTail,
   emptyMessage = "Nothing here yet.",
+  rowClass = "",
+  showExpandCollapseAll = false,
   onselect,
 }: {
   nodes: TreeNode[];
@@ -28,6 +30,10 @@ let {
   leading?: Snippet<[TreeNode, boolean]>;
   rowTail?: Snippet<[TreeNode]>;
   emptyMessage?: string;
+  /** Extra classes added to each row to tune vertical/horizontal spacing, e.g. "py-1". */
+  rowClass?: string;
+  /** If true, show a "Collapse all / Expand all" toolbar above the tree. */
+  showExpandCollapseAll?: boolean;
   /** Extra sole-selection hook, fired on a label click after `selectedId` is set. */
   onselect?: (entry: TreeNode) => void;
 } = $props();
@@ -40,13 +46,36 @@ function toggleCollapsed(id: string) {
   if (collapsedIds.has(id)) collapsedIds.delete(id);
   else collapsedIds.add(id);
 }
+
+// Every expandable node id in the tree, for the collapse-all/expand-all
+// buttons. Purely derived from the input tree, so the buttons only appear
+// when there's actually something to collapse/expand.
+let expandableIds = $derived.by(() => {
+  const collect = (entries: TreeNode[], acc: string[]) => {
+    for (const entry of entries) {
+      if (entry.isExpandable) acc.push(entry.id);
+      collect(entry.children, acc);
+    }
+  };
+  const acc: string[] = [];
+  collect(nodes, acc);
+  return acc;
+});
+
+function collapseAll() {
+  for (const id of expandableIds) collapsedIds.add(id);
+}
+
+function expandAll() {
+  collapsedIds.clear();
+}
 </script>
 
 {#snippet node(entry: TreeNode, depth: number)}
   {@const collapsed = collapsedIds.has(entry.id)}
   <li>
     <div
-      class="flex items-center gap-1 group/row rounded hover:bg-base-200"
+      class="flex items-center gap-1 group/row rounded hover:bg-base-200 {rowClass}"
       style="padding-left: {depth * 12}px"
     >
       {#if entry.isExpandable}
@@ -93,7 +122,23 @@ function toggleCollapsed(id: string) {
 {#if nodes.length === 0}
   <p class="text-sm text-base-content/50">{emptyMessage}</p>
 {:else}
-  <ul class="text-sm">
+  {#if showExpandCollapseAll}
+    <div class="flex gap-1 mb-1">
+  <button
+    class="btn btn-ghost btn-xs"
+    onclick={collapseAll}
+    disabled={expandableIds.length === 0}
+    title="Collapse every expandable node"
+  >Collapse all</button>
+  <button
+    class="btn btn-ghost btn-xs"
+    onclick={expandAll}
+    disabled={expandableIds.length === 0}
+    title="Expand every expandable node"
+  >Expand all</button>
+</div>
+  {/if}
+  <ul class="text-sm space-y-1">
     {#each nodes as entry (entry.id)}
       {@render node(entry, 0)}
     {/each}

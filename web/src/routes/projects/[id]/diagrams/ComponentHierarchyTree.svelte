@@ -93,6 +93,8 @@ function nodeIndex(entry: TreeNode): number | null {
   {nodes}
   bind:selectedId={selectedIndex}
   emptyMessage="No components found."
+  rowClass="py-1.5"
+  showExpandCollapseAll
   leading={compLeading}
   onselect={onSelectComponent}
 />

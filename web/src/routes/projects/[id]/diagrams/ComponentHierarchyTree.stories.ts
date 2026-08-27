@@ -55,3 +55,26 @@ export const Default: Story = {
     expect(args.selected && args.selected.has(2)).toBe(true);
   },
 };
+
+export const ExpandCollapseAll: Story = {
+  args: {},
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Buttons are present while there's something expandable.
+    expect(canvas.getByRole("button", { name: "Collapse all" }))
+      .toBeInTheDocument();
+    expect(canvas.getByRole("button", { name: "Expand all" }))
+      .toBeInTheDocument();
+
+    // "Collapse all" folds every expandable node: all top-level rows still
+    // render, but their children are hidden.
+    const mcu = canvas.getByText("mcu");
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse all" }));
+    expect(mcu).not.toBeInTheDocument();
+
+    // "Expand all" unfolds them again.
+    await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
+    expect(canvas.getByText("mcu")).toBeInTheDocument();
+  },
+};
