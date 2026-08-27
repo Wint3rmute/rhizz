@@ -174,6 +174,12 @@ pub struct Component {
     pub description: String,
     /// Optional icon name (e.g. FontAwesome icon identifier).
     pub icon: Option<String>,
+    /// Optional border color for diagram rendering.
+    pub color: Option<String>,
+    /// Optional border style (solid, dashed, dotted); solid when unset.
+    pub border: Option<BorderStyle>,
+    /// Optional single-word font style (bold, italic); unstyled when unset.
+    pub font: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Abstraction level.
@@ -338,6 +344,36 @@ pub struct NodeLayout {
     /// Optional text alignment ("center", "top-center", "top-left").
     #[serde(default)]
     pub text_align: Option<String>,
+}
+
+/// Optional rendering attributes for a component/connection box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum BorderStyle {
+    /// Solid border (default).
+    #[default]
+    Solid,
+    /// Dashed border.
+    Dashed,
+    /// Dotted border.
+    Dotted,
+}
+
+impl BorderStyle {
+    /// Returns the lowercase string representation of this style.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BorderStyle::Solid => "solid",
+            BorderStyle::Dashed => "dashed",
+            BorderStyle::Dotted => "dotted",
+        }
+    }
+}
+
+impl std::fmt::Display for BorderStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 /// The boundary side of a component box where a connection attaches.
