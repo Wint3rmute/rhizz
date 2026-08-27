@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "./inMemoryStore";
 import { openProjectFs, type ProjectFs } from "./fs";
 import { readProjectSources } from "./compile";
+import { createProjectWithFiles, projectStore } from "../ProjectState.svelte";
 
 let store: InMemoryProjectStore;
 let fs: ProjectFs;
@@ -58,5 +59,46 @@ describe("readProjectSources", () => {
 
   it("returns an empty array for an empty project", async () => {
     expect(await readProjectSources(fs)).toEqual([]);
+  });
+
+  it("unpacks example diagrams exclusively into .rhizz/diagrams without duplicating at root", async () => {
+    const files = [
+      { path: "project.hcl", content: 'project { name = "apollo" }' },
+      {
+        path: "components/mcu.hcl",
+        content: 'component "mcu" { leaf = true }',
+      },
+      {
+        path: "diagrams/main.hcl",
+        content: 'view "main" { system = "apollo" }',
+      },
+    ];
+
+    const project = await createProjectWithFiles("apollo-test", files);
+    const projFs = openProjectFs(projectStore, project.id);
+
+    // Root entries should contain project.hcl, components, and .rhizz, but NOT diagrams
+    const rootEntries = await projFs.readdir(".");
+    const rootNames = rootEntries.map((e) => e.name);
+    expect(rootNames).toContain("project.hcl");
+    expect(rootNames).toContain("components");
+    expect(rootNames).toContain(".rhizz");
+    expect(rootNames).not.toContain("diagrams");
+
+    // Check .rhizz/diagrams contains main.hcl
+    const rhizzDiagrams = await projFs.readdir(".rhizz/diagrams");
+    expect(rhizzDiagrams.map((e) => e.name)).toContain("main.hcl");
+
+    // Check components directory contains mcu.hcl
+    const compEntries = await projFs.readdir("components");
+    expect(compEntries.map((e) => e.name)).toContain("mcu.hcl");
+
+    // Check compilation sources: must include project.hcl & components/mcu.hcl, NOT .rhizz diagram files
+    const sources = await readProjectSources(projFs);
+    const filenames = sources.map((s) => s.filename);
+    expect(filenames).toContain("project.hcl");
+    expect(filenames).toContain("components/mcu.hcl");
+    expect(filenames).not.toContain("diagrams/main.hcl");
+    expect(filenames).not.toContain(".rhizz/diagrams/main.hcl");
   });
 });

@@ -14,6 +14,17 @@ export type Box = { x: number; y: number; width: number; height: number };
 export type ConnectionOrientation = "horizontal" | "vertical";
 export type ConnectionSide = "top" | "bottom" | "left" | "right";
 
+// Identifies which edge or corner of a node is being dragged for resizing.
+export type ResizeHandle =
+  | "top"
+  | "bottom"
+  | "left"
+  | "right"
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right";
+
 // Nodes can't be resized smaller than this (world units), so a node never
 // shrinks into an unusable sliver. Used by clampResizeWithin below.
 export const MIN_NODE_SIZE = 40;
@@ -64,6 +75,63 @@ export function clampResizeWithin(
     width: Math.min(box.width, Math.max(MIN_NODE_SIZE, maxWidth)),
     height: Math.min(box.height, Math.max(MIN_NODE_SIZE, maxHeight)),
   };
+}
+
+// Computes a new bounding box by applying pointer deltas to a specified edge or corner handle.
+export function computeResizedBox(
+  startBox: Box,
+  handle: ResizeHandle,
+  deltaX: number,
+  deltaY: number,
+  minSize: number = MIN_NODE_SIZE,
+): Box {
+  let { x, y, width, height } = startBox;
+
+  // Horizontal resizing
+  if (
+    handle === "right" ||
+    handle === "top-right" ||
+    handle === "bottom-right"
+  ) {
+    width = Math.max(minSize, startBox.width + deltaX);
+  } else if (
+    handle === "left" ||
+    handle === "top-left" ||
+    handle === "bottom-left"
+  ) {
+    const rawWidth = startBox.width - deltaX;
+    if (rawWidth < minSize) {
+      width = minSize;
+      x = startBox.x + (startBox.width - minSize);
+    } else {
+      width = rawWidth;
+      x = startBox.x + deltaX;
+    }
+  }
+
+  // Vertical resizing
+  if (
+    handle === "bottom" ||
+    handle === "bottom-left" ||
+    handle === "bottom-right"
+  ) {
+    height = Math.max(minSize, startBox.height + deltaY);
+  } else if (
+    handle === "top" ||
+    handle === "top-left" ||
+    handle === "top-right"
+  ) {
+    const rawHeight = startBox.height - deltaY;
+    if (rawHeight < minSize) {
+      height = minSize;
+      y = startBox.y + (startBox.height - minSize);
+    } else {
+      height = rawHeight;
+      y = startBox.y + deltaY;
+    }
+  }
+
+  return { x, y, width, height };
 }
 
 // Bounding box (union) enclosing every box in `boxes`. Used to find a

@@ -58,12 +58,14 @@ import {
   computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
+  computeResizedBox,
   computeVisibleConnections,
   depthOf,
   elbowPath,
   findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
+  type ResizeHandle,
   textPosition,
   unionBox,
 } from "./geometry";
@@ -189,12 +191,9 @@ function snap(value: number): number {
   return Math.round(value / gridSize) * gridSize;
 }
 
-// Size of the resize-handle square rendered at a selected node's
-// bottom-right corner, in world units. Its outer corner is rounded to
-// match the node's own `rx` so it hugs the node's rounded corner instead
-// of poking past it.
-const RESIZE_HANDLE_SIZE = 10;
-const RESIZE_HANDLE_RADIUS = 5;
+// Hit area dimensions for edge and corner resize handles
+const CORNER_HANDLE_SIZE = 10;
+const EDGE_HANDLE_THICKNESS = 6;
 
 // Default text alignment for newly-placed nodes and for backfilling
 // entries persisted before per-node text alignment existed.
@@ -677,12 +676,12 @@ type Interaction =
     startPositions: Record<number, { x: number; y: number }>;
   }
   | {
-    // Resizing any selected node's handle scales the whole selection
-    // together, proportionally, around the fixed top-left corner of the
-    // selection's combined bounding box (groupBox, captured at resize
-    // start alongside every selected node's starting box).
+    // Resizing any node via any of its 8 edge/corner handles.
     type: "resizing";
     anchorIndex: number;
+    handle: ResizeHandle;
+    startBox: Box;
+    startPointer: { x: number; y: number };
     groupBox: Box;
     startBoxes: Record<number, Box>;
   }
@@ -756,13 +755,17 @@ async function getPrimaryHclPath(): Promise<string> {
   try {
     const entries = await fs.readdir(".", { recursive: true });
     const hclFiles = entries.filter((e) =>
-      e.isFile() && e.name.endsWith(".hcl")
+      e.isFile() &&
+      e.name.endsWith(".hcl") &&
+      !e.path.startsWith(".rhizz/") &&
+      !e.path.startsWith("diagrams/")
     );
     const preferred = hclFiles.find(
       (e) =>
-        e.name === "main.hcl" ||
         e.name === "system.hcl" ||
-        e.name === "systems.hcl",
+        e.name === "systems.hcl" ||
+        e.name === "project.hcl" ||
+        e.name === "main.hcl",
     );
     return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
   } catch {
@@ -957,13 +960,12 @@ function onCanvasDblClick(event: MouseEvent) {
 }
 
 let docStore = $derived.by(() => {
-  const mainContent = sources.find((s) =>
-    s.filename.endsWith("main.hcl")
-  )?.content ||
-    sources.map((s) => s.content).join("\n");
+  const model = output.model();
   const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
+  if (model) {
+    doc.loadFromRawModel(model.to_js());
+  } else if (sources.length > 0) {
+    doc.loadFromSources(sources);
   }
   return doc;
 });
@@ -1239,11 +1241,13 @@ function onCanvasMouseDown(event: MouseEvent) {
   };
 }
 
-// Starts a resize of the whole current selection. Stops propagation so the
-// handle's own mousedown doesn't also bubble up to the node's onmousedown
-// (which would start a drag too). Handles only render on selected nodes
-// (see the ViewNode snippet), so `index` is always already in `selected`.
-function onResizeHandleMouseDown(event: MouseEvent, index: number) {
+// Starts a resize from any edge or corner handle of a node. Stops propagation
+// so the handle's own mousedown doesn't also bubble up to the node's onmousedown.
+function onResizeHandleMouseDown(
+  event: MouseEvent,
+  index: number,
+  handle: ResizeHandle,
+) {
   // See onNodeMouseDown's matching guard above.
   if (autoLayoutRunning) return;
   if (event.button !== 0) return;
@@ -1254,6 +1258,12 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
   event.preventDefault();
   event.stopPropagation();
 
+  // If node is not already part of the selection, select only this node
+  if (!selected.has(index)) {
+    selected.clear();
+    selected.add(index);
+  }
+
   // One undo point per resize gesture, recorded before anything resizes.
   recordUndoPoint();
 
@@ -1263,7 +1273,23 @@ function onResizeHandleMouseDown(event: MouseEvent, index: number) {
     if (box) startBoxes[i] = box;
   }
   const groupBox = unionBox(Object.values(startBoxes));
-  interaction = { type: "resizing", anchorIndex: index, groupBox, startBoxes };
+  const startBox = nodeBox(index) ?? {
+    x: 0,
+    y: 0,
+    width: DEFAULT_NODE_WIDTH,
+    height: DEFAULT_NODE_HEIGHT,
+  };
+  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+
+  interaction = {
+    type: "resizing",
+    anchorIndex: index,
+    handle,
+    startBox,
+    startPointer: svgCoords,
+    groupBox,
+    startBoxes,
+  };
 }
 
 // Moves every node in `startPositions` (a snapshot of the whole selection
@@ -1403,16 +1429,39 @@ function onSvgMouseMove(event: MouseEvent) {
       return;
     }
     case "resizing": {
-      const anchorStart = current.startBoxes[current.anchorIndex];
+      const anchorStart = current.startBox;
       if (anchorStart) {
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        const rawWidth = Math.max(MIN_NODE_SIZE, svgCoords.x - anchorStart.x);
-        const rawHeight = Math.max(MIN_NODE_SIZE, svgCoords.y - anchorStart.y);
-        // Group-resize is a uniform scale, derived from how much the
-        // grabbed node's own box changed.
-        const scaleX = rawWidth / anchorStart.width;
-        const scaleY = rawHeight / anchorStart.height;
-        applyGroupScale(current.startBoxes, current.groupBox, scaleX, scaleY);
+        const deltaX = svgCoords.x - current.startPointer.x;
+        const deltaY = svgCoords.y - current.startPointer.y;
+
+        if (selected.size <= 1) {
+          const resizedBox = computeResizedBox(
+            anchorStart,
+            current.handle,
+            deltaX,
+            deltaY,
+            MIN_NODE_SIZE,
+          );
+          const next: Box = {
+            x: snap(resizedBox.x),
+            y: snap(resizedBox.y),
+            width: snap(resizedBox.width),
+            height: snap(resizedBox.height),
+          };
+          writeClampedToActiveParent(current.anchorIndex, next);
+        } else {
+          const resizedBox = computeResizedBox(
+            anchorStart,
+            current.handle,
+            deltaX,
+            deltaY,
+            MIN_NODE_SIZE,
+          );
+          const scaleX = resizedBox.width / anchorStart.width;
+          const scaleY = resizedBox.height / anchorStart.height;
+          applyGroupScale(current.startBoxes, current.groupBox, scaleX, scaleY);
+        }
       }
       return;
     }
@@ -2350,6 +2399,98 @@ $effect(() => {
               </text>
             {/if}
 
+            <!-- 4 Edge resize hit strips (transparent, active on hover) -->
+            <!-- Top edge -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={CORNER_HANDLE_SIZE}
+              y={-EDGE_HANDLE_THICKNESS / 2}
+              width={Math.max(1, width - 2 * CORNER_HANDLE_SIZE)}
+              height={EDGE_HANDLE_THICKNESS}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'ns-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "top")}
+            />
+            <!-- Bottom edge -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={CORNER_HANDLE_SIZE}
+              y={height - EDGE_HANDLE_THICKNESS / 2}
+              width={Math.max(1, width - 2 * CORNER_HANDLE_SIZE)}
+              height={EDGE_HANDLE_THICKNESS}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'ns-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom")}
+            />
+            <!-- Left edge -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={-EDGE_HANDLE_THICKNESS / 2}
+              y={CORNER_HANDLE_SIZE}
+              width={EDGE_HANDLE_THICKNESS}
+              height={Math.max(1, height - 2 * CORNER_HANDLE_SIZE)}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'ew-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "left")}
+            />
+            <!-- Right edge -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={width - EDGE_HANDLE_THICKNESS / 2}
+              y={CORNER_HANDLE_SIZE}
+              width={EDGE_HANDLE_THICKNESS}
+              height={Math.max(1, height - 2 * CORNER_HANDLE_SIZE)}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'ew-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "right")}
+            />
+
+            <!-- 4 Corner resize handles -->
+            <!-- Top-Left corner -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={-CORNER_HANDLE_SIZE / 2}
+              y={-CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "top-left")}
+            />
+            <!-- Top-Right corner -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={width - CORNER_HANDLE_SIZE / 2}
+              y={-CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'nesw-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "top-right")}
+            />
+            <!-- Bottom-Left corner -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={-CORNER_HANDLE_SIZE / 2}
+              y={height - CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'nesw-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-left")}
+            />
+            <!-- Bottom-Right corner -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <rect
+              x={width - CORNER_HANDLE_SIZE / 2}
+              y={height - CORNER_HANDLE_SIZE / 2}
+              width={CORNER_HANDLE_SIZE}
+              height={CORNER_HANDLE_SIZE}
+              fill="transparent"
+              style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
+              onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-right")}
+            />
+
             <!-- Port & Directional handles (visible when selected or actively dragging a connection) -->
             {#if selected.has(index) || interaction.type === "connecting"}
               <!-- 4 Directional handles for starting connection from any border side -->
@@ -2414,26 +2555,7 @@ $effect(() => {
               {/if}
             {/if}
 
-            {#if selected.has(index)}
-              <!--
-                Only the outer (bottom-right) corner is rounded, matching
-                the node's own rx, so the handle hugs the node's rounded
-                corner instead of poking past it. rect's rx rounds all four
-                corners uniformly, so a path with a single arc is used
-                instead of a rect.
-              -->
-              <path
-                d="M {width - RESIZE_HANDLE_SIZE},{height -
-                  RESIZE_HANDLE_SIZE} L {width},{height - RESIZE_HANDLE_SIZE}
-                  L {width},{height - RESIZE_HANDLE_RADIUS}
-                  A {RESIZE_HANDLE_RADIUS},{RESIZE_HANDLE_RADIUS} 0 0,1 {width -
-                  RESIZE_HANDLE_RADIUS},{height} L {width -
-                  RESIZE_HANDLE_SIZE},{height} Z"
-                fill="var(--color-primary)"
-                style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
-                onmousedown={(e) => onResizeHandleMouseDown(e, index)}
-              />
-            {/if}
+
           </g>
         {/snippet}
 

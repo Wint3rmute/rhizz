@@ -97,6 +97,27 @@ export async function createProjectWithMainFile(
   return project;
 }
 
+// Populates a project's virtual filesystem with a list of relative files.
+// Automatically creates parent directories as needed and routes diagram
+// files (e.g. "diagrams/main.hcl") to ".rhizz/diagrams/" for persistence discovery.
+export async function populateProjectFiles(
+  fs: ReturnType<typeof openProjectFs>,
+  files: Array<{ path: string; content: string }>,
+): Promise<void> {
+  for (const file of files) {
+    const targetPath = file.path.startsWith("diagrams/")
+      ? `.rhizz/${file.path}`
+      : file.path;
+
+    const lastSlash = targetPath.lastIndexOf("/");
+    if (lastSlash !== -1) {
+      const dir = targetPath.slice(0, lastSlash);
+      await fs.mkdir(dir, { recursive: true });
+    }
+    await fs.writeFile(targetPath, file.content);
+  }
+}
+
 // Creates a project and writes all supplied files into its virtual filesystem.
 export async function createProjectWithFiles(
   name: string,
@@ -104,26 +125,7 @@ export async function createProjectWithFiles(
 ): Promise<Project> {
   const project = await projectStore.createProject(name);
   const fs = openProjectFs(projectStore, project.id);
-  for (const file of files) {
-    const lastSlash = file.path.lastIndexOf("/");
-    if (lastSlash !== -1) {
-      const dir = file.path.slice(0, lastSlash);
-      await fs.mkdir(dir, { recursive: true });
-    }
-    await fs.writeFile(file.path, file.content);
-
-    // If the file is in diagrams/ (e.g. "diagrams/main.hcl"), also copy to
-    // ".rhizz/diagrams/main.hcl" so that the Diagrams canvas immediately finds it.
-    if (file.path.startsWith("diagrams/")) {
-      const rhizzDiagramPath = `.rhizz/${file.path}`;
-      const rhizzDir = rhizzDiagramPath.slice(
-        0,
-        rhizzDiagramPath.lastIndexOf("/"),
-      );
-      await fs.mkdir(rhizzDir, { recursive: true });
-      await fs.writeFile(rhizzDiagramPath, file.content);
-    }
-  }
+  await populateProjectFiles(fs, files);
   return project;
 }
 </script>

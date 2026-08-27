@@ -898,7 +898,7 @@ mod tests {
             .expect("sprint-out port missing");
         assert_eq!(sprint_port.label, "sprint-out");
 
-        assert_eq!(raw.views.len(), 3);
+        assert_eq!(raw.views.len(), 4);
     }
 
     // ── E010 detection ─────────────────────────────────────────────────────

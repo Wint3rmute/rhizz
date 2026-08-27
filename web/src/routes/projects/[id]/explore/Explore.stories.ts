@@ -3,6 +3,7 @@ import init from "rhizz";
 import {
   createProjectWithFiles,
   createProjectWithMainFile,
+  populateProjectFiles,
   projectStore,
 } from "../../../../ProjectState.svelte";
 import {
@@ -193,6 +194,9 @@ const crossLevelProject = await ensureProjectWithDiagrams(
 );
 
 const apolloExample = get_example_projects().find((e) => e.id === "apollo-11");
+const softwareHouseExample = get_example_projects().find(
+  (e) => e.id === "software-house",
+);
 
 async function ensureApolloProject() {
   const existing = await projectStore.listProjects();
@@ -206,7 +210,20 @@ async function ensureApolloProject() {
   return project;
 }
 
+async function ensureSoftwareHouseProject() {
+  const existing = await projectStore.listProjects();
+  let project = existing.find((p) => p.name === "Software House story");
+  if (!project && softwareHouseExample) {
+    project = await createProjectWithFiles(
+      "Software House story",
+      softwareHouseExample.files,
+    );
+  }
+  return project;
+}
+
 const apolloProject = await ensureApolloProject();
+const softwareHouseProject = await ensureSoftwareHouseProject();
 
 const meta = {
   title: "Pages/Explore",
@@ -329,23 +346,26 @@ export const Apollo11: Story = {
       await init();
       if (apolloProject && apolloExample) {
         const fs = openProjectFs(projectStore, apolloProject.id);
-        for (const file of apolloExample.files) {
-          const lastSlash = file.path.lastIndexOf("/");
-          if (lastSlash !== -1) {
-            const dir = file.path.slice(0, lastSlash);
-            await fs.mkdir(dir, { recursive: true });
-          }
-          await fs.writeFile(file.path, file.content);
-          if (file.path.startsWith("diagrams/")) {
-            const rhizzDiagramPath = `.rhizz/${file.path}`;
-            const rhizzDir = rhizzDiagramPath.slice(
-              0,
-              rhizzDiagramPath.lastIndexOf("/"),
-            );
-            await fs.mkdir(rhizzDir, { recursive: true });
-            await fs.writeFile(rhizzDiagramPath, file.content);
-          }
-        }
+        await populateProjectFiles(fs, apolloExample.files);
+      }
+      return {};
+    },
+  ],
+};
+
+export const SoftwareHouse: Story = {
+  parameters: {
+    viewport: { defaultViewport: "responsive" },
+  },
+  args: {
+    projectId: softwareHouseProject?.id ?? seededProject.id,
+  },
+  loaders: [
+    async () => {
+      await init();
+      if (softwareHouseProject && softwareHouseExample) {
+        const fs = openProjectFs(projectStore, softwareHouseProject.id);
+        await populateProjectFiles(fs, softwareHouseExample.files);
       }
       return {};
     },
