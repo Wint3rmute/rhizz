@@ -2806,7 +2806,8 @@ $effect(() => {
         />
       {/if}
 
-      <br />
+        <div class="divider"></div>
+
       <h3
         class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
       >
