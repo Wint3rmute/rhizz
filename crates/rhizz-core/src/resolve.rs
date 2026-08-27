@@ -1362,7 +1362,7 @@ mod tests {
             "expected W004 for operations"
         );
 
-        assert_eq!(model.views.len(), 3);
+        assert_eq!(model.views.len(), 4);
     }
 
     // ── Error cases ────────────────────────────────────────────────────────
