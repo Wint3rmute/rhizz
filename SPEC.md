@@ -184,6 +184,9 @@ system "quadcopter" {
 | `source`      | string       | no       | —                | Label of a top-level `component` to use as this component's body.          |
 | `description` | string       | no       | `""`             | Human-readable description                                                 |
 | `icon`        | string       | no       | `""`             | Optional FontAwesome icon name (e.g. `"microchip"`, `"server"`, `"wifi"`) |
+| `color`       | string       | no       | `""`             | Optional border color for diagram rendering (e.g. `"#ff0000"`, `"red"`) |
+| `border`      | string       | no       | `"solid"`        | Optional border style for diagrams: `"solid"`, `"dashed"`, or `"dotted"` |
+| `font`        | string       | no       | `"unstyled"`     | Optional single-word font style for diagram labels: `"bold"`, `"italic"`, `"underline"` |
 | `tags`        | list(string) | no       | `[]`             | Filtering tags                                                             |
 | `level`       | integer      | no       | parent level + 1 | Abstraction level                                                          |
 | `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `component`s        |

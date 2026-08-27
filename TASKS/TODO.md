@@ -13,16 +13,6 @@ How to work on this file:
 
 ---
 
-## For later Task <N> — Visual attributes for components and connections
-
-Make it possible to define system-model-level attributes specifying how
-a component shall be rendered in diagrams. Currently, an icon is the only
-customizable element. I want to add the following new attributes:
-
-- Color
-- Border style (solid, dashed, dotted)
-- Font style (bold, italic, underline)
-
 ## For later Task <N> — Adding annotation to plots
 
 Make it possible to attach a text marker to a component with a specified offset.
