@@ -334,6 +334,41 @@ system "demo" {
     expect(doc.compileResult.error_count()).toBe(0);
   });
 
+  it("round-trips component visual attributes (color, border, font)", () => {
+    const systemHcl = `system "style-demo" {
+  component "danger" {
+    color  = "#ff0000"
+    border = "dashed"
+    font   = "bold"
+  }
+
+  component "plain" {
+    leaf = true
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    const comp = doc.findComponent("style-demo/danger");
+    expect(comp).toBeDefined();
+    expect(comp?.color).toBe("#ff0000");
+    expect(comp?.border).toBe("dashed");
+    expect(comp?.font).toBe("bold");
+
+    // Serialized HCL preserves the attributes and omits defaults.
+    expect(doc.systemHcl).toContain('color       = "#ff0000"');
+    expect(doc.systemHcl).toContain('border      = "dashed"');
+    expect(doc.systemHcl).toContain('font        = "bold"');
+    expect(doc.systemHcl).not.toContain('border      = "solid"');
+
+    // A bare component exposes no visual attributes.
+    const plain = doc.findComponent("style-demo/plain");
+    expect(plain?.color).toBeFalsy();
+    expect(plain?.border).toBeFalsy();
+    expect(plain?.font).toBeFalsy();
+  });
+
   it("loads components across multi-file sources and finds them by persistence key", () => {
     const sources = [
       {

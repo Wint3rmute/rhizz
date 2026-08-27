@@ -63,6 +63,9 @@ export interface ComponentData {
   label: string;
   description?: string;
   icon?: string;
+  color?: string;
+  border?: "solid" | "dashed" | "dotted";
+  font?: string;
   tags?: string[];
   level?: number;
   leaf: boolean;
@@ -99,6 +102,9 @@ export interface RawModelPayload {
     label: string;
     description?: string;
     icon?: string;
+    color?: string;
+    border?: string;
+    font?: string;
     tags?: string[];
     level?: number;
     leaf?: boolean;
@@ -283,6 +289,15 @@ export class DocumentStore {
     }
     if (comp.icon) {
       lines.push(`${inner}icon        = ${escapeHclString(comp.icon)}`);
+    }
+    if (comp.color) {
+      lines.push(`${inner}color       = ${escapeHclString(comp.color)}`);
+    }
+    if (comp.border && comp.border !== "solid") {
+      lines.push(`${inner}border      = ${escapeHclString(comp.border)}`);
+    }
+    if (comp.font) {
+      lines.push(`${inner}font        = ${escapeHclString(comp.font)}`);
     }
     if (comp.tags && comp.tags.length > 0) {
       lines.push(`${inner}tags        = ${formatStringList(comp.tags)}`);
@@ -869,6 +884,10 @@ export class DocumentStore {
         label: c.label,
         description: c.description || "",
         icon: c.icon || "",
+        color: c.color || "",
+        border: (c.border as "solid" | "dashed" | "dotted" | undefined) ||
+          undefined,
+        font: c.font || "",
         tags: c.tags || [],
         level: c.level,
         leaf: Boolean(c.leaf),
