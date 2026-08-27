@@ -88,6 +88,15 @@ case, but nothing calls it that way yet.
 
 ---
 
+## (For later brainstorming) Task <N> - routing multiple connections between 2 components
+
+When 2 components have more than one connection between them, connection routing
+rules cause connections to be drawn over each other. Instead, a better routing algorithm should be implemented.
+I'm thinking about a PCB-style routing that lines up multiple connections along a shared path, but with some extra
+offset to avoid overlapping.
+
+---
+
 ## (For later brainstorming) Task <N> - visual regression testing
 
 As we now have a virtual filesystem hierarchy for the frontend, we can create
