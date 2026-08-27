@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 79 — Allow resizing of components by dragging from any edge or corner
+
+- **Pure Geometry Computation (`geometry.ts`, `geometry.test.ts`)**:
+  - Added `ResizeHandle` type (`"top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right"`).
+  - Implemented `computeResizedBox(startBox, handle, deltaX, deltaY, minSize)` supporting all 8 resize directions with min-size clamping and opposite-anchor retention.
+  - Added unit tests in `geometry.test.ts` covering all edge/corner directions and limit conditions.
+- **Interactive Canvas Handles (`+page.svelte`)**:
+  - Replaced the single-corner restriction with full-perimeter hit zones: 4 edge strips (`top`, `bottom`, `left`, `right`) and 4 corner handles (`top-left`, `top-right`, `bottom-left`, `bottom-right`).
+  - Allowed resizing components even when they are not pre-selected (auto-selects on grab).
+  - Maintained undo/redo tracking, active-parent boundary clamping, and child cascade reclamping.
+- Validated with `just test` (all 78 Rust tests + 310 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 78 — Better examples (Single Source of Truth)
 
 - **Single Source of Truth for Examples (`rhizz-core`, `build.rs`, `examples.rs`)**:

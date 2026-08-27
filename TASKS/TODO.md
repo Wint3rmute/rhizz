@@ -13,12 +13,6 @@ How to work on this file:
 
 ---
 
-## (For later brainstorming) Task <N> - allow resizing of components by dragging from the edges
-
-Currently, components can be resized only by dragging a "special" rectangle at the bottom-left corner,
-only when the component is focused. I want to change it, so that components can be resized by dragging from any edge,
-even when they are not focused.
-
 ## (For later brainstorming) Task <N> - Use the FileTree.svelte component to display component hierachy
 
 The `FileTree.svelte` component is now only displaying the files in the project. It serves its purpose well,
