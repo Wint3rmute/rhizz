@@ -1235,8 +1235,8 @@ mod tests {
             w004_labels
         );
 
-        // 4 views should resolve
-        assert_eq!(model.views.len(), 4);
+        // 5 views should resolve (4 in views.hcl + 1 in diagrams/main.hcl)
+        assert_eq!(model.views.len(), 5);
     }
 
     // ── social-media ───────────────────────────────────────────────────────

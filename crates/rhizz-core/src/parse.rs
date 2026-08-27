@@ -755,7 +755,7 @@ mod tests {
         assert!(conn_labels.contains(&"rc-link"));
 
         // Views
-        assert_eq!(raw.views.len(), 4, "expected 4 views");
+        assert_eq!(raw.views.len(), 5, "expected 5 views");
         let ov = raw
             .views
             .iter()
