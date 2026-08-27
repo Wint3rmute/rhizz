@@ -120,6 +120,20 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
   - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
 - Validate with `deno task check`, `deno task test`, `deno task build`.
 
+## For later Task <N> — Visual attributes for components and connections
+
+Make it possible to define system-model-level attributes specifying how
+a component shall be rendered in diagrams. Currently, an icon is the only
+customizable element. I want to add the following new attributes:
+
+- Color
+- Border style (solid, dashed, dotted)
+
+## For later Task <N> — Adding annotation to plots
+
+Make it possible to attach a text marker to a component with a specified offset.
+This attachment should be saved on the view-level not on the system model.
+
 ---
 
 ## Task <NUMBER> — Task template
