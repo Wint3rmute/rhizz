@@ -105,7 +105,24 @@ export async function createProjectWithFiles(
   const project = await projectStore.createProject(name);
   const fs = openProjectFs(projectStore, project.id);
   for (const file of files) {
+    const lastSlash = file.path.lastIndexOf("/");
+    if (lastSlash !== -1) {
+      const dir = file.path.slice(0, lastSlash);
+      await fs.mkdir(dir, { recursive: true });
+    }
     await fs.writeFile(file.path, file.content);
+
+    // If the file is in diagrams/ (e.g. "diagrams/main.hcl"), also copy to
+    // ".rhizz/diagrams/main.hcl" so that the Diagrams canvas immediately finds it.
+    if (file.path.startsWith("diagrams/")) {
+      const rhizzDiagramPath = `.rhizz/${file.path}`;
+      const rhizzDir = rhizzDiagramPath.slice(
+        0,
+        rhizzDiagramPath.lastIndexOf("/"),
+      );
+      await fs.mkdir(rhizzDir, { recursive: true });
+      await fs.writeFile(rhizzDiagramPath, file.content);
+    }
   }
   return project;
 }

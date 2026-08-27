@@ -85,6 +85,7 @@ type ExampleFileList = Vec<(String, PathBuf)>;
 type ExampleProjectMeta = (String, String, String, ExampleFileList);
 
 fn collect_hcl_files(dir: &Path, base_dir: &Path, acc: &mut ExampleFileList) {
+    println!("cargo:rerun-if-changed={}", dir.display());
     if let Ok(read_dir) = fs::read_dir(dir) {
         for entry in read_dir.flatten() {
             let path = entry.path();
@@ -95,6 +96,7 @@ fn collect_hcl_files(dir: &Path, base_dir: &Path, acc: &mut ExampleFileList) {
                 && let Ok(rel_path) = path.strip_prefix(base_dir)
             {
                 let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+                println!("cargo:rerun-if-changed={}", path.display());
                 acc.push((rel_str, path.canonicalize().unwrap_or(path)));
             }
         }
