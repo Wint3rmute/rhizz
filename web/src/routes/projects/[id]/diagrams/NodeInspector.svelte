@@ -27,12 +27,14 @@ let editLabel = $state("");
 let editDescription = $state("");
 let editTagsStr = $state("");
 let editLeaf = $state(false);
+let editColor = $state("");
 
 $effect(() => {
   editLabel = component.label;
   editDescription = component.description || "";
   editTagsStr = (component.tags || []).join(", ");
   editLeaf = component.leaf;
+  editColor = component.color || "";
 });
 
 function handleLabelBlur() {
@@ -62,6 +64,19 @@ function handleLeafChange(e: Event) {
   const checked = (e.target as HTMLInputElement).checked;
   editLeaf = checked;
   onupdate({ leaf: checked });
+}
+
+function handleColorBlur() {
+  if (editColor !== (component.color || "")) {
+    onupdate({ color: editColor.trim() || undefined });
+  }
+}
+
+function handleBorderChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value;
+  onupdate({
+    border: value === "solid" ? undefined : (value as "dashed" | "dotted"),
+  });
 }
 
 // ── Port Operations ───────────────────────────────────────────────────────────
@@ -142,6 +157,69 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       value={component.icon || ""}
       onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
     />
+
+    <div class="grid grid-cols-2 gap-2">
+      <div class="form-control">
+        <label class="label py-1" for="comp-color-input">
+          <span
+            class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            Color
+          </span>
+        </label>
+        <input
+          id="comp-color-input"
+          type="text"
+          bind:value={editColor}
+          onblur={handleColorBlur}
+          class="input input-sm input-bordered w-full"
+          placeholder="e.g. #ff0000 or red"
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label py-1" for="comp-border-input">
+          <span
+            class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+            Border
+          </span>
+        </label>
+        <select
+          id="comp-border-input"
+          value={component.border || "solid"}
+          onchange={handleBorderChange}
+          class="select select-sm select-bordered w-full"
+        >
+          <option value="solid">Solid</option>
+          <option value="dashed">Dashed</option>
+          <option value="dotted">Dotted</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-control">
+      <label class="label py-1" for="comp-font-input">
+        <span
+          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Font
+        </span>
+      </label>
+      <select
+        id="comp-font-input"
+        value={component.font || "unstyled"}
+        onchange={(e) =>
+          onupdate({
+            font: (e.target as HTMLSelectElement).value === "unstyled"
+              ? undefined
+              : (e.target as HTMLSelectElement).value,
+          })}
+        class="select select-sm select-bordered w-full"
+      >
+        <option value="unstyled">Unstyled</option>
+        <option value="bold">Bold</option>
+        <option value="italic">Italic</option>
+        <option value="underline">Underline</option>
+      </select>
+    </div>
 
     <div class="form-control">
       <label class="label py-1" for="comp-tags-input">
