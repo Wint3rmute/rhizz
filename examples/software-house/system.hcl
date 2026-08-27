@@ -148,6 +148,7 @@ system "acme-software" {
 
   component "engineering" {
     description = "Product engineering department"
+    icon        = "gears"
     tags        = ["department", "technical"]
     leaf        = false
 
@@ -169,6 +170,7 @@ system "acme-software" {
 
     component "frontend-team" {
       description = "Web and mobile client engineers"
+      icon        = "desktop"
       tags        = ["team", "technical"]
       leaf        = true
 
@@ -189,6 +191,7 @@ system "acme-software" {
 
     component "backend-team" {
       description = "API and infrastructure engineers"
+      icon        = "server"
       tags        = ["team", "technical"]
       leaf        = true
 
@@ -202,6 +205,7 @@ system "acme-software" {
 
     component "platform-team" {
       description = "CI/CD, observability, developer tooling"
+      icon        = "cloud"
       tags        = ["team", "technical", "infra"]
       leaf        = true
 
@@ -230,6 +234,7 @@ system "acme-software" {
 
   component "product" {
     description = "Product management"
+    icon        = "lightbulb"
     tags        = ["department", "business"]
     leaf        = false
 
@@ -259,12 +264,14 @@ system "acme-software" {
 
     component "product-managers" {
       description = "Technical and growth PMs"
+      icon        = "briefcase"
       tags        = ["team", "business"]
       leaf        = true
     }
 
     component "designers" {
       description = "UX/UI design team"
+      icon        = "palette"
       tags        = ["team", "creative"]
       leaf        = true
 
@@ -287,6 +294,7 @@ system "acme-software" {
 
   component "qa" {
     description = "Quality assurance department"
+    icon        = "vial"
     tags        = ["department", "technical"]
     leaf        = false
 
@@ -308,12 +316,14 @@ system "acme-software" {
 
     component "manual-qa" {
       description = "Manual / exploratory testing team"
+      icon        = "clipboard-check"
       tags        = ["team", "testing"]
       leaf        = true
     }
 
     component "automation-qa" {
       description = "Test automation engineers"
+      icon        = "robot"
       tags        = ["team", "testing", "technical"]
       leaf        = true
 
@@ -335,6 +345,7 @@ system "acme-software" {
 
   component "sales" {
     description = "Sales and business development"
+    icon        = "handshake"
     tags        = ["department", "business"]
     leaf        = true
 
@@ -348,6 +359,7 @@ system "acme-software" {
 
   # Intentionally incomplete — W001 + W004
   component "operations" {
+    icon = "headset"
     tags = ["department", "infra"]
     leaf = false
     # no description → W004
