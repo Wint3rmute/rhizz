@@ -19,7 +19,6 @@ import {
   findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
-  type ResizeHandle,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
