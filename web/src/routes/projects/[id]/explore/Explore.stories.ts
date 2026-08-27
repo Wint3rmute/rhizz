@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import init from "rhizz";
 import {
+  createProjectWithFiles,
   createProjectWithMainFile,
   projectStore,
 } from "../../../../ProjectState.svelte";
@@ -8,6 +9,7 @@ import {
   EXAMPLE_SYSTEM_DIAGRAMS,
   EXAMPLE_SYSTEM_HCL,
 } from "../../../../example_system";
+import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,
@@ -190,6 +192,22 @@ const crossLevelProject = await ensureProjectWithDiagrams(
   CROSS_LEVEL_SYSTEM_HCL,
 );
 
+const apolloExample = get_example_projects().find((e) => e.id === "apollo-11");
+
+async function ensureApolloProject() {
+  const existing = await projectStore.listProjects();
+  let project = existing.find((p) => p.name === "Apollo 11 story");
+  if (!project && apolloExample) {
+    project = await createProjectWithFiles(
+      "Apollo 11 story",
+      apolloExample.files,
+    );
+  }
+  return project;
+}
+
+const apolloProject = await ensureApolloProject();
+
 const meta = {
   title: "Pages/Explore",
   component: Explore,
@@ -293,6 +311,41 @@ export const CrossLevelConnections: Story = {
           `${DIAGRAM_LAYOUT_DIR}/${name}`,
           layout,
         );
+      }
+      return {};
+    },
+  ],
+};
+
+export const Apollo11: Story = {
+  parameters: {
+    viewport: { defaultViewport: "responsive" },
+  },
+  args: {
+    projectId: apolloProject?.id ?? seededProject.id,
+  },
+  loaders: [
+    async () => {
+      await init();
+      if (apolloProject && apolloExample) {
+        const fs = openProjectFs(projectStore, apolloProject.id);
+        for (const file of apolloExample.files) {
+          const lastSlash = file.path.lastIndexOf("/");
+          if (lastSlash !== -1) {
+            const dir = file.path.slice(0, lastSlash);
+            await fs.mkdir(dir, { recursive: true });
+          }
+          await fs.writeFile(file.path, file.content);
+          if (file.path.startsWith("diagrams/")) {
+            const rhizzDiagramPath = `.rhizz/${file.path}`;
+            const rhizzDir = rhizzDiagramPath.slice(
+              0,
+              rhizzDiagramPath.lastIndexOf("/"),
+            );
+            await fs.mkdir(rhizzDir, { recursive: true });
+            await fs.writeFile(rhizzDiagramPath, file.content);
+          }
+        }
       }
       return {};
     },
