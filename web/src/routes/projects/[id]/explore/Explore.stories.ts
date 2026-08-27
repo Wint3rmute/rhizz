@@ -3,6 +3,7 @@ import init from "rhizz";
 import {
   createProjectWithFiles,
   createProjectWithMainFile,
+  populateProjectFiles,
   projectStore,
 } from "../../../../ProjectState.svelte";
 import {
@@ -345,17 +346,7 @@ export const Apollo11: Story = {
       await init();
       if (apolloProject && apolloExample) {
         const fs = openProjectFs(projectStore, apolloProject.id);
-        for (const file of apolloExample.files) {
-          const targetPath = file.path.startsWith("diagrams/")
-            ? `.rhizz/${file.path}`
-            : file.path;
-          const lastSlash = targetPath.lastIndexOf("/");
-          if (lastSlash !== -1) {
-            const dir = targetPath.slice(0, lastSlash);
-            await fs.mkdir(dir, { recursive: true });
-          }
-          await fs.writeFile(targetPath, file.content);
-        }
+        await populateProjectFiles(fs, apolloExample.files);
       }
       return {};
     },
@@ -374,17 +365,7 @@ export const SoftwareHouse: Story = {
       await init();
       if (softwareHouseProject && softwareHouseExample) {
         const fs = openProjectFs(projectStore, softwareHouseProject.id);
-        for (const file of softwareHouseExample.files) {
-          const targetPath = file.path.startsWith("diagrams/")
-            ? `.rhizz/${file.path}`
-            : file.path;
-          const lastSlash = targetPath.lastIndexOf("/");
-          if (lastSlash !== -1) {
-            const dir = targetPath.slice(0, lastSlash);
-            await fs.mkdir(dir, { recursive: true });
-          }
-          await fs.writeFile(targetPath, file.content);
-        }
+        await populateProjectFiles(fs, softwareHouseExample.files);
       }
       return {};
     },

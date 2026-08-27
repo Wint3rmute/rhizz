@@ -97,16 +97,13 @@ export async function createProjectWithMainFile(
   return project;
 }
 
-// Creates a project and writes all supplied files into its virtual filesystem.
-// Diagram files (e.g. "diagrams/main.hcl") are unpacked exclusively into
-// ".rhizz/diagrams/" where diagram views are persisted and discovered,
-// avoiding duplicate directory trees.
-export async function createProjectWithFiles(
-  name: string,
+// Populates a project's virtual filesystem with a list of relative files.
+// Automatically creates parent directories as needed and routes diagram
+// files (e.g. "diagrams/main.hcl") to ".rhizz/diagrams/" for persistence discovery.
+export async function populateProjectFiles(
+  fs: ReturnType<typeof openProjectFs>,
   files: Array<{ path: string; content: string }>,
-): Promise<Project> {
-  const project = await projectStore.createProject(name);
-  const fs = openProjectFs(projectStore, project.id);
+): Promise<void> {
   for (const file of files) {
     const targetPath = file.path.startsWith("diagrams/")
       ? `.rhizz/${file.path}`
@@ -119,6 +116,16 @@ export async function createProjectWithFiles(
     }
     await fs.writeFile(targetPath, file.content);
   }
+}
+
+// Creates a project and writes all supplied files into its virtual filesystem.
+export async function createProjectWithFiles(
+  name: string,
+  files: Array<{ path: string; content: string }>,
+): Promise<Project> {
+  const project = await projectStore.createProject(name);
+  const fs = openProjectFs(projectStore, project.id);
+  await populateProjectFiles(fs, files);
   return project;
 }
 </script>
