@@ -709,7 +709,7 @@ mod tests {
         assert!(comp_labels.contains(&"esc"));
         assert!(comp_labels.contains(&"battery"));
 
-        // flight-controller uses source = "flight-controller"; no inline body at parse time
+        // flight-controller is now inlined (single-file model); no source attr
         let fc = quad
             .inner
             .components
@@ -718,33 +718,28 @@ mod tests {
             .unwrap();
         assert_eq!(
             fc.inner.source.as_deref(),
-            Some("flight-controller"),
-            "flight-controller component should have source attribute"
+            None,
+            "flight-controller should be inlined in the single-file model"
         );
         assert!(
-            fc.inner.components.is_empty(),
-            "sourced component should have no inline children at parse time"
+            !fc.inner.components.is_empty(),
+            "inlined flight-controller should have child components"
         );
 
-        // The full definition lives in the top-level components map
-        let tl_fc = raw
-            .components
-            .iter()
-            .find(|c| c.label == "flight-controller")
-            .expect("top-level flight-controller component missing");
-        let tl_fc_child_labels: Vec<&str> = tl_fc
+        // The inlined flight-controller carries its children and ports directly
+        let fc_child_labels: Vec<&str> = fc
             .inner
             .components
             .iter()
             .map(|c| c.label.as_str())
             .collect();
-        assert!(tl_fc_child_labels.contains(&"mcu"));
-        assert!(tl_fc_child_labels.contains(&"imu"));
-        assert!(tl_fc_child_labels.contains(&"barometer"));
+        assert!(fc_child_labels.contains(&"mcu"));
+        assert!(fc_child_labels.contains(&"imu"));
+        assert!(fc_child_labels.contains(&"barometer"));
 
-        // FC top-level definition should have ports
+        // FC definition should have ports
         let fc_port_labels: Vec<&str> =
-            tl_fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
+            fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
