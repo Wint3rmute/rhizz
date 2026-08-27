@@ -65,14 +65,9 @@ function handleLeafChange(e: Event) {
   onupdate({ leaf: checked });
 }
 
-function handleColorChange(color: string | undefined) {
-  onupdate({ color });
-}
-
-// daisyUI background utility class for a theme token (e.g. "primary" ->
-// "bg-primary"), used to render the color swatch.
-function colorSwatchClass(option: string): string {
-  return `bg-${option}`;
+function handleColorChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value;
+  onupdate({ color: value === "none" ? undefined : value });
 }
 
 function handleBorderChange(e: Event) {
@@ -162,55 +157,43 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
     />
 
-    <div class="grid grid-cols-2 gap-2">
-      <div class="form-control col-span-2">
-        <label class="label py-1" for="comp-color-input">
-          <span
-            class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-            Color
-          </span>
-        </label>
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            class="btn btn-xs btn-ghost {!component.color ? 'btn-primary' : ''}"
-            title="No color (default)"
-            onclick={() => handleColorChange(undefined)}
-          >
-            None
-          </button>
-          {#each COLOR_OPTIONS as option (option)}
-            <button
-              type="button"
-              class="btn btn-xs btn-circle {colorSwatchClass(option)} {component.color ===
-              option
-                ? 'ring-2 ring-offset-1 ring-offset-base-100'
-                : ''}"
-              title={option}
-              onclick={() => handleColorChange(option)}
-            ></button>
-          {/each}
-        </div>
-      </div>
+    <div class="form-control">
+      <label class="label py-1" for="comp-color-input">
+        <span
+          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Color
+        </span>
+      </label>
+      <select
+        id="comp-color-input"
+        value={component.color || "none"}
+        onchange={handleColorChange}
+        class="select select-sm select-bordered w-full"
+      >
+        <option value="none">None</option>
+        {#each COLOR_OPTIONS as option (option)}
+          <option value={option}>{option}</option>
+        {/each}
+      </select>
+    </div>
 
-      <div class="form-control">
-        <label class="label py-1" for="comp-border-input">
-          <span
-            class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-            Border
-          </span>
-        </label>
-        <select
-          id="comp-border-input"
-          value={component.border || "solid"}
-          onchange={handleBorderChange}
-          class="select select-sm select-bordered w-full"
-        >
-          <option value="solid">Solid</option>
-          <option value="dashed">Dashed</option>
-          <option value="dotted">Dotted</option>
-        </select>
-      </div>
+    <div class="form-control">
+      <label class="label py-1" for="comp-border-input">
+        <span
+          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Border
+        </span>
+      </label>
+      <select
+        id="comp-border-input"
+        value={component.border || "solid"}
+        onchange={handleBorderChange}
+        class="select select-sm select-bordered w-full"
+      >
+        <option value="solid">Solid</option>
+        <option value="dashed">Dashed</option>
+        <option value="dotted">Dotted</option>
+      </select>
     </div>
 
     <div class="form-control">
