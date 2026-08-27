@@ -40,7 +40,7 @@ Read the relevant source files.
 Before writing any task, check whether the gap is already tracked:
 
 ```bash
-grep -n "<keyword>" TASKS.md FINISHED_TASKS.md
+grep -n "<keyword>" TASKS/TODO.md TASKS/FINISHED.md
 ```
 
 Skip writing a task if the issue is already queued or already fixed.
