@@ -19,6 +19,18 @@ Currently, components can be resized only by dragging a "special" rectangle at t
 only when the component is focused. I want to change it, so that components can be resized by dragging from any edge,
 even when they are not focused.
 
+## (For later brainstorming) Task <N> - Use the FileTree.svelte component to display component hierachy
+
+The `FileTree.svelte` component is now only displaying the files in the project. It serves its purpose well,
+so it could be used to display the component hierarchy as well. Right now, the hierarchy is displayed
+in a poorly designed side panel, which is hard to navigate and does not allow expanding/collapsing of components.
+
+Definition of done:
+
+1. Analyze the current coode of the FileTree, determine if could be reused.
+2. If it can be generalised, refactor it to be reusable for both file and component hierarchies.
+3. Use the refactored components to display both file and component hierarchies in the Diagrams Editor.
+
 ## (For later brainstorming) Task <N> - map errors to different usage modes
 
 I want Rhizz to be usable in different usage modes, such as:
