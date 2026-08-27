@@ -21,7 +21,10 @@ let {
   leading,
   rowTail,
   emptyMessage = "Nothing here yet.",
-  rowClass = "",
+  // Global default row spacing for every tree consumer. Override per-consumer
+  // by passing rowClass="" (or another spacing, e.g. "py-1") to opt out / tune
+  // a single tree only.
+  rowClass = "py-1",
   showExpandCollapseAll = false,
   onselect,
 }: {
@@ -30,7 +33,6 @@ let {
   leading?: Snippet<[TreeNode, boolean]>;
   rowTail?: Snippet<[TreeNode]>;
   emptyMessage?: string;
-  /** Extra classes added to each row to tune vertical/horizontal spacing, e.g. "py-1". */
   rowClass?: string;
   /** If true, show a "Collapse all / Expand all" toolbar above the tree. */
   showExpandCollapseAll?: boolean;
