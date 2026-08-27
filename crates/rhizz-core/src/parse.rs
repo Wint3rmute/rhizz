@@ -738,8 +738,7 @@ mod tests {
         assert!(fc_child_labels.contains(&"barometer"));
 
         // FC definition should have ports
-        let fc_port_labels: Vec<&str> =
-            fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
+        let fc_port_labels: Vec<&str> = fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));

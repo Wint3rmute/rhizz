@@ -15,8 +15,9 @@
 //!    separate `views.hcl` files.
 
 use crate::model::{
-    BorderStyle, Component, Connection, ConnectionLayout, ConnectionSide, Field, Message, Model,
-    NodeLayout, Port, Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
+    BorderStyle, Component, ComponentParent, Connection, ConnectionEndpoint, ConnectionLayout,
+    ConnectionSide, Field, Message, Model, NodeLayout, Port, Project, Protocol, System, View,
+    ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -418,21 +419,13 @@ fn serialize_connection(
         out.push_str(&format!("{inner_indent}level        = {}\n", conn.level));
     }
 
-    let from_comp = &model.components[conn.from.component.0].label;
-    let from_str = match conn.from.port {
-        Some(pid) => format!("{from_comp}/{}", model.ports[pid.0].label),
-        None => from_comp.clone(),
-    };
+    let from_str = endpoint_path(&conn.from, model);
     out.push_str(&format!(
         "{inner_indent}from         = {}\n",
         escape_string(&from_str)
     ));
 
-    let to_comp = &model.components[conn.to.component.0].label;
-    let to_str = match conn.to.port {
-        Some(pid) => format!("{to_comp}/{}", model.ports[pid.0].label),
-        None => to_comp.clone(),
-    };
+    let to_str = endpoint_path(&conn.to, model);
     out.push_str(&format!(
         "{inner_indent}to           = {}\n",
         escape_string(&to_str)
@@ -452,6 +445,36 @@ fn serialize_connection(
     }
 
     out.push_str(&format!("{indent}}}\n"));
+}
+
+/// Builds an absolute, scope-independent path to a connection endpoint, e.g.
+/// `/system/comp/child/port`. Walking up the parent chain from the endpoint
+/// component to its root system guarantees the path resolves identically on
+/// re-parse regardless of the connection's own scope (a relative label like
+/// `agc/port` would break for deeply-nested endpoints — see the nested
+/// connection roundtrip regression test).
+fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
+    let mut segments: Vec<String> = Vec::new();
+
+    if let Some(pid) = endpoint.port {
+        segments.push(model.ports[pid.0].label.clone());
+    }
+
+    let mut current = endpoint.component;
+    loop {
+        let comp = &model.components[current.0];
+        segments.push(comp.label.clone());
+        match comp.parent {
+            ComponentParent::Component(parent) => current = parent,
+            ComponentParent::System(sid) => {
+                segments.push(model.systems[sid.0].label.clone());
+                break;
+            }
+        }
+    }
+
+    segments.reverse();
+    format!("/{}", segments.join("/"))
 }
 
 // ── Views and Layout Serialization ────────────────────────────────────────────
@@ -1084,6 +1107,65 @@ system "monitored-device" {
     }
 
     #[test]
+    fn test_nested_connection_roundtrip() {
+        // A connection at the system level referencing a deeply-nested
+        // component (cm/agc/rcs-commands) must round-trip. Regression test for
+        // the serializer emitting endpoint labels without their full scope
+        // path, which broke resolution on re-parse (E011).
+        let hcl = r#"system "apollo" {
+  component "cm" {
+    component "agc" {
+      port "rcs-commands" {
+        role = "provider"
+      }
+    }
+  }
+
+  component "sm" {
+    component "rcs-quads" {
+      port "driver-signals" {
+        role = "consumer"
+      }
+    }
+  }
+
+  connection "cm-agc-to-sm-rcs" {
+    from = "cm/agc/rcs-commands"
+    to   = "sm/rcs-quads/driver-signals"
+  }
+}
+"#;
+
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res1: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("model1 should resolve");
+        let serialized1 = serialize_model(&model1);
+
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized1.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "errors recompiling serialized nested-connection model: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("model2 should resolve");
+        let serialized2 = serialize_model(&model2);
+        assert_eq!(
+            serialized1, serialized2,
+            "nested-connection serialization must be idempotent"
+        );
+    }
+
+    #[test]
     fn test_examples_idempotent_roundtrip() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let workspace_dir = manifest_dir
@@ -1098,6 +1180,7 @@ system "monitored-device" {
             "software-house",
             "single-file",
             "web-app",
+            "apollo-11",
         ] {
             let example_path = examples_dir.join(example_name);
             if !example_path.exists() {
