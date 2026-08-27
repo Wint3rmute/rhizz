@@ -11,6 +11,7 @@ import {
   computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
+  computeResizedBox,
   computeVisibleConnections,
   type ConnectionSide,
   depthOf,
@@ -18,6 +19,7 @@ import {
   findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
+  type ResizeHandle,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
@@ -467,7 +469,53 @@ describe("computeVisibleConnections", () => {
     }];
     const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
     expect(visBoth[0].a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visBoth[0].b).toEqual({ x: 300, y: 25 }); // box 1 right midpoint
+    expect(visBottom[0].b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
+  });
+});
+
+describe("computeResizedBox", () => {
+  const start: Box = { x: 100, y: 100, width: 120, height: 80 };
+
+  it("resizes from the right edge", () => {
+    const res = computeResizedBox(start, "right", 30, 0);
+    expect(res).toEqual({ x: 100, y: 100, width: 150, height: 80 });
+  });
+
+  it("resizes from the bottom edge", () => {
+    const res = computeResizedBox(start, "bottom", 0, 40);
+    expect(res).toEqual({ x: 100, y: 100, width: 120, height: 120 });
+  });
+
+  it("resizes from the left edge and shifts x", () => {
+    const res = computeResizedBox(start, "left", -20, 0);
+    expect(res).toEqual({ x: 80, y: 100, width: 140, height: 80 });
+  });
+
+  it("resizes from the top edge and shifts y", () => {
+    const res = computeResizedBox(start, "top", 0, -20);
+    expect(res).toEqual({ x: 100, y: 80, width: 120, height: 100 });
+  });
+
+  it("resizes from top-left corner", () => {
+    const res = computeResizedBox(start, "top-left", 10, 10);
+    expect(res).toEqual({ x: 110, y: 110, width: 110, height: 70 });
+  });
+
+  it("resizes from bottom-right corner", () => {
+    const res = computeResizedBox(start, "bottom-right", 20, 20);
+    expect(res).toEqual({ x: 100, y: 100, width: 140, height: 100 });
+  });
+
+  it("clamps minimum size when shrinking from right or bottom", () => {
+    const res = computeResizedBox(start, "bottom-right", -200, -200, 40);
+    expect(res).toEqual({ x: 100, y: 100, width: 40, height: 40 });
+  });
+
+  it("clamps minimum size and anchors opposite edge when shrinking from left or top", () => {
+    const res = computeResizedBox(start, "top-left", 200, 200, 40);
+    // start x=100, width=120 -> right edge is 220. Minimum width 40 -> x must be 180
+    // start y=100, height=80 -> bottom edge is 180. Minimum height 40 -> y must be 140
+    expect(res).toEqual({ x: 180, y: 140, width: 40, height: 40 });
   });
 });
 
