@@ -150,6 +150,6 @@ system "quad" {
 
     const singleFile = examples.find((e) => e.id === "single-file");
     expect(singleFile).toBeDefined();
-    expect(singleFile?.files.some((f) => f.path === "project.hcl")).toBe(true);
+    expect(singleFile?.files.some((f) => f.path === "system.hcl")).toBe(true);
   });
 });

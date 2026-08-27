@@ -16,6 +16,12 @@
 #  - Ports and connections used to model communication channels and handoffs
 #  - Protocol definitions describing team communication schemas
 
+project {
+  name    = "acme-software"
+  version = "0.3.0"
+  authors = ["rhizz-examples"]
+}
+
 # ── Protocols ─────────────────────────────
 
 protocol "pr-review" {

@@ -136,11 +136,11 @@ fn watch_reruns_build_on_hcl_change() {
     // Wait long enough for the initial build to complete and stabilise.
     std::thread::sleep(Duration::from_millis(1500));
 
-    // Touch `project.hcl` to trigger a rebuild.
-    let project_hcl = tmp_project.path().join("project.hcl");
-    let content = std::fs::read_to_string(&project_hcl).expect("read project.hcl");
+    // Touch `system.hcl` to trigger a rebuild.
+    let project_hcl = tmp_project.path().join("system.hcl");
+    let content = std::fs::read_to_string(&project_hcl).expect("read system.hcl");
     std::fs::write(&project_hcl, format!("{content}\n// watch-test trigger\n"))
-        .expect("write project.hcl");
+        .expect("write system.hcl");
 
     // Wait for the rebuild.
     std::thread::sleep(Duration::from_millis(1500));

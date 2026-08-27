@@ -25,6 +25,5 @@ station.
 
 | File        | Contents                                                                 |
 | ----------- | ------------------------------------------------------------------------ |
-| `project.hcl` | Project metadata                                                        |
-| `system.hcl`  | Complete system model: protocols + both systems (`quadcopter`, `ground-control`) |
+| `system.hcl`  | Complete system model: project metadata, protocols, and both systems (`quadcopter`, `ground-control`) |
 | `views.hcl`   | Four view definitions with different filters                            |

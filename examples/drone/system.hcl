@@ -3,6 +3,12 @@
 # The "ground-control" system is deliberately less complete — shows
 # in-progress modeling that still compiles cleanly (W001/W004 warnings only).
 
+project {
+  name    = "drone-system"
+  version = "0.3.0"
+  authors = ["rhizz-examples"]
+}
+
 # ── Protocols ─────────────────────────────
 
 protocol "dshot600" {

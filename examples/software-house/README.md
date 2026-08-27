@@ -22,6 +22,5 @@ processes are interfaces.
 
 | File          | Contents                                                  |
 | ------------- | --------------------------------------------------------- |
-| `project.hcl` | Project metadata                                          |
-| `system.hcl`  | The `acme-software` system with departments and processes |
+| `system.hcl`  | The `acme-software` system (incl. project metadata) with departments and processes |
 | `views.hcl`   | Three view definitions at different scopes                |

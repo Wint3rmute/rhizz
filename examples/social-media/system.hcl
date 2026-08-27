@@ -6,6 +6,12 @@
 #  - Port/connection model with typed and untyped endpoints
 #  - Leaf vs non-leaf at the software level
 
+project {
+  name    = "buzzvid"
+  version = "0.3.0"
+  authors = ["rhizz-examples"]
+}
+
 # ── Protocols ─────────────────────────────
 
 protocol "https" {
