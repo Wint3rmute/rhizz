@@ -15,9 +15,11 @@ How to work on this file:
 
 ## (For later brainstorming) Task <N> - Use the FileTree.svelte component to display component hierachy
 
-The `FileTree.svelte` component is now only displaying the files in the project. It serves its purpose well,
-so it could be used to display the component hierarchy as well. Right now, the hierarchy is displayed
-in a poorly designed side panel, which is hard to navigate and does not allow expanding/collapsing of components.
+The `FileTree.svelte` component is now only displaying the files in the project.
+It serves its purpose well, so it could be used to display the component
+hierarchy in the Diagrams Editor as well. Right now, the hierarchy is displayed
+in a poorly designed side panel, which is hard to navigate and does not allow
+expanding/collapsing of components.
 
 Definition of done:
 
