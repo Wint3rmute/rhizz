@@ -13,6 +13,21 @@ How to work on this file:
 
 ---
 
+## For later Task <N> — Visual attributes for components and connections
+
+Make it possible to define system-model-level attributes specifying how
+a component shall be rendered in diagrams. Currently, an icon is the only
+customizable element. I want to add the following new attributes:
+
+- Color
+- Border style (solid, dashed, dotted)
+- Font style (bold, italic, underline)
+
+## For later Task <N> — Adding annotation to plots
+
+Make it possible to attach a text marker to a component with a specified offset.
+This attachment should be saved on the view-level not on the system model.
+
 ## (For later brainstorming) Task <N> - map errors to different usage modes
 
 I want Rhizz to be usable in different usage modes, such as:
@@ -45,16 +60,6 @@ formalized to require assigning each warning to a specific preset. If a warning
 is assigned to business-level, it should be shown on business level and all
 lower levels. Similarly, if a warning is assigned to architectural-level, it
 should be shown on architectural level and all lower levels.
-
-## (For later brainstorming) Task <N> - relax requirements regarding adding new
-connections
-
-This is not well understood by me at this point, but interactive experimentation with rhizz shows that it's kinda hard to "just add a new connection and have it show up on the diagram". Lots of boilerplate must be written before the Rhizz compiler accepts a model without errors. This is against `SPEC.md`, which describes a gradual validation system, which detects incomplete definitions, emits warnings to the user, but **still allows to build the system**.
-
-I suggest starting out this task with writing a new example in `examples/` that demonstrates all possible incomplete definitions and how the compiler handles them,
-showcasing the compiler's flexibility in gradual validation.
-
-It should later be expanded into unit tests, but that is only after the core idea is implemented and checked by the user.
 
 ---
 
@@ -116,20 +121,6 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
   - "Export Project" downloads `system.hcl` and `views.hcl`.
   - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
 - Validate with `deno task check`, `deno task test`, `deno task build`.
-
-## For later Task <N> — Visual attributes for components and connections
-
-Make it possible to define system-model-level attributes specifying how
-a component shall be rendered in diagrams. Currently, an icon is the only
-customizable element. I want to add the following new attributes:
-
-- Color
-- Border style (solid, dashed, dotted)
-
-## For later Task <N> — Adding annotation to plots
-
-Make it possible to attach a text marker to a component with a specified offset.
-This attachment should be saved on the view-level not on the system model.
 
 ---
 
