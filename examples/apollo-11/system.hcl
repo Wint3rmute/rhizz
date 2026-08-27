@@ -338,6 +338,8 @@ protocol "radar-altimetry" {
 component "mission-control-center" {
   description = "Manned Space Flight Network (MSFN) & Houston Mission Control Center (MCC)"
   icon        = "tower-broadcast"
+  color       = "accent"
+  border      = "dashed"
   tags        = ["ground", "telemetry"]
   leaf        = true
 
@@ -447,6 +449,7 @@ component "instrument-unit" {
 component "cm-cabin-structure" {
   description = "Crew compartment, astronaut couches, manual hand controllers, and forward hatch"
   icon        = "users"
+  font        = "italic"
   tags        = ["csm", "structure", "crew"]
   leaf        = true
 
@@ -478,6 +481,7 @@ component "cm-cabin-structure" {
 component "cm-agc" {
   description = "Apollo Guidance Computer (Raytheon Block II, 2.048 MHz, 36K ROM / 2K RAM, Luminary/Colossus)"
   icon        = "microchip"
+  font        = "bold"
   tags        = ["csm", "avionics", "pgncs", "compute"]
   leaf        = true
 
@@ -703,6 +707,7 @@ component "sm-high-gain-antenna" {
 component "lm-cabin" {
   description = "Ascent stage pressurized crew cabin, stand-up astronaut stations, and overhead docking drogue"
   icon        = "user-astronaut"
+  font        = "italic"
   tags        = ["lm", "ascent", "crew"]
   leaf        = true
 
@@ -726,6 +731,7 @@ component "lm-cabin" {
 component "lm-lgc" {
   description = "Lunar Module Guidance Computer (LGC - Luminary software with landing & rendezvous programs)"
   icon        = "microchip"
+  font        = "bold"
   tags        = ["lm", "ascent", "avionics", "guidance", "pgncs"]
   leaf        = true
 
@@ -937,6 +943,7 @@ component "lm-batteries" {
 component "saturn-v-stack" {
   description = "Saturn V Launch Vehicle Stack (S-IC First Stage, S-II Second Stage, S-IVB Third Stage, Instrument Unit)"
   icon        = "rocket"
+  color       = "primary"
   tags        = ["saturn-v", "launch-vehicle"]
   leaf        = false
 
@@ -981,6 +988,7 @@ component "saturn-v-stack" {
 component "command-module" {
   description = "Apollo Command Module (CM-107 'Columbia') Crew Compartment and PGNCS Avionics"
   icon        = "satellite"
+  color       = "info"
   tags        = ["csm", "cm", "spacecraft"]
   leaf        = false
 
@@ -1054,6 +1062,7 @@ component "command-module" {
 component "service-module" {
   description = "Apollo Service Module (SM-107) Propulsion, Fuel Cells, Cryogenics, and High Gain Antenna"
   icon        = "solar-panel"
+  color       = "secondary"
   tags        = ["csm", "sm", "spacecraft"]
   leaf        = false
 
@@ -1099,6 +1108,7 @@ component "service-module" {
 component "lunar-module-ascent" {
   description = "Apollo Lunar Module Ascent Stage (Cabin, LGC, DSKY, IMU, APS, and Comms)"
   icon        = "moon"
+  color       = "success"
   tags        = ["lm", "ascent"]
   leaf        = false
 
@@ -1173,6 +1183,7 @@ component "lunar-module-ascent" {
 component "lunar-module-descent" {
   description = "Apollo Lunar Module Descent Stage (Throttleable DPS Engine, Landing Radar, Batteries)"
   icon        = "circle-down"
+  color       = "warning"
   tags        = ["lm", "descent"]
   leaf        = false
 
