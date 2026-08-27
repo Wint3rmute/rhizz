@@ -2,17 +2,21 @@
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import {
+  createProjectWithFiles,
   createProjectWithMainFile,
   projectStore,
 } from "../../ProjectState.svelte";
+import { seedExampleProjectDiagrams } from "../../example_system";
 import {
-  EXAMPLE_SYSTEM_HCL,
-  seedExampleProjectDiagrams,
-} from "../../example_system";
+  type ExampleProject,
+  get_example_projects,
+} from "../../rhizz_wasm_wrapper";
 import type { Project } from "../../vfs/types";
 
 let projects = $state<Project[]>([]);
 let loading = $state(true);
+let showExampleModal = $state(false);
+let exampleProjects = $state<ExampleProject[]>([]);
 
 async function refresh() {
   const loaded = await projectStore.listProjects();
@@ -42,11 +46,19 @@ async function createEmpty() {
   await openProject(project);
 }
 
-async function createFromExample() {
-  const name = prompt("Project name?", "Example project");
+function openExampleModal() {
+  exampleProjects = get_example_projects();
+  showExampleModal = true;
+}
+
+async function selectExample(example: ExampleProject) {
+  showExampleModal = false;
+  const name = prompt("Project name?", example.name);
   if (!name) return;
-  const project = await createProjectWithMainFile(name, EXAMPLE_SYSTEM_HCL);
-  await seedExampleProjectDiagrams(project.id);
+  const project = await createProjectWithFiles(name, example.files);
+  if (example.id === "single-file") {
+    await seedExampleProjectDiagrams(project.id);
+  }
   await refresh();
   await openProject(project);
 }
@@ -73,7 +85,7 @@ async function deleteProject(project: Project) {
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
       <div class="flex gap-2">
-        <button class="btn btn-outline" onclick={createFromExample}>
+        <button class="btn btn-outline" onclick={openExampleModal}>
           New from example
         </button>
         <button class="btn btn-primary" onclick={createEmpty}>
@@ -129,3 +141,57 @@ async function deleteProject(project: Project) {
     {/if}
   </div>
 </div>
+
+{#if showExampleModal}
+  <dialog class="modal modal-open">
+  <div
+    class="modal-box max-w-2xl bg-base-100 text-base-content border border-base-content/10 shadow-2xl">
+    <div class="flex items-center justify-between mb-2">
+      <h3
+        class="font-bold text-lg text-base-content">Choose an Example Architecture</h3>
+      <button
+        class="btn btn-sm btn-circle btn-ghost"
+        onclick={() => (showExampleModal = false)}
+        aria-label="Close"
+      >
+          ✕
+        </button>
+    </div>
+    <p class="text-sm text-base-content/70 mb-4">
+        Select a template system from the bundled examples to initialize your new workspace.
+      </p>
+
+    <div
+      class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto p-1">
+        {#each exampleProjects as example (example.id)}
+          <button
+            class="card bg-base-200 hover:bg-base-300 hover:border-primary/50 transition text-left p-4 cursor-pointer border border-base-content/10 flex flex-col justify-between"
+            onclick={() => selectExample(example)}
+          >
+            <div>
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <div class="font-semibold text-base-content text-sm">{example.name}</div>
+                <span class="badge badge-xs badge-neutral shrink-0">
+                  {example.files.length} {example.files.length === 1 ? "file" : "files"}
+                </span>
+              </div>
+              <div class="text-xs text-base-content/70 mt-1 line-clamp-3">
+                {example.description}
+              </div>
+            </div>
+          </button>
+        {/each}
+      </div>
+
+    <div class="modal-action mt-4">
+      <button class="btn btn-ghost btn-sm"
+        onclick={() => (showExampleModal = false)}>
+          Cancel
+        </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button onclick={() => (showExampleModal = false)}>close</button>
+  </form>
+</dialog>
+{/if}

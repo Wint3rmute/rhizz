@@ -13,17 +13,11 @@ How to work on this file:
 
 ---
 
-## Task 78 - Better examples
+## (For later brainstorming) Task <N> - allow resizing of components by dragging from the edges
 
-There's a bit of a split brain situation with examples right now. Some examples
-are in the `examples/` directory, but an example project for the web app lives
-in `example_system.ts`. I want to have a single source of truth for examples.
-Embed all example systems in the `examples/` directory into the WASM library as
-a public symbol/constant or function.
-
-On the Frontend side, read the WASM library's public symbol/constant or function
-to get the example systems and display them to the user when creating new
-example project. Let them choose from the examples.
+Currently, components can be resized only by dragging a "special" rectangle at the bottom-left corner,
+only when the component is focused. I want to change it, so that components can be resized by dragging from any edge,
+even when they are not focused.
 
 ## (For later brainstorming) Task <N> - map errors to different usage modes
 
@@ -91,6 +85,15 @@ case, but nothing calls it that way yet.
   that was previously positioned)? Lean towards the latter — respecting
   a remembered position take priority over auto-placing.
 - Validate with `deno task check`, `deno task build`, `deno task test`.
+
+---
+
+## (For later brainstorming) Task <N> - routing multiple connections between 2 components
+
+When 2 components have more than one connection between them, connection routing
+rules cause connections to be drawn over each other. Instead, a better routing algorithm should be implemented.
+I'm thinking about a PCB-style routing that lines up multiple connections along a shared path, but with some extra
+offset to avoid overlapping.
 
 ---
 

@@ -1,6 +1,9 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
-import { getCurrentProject, setCurrentProject } from "../../../ProjectState.svelte";
+import {
+  getCurrentProject,
+  setCurrentProject,
+} from "../../../ProjectState.svelte";
 import type { LayoutProps } from "./$types";
 
 let { data, children }: LayoutProps = $props();
@@ -32,18 +35,18 @@ let project = $derived(getCurrentProject());
   </div>
 {:else if project === null}
   <div class="flex-1 flex items-center justify-center">
-    <div class="card bg-base-200 shadow-xl">
-      <div class="card-body items-center text-center">
-        <h2 class="card-title">Project not found</h2>
-        <p class="text-base-content/60 text-sm">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body items-center text-center">
+      <h2 class="card-title">Project not found</h2>
+      <p class="text-base-content/60 text-sm">
           No project exists with id "{data.projectId}".
         </p>
-        <a href={resolve("/projects", {})} class="btn btn-primary mt-2">
+      <a href={resolve("/projects", {})} class="btn btn-primary mt-2">
           Back to projects
         </a>
-      </div>
     </div>
   </div>
+</div>
 {:else}
   {@render children()}
 {/if}

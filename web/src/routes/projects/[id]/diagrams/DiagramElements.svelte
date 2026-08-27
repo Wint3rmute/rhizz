@@ -165,23 +165,23 @@ let visibleConnections = $derived(
 
 {#each visibleConnections as { conn, a, b, orientation } (`${conn.label}-${conn.from}-${conn.to}`)}
   <path
-    d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
-    stroke="var(--color-base-content)"
-    stroke-opacity="0.35"
-    stroke-width="1.5"
-    fill="none"
-    marker-end="url(#{markerId})"
-    style="pointer-events: none"
-  />
+  d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+  stroke="var(--color-base-content)"
+  stroke-opacity="0.35"
+  stroke-width="1.5"
+  fill="none"
+  marker-end="url(#{markerId})"
+  style="pointer-events: none"
+/>
   <text
-    x={(a.x + b.x) / 2}
-    y={(a.y + b.y) / 2 - 6}
-    fill="var(--color-base-content)"
-    fill-opacity="0.5"
-    font-size="10"
-    text-anchor="middle"
-    style="pointer-events: none; user-select: none"
-  >
+  x={(a.x + b.x) / 2}
+  y={(a.y + b.y) / 2 - 6}
+  fill="var(--color-base-content)"
+  fill-opacity="0.5"
+  font-size="10"
+  text-anchor="middle"
+  style="pointer-events: none; user-select: none"
+>
     {conn.label}
   </text>
 {/each}

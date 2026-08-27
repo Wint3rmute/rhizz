@@ -76,7 +76,8 @@ let filteredParents = $derived.by(() => {
   if (!parentSearch.trim()) return availableParents;
   const q = parentSearch.toLowerCase();
   return availableParents.filter(
-    (p) => p.label.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
+    (p) =>
+      p.label.toLowerCase().includes(q) || p.path.toLowerCase().includes(q),
   );
 });
 
@@ -110,63 +111,66 @@ function handleCreate() {
 {#if isOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
-    class="modal modal-open z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center cursor-pointer"
-    role="dialog"
-    aria-modal="true"
-    tabindex="-1"
-    onclick={(e) => {
+  class="modal modal-open z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center cursor-pointer"
+  role="dialog"
+  aria-modal="true"
+  tabindex="-1"
+  onclick={(e) => {
       if (e.target === e.currentTarget) onclose();
     }}
+>
+  <div
+    class="modal-box max-w-2xl bg-base-100 border border-base-300 shadow-2xl p-6 rounded-box max-h-[90vh] flex flex-col cursor-default"
   >
     <div
-      class="modal-box max-w-2xl bg-base-100 border border-base-300 shadow-2xl p-6 rounded-box max-h-[90vh] flex flex-col cursor-default"
-    >
-      <div class="flex items-center justify-between pb-3 border-b border-base-300">
-        <h3 class="font-bold text-lg flex items-center gap-2">
+      class="flex items-center justify-between pb-3 border-b border-base-300">
+      <h3 class="font-bold text-lg flex items-center gap-2">
           <span class="text-primary">+</span> Create New Component
         </h3>
-        <button
-          onclick={onclose}
-          class="btn btn-sm btn-ghost btn-circle"
-          title="Close (Esc)"
-        >
+      <button
+        onclick={onclose}
+        class="btn btn-sm btn-ghost btn-circle"
+        title="Close (Esc)"
+      >
           ✕
         </button>
-      </div>
+    </div>
 
-      <div class="overflow-y-auto flex-1 py-4 space-y-4 pr-1">
-        <!-- 1. Component Name -->
-        <div class="form-control">
-          <label class="label py-1" for="new-comp-name">
-            <span class="label-text font-semibold text-xs uppercase tracking-wider text-base-content/70">
+    <div class="overflow-y-auto flex-1 py-4 space-y-4 pr-1">
+      <!-- 1. Component Name -->
+      <div class="form-control">
+        <label class="label py-1" for="new-comp-name">
+          <span
+            class="label-text font-semibold text-xs uppercase tracking-wider text-base-content/70">
               Component Name <span class="text-error">*</span>
             </span>
-          </label>
-          <!-- svelte-ignore a11y_autofocus -->
-          <input
-            id="new-comp-name"
-            type="text"
-            bind:value={label}
-            placeholder="e.g. flight-controller, sensor, battery"
-            class="input input-sm input-bordered w-full font-medium"
-            autofocus
-            onkeydown={(e) => {
+        </label>
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          id="new-comp-name"
+          type="text"
+          bind:value={label}
+          placeholder="e.g. flight-controller, sensor, battery"
+          class="input input-sm input-bordered w-full font-medium"
+          autofocus
+          onkeydown={(e) => {
               if (e.key === "Enter" && label.trim()) {
                 handleCreate();
               }
             }}
-          />
-        </div>
+        />
+      </div>
 
-        <!-- 2. Searchable Parent Container Selector -->
-        <div class="form-control relative">
-          <label class="label py-1" for="new-comp-parent">
-            <span class="label-text font-semibold text-xs uppercase tracking-wider text-base-content/70">
+      <!-- 2. Searchable Parent Container Selector -->
+      <div class="form-control relative">
+        <label class="label py-1" for="new-comp-parent">
+          <span
+            class="label-text font-semibold text-xs uppercase tracking-wider text-base-content/70">
               Parent System / Container <span class="text-error">*</span>
             </span>
-          </label>
+        </label>
 
-          <div class="relative">
+        <div class="relative">
             <button
               id="new-comp-parent"
               type="button"
@@ -222,47 +226,48 @@ function handleCreate() {
               </div>
             {/if}
           </div>
-        </div>
+      </div>
 
-        <div class="divider my-1"></div>
+      <div class="divider my-1"></div>
 
-        <!-- 3. Component Details & Ports / Messages / Fields (Reusing NodeInspector) -->
-        <div class="bg-base-200/50 p-4 rounded-box border border-base-300">
-          <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/70 mb-3">
+      <!-- 3. Component Details & Ports / Messages / Fields (Reusing NodeInspector) -->
+      <div class="bg-base-200/50 p-4 rounded-box border border-base-300">
+        <h4
+          class="text-xs font-semibold uppercase tracking-wider text-base-content/70 mb-3">
             Component Properties & Ports
           </h4>
-          <NodeInspector
-            componentKey={selectedParentKey
+        <NodeInspector
+          componentKey={selectedParentKey
               ? `${selectedParentKey}/${label || "untitled"}`
               : label || "untitled"}
-            component={{
+          component={{
               ...compDetails,
               label: label || "untitled",
             }}
-            {textAlign}
-            onupdate={(patch) => {
+          {textAlign}
+          onupdate={(patch) => {
               Object.assign(compDetails, patch);
             }}
-            onrename={(newLabel) => {
+          onrename={(newLabel) => {
               label = newLabel;
             }}
-            onsettextalign={(align) => {
+          onsettextalign={(align) => {
               textAlign = align;
             }}
-          />
-        </div>
-      </div>
-
-      <div class="modal-action border-t border-base-300 pt-3 mt-0">
-        <button onclick={onclose} class="btn btn-sm btn-ghost">Cancel</button>
-        <button
-          onclick={handleCreate}
-          disabled={!label.trim() || !selectedParentKey}
-          class="btn btn-sm btn-primary"
-        >
-          Create Component
-        </button>
+        />
       </div>
     </div>
+
+    <div class="modal-action border-t border-base-300 pt-3 mt-0">
+      <button onclick={onclose} class="btn btn-sm btn-ghost">Cancel</button>
+      <button
+        onclick={handleCreate}
+        disabled={!label.trim() || !selectedParentKey}
+        class="btn btn-sm btn-primary"
+      >
+          Create Component
+        </button>
+    </div>
   </div>
+</div>
 {/if}

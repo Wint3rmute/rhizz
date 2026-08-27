@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 78 — Better examples (Single Source of Truth)
+
+- **Single Source of Truth for Examples (`rhizz-core`, `build.rs`, `examples.rs`)**:
+  - `crates/rhizz-core/build.rs` scans all subdirectories of `examples/` (`apollo-11`, `drone`, `single-file`, `social-media`, `software-house`, `web-app`) and embeds all `.hcl` files at compile time via static `ExampleProject` and `ExampleFile` structures in `$OUT_DIR/example_projects.rs`.
+  - Exposed `pub mod examples;` and `rhizz_core::example_projects()` function.
+- **WASM Exports (`rhizz-wasm`)**:
+  - Added `get_example_projects()` returning a structured JS array of `{ id, name, description, files: [{ path, content }] }`.
+- **Frontend Workspace & Example Selector (`web/`)**:
+  - Added `get_example_projects()` to `web/src/rhizz_wasm_wrapper.ts`.
+  - Added `createProjectWithFiles()` to `web/src/ProjectState.svelte` to populate multi-file projects in the virtual filesystem.
+  - Replaced hardcoded single example on `/projects` with a responsive modal dialog allowing users to browse and initialize workspaces from any bundled example architecture.
+  - Eliminated hardcoded HCL duplication in `web/src/example_system.ts`.
+- Validated with `just test` (all 78 Rust core tests + 302 Vitest tests pass), `just lint`, `just format`, and `just build`.
+
+---
+
 ## Task 77 — Allow customizing the starting point of a connection in Diagrams
 
 - **Diagram-Specific Connection Layout & Persistence (`persistence.ts`, `rhizz-core`)**:
