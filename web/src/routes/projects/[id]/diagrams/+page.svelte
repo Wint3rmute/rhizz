@@ -72,6 +72,7 @@ import {
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
+import { borderStyleToSvg, fontStyleToSvg } from "./visuals";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -2336,6 +2337,11 @@ $effect(() => {
           {@const compKey = getComponentKey(index)}
           {@const compData = docStore.findComponent(compKey)}
           {@const icon = resolveIcon(compData?.icon ?? components[index]?.icon)}
+          {@const borderSvg = borderStyleToSvg({
+            color: compData?.color || components[index]?.color,
+            border: compData?.border ?? components[index]?.border,
+          })}
+          {@const fontSvg = fontStyleToSvg(compData?.font ?? components[index]?.font)}
           {@const portPositions = compData && compData.ports.length > 0
             ? computePortPositions(width, height, compData.ports)
             : []}
@@ -2351,8 +2357,9 @@ $effect(() => {
               rx="5"
               stroke={highlighted
                 ? "var(--color-primary)"
-                : "var(--color-base-content)"}
+                : (borderSvg.stroke ?? "var(--color-base-content)")}
               stroke-width={highlighted ? 2 : 1}
+              stroke-dasharray={highlighted ? undefined : borderSvg.dasharray}
               fill="var(--color-base-200)"
             />
             {#if reparentTargetIndex === index}
@@ -2389,6 +2396,9 @@ $effect(() => {
                   fill="var(--color-base-content)"
                   text-anchor="start"
                   dominant-baseline={textPos.baseline}
+                  font-weight={fontSvg.fontWeight}
+                  font-style={fontSvg.fontStyle}
+                  text-decoration={fontSvg.textDecoration}
                   style="pointer-events: none; user-select: none"
                 >
                   {label}
@@ -2413,6 +2423,9 @@ $effect(() => {
                   fill="var(--color-base-content)"
                   text-anchor="start"
                   dominant-baseline={textPos.baseline}
+                  font-weight={fontSvg.fontWeight}
+                  font-style={fontSvg.fontStyle}
+                  text-decoration={fontSvg.textDecoration}
                   style="pointer-events: none; user-select: none"
                 >
                   {label}
@@ -2435,6 +2448,9 @@ $effect(() => {
                   fill="var(--color-base-content)"
                   text-anchor="middle"
                   dominant-baseline="middle"
+                  font-weight={fontSvg.fontWeight}
+                  font-style={fontSvg.fontStyle}
+                  text-decoration={fontSvg.textDecoration}
                   style="pointer-events: none; user-select: none"
                 >
                   {label}
@@ -2447,6 +2463,9 @@ $effect(() => {
                 fill="var(--color-base-content)"
                 text-anchor={textPos.anchor}
                 dominant-baseline={textPos.baseline}
+                font-weight={fontSvg.fontWeight}
+                font-style={fontSvg.fontStyle}
+                text-decoration={fontSvg.textDecoration}
                 style="pointer-events: none; user-select: none"
               >
                 {label}
