@@ -668,6 +668,7 @@ name = "rhizz-wasm"
 version = "0.1.0"
 dependencies = [
  "rhizz-core",
+ "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",

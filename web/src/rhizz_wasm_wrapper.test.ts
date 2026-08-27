@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   compile_system,
+  get_example_projects,
   parse_views,
   serialize_model,
   serialize_views,
@@ -136,5 +137,19 @@ system "quad" {
       label: c.label,
     }));
     expect(mappedConns[0]).toEqual({ from: 0, to: 1, label: "link" });
+  });
+
+  it("returns embedded example projects from WASM", () => {
+    const examples = get_example_projects();
+    expect(examples.length).toBeGreaterThanOrEqual(6);
+
+    const apollo = examples.find((e) => e.id === "apollo-11");
+    expect(apollo).toBeDefined();
+    expect(apollo?.name).toBe("Apollo 11 Mission Stack");
+    expect(apollo?.files.length).toBeGreaterThanOrEqual(1);
+
+    const singleFile = examples.find((e) => e.id === "single-file");
+    expect(singleFile).toBeDefined();
+    expect(singleFile?.files.some((f) => f.path === "project.hcl")).toBe(true);
   });
 });

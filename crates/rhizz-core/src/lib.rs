@@ -8,6 +8,7 @@
 use tracing::instrument;
 
 pub mod diagnostics;
+pub mod examples;
 pub mod model;
 pub mod parse;
 pub mod resolve;
@@ -16,6 +17,7 @@ pub mod serialize;
 pub mod validate;
 
 pub use diagnostics::{Diagnostic, DiagnosticCode, Level};
+pub use examples::{ExampleFile, ExampleProject, example_projects};
 pub use model::{
     Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
     ConnectionLayout, ConnectionSide, Field, FieldId, Message, MessageId, Model, NodeLayout, Port,

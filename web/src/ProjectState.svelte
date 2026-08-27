@@ -96,4 +96,17 @@ export async function createProjectWithMainFile(
   );
   return project;
 }
+
+// Creates a project and writes all supplied files into its virtual filesystem.
+export async function createProjectWithFiles(
+  name: string,
+  files: Array<{ path: string; content: string }>,
+): Promise<Project> {
+  const project = await projectStore.createProject(name);
+  const fs = openProjectFs(projectStore, project.id);
+  for (const file of files) {
+    await fs.writeFile(file.path, file.content);
+  }
+  return project;
+}
 </script>

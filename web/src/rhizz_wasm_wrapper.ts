@@ -1,5 +1,6 @@
 import {
   CompileResultJS,
+  get_example_projects as wasm_get_example_projects,
   type ModelJS,
   parse_views as wasm_parse_views,
   serialize_model as wasm_serialize_model,
@@ -55,4 +56,20 @@ export function serialize_views(views: ViewDefinition[]): string {
 
 export function parse_views(hcl: string): ViewDefinition[] {
   return wasm_parse_views(hcl) as ViewDefinition[];
+}
+
+export interface ExampleFile {
+  path: string;
+  content: string;
+}
+
+export interface ExampleProject {
+  id: string;
+  name: string;
+  description: string;
+  files: ExampleFile[];
+}
+
+export function get_example_projects(): ExampleProject[] {
+  return wasm_get_example_projects() as ExampleProject[];
 }

@@ -13,18 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 78 - Better examples
-
-There's a bit of a split brain situation with examples right now. Some examples
-are in the `examples/` directory, but an example project for the web app lives
-in `example_system.ts`. I want to have a single source of truth for examples.
-Embed all example systems in the `examples/` directory into the WASM library as
-a public symbol/constant or function.
-
-On the Frontend side, read the WASM library's public symbol/constant or function
-to get the example systems and display them to the user when creating new
-example project. Let them choose from the examples.
-
 ## (For later brainstorming) Task <N> - map errors to different usage modes
 
 I want Rhizz to be usable in different usage modes, such as:

@@ -2,6 +2,7 @@
 
 #![deny(clippy::all)]
 
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 // ── DiagnosticJS ──────────────────────────────────────────────────────────────
@@ -612,6 +613,47 @@ pub fn parse_views(hcl: &str) -> Result<JsValue, JsError> {
     let views = rhizz_core::parse_views(hcl)
         .map_err(|e| JsError::new(&format!("failed to parse views HCL: {e}")))?;
     serde_wasm_bindgen::to_value(&views).map_err(|e| JsError::new(&e.to_string()))
+}
+
+// ── Example projects ──────────────────────────────────────────────────────────
+
+/// A source file in an embedded example project.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ExampleFileJS {
+    pub path: String,
+    pub content: String,
+}
+
+/// An embedded example project available for scaffolding.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ExampleProjectJS {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub files: Vec<ExampleFileJS>,
+}
+
+/// Returns all embedded example systems from `examples/` as a JS array of
+/// `{ id: string, name: string, description: string, files: [{ path: string, content: string }] }`.
+#[wasm_bindgen]
+pub fn get_example_projects() -> Result<JsValue, JsError> {
+    let list: Vec<ExampleProjectJS> = rhizz_core::example_projects()
+        .iter()
+        .map(|p| ExampleProjectJS {
+            id: p.id.to_string(),
+            name: p.name.to_string(),
+            description: p.description.to_string(),
+            files: p
+                .files
+                .iter()
+                .map(|f| ExampleFileJS {
+                    path: f.path.to_string(),
+                    content: f.content.to_string(),
+                })
+                .collect(),
+        })
+        .collect();
+    serde_wasm_bindgen::to_value(&list).map_err(|e| JsError::new(&e.to_string()))
 }
 
 // ── CompileResultJS ───────────────────────────────────────────────────────────

@@ -219,6 +219,21 @@ fn model_serialization_via_wasm() {
 }
 
 #[wasm_bindgen_test]
+fn get_example_projects_returns_all_embedded_examples() {
+    let js_val = rhizz_wasm::get_example_projects().expect("should return examples");
+    let examples: Vec<rhizz_wasm::ExampleProjectJS> =
+        serde_wasm_bindgen::from_value(js_val).expect("should deserialize examples");
+
+    assert!(examples.len() >= 6);
+    let apollo = examples
+        .iter()
+        .find(|e| e.id == "apollo-11")
+        .expect("apollo-11 should exist");
+    assert_eq!(apollo.name, "Apollo 11 Mission Stack");
+    assert!(!apollo.files.is_empty());
+}
+
+#[wasm_bindgen_test]
 fn views_serialization_and_parsing_via_wasm() {
     let views_hcl = r#"view "main" {
   description = "Main diagram"
