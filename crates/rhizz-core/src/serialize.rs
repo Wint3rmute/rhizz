@@ -15,8 +15,8 @@
 //!    separate `views.hcl` files.
 
 use crate::model::{
-    Component, Connection, ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout,
-    Port, Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
+    BorderStyle, Component, Connection, ConnectionLayout, ConnectionSide, Field, Message, Model,
+    NodeLayout, Port, Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -161,6 +161,26 @@ fn serialize_component(
         out.push_str(&format!(
             "{inner_indent}icon        = {}\n",
             escape_string(icon)
+        ));
+    }
+    if let Some(color) = comp.color.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!(
+            "{inner_indent}color       = {}\n",
+            escape_string(color)
+        ));
+    }
+    if let Some(border) = comp.border
+        && border != BorderStyle::Solid
+    {
+        out.push_str(&format!(
+            "{inner_indent}border      = {}\n",
+            escape_string(border.as_str())
+        ));
+    }
+    if let Some(font) = comp.font.as_deref().filter(|s| !s.is_empty()) {
+        out.push_str(&format!(
+            "{inner_indent}font        = {}\n",
+            escape_string(font)
         ));
     }
     if !comp.tags.is_empty() {
@@ -1014,6 +1034,52 @@ system "monitored-device" {
         assert_eq!(
             serialized1, serialized2,
             "protocol and port attributes serialization must be idempotent"
+        );
+    }
+
+    #[test]
+    fn test_component_visual_attributes_roundtrip() {
+        let hcl = r##"system "style-demo" {
+  component "danger" {
+    color  = "#ff0000"
+    border = "dashed"
+    font   = "bold"
+  }
+}
+"##;
+
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res1: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("model1 should resolve");
+        let serialized1 = serialize_model(&model1);
+
+        // The visual attributes survive serialization.
+        assert!(serialized1.contains("color       = \"#ff0000\""));
+        assert!(serialized1.contains("border      = \"dashed\""));
+        assert!(serialized1.contains("font        = \"bold\""));
+
+        // The plain component omits them entirely (defaults).
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized1.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res2: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("model2 should resolve");
+        let serialized2 = serialize_model(&model2);
+        assert_eq!(
+            serialized1, serialized2,
+            "visual attribute serialization must be idempotent"
         );
     }
 
