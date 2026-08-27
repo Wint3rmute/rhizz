@@ -815,13 +815,12 @@ async function getPrimaryHclPath(): Promise<string> {
       !e.path.startsWith(".rhizz/") &&
       !e.path.startsWith("diagrams/")
     );
-    const preferred = hclFiles.find(
-      (e) =>
-        e.name === "system.hcl" ||
-        e.name === "systems.hcl" ||
-        e.name === "project.hcl" ||
-        e.name === "main.hcl",
-    );
+    // Prefer the file that actually holds the system model, in priority
+    // order. A bare "project.hcl" only carries project metadata, so it must
+    // never shadow a real system file just because it sorts earlier.
+    const preferred = ["system.hcl", "systems.hcl", "main.hcl", "project.hcl"]
+      .map((name) => hclFiles.find((e) => e.name === name))
+      .find(Boolean);
     return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
   } catch {
     return "main.hcl";

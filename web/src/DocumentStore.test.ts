@@ -369,6 +369,26 @@ system "demo" {
     expect(plain?.font).toBeFalsy();
   });
 
+  it("persists visual attributes set via updateComponent (inspector path)", () => {
+    const systemHcl = `system "style-demo" {
+  component "compA" {
+    leaf = true
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+    doc.updateComponent("style-demo/compA", {
+      color: "#00ff00",
+      border: "dotted",
+      font: "italic",
+    });
+
+    expect(doc.systemHcl).toContain('color       = "#00ff00"');
+    expect(doc.systemHcl).toContain('border      = "dotted"');
+    expect(doc.systemHcl).toContain('font        = "italic"');
+  });
+
   it("loads components across multi-file sources and finds them by persistence key", () => {
     const sources = [
       {

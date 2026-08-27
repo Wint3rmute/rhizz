@@ -74,8 +74,9 @@ function handleColorBlur() {
 
 function handleBorderChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value;
+  const border = value === "solid" ? undefined : (value as "dashed" | "dotted");
   onupdate({
-    border: value === "solid" ? undefined : (value as "dashed" | "dotted"),
+    border,
   });
 }
 
@@ -206,12 +207,12 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       <select
         id="comp-font-input"
         value={component.font || "unstyled"}
-        onchange={(e) =>
+        onchange={(e) => {
+          const v = (e.target as HTMLSelectElement).value;
           onupdate({
-            font: (e.target as HTMLSelectElement).value === "unstyled"
-              ? undefined
-              : (e.target as HTMLSelectElement).value,
-          })}
+            font: v === "unstyled" ? undefined : v,
+          });
+        }}
         class="select select-sm select-bordered w-full"
       >
         <option value="unstyled">Unstyled</option>
