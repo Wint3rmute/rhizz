@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 85 — Make clippy more strict
+
+Enabled strict Clippy lints across the workspace and fixed all resulting warnings.
+
+- **Workspace lint config (`Cargo.toml`)**
+  - Added `[workspace.lints.clippy]` enabling `pedantic` and `nursery` at `deny` level, plus explicit denials for panic-related and unsafe lints: `unwrap_used`, `expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `unreachable`, `unimplemented`, `unchecked_time_subtraction`, `todo`, `string_slice`, `panic_in_result_fn`, `panic`, `exit`, and `as_conversions`.
+- **`clippy.toml`**
+  - Added test-scoped allowances so unit/integration tests may still use `unwrap`/`expect`/`panic`/indexing-slicing.
+- **Code fixes**
+  - Applied mechanical and targeted fixes across `rhizz-core`, `rhizz-cli`, and `rhizz-wasm` to satisfy the newly enabled lints (one file at a time, committing after each fix).
+- Validated with `just lint` (clippy `-D warnings` + ESLint + svelte-check), `just test` (all Rust + 332 Vitest tests pass), and `just format`.
+
+---
+
 ## Task 84 — Visual attributes for components (color, border, font)
 
 Make it possible to define model-level visual attributes on components so diagrams can be styled.
