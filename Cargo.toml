@@ -15,6 +15,7 @@ resolver = "2"
 #   - unreachable
 #   - unimplemented
 #   - todo
+#   - exit
 #
 [workspace.lints.clippy]
 # pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
@@ -33,6 +34,6 @@ unimplemented = "deny"
 todo = "deny"
 # string_slice = "deny"
 # panic_in_result_fn = "deny"
-panic = "deny"
-# exit = "deny"
+# panic = "deny"
+exit = "deny"
 # as_conversions = "deny"
