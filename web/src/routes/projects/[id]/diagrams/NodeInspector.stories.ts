@@ -44,6 +44,21 @@ export const Default: Story = {
   },
 };
 
+export const Styled: Story = {
+  args: {
+    component: {
+      ...meta.args.component,
+      icon: "microchip",
+      color: "#ff0000",
+      border: "dashed",
+      font: "bold",
+    },
+  },
+  globals: {
+    viewport: { value: "phone" },
+  },
+};
+
 export const AtomicLeaf: Story = {
   args: {
     component: {

@@ -67,16 +67,13 @@ function handleLeafChange(e: Event) {
 
 function handleColorChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value;
-  const patch: Partial<ComponentData> = {};
-  if (value !== "none") patch.color = value;
-  onupdate(patch);
+  onupdate({ color: value === "none" ? undefined : value });
 }
 
 function handleBorderChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value;
-  const patch: Partial<ComponentData> = {};
-  if (value !== "solid") patch.border = value as "dashed" | "dotted";
-  onupdate(patch);
+  const border = value === "solid" ? undefined : (value as "dashed" | "dotted");
+  onupdate({ border });
 }
 
 // ── Port Operations ───────────────────────────────────────────────────────────
@@ -155,11 +152,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
     <IconAutocompleteInput
       id="comp-icon-input"
       value={component.icon || ""}
-      onchange={(newIcon) => {
-        const patch: Partial<ComponentData> = {};
-        if (newIcon) patch.icon = newIcon;
-        onupdate(patch);
-      }}
+      onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
     />
 
     <div class="form-control">
@@ -213,9 +206,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
         value={component.font || "unstyled"}
         onchange={(e) => {
           const v = (e.target as HTMLSelectElement).value;
-          const patch: Partial<ComponentData> = {};
-          if (v !== "unstyled") patch.font = v;
-          onupdate(patch);
+          onupdate({ font: v === "unstyled" ? undefined : v });
         }}
         class="select select-sm select-bordered w-full"
       >

@@ -63,10 +63,10 @@ export interface ConnectionData {
 export interface ComponentData {
   label: string;
   description?: string;
-  icon?: string;
-  color?: string;
+  icon?: string | undefined;
+  color?: string | undefined;
   border?: "solid" | "dashed" | "dotted" | undefined;
-  font?: string;
+  font?: string | undefined;
   tags?: string[];
   level?: number | undefined;
   leaf: boolean;

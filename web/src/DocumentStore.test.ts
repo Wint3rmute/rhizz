@@ -387,6 +387,16 @@ system "demo" {
     expect(doc.systemHcl).toContain('color       = "#00ff00"');
     expect(doc.systemHcl).toContain('border      = "dotted"');
     expect(doc.systemHcl).toContain('font        = "italic"');
+
+    doc.updateComponent("style-demo/compA", {
+      color: undefined,
+      border: undefined,
+      font: undefined,
+    });
+
+    expect(doc.systemHcl).not.toContain("color       =");
+    expect(doc.systemHcl).not.toContain("border      =");
+    expect(doc.systemHcl).not.toContain("font        =");
   });
 
   it("loads components across multi-file sources and finds them by persistence key", () => {
