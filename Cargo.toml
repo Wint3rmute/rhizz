@@ -11,6 +11,7 @@ resolver = "2"
 # configuration. Already enabled:
 #   - unwrap_used
 #   - expect_used
+#   - panic
 #
 [workspace.lints.clippy]
 # pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
@@ -26,6 +27,6 @@ expect_used = "deny"
 # todo = "deny"
 # string_slice = "deny"
 # panic_in_result_fn = "deny"
-# panic = "deny"
+panic = "deny"
 # exit = "deny"
 # as_conversions = "deny"
