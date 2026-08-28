@@ -6,46 +6,22 @@ members = [
 ]
 resolver = "2"
 
-# NOTE: stricter clippy lints are being enabled incrementally, one lint at a
-# time. See `TASKS/TODO.md` ("Make clippy more strict") for the full target
-# configuration. Already enabled:
-#   - unwrap_used
-#   - expect_used
-#   - panic
-#   - unreachable
-#   - unimplemented
-#   - todo
-#   - exit
-#   - unchecked_time_subtraction
-#   - panic_in_result_fn
-#   - string_slice
-#   - indexing_slicing
-#   - arithmetic_side_effects
-#   - as_conversions
-#
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
 [workspace.lints.clippy]
-pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
-nursery = { level = "deny", priority = -1 }    # BETA LINTS
-# # DENY PANICS
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+# Deny panics
 unwrap_used = "deny"
 expect_used = "deny"
-# indexing_slicing = "deny"
 indexing_slicing = "deny"
-# arithmetic_side_effects = "deny"
 arithmetic_side_effects = "deny"
-# unreachable = "deny"
 unreachable = "deny"
-# unimplemented = "deny"
 unimplemented = "deny"
-# unchecked_time_subtraction = "deny"
 unchecked_time_subtraction = "deny"
-# todo = "deny"
 todo = "deny"
-# string_slice = "deny"
 string_slice = "deny"
 panic_in_result_fn = "deny"
-# panic = "deny"
+panic = "deny"
 exit = "deny"
 as_conversions = "deny"
