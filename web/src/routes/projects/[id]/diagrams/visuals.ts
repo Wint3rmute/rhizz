@@ -47,6 +47,30 @@ export interface SvgFont {
 export const SELECTION_OUTLINE_OPACITY = 0.5;
 export const SELECTION_OUTLINE_DASHARRAY = "1.5 3";
 
+// Fraction by which the selection outline is enlarged beyond the node's own
+// box (applied to both width and height), so the outline sits slightly
+// outside the node's border while staying centered on the same place. Tweak
+// this in a dev build to tune the visual gap.
+export const SELECTION_OUTLINE_SCALE = 0.05;
+
+// Returns the selection outline's rect for a node of the given size, expanded
+// by SELECTION_OUTLINE_SCALE on each axis and centered on the node's origin.
+// Coordinates are relative to the node's top-left corner (the caller renders
+// this inside a `translate(x, y)` group).
+export function selectionOutlineRect(
+  width: number,
+  height: number,
+): { x: number; y: number; width: number; height: number } {
+  const dx = width * SELECTION_OUTLINE_SCALE;
+  const dy = height * SELECTION_OUTLINE_SCALE;
+  return {
+    x: -dx / 2,
+    y: -dy / 2,
+    width: width + dx,
+    height: height + dy,
+  };
+}
+
 function isColorOption(c: string): c is ColorOption {
   return (COLOR_OPTIONS as readonly string[]).includes(c);
 }

@@ -7,6 +7,8 @@ import {
   fontStyleToSvg,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
+  SELECTION_OUTLINE_SCALE,
+  selectionOutlineRect,
 } from "./visuals";
 
 describe("colorToSvgStroke", () => {
@@ -66,6 +68,18 @@ describe("selection outline", () => {
   it("uses a 50% transparent dotted outline", () => {
     expect(SELECTION_OUTLINE_OPACITY).toBe(0.5);
     expect(SELECTION_OUTLINE_DASHARRAY).toBe("1.5 3");
+  });
+
+  it("expands the outline by the scale constant, centered on the box", () => {
+    const rect = selectionOutlineRect(200, 100);
+    const dx = 200 * SELECTION_OUTLINE_SCALE;
+    const dy = 100 * SELECTION_OUTLINE_SCALE;
+    expect(rect).toEqual({
+      x: -dx / 2,
+      y: -dy / 2,
+      width: 200 + dx,
+      height: 100 + dy,
+    });
   });
 });
 

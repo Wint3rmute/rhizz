@@ -77,6 +77,7 @@ import {
   fontStyleToSvg,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
+  selectionOutlineRect,
 } from "./visuals";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
@@ -2368,9 +2369,12 @@ $effect(() => {
               <!-- Selection indicator: a 50%-transparent dotted outline drawn
                    on top of the node's own border, so the component's style
                    (color / border) stays visible and isn't obscured. -->
+              {@const outline = selectionOutlineRect(width, height)}
               <rect
-                {width}
-                {height}
+                x={outline.x}
+                y={outline.y}
+                width={outline.width}
+                height={outline.height}
                 rx="5"
                 fill="none"
                 stroke="var(--color-primary)"

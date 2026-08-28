@@ -13,6 +13,7 @@ import {
   fontStyleToSvg,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
+  selectionOutlineRect,
 } from "./visuals";
 import type {
   DiagramStaticBox,
@@ -97,9 +98,12 @@ let visibleConnections = $derived(
              top of the node's own border, so the component's style (color /
              border) stays visible and isn't obscured. Mirrors the interactive
              canvas's selection rendering. -->
+        {@const outline = selectionOutlineRect(box.width, box.height)}
         <rect
-          width={box.width}
-          height={box.height}
+          x={outline.x}
+          y={outline.y}
+          width={outline.width}
+          height={outline.height}
           rx="5"
           fill="none"
           stroke="var(--color-primary)"
