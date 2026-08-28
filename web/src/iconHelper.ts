@@ -23,7 +23,7 @@ export function normalizeIconName(name: string): string {
     clean = clean.slice(3);
   } else if (
     clean.startsWith("fa") && clean.length > 2 &&
-    clean[2] === clean[2].toUpperCase()
+    clean.charAt(2) === clean.charAt(2).toUpperCase()
   ) {
     clean = clean.slice(2);
   }
@@ -47,9 +47,16 @@ export function resolveIcon(name?: string | null): ResolvedIcon | null {
     | { icon: [number, number, unknown[], string, string | string[]] }
     | undefined;
 
-  if (iconDef && Array.isArray(iconDef.icon) && iconDef.icon.length >= 5) {
-    const [width, height, , , svgPath] = iconDef.icon;
-    return { width, height, svgPath: toSvgPath(svgPath) };
+  if (iconDef && Array.isArray(iconDef.icon)) {
+    const icon = iconDef.icon as
+      | [number, number, unknown[], string, string | string[]]
+      | [number, number, unknown[], string, string | string[], unknown];
+    const [, , , , svgPath] = icon;
+    return {
+      width: icon[0],
+      height: icon[1],
+      svgPath: toSvgPath(svgPath),
+    };
   }
 
   return null;
@@ -86,7 +93,7 @@ export const ALL_ICON_NAMES: string[] = Object.keys(solidIcons)
     (key) =>
       key.startsWith("fa") &&
       key.length > 2 &&
-      key[2] === key[2].toUpperCase() &&
+      key.charAt(2) === key.charAt(2).toUpperCase() &&
       key !== "fas",
   )
   .map((key) => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { PortData } from "../../../../DocumentStore.svelte";
+import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
 import type { TextAlign } from "./geometry";
 import NodeInspector from "./NodeInspector.svelte";
 
@@ -13,8 +13,8 @@ interface ParentOption {
 interface Props {
   isOpen: boolean;
   availableParents: ParentOption[];
-  defaultParentKey?: string;
-  initialPosition?: { x: number; y: number };
+  defaultParentKey?: string | undefined;
+  initialPosition?: { x: number; y: number } | undefined;
   oncreate: (data: {
     label: string;
     parentKey: string;
@@ -43,12 +43,12 @@ let parentSearch = $state("");
 let parentDropdownOpen = $state(false);
 let textAlign = $state<TextAlign>("center");
 
-let compDetails = $state({
+let compDetails = $state<ComponentData>({
   label: "",
   description: "",
-  tags: [] as string[],
+  tags: [],
   leaf: true,
-  ports: [] as PortData[],
+  ports: [],
   components: [],
   connections: [],
 });
@@ -89,16 +89,26 @@ let selectedParentDisplay = $derived(
 function handleCreate() {
   const trimmed = label.trim();
   if (!trimmed) return;
-  oncreate({
+  const data: {
+    label: string;
+    parentKey: string;
+    description: string;
+    tags: string[];
+    leaf: boolean;
+    ports: PortData[];
+    textAlign?: TextAlign;
+    position?: { x: number; y: number };
+  } = {
     label: trimmed,
     parentKey: selectedParentKey,
-    description: compDetails.description,
-    tags: compDetails.tags,
+    description: compDetails.description ?? "",
+    tags: compDetails.tags ?? [],
     leaf: compDetails.leaf,
     ports: compDetails.ports,
-    textAlign,
-    position: initialPosition,
-  });
+  };
+  if (textAlign !== undefined) data.textAlign = textAlign;
+  if (initialPosition !== undefined) data.position = initialPosition;
+  oncreate(data);
 }
 </script>
 

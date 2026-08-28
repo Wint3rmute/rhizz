@@ -236,14 +236,14 @@ system "arm" {
 
     expect(doc.project.name).toBe("robot-arm");
     expect(doc.systems).toHaveLength(1);
-    expect(doc.systems[0].label).toBe("arm");
-    expect(doc.systems[0].components).toHaveLength(2);
-    expect(doc.systems[0].connections).toHaveLength(1);
+    expect(doc.systems[0]?.label).toBe("arm");
+    expect(doc.systems[0]?.components).toHaveLength(2);
+    expect(doc.systems[0]?.connections).toHaveLength(1);
 
     expect(doc.views).toHaveLength(1);
-    expect(doc.views[0].label).toBe("wiring");
-    expect(doc.views[0].nodes?.[0].component).toBe("arm/gripper");
-    expect(doc.views[0].nodes?.[0].x).toBe(400);
+    expect(doc.views[0]?.label).toBe("wiring");
+    expect(doc.views[0]?.nodes?.[0]?.component).toBe("arm/gripper");
+    expect(doc.views[0]?.nodes?.[0]?.x).toBe(400);
 
     // Roundtrip verification
     expect(doc.systemHcl).toContain('system "arm"');
@@ -387,6 +387,16 @@ system "demo" {
     expect(doc.systemHcl).toContain('color       = "#00ff00"');
     expect(doc.systemHcl).toContain('border      = "dotted"');
     expect(doc.systemHcl).toContain('font        = "italic"');
+
+    doc.updateComponent("style-demo/compA", {
+      color: undefined,
+      border: undefined,
+      font: undefined,
+    });
+
+    expect(doc.systemHcl).not.toContain("color       =");
+    expect(doc.systemHcl).not.toContain("border      =");
+    expect(doc.systemHcl).not.toContain("font        =");
   });
 
   it("loads components across multi-file sources and finds them by persistence key", () => {
@@ -419,7 +429,7 @@ system "apollo-11" {
     doc.loadFromSources(sources);
 
     expect(doc.systems).toHaveLength(1);
-    expect(doc.systems[0].label).toBe("apollo-11");
+    expect(doc.systems[0]?.label).toBe("apollo-11");
     const comp = doc.findComponent("apollo-11/cm");
     expect(comp).toBeDefined();
     expect(comp?.label).toBe("cm");

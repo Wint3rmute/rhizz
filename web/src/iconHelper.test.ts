@@ -19,7 +19,7 @@ describe("iconHelper", () => {
     const results = searchIcons("chip", 5);
     expect(results.length).toBeGreaterThan(0);
     expect(results.some((r) => r.name.includes("chip"))).toBe(true);
-    expect(results[0].icon.svgPath.length).toBeGreaterThan(0);
+    expect(results[0]?.icon.svgPath.length).toBeGreaterThan(0);
   });
 
   it("handles empty or whitespace search queries gracefully", () => {

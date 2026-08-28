@@ -10,7 +10,7 @@ import FileTree from "./FileTree.svelte";
 function dirent(path: string, kind: "file" | "directory"): Dirent {
   const segments = path.split("/");
   return {
-    name: segments[segments.length - 1],
+    name: segments[segments.length - 1] ?? path,
     path,
     isFile: () => kind === "file",
     isDirectory: () => kind === "directory",
@@ -55,42 +55,44 @@ export const Default: Story = {
     const canvas = within(canvasElement);
 
     // Directories/files nest as expected, sorted directories-first.
-    expect(canvas.getByText("components")).toBeInTheDocument();
-    expect(canvas.getByText("imu.hcl")).toBeInTheDocument();
+    await expect(canvas.getByText("components")).toBeInTheDocument();
+    await expect(canvas.getByText("imu.hcl")).toBeInTheDocument();
 
     // Selecting a file is a purely internal DOM change (selectedPath is
     // bindable, not driven by a callback) — verified via aria-current
     // rather than a callback assertion.
     const escFile = canvas.getByRole("button", { name: "esc.hcl" });
-    expect(escFile).not.toHaveAttribute("aria-current");
+    await expect(escFile).not.toHaveAttribute("aria-current");
     await userEvent.click(escFile);
-    expect(escFile).toHaveAttribute("aria-current", "true");
+    await expect(escFile).toHaveAttribute("aria-current", "true");
 
     // The root-level toolbar creates at the project root ("").
     await userEvent.click(canvas.getByRole("button", { name: "+ File" }));
-    expect(args.oncreatefile).toHaveBeenLastCalledWith("");
+    await expect(args.oncreatefile).toHaveBeenLastCalledWith("");
 
     await userEvent.click(canvas.getByRole("button", { name: "+ Folder" }));
-    expect(args.oncreatedirectory).toHaveBeenLastCalledWith("");
+    await expect(args.oncreatedirectory).toHaveBeenLastCalledWith("");
 
     // Per-row hover actions: hidden until the row is hovered (CSS
     // `group-hover/row:flex`), same as real mouse use — userEvent.hover
     // triggers that before clicking through to the underlying action.
     const droneRow = canvas.getByRole("button", { name: "drone.hcl" })
-      .closest("div")!;
+      .closest("div");
+    if (!droneRow) throw new Error("drone row not found");
     await userEvent.hover(droneRow);
     await userEvent.click(within(droneRow).getByTitle("Rename"));
-    expect(args.onrename).toHaveBeenLastCalledWith("drone.hcl");
+    await expect(args.onrename).toHaveBeenLastCalledWith("drone.hcl");
 
     await userEvent.click(within(droneRow).getByTitle("Delete"));
-    expect(args.ondelete).toHaveBeenLastCalledWith("drone.hcl");
+    await expect(args.ondelete).toHaveBeenLastCalledWith("drone.hcl");
 
     // A directory's hover actions create scoped to that directory, not
     // the root.
-    const componentsRow = canvas.getByText("components").closest("div")!;
+    const componentsRow = canvas.getByText("components").closest("div");
+    if (!componentsRow) throw new Error("components row not found");
     await userEvent.hover(componentsRow);
     await userEvent.click(within(componentsRow).getByTitle("New file"));
-    expect(args.oncreatefile).toHaveBeenLastCalledWith("components");
+    await expect(args.oncreatefile).toHaveBeenLastCalledWith("components");
   },
 };
 
@@ -101,7 +103,7 @@ export const Empty: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByText("No files yet.")).toBeInTheDocument();
+    await expect(canvas.getByText("No files yet.")).toBeInTheDocument();
   },
 };
 

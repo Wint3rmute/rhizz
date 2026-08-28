@@ -18,6 +18,19 @@ function center(node: LayoutNode) {
   };
 }
 
+// Returns the two members of a result array (assumed length >= 2 for the
+// single-edge pair scenarios these tests exercise) or throws if the layout
+// unexpectedly produced fewer nodes, so the assertions below use concrete
+// elements instead of unchecked indexing.
+function pair<T>(arr: T[]): [T, T] {
+  const a = arr[0];
+  const b = arr[1];
+  if (a === undefined || b === undefined) {
+    throw new Error(`expected at least 2 elements, got ${String(arr.length)}`);
+  }
+  return [a, b];
+}
+
 describe("runForceLayout", () => {
   it("returns an empty result for no nodes", () => {
     expect(runForceLayout([], [])).toEqual([]);
@@ -30,11 +43,13 @@ describe("runForceLayout", () => {
     ];
     const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
 
-    const initialDistance = distance(center(nodes[0]), center(nodes[1]));
+    const [n0, n1] = pair(nodes);
+    const initialDistance = distance(center(n0), center(n1));
     const result = runForceLayout(nodes, edges);
+    const [r0, r1] = pair(result);
     const finalDistance = distance(
-      { x: result[0].x + 50, y: result[0].y + 50 },
-      { x: result[1].x + 50, y: result[1].y + 50 },
+      { x: r0.x + 50, y: r0.y + 50 },
+      { x: r1.x + 50, y: r1.y + 50 },
     );
 
     expect(finalDistance).toBeLessThan(initialDistance);
@@ -48,9 +63,10 @@ describe("runForceLayout", () => {
     const edges: LayoutEdge[] = [{ from: 0, to: 1 }];
 
     const result = runForceLayout(nodes, edges);
+    const [r0, r1] = pair(result);
     const finalDistance = distance(
-      { x: result[0].x + 50, y: result[0].y + 50 },
-      { x: result[1].x + 50, y: result[1].y + 50 },
+      { x: r0.x + 50, y: r0.y + 50 },
+      { x: r1.x + 50, y: r1.y + 50 },
     );
 
     // Circumscribing radius of a 100x100 box is 50*sqrt(2) ≈ 70.7; two
@@ -64,11 +80,13 @@ describe("runForceLayout", () => {
       { index: 1, box: { x: 10, y: 10, width: 100, height: 100 } },
     ];
 
-    const initialDistance = distance(center(nodes[0]), center(nodes[1]));
+    const [n0, n1] = pair(nodes);
+    const initialDistance = distance(center(n0), center(n1));
     const result = runForceLayout(nodes, []);
+    const [r0, r1] = pair(result);
     const finalDistance = distance(
-      { x: result[0].x + 50, y: result[0].y + 50 },
-      { x: result[1].x + 50, y: result[1].y + 50 },
+      { x: r0.x + 50, y: r0.y + 50 },
+      { x: r1.x + 50, y: r1.y + 50 },
     );
 
     expect(finalDistance).toBeGreaterThan(initialDistance);
@@ -119,12 +137,10 @@ describe("runForceLayout", () => {
     const aligned = runForceLayout(nodes, edges, { alignStrength: 1 });
     const unaligned = runForceLayout(nodes, edges, { alignStrength: 0 });
 
-    const dyAligned = Math.abs(
-      aligned[1].y + 50 - (aligned[0].y + 50),
-    );
-    const dyUnaligned = Math.abs(
-      unaligned[1].y + 50 - (unaligned[0].y + 50),
-    );
+    const [a0, a1] = pair(aligned);
+    const dyAligned = Math.abs(a1.y + 50 - (a0.y + 50));
+    const [u0, u1] = pair(unaligned);
+    const dyUnaligned = Math.abs(u1.y + 50 - (u0.y + 50));
 
     expect(dyAligned).toBeLessThan(dyUnaligned);
   });
@@ -199,16 +215,17 @@ describe("createForceLayout", () => {
     const ramped = createForceLayout(nodes, edges, { warmupTicks: 10 });
     const unramped = createForceLayout(nodes, edges, { warmupTicks: 0 });
 
-    const rampedFirst = ramped.tick()[0];
-    const unrampedFirst = unramped.tick()[0];
+    const [rampedFirst] = pair(ramped.tick());
+    const [unrampedFirst] = pair(unramped.tick());
+    const [node0] = pair(nodes);
 
     const rampedMove = distance(
       { x: rampedFirst.x, y: rampedFirst.y },
-      { x: nodes[0].box.x, y: nodes[0].box.y },
+      { x: node0.box.x, y: node0.box.y },
     );
     const unrampedMove = distance(
       { x: unrampedFirst.x, y: unrampedFirst.y },
-      { x: nodes[0].box.x, y: nodes[0].box.y },
+      { x: node0.box.x, y: node0.box.y },
     );
 
     expect(rampedMove).toBeLessThan(unrampedMove);

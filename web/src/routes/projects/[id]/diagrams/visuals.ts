@@ -22,16 +22,16 @@ export const COLOR_OPTIONS = [
 export type ColorOption = (typeof COLOR_OPTIONS)[number];
 
 export interface ComponentVisuals {
-  color?: string;
-  border?: string;
-  font?: string;
+  color?: string | undefined;
+  border?: string | undefined;
+  font?: string | undefined;
 }
 
 export interface SvgBorder {
   /** SVG `stroke-dasharray` value, or undefined for a solid border. */
-  dasharray?: string;
+  dasharray?: string | undefined;
   /** Stroke color; falls back to the default base-content grey when unset. */
-  stroke?: string;
+  stroke?: string | undefined;
 }
 
 export interface SvgFont {
@@ -88,6 +88,8 @@ export function colorToSvgStroke(color?: string): string | undefined {
 // value) returns undefined so the renderer keeps its default solid stroke.
 export function borderStyleToDasharray(border?: string): string | undefined {
   switch (border) {
+    case undefined:
+      return undefined;
     case "dashed":
       return "6 4";
     case "dotted":
@@ -100,6 +102,8 @@ export function borderStyleToDasharray(border?: string): string | undefined {
 // Maps a single-word font token to SVG text-presentation values.
 export function fontStyleToSvg(font?: string): SvgFont {
   switch (font) {
+    case undefined:
+      return {};
     case "bold":
       return { fontWeight: "bold" };
     case "italic":

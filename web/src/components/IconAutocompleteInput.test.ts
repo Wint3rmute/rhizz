@@ -5,7 +5,7 @@ describe("IconAutocompleteInput logic", () => {
   it("searches and returns suggestions for typed query", () => {
     const results = searchIcons("server", 5);
     expect(results.length).toBeGreaterThan(0);
-    expect(results[0].name).toBe("server");
+    expect(results[0]?.name).toBe("server");
   });
 
   it("returns multiple matches when search is broad", () => {

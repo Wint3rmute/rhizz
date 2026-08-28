@@ -2,12 +2,12 @@ import type { Box, TextAlign } from "./geometry";
 
 export interface DiagramStaticComponent {
   label: string;
-  icon?: string;
-  color?: string;
-  border?: string;
-  font?: string;
+  icon?: string | undefined;
+  color?: string | undefined;
+  border?: string | undefined;
+  font?: string | undefined;
   /** Index (into `components`) of this component's parent, if it has one — used only to decide render order (children drawn on top of their parent). */
-  parent_component_index?: number;
+  parent_component_index?: number | undefined;
 }
 
 export interface DiagramStaticConnection {

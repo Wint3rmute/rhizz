@@ -5,7 +5,12 @@
 // Where a node's label is positioned within its box.
 export type TextAlign = "center" | "top-center" | "top-left";
 
-export type Box = { x: number; y: number; width: number; height: number };
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 // Whether a connection leaves/enters its endpoints horizontally (via the
 // left/right side, jogging vertically in the middle — for boxes that are
@@ -184,10 +189,9 @@ export function computeVisibleConnections<
     startSide?: ConnectionSide;
     endSide?: ConnectionSide;
   },
-  B extends Box,
 >(
   connections: T[],
-  getBox: (index: number) => B | null | undefined,
+  getBox: (index: number) => Box | null | undefined,
 ): VisibleConnection<T>[] {
   return connections.flatMap((conn) => {
     const boxA = getBox(conn.from);
@@ -342,7 +346,7 @@ export function elbowPath(
   if (Math.abs(ds) < 0.5) {
     const [x1, y1] = toXY(ap, as_);
     const [x2, y2] = toXY(bp, bs);
-    return `M ${x1},${y1} L ${x2},${y2}`;
+    return `M ${String(x1)},${String(y1)} L ${String(x2)},${String(y2)}`;
   }
 
   const mp = (ap + bp) / 2;
@@ -360,12 +364,16 @@ export function elbowPath(
   const [x5, y5] = toXY(bp, bs);
 
   return [
-    `M ${x0},${y0}`,
-    `L ${x1},${y1}`,
-    `A ${rc},${rc} 0 0,${sweep(t1 as 0 | 1)} ${x2},${y2}`,
-    `L ${x3},${y3}`,
-    `A ${rc},${rc} 0 0,${sweep(t2 as 0 | 1)} ${x4},${y4}`,
-    `L ${x5},${y5}`,
+    `M ${String(x0)},${String(y0)}`,
+    `L ${String(x1)},${String(y1)}`,
+    `A ${String(rc)},${String(rc)} 0 0,${String(sweep(t1))} ${String(x2)},${
+      String(y2)
+    }`,
+    `L ${String(x3)},${String(y3)}`,
+    `A ${String(rc)},${String(rc)} 0 0,${String(sweep(t2 as 0 | 1))} ${
+      String(x4)
+    },${String(y4)}`,
+    `L ${String(x5)},${String(y5)}`,
   ].join(" ");
 }
 

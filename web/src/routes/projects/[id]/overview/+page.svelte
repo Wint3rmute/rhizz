@@ -15,7 +15,7 @@ let { data }: PageProps = $props();
 let sources = $state<Source[]>([]);
 $effect(() => {
   const fs = openProjectFs(projectStore, data.projectId);
-  readProjectSources(fs).then((s) => {
+  void readProjectSources(fs).then((s) => {
     sources = s;
   });
 });

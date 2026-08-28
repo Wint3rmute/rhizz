@@ -6,6 +6,8 @@
 import { z } from "zod";
 import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 import {
+  type ConnectionLayout,
+  type NodeLayout,
   parse_views,
   serialize_views,
   type ViewDefinition,
@@ -54,7 +56,7 @@ export function sanitizeStoredRecord(
 
   if (droppedKeys) {
     console.warn(
-      `Dropped ${droppedKeys.length} malformed diagram layout entr${
+      `Dropped ${String(droppedKeys.length)} malformed diagram layout entr${
         droppedKeys.length === 1 ? "y" : "ies"
       }: ${droppedKeys.join(", ")}`,
     );
@@ -83,8 +85,8 @@ export function emptyDiagramLayout(): DiagramLayout {
  */
 export interface ComponentHierarchyItem {
   label: string;
-  parent_component_index?: number;
-  parent_system_index?: number;
+  parent_component_index?: number | undefined;
+  parent_system_index?: number | undefined;
 }
 
 /**
@@ -110,7 +112,7 @@ export function componentKey(
 
   while (current !== undefined) {
     const component: ComponentHierarchyItem | undefined = components[current];
-    if (!component) return `#${index}`;
+    if (!component) return `#${String(index)}`;
     parts.unshift(component.label);
     if (component.parent_component_index !== undefined) {
       current = component.parent_component_index;
@@ -168,7 +170,7 @@ export function mapLayoutToBoxes(
  * Extracts a clean view name from a file path (e.g. ".rhizz/diagrams/overview.hcl" -> "overview").
  */
 export function viewNameFromPath(path: string): string {
-  const filename = path.split("/").pop() || "diagram";
+  const filename = path.split("/").pop() ?? "diagram";
   return filename.replace(/\.(hcl|json)$/, "");
 }
 
@@ -180,21 +182,25 @@ export function layoutToHcl(
   viewName = "diagram",
   systemName = "",
 ): string {
-  const nodes = Object.entries(layout.checked).map(([component, box]) => ({
-    component,
-    x: box.x,
-    y: box.y,
-    width: box.width,
-    height: box.height,
-    text_align: box.textAlign,
-  }));
+  const nodes = Object.entries(layout.checked).map(([component, box]) => {
+    const node: NodeLayout = {
+      component,
+      x: box.x,
+      y: box.y,
+    };
+    if (box.width !== undefined) node.width = box.width;
+    if (box.height !== undefined) node.height = box.height;
+    if (box.textAlign !== undefined) node.text_align = box.textAlign;
+    return node;
+  });
 
-  const connections = Object.entries(layout.connections || {}).map(
-    ([connection, data]) => ({
-      connection,
-      start_side: data.startSide,
-      end_side: data.endSide,
-    }),
+  const connections = Object.entries(layout.connections ?? {}).map(
+    ([connection, data]) => {
+      const conn: ConnectionLayout = { connection };
+      if (data.startSide !== undefined) conn.start_side = data.startSide;
+      if (data.endSide !== undefined) conn.end_side = data.endSide;
+      return conn;
+    },
   );
 
   const viewDef: ViewDefinition = {
@@ -223,7 +229,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const connections: Record<string, StoredConnection> = {};
 
   for (const view of views) {
-    for (const node of view.nodes || []) {
+    for (const node of view.nodes ?? []) {
       const parsedBox = StoredBoxSchema.safeParse({
         x: node.x,
         y: node.y,
@@ -236,7 +242,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
         savedLayout[node.component] = parsedBox.data;
       }
     }
-    for (const conn of view.connections || []) {
+    for (const conn of view.connections ?? []) {
       const entry: StoredConnection = {};
       if (conn.start_side) {
         const parsedStart = ConnectionSideSchema.safeParse(conn.start_side);

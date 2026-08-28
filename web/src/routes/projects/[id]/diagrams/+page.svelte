@@ -93,7 +93,7 @@ let canvas_height = $state(600);
 // matches the node size (100x100), so the grid doubles as a snapping
 // guide; MINOR_GRID_SPACING subdivides each major cell into tenths.
 //
-// TODO: spacing is fixed, so at extreme zoom the grid can get too dense
+// Note: spacing is fixed, so at extreme zoom the grid can get too dense
 // (zoomed out) or too sparse (zoomed in). If that becomes an issue, make
 // spacing adaptive: derive a multiplier from editor_state.view.zoom,
 // snapped to a "nice" progression (1, 2, 5, 10, 20, 50, ...) so that
@@ -113,7 +113,7 @@ let fs = $derived(openProjectFs(projectStore, data.projectId));
 
 let sources = $state<Source[]>([]);
 $effect(() => {
-  readProjectSources(fs).then((s) => {
+  void readProjectSources(fs).then((s) => {
     sources = s;
   });
 });
@@ -338,7 +338,7 @@ $effect(() => {
     return;
   }
 
-  readDiagramLayoutFile(fs, path).then((layout) => {
+  void readDiagramLayoutFile(fs, path).then((layout) => {
     // A stale load (e.g. rapid switching between diagrams) could resolve
     // after a newer one already changed the selection — guard against
     // overwriting the newer selection's state with the older one.
@@ -374,7 +374,7 @@ $effect(() => {
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
-  writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
+  void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -473,8 +473,22 @@ async function handleDeleteDiagram(path: string): Promise<void> {
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
   const key = getComponentKey(index);
-  checked[key] = { ...checked[key], ...box };
-  savedLayout[key] = { ...savedLayout[key], ...box };
+  const checkedPrev = checked[key];
+  const savedPrev = savedLayout[key];
+  checked[key] = {
+    x: box.x ?? checkedPrev?.x ?? 0,
+    y: box.y ?? checkedPrev?.y ?? 0,
+    width: box.width ?? checkedPrev?.width,
+    height: box.height ?? checkedPrev?.height,
+    textAlign: box.textAlign ?? checkedPrev?.textAlign,
+  };
+  savedLayout[key] = {
+    x: box.x ?? savedPrev?.x ?? 0,
+    y: box.y ?? savedPrev?.y ?? 0,
+    width: box.width ?? savedPrev?.width,
+    height: box.height ?? savedPrev?.height,
+    textAlign: box.textAlign ?? savedPrev?.textAlign,
+  };
 }
 
 // Returns the placed node's box (position + size + text alignment), or null
@@ -502,7 +516,7 @@ function nodeBox(index: number): {
 // Sets the text alignment of the currently selected node. Only meaningful
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
-  if (primarySelected === null) return;
+  if (primarySelected === null || primarySelected === undefined) return;
   const box = checked[getComponentKey(primarySelected)];
   if (!box) return;
   if (box.textAlign === align) return; // no-op: skip a redundant undo point
@@ -711,7 +725,9 @@ let primarySelected = $derived(
   selected.size === 1 ? [...selected][0] : null,
 );
 let selectedBox = $derived(
-  primarySelected !== null ? nodeBox(primarySelected) : null,
+  primarySelected !== null && primarySelected !== undefined
+    ? nodeBox(primarySelected)
+    : null,
 );
 
 // All pointer-driven canvas interactions (drag, resize, pan, marquee
@@ -769,7 +785,7 @@ type Interaction =
     type: "connecting";
     sourceComponentIndex: number;
     sourcePortLabel: string | null;
-    startSide?: ConnectionSide;
+    startSide?: ConnectionSide | undefined;
     sourcePoint: { x: number; y: number };
     currentPoint: { x: number; y: number };
   };
@@ -974,7 +990,7 @@ async function handleModalCreateComponent(data: {
       doc.addSystem(parent || "main");
       parent = parent || "main";
     } else {
-      parent = doc.systems[0].label;
+      parent = doc.systems[0]?.label ?? "main";
     }
   }
 
@@ -1044,7 +1060,9 @@ $effect(() => {
 });
 
 let selectedKey = $derived(
-  selected.size === 1 ? getComponentKey(selected.values().next().value!) : null,
+  selected.size === 1
+    ? getComponentKey(selected.values().next().value ?? 0)
+    : null,
 );
 
 let selectedComponentData = $derived(
@@ -1722,13 +1740,19 @@ async function handleDeleteSelectedConnection(): Promise<void> {
 // Only connections where both endpoints are currently on the canvas.
 let visibleConnections = $derived(
   computeVisibleConnections(
-    connections.map((conn) => ({
-      from: conn.from,
-      to: conn.to,
-      label: conn.label,
-      startSide: savedConnections[conn.label]?.startSide,
-      endSide: savedConnections[conn.label]?.endSide,
-    })),
+    connections.map((conn) => {
+      const entry: {
+        from: number;
+        to: number;
+        label: string;
+        startSide?: ConnectionSide;
+        endSide?: ConnectionSide;
+      } = { from: conn.from, to: conn.to, label: conn.label };
+      const saved = savedConnections[conn.label];
+      if (saved?.startSide !== undefined) entry.startSide = saved.startSide;
+      if (saved?.endSide !== undefined) entry.endSide = saved.endSide;
+      return entry;
+    }),
     (i) => nodeBox(i),
   ),
 );
@@ -1985,12 +2009,16 @@ let currentActivity = $derived.by((): string | null => {
   if (pulseActivity !== null) return pulseActivity;
   if (autoLayoutRunning) return "Calculating…";
   switch (interaction.type) {
+    case "idle":
+      return null;
     case "dragging":
       return "Dragging";
     case "connecting":
       return "Connecting";
     case "resizing":
       return "Resizing";
+    case "panning":
+      return "Panning";
     case "marquee": {
       // A marquee this small is really just a click (same threshold
       // onSvgMouseUp uses to decide whether to commit a selection) —

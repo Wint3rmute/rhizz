@@ -25,12 +25,20 @@ await init();
 const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
 const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.hcl"];
 
+// The sampled layouts always exist in EXAMPLE_SYSTEM_DIAGRAMS; the fallbacks
+// are only to keep the object total under noUncheckedIndexedAccess.
+const EMPTY_LAYOUT: DiagramLayout = {
+  checked: {},
+  savedLayout: {},
+  connections: {},
+};
+
 const manyDiagramsMap: Record<string, DiagramLayout> = {
-  "overview.hcl": sampleOverview,
-  "cloud-path.hcl": sampleCloud,
-  "sensor-network.hcl": sampleOverview,
-  "power-distribution.hcl": sampleCloud,
-  "data-pipeline.hcl": sampleOverview,
+  "overview.hcl": sampleOverview ?? EMPTY_LAYOUT,
+  "cloud-path.hcl": sampleCloud ?? EMPTY_LAYOUT,
+  "sensor-network.hcl": sampleOverview ?? EMPTY_LAYOUT,
+  "power-distribution.hcl": sampleCloud ?? EMPTY_LAYOUT,
+  "data-pipeline.hcl": sampleOverview ?? EMPTY_LAYOUT,
 };
 
 const CROSS_LEVEL_SYSTEM_HCL = `project {
@@ -167,9 +175,7 @@ async function ensureProjectWithDiagrams(
 ) {
   const existing = await projectStore.listProjects();
   let project = existing.find((p) => p.name === name);
-  if (!project) {
-    project = await createProjectWithMainFile(name, hclContent);
-  }
+  project ??= await createProjectWithMainFile(name, hclContent);
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(diagrams)) {
     await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);

@@ -56,23 +56,23 @@ export const TextAlignSelection: Story = {
     const topLeftBtn = canvas.getByRole("button", { name: "Top-left" });
 
     // Initial state should be Center
-    expect(centerBtn).toHaveClass("btn-primary");
-    expect(topBtn).not.toHaveClass("btn-primary");
-    expect(topLeftBtn).not.toHaveClass("btn-primary");
+    await expect(centerBtn).toHaveClass("btn-primary");
+    await expect(topBtn).not.toHaveClass("btn-primary");
+    await expect(topLeftBtn).not.toHaveClass("btn-primary");
 
     // Click Top button
     await userEvent.click(topBtn);
-    expect(topBtn).toHaveClass("btn-primary");
-    expect(centerBtn).not.toHaveClass("btn-primary");
-    expect(topLeftBtn).not.toHaveClass("btn-primary");
+    await expect(topBtn).toHaveClass("btn-primary");
+    await expect(centerBtn).not.toHaveClass("btn-primary");
+    await expect(topLeftBtn).not.toHaveClass("btn-primary");
 
     // Click Top-left button
     await userEvent.click(topLeftBtn);
 
     // Assert Top-left is now active and others are inactive
-    expect(topLeftBtn).toHaveClass("btn-primary");
-    expect(topBtn).not.toHaveClass("btn-primary");
-    expect(centerBtn).not.toHaveClass("btn-primary");
+    await expect(topLeftBtn).toHaveClass("btn-primary");
+    await expect(topBtn).not.toHaveClass("btn-primary");
+    await expect(centerBtn).not.toHaveClass("btn-primary");
 
     // Submit modal
     const createBtn = canvas.getByRole("button", {
@@ -81,7 +81,7 @@ export const TextAlignSelection: Story = {
     await userEvent.click(createBtn);
 
     // Verify oncreate was called with the selected textAlign: "top-left"
-    expect(args.oncreate).toHaveBeenCalledWith(
+    await expect(args.oncreate).toHaveBeenCalledWith(
       expect.objectContaining({
         label: "sensor-unit",
         textAlign: "top-left",

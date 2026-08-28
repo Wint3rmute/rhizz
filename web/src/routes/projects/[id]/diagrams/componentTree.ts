@@ -23,11 +23,11 @@ export interface ComponentTreeSystem {
 export interface ComponentTreeComponent {
   label: string;
   /** Arena index of the parent component, if this component is nested. */
-  parent_component_index?: number;
+  parent_component_index?: number | undefined;
   /** Arena index of the parent system, if this component is top-level. */
-  parent_system_index?: number;
+  parent_system_index?: number | undefined;
   /** Optional icon name for rendering. */
-  icon?: string;
+  icon?: string | undefined;
 }
 
 /**
@@ -63,7 +63,7 @@ export function buildComponentTree(
   });
 
   const systemNodes: TreeNode[] = systems.map((system, index) => ({
-    id: `sys:${index}`,
+    id: `sys:${String(index)}`,
     name: system.label,
     isExpandable: false,
     children: [],
@@ -76,7 +76,8 @@ export function buildComponentTree(
   // (arena index) to the already-created node. Unparented components are
   // collected into orphanRoots below.
   components.forEach((component, index) => {
-    const node = componentNodeByIndex.get(index)!;
+    const node = componentNodeByIndex.get(index);
+    if (node === undefined) return; // unreachable: pass 1 created every index
     let parentChildren: TreeNode[] | undefined;
 
     if (component.parent_component_index !== undefined) {

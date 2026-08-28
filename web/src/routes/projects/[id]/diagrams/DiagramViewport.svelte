@@ -112,30 +112,36 @@ let lastTouchX = 0;
 let lastTouchY = 0;
 
 function onTouchStart(event: TouchEvent) {
-  if (event.touches.length === 1) {
-    lastTouchX = event.touches[0].clientX;
-    lastTouchY = event.touches[0].clientY;
-  } else if (event.touches.length === 2) {
-    const dx = event.touches[0].clientX - event.touches[1].clientX;
-    const dy = event.touches[0].clientY - event.touches[1].clientY;
+  const first = event.touches[0];
+  const second = event.touches[1];
+  if (event.touches.length === 1 && first) {
+    lastTouchX = first.clientX;
+    lastTouchY = first.clientY;
+  } else if (event.touches.length === 2 && first && second) {
+    const dx = first.clientX - second.clientX;
+    const dy = first.clientY - second.clientY;
     touchStartDist = Math.hypot(dx, dy);
   }
 }
 
 function onTouchMove(event: TouchEvent) {
   event.preventDefault();
-  if (event.touches.length === 1) {
-    const dx = (event.touches[0].clientX - lastTouchX) /
+  const first = event.touches[0];
+  const second = event.touches[1];
+  if (event.touches.length === 1 && first) {
+    const dx = (first.clientX - lastTouchX) /
       editor_state.view.zoom;
-    const dy = (event.touches[0].clientY - lastTouchY) /
+    const dy = (first.clientY - lastTouchY) /
       editor_state.view.zoom;
     editor_state.view.x -= dx;
     editor_state.view.y -= dy;
-    lastTouchX = event.touches[0].clientX;
-    lastTouchY = event.touches[0].clientY;
-  } else if (event.touches.length === 2 && touchStartDist !== null) {
-    const dx = event.touches[0].clientX - event.touches[1].clientX;
-    const dy = event.touches[0].clientY - event.touches[1].clientY;
+    lastTouchX = first.clientX;
+    lastTouchY = first.clientY;
+  } else if (
+    event.touches.length === 2 && touchStartDist !== null && first && second
+  ) {
+    const dx = first.clientX - second.clientX;
+    const dy = first.clientY - second.clientY;
     const newDist = Math.hypot(dx, dy);
     const factor = newDist / touchStartDist;
     editor_state.view.zoom = clamp_zoom(editor_state.view.zoom * factor);

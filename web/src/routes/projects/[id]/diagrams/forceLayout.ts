@@ -25,17 +25,24 @@ import type { Box } from "./geometry";
 // back out in LayoutResult). `fixed` pins the node in place (via d3-force's
 // fx/fy): used for "only lay out newly-added nodes, don't disturb
 // everything else" (see TASKS.md Task 50's "new nodes added" use-case).
-export type LayoutNode = {
+export interface LayoutNode {
   index: number;
   box: Box;
   fixed?: boolean;
-};
+}
 
-export type LayoutEdge = { from: number; to: number };
+export interface LayoutEdge {
+  from: number;
+  to: number;
+}
 
-export type LayoutResult = { index: number; x: number; y: number };
+export interface LayoutResult {
+  index: number;
+  x: number;
+  y: number;
+}
 
-export type ForceLayoutOptions = {
+export interface ForceLayoutOptions {
   // World-space point the whole layout is gently centered around.
   centerX?: number;
   centerY?: number;
@@ -58,7 +65,7 @@ export type ForceLayoutOptions = {
   // converged result) — smooths out the otherwise-sharp jump an animated
   // caller would show on frame 1. 0 (the default) disables the ramp.
   warmupTicks?: number;
-};
+}
 
 const DEFAULT_LINK_DISTANCE = 160;
 const DEFAULT_CHARGE_STRENGTH = -300;
@@ -122,10 +129,10 @@ function forceOrthogonalAlign(
 // simulation is created with .stop() called immediately, so it never
 // advances on its own internal timer; this object is the only way to
 // step it forward.
-export type ForceLayout = {
+export interface ForceLayout {
   tick: () => LayoutResult[];
   alpha: () => number;
-};
+}
 
 // Builds a force layout for `nodes`, using `edges` (filtered to only
 // those whose endpoints are both present in `nodes`) as attraction links.
@@ -167,10 +174,12 @@ export function createForceLayout(
 
   const simLinks: SimulationLinkDatum<SimNode>[] = edges
     .filter((e) => simNodeByIndex.has(e.from) && simNodeByIndex.has(e.to))
-    .map((e) => ({
-      source: simNodeByIndex.get(e.from) as SimNode,
-      target: simNodeByIndex.get(e.to) as SimNode,
-    }));
+    .flatMap((e) => {
+      const source = simNodeByIndex.get(e.from);
+      const target = simNodeByIndex.get(e.to);
+      if (source === undefined || target === undefined) return [];
+      return [{ source, target }];
+    });
 
   const simulation: Simulation<SimNode, SimulationLinkDatum<SimNode>> =
     forceSimulation(simNodes)

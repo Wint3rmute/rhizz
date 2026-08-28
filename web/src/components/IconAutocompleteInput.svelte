@@ -74,15 +74,24 @@ function handleKeyDown(e: KeyboardEvent) {
       break;
     case "Enter":
       if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
-        e.preventDefault();
-        handleSelect(suggestions[highlightedIndex].name);
+        const suggestion = suggestions[highlightedIndex];
+        if (suggestion) {
+          e.preventDefault();
+          handleSelect(suggestion.name);
+        }
       }
       break;
     case "Tab":
       if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
-        handleSelect(suggestions[highlightedIndex].name);
+        const suggestion = suggestions[highlightedIndex];
+        if (suggestion) {
+          handleSelect(suggestion.name);
+        }
       } else if (suggestions.length > 0) {
-        handleSelect(suggestions[0].name);
+        const first = suggestions[0];
+        if (first) {
+          handleSelect(first.name);
+        }
       }
       break;
     case "Escape":
@@ -97,7 +106,7 @@ function scrollToHighlighted() {
   if (!listElement) return;
   const items = listElement.querySelectorAll("li");
   if (highlightedIndex >= 0 && highlightedIndex < items.length) {
-    items[highlightedIndex].scrollIntoView({ block: "nearest" });
+    items[highlightedIndex]?.scrollIntoView({ block: "nearest" });
   }
 }
 
