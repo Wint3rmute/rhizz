@@ -12,7 +12,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "build-storybook": "storybook build --config-dir .storybook --output-dir storybook-static",
-    "lint": "eslint .",
+    "lint": "svelte-kit sync && eslint .",
     "chromatic": "npx chromatic --exit-once-uploaded"
   },
   "dependencies": {
