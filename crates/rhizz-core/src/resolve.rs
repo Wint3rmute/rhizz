@@ -759,6 +759,10 @@ fn resolve_endpoint(
     }
 
     let mut current_scope = scope;
+    // Absolute paths start after the leading system segment; relative paths
+    // start at the first segment. Assigned in the branch below, so the
+    // initializer is always overwritten — hence the nursery allow.
+    #[allow(clippy::useless_let_if_seq)]
     let mut segment_idx = 0;
 
     if is_absolute {
@@ -1027,18 +1031,19 @@ fn process_fields(
         }
 
         // E007 -- missing required `type`
-        let field_type = if let Some(t) = &lf.inner.field_type {
-            t.clone()
-        } else {
-            r.push_error(
-                DiagnosticCode::E007,
-                format!(
-                    "field '{}' in message '{}' is missing required 'type'",
-                    lf.label, msg_label
-                ),
-            );
-            String::new()
-        };
+        let field_type = lf.inner.field_type.as_ref().map_or_else(
+            || {
+                r.push_error(
+                    DiagnosticCode::E007,
+                    format!(
+                        "field '{}' in message '{}' is missing required 'type'",
+                        lf.label, msg_label
+                    ),
+                );
+                String::new()
+            },
+            std::clone::Clone::clone,
+        );
 
         let fid = FieldId(r.model.fields.len());
         r.model.fields.push(Field {

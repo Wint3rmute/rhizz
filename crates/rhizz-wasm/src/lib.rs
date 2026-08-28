@@ -67,6 +67,7 @@ impl CategoryScoreJS {
     /// Number of entities that scored 1.0 ("fully complete").
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn complete(&self) -> usize {
         self.complete
     }
@@ -74,6 +75,7 @@ impl CategoryScoreJS {
     /// Number of entities that scored 0.5 ("partial").
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn partial(&self) -> usize {
         self.partial
     }
@@ -81,6 +83,7 @@ impl CategoryScoreJS {
     /// Number of entities that scored 0.0 ("incomplete").
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn incomplete(&self) -> usize {
         self.incomplete
     }
@@ -88,6 +91,7 @@ impl CategoryScoreJS {
     /// Aggregate percentage (0–100).
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn percentage(&self) -> f64 {
         self.percentage
     }
@@ -130,6 +134,7 @@ impl ScoreReportJS {
     /// Overall aggregate percentage (0–100).
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn overall_percentage(&self) -> f64 {
         self.overall_percentage
     }
@@ -307,6 +312,7 @@ impl PortJS {
     /// Whether this port is an external boundary interface.
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn external(&self) -> bool {
         self.external
     }
@@ -314,6 +320,7 @@ impl PortJS {
     /// Whether this port is required when instantiated in a system.
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn required(&self) -> bool {
         self.required
     }
@@ -328,6 +335,7 @@ impl PortJS {
     /// Index of the owning component in `model.components()`.
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn owner_component_index(&self) -> usize {
         self.owner_component_index
     }
@@ -508,6 +516,7 @@ impl ComponentJS {
     /// Abstraction level.
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn level(&self) -> i32 {
         self.level
     }
@@ -515,6 +524,7 @@ impl ComponentJS {
     /// Whether the component is atomic (no further decomposition).
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn leaf(&self) -> bool {
         self.leaf
     }
@@ -522,6 +532,7 @@ impl ComponentJS {
     /// Arena index into `model.components()` for the parent component, or `undefined` if the parent is a system.
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn parent_component_index(&self) -> Option<usize> {
         self.parent_component_index
     }
@@ -529,6 +540,7 @@ impl ComponentJS {
     /// Arena index into `model.systems()` for the parent system, or `undefined` if the parent is a component.
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn parent_system_index(&self) -> Option<usize> {
         self.parent_system_index
     }
@@ -645,10 +657,10 @@ impl ModelJS {
     /// # Errors
     ///
     /// Returns a `JsError` if the JSON does not match the `Model` schema.
-    pub fn from_json(json: &str) -> Result<ModelJS, JsError> {
+    pub fn from_json(json: &str) -> Result<Self, JsError> {
         let model: rhizz_core::Model = serde_json::from_str(json)
             .map_err(|e| JsError::new(&format!("invalid model JSON: {e}")))?;
-        Ok(ModelJS { inner: model })
+        Ok(Self { inner: model })
     }
 
     /// Exports the model to a JSON string.
@@ -666,10 +678,10 @@ impl ModelJS {
     /// # Errors
     ///
     /// Returns a `JsError` if the JS object does not match the `Model` schema.
-    pub fn from_js(val: JsValue) -> Result<ModelJS, JsError> {
+    pub fn from_js(val: JsValue) -> Result<Self, JsError> {
         let model: rhizz_core::Model =
             serde_wasm_bindgen::from_value(val).map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(ModelJS { inner: model })
+        Ok(Self { inner: model })
     }
 
     /// Exports the model as a plain JS object.
@@ -791,11 +803,11 @@ impl CompileResultJS {
     ///
     /// # Errors
     /// Returns a [`JsError`] if `sources` cannot be deserialised.
-    pub fn compile(sources: JsValue) -> Result<CompileResultJS, JsError> {
+    pub fn compile(sources: JsValue) -> Result<Self, JsError> {
         let sources: Vec<rhizz_core::Source> =
             serde_wasm_bindgen::from_value(sources).map_err(|e| JsError::new(&e.to_string()))?;
         let result = rhizz_core::compile(&sources);
-        Ok(CompileResultJS {
+        Ok(Self {
             diagnostics: result.diagnostics,
             model: result.model,
         })
