@@ -4,6 +4,28 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 86 — Make selection box less obstructive
+
+Replaced the selection box so it no longer overrides a node's border style.
+
+- **`web/src/routes/projects/[id]/diagrams/visuals.ts`**
+  - Added `SELECTION_OUTLINE_OPACITY` (0.5) and `SELECTION_OUTLINE_DASHARRAY`
+    (`"1.5 3"`) constants describing the selection indicator's presentation.
+- **`web/src/routes/projects/[id]/diagrams/+page.svelte`**
+  - The node `<rect>` now always renders the component's own border
+    (`borderSvg.stroke`/`dasharray`) instead of swapping to a solid bold
+    primary stroke when selected.
+  - Selection is now indicated by a separate 50%-transparent dotted outline
+    `<rect>` drawn on top of the node, so the component's color/border style
+    stays visible and isn't obscured.
+- **`web/src/routes/projects/[id]/diagrams/visuals.test.ts`**
+  - Added a unit test asserting the selection-outline constants.
+- Validated with `just test` (all Rust + 333 Vitest tests pass), `just lint`
+  (clippy `-D warnings` + ESLint + svelte-check), `just build`, and
+  `just format`.
+
+---
+
 ## Task 85 — Make clippy more strict
 
 Enabled strict Clippy lints across the workspace and fixed all resulting warnings.

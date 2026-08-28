@@ -15,12 +15,15 @@ let {
   boxes = {},
   projectId = null,
   diagramPath = null,
+  selected = new Set<number>(),
 }: {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
   boxes: Record<number, DiagramStaticBox>;
   projectId?: string | null;
   diagramPath?: string | null;
+  /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
+  selected?: Set<number>;
 } = $props();
 
 let bounds = $derived.by(() => {
@@ -40,7 +43,7 @@ let fullDiagramUrl = $derived.by(() => {
 
 <DiagramViewport stateKey="DIAGRAM_EMBED" {bounds}>
   {#snippet content()}
-    <DiagramElements {components} {connections} {boxes} markerId="embed-arrow" />
+    <DiagramElements {components} {connections} {boxes} markerId="embed-arrow" {selected} />
   {/snippet}
 
   {#snippet toolbarExtra()}

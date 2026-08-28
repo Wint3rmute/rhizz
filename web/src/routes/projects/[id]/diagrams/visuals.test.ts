@@ -5,6 +5,10 @@ import {
   COLOR_OPTIONS,
   colorToSvgStroke,
   fontStyleToSvg,
+  SELECTION_OUTLINE_DASHARRAY,
+  SELECTION_OUTLINE_OPACITY,
+  SELECTION_OUTLINE_SCALE,
+  selectionOutlineRect,
 } from "./visuals";
 
 describe("colorToSvgStroke", () => {
@@ -56,6 +60,26 @@ describe("fontStyleToSvg", () => {
     expect(fontStyleToSvg("italic")).toEqual({ fontStyle: "italic" });
     expect(fontStyleToSvg("underline")).toEqual({
       textDecoration: "underline",
+    });
+  });
+});
+
+describe("selection outline", () => {
+  it("uses a 75% opaque dotted outline", () => {
+    expect(SELECTION_OUTLINE_OPACITY).toBe(0.75);
+    expect(SELECTION_OUTLINE_DASHARRAY).toBe("1.5 3");
+  });
+
+  it("expands uniformly by the scale of the shorter side, centered on the box", () => {
+    // Wide-but-short: the shorter side (height) drives the expansion, so the
+    // outline clearance is the same on all four sides.
+    const rect = selectionOutlineRect(400, 100);
+    const expansion = 100 * SELECTION_OUTLINE_SCALE;
+    expect(rect).toEqual({
+      x: -expansion / 2,
+      y: -expansion / 2,
+      width: 400 + expansion,
+      height: 100 + expansion,
     });
   });
 });

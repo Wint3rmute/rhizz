@@ -40,6 +40,38 @@ export interface SvgFont {
   textDecoration?: string;
 }
 
+// Presentation of the selection outline drawn on top of a selected node.
+// A partially-transparent dotted outline (rather than a solid bold border) so
+// the node's own border style stays visible and isn't obscured by the
+// selection indicator.
+export const SELECTION_OUTLINE_OPACITY = 0.75;
+export const SELECTION_OUTLINE_DASHARRAY = "1.5 3";
+
+// Fraction of the node's *shorter* side by which the selection outline is
+// enlarged beyond the node's own box, so the outline sits slightly outside the
+// node's border while staying centered on the same place. Basing it on the
+// shorter side keeps the gap uniform (a wide-but-short node gets the same
+// outline clearance on all four sides). Tweak this in a dev build to tune the
+// visual gap.
+export const SELECTION_OUTLINE_SCALE = 0.05;
+
+// Returns the selection outline's rect for a node of the given size, expanded
+// by SELECTION_OUTLINE_SCALE of the shorter side on each axis and centered on
+// the node's origin. Coordinates are relative to the node's top-left corner
+// (the caller renders this inside a `translate(x, y)` group).
+export function selectionOutlineRect(
+  width: number,
+  height: number,
+): { x: number; y: number; width: number; height: number } {
+  const expansion = Math.min(width, height) * SELECTION_OUTLINE_SCALE;
+  return {
+    x: -expansion / 2,
+    y: -expansion / 2,
+    width: width + expansion,
+    height: height + expansion,
+  };
+}
+
 function isColorOption(c: string): c is ColorOption {
   return (COLOR_OPTIONS as readonly string[]).includes(c);
 }

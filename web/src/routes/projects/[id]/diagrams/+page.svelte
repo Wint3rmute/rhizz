@@ -72,7 +72,13 @@ import {
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
-import { borderStyleToSvg, fontStyleToSvg } from "./visuals";
+import {
+  borderStyleToSvg,
+  fontStyleToSvg,
+  SELECTION_OUTLINE_DASHARRAY,
+  SELECTION_OUTLINE_OPACITY,
+  selectionOutlineRect,
+} from "./visuals";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -2354,13 +2360,30 @@ $effect(() => {
               {width}
               {height}
               rx="5"
-              stroke={highlighted
-                ? "var(--color-primary)"
-                : (borderSvg.stroke ?? "var(--color-base-content)")}
-              stroke-width={highlighted ? 2 : 1}
-              stroke-dasharray={highlighted ? undefined : borderSvg.dasharray}
+              stroke={borderSvg.stroke ?? "var(--color-base-content)"}
+              stroke-width="1"
+              stroke-dasharray={borderSvg.dasharray}
               fill="var(--color-base-200)"
             />
+            {#if highlighted}
+              <!-- Selection indicator: a 50%-transparent dotted outline drawn
+                   on top of the node's own border, so the component's style
+                   (color / border) stays visible and isn't obscured. -->
+              {@const outline = selectionOutlineRect(width, height)}
+              <rect
+                x={outline.x}
+                y={outline.y}
+                width={outline.width}
+                height={outline.height}
+                rx="5"
+                fill="none"
+                stroke="var(--color-primary)"
+                stroke-opacity={SELECTION_OUTLINE_OPACITY}
+                stroke-width="1.5"
+                stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
+                style="pointer-events: none"
+              />
+            {/if}
             {#if reparentTargetIndex === index}
               <rect
                 x={-4}
