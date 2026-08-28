@@ -13,14 +13,14 @@ How to work on this file:
 
 ---
 
-## For later Task <N> — Make selection box less obstructive
+## Task <N> — Make selection box less obstructive
 
 The current selection box is breaking the style edit flow - it overrides the
 style with a constant solid bold border. Instead of the current approach, use a
 50% transparent dotted outline, so that changes in the style are not obscured by
 the selection box.
 
-## For later Task <N> — Adding annotation to plots
+## Task <N> — Adding annotation to plots
 
 Make it possible to attach a text marker to a component with a specified offset.
 This attachment should be saved on the view-level not on the system model.
