@@ -907,7 +907,7 @@ fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> b
 
         let idx = *child_idx;
         if idx < children.len() {
-            *stack.last_mut().unwrap() = (node, idx + 1);
+            *child_idx = idx + 1;
             let child = children[idx].0;
             stack.push((child, 0));
         } else {

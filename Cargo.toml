@@ -6,14 +6,16 @@ members = [
 ]
 resolver = "2"
 
-# NOTE: stricter clippy lints are intentionally commented out until the
-# remediation work is complete. See `TASKS/TODO.md` ("Make clippy more strict").
+# NOTE: stricter clippy lints are being enabled incrementally, one lint at a
+# time. See `TASKS/TODO.md` ("Make clippy more strict") for the full target
+# configuration. Already enabled:
+#   - unwrap_used
 #
-# [workspace.lints.clippy]
+[workspace.lints.clippy]
 # pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
 # nursery = { level = "deny", priority = -1 }    # BETA LINTS
 # # DENY PANICS
-# unwrap_used = "deny"
+unwrap_used = "deny"
 # expect_used = "deny"
 # indexing_slicing = "deny"
 # arithmetic_side_effects = "deny"

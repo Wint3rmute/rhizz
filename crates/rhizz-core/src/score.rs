@@ -55,10 +55,10 @@ fn score_connection(idx: usize, model: &Model) -> f64 {
     let from_typed = conn.from.port.is_some();
     let to_typed = conn.to.port.is_some();
 
-    if from_typed && to_typed {
+    if let (Some(from_port), Some(to_port)) = (conn.from.port, conn.to.port) {
         // Both typed -- check protocol match.
-        let from_proto = &model.ports[conn.from.port.unwrap().0].protocol;
-        let to_proto = &model.ports[conn.to.port.unwrap().0].protocol;
+        let from_proto = &model.ports[from_port.0].protocol;
+        let to_proto = &model.ports[to_port.0].protocol;
         if !from_proto.is_empty() && !to_proto.is_empty() && from_proto == to_proto {
             1.0
         } else {

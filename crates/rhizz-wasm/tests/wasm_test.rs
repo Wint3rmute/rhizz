@@ -74,9 +74,8 @@ fn components_returns_typed_wrappers() {
     assert!(!comps.is_empty(), "expected at least one component");
     let server = comps
         .iter()
-        .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "server");
-    assert!(server.is_some(), "expected component 'server'");
-    let server = server.unwrap();
+        .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "server")
+        .expect("expected component 'server'");
     assert!(server.leaf(), "server should be a leaf component");
     assert_eq!(server.description(), "HTTP server");
     assert_eq!(server.icon(), Some("server".to_string()));
