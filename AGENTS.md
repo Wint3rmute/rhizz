@@ -1,4 +1,4 @@
-# Copilot Instructions for rhizz
+# AI coding agents instructions for rhizz
 
 ## Project Overview
 
