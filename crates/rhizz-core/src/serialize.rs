@@ -113,7 +113,7 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
     let mut child_comps: Vec<&Component> = sys
         .components
         .iter()
-        .map(|id| &model.components[id.0])
+        .filter_map(|id| model.component(*id))
         .collect();
     child_comps.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -126,7 +126,7 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
     let mut child_conns: Vec<&Connection> = sys
         .connections
         .iter()
-        .map(|id| &model.connections[id.0])
+        .filter_map(|id| model.connection(*id))
         .collect();
     child_conns.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -199,7 +199,7 @@ fn serialize_component(
     }
 
     // Ports (sorted by label)
-    let mut ports: Vec<&Port> = comp.ports.iter().map(|id| &model.ports[id.0]).collect();
+    let mut ports: Vec<&Port> = comp.ports.iter().filter_map(|id| model.port(*id)).collect();
     ports.sort_by(|a, b| a.label.cmp(&b.label));
 
     for port in ports {
@@ -211,7 +211,7 @@ fn serialize_component(
     let mut child_comps: Vec<&Component> = comp
         .children
         .iter()
-        .map(|id| &model.components[id.0])
+        .filter_map(|id| model.component(*id))
         .collect();
     child_comps.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -224,7 +224,7 @@ fn serialize_component(
     let mut child_conns: Vec<&Connection> = comp
         .connections
         .iter()
-        .map(|id| &model.connections[id.0])
+        .filter_map(|id| model.connection(*id))
         .collect();
     child_conns.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -302,7 +302,7 @@ fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
     let mut messages: Vec<&Message> = proto
         .messages
         .iter()
-        .map(|id| &model.messages[id.0])
+        .filter_map(|id| model.message(*id))
         .collect();
     messages.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -346,7 +346,11 @@ fn serialize_message(
     }
 
     // Fields (sorted by label)
-    let mut fields: Vec<&Field> = msg.fields.iter().map(|id| &model.fields[id.0]).collect();
+    let mut fields: Vec<&Field> = msg
+        .fields
+        .iter()
+        .filter_map(|id| model.field(*id))
+        .collect();
     fields.sort_by(|a, b| a.label.cmp(&b.label));
 
     for field in fields {
@@ -436,7 +440,8 @@ fn serialize_connection(
         let mut enc_labels: Vec<String> = conn
             .encapsulates
             .iter()
-            .map(|id| model.connections[id.0].label.clone())
+            .filter_map(|id| model.connection(*id))
+            .map(|c| c.label.clone())
             .collect();
         enc_labels.sort();
         out.push_str(&format!(
@@ -457,18 +462,25 @@ fn serialize_connection(
 fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
     let mut segments: Vec<String> = Vec::new();
 
-    if let Some(pid) = endpoint.port {
-        segments.push(model.ports[pid.0].label.clone());
+    if let Some(pid) = endpoint.port
+        && let Some(port) = model.port(pid)
+    {
+        segments.push(port.label.clone());
     }
 
     let mut current = endpoint.component;
-    loop {
-        let comp = &model.components[current.0];
-        segments.push(comp.label.clone());
-        match comp.parent {
+    while let Some(comp) = model.component(current) {
+        let label = comp.label.clone();
+        let parent = comp.parent;
+        segments.push(label);
+        match parent {
             ComponentParent::Component(parent) => current = parent,
             ComponentParent::System(sid) => {
-                segments.push(model.systems[sid.0].label.clone());
+                let system_label = model
+                    .system(sid)
+                    .map(|s| s.label.clone())
+                    .unwrap_or_default();
+                segments.push(system_label);
                 break;
             }
         }

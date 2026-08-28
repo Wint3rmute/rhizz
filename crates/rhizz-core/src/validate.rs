@@ -103,8 +103,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W006 -- `level` value decreases relative to parent (likely a mistake)
     for comp in &model.components {
         let parent_level = match comp.parent {
-            ComponentParent::System(sid) => model.systems[sid.0].level,
-            ComponentParent::Component(pid) => model.components[pid.0].level,
+            ComponentParent::System(sid) => model.system(sid).map(|s| s.level).unwrap_or(0),
+            ComponentParent::Component(pid) => model.component(pid).map(|c| c.level).unwrap_or(0),
         };
         if comp.level < parent_level {
             warnings.push(Diagnostic::warning(
@@ -161,8 +161,14 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W008 -- both sides typed but protocol values differ
     for conn in &model.connections {
         if let (Some(from_pid), Some(to_pid)) = (conn.from.port, conn.to.port) {
-            let from_proto = &model.ports[from_pid.0].protocol;
-            let to_proto = &model.ports[to_pid.0].protocol;
+            let from_proto = model
+                .port(from_pid)
+                .map(|p| p.protocol.as_str())
+                .unwrap_or_default();
+            let to_proto = model
+                .port(to_pid)
+                .map(|p| p.protocol.as_str())
+                .unwrap_or_default();
             if !from_proto.is_empty() && !to_proto.is_empty() && from_proto != to_proto {
                 warnings.push(Diagnostic::warning(
                     DiagnosticCode::W008,

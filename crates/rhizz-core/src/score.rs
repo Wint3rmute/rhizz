@@ -8,7 +8,9 @@ use tracing::instrument;
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single component.
 fn score_component(id: ComponentId, model: &Model) -> f64 {
-    let comp = &model.components[id.0];
+    let Some(comp) = model.component(id) else {
+        return 0.0;
+    };
     if comp.leaf {
         // Leaf component: complete if it has a description, partial otherwise.
         // (ports are optional detail — a leaf with description and no ports is Complete)
@@ -31,18 +33,22 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single port.
 fn score_port(idx: usize, model: &Model) -> f64 {
-    let port = &model.ports[idx];
+    let Some(port) = model.ports.get(idx) else {
+        return 0.0;
+    };
     match port.protocol_id {
         None => 0.0,
         Some(proto_id) => {
-            let proto = &model.protocols[proto_id.0];
+            let Some(proto) = model.protocol(proto_id) else {
+                return 0.0;
+            };
             if proto.messages.is_empty() {
                 0.0
             } else {
                 let all_complete = proto
                     .messages
                     .iter()
-                    .all(|&mid| !model.messages[mid.0].fields.is_empty());
+                    .all(|&mid| model.message(mid).is_some_and(|m| !m.fields.is_empty()));
                 if all_complete { 1.0 } else { 0.5 }
             }
         }
@@ -51,14 +57,22 @@ fn score_port(idx: usize, model: &Model) -> f64 {
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single connection.
 fn score_connection(idx: usize, model: &Model) -> f64 {
-    let conn = &model.connections[idx];
+    let Some(conn) = model.connections.get(idx) else {
+        return 0.0;
+    };
     let from_typed = conn.from.port.is_some();
     let to_typed = conn.to.port.is_some();
 
     if let (Some(from_port), Some(to_port)) = (conn.from.port, conn.to.port) {
         // Both typed -- check protocol match.
-        let from_proto = &model.ports[from_port.0].protocol;
-        let to_proto = &model.ports[to_port.0].protocol;
+        let from_proto = model
+            .port(from_port)
+            .map(|p| p.protocol.as_str())
+            .unwrap_or_default();
+        let to_proto = model
+            .port(to_port)
+            .map(|p| p.protocol.as_str())
+            .unwrap_or_default();
         if !from_proto.is_empty() && !to_proto.is_empty() && from_proto == to_proto {
             1.0
         } else {
@@ -75,10 +89,14 @@ fn score_connection(idx: usize, model: &Model) -> f64 {
 
 /// Returns the completion score (0.0 or 1.0) for a single message.
 fn score_message(idx: usize, model: &Model) -> f64 {
-    if model.messages[idx].fields.is_empty() {
-        0.0
-    } else {
+    if model
+        .messages
+        .get(idx)
+        .is_some_and(|m| !m.fields.is_empty())
+    {
         1.0
+    } else {
+        0.0
     }
 }
 

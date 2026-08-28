@@ -170,7 +170,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             );
             child_ids.push(cid);
         }
-        r.model.systems[sid.0].components = child_ids;
+        if let Some(system) = r.model.system_mut(sid) {
+            system.components = child_ids;
+        }
 
         pending_systems.push(SystemWork {
             sid,
@@ -196,7 +198,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             resolve_encapsulates(&mut r, *cid, &lc.inner.encapsulates, scope, &lc.label);
         }
 
-        r.model.systems[sw.sid.0].connections = conn_ids;
+        if let Some(system) = r.model.system_mut(sw.sid) {
+            system.connections = conn_ids;
+        }
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
@@ -448,11 +452,15 @@ fn register_component(
         );
         child_ids.push(child_cid);
     }
-    r.model.components[cid.0].children = child_ids;
+    if let Some(component) = r.model.component_mut(cid) {
+        component.children = child_ids;
+    }
 
     // Step 2: process ports on this component.
     let port_ids = process_ports(r, &body.ports, cid, level, &lc.label);
-    r.model.components[cid.0].ports = port_ids;
+    if let Some(component) = r.model.component_mut(cid) {
+        component.ports = port_ids;
+    }
 
     // Step 3: process connections in this component's scope.
     let conn_ids =
@@ -463,7 +471,9 @@ fn register_component(
         resolve_encapsulates(r, *conn_id, &li.inner.encapsulates, child_scope, &li.label);
     }
 
-    r.model.components[cid.0].connections = conn_ids;
+    if let Some(component) = r.model.component_mut(cid) {
+        component.connections = conn_ids;
+    }
 
     // Restore ancestors to where they were before this call.
     ancestors.truncate(initial_depth);
@@ -504,8 +514,11 @@ fn process_ports(
             } else {
                 r.used_protocol_labels.insert(proto_name.clone());
                 if let Some(&pid) = r.protocol_label_index.get(proto_name) {
-                    let proto = &r.model.protocols[pid.0];
-                    if !proto.roles.is_empty() {
+                    if let Some(proto) = r
+                        .model
+                        .protocol(pid)
+                        .filter(|proto| !proto.roles.is_empty())
+                    {
                         match &role {
                             Some(r_str) if proto.roles.contains(r_str) => {}
                             Some(invalid_role) => {
@@ -657,12 +670,15 @@ fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -
         if Scope::Component(current_cid) == ancestor_scope {
             return true;
         }
-        match model.components[current_cid.0].parent {
-            ComponentParent::Component(parent_cid) => {
-                current_cid = parent_cid;
+        match model.component(current_cid).map(|c| &c.parent) {
+            Some(ComponentParent::Component(parent_cid)) => {
+                current_cid = *parent_cid;
             }
-            ComponentParent::System(parent_sid) => {
-                return Scope::System(parent_sid) == ancestor_scope;
+            Some(ComponentParent::System(parent_sid)) => {
+                return Scope::System(*parent_sid) == ancestor_scope;
+            }
+            None => {
+                return false;
             }
         }
     }
@@ -730,11 +746,8 @@ fn resolve_endpoint(
     let mut segment_idx = 0;
 
     if is_absolute {
-        let system_label = raw_segments[0];
-        if let Some(sid) = r.system_label_index.get(system_label) {
-            current_scope = Scope::System(*sid);
-            segment_idx = 1;
-        } else {
+        let system_label = *raw_segments.first()?;
+        let Some(sid) = r.system_label_index.get(system_label) else {
             r.push_error(
                 DiagnosticCode::E002,
                 format!(
@@ -742,7 +755,9 @@ fn resolve_endpoint(
                 ),
             );
             return None;
-        }
+        };
+        current_scope = Scope::System(*sid);
+        segment_idx = 1;
     }
 
     if segment_idx >= raw_segments.len() {
@@ -758,7 +773,10 @@ fn resolve_endpoint(
 
     // Traverse component segments
     while segment_idx < raw_segments.len() {
-        let seg = raw_segments[segment_idx];
+        let Some(seg) = raw_segments.get(segment_idx) else {
+            break;
+        };
+        let seg = *seg;
 
         if seg == "." {
             segment_idx += 1;
@@ -768,7 +786,7 @@ fn resolve_endpoint(
         if seg == ".." {
             match current_scope {
                 Scope::Component(cid) => {
-                    let parent = r.model.components[cid.0].parent;
+                    let parent = r.model.component(cid).map(|c| c.parent)?;
                     current_scope = match parent {
                         ComponentParent::Component(parent_cid) => Scope::Component(parent_cid),
                         ComponentParent::System(parent_sid) => Scope::System(parent_sid),
@@ -817,7 +835,11 @@ fn resolve_endpoint(
                     port: Some(*pid),
                 });
             }
-            let comp_label = &r.model.components[cid.0].label;
+            let comp_label = r
+                .model
+                .component(cid)
+                .map(|c| c.label.clone())
+                .unwrap_or_default();
             r.push_error(
                 DiagnosticCode::E010,
                 format!(
@@ -871,7 +893,9 @@ fn resolve_encapsulates(
             }
         }
     }
-    r.model.connections[conn_id.0].encapsulates = enc_ids;
+    if let Some(conn) = r.model.connection_mut(conn_id) {
+        conn.encapsulates = enc_ids;
+    }
 
     // E004 -- detect circular encapsulation by DFS from this connection.
     if has_encapsulation_cycle(&r.model.connections, conn_id) {
@@ -880,7 +904,9 @@ fn resolve_encapsulates(
             format!("circular encapsulation chain detected involving connection '{conn_label}'"),
         );
         // Clear the encapsulates list to break the cycle in the model.
-        r.model.connections[conn_id.0].encapsulates.clear();
+        if let Some(conn) = r.model.connection_mut(conn_id) {
+            conn.encapsulates.clear();
+        }
     }
 }
 
@@ -892,7 +918,11 @@ fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> b
 
     while let Some((node, child_idx)) = stack.last_mut() {
         let node = *node;
-        let children = &connections[node].encapsulates;
+        let Some(conn) = connections.get(node) else {
+            stack.pop();
+            continue;
+        };
+        let children = &conn.encapsulates;
 
         if *child_idx == 0 {
             if black.contains(&node) {
@@ -906,10 +936,9 @@ fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> b
         }
 
         let idx = *child_idx;
-        if idx < children.len() {
+        if let Some(child) = children.get(idx) {
             *child_idx = idx + 1;
-            let child = children[idx].0;
-            stack.push((child, 0));
+            stack.push((child.0, 0));
         } else {
             gray.remove(&node);
             black.insert(node);

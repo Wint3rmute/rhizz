@@ -137,6 +137,65 @@ impl Default for Model {
     }
 }
 
+impl Model {
+    /// Returns a reference to the system at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn system(&self, id: SystemId) -> Option<&System> {
+        self.systems.get(id.0)
+    }
+
+    /// Returns a mutable reference to the system at `id`, or `None` if out of bounds.
+    pub fn system_mut(&mut self, id: SystemId) -> Option<&mut System> {
+        self.systems.get_mut(id.0)
+    }
+
+    /// Returns a reference to the component at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn component(&self, id: ComponentId) -> Option<&Component> {
+        self.components.get(id.0)
+    }
+
+    /// Returns a mutable reference to the component at `id`, or `None` if out of bounds.
+    pub fn component_mut(&mut self, id: ComponentId) -> Option<&mut Component> {
+        self.components.get_mut(id.0)
+    }
+
+    /// Returns a reference to the protocol at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn protocol(&self, id: ProtocolId) -> Option<&Protocol> {
+        self.protocols.get(id.0)
+    }
+
+    /// Returns a reference to the port at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn port(&self, id: PortId) -> Option<&Port> {
+        self.ports.get(id.0)
+    }
+
+    /// Returns a reference to the connection at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn connection(&self, id: ConnectionId) -> Option<&Connection> {
+        self.connections.get(id.0)
+    }
+
+    /// Returns a mutable reference to the connection at `id`, or `None` if out of bounds.
+    pub fn connection_mut(&mut self, id: ConnectionId) -> Option<&mut Connection> {
+        self.connections.get_mut(id.0)
+    }
+
+    /// Returns a reference to the message at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn message(&self, id: MessageId) -> Option<&Message> {
+        self.messages.get(id.0)
+    }
+
+    /// Returns a reference to the field at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn field(&self, id: FieldId) -> Option<&Field> {
+        self.fields.get(id.0)
+    }
+}
+
 /// Optional project-level metadata (name, version, authors).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
