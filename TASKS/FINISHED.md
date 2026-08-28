@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 87 — Stricter TypeScript and ESLint configuration
+
+Upgraded TypeScript and ESLint linting in `web/` to mirror the strictness applied to Rust in Task 85 (Clippy denial suite).
+
+- **`web/tsconfig.json`**
+  - Enabled `noUncheckedIndexedAccess`, `noImplicitOverride`, `exactOptionalPropertyTypes`, and `noFallthroughCasesInSwitch`.
+  - Fixed the resulting typing violations across `web/src/` (indexed-access guards, optional-property widenings, explicit `| undefined` on WASM-boundary interfaces).
+- **`web/eslint.config.js`**
+  - Upgraded the `@typescript-eslint` preset from `ts.configs.recommended` to `ts.configs.strictTypeChecked` + `ts.configs.stylisticTypeChecked`, scoped to TS/Svelte sources with `projectService` type info.
+  - Added explicit strict safety rules: `no-explicit-any`, `no-non-null-assertion`, `no-floating-promises`, `no-misused-promises`, `only-throw-error`, `switch-exhaustiveness-check`, `consistent-type-assertions` (`assertionStyle: "as"`), `no-warning-comments`, and `no-debugger`.
+  - Fixed the resulting violations across `web/src/` (nullish-coalescing, `String()` in template literals, `await` on Storybook async `expect`, exhaustive switches, removed `!` assertions, removed a `TODO` marker).
+- **Tooling-boundary notes**
+  - ESLint's `projectService` can't parse first-party `.svelte` module files, so `no-unsafe-*` false-positives on files importing them are scoped off for exactly those files (svelte-check, part of `just lint`, types them correctly).
+  - `no-unused-vars` false-positives on Svelte `interface Props` callback parameter names are disabled for `.svelte` files only; pure `.ts` files keep full checking.
+- Validated with `just lint` (clippy `-D warnings` + ESLint + svelte-check), `just test` (all Rust + 334 Vitest tests pass), `just build`, and `just format`.
+
+---
+
 ## Task 86 — Make selection box less obstructive
 
 Replaced the selection box so it no longer overrides a node's border style.
