@@ -18,9 +18,9 @@ struct Resolver {
     scope_index: ScopeIndex,
     /// Accumulated diagnostics (errors and warnings).
     diagnostics: Vec<Diagnostic>,
-    /// Maps system label -> SystemId for view resolution.
+    /// Maps system label -> `SystemId` for view resolution.
     system_label_index: HashMap<String, SystemId>,
-    /// Maps protocol label -> ProtocolId for port protocol resolution.
+    /// Maps protocol label -> `ProtocolId` for port protocol resolution.
     protocol_label_index: HashMap<String, ProtocolId>,
     /// Protocol labels that were referenced by at least one port.
     used_protocol_labels: HashSet<String>,
@@ -46,6 +46,14 @@ impl Resolver {
 ///
 /// On success returns `Ok((model, warnings))`.
 /// If any hard errors (E-codes) were encountered returns `Err(all_diagnostics)`.
+///
+/// # Errors
+///
+/// Returns the full list of collected diagnostics when any blocking error
+/// (E-code) was emitted during resolution.
+// Long but linear: phases A/B of resolution read top-to-bottom; splitting
+// would thread `Resolver` through helpers without reducing complexity.
+#[allow(clippy::too_many_lines)]
 #[instrument(skip(raw))]
 pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>> {
     let mut r = Resolver::default();
@@ -170,7 +178,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             );
             child_ids.push(cid);
         }
-        r.model.systems[sid.0].components = child_ids;
+        if let Some(system) = r.model.system_mut(sid) {
+            system.components = child_ids;
+        }
 
         pending_systems.push(SystemWork {
             sid,
@@ -196,7 +206,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             resolve_encapsulates(&mut r, *cid, &lc.inner.encapsulates, scope, &lc.label);
         }
 
-        r.model.systems[sw.sid.0].connections = conn_ids;
+        if let Some(system) = r.model.system_mut(sw.sid) {
+            system.connections = conn_ids;
+        }
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
@@ -209,16 +221,13 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         let mut orphan_labels: Vec<&str> = top_level_components
             .keys()
             .filter(|label| !r.used_top_level_labels.contains(*label))
-            .map(|s| s.as_str())
+            .map(std::string::String::as_str)
             .collect();
-        orphan_labels.sort();
+        orphan_labels.sort_unstable();
         for label in orphan_labels {
             r.push_warning(
                 DiagnosticCode::W012,
-                format!(
-                    "top-level component '{}' is not referenced by any 'source'",
-                    label
-                ),
+                format!("top-level component '{label}' is not referenced by any 'source'"),
             );
         }
 
@@ -232,10 +241,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         for label in orphan_proto_labels {
             r.push_warning(
                 DiagnosticCode::W012,
-                format!(
-                    "top-level protocol '{}' is not referenced by any port",
-                    label
-                ),
+                format!("top-level protocol '{label}' is not referenced by any port"),
             );
         }
     }
@@ -244,14 +250,17 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     r.diagnostics.extend(crate::validate::validate(&r.model));
 
     // ── Return ────────────────────────────────────────────────────────────────
-    let has_errors = r.diagnostics.iter().any(|d| d.is_error());
+    let has_errors = r
+        .diagnostics
+        .iter()
+        .any(super::diagnostics::Diagnostic::is_error);
     if has_errors {
         Err(r.diagnostics)
     } else {
         let warnings = r
             .diagnostics
             .into_iter()
-            .filter(|d| d.is_warning())
+            .filter(super::diagnostics::Diagnostic::is_warning)
             .collect();
         Ok((r.model, warnings))
     }
@@ -271,6 +280,8 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 /// When `lc.inner.source` is set the body is taken from the top-level
 /// component map instead of from `lc.inner`.  The `ancestors` stack is used
 /// for cycle detection (E013).
+// Long but linear: the five registration steps read top-to-bottom.
+#[allow(clippy::too_many_lines)]
 fn register_component(
     r: &mut Resolver,
     lc: &Labeled<RawComponent>,
@@ -329,7 +340,7 @@ fn register_component(
                     border: None,
                     font: None,
                     tags: vec![],
-                    level: parent_level + 1,
+                    level: parent_level.saturating_add(1),
                     leaf: false,
                     parent,
                     children: vec![],
@@ -364,7 +375,7 @@ fn register_component(
                         border: None,
                         font: None,
                         tags: vec![],
-                        level: parent_level + 1,
+                        level: parent_level.saturating_add(1),
                         leaf: false,
                         parent,
                         children: vec![],
@@ -388,7 +399,7 @@ fn register_component(
     let body: &RawComponent = source_body.as_ref().unwrap_or(&lc.inner);
 
     let cid = ComponentId(r.model.components.len());
-    let level = body.level.unwrap_or(parent_level + 1);
+    let level = body.level.unwrap_or_else(|| parent_level.saturating_add(1));
     let leaf = body.leaf.unwrap_or(false);
 
     // E005 -- leaf component with children or connections
@@ -451,11 +462,15 @@ fn register_component(
         );
         child_ids.push(child_cid);
     }
-    r.model.components[cid.0].children = child_ids;
+    if let Some(component) = r.model.component_mut(cid) {
+        component.children = child_ids;
+    }
 
     // Step 2: process ports on this component.
     let port_ids = process_ports(r, &body.ports, cid, level, &lc.label);
-    r.model.components[cid.0].ports = port_ids;
+    if let Some(component) = r.model.component_mut(cid) {
+        component.ports = port_ids;
+    }
 
     // Step 3: process connections in this component's scope.
     let conn_ids =
@@ -466,7 +481,9 @@ fn register_component(
         resolve_encapsulates(r, *conn_id, &li.inner.encapsulates, child_scope, &li.label);
     }
 
-    r.model.components[cid.0].connections = conn_ids;
+    if let Some(component) = r.model.component_mut(cid) {
+        component.connections = conn_ids;
+    }
 
     // Restore ancestors to where they were before this call.
     ancestors.truncate(initial_depth);
@@ -502,11 +519,16 @@ fn process_ports(
         let role = lp.inner.role.clone();
 
         let proto_id = if let Some(ref proto_name) = lp.inner.protocol {
-            if !proto_name.is_empty() {
+            if proto_name.is_empty() {
+                None
+            } else {
                 r.used_protocol_labels.insert(proto_name.clone());
                 if let Some(&pid) = r.protocol_label_index.get(proto_name) {
-                    let proto = &r.model.protocols[pid.0];
-                    if !proto.roles.is_empty() {
+                    if let Some(proto) = r
+                        .model
+                        .protocol(pid)
+                        .filter(|proto| !proto.roles.is_empty())
+                    {
                         match &role {
                             Some(r_str) if proto.roles.contains(r_str) => {}
                             Some(invalid_role) => {
@@ -540,8 +562,6 @@ fn process_ports(
                     );
                     None
                 }
-            } else {
-                None
             }
         } else {
             None
@@ -598,13 +618,16 @@ fn process_connections_in_scope(
             continue;
         }
 
-        let level = lc.inner.level.unwrap_or(parent_level + 1);
+        let level = lc
+            .inner
+            .level
+            .unwrap_or_else(|| parent_level.saturating_add(1));
 
         // Resolve `from` endpoint
-        let from = resolve_endpoint(r, &lc.inner.from, scope, &lc.label, "from");
+        let from = resolve_endpoint(r, lc.inner.from.as_deref(), scope, &lc.label, "from");
 
         // Resolve `to` endpoint
-        let to = resolve_endpoint(r, &lc.inner.to, scope, &lc.label, "to");
+        let to = resolve_endpoint(r, lc.inner.to.as_deref(), scope, &lc.label, "to");
 
         // Allocate ConnectionId and register in scope so encapsulates can find it.
         let conn_id = ConnectionId(r.model.connections.len());
@@ -660,12 +683,15 @@ fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -
         if Scope::Component(current_cid) == ancestor_scope {
             return true;
         }
-        match model.components[current_cid.0].parent {
-            ComponentParent::Component(parent_cid) => {
-                current_cid = parent_cid;
+        match model.component(current_cid).map(|c| &c.parent) {
+            Some(ComponentParent::Component(parent_cid)) => {
+                current_cid = *parent_cid;
             }
-            ComponentParent::System(parent_sid) => {
-                return Scope::System(parent_sid) == ancestor_scope;
+            Some(ComponentParent::System(parent_sid)) => {
+                return Scope::System(*parent_sid) == ancestor_scope;
+            }
+            None => {
+                return false;
             }
         }
     }
@@ -682,9 +708,12 @@ fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -
 /// - Legacy colon notation: `"comp:port"`
 ///
 /// Returns `None` and emits the appropriate error if resolution fails.
+// Long but linear: each path notation is handled by one branch of the
+// segment-traversal loop.
+#[allow(clippy::too_many_lines)]
 fn resolve_endpoint(
     r: &mut Resolver,
-    ref_str: &Option<String>,
+    ref_str: Option<&str>,
     scope: Scope,
     conn_label: &str,
     field: &str,
@@ -693,10 +722,7 @@ fn resolve_endpoint(
         None => {
             r.push_error(
                 DiagnosticCode::E002,
-                format!(
-                    "connection '{}' is missing required '{}' attribute",
-                    conn_label, field
-                ),
+                format!("connection '{conn_label}' is missing required '{field}' attribute"),
             );
             return None;
         }
@@ -706,10 +732,7 @@ fn resolve_endpoint(
     if raw.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
-            format!(
-                "connection '{}' has empty '{}' attribute",
-                conn_label, field
-            ),
+            format!("connection '{conn_label}' has empty '{field}' attribute"),
         );
         return None;
     }
@@ -718,8 +741,7 @@ fn resolve_endpoint(
         r.push_error(
             DiagnosticCode::E002,
             format!(
-                "connection '{}' has invalid non-UNIX path '{}' in '{}' (colon notation is not supported; use '/' path notation)",
-                conn_label, raw, field
+                "connection '{conn_label}' has invalid non-UNIX path '{raw}' in '{field}' (colon notation is not supported; use '/' path notation)"
             ),
         );
         return None;
@@ -731,35 +753,31 @@ fn resolve_endpoint(
     if raw_segments.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
-            format!(
-                "connection '{}' references empty path in '{}'",
-                conn_label, field
-            ),
+            format!("connection '{conn_label}' references empty path in '{field}'"),
         );
         return None;
     }
 
     let mut current_scope = scope;
+    // Absolute paths start after the leading system segment; relative paths
+    // start at the first segment. Assigned in the branch below, so the
+    // initializer is always overwritten — hence the nursery allow.
+    #[allow(clippy::useless_let_if_seq)]
     let mut segment_idx = 0;
 
     if is_absolute {
-        let system_label = raw_segments[0];
-        match r.system_label_index.get(system_label) {
-            Some(sid) => {
-                current_scope = Scope::System(*sid);
-                segment_idx = 1;
-            }
-            None => {
-                r.push_error(
-                    DiagnosticCode::E002,
-                    format!(
-                        "connection '{}' references undefined system '{}' in path '{}'",
-                        conn_label, system_label, raw
-                    ),
-                );
-                return None;
-            }
-        }
+        let system_label = *raw_segments.first()?;
+        let Some(sid) = r.system_label_index.get(system_label) else {
+            r.push_error(
+                DiagnosticCode::E002,
+                format!(
+                    "connection '{conn_label}' references undefined system '{system_label}' in path '{raw}'"
+                ),
+            );
+            return None;
+        };
+        current_scope = Scope::System(*sid);
+        segment_idx = 1;
     }
 
     if segment_idx >= raw_segments.len() {
@@ -767,8 +785,7 @@ fn resolve_endpoint(
         r.push_error(
             DiagnosticCode::E002,
             format!(
-                "connection '{}' references system instead of component in path '{}'",
-                conn_label, raw
+                "connection '{conn_label}' references system instead of component in path '{raw}'"
             ),
         );
         return None;
@@ -776,30 +793,32 @@ fn resolve_endpoint(
 
     // Traverse component segments
     while segment_idx < raw_segments.len() {
-        let seg = raw_segments[segment_idx];
+        let Some(seg) = raw_segments.get(segment_idx) else {
+            break;
+        };
+        let seg = *seg;
 
         if seg == "." {
-            segment_idx += 1;
+            segment_idx = segment_idx.saturating_add(1);
             continue;
         }
 
         if seg == ".." {
             match current_scope {
                 Scope::Component(cid) => {
-                    let parent = r.model.components[cid.0].parent;
+                    let parent = r.model.component(cid).map(|c| c.parent)?;
                     current_scope = match parent {
                         ComponentParent::Component(parent_cid) => Scope::Component(parent_cid),
                         ComponentParent::System(parent_sid) => Scope::System(parent_sid),
                     };
-                    segment_idx += 1;
+                    segment_idx = segment_idx.saturating_add(1);
                     continue;
                 }
                 Scope::System(_) => {
                     r.push_error(
                         DiagnosticCode::E002,
                         format!(
-                            "connection '{}' cannot navigate above root system with '..' in path '{}'",
-                            conn_label, raw
+                            "connection '{conn_label}' cannot navigate above root system with '..' in path '{raw}'"
                         ),
                     );
                     return None;
@@ -807,7 +826,7 @@ fn resolve_endpoint(
             }
         }
 
-        let is_last_segment = segment_idx == raw_segments.len() - 1;
+        let is_last_segment = segment_idx.saturating_add(1) == raw_segments.len();
 
         // Try looking up component in current_scope
         if let Some(comp_cid) = r
@@ -822,11 +841,10 @@ fn resolve_endpoint(
                     component: cid,
                     port: None,
                 });
-            } else {
-                current_scope = Scope::Component(cid);
-                segment_idx += 1;
-                continue;
             }
+            current_scope = Scope::Component(cid);
+            segment_idx = segment_idx.saturating_add(1);
+            continue;
         }
 
         // If not found as a component, and this is the last segment, check if current_scope is a component with this port
@@ -837,12 +855,15 @@ fn resolve_endpoint(
                     port: Some(*pid),
                 });
             }
-            let comp_label = &r.model.components[cid.0].label;
+            let comp_label = r
+                .model
+                .component(cid)
+                .map(|c| c.label.clone())
+                .unwrap_or_default();
             r.push_error(
                 DiagnosticCode::E010,
                 format!(
-                    "connection '{}': component '{}' has no port '{}' (in '{}')",
-                    conn_label, comp_label, seg, field
+                    "connection '{conn_label}': component '{comp_label}' has no port '{seg}' (in '{field}')"
                 ),
             );
             return None;
@@ -857,8 +878,7 @@ fn resolve_endpoint(
         r.push_error(
             err_code,
             format!(
-                "connection '{}' references undefined component '{}' in '{}'",
-                conn_label, seg, field
+                "connection '{conn_label}' references undefined component '{seg}' in '{field}'"
             ),
         );
         return None;
@@ -887,26 +907,26 @@ fn resolve_encapsulates(
                 r.push_error(
                     DiagnosticCode::E003,
                     format!(
-                        "connection '{}' encapsulates undefined connection '{}'",
-                        conn_label, label
+                        "connection '{conn_label}' encapsulates undefined connection '{label}'"
                     ),
                 );
             }
         }
     }
-    r.model.connections[conn_id.0].encapsulates = enc_ids;
+    if let Some(conn) = r.model.connection_mut(conn_id) {
+        conn.encapsulates = enc_ids;
+    }
 
     // E004 -- detect circular encapsulation by DFS from this connection.
     if has_encapsulation_cycle(&r.model.connections, conn_id) {
         r.push_error(
             DiagnosticCode::E004,
-            format!(
-                "circular encapsulation chain detected involving connection '{}'",
-                conn_label
-            ),
+            format!("circular encapsulation chain detected involving connection '{conn_label}'"),
         );
         // Clear the encapsulates list to break the cycle in the model.
-        r.model.connections[conn_id.0].encapsulates.clear();
+        if let Some(conn) = r.model.connection_mut(conn_id) {
+            conn.encapsulates.clear();
+        }
     }
 }
 
@@ -918,7 +938,11 @@ fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> b
 
     while let Some((node, child_idx)) = stack.last_mut() {
         let node = *node;
-        let children = &connections[node].encapsulates;
+        let Some(conn) = connections.get(node) else {
+            stack.pop();
+            continue;
+        };
+        let children = &conn.encapsulates;
 
         if *child_idx == 0 {
             if black.contains(&node) {
@@ -932,10 +956,9 @@ fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> b
         }
 
         let idx = *child_idx;
-        if idx < children.len() {
-            *stack.last_mut().unwrap() = (node, idx + 1);
-            let child = children[idx].0;
-            stack.push((child, 0));
+        if let Some(child) = children.get(idx) {
+            *child_idx = idx.saturating_add(1);
+            stack.push((child.0, 0));
         } else {
             gray.remove(&node);
             black.insert(node);
@@ -1008,9 +1031,8 @@ fn process_fields(
         }
 
         // E007 -- missing required `type`
-        let field_type = match &lf.inner.field_type {
-            Some(t) => t.clone(),
-            None => {
+        let field_type = lf.inner.field_type.as_ref().map_or_else(
+            || {
                 r.push_error(
                     DiagnosticCode::E007,
                     format!(
@@ -1019,8 +1041,9 @@ fn process_fields(
                     ),
                 );
                 String::new()
-            }
-        };
+            },
+            std::clone::Clone::clone,
+        );
 
         let fid = FieldId(r.model.fields.len());
         r.model.fields.push(Field {
@@ -1049,9 +1072,10 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
             );
             return;
         }
-        Some(sys_label) => match r.system_label_index.get(sys_label) {
-            Some(sid) => *sid,
-            None => {
+        Some(sys_label) => {
+            if let Some(sid) = r.system_label_index.get(sys_label) {
+                *sid
+            } else {
                 r.push_error(
                     DiagnosticCode::E006,
                     format!(
@@ -1061,7 +1085,7 @@ fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
                 );
                 return;
             }
-        },
+        }
     };
 
     let filter = {
@@ -1101,6 +1125,8 @@ mod tests {
     // ── drone ──────────────────────────────────────────────────────────────
 
     #[test]
+    // Long but linear: asserts the full resolved shape of the drone example.
+    #[allow(clippy::too_many_lines)]
     fn resolve_drone() {
         let raw = parse_dir(&example_dir("drone")).expect("drone should parse");
         let (model, warnings) = resolve(raw).expect("drone should resolve without errors");
@@ -1220,8 +1246,7 @@ mod tests {
             .collect();
         assert!(
             w001_labels.iter().any(|m| m.contains("ground-station-pc")),
-            "expected W001 for ground-station-pc, got: {:?}",
-            w001_labels
+            "expected W001 for ground-station-pc, got: {w001_labels:?}"
         );
 
         let w004_labels: Vec<&str> = warnings
@@ -1231,8 +1256,7 @@ mod tests {
             .collect();
         assert!(
             w004_labels.iter().any(|m| m.contains("ground-station-pc")),
-            "expected W004 for ground-station-pc, got: {:?}",
-            w004_labels
+            "expected W004 for ground-station-pc, got: {w004_labels:?}"
         );
 
         // 5 views should resolve (4 in views.hcl + 1 in diagrams/main.hcl)
@@ -1393,8 +1417,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E002),
-            "expected E002, got: {:?}",
-            diags
+            "expected E002, got: {diags:?}"
         );
     }
 
@@ -1412,8 +1435,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E001),
-            "expected E001, got: {:?}",
-            diags
+            "expected E001, got: {diags:?}"
         );
     }
 
@@ -1435,8 +1457,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E006),
-            "expected E006, got: {:?}",
-            diags
+            "expected E006, got: {diags:?}"
         );
     }
 
@@ -1456,8 +1477,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E005),
-            "expected E005, got: {:?}",
-            diags
+            "expected E005, got: {diags:?}"
         );
     }
 
@@ -1484,8 +1504,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E009),
-            "expected E009, got: {:?}",
-            diags
+            "expected E009, got: {diags:?}"
         );
     }
 
@@ -1507,8 +1526,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E010),
-            "expected E010, got: {:?}",
-            diags
+            "expected E010, got: {diags:?}"
         );
     }
 
@@ -1529,8 +1547,7 @@ mod tests {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E011),
-            "expected E011, got: {:?}",
-            diags
+            "expected E011, got: {diags:?}"
         );
     }
 
@@ -1554,8 +1571,7 @@ mod tests {
             diags
                 .iter()
                 .any(|d| d.code == DiagnosticCode::E002 && d.message.contains("colon")),
-            "expected E002 error for colon notation, got: {:?}",
-            diags
+            "expected E002 error for colon notation, got: {diags:?}"
         );
     }
 
@@ -1632,8 +1648,7 @@ system "sys" {
         let errs = resolve(raw).unwrap_err();
         assert!(
             errs.iter().any(|d| d.code == DiagnosticCode::E012),
-            "expected E012, got: {:?}",
-            errs
+            "expected E012, got: {errs:?}"
         );
     }
 
@@ -1651,8 +1666,7 @@ system "sys" {
         let errs = resolve(raw).unwrap_err();
         assert!(
             errs.iter().any(|d| d.code == DiagnosticCode::E014),
-            "expected E014, got: {:?}",
-            errs
+            "expected E014, got: {errs:?}"
         );
     }
 
@@ -1676,8 +1690,7 @@ system "sys" {
         let errs = resolve(raw).unwrap_err();
         assert!(
             errs.iter().any(|d| d.code == DiagnosticCode::E013),
-            "expected E013, got: {:?}",
-            errs
+            "expected E013, got: {errs:?}"
         );
     }
 
@@ -1762,8 +1775,7 @@ system "sys" {
         let (_model, warnings) = resolve(raw).expect("should resolve");
         assert!(
             !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
-            "expected no W012 when top-level component is referenced, got: {:?}",
-            warnings
+            "expected no W012 when top-level component is referenced, got: {warnings:?}"
         );
     }
 
@@ -1783,8 +1795,7 @@ system "sys" {
         let (_model, warnings) = resolve(raw).expect("should resolve");
         assert!(
             warnings.iter().any(|d| d.code == DiagnosticCode::W012),
-            "expected W012 for unreferenced top-level component, got: {:?}",
-            warnings
+            "expected W012 for unreferenced top-level component, got: {warnings:?}"
         );
         let w = warnings
             .iter()
@@ -1820,8 +1831,7 @@ system "sys2" {
         let (_model, warnings) = resolve(raw).expect("should resolve");
         assert!(
             !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
-            "expected no W012 when top-level component referenced multiple times, got: {:?}",
-            warnings
+            "expected no W012 when top-level component referenced multiple times, got: {warnings:?}"
         );
     }
 
@@ -1840,8 +1850,7 @@ system "sys" {
         let (_model, warnings) = resolve(raw).expect("should resolve");
         assert!(
             warnings.iter().any(|d| d.code == DiagnosticCode::W012),
-            "expected W012 for unreferenced top-level protocol, got: {:?}",
-            warnings
+            "expected W012 for unreferenced top-level protocol, got: {warnings:?}"
         );
         let w = warnings
             .iter()
@@ -1874,8 +1883,7 @@ system "sys" {
         let (_model, warnings) = resolve(raw).expect("should resolve");
         assert!(
             !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
-            "expected no W012 for referenced protocol, got: {:?}",
-            warnings
+            "expected no W012 for referenced protocol, got: {warnings:?}"
         );
     }
 
@@ -1973,8 +1981,7 @@ system "drone" {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E015),
-            "expected E015 for connection outside LCA, got: {:?}",
-            diags
+            "expected E015 for connection outside LCA, got: {diags:?}"
         );
     }
 
@@ -2045,8 +2052,7 @@ system "drone" {
 
         assert!(
             warnings.iter().any(|d| d.code == DiagnosticCode::W014),
-            "expected W014 warning, got: {:?}",
-            warnings
+            "expected W014 warning, got: {warnings:?}"
         );
         let port = &model.ports[0];
         assert_eq!(port.protocol, "nonexistent-protocol");
@@ -2076,8 +2082,7 @@ system "drone" {
         let diags = result.unwrap_err();
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E009),
-            "expected E009 error, got: {:?}",
-            diags
+            "expected E009 error, got: {diags:?}"
         );
     }
 

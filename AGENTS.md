@@ -1,12 +1,15 @@
-# Copilot Instructions for rhizz
+# AI coding agents instructions for rhizz
 
 ## Project Overview
 
 **rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in
-Rust. Systems are described in `.hcl` files (HCL syntax, same as Terraform) that
-can be version-controlled, diffed, and reviewed without a GUI. See `SPEC.md` and
-`SPEC/` for the full specification, and `examples/` for examples of systems
-defined with `rhizz`.
+Rust, with a frontend in Svelt. Systems are described in `.hcl` files (HCL
+syntax, same as Terraform) that can be version-controlled, diffed, and reviewed
+with or without a GUI. Read `SPEC.md` (and `SPEC/` if needed) for the full
+specification.
+
+Read the last 3 finished tasks in `TASKS/FINISHED.md` to get current
+project context.
 
 ## Repository Layout
 
@@ -49,7 +52,15 @@ just test     # run all tests (Rust + Vitest)
 just build    # build release binaries, WASM package, and web frontend
 ```
 
-## Coding Conventions
+**Do not directly call `cargo` or `npm` commands**; use `just` instead. It comes
+with a predefined set of correct commands for the project.
+
+## Frontend
+
+When adding new components or changing functionality of existing components,
+always add new Storybook stories which excercise the new/changed functionality.
+
+## Linting
 
 - All linter (clippy/eslint) warnings must be fixed, never suppressed unless
   there is a strong reason.
@@ -59,8 +70,8 @@ just build    # build release binaries, WASM package, and web frontend
 - Use `anyhow::Result` for fallible functions that surface errors to the caller.
 - Prefer `thiserror` for library-facing error types when type-safe matching is
   needed.
-- Diagnostics use the `Diagnostic` type with fields `code`, `file`, `line`
-  (optional), and `message`.
+- Rhizz compiler diagnostics use the `Diagnostic` type with fields `code`,
+  `file`, `line` (optional), and `message`.
   - Error codes start with `E` (blocking), warning codes start with `W`
     (non-blocking).
 - All identifier types (`ComponentId`, `InterfaceId`, …) are newtypes over a
@@ -70,7 +81,7 @@ just build    # build release binaries, WASM package, and web frontend
 
 ## Testing Approach
 
-- Unit tests live in `#[cfg(test)]` modules inside each source file.
+- Rust unit tests live in `#[cfg(test)]` modules inside each source file.
 - Integration tests exercise the three worked examples under `examples/` (drone,
   social-media, software-house).
 - Use `just test` to run all tests.

@@ -20,6 +20,7 @@ pub enum Level {
 
 impl Level {
     /// Returns `true` if this level blocks compilation.
+    #[must_use]
     pub fn is_blocking(self) -> bool {
         self == Self::Error
     }
@@ -46,11 +47,13 @@ include!(concat!(env!("OUT_DIR"), "/diagnostic_codes.rs"));
 
 impl DiagnosticCode {
     /// Returns `true` if this code is error-level.
+    #[must_use]
     pub fn is_error(self) -> bool {
         self.level == Level::Error
     }
 
     /// Returns `true` if this code is warning-level.
+    #[must_use]
     pub fn is_warning(self) -> bool {
         self.level == Level::Warning
     }
@@ -86,7 +89,7 @@ pub struct Diagnostic {
 impl Diagnostic {
     /// Create an error-level diagnostic.
     pub fn error(code: DiagnosticCode, message: impl Into<String>) -> Self {
-        Diagnostic {
+        Self {
             code,
             file: None,
             line: None,
@@ -96,7 +99,7 @@ impl Diagnostic {
 
     /// Create a warning-level diagnostic.
     pub fn warning(code: DiagnosticCode, message: impl Into<String>) -> Self {
-        Diagnostic {
+        Self {
             code,
             file: None,
             line: None,
@@ -105,11 +108,13 @@ impl Diagnostic {
     }
 
     /// Returns `true` if this is an error diagnostic.
+    #[must_use]
     pub fn is_error(&self) -> bool {
         self.code.is_error()
     }
 
     /// Returns `true` if this is a warning diagnostic.
+    #[must_use]
     pub fn is_warning(&self) -> bool {
         self.code.is_warning()
     }

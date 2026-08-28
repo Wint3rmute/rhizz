@@ -1,4 +1,6 @@
-fn main() {
+use std::process::ExitCode;
+
+fn main() -> ExitCode {
     use clap::Parser as _;
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -9,5 +11,7 @@ fn main() {
         .init();
     let args = rhizz_cli::cli::Cli::parse();
     let code = rhizz_cli::cli::run(&args);
-    std::process::exit(code);
+    // `run` returns i32 but process exit codes are u8; values above 255 are
+    // truncated the same way the OS would truncate them.
+    ExitCode::from(u8::try_from(code).unwrap_or(u8::MAX))
 }

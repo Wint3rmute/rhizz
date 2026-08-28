@@ -8,7 +8,9 @@ use tracing::instrument;
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single component.
 fn score_component(id: ComponentId, model: &Model) -> f64 {
-    let comp = &model.components[id.0];
+    let Some(comp) = model.component(id) else {
+        return 0.0;
+    };
     if comp.leaf {
         // Leaf component: complete if it has a description, partial otherwise.
         // (ports are optional detail — a leaf with description and no ports is Complete)
@@ -21,6 +23,9 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
         // Non-leaf, no children yet -> incomplete.
         0.0
     } else {
+        // Scores are exactly 0.0, 0.5, or 1.0 by construction (never computed),
+        // so exact comparison is intentional here.
+        #[allow(clippy::float_cmp)]
         let all_complete = comp
             .children
             .iter()
@@ -31,18 +36,22 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single port.
 fn score_port(idx: usize, model: &Model) -> f64 {
-    let port = &model.ports[idx];
+    let Some(port) = model.ports.get(idx) else {
+        return 0.0;
+    };
     match port.protocol_id {
         None => 0.0,
         Some(proto_id) => {
-            let proto = &model.protocols[proto_id.0];
+            let Some(proto) = model.protocol(proto_id) else {
+                return 0.0;
+            };
             if proto.messages.is_empty() {
                 0.0
             } else {
                 let all_complete = proto
                     .messages
                     .iter()
-                    .all(|&mid| !model.messages[mid.0].fields.is_empty());
+                    .all(|&mid| model.message(mid).is_some_and(|m| !m.fields.is_empty()));
                 if all_complete { 1.0 } else { 0.5 }
             }
         }
@@ -51,14 +60,22 @@ fn score_port(idx: usize, model: &Model) -> f64 {
 
 /// Returns the completion score (0.0, 0.5, or 1.0) for a single connection.
 fn score_connection(idx: usize, model: &Model) -> f64 {
-    let conn = &model.connections[idx];
+    let Some(conn) = model.connections.get(idx) else {
+        return 0.0;
+    };
     let from_typed = conn.from.port.is_some();
     let to_typed = conn.to.port.is_some();
 
-    if from_typed && to_typed {
+    if let (Some(from_port), Some(to_port)) = (conn.from.port, conn.to.port) {
         // Both typed -- check protocol match.
-        let from_proto = &model.ports[conn.from.port.unwrap().0].protocol;
-        let to_proto = &model.ports[conn.to.port.unwrap().0].protocol;
+        let from_proto = model
+            .port(from_port)
+            .map(|p| p.protocol.as_str())
+            .unwrap_or_default();
+        let to_proto = model
+            .port(to_port)
+            .map(|p| p.protocol.as_str())
+            .unwrap_or_default();
         if !from_proto.is_empty() && !to_proto.is_empty() && from_proto == to_proto {
             1.0
         } else {
@@ -75,17 +92,21 @@ fn score_connection(idx: usize, model: &Model) -> f64 {
 
 /// Returns the completion score (0.0 or 1.0) for a single message.
 fn score_message(idx: usize, model: &Model) -> f64 {
-    if model.messages[idx].fields.is_empty() {
-        0.0
-    } else {
+    if model
+        .messages
+        .get(idx)
+        .is_some_and(|m| !m.fields.is_empty())
+    {
         1.0
+    } else {
+        0.0
     }
 }
 
 // ── Category statistics ───────────────────────────────────────────────────────
 
 /// Aggregated scoring statistics for one category.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CategoryScore {
     /// Number of entities that scored 1.0 ("fully complete").
     pub complete: usize,
@@ -98,40 +119,48 @@ pub struct CategoryScore {
 impl CategoryScore {
     /// Build a [`CategoryScore`] from a slice of per-entity scores.
     fn from_scores(scores: &[f64]) -> Self {
-        let mut s = CategoryScore {
+        let mut s = Self {
             complete: 0,
             partial: 0,
             incomplete: 0,
         };
         for &v in scores {
             if (v - 1.0).abs() < f64::EPSILON {
-                s.complete += 1;
+                s.complete = s.complete.saturating_add(1);
             } else if (v - 0.5).abs() < f64::EPSILON {
-                s.partial += 1;
+                s.partial = s.partial.saturating_add(1);
             } else {
-                s.incomplete += 1;
+                s.incomplete = s.incomplete.saturating_add(1);
             }
         }
         s
     }
 
     /// Total number of entities in this category.
-    pub fn total(&self) -> usize {
-        self.complete + self.partial + self.incomplete
+    #[must_use]
+    pub const fn total(&self) -> usize {
+        self.complete
+            .saturating_add(self.partial)
+            .saturating_add(self.incomplete)
     }
 
     /// Weighted sum: complete x 1.0 + partial x 0.5 + incomplete x 0.0.
+    #[must_use]
     pub fn sum(&self) -> f64 {
-        self.complete as f64 + self.partial as f64 * 0.5
+        f64::from(u32::try_from(self.partial).unwrap_or(u32::MAX)).mul_add(
+            0.5,
+            f64::from(u32::try_from(self.complete).unwrap_or(u32::MAX)),
+        )
     }
 
     /// Aggregate percentage (sum / total x 100), or 0.0 for empty categories.
+    #[must_use]
     pub fn percentage(&self) -> f64 {
         let n = self.total();
         if n == 0 {
             0.0
         } else {
-            self.sum() / n as f64 * 100.0
+            self.sum() / f64::from(u32::try_from(n).unwrap_or(u32::MAX)) * 100.0
         }
     }
 }
@@ -155,34 +184,40 @@ pub struct ScoreReport {
 
 impl ScoreReport {
     /// Overall weighted sum across all four categories.
+    #[must_use]
     pub fn overall_sum(&self) -> f64 {
         self.components.sum() + self.ports.sum() + self.connections.sum() + self.messages.sum()
     }
 
     /// Total entity count across all four categories.
-    pub fn overall_total(&self) -> usize {
-        self.components.total()
-            + self.ports.total()
-            + self.connections.total()
-            + self.messages.total()
+    #[must_use]
+    pub const fn overall_total(&self) -> usize {
+        self.components
+            .total()
+            .saturating_add(self.ports.total())
+            .saturating_add(self.connections.total())
+            .saturating_add(self.messages.total())
     }
 
     /// Overall aggregate percentage.
+    #[must_use]
     pub fn overall_percentage(&self) -> f64 {
         let n = self.overall_total();
         if n == 0 {
             0.0
         } else {
-            self.overall_sum() / n as f64 * 100.0
+            self.overall_sum() / f64::from(u32::try_from(n).unwrap_or(u32::MAX)) * 100.0
         }
     }
 
     /// Count of fully-complete entities across all categories.
-    pub fn overall_complete(&self) -> usize {
-        self.components.complete
-            + self.ports.complete
-            + self.connections.complete
-            + self.messages.complete
+    #[must_use]
+    pub const fn overall_complete(&self) -> usize {
+        self.components
+            .complete
+            .saturating_add(self.ports.complete)
+            .saturating_add(self.connections.complete)
+            .saturating_add(self.messages.complete)
     }
 }
 

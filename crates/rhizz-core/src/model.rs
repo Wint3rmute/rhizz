@@ -119,7 +119,7 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
-        Model {
+        Self {
             project: Project {
                 name: String::new(),
                 version: String::new(),
@@ -134,6 +134,65 @@ impl Default for Model {
             fields: vec![],
             views: vec![],
         }
+    }
+}
+
+impl Model {
+    /// Returns a reference to the system at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn system(&self, id: SystemId) -> Option<&System> {
+        self.systems.get(id.0)
+    }
+
+    /// Returns a mutable reference to the system at `id`, or `None` if out of bounds.
+    pub fn system_mut(&mut self, id: SystemId) -> Option<&mut System> {
+        self.systems.get_mut(id.0)
+    }
+
+    /// Returns a reference to the component at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn component(&self, id: ComponentId) -> Option<&Component> {
+        self.components.get(id.0)
+    }
+
+    /// Returns a mutable reference to the component at `id`, or `None` if out of bounds.
+    pub fn component_mut(&mut self, id: ComponentId) -> Option<&mut Component> {
+        self.components.get_mut(id.0)
+    }
+
+    /// Returns a reference to the protocol at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn protocol(&self, id: ProtocolId) -> Option<&Protocol> {
+        self.protocols.get(id.0)
+    }
+
+    /// Returns a reference to the port at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn port(&self, id: PortId) -> Option<&Port> {
+        self.ports.get(id.0)
+    }
+
+    /// Returns a reference to the connection at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn connection(&self, id: ConnectionId) -> Option<&Connection> {
+        self.connections.get(id.0)
+    }
+
+    /// Returns a mutable reference to the connection at `id`, or `None` if out of bounds.
+    pub fn connection_mut(&mut self, id: ConnectionId) -> Option<&mut Connection> {
+        self.connections.get_mut(id.0)
+    }
+
+    /// Returns a reference to the message at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn message(&self, id: MessageId) -> Option<&Message> {
+        self.messages.get(id.0)
+    }
+
+    /// Returns a reference to the field at `id`, or `None` if out of bounds.
+    #[must_use]
+    pub fn field(&self, id: FieldId) -> Option<&Field> {
+        self.fields.get(id.0)
     }
 }
 
@@ -172,7 +231,7 @@ pub struct Component {
     pub label: String,
     /// Human-readable description.
     pub description: String,
-    /// Optional icon name (e.g. FontAwesome icon identifier).
+    /// Optional icon name (e.g. `FontAwesome` icon identifier).
     pub icon: Option<String>,
     /// Optional border color for diagram rendering.
     pub color: Option<String>,
@@ -361,11 +420,12 @@ pub enum BorderStyle {
 
 impl BorderStyle {
     /// Returns the lowercase string representation of this style.
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            BorderStyle::Solid => "solid",
-            BorderStyle::Dashed => "dashed",
-            BorderStyle::Dotted => "dotted",
+            Self::Solid => "solid",
+            Self::Dashed => "dashed",
+            Self::Dotted => "dotted",
         }
     }
 }
@@ -392,12 +452,13 @@ pub enum ConnectionSide {
 
 impl ConnectionSide {
     /// Returns the lowercase string representation of this side.
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            ConnectionSide::Top => "top",
-            ConnectionSide::Bottom => "bottom",
-            ConnectionSide::Left => "left",
-            ConnectionSide::Right => "right",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+            Self::Left => "left",
+            Self::Right => "right",
         }
     }
 }
@@ -409,7 +470,7 @@ impl std::fmt::Display for ConnectionSide {
 }
 
 /// Connection layout metadata for visual diagrams.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ConnectionLayout {
     /// Connection label or key.
     pub connection: String,
@@ -448,6 +509,7 @@ pub struct ViewDefinition {
 
 impl ViewDefinition {
     /// Constructs a `ViewDefinition` from a resolved `View` and its parent `Model`.
+    #[must_use]
     pub fn from_resolved(view: &View, model: &Model) -> Self {
         let system_label = model
             .systems
@@ -477,7 +539,7 @@ impl ViewDefinition {
 }
 
 /// Filter settings for a view definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ViewFilterDefinition {
     /// Tag whitelist (empty = match all).
     #[serde(default)]

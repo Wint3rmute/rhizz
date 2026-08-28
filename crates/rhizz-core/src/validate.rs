@@ -8,6 +8,8 @@ use tracing::instrument;
 ///
 /// Returns a list of non-blocking [`Diagnostic`] values with codes W001-W011.
 /// This function never emits E-codes; errors are produced by the resolution pass.
+// Long but linear: one loop per warning rule (W001-W011), each independent.
+#[allow(clippy::too_many_lines)]
 #[instrument(skip(model))]
 pub fn validate(model: &Model) -> Vec<Diagnostic> {
     let mut warnings: Vec<Diagnostic> = Vec::new();
@@ -103,8 +105,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W006 -- `level` value decreases relative to parent (likely a mistake)
     for comp in &model.components {
         let parent_level = match comp.parent {
-            ComponentParent::System(sid) => model.systems[sid.0].level,
-            ComponentParent::Component(pid) => model.components[pid.0].level,
+            ComponentParent::System(sid) => model.system(sid).map_or(0, |s| s.level),
+            ComponentParent::Component(pid) => model.component(pid).map_or(0, |c| c.level),
         };
         if comp.level < parent_level {
             warnings.push(Diagnostic::warning(
@@ -161,8 +163,14 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W008 -- both sides typed but protocol values differ
     for conn in &model.connections {
         if let (Some(from_pid), Some(to_pid)) = (conn.from.port, conn.to.port) {
-            let from_proto = &model.ports[from_pid.0].protocol;
-            let to_proto = &model.ports[to_pid.0].protocol;
+            let from_proto = model
+                .port(from_pid)
+                .map(|p| p.protocol.as_str())
+                .unwrap_or_default();
+            let to_proto = model
+                .port(to_pid)
+                .map(|p| p.protocol.as_str())
+                .unwrap_or_default();
             if !from_proto.is_empty() && !to_proto.is_empty() && from_proto != to_proto {
                 warnings.push(Diagnostic::warning(
                     DiagnosticCode::W008,
@@ -240,7 +248,9 @@ mod tests {
 
         // No errors from resolution
         assert!(
-            warnings.iter().all(|d| d.is_warning()),
+            warnings
+                .iter()
+                .all(super::super::diagnostics::Diagnostic::is_warning),
             "expected only warnings, got: {:?}",
             warning_codes(&warnings)
         );
@@ -422,7 +432,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == DiagnosticCode::W006 && d.message.contains("c")),
+                .any(|d| d.code == DiagnosticCode::W006 && d.message.contains('c')),
             "expected W006 for component 'c', got: {:?}",
             warning_codes(&warnings)
         );

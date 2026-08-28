@@ -13,45 +13,6 @@ How to work on this file:
 
 ---
 
-## For later Task <N> — Make clippy more strict
-
-Add these to your Cargo.toml:
-
-```
-[lints.clippy]
-pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
-nursery = { level = "deny", priority = -1 }    # BETA LINTS
-# DENY PANICS
-unwrap_used = "deny"
-expect_used = "deny"
-indexing_slicing = "deny"
-arithmetic_side_effects = "deny"
-unreachable = "deny"
-unimplemented = "deny"
-unchecked_time_subtraction = "deny"
-todo = "deny"
-string_slice = "deny"
-panic_in_result_fn = "deny"
-panic = "deny"
-exit = "deny"
-as_conversions = "deny"
-```
-
-and these in your clippy.toml:
-
-```
-allow-unwrap-in-tests = true
-allow-expect-in-tests = true
-allow-panic-in-tests = true
-allow-indexing-slicing-in-tests = true
-```
-
-After making those changes, run `cargo clippy` and make a plan to address any
-new lint warnings. Fix the warnings gradually, starting with the most severe
-ones. Try to fix one file at a time, and commit the changes after each fix.
-
----
-
 ## For later Task <N> — Make selection box less obstructive
 
 The current selection box is breaking the style edit flow - it overrides the

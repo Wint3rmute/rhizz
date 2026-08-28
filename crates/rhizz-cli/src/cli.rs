@@ -104,7 +104,7 @@ enum CommandKind {
 
 impl Cli {
     /// Returns the effective command kind and the project path.
-    fn effective(&self) -> (CommandKind, &PathBuf) {
+    const fn effective(&self) -> (CommandKind, &PathBuf) {
         match &self.command {
             Some(Command::Check { path }) => (CommandKind::Check, path),
             Some(Command::Score { path }) => (CommandKind::Score, path),
@@ -124,7 +124,7 @@ impl Cli {
 fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
         .map(|e| e.path().to_path_buf())
         .collect();
@@ -161,6 +161,8 @@ fn use_color(cli: &Cli) -> bool {
 
 // ── Diagnostic formatting ────────────────────────────────────────────────────
 
+use owo_colors::OwoColorize;
+
 /// Format a single [`Diagnostic`] as a human-readable line.
 fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
     let location = match (&d.file, d.line) {
@@ -179,7 +181,6 @@ fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
     }
 
     // Colourise: red for errors, yellow for warnings.
-    use owo_colors::OwoColorize;
     if d.is_error() {
         if location.is_empty() {
             format!("{} {}  {}", "✗".red(), d.code.red(), d.message)
@@ -205,11 +206,23 @@ fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
     }
 }
 
+/// Serialise `value` as pretty JSON on stdout. If serialisation fails (which
+/// should be impossible for our output types), fall back to a minimal valid
+/// JSON error payload instead of panicking.
+fn print_json<T: serde::Serialize>(value: &T) {
+    match serde_json::to_string_pretty(value) {
+        Ok(s) => println!("{s}"),
+        Err(e) => println!(
+            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"score\": null, \"views\": null}}"
+        ),
+    }
+}
+
 /// Print the summary line, e.g. `1 error, 2 warnings — aborting (fix errors to continue)`.
 fn format_summary(errors: usize, warnings: usize, has_errors: bool) -> String {
     let e_word = if errors == 1 { "error" } else { "errors" };
     let w_word = if warnings == 1 { "warning" } else { "warnings" };
-    let base = format!("{} {}, {} {}", errors, e_word, warnings, w_word);
+    let base = format!("{errors} {e_word}, {warnings} {w_word}");
     if has_errors {
         format!("{base} — aborting (fix errors to continue)")
     } else {
@@ -328,10 +341,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     score: None,
                     views: None,
                 };
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&out).expect("JSON serialisation")
-                );
+                print_json(&out);
             } else {
                 let d = Diagnostic::error(DiagnosticCode::E000, format!("{e:#}"));
                 eprintln!("{}", format_diagnostic(&d, color));
@@ -393,10 +403,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
             }),
             views: None,
         };
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&json_out).expect("JSON serialisation")
-        );
+        print_json(&json_out);
     } else {
         // Print diagnostics.
         for d in &diagnostics {
@@ -417,12 +424,13 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
         }
     }
 
-    if effective_failure { 1 } else { 0 }
+    i32::from(effective_failure)
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Dispatch to the appropriate pipeline based on the parsed CLI command.
+#[must_use]
 pub fn run(cli: &Cli) -> i32 {
     let color = use_color(cli);
     let (cmd, path) = cli.effective();
@@ -432,7 +440,7 @@ pub fn run(cli: &Cli) -> i32 {
         let r = running.clone();
         // Best-effort: a second call (e.g. in parallel tests) returns an error we can ignore.
         let _ = ctrlc::set_handler(move || r.store(false, Ordering::SeqCst));
-        return run_watch(cli, path, color, running);
+        return run_watch(cli, path, color, &running);
     }
 
     run_pipeline(cli, cmd, path, color)
@@ -442,8 +450,12 @@ pub fn run(cli: &Cli) -> i32 {
 
 /// Run the build pipeline once, then re-run it every time an `.hcl` file in
 /// `path` is created, modified, or deleted.  Exits cleanly on Ctrl-C.
-fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i32 {
+fn run_watch(cli: &Cli, path: &Path, color: bool, running: &Arc<AtomicBool>) -> i32 {
     use notify::{RecursiveMode, Watcher};
+    // Debounce window: events arriving within this period count as one save.
+    const DEBOUNCE: Duration = Duration::from_millis(200);
+    // Poll interval used when no events arrive.
+    const POLL: Duration = Duration::from_millis(100);
 
     if color {
         use owo_colors::OwoColorize as _;
@@ -457,6 +469,7 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
 
     // Set up the file-system watcher.
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+
     let mut watcher = match notify::recommended_watcher(tx) {
         Ok(w) => w,
         Err(e) => {
@@ -468,9 +481,6 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
         eprintln!("Error: cannot watch {}: {e}", path.display());
         return 1;
     }
-
-    const DEBOUNCE: Duration = Duration::from_millis(200);
-    const POLL: Duration = Duration::from_millis(100);
 
     while running.load(Ordering::SeqCst) {
         match rx.recv_timeout(POLL) {
@@ -485,8 +495,7 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
                 let _ = std::io::stdout().flush();
                 run_pipeline(cli, CommandKind::Build, path, color);
             }
-            Ok(_) => {}
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
@@ -513,15 +522,17 @@ fn is_hcl_event(event: &notify::Event) -> bool {
 /// Drain the watch receiver for `window` to batch rapid successive events.
 /// Returns the count of additional events consumed.
 fn drain_debounce(rx: &mpsc::Receiver<notify::Result<notify::Event>>, window: Duration) -> usize {
-    let deadline = Instant::now() + window;
-    let mut count = 0;
+    let Some(deadline) = Instant::now().checked_add(window) else {
+        return 0;
+    };
+    let mut count: usize = 0;
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             break;
         }
         match rx.recv_timeout(remaining) {
-            Ok(_) => count += 1,
+            Ok(_) => count = count.saturating_add(1),
             Err(_) => break,
         }
     }

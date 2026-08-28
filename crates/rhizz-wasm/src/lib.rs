@@ -20,18 +20,21 @@ pub struct DiagnosticJS {
 impl DiagnosticJS {
     /// Short code string, e.g. `"E001"` or `"W003"`.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn code(&self) -> String {
         self.code.clone()
     }
 
     /// Human-readable diagnostic message.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn message(&self) -> String {
         self.message.clone()
     }
 
     /// Severity level as a string (`"Error"`, `"Warning"`, `"Note"`, `"Help"`).
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn level(&self) -> String {
         self.level.clone()
     }
@@ -63,24 +66,32 @@ pub struct CategoryScoreJS {
 impl CategoryScoreJS {
     /// Number of entities that scored 1.0 ("fully complete").
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn complete(&self) -> usize {
         self.complete
     }
 
     /// Number of entities that scored 0.5 ("partial").
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn partial(&self) -> usize {
         self.partial
     }
 
     /// Number of entities that scored 0.0 ("incomplete").
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn incomplete(&self) -> usize {
         self.incomplete
     }
 
     /// Aggregate percentage (0–100).
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn percentage(&self) -> f64 {
         self.percentage
     }
@@ -115,36 +126,43 @@ pub struct ScoreReportJS {
 impl ScoreReportJS {
     /// Project name.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn project_name(&self) -> String {
         self.project_name.clone()
     }
 
     /// Overall aggregate percentage (0–100).
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn overall_percentage(&self) -> f64 {
         self.overall_percentage
     }
 
     /// Component scoring breakdown.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn components(&self) -> CategoryScoreJS {
         self.components.clone()
     }
 
     /// Port scoring breakdown.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn ports(&self) -> CategoryScoreJS {
         self.ports.clone()
     }
 
     /// Connection scoring breakdown.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn connections(&self) -> CategoryScoreJS {
         self.connections.clone()
     }
 
     /// Message scoring breakdown.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn messages(&self) -> CategoryScoreJS {
         self.messages.clone()
     }
@@ -178,18 +196,21 @@ pub struct ProjectJS {
 impl ProjectJS {
     /// Human-readable project name.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn name(&self) -> String {
         self.name.clone()
     }
 
     /// Semantic version string.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn version(&self) -> String {
         self.version.clone()
     }
 
     /// List of author strings.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn authors(&self) -> Vec<String> {
         self.authors.clone()
     }
@@ -236,6 +257,7 @@ impl From<&rhizz_core::Connection> for ConnectionJS {
 #[wasm_bindgen]
 impl ConnectionJS {
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn label(&self) -> String {
         self.label.clone()
     }
@@ -261,48 +283,59 @@ pub struct PortJS {
 impl PortJS {
     /// Port label.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn label(&self) -> String {
         self.label.clone()
     }
 
     /// Human-readable description.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn description(&self) -> String {
         self.description.clone()
     }
 
     /// Referenced protocol name.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn protocol(&self) -> String {
         self.protocol.clone()
     }
 
     /// Port role.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn role(&self) -> Option<String> {
         self.role.clone()
     }
 
     /// Whether this port is an external boundary interface.
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn external(&self) -> bool {
         self.external
     }
 
     /// Whether this port is required when instantiated in a system.
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn required(&self) -> bool {
         self.required
     }
 
     /// Filtering tags.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn tags(&self) -> Vec<String> {
         self.tags.clone()
     }
 
     /// Index of the owning component in `model.components()`.
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn owner_component_index(&self) -> usize {
         self.owner_component_index
     }
@@ -339,24 +372,28 @@ pub struct ProtocolJS {
 impl ProtocolJS {
     /// Protocol label.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn label(&self) -> String {
         self.label.clone()
     }
 
     /// Human-readable description.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn description(&self) -> String {
         self.description.clone()
     }
 
     /// Filtering tags.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn tags(&self) -> Vec<String> {
         self.tags.clone()
     }
 
     /// Permitted port roles.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn roles(&self) -> Vec<String> {
         self.roles.clone()
     }
@@ -390,6 +427,7 @@ pub struct SystemJS {
 impl SystemJS {
     /// Globally-unique system identifier.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn label(&self) -> String {
         self.label.clone()
     }
@@ -428,66 +466,81 @@ pub struct ComponentJS {
 impl ComponentJS {
     /// Unique label within its parent scope.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn label(&self) -> String {
         self.label.clone()
     }
 
     /// Human-readable description.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn description(&self) -> String {
         self.description.clone()
     }
 
-    /// Optional FontAwesome icon name.
+    /// Optional `FontAwesome` icon name.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn icon(&self) -> Option<String> {
         self.icon.clone()
     }
 
     /// Optional border color.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn color(&self) -> Option<String> {
         self.color.clone()
     }
 
     /// Optional border style (solid, dashed, dotted).
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn border(&self) -> Option<String> {
         self.border.clone()
     }
 
     /// Optional single-word font style (bold, italic).
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn font(&self) -> Option<String> {
         self.font.clone()
     }
 
     /// Filtering tags.
     #[wasm_bindgen(getter)]
+    #[must_use]
     pub fn tags(&self) -> Vec<String> {
         self.tags.clone()
     }
 
     /// Abstraction level.
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn level(&self) -> i32 {
         self.level
     }
 
     /// Whether the component is atomic (no further decomposition).
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn leaf(&self) -> bool {
         self.leaf
     }
 
     /// Arena index into `model.components()` for the parent component, or `undefined` if the parent is a system.
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn parent_component_index(&self) -> Option<usize> {
         self.parent_component_index
     }
 
     /// Arena index into `model.systems()` for the parent system, or `undefined` if the parent is a component.
     #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
     pub fn parent_system_index(&self) -> Option<usize> {
         self.parent_system_index
     }
@@ -528,16 +581,19 @@ pub struct ModelJS {
 #[wasm_bindgen]
 impl ModelJS {
     /// Returns the project metadata.
+    #[must_use]
     pub fn project(&self) -> ProjectJS {
         ProjectJS::from(&self.inner.project)
     }
 
     /// Returns all top-level systems as typed wrappers.
+    #[must_use]
     pub fn systems(&self) -> Vec<SystemJS> {
         self.inner.systems.iter().map(SystemJS::from).collect()
     }
 
     /// Returns all components as typed wrappers.
+    #[must_use]
     pub fn components(&self) -> Vec<ComponentJS> {
         self.inner
             .components
@@ -547,6 +603,7 @@ impl ModelJS {
     }
 
     /// Returns all connections as typed wrappers.
+    #[must_use]
     pub fn connections(&self) -> Vec<ConnectionJS> {
         self.inner
             .connections
@@ -556,16 +613,19 @@ impl ModelJS {
     }
 
     /// Returns all top-level protocols as typed wrappers.
+    #[must_use]
     pub fn protocols(&self) -> Vec<ProtocolJS> {
         self.inner.protocols.iter().map(ProtocolJS::from).collect()
     }
 
     /// Returns all ports as typed wrappers.
+    #[must_use]
     pub fn ports(&self) -> Vec<PortJS> {
         self.inner.ports.iter().map(PortJS::from).collect()
     }
 
     /// Returns the component with the given label, or `undefined` if not found.
+    #[must_use]
     pub fn component_by_name(&self, name: &str) -> Option<ComponentJS> {
         self.inner
             .components
@@ -575,41 +635,60 @@ impl ModelJS {
     }
 
     /// Returns the component with the given id, or `undefined` if not found.
+    #[must_use]
     pub fn component_by_id(&self, id: usize) -> Option<ComponentJS> {
         self.inner.components.get(id).map(ComponentJS::from)
     }
 
     /// Computes and returns the completion score report.
+    #[must_use]
     pub fn score(&self) -> ScoreReportJS {
         ScoreReportJS::from(&rhizz_core::score(&self.inner))
     }
 
     /// Serializes the model into a canonical HCL string.
+    #[must_use]
     pub fn to_hcl(&self) -> String {
         rhizz_core::serialize_model(&self.inner)
     }
 
     /// Creates a `ModelJS` from a JSON string representation of `Model`.
-    pub fn from_json(json: &str) -> Result<ModelJS, JsError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if the JSON does not match the `Model` schema.
+    pub fn from_json(json: &str) -> Result<Self, JsError> {
         let model: rhizz_core::Model = serde_json::from_str(json)
             .map_err(|e| JsError::new(&format!("invalid model JSON: {e}")))?;
-        Ok(ModelJS { inner: model })
+        Ok(Self { inner: model })
     }
 
     /// Exports the model to a JSON string.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if serialization fails.
     pub fn to_json(&self) -> Result<String, JsError> {
         serde_json::to_string(&self.inner)
             .map_err(|e| JsError::new(&format!("failed to serialize model to JSON: {e}")))
     }
 
     /// Creates a `ModelJS` directly from a JS object matching the `Model` schema.
-    pub fn from_js(val: JsValue) -> Result<ModelJS, JsError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if the JS object does not match the `Model` schema.
+    pub fn from_js(val: JsValue) -> Result<Self, JsError> {
         let model: rhizz_core::Model =
             serde_wasm_bindgen::from_value(val).map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(ModelJS { inner: model })
+        Ok(Self { inner: model })
     }
 
     /// Exports the model as a plain JS object.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if serialization fails.
     pub fn to_js(&self) -> Result<JsValue, JsError> {
         serde_wasm_bindgen::to_value(&self.inner).map_err(|e| JsError::new(&e.to_string()))
     }
@@ -619,11 +698,16 @@ impl ModelJS {
 
 /// Serializes a resolved model to canonical HCL.
 #[wasm_bindgen]
+#[must_use]
 pub fn serialize_model(model: &ModelJS) -> String {
     model.to_hcl()
 }
 
 /// Serializes an array of [`ViewDefinition`] JS objects into canonical HCL for `views.hcl`.
+///
+/// # Errors
+///
+/// Returns a `JsError` if the JS value does not match the `ViewDefinition` schema.
 #[wasm_bindgen]
 pub fn serialize_views(views: JsValue) -> Result<String, JsError> {
     let views: Vec<rhizz_core::ViewDefinition> =
@@ -632,6 +716,10 @@ pub fn serialize_views(views: JsValue) -> Result<String, JsError> {
 }
 
 /// Parses an HCL string representing `views.hcl` into an array of [`ViewDefinition`] JS objects.
+///
+/// # Errors
+///
+/// Returns a `JsError` if the HCL is invalid or serialization fails.
 #[wasm_bindgen]
 pub fn parse_views(hcl: &str) -> Result<JsValue, JsError> {
     let views = rhizz_core::parse_views(hcl)
@@ -659,6 +747,10 @@ pub struct ExampleProjectJS {
 
 /// Returns all embedded example systems from `examples/` as a JS array of
 /// `{ id: string, name: string, description: string, files: [{ path: string, content: string }] }`.
+///
+/// # Errors
+///
+/// Returns a `JsError` if serialization fails.
 #[wasm_bindgen]
 pub fn get_example_projects() -> Result<JsValue, JsError> {
     let list: Vec<ExampleProjectJS> = rhizz_core::example_projects()
@@ -711,11 +803,11 @@ impl CompileResultJS {
     ///
     /// # Errors
     /// Returns a [`JsError`] if `sources` cannot be deserialised.
-    pub fn compile(sources: JsValue) -> Result<CompileResultJS, JsError> {
+    pub fn compile(sources: JsValue) -> Result<Self, JsError> {
         let sources: Vec<rhizz_core::Source> =
             serde_wasm_bindgen::from_value(sources).map_err(|e| JsError::new(&e.to_string()))?;
         let result = rhizz_core::compile(&sources);
-        Ok(CompileResultJS {
+        Ok(Self {
             diagnostics: result.diagnostics,
             model: result.model,
         })
@@ -727,11 +819,13 @@ impl CompileResultJS {
     }
 
     /// Returns the number of error-level diagnostics.
+    #[must_use]
     pub fn error_count(&self) -> usize {
         self.diagnostics.iter().filter(|d| d.is_error()).count()
     }
 
     /// Returns the number of warning-level diagnostics.
+    #[must_use]
     pub fn warning_count(&self) -> usize {
         self.diagnostics.iter().filter(|d| !d.is_error()).count()
     }
@@ -739,6 +833,7 @@ impl CompileResultJS {
     /// Returns the resolved model, or `undefined` if there were hard errors.
     ///
     /// Clones the model on each call; cache the result in JS if calling repeatedly.
+    #[must_use]
     pub fn model(&self) -> Option<ModelJS> {
         self.model.as_ref().map(|m| ModelJS { inner: m.clone() })
     }

@@ -1,6 +1,12 @@
 //! Wasm smoke tests – run with:
 //!   wasm-pack test --node crates/rhizz-wasm
 
+// `#[wasm_bindgen_test]` is not recognised by clippy's test detection, so the
+// `allow-*-in-tests` settings in clippy.toml do not apply to this file.
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::indexing_slicing)]
+
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -74,9 +80,8 @@ fn components_returns_typed_wrappers() {
     assert!(!comps.is_empty(), "expected at least one component");
     let server = comps
         .iter()
-        .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "server");
-    assert!(server.is_some(), "expected component 'server'");
-    let server = server.unwrap();
+        .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "server")
+        .expect("expected component 'server'");
     assert!(server.leaf(), "server should be a leaf component");
     assert_eq!(server.description(), "HTTP server");
     assert_eq!(server.icon(), Some("server".to_string()));

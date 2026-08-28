@@ -14,6 +14,8 @@
 //!    system model files, while visual layout coordinates and views are serialized into
 //!    separate `views.hcl` files.
 
+use std::fmt::Write as _;
+
 use crate::model::{
     BorderStyle, Component, ComponentParent, Connection, ConnectionEndpoint, ConnectionLayout,
     ConnectionSide, Field, Message, Model, NodeLayout, Port, Project, Protocol, System, View,
@@ -25,6 +27,7 @@ use serde::Deserialize;
 // ── Model Serialization ───────────────────────────────────────────────────────
 
 /// Serializes a resolved [`Model`] into a canonical, formatted HCL string.
+#[must_use]
 pub fn serialize_model(model: &Model) -> String {
     let mut out = String::new();
 
@@ -53,7 +56,7 @@ pub fn serialize_model(model: &Model) -> String {
             out.push('\n');
         }
         serialize_system(&mut out, sys, model);
-        if i + 1 < systems.len() {
+        if i.saturating_add(1) < systems.len() {
             out.push('\n');
         }
     }
@@ -70,49 +73,45 @@ fn should_serialize_project(project: &Project) -> bool {
 fn serialize_project(out: &mut String, project: &Project) {
     out.push_str("project {\n");
     if !project.name.is_empty() {
-        out.push_str(&format!("  name    = {}\n", escape_string(&project.name)));
+        let _ = writeln!(out, "  name    = {}", escape_string(&project.name));
     }
     if !project.version.is_empty() && project.version != "0.0.0" {
-        out.push_str(&format!(
-            "  version = {}\n",
-            escape_string(&project.version)
-        ));
+        let _ = writeln!(out, "  version = {}", escape_string(&project.version));
     }
     if !project.authors.is_empty() {
-        out.push_str(&format!(
-            "  authors = {}\n",
-            format_string_list(&project.authors)
-        ));
+        let _ = writeln!(out, "  authors = {}", format_string_list(&project.authors));
     }
     out.push_str("}\n");
 }
 
 fn serialize_system(out: &mut String, sys: &System, model: &Model) {
-    out.push_str(&format!("system {} {{\n", escape_string(&sys.label)));
+    let _ = writeln!(out, "system {} {{", escape_string(&sys.label));
 
     let indent = "  ";
 
     if !sys.description.is_empty() {
-        out.push_str(&format!(
-            "{indent}description = {}\n",
+        let _ = writeln!(
+            out,
+            "{indent}description = {}",
             escape_string(&sys.description)
-        ));
+        );
     }
     if !sys.tags.is_empty() {
-        out.push_str(&format!(
-            "{indent}tags        = {}\n",
+        let _ = writeln!(
+            out,
+            "{indent}tags        = {}",
             format_string_list(&sys.tags)
-        ));
+        );
     }
     if sys.level != 0 {
-        out.push_str(&format!("{indent}level       = {}\n", sys.level));
+        let _ = writeln!(out, "{indent}level       = {}", sys.level);
     }
 
     // Child components (sorted by label)
     let mut child_comps: Vec<&Component> = sys
         .components
         .iter()
-        .map(|id| &model.components[id.0])
+        .filter_map(|id| model.component(*id))
         .collect();
     child_comps.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -125,7 +124,7 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
     let mut child_conns: Vec<&Connection> = sys
         .connections
         .iter()
-        .map(|id| &model.connections[id.0])
+        .filter_map(|id| model.connection(*id))
         .collect();
     child_conns.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -145,163 +144,149 @@ fn serialize_component(
     parent_level: i32,
 ) {
     let indent = "  ".repeat(depth);
-    out.push_str(&format!(
-        "{indent}component {} {{\n",
-        escape_string(&comp.label)
-    ));
+    let _ = writeln!(out, "{indent}component {} {{", escape_string(&comp.label));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !comp.description.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}description = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}description = {}",
             escape_string(&comp.description)
-        ));
+        );
     }
     if let Some(icon) = comp.icon.as_deref().filter(|s| !s.is_empty()) {
-        out.push_str(&format!(
-            "{inner_indent}icon        = {}\n",
-            escape_string(icon)
-        ));
+        let _ = writeln!(out, "{inner_indent}icon        = {}", escape_string(icon));
     }
     if let Some(color) = comp.color.as_deref().filter(|s| !s.is_empty()) {
-        out.push_str(&format!(
-            "{inner_indent}color       = {}\n",
-            escape_string(color)
-        ));
+        let _ = writeln!(out, "{inner_indent}color       = {}", escape_string(color));
     }
     if let Some(border) = comp.border
         && border != BorderStyle::Solid
     {
-        out.push_str(&format!(
-            "{inner_indent}border      = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}border      = {}",
             escape_string(border.as_str())
-        ));
+        );
     }
     if let Some(font) = comp.font.as_deref().filter(|s| !s.is_empty()) {
-        out.push_str(&format!(
-            "{inner_indent}font        = {}\n",
-            escape_string(font)
-        ));
+        let _ = writeln!(out, "{inner_indent}font        = {}", escape_string(font));
     }
     if !comp.tags.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}tags        = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}tags        = {}",
             format_string_list(&comp.tags)
-        ));
+        );
     }
-    if comp.level != parent_level + 1 {
-        out.push_str(&format!("{inner_indent}level       = {}\n", comp.level));
+    if comp.level != parent_level.saturating_add(1) {
+        let _ = writeln!(out, "{inner_indent}level       = {}", comp.level);
     }
     if comp.leaf {
-        out.push_str(&format!("{inner_indent}leaf        = true\n"));
+        let _ = writeln!(out, "{inner_indent}leaf        = true");
     }
 
     // Ports (sorted by label)
-    let mut ports: Vec<&Port> = comp.ports.iter().map(|id| &model.ports[id.0]).collect();
+    let mut ports: Vec<&Port> = comp.ports.iter().filter_map(|id| model.port(*id)).collect();
     ports.sort_by(|a, b| a.label.cmp(&b.label));
 
     for port in ports {
         out.push('\n');
-        serialize_port(out, port, depth + 1);
+        serialize_port(out, port, depth.saturating_add(1));
     }
 
     // Child components (sorted by label)
     let mut child_comps: Vec<&Component> = comp
         .children
         .iter()
-        .map(|id| &model.components[id.0])
+        .filter_map(|id| model.component(*id))
         .collect();
     child_comps.sort_by(|a, b| a.label.cmp(&b.label));
 
     for child in child_comps {
         out.push('\n');
-        serialize_component(out, child, model, depth + 1, comp.level);
+        serialize_component(out, child, model, depth.saturating_add(1), comp.level);
     }
 
     // Internal connections (sorted by label)
     let mut child_conns: Vec<&Connection> = comp
         .connections
         .iter()
-        .map(|id| &model.connections[id.0])
+        .filter_map(|id| model.connection(*id))
         .collect();
     child_conns.sort_by(|a, b| a.label.cmp(&b.label));
 
     for conn in child_conns {
         out.push('\n');
-        serialize_connection(out, conn, model, depth + 1, comp.level);
+        serialize_connection(out, conn, model, depth.saturating_add(1), comp.level);
     }
 
-    out.push_str(&format!("{indent}}}\n"));
+    let _ = writeln!(out, "{indent}}}");
 }
 
 fn serialize_port(out: &mut String, port: &Port, depth: usize) {
     let indent = "  ".repeat(depth);
-    out.push_str(&format!("{indent}port {} {{\n", escape_string(&port.label)));
+    let _ = writeln!(out, "{indent}port {} {{", escape_string(&port.label));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !port.description.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}description = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}description = {}",
             escape_string(&port.description)
-        ));
+        );
     }
     if !port.protocol.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}protocol    = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}protocol    = {}",
             escape_string(&port.protocol)
-        ));
+        );
     }
     if let Some(role_str) = &port.role {
-        out.push_str(&format!(
-            "{inner_indent}role        = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}role        = {}",
             escape_string(role_str)
-        ));
+        );
     }
 
     if !port.tags.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}tags        = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}tags        = {}",
             format_string_list(&port.tags)
-        ));
+        );
     }
     if port.external {
-        out.push_str(&format!("{inner_indent}external    = true\n"));
+        let _ = writeln!(out, "{inner_indent}external    = true");
     }
     if !port.required {
-        out.push_str(&format!("{inner_indent}required    = false\n"));
+        let _ = writeln!(out, "{inner_indent}required    = false");
     }
 
-    out.push_str(&format!("{indent}}}\n"));
+    let _ = writeln!(out, "{indent}}}");
 }
 
 fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
-    out.push_str(&format!("protocol {} {{\n", escape_string(&proto.label)));
+    let _ = writeln!(out, "protocol {} {{", escape_string(&proto.label));
 
     if !proto.description.is_empty() {
-        out.push_str(&format!(
-            "  description = {}\n",
-            escape_string(&proto.description)
-        ));
+        let _ = writeln!(out, "  description = {}", escape_string(&proto.description));
     }
     if !proto.tags.is_empty() {
-        out.push_str(&format!(
-            "  tags        = {}\n",
-            format_string_list(&proto.tags)
-        ));
+        let _ = writeln!(out, "  tags        = {}", format_string_list(&proto.tags));
     }
     if !proto.roles.is_empty() {
-        out.push_str(&format!(
-            "  roles       = {}\n",
-            format_string_list(&proto.roles)
-        ));
+        let _ = writeln!(out, "  roles       = {}", format_string_list(&proto.roles));
     }
 
     let mut messages: Vec<&Message> = proto
         .messages
         .iter()
-        .map(|id| &model.messages[id.0])
+        .filter_map(|id| model.message(*id))
         .collect();
     messages.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -321,71 +306,74 @@ fn serialize_message(
     parent_level: i32,
 ) {
     let indent = "  ".repeat(depth);
-    out.push_str(&format!(
-        "{indent}message {} {{\n",
-        escape_string(&msg.label)
-    ));
+    let _ = writeln!(out, "{indent}message {} {{", escape_string(&msg.label));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !msg.description.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}description = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}description = {}",
             escape_string(&msg.description)
-        ));
+        );
     }
     if !msg.tags.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}tags        = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}tags        = {}",
             format_string_list(&msg.tags)
-        ));
+        );
     }
     if msg.level != parent_level {
-        out.push_str(&format!("{inner_indent}level       = {}\n", msg.level));
+        let _ = writeln!(out, "{inner_indent}level       = {}", msg.level);
     }
 
     // Fields (sorted by label)
-    let mut fields: Vec<&Field> = msg.fields.iter().map(|id| &model.fields[id.0]).collect();
+    let mut fields: Vec<&Field> = msg
+        .fields
+        .iter()
+        .filter_map(|id| model.field(*id))
+        .collect();
     fields.sort_by(|a, b| a.label.cmp(&b.label));
 
     for field in fields {
         out.push('\n');
-        serialize_field(out, field, depth + 1);
+        serialize_field(out, field, depth.saturating_add(1));
     }
 
-    out.push_str(&format!("{indent}}}\n"));
+    let _ = writeln!(out, "{indent}}}");
 }
 
 fn serialize_field(out: &mut String, field: &Field, depth: usize) {
     let indent = "  ".repeat(depth);
-    out.push_str(&format!(
-        "{indent}field {} {{\n",
-        escape_string(&field.label)
-    ));
+    let _ = writeln!(out, "{indent}field {} {{", escape_string(&field.label));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
-    out.push_str(&format!(
-        "{inner_indent}type        = {}\n",
+    let _ = writeln!(
+        out,
+        "{inner_indent}type        = {}",
         escape_string(&field.field_type)
-    ));
+    );
     if !field.description.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}description = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}description = {}",
             escape_string(&field.description)
-        ));
+        );
     }
     if !field.unit.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}unit        = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}unit        = {}",
             escape_string(&field.unit)
-        ));
+        );
     }
     if field.required {
-        out.push_str(&format!("{inner_indent}required    = true\n"));
+        let _ = writeln!(out, "{inner_indent}required    = true");
     }
 
-    out.push_str(&format!("{indent}}}\n"));
+    let _ = writeln!(out, "{indent}}}");
 }
 
 fn serialize_connection(
@@ -396,55 +384,58 @@ fn serialize_connection(
     parent_level: i32,
 ) {
     let indent = "  ".repeat(depth);
-    out.push_str(&format!(
-        "{indent}connection {} {{\n",
-        escape_string(&conn.label)
-    ));
+    let _ = writeln!(out, "{indent}connection {} {{", escape_string(&conn.label));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !conn.description.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}description  = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}description  = {}",
             escape_string(&conn.description)
-        ));
+        );
     }
     if !conn.tags.is_empty() {
-        out.push_str(&format!(
-            "{inner_indent}tags         = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}tags         = {}",
             format_string_list(&conn.tags)
-        ));
+        );
     }
-    if conn.level != parent_level + 1 {
-        out.push_str(&format!("{inner_indent}level        = {}\n", conn.level));
+    if conn.level != parent_level.saturating_add(1) {
+        let _ = writeln!(out, "{inner_indent}level        = {}", conn.level);
     }
 
     let from_str = endpoint_path(&conn.from, model);
-    out.push_str(&format!(
-        "{inner_indent}from         = {}\n",
+    let _ = writeln!(
+        out,
+        "{inner_indent}from         = {}",
         escape_string(&from_str)
-    ));
+    );
 
     let to_str = endpoint_path(&conn.to, model);
-    out.push_str(&format!(
-        "{inner_indent}to           = {}\n",
+    let _ = writeln!(
+        out,
+        "{inner_indent}to           = {}",
         escape_string(&to_str)
-    ));
+    );
 
     if !conn.encapsulates.is_empty() {
         let mut enc_labels: Vec<String> = conn
             .encapsulates
             .iter()
-            .map(|id| model.connections[id.0].label.clone())
+            .filter_map(|id| model.connection(*id))
+            .map(|c| c.label.clone())
             .collect();
         enc_labels.sort();
-        out.push_str(&format!(
-            "{inner_indent}encapsulates = {}\n",
+        let _ = writeln!(
+            out,
+            "{inner_indent}encapsulates = {}",
             format_string_list(&enc_labels)
-        ));
+        );
     }
 
-    out.push_str(&format!("{indent}}}\n"));
+    let _ = writeln!(out, "{indent}}}");
 }
 
 /// Builds an absolute, scope-independent path to a connection endpoint, e.g.
@@ -456,18 +447,25 @@ fn serialize_connection(
 fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
     let mut segments: Vec<String> = Vec::new();
 
-    if let Some(pid) = endpoint.port {
-        segments.push(model.ports[pid.0].label.clone());
+    if let Some(pid) = endpoint.port
+        && let Some(port) = model.port(pid)
+    {
+        segments.push(port.label.clone());
     }
 
     let mut current = endpoint.component;
-    loop {
-        let comp = &model.components[current.0];
-        segments.push(comp.label.clone());
-        match comp.parent {
+    while let Some(comp) = model.component(current) {
+        let label = comp.label.clone();
+        let parent = comp.parent;
+        segments.push(label);
+        match parent {
             ComponentParent::Component(parent) => current = parent,
             ComponentParent::System(sid) => {
-                segments.push(model.systems[sid.0].label.clone());
+                let system_label = model
+                    .system(sid)
+                    .map(|s| s.label.clone())
+                    .unwrap_or_default();
+                segments.push(system_label);
                 break;
             }
         }
@@ -480,6 +478,7 @@ fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
 // ── Views and Layout Serialization ────────────────────────────────────────────
 
 /// Serializes a slice of [`ViewDefinition`]s into canonical HCL formatted for `views.hcl`.
+#[must_use]
 pub fn serialize_views(views: &[ViewDefinition]) -> String {
     let mut out = String::new();
     let mut sorted_views: Vec<&ViewDefinition> = views.iter().collect();
@@ -496,6 +495,7 @@ pub fn serialize_views(views: &[ViewDefinition]) -> String {
 }
 
 /// Helper to serialize resolved [`View`] models from a [`Model`] into HCL.
+#[must_use]
 pub fn serialize_resolved_views(views: &[View], model: &Model) -> String {
     let view_defs: Vec<ViewDefinition> = views
         .iter()
@@ -505,25 +505,16 @@ pub fn serialize_resolved_views(views: &[View], model: &Model) -> String {
 }
 
 fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
-    out.push_str(&format!("view {} {{\n", escape_string(&view.label)));
+    let _ = writeln!(out, "view {} {{", escape_string(&view.label));
 
     if !view.description.is_empty() {
-        out.push_str(&format!(
-            "  description = {}\n",
-            escape_string(&view.description)
-        ));
+        let _ = writeln!(out, "  description = {}", escape_string(&view.description));
     }
     if !view.tags.is_empty() {
-        out.push_str(&format!(
-            "  tags        = {}\n",
-            format_string_list(&view.tags)
-        ));
+        let _ = writeln!(out, "  tags        = {}", format_string_list(&view.tags));
     }
     if !view.system.is_empty() {
-        out.push_str(&format!(
-            "  system      = {}\n",
-            escape_string(&view.system)
-        ));
+        let _ = writeln!(out, "  system      = {}", escape_string(&view.system));
     }
 
     if should_serialize_filter(&view.filter) {
@@ -550,7 +541,7 @@ fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
     out.push_str("}\n");
 }
 
-fn should_serialize_filter(filter: &ViewFilterDefinition) -> bool {
+const fn should_serialize_filter(filter: &ViewFilterDefinition) -> bool {
     !filter.include_tags.is_empty()
         || !filter.exclude_tags.is_empty()
         || filter.max_level.is_some()
@@ -561,71 +552,71 @@ fn should_serialize_filter(filter: &ViewFilterDefinition) -> bool {
 fn serialize_view_filter(out: &mut String, filter: &ViewFilterDefinition) {
     out.push_str("  filter {\n");
     if !filter.include_tags.is_empty() {
-        out.push_str(&format!(
-            "    include_tags  = {}\n",
+        let _ = writeln!(
+            out,
+            "    include_tags  = {}",
             format_string_list(&filter.include_tags)
-        ));
+        );
     }
     if !filter.exclude_tags.is_empty() {
-        out.push_str(&format!(
-            "    exclude_tags  = {}\n",
+        let _ = writeln!(
+            out,
+            "    exclude_tags  = {}",
             format_string_list(&filter.exclude_tags)
-        ));
+        );
     }
     if let Some(max_level) = filter.max_level {
-        out.push_str(&format!("    max_level     = {max_level}\n"));
+        let _ = writeln!(out, "    max_level     = {max_level}");
     }
     if !filter.components.is_empty() {
-        out.push_str(&format!(
-            "    components    = {}\n",
+        let _ = writeln!(
+            out,
+            "    components    = {}",
             format_string_list(&filter.components)
-        ));
+        );
     }
     if let Some(show_messages) = filter.show_messages {
-        out.push_str(&format!("    show_messages = {show_messages}\n"));
+        let _ = writeln!(out, "    show_messages = {show_messages}");
     }
     out.push_str("  }\n");
 }
 
 fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
-    out.push_str(&format!("  node {} {{\n", escape_string(&node.component)));
-    out.push_str(&format!("    x          = {}\n", format_number(node.x)));
-    out.push_str(&format!("    y          = {}\n", format_number(node.y)));
+    let _ = writeln!(out, "  node {} {{", escape_string(&node.component));
+    let _ = writeln!(out, "    x          = {}", format_number(node.x));
+    let _ = writeln!(out, "    y          = {}", format_number(node.y));
     if let Some(w) = node.width {
-        out.push_str(&format!("    width      = {}\n", format_number(w)));
+        let _ = writeln!(out, "    width      = {}", format_number(w));
     }
     if let Some(h) = node.height {
-        out.push_str(&format!("    height     = {}\n", format_number(h)));
+        let _ = writeln!(out, "    height     = {}", format_number(h));
     }
     if let Some(ref align) = node.text_align {
-        out.push_str(&format!("    text_align = {}\n", escape_string(align)));
+        let _ = writeln!(out, "    text_align = {}", escape_string(align));
     }
     out.push_str("  }\n");
 }
 
 fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
-    out.push_str(&format!(
-        "  connection {} {{\n",
-        escape_string(&conn.connection)
-    ));
+    let _ = writeln!(out, "  connection {} {{", escape_string(&conn.connection));
     if let Some(side) = conn.start_side {
-        out.push_str(&format!(
-            "    start_side = {}\n",
-            escape_string(side.as_str())
-        ));
+        let _ = writeln!(out, "    start_side = {}", escape_string(side.as_str()));
     }
     if let Some(side) = conn.end_side {
-        out.push_str(&format!(
-            "    end_side   = {}\n",
-            escape_string(side.as_str())
-        ));
+        let _ = writeln!(out, "    end_side   = {}", escape_string(side.as_str()));
     }
     out.push_str("  }\n");
 }
 
 fn format_number(n: f64) -> String {
     if n.fract() == 0.0 && n.is_finite() {
-        format!("{}", n as i64)
+        // The value is a finite whole number. Clamp to the i64 range so the
+        // float-to-int cast cannot overflow. std provides no TryFrom<f64> for
+        // i64, so an `as` cast is the only available conversion here; the
+        // clamp above makes it safe.
+        #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
+        let as_int = n.clamp(-9.223_372_036_854_776E18, 9.223_372_036_854_776E18) as i64;
+        format!("{as_int}")
     } else {
         format!("{n}")
     }
@@ -664,8 +655,8 @@ struct RawConnectionLayoutAttrs {
     end_side: Option<String>,
 }
 
-fn parse_connection_side(s: Option<String>) -> Option<ConnectionSide> {
-    match s.as_deref() {
+fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
+    match s {
         Some("top") => Some(ConnectionSide::Top),
         Some("bottom") => Some(ConnectionSide::Bottom),
         Some("left") => Some(ConnectionSide::Left),
@@ -675,6 +666,11 @@ fn parse_connection_side(s: Option<String>) -> Option<ConnectionSide> {
 }
 
 /// Parses an HCL string representing `views.hcl` into a vector of [`ViewDefinition`]s.
+///
+/// # Errors
+///
+/// Returns an error if the HCL cannot be parsed or a `view` block is missing
+/// its label.
 pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
     let body: hcl::Body = hcl::from_str(hcl_str).context("failed to parse HCL for views")?;
     let mut views = Vec::new();
@@ -736,8 +732,8 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             .context("failed to deserialize connection layout attributes")?;
                         connections.push(ConnectionLayout {
                             connection: conn_label,
-                            start_side: parse_connection_side(ca.start_side),
-                            end_side: parse_connection_side(ca.end_side),
+                            start_side: parse_connection_side(ca.start_side.as_deref()),
+                            end_side: parse_connection_side(ca.end_side.as_deref()),
                         });
                     }
                     _ => {}
@@ -762,7 +758,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
 // ── Shared formatting helpers ─────────────────────────────────────────────────
 
 fn escape_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
+    let mut out = String::with_capacity(s.len().saturating_add(2));
     out.push('"');
     for c in s.chars() {
         match c {
@@ -794,7 +790,7 @@ mod tests {
     fn compile_dir(dir: &Path) -> CompileResult {
         let mut sources: Vec<Source> = WalkDir::new(dir)
             .into_iter()
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|entry| {
                 entry.file_type().is_file()
                     && entry.path().extension().is_some_and(|ext| ext == "hcl")
@@ -1190,7 +1186,7 @@ system "monitored-device" {
             let initial_result = compile_dir(&example_path);
             let model0 = initial_result
                 .model
-                .unwrap_or_else(|| panic!("failed to compile example {}", example_name));
+                .unwrap_or_else(|| panic!("failed to compile example {example_name}"));
 
             let serialized1 = serialize_model(&model0);
 
@@ -1210,8 +1206,7 @@ system "monitored-device" {
 
             assert_eq!(
                 serialized1, serialized2,
-                "idempotency failed for example {}",
-                example_name
+                "idempotency failed for example {example_name}"
             );
         }
     }
