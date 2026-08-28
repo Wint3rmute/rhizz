@@ -3,10 +3,13 @@
 ## Project Overview
 
 **rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in
-Rust. Systems are described in `.hcl` files (HCL syntax, same as Terraform) that
-can be version-controlled, diffed, and reviewed without a GUI. See `SPEC.md` and
-`SPEC/` for the full specification, and `examples/` for examples of systems
-defined with `rhizz`.
+Rust, with a frontend in Svelt. Systems are described in `.hcl` files (HCL
+syntax, same as Terraform) that can be version-controlled, diffed, and reviewed
+with or without a GUI. Read `SPEC.md` (and `SPEC/` if needed) for the full
+specification.
+
+Read the last 3 finished tasks in `TASKS/FINISHED_TASKS.md` to get current
+project context.
 
 ## Repository Layout
 
@@ -48,6 +51,9 @@ just lint     # lint workspace (Clippy + ESLint)
 just test     # run all tests (Rust + Vitest)
 just build    # build release binaries, WASM package, and web frontend
 ```
+
+**Do not directly call `cargo` or `npm` commands**; use `just` instead. It comes
+with a predefined set of correct commands for the project.
 
 ## Coding Conventions
 
