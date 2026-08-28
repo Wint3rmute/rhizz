@@ -205,7 +205,7 @@ mod tests {
     fn compile_dir(dir: &Path) -> CompileResult {
         let mut sources: Vec<Source> = WalkDir::new(dir)
             .into_iter()
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|entry| {
                 entry.file_type().is_file()
                     && entry.path().extension().is_some_and(|ext| ext == "hcl")

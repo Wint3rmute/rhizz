@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2024"
 description = "WebAssembly bindings for rhizz-core"
 
-[lints]
-workspace = true
-
 [package.metadata.wasm-pack.profile.release]
 # Larger WASM packages, but this works
 # from android's termux environment.

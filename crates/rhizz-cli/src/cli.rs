@@ -104,7 +104,7 @@ enum CommandKind {
 
 impl Cli {
     /// Returns the effective command kind and the project path.
-    fn effective(&self) -> (CommandKind, &PathBuf) {
+    const fn effective(&self) -> (CommandKind, &PathBuf) {
         match &self.command {
             Some(Command::Check { path }) => (CommandKind::Check, path),
             Some(Command::Score { path }) => (CommandKind::Score, path),
@@ -124,7 +124,7 @@ impl Cli {
 fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
         .map(|e| e.path().to_path_buf())
         .collect();
@@ -209,7 +209,7 @@ fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
 fn format_summary(errors: usize, warnings: usize, has_errors: bool) -> String {
     let e_word = if errors == 1 { "error" } else { "errors" };
     let w_word = if warnings == 1 { "warning" } else { "warnings" };
-    let base = format!("{} {}, {} {}", errors, e_word, warnings, w_word);
+    let base = format!("{errors} {e_word}, {warnings} {w_word}");
     if has_errors {
         format!("{base} — aborting (fix errors to continue)")
     } else {
@@ -417,12 +417,13 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
         }
     }
 
-    if effective_failure { 1 } else { 0 }
+    i32::from(effective_failure)
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Dispatch to the appropriate pipeline based on the parsed CLI command.
+#[must_use]
 pub fn run(cli: &Cli) -> i32 {
     let color = use_color(cli);
     let (cmd, path) = cli.effective();

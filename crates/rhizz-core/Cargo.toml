@@ -3,9 +3,6 @@ name = "rhizz-core"
 version = "0.1.0"
 edition = "2024"
 
-[lints]
-workspace = true
-
 [dependencies]
 hcl-rs  = "0.19.6"
 anyhow  = "1"

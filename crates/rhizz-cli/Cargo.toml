@@ -3,9 +3,6 @@ name = "rhizz-cli"
 version = "0.1.0"
 edition = "2024"
 
-[lints]
-workspace = true
-
 [[bin]]
 name = "rhizz"
 path = "src/main.rs"

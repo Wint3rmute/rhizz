@@ -85,7 +85,7 @@ fn score_message(idx: usize, model: &Model) -> f64 {
 // ── Category statistics ───────────────────────────────────────────────────────
 
 /// Aggregated scoring statistics for one category.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CategoryScore {
     /// Number of entities that scored 1.0 ("fully complete").
     pub complete: usize,
@@ -98,7 +98,7 @@ pub struct CategoryScore {
 impl CategoryScore {
     /// Build a [`CategoryScore`] from a slice of per-entity scores.
     fn from_scores(scores: &[f64]) -> Self {
-        let mut s = CategoryScore {
+        let mut s = Self {
             complete: 0,
             partial: 0,
             incomplete: 0,
@@ -116,16 +116,19 @@ impl CategoryScore {
     }
 
     /// Total number of entities in this category.
-    pub fn total(&self) -> usize {
+    #[must_use]
+    pub const fn total(&self) -> usize {
         self.complete + self.partial + self.incomplete
     }
 
     /// Weighted sum: complete x 1.0 + partial x 0.5 + incomplete x 0.0.
-    pub fn sum(&self) -> f64 {
-        self.complete as f64 + self.partial as f64 * 0.5
+    #[must_use]
+    pub const fn sum(&self) -> f64 {
+        (self.partial as f64).mul_add(0.5, self.complete as f64)
     }
 
     /// Aggregate percentage (sum / total x 100), or 0.0 for empty categories.
+    #[must_use]
     pub fn percentage(&self) -> f64 {
         let n = self.total();
         if n == 0 {
@@ -155,12 +158,14 @@ pub struct ScoreReport {
 
 impl ScoreReport {
     /// Overall weighted sum across all four categories.
+    #[must_use]
     pub fn overall_sum(&self) -> f64 {
         self.components.sum() + self.ports.sum() + self.connections.sum() + self.messages.sum()
     }
 
     /// Total entity count across all four categories.
-    pub fn overall_total(&self) -> usize {
+    #[must_use]
+    pub const fn overall_total(&self) -> usize {
         self.components.total()
             + self.ports.total()
             + self.connections.total()
@@ -168,6 +173,7 @@ impl ScoreReport {
     }
 
     /// Overall aggregate percentage.
+    #[must_use]
     pub fn overall_percentage(&self) -> f64 {
         let n = self.overall_total();
         if n == 0 {
@@ -178,7 +184,8 @@ impl ScoreReport {
     }
 
     /// Count of fully-complete entities across all categories.
-    pub fn overall_complete(&self) -> usize {
+    #[must_use]
+    pub const fn overall_complete(&self) -> usize {
         self.components.complete
             + self.ports.complete
             + self.connections.complete

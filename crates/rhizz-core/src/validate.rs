@@ -240,7 +240,9 @@ mod tests {
 
         // No errors from resolution
         assert!(
-            warnings.iter().all(|d| d.is_warning()),
+            warnings
+                .iter()
+                .all(super::super::diagnostics::Diagnostic::is_warning),
             "expected only warnings, got: {:?}",
             warning_codes(&warnings)
         );
@@ -422,7 +424,7 @@ mod tests {
         assert!(
             warnings
                 .iter()
-                .any(|d| d.code == DiagnosticCode::W006 && d.message.contains("c")),
+                .any(|d| d.code == DiagnosticCode::W006 && d.message.contains('c')),
             "expected W006 for component 'c', got: {:?}",
             warning_codes(&warnings)
         );

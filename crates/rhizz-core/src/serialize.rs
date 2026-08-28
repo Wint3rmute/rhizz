@@ -25,6 +25,7 @@ use serde::Deserialize;
 // ── Model Serialization ───────────────────────────────────────────────────────
 
 /// Serializes a resolved [`Model`] into a canonical, formatted HCL string.
+#[must_use]
 pub fn serialize_model(model: &Model) -> String {
     let mut out = String::new();
 
@@ -480,6 +481,7 @@ fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
 // ── Views and Layout Serialization ────────────────────────────────────────────
 
 /// Serializes a slice of [`ViewDefinition`]s into canonical HCL formatted for `views.hcl`.
+#[must_use]
 pub fn serialize_views(views: &[ViewDefinition]) -> String {
     let mut out = String::new();
     let mut sorted_views: Vec<&ViewDefinition> = views.iter().collect();
@@ -496,6 +498,7 @@ pub fn serialize_views(views: &[ViewDefinition]) -> String {
 }
 
 /// Helper to serialize resolved [`View`] models from a [`Model`] into HCL.
+#[must_use]
 pub fn serialize_resolved_views(views: &[View], model: &Model) -> String {
     let view_defs: Vec<ViewDefinition> = views
         .iter()
@@ -550,7 +553,7 @@ fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
     out.push_str("}\n");
 }
 
-fn should_serialize_filter(filter: &ViewFilterDefinition) -> bool {
+const fn should_serialize_filter(filter: &ViewFilterDefinition) -> bool {
     !filter.include_tags.is_empty()
         || !filter.exclude_tags.is_empty()
         || filter.max_level.is_some()
@@ -794,7 +797,7 @@ mod tests {
     fn compile_dir(dir: &Path) -> CompileResult {
         let mut sources: Vec<Source> = WalkDir::new(dir)
             .into_iter()
-            .filter_map(|entry| entry.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|entry| {
                 entry.file_type().is_file()
                     && entry.path().extension().is_some_and(|ext| ext == "hcl")
@@ -1190,7 +1193,7 @@ system "monitored-device" {
             let initial_result = compile_dir(&example_path);
             let model0 = initial_result
                 .model
-                .unwrap_or_else(|| panic!("failed to compile example {}", example_name));
+                .unwrap_or_else(|| panic!("failed to compile example {example_name}"));
 
             let serialized1 = serialize_model(&model0);
 
@@ -1210,8 +1213,7 @@ system "monitored-device" {
 
             assert_eq!(
                 serialized1, serialized2,
-                "idempotency failed for example {}",
-                example_name
+                "idempotency failed for example {example_name}"
             );
         }
     }

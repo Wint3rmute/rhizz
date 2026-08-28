@@ -75,7 +75,7 @@ pub struct RawComponent {
     pub source: Option<String>,
     /// Optional description text.
     pub description: Option<String>,
-    /// Optional icon name (e.g. FontAwesome icon identifier).
+    /// Optional icon name (e.g. `FontAwesome` icon identifier).
     pub icon: Option<String>,
     /// Optional border color for diagram rendering.
     pub color: Option<String>,
@@ -92,7 +92,7 @@ pub struct RawComponent {
     /// Port blocks declared on this component.
     pub ports: Vec<Labeled<RawPort>>,
     /// Nested child component blocks.
-    pub components: Vec<Labeled<RawComponent>>,
+    pub components: Vec<Labeled<Self>>,
     /// Nested connection blocks.
     pub connections: Vec<Labeled<RawConnection>>,
 }
@@ -571,6 +571,10 @@ fn parse_view(body: &hcl::Body) -> Result<RawView> {
 
 /// Parse a single `.hcl` source string into a `RawFile`.
 /// `path` is used only for error context messages.
+///
+/// # Errors
+///
+/// Returns an error if the HCL source fails to parse.
 #[instrument(skip(src), fields(path = %path.display()))]
 pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
     let body = hcl::parse(src).with_context(|| format!("HCL parse error in {}", path.display()))?;
@@ -650,7 +654,7 @@ pub(crate) fn parse_dir(dir: &std::path::Path) -> anyhow::Result<RawFile> {
     let mut merged = RawFile::default();
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
         .map(|e| e.path().to_path_buf())
         .collect();

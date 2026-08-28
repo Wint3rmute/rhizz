@@ -119,7 +119,7 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
-        Model {
+        Self {
             project: Project {
                 name: String::new(),
                 version: String::new(),
@@ -172,7 +172,7 @@ pub struct Component {
     pub label: String,
     /// Human-readable description.
     pub description: String,
-    /// Optional icon name (e.g. FontAwesome icon identifier).
+    /// Optional icon name (e.g. `FontAwesome` icon identifier).
     pub icon: Option<String>,
     /// Optional border color for diagram rendering.
     pub color: Option<String>,
@@ -361,11 +361,12 @@ pub enum BorderStyle {
 
 impl BorderStyle {
     /// Returns the lowercase string representation of this style.
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            BorderStyle::Solid => "solid",
-            BorderStyle::Dashed => "dashed",
-            BorderStyle::Dotted => "dotted",
+            Self::Solid => "solid",
+            Self::Dashed => "dashed",
+            Self::Dotted => "dotted",
         }
     }
 }
@@ -392,12 +393,13 @@ pub enum ConnectionSide {
 
 impl ConnectionSide {
     /// Returns the lowercase string representation of this side.
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            ConnectionSide::Top => "top",
-            ConnectionSide::Bottom => "bottom",
-            ConnectionSide::Left => "left",
-            ConnectionSide::Right => "right",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+            Self::Left => "left",
+            Self::Right => "right",
         }
     }
 }
@@ -409,7 +411,7 @@ impl std::fmt::Display for ConnectionSide {
 }
 
 /// Connection layout metadata for visual diagrams.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ConnectionLayout {
     /// Connection label or key.
     pub connection: String,
@@ -448,6 +450,7 @@ pub struct ViewDefinition {
 
 impl ViewDefinition {
     /// Constructs a `ViewDefinition` from a resolved `View` and its parent `Model`.
+    #[must_use]
     pub fn from_resolved(view: &View, model: &Model) -> Self {
         let system_label = model
             .systems
@@ -477,7 +480,7 @@ impl ViewDefinition {
 }
 
 /// Filter settings for a view definition.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ViewFilterDefinition {
     /// Tag whitelist (empty = match all).
     #[serde(default)]
