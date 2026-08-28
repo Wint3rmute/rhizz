@@ -21,6 +21,7 @@ resolver = "2"
 #   - string_slice
 #   - indexing_slicing
 #   - arithmetic_side_effects
+#   - as_conversions
 #
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
@@ -47,4 +48,4 @@ string_slice = "deny"
 panic_in_result_fn = "deny"
 # panic = "deny"
 exit = "deny"
-# as_conversions = "deny"
+as_conversions = "deny"

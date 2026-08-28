@@ -640,7 +640,13 @@ fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
 
 fn format_number(n: f64) -> String {
     if n.fract() == 0.0 && n.is_finite() {
-        format!("{}", n as i64)
+        // The value is a finite whole number. Clamp to the i64 range so the
+        // float-to-int cast cannot overflow. std provides no TryFrom<f64> for
+        // i64, so an `as` cast is the only available conversion here; the
+        // clamp above makes it safe.
+        #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
+        let as_int = n.clamp(-9.223_372_036_854_776E18, 9.223_372_036_854_776E18) as i64;
+        format!("{as_int}")
     } else {
         format!("{n}")
     }

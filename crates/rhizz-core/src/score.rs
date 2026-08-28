@@ -143,8 +143,11 @@ impl CategoryScore {
 
     /// Weighted sum: complete x 1.0 + partial x 0.5 + incomplete x 0.0.
     #[must_use]
-    pub const fn sum(&self) -> f64 {
-        (self.partial as f64).mul_add(0.5, self.complete as f64)
+    pub fn sum(&self) -> f64 {
+        f64::from(u32::try_from(self.partial).unwrap_or(u32::MAX)).mul_add(
+            0.5,
+            f64::from(u32::try_from(self.complete).unwrap_or(u32::MAX)),
+        )
     }
 
     /// Aggregate percentage (sum / total x 100), or 0.0 for empty categories.
@@ -154,7 +157,7 @@ impl CategoryScore {
         if n == 0 {
             0.0
         } else {
-            self.sum() / n as f64 * 100.0
+            self.sum() / f64::from(u32::try_from(n).unwrap_or(u32::MAX)) * 100.0
         }
     }
 }
@@ -200,7 +203,7 @@ impl ScoreReport {
         if n == 0 {
             0.0
         } else {
-            self.overall_sum() / n as f64 * 100.0
+            self.overall_sum() / f64::from(u32::try_from(n).unwrap_or(u32::MAX)) * 100.0
         }
     }
 
