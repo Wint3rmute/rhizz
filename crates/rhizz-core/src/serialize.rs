@@ -54,7 +54,7 @@ pub fn serialize_model(model: &Model) -> String {
             out.push('\n');
         }
         serialize_system(&mut out, sys, model);
-        if i + 1 < systems.len() {
+        if i.saturating_add(1) < systems.len() {
             out.push('\n');
         }
     }
@@ -151,7 +151,7 @@ fn serialize_component(
         escape_string(&comp.label)
     ));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !comp.description.is_empty() {
         out.push_str(&format!(
@@ -191,7 +191,7 @@ fn serialize_component(
             format_string_list(&comp.tags)
         ));
     }
-    if comp.level != parent_level + 1 {
+    if comp.level != parent_level.saturating_add(1) {
         out.push_str(&format!("{inner_indent}level       = {}\n", comp.level));
     }
     if comp.leaf {
@@ -204,7 +204,7 @@ fn serialize_component(
 
     for port in ports {
         out.push('\n');
-        serialize_port(out, port, depth + 1);
+        serialize_port(out, port, depth.saturating_add(1));
     }
 
     // Child components (sorted by label)
@@ -217,7 +217,7 @@ fn serialize_component(
 
     for child in child_comps {
         out.push('\n');
-        serialize_component(out, child, model, depth + 1, comp.level);
+        serialize_component(out, child, model, depth.saturating_add(1), comp.level);
     }
 
     // Internal connections (sorted by label)
@@ -230,7 +230,7 @@ fn serialize_component(
 
     for conn in child_conns {
         out.push('\n');
-        serialize_connection(out, conn, model, depth + 1, comp.level);
+        serialize_connection(out, conn, model, depth.saturating_add(1), comp.level);
     }
 
     out.push_str(&format!("{indent}}}\n"));
@@ -240,7 +240,7 @@ fn serialize_port(out: &mut String, port: &Port, depth: usize) {
     let indent = "  ".repeat(depth);
     out.push_str(&format!("{indent}port {} {{\n", escape_string(&port.label)));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !port.description.is_empty() {
         out.push_str(&format!(
@@ -327,7 +327,7 @@ fn serialize_message(
         escape_string(&msg.label)
     ));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !msg.description.is_empty() {
         out.push_str(&format!(
@@ -355,7 +355,7 @@ fn serialize_message(
 
     for field in fields {
         out.push('\n');
-        serialize_field(out, field, depth + 1);
+        serialize_field(out, field, depth.saturating_add(1));
     }
 
     out.push_str(&format!("{indent}}}\n"));
@@ -368,7 +368,7 @@ fn serialize_field(out: &mut String, field: &Field, depth: usize) {
         escape_string(&field.label)
     ));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     out.push_str(&format!(
         "{inner_indent}type        = {}\n",
@@ -406,7 +406,7 @@ fn serialize_connection(
         escape_string(&conn.label)
     ));
 
-    let inner_indent = "  ".repeat(depth + 1);
+    let inner_indent = "  ".repeat(depth.saturating_add(1));
 
     if !conn.description.is_empty() {
         out.push_str(&format!(
@@ -420,7 +420,7 @@ fn serialize_connection(
             format_string_list(&conn.tags)
         ));
     }
-    if conn.level != parent_level + 1 {
+    if conn.level != parent_level.saturating_add(1) {
         out.push_str(&format!("{inner_indent}level        = {}\n", conn.level));
     }
 
@@ -777,7 +777,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
 // ── Shared formatting helpers ─────────────────────────────────────────────────
 
 fn escape_string(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
+    let mut out = String::with_capacity(s.len().saturating_add(2));
     out.push('"');
     for c in s.chars() {
         match c {

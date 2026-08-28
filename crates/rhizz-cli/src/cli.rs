@@ -520,15 +520,17 @@ fn is_hcl_event(event: &notify::Event) -> bool {
 /// Drain the watch receiver for `window` to batch rapid successive events.
 /// Returns the count of additional events consumed.
 fn drain_debounce(rx: &mpsc::Receiver<notify::Result<notify::Event>>, window: Duration) -> usize {
-    let deadline = Instant::now() + window;
-    let mut count = 0;
+    let Some(deadline) = Instant::now().checked_add(window) else {
+        return 0;
+    };
+    let mut count: usize = 0;
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             break;
         }
         match rx.recv_timeout(remaining) {
-            Ok(_) => count += 1,
+            Ok(_) => count = count.saturating_add(1),
             Err(_) => break,
         }
     }

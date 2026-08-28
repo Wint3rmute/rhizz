@@ -123,11 +123,11 @@ impl CategoryScore {
         };
         for &v in scores {
             if (v - 1.0).abs() < f64::EPSILON {
-                s.complete += 1;
+                s.complete = s.complete.saturating_add(1);
             } else if (v - 0.5).abs() < f64::EPSILON {
-                s.partial += 1;
+                s.partial = s.partial.saturating_add(1);
             } else {
-                s.incomplete += 1;
+                s.incomplete = s.incomplete.saturating_add(1);
             }
         }
         s
@@ -136,7 +136,9 @@ impl CategoryScore {
     /// Total number of entities in this category.
     #[must_use]
     pub const fn total(&self) -> usize {
-        self.complete + self.partial + self.incomplete
+        self.complete
+            .saturating_add(self.partial)
+            .saturating_add(self.incomplete)
     }
 
     /// Weighted sum: complete x 1.0 + partial x 0.5 + incomplete x 0.0.
@@ -184,10 +186,11 @@ impl ScoreReport {
     /// Total entity count across all four categories.
     #[must_use]
     pub const fn overall_total(&self) -> usize {
-        self.components.total()
-            + self.ports.total()
-            + self.connections.total()
-            + self.messages.total()
+        self.components
+            .total()
+            .saturating_add(self.ports.total())
+            .saturating_add(self.connections.total())
+            .saturating_add(self.messages.total())
     }
 
     /// Overall aggregate percentage.
@@ -204,10 +207,11 @@ impl ScoreReport {
     /// Count of fully-complete entities across all categories.
     #[must_use]
     pub const fn overall_complete(&self) -> usize {
-        self.components.complete
-            + self.ports.complete
-            + self.connections.complete
-            + self.messages.complete
+        self.components
+            .complete
+            .saturating_add(self.ports.complete)
+            .saturating_add(self.connections.complete)
+            .saturating_add(self.messages.complete)
     }
 }
 

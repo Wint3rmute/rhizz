@@ -330,7 +330,7 @@ fn register_component(
                     border: None,
                     font: None,
                     tags: vec![],
-                    level: parent_level + 1,
+                    level: parent_level.saturating_add(1),
                     leaf: false,
                     parent,
                     children: vec![],
@@ -365,7 +365,7 @@ fn register_component(
                         border: None,
                         font: None,
                         tags: vec![],
-                        level: parent_level + 1,
+                        level: parent_level.saturating_add(1),
                         leaf: false,
                         parent,
                         children: vec![],
@@ -389,7 +389,7 @@ fn register_component(
     let body: &RawComponent = source_body.as_ref().unwrap_or(&lc.inner);
 
     let cid = ComponentId(r.model.components.len());
-    let level = body.level.unwrap_or(parent_level + 1);
+    let level = body.level.unwrap_or_else(|| parent_level.saturating_add(1));
     let leaf = body.leaf.unwrap_or(false);
 
     // E005 -- leaf component with children or connections
@@ -608,7 +608,10 @@ fn process_connections_in_scope(
             continue;
         }
 
-        let level = lc.inner.level.unwrap_or(parent_level + 1);
+        let level = lc
+            .inner
+            .level
+            .unwrap_or_else(|| parent_level.saturating_add(1));
 
         // Resolve `from` endpoint
         let from = resolve_endpoint(r, &lc.inner.from, scope, &lc.label, "from");
@@ -779,7 +782,7 @@ fn resolve_endpoint(
         let seg = *seg;
 
         if seg == "." {
-            segment_idx += 1;
+            segment_idx = segment_idx.saturating_add(1);
             continue;
         }
 
@@ -791,7 +794,7 @@ fn resolve_endpoint(
                         ComponentParent::Component(parent_cid) => Scope::Component(parent_cid),
                         ComponentParent::System(parent_sid) => Scope::System(parent_sid),
                     };
-                    segment_idx += 1;
+                    segment_idx = segment_idx.saturating_add(1);
                     continue;
                 }
                 Scope::System(_) => {
@@ -806,7 +809,7 @@ fn resolve_endpoint(
             }
         }
 
-        let is_last_segment = segment_idx == raw_segments.len() - 1;
+        let is_last_segment = segment_idx.saturating_add(1) == raw_segments.len();
 
         // Try looking up component in current_scope
         if let Some(comp_cid) = r
@@ -823,7 +826,7 @@ fn resolve_endpoint(
                 });
             }
             current_scope = Scope::Component(cid);
-            segment_idx += 1;
+            segment_idx = segment_idx.saturating_add(1);
             continue;
         }
 
@@ -937,7 +940,7 @@ fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> b
 
         let idx = *child_idx;
         if let Some(child) = children.get(idx) {
-            *child_idx = idx + 1;
+            *child_idx = idx.saturating_add(1);
             stack.push((child.0, 0));
         } else {
             gray.remove(&node);

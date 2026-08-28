@@ -20,6 +20,7 @@ resolver = "2"
 #   - panic_in_result_fn
 #   - string_slice
 #   - indexing_slicing
+#   - arithmetic_side_effects
 #
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
@@ -32,6 +33,7 @@ expect_used = "deny"
 # indexing_slicing = "deny"
 indexing_slicing = "deny"
 # arithmetic_side_effects = "deny"
+arithmetic_side_effects = "deny"
 # unreachable = "deny"
 unreachable = "deny"
 # unimplemented = "deny"
