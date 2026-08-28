@@ -26,7 +26,7 @@ resolver = "2"
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
 [workspace.lints.clippy]
-# pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
+pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
 # nursery = { level = "deny", priority = -1 }    # BETA LINTS
 # # DENY PANICS
 unwrap_used = "deny"

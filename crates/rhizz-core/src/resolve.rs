@@ -46,6 +46,14 @@ impl Resolver {
 ///
 /// On success returns `Ok((model, warnings))`.
 /// If any hard errors (E-codes) were encountered returns `Err(all_diagnostics)`.
+///
+/// # Errors
+///
+/// Returns the full list of collected diagnostics when any blocking error
+/// (E-code) was emitted during resolution.
+// Long but linear: phases A/B of resolution read top-to-bottom; splitting
+// would thread `Resolver` through helpers without reducing complexity.
+#[allow(clippy::too_many_lines)]
 #[instrument(skip(raw))]
 pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>> {
     let mut r = Resolver::default();
@@ -272,6 +280,8 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 /// When `lc.inner.source` is set the body is taken from the top-level
 /// component map instead of from `lc.inner`.  The `ancestors` stack is used
 /// for cycle detection (E013).
+// Long but linear: the five registration steps read top-to-bottom.
+#[allow(clippy::too_many_lines)]
 fn register_component(
     r: &mut Resolver,
     lc: &Labeled<RawComponent>,
@@ -614,10 +624,10 @@ fn process_connections_in_scope(
             .unwrap_or_else(|| parent_level.saturating_add(1));
 
         // Resolve `from` endpoint
-        let from = resolve_endpoint(r, &lc.inner.from, scope, &lc.label, "from");
+        let from = resolve_endpoint(r, lc.inner.from.as_deref(), scope, &lc.label, "from");
 
         // Resolve `to` endpoint
-        let to = resolve_endpoint(r, &lc.inner.to, scope, &lc.label, "to");
+        let to = resolve_endpoint(r, lc.inner.to.as_deref(), scope, &lc.label, "to");
 
         // Allocate ConnectionId and register in scope so encapsulates can find it.
         let conn_id = ConnectionId(r.model.connections.len());
@@ -698,9 +708,12 @@ fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -
 /// - Legacy colon notation: `"comp:port"`
 ///
 /// Returns `None` and emits the appropriate error if resolution fails.
+// Long but linear: each path notation is handled by one branch of the
+// segment-traversal loop.
+#[allow(clippy::too_many_lines)]
 fn resolve_endpoint(
     r: &mut Resolver,
-    ref_str: &Option<String>,
+    ref_str: Option<&str>,
     scope: Scope,
     conn_label: &str,
     field: &str,
@@ -1107,6 +1120,8 @@ mod tests {
     // ── drone ──────────────────────────────────────────────────────────────
 
     #[test]
+    // Long but linear: asserts the full resolved shape of the drone example.
+    #[allow(clippy::too_many_lines)]
     fn resolve_drone() {
         let raw = parse_dir(&example_dir("drone")).expect("drone should parse");
         let (model, warnings) = resolve(raw).expect("drone should resolve without errors");

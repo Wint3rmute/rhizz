@@ -23,6 +23,9 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
         // Non-leaf, no children yet -> incomplete.
         0.0
     } else {
+        // Scores are exactly 0.0, 0.5, or 1.0 by construction (never computed),
+        // so exact comparison is intentional here.
+        #[allow(clippy::float_cmp)]
         let all_complete = comp
             .children
             .iter()

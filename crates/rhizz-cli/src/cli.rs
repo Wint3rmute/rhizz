@@ -161,6 +161,8 @@ fn use_color(cli: &Cli) -> bool {
 
 // ── Diagnostic formatting ────────────────────────────────────────────────────
 
+use owo_colors::OwoColorize;
+
 /// Format a single [`Diagnostic`] as a human-readable line.
 fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
     let location = match (&d.file, d.line) {
@@ -179,7 +181,6 @@ fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
     }
 
     // Colourise: red for errors, yellow for warnings.
-    use owo_colors::OwoColorize;
     if d.is_error() {
         if location.is_empty() {
             format!("{} {}  {}", "✗".red(), d.code.red(), d.message)
@@ -439,7 +440,7 @@ pub fn run(cli: &Cli) -> i32 {
         let r = running.clone();
         // Best-effort: a second call (e.g. in parallel tests) returns an error we can ignore.
         let _ = ctrlc::set_handler(move || r.store(false, Ordering::SeqCst));
-        return run_watch(cli, path, color, running);
+        return run_watch(cli, path, color, &running);
     }
 
     run_pipeline(cli, cmd, path, color)
@@ -449,8 +450,12 @@ pub fn run(cli: &Cli) -> i32 {
 
 /// Run the build pipeline once, then re-run it every time an `.hcl` file in
 /// `path` is created, modified, or deleted.  Exits cleanly on Ctrl-C.
-fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i32 {
+fn run_watch(cli: &Cli, path: &Path, color: bool, running: &Arc<AtomicBool>) -> i32 {
     use notify::{RecursiveMode, Watcher};
+    // Debounce window: events arriving within this period count as one save.
+    const DEBOUNCE: Duration = Duration::from_millis(200);
+    // Poll interval used when no events arrive.
+    const POLL: Duration = Duration::from_millis(100);
 
     if color {
         use owo_colors::OwoColorize as _;
@@ -464,6 +469,7 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
 
     // Set up the file-system watcher.
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+
     let mut watcher = match notify::recommended_watcher(tx) {
         Ok(w) => w,
         Err(e) => {
@@ -475,9 +481,6 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
         eprintln!("Error: cannot watch {}: {e}", path.display());
         return 1;
     }
-
-    const DEBOUNCE: Duration = Duration::from_millis(200);
-    const POLL: Duration = Duration::from_millis(100);
 
     while running.load(Ordering::SeqCst) {
         match rx.recv_timeout(POLL) {
@@ -492,8 +495,7 @@ fn run_watch(cli: &Cli, path: &Path, color: bool, running: Arc<AtomicBool>) -> i
                 let _ = std::io::stdout().flush();
                 run_pipeline(cli, CommandKind::Build, path, color);
             }
-            Ok(_) => {}
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }

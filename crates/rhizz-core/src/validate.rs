@@ -8,6 +8,8 @@ use tracing::instrument;
 ///
 /// Returns a list of non-blocking [`Diagnostic`] values with codes W001-W011.
 /// This function never emits E-codes; errors are produced by the resolution pass.
+// Long but linear: one loop per warning rule (W001-W011), each independent.
+#[allow(clippy::too_many_lines)]
 #[instrument(skip(model))]
 pub fn validate(model: &Model) -> Vec<Diagnostic> {
     let mut warnings: Vec<Diagnostic> = Vec::new();
@@ -103,8 +105,8 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W006 -- `level` value decreases relative to parent (likely a mistake)
     for comp in &model.components {
         let parent_level = match comp.parent {
-            ComponentParent::System(sid) => model.system(sid).map(|s| s.level).unwrap_or(0),
-            ComponentParent::Component(pid) => model.component(pid).map(|c| c.level).unwrap_or(0),
+            ComponentParent::System(sid) => model.system(sid).map_or(0, |s| s.level),
+            ComponentParent::Component(pid) => model.component(pid).map_or(0, |c| c.level),
         };
         if comp.level < parent_level {
             warnings.push(Diagnostic::warning(
