@@ -3,7 +3,7 @@ function linearToSRGB(c: number): number {
 }
 
 function oklchToHex(str: string): string {
-  const m = str.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+  const m = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(str);
   if (!m) return "#000000";
   const L = parseFloat(m[1] ?? "");
   const C = parseFloat(m[2] ?? "");

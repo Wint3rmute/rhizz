@@ -56,7 +56,7 @@ export function sanitizeStoredRecord(
 
   if (droppedKeys) {
     console.warn(
-      `Dropped ${droppedKeys.length} malformed diagram layout entr${
+      `Dropped ${String(droppedKeys.length)} malformed diagram layout entr${
         droppedKeys.length === 1 ? "y" : "ies"
       }: ${droppedKeys.join(", ")}`,
     );
@@ -112,7 +112,7 @@ export function componentKey(
 
   while (current !== undefined) {
     const component: ComponentHierarchyItem | undefined = components[current];
-    if (!component) return `#${index}`;
+    if (!component) return `#${String(index)}`;
     parts.unshift(component.label);
     if (component.parent_component_index !== undefined) {
       current = component.parent_component_index;
@@ -170,7 +170,7 @@ export function mapLayoutToBoxes(
  * Extracts a clean view name from a file path (e.g. ".rhizz/diagrams/overview.hcl" -> "overview").
  */
 export function viewNameFromPath(path: string): string {
-  const filename = path.split("/").pop() || "diagram";
+  const filename = path.split("/").pop() ?? "diagram";
   return filename.replace(/\.(hcl|json)$/, "");
 }
 
@@ -194,7 +194,7 @@ export function layoutToHcl(
     return node;
   });
 
-  const connections = Object.entries(layout.connections || {}).map(
+  const connections = Object.entries(layout.connections ?? {}).map(
     ([connection, data]) => {
       const conn: ConnectionLayout = { connection };
       if (data.startSide !== undefined) conn.start_side = data.startSide;
@@ -229,7 +229,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const connections: Record<string, StoredConnection> = {};
 
   for (const view of views) {
-    for (const node of view.nodes || []) {
+    for (const node of view.nodes ?? []) {
       const parsedBox = StoredBoxSchema.safeParse({
         x: node.x,
         y: node.y,
@@ -242,7 +242,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
         savedLayout[node.component] = parsedBox.data;
       }
     }
-    for (const conn of view.connections || []) {
+    for (const conn of view.connections ?? []) {
       const entry: StoredConnection = {};
       if (conn.start_side) {
         const parsedStart = ConnectionSideSchema.safeParse(conn.start_side);

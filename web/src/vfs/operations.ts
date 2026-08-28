@@ -275,7 +275,7 @@ export function moveNode(
 
   if (wouldCreateCycle(nodeId, newParentId, data.nodes)) {
     throw new Error(
-      `Moving "${nodeId}" under "${newParentId}" would create a cycle`,
+      `Moving "${nodeId}" under "${String(newParentId)}" would create a cycle`,
     );
   }
 

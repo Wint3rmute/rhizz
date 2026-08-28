@@ -26,7 +26,7 @@ function pair<T>(arr: T[]): [T, T] {
   const a = arr[0];
   const b = arr[1];
   if (a === undefined || b === undefined) {
-    throw new Error(`expected at least 2 elements, got ${arr.length}`);
+    throw new Error(`expected at least 2 elements, got ${String(arr.length)}`);
   }
   return [a, b];
 }

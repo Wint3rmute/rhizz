@@ -175,9 +175,7 @@ async function ensureProjectWithDiagrams(
 ) {
   const existing = await projectStore.listProjects();
   let project = existing.find((p) => p.name === name);
-  if (!project) {
-    project = await createProjectWithMainFile(name, hclContent);
-  }
+  project ??= await createProjectWithMainFile(name, hclContent);
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(diagrams)) {
     await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);

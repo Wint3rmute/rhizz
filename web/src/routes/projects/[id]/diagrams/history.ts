@@ -3,10 +3,10 @@
 // unit tested directly (see history.test.ts) with plain values, and
 // reused for any snapshot-able piece of state that wants undo/redo — not
 // just the diagram layout.
-export type HistoryStack<T> = {
+export interface HistoryStack<T> {
   undoStack: T[];
   redoStack: T[];
-};
+}
 
 export function createHistoryStack<T>(): HistoryStack<T> {
   return { undoStack: [], redoStack: [] };
@@ -15,7 +15,7 @@ export function createHistoryStack<T>(): HistoryStack<T> {
 // Caps `stack`'s length at `limit`, discarding from the *front* (the
 // oldest entries) — the stack's end is always the most recent entry, so
 // this keeps the most recent `limit` entries.
-function capAtLimit<T>(stack: T[], limit: number): void {
+function capAtLimit(stack: unknown[], limit: number): void {
   while (stack.length > limit) stack.shift();
 }
 

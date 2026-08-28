@@ -349,7 +349,7 @@ export function runProjectStoreContractTests(
 
         await store.updateFileContent(file.id, "v1");
         const [afterFirst] = await store.listNodes(project.id);
-        if (!afterFirst || afterFirst.kind !== "file") {
+        if (afterFirst?.kind !== "file") {
           throw new Error("expected a file");
         }
         expect(afterFirst.revision).toBe(1);
@@ -358,7 +358,7 @@ export function runProjectStoreContractTests(
 
         await store.updateFileContent(file.id, "v2");
         const [afterSecond] = await store.listNodes(project.id);
-        if (!afterSecond || afterSecond.kind !== "file") {
+        if (afterSecond?.kind !== "file") {
           throw new Error("expected a file");
         }
         expect(afterSecond.revision).toBe(2);

@@ -37,23 +37,23 @@ export const Default: Story = {
 
     // System is a root; its top-level components are children. The nested
     // `mcu` (child of the composite `fc`) renders collapsed-under it.
-    expect(canvas.getByText("drone")).toBeInTheDocument();
-    expect(canvas.getByText("fc")).toBeInTheDocument();
-    expect(canvas.getByText("imu")).toBeInTheDocument();
-    expect(canvas.getByText("mcu")).toBeInTheDocument();
+    await expect(canvas.getByText("drone")).toBeInTheDocument();
+    await expect(canvas.getByText("fc")).toBeInTheDocument();
+    await expect(canvas.getByText("imu")).toBeInTheDocument();
+    await expect(canvas.getByText("mcu")).toBeInTheDocument();
 
     // 3 component rows → 3 checkbox inputs (the system root has none).
     const rows = canvas.getAllByRole("checkbox");
-    expect(rows).toHaveLength(3);
+    await expect(rows).toHaveLength(3);
 
     // Toggling a checkbox fires onToggleChecked with the arena index.
     const target = rows[2];
     if (target) await userEvent.click(target); // imu (index 2), currently unchecked
-    expect(args.onToggleChecked).toHaveBeenLastCalledWith(2);
+    await expect(args.onToggleChecked).toHaveBeenLastCalledWith(2);
 
     // Selecting a component row collapses `selected` to that component.
     await userEvent.click(canvas.getByText("imu"));
-    expect(args.selected && args.selected.has(2)).toBe(true);
+    await expect(args.selected?.has(2)).toBe(true);
   },
 };
 
@@ -63,19 +63,19 @@ export const ExpandCollapseAll: Story = {
     const canvas = within(canvasElement);
 
     // Buttons are present while there's something expandable.
-    expect(canvas.getByRole("button", { name: "Collapse all" }))
+    await expect(canvas.getByRole("button", { name: "Collapse all" }))
       .toBeInTheDocument();
-    expect(canvas.getByRole("button", { name: "Expand all" }))
+    await expect(canvas.getByRole("button", { name: "Expand all" }))
       .toBeInTheDocument();
 
     // "Collapse all" folds every expandable node: all top-level rows still
     // render, but their children are hidden.
     const mcu = canvas.getByText("mcu");
     await userEvent.click(canvas.getByRole("button", { name: "Collapse all" }));
-    expect(mcu).not.toBeInTheDocument();
+    await expect(mcu).not.toBeInTheDocument();
 
     // "Expand all" unfolds them again.
     await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
-    expect(canvas.getByText("mcu")).toBeInTheDocument();
+    await expect(canvas.getByText("mcu")).toBeInTheDocument();
   },
 };

@@ -103,7 +103,8 @@ describe("buildComponentTree", () => {
     );
     // mcu (index 0) references fc (index 1) as its parent, even though it
     // appears first in the array. It must still nest under fc.
-    const fc = childFirst[0]!.children[0]!;
+    const fc = childFirst[0]?.children[0];
+    if (!fc) throw new Error("expected nested fc under the root");
     expect(fc.id).toBe("1");
     expect(fc.isExpandable).toBe(true);
     expect(fc.children.map((c) => c.name)).toEqual(["mcu"]);
@@ -129,8 +130,9 @@ describe("buildComponentTree", () => {
         comp("child", { parent_component_index: 1 }),
       ],
     );
-    const systemA = tree[0]!;
-    const systemB = tree[1]!;
+    const systemA = tree[0];
+    const systemB = tree[1];
+    if (!systemA || !systemB) throw new Error("expected two systems");
     expect(systemA.children[0]).toMatchObject({ id: "0", isExpandable: false });
     expect(systemB.children[0]).toMatchObject({
       id: "1",

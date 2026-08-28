@@ -113,8 +113,9 @@ describe("readdir", () => {
     await fs.writeFile("main.hcl", "");
     await fs.mkdir("components");
     const entries = await fs.readdir();
-    const file = entries.find((e) => e.name === "main.hcl")!;
-    const dir = entries.find((e) => e.name === "components")!;
+    const file = entries.find((e) => e.name === "main.hcl");
+    const dir = entries.find((e) => e.name === "components");
+    if (!file || !dir) throw new Error("expected main.hcl and components");
     expect(file.isFile()).toBe(true);
     expect(file.isDirectory()).toBe(false);
     expect(dir.isFile()).toBe(false);

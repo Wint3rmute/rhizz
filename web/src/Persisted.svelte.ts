@@ -4,7 +4,7 @@ export default function persisted<T>(key: string, initial: T) {
 
   if (stored !== null) {
     try {
-      parsed = JSON.parse(stored) ?? initial;
+      parsed = JSON.parse(stored) as T;
     } catch {
       parsed = initial;
       localStorage.setItem(key, JSON.stringify(initial));
@@ -12,7 +12,9 @@ export default function persisted<T>(key: string, initial: T) {
   }
 
   let value = $state<T>(parsed);
-  $effect(() => localStorage.setItem(key, JSON.stringify(value)));
+  $effect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  });
   return {
     get value() {
       return value;

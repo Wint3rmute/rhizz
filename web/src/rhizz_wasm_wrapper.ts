@@ -13,13 +13,13 @@ export interface NodeLayout {
   y: number;
   width?: number;
   height?: number;
-  text_align?: "center" | "top-center" | "top-left" | string;
+  text_align?: string;
 }
 
 export interface ConnectionLayout {
   connection: string;
-  start_side?: "top" | "bottom" | "left" | "right" | string;
-  end_side?: "top" | "bottom" | "left" | "right" | string;
+  start_side?: string;
+  end_side?: string;
 }
 
 export interface ViewFilterDefinition {

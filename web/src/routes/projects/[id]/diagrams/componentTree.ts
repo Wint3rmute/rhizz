@@ -63,7 +63,7 @@ export function buildComponentTree(
   });
 
   const systemNodes: TreeNode[] = systems.map((system, index) => ({
-    id: `sys:${index}`,
+    id: `sys:${String(index)}`,
     name: system.label,
     isExpandable: false,
     children: [],
@@ -76,7 +76,8 @@ export function buildComponentTree(
   // (arena index) to the already-created node. Unparented components are
   // collected into orphanRoots below.
   components.forEach((component, index) => {
-    const node = componentNodeByIndex.get(index)!;
+    const node = componentNodeByIndex.get(index);
+    if (node === undefined) return; // unreachable: pass 1 created every index
     let parentChildren: TreeNode[] | undefined;
 
     if (component.parent_component_index !== undefined) {

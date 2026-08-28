@@ -21,7 +21,7 @@ export interface FieldData {
   type: string;
   description?: string;
   unit?: string;
-  required?: boolean;
+  required?: boolean | undefined;
 }
 
 export interface MessageData {
@@ -45,8 +45,8 @@ export interface PortData {
   description?: string;
   protocol?: string;
   role: "provider" | "consumer" | "peer";
-  external?: boolean;
-  required?: boolean;
+  external?: boolean | undefined;
+  required?: boolean | undefined;
   tags?: string[];
 }
 
@@ -101,7 +101,9 @@ function arenaAt<T>(arena: T[], index: number): T {
   const el = arena[index];
   if (el === undefined) {
     throw new Error(
-      `Arena index ${index} is out of range (len ${arena.length})`,
+      `Arena index ${String(index)} is out of range (len ${
+        String(arena.length)
+      })`,
     );
   }
   return el;
@@ -113,7 +115,7 @@ export interface RawModelPayload {
     version?: string;
     authors?: string[];
   };
-  components?: Array<{
+  components?: {
     label: string;
     description?: string;
     icon?: string;
@@ -126,15 +128,15 @@ export interface RawModelPayload {
     ports?: number[];
     children?: number[];
     connections?: number[];
-  }>;
-  protocols?: Array<{
+  }[];
+  protocols?: {
     label: string;
     description?: string;
     tags?: string[];
     roles?: string[];
     messages?: number[];
-  }>;
-  ports?: Array<{
+  }[];
+  ports?: {
     label: string;
     description?: string;
     protocol?: string;
@@ -142,8 +144,8 @@ export interface RawModelPayload {
     external?: boolean;
     required?: boolean;
     tags?: string[];
-  }>;
-  connections?: Array<{
+  }[];
+  connections?: {
     label: string;
     description?: string;
     tags?: string[];
@@ -151,29 +153,29 @@ export interface RawModelPayload {
     from: { component: number; port?: number | null };
     to: { component: number; port?: number | null };
     encapsulates?: number[];
-  }>;
-  messages?: Array<{
+  }[];
+  messages?: {
     label: string;
     description?: string;
     tags?: string[];
     level?: number;
     fields?: number[];
-  }>;
-  fields?: Array<{
+  }[];
+  fields?: {
     label: string;
     field_type?: string;
     description?: string;
     unit?: string;
     required?: boolean;
-  }>;
-  systems?: Array<{
+  }[];
+  systems?: {
     label: string;
     description?: string;
     tags?: string[];
     level?: number;
     components?: number[];
     connections?: number[];
-  }>;
+  }[];
 }
 
 export class DocumentStore {
@@ -195,7 +197,7 @@ export class DocumentStore {
     // Project block
     if (
       this.project.name || this.project.version ||
-      (this.project.authors && this.project.authors.length > 0)
+      (this.project.authors.length > 0)
     ) {
       lines.push("project {");
       if (this.project.name) {
@@ -204,7 +206,7 @@ export class DocumentStore {
       if (this.project.version && this.project.version !== "0.0.0") {
         lines.push(`  version = ${escapeHclString(this.project.version)}`);
       }
-      if (this.project.authors && this.project.authors.length > 0) {
+      if (this.project.authors.length > 0) {
         lines.push(`  authors = ${formatStringList(this.project.authors)}`);
       }
       lines.push("}\n");
@@ -234,7 +236,7 @@ export class DocumentStore {
         lines.push(`  tags        = ${formatStringList(sys.tags)}`);
       }
       if (sys.level !== undefined && sys.level !== 0) {
-        lines.push(`  level       = ${sys.level}`);
+        lines.push(`  level       = ${String(sys.level)}`);
       }
 
       // Child components
@@ -318,7 +320,7 @@ export class DocumentStore {
       lines.push(`${inner}tags        = ${formatStringList(comp.tags)}`);
     }
     if (comp.level !== undefined && comp.level !== parentLevel + 1) {
-      lines.push(`${inner}level       = ${comp.level}`);
+      lines.push(`${inner}level       = ${String(comp.level)}`);
     }
     if (comp.leaf) lines.push(`${inner}leaf        = true`);
 
@@ -394,7 +396,7 @@ export class DocumentStore {
     if (port.protocol) {
       lines.push(`${inner}protocol    = ${escapeHclString(port.protocol)}`);
     }
-    lines.push(`${inner}role        = ${escapeHclString(port.role || "peer")}`);
+    lines.push(`${inner}role        = ${escapeHclString(port.role)}`);
     if (port.tags && port.tags.length > 0) {
       lines.push(`${inner}tags        = ${formatStringList(port.tags)}`);
     }
@@ -425,7 +427,7 @@ export class DocumentStore {
       lines.push(`${inner}tags        = ${formatStringList(msg.tags)}`);
     }
     if (msg.level !== undefined && msg.level !== parentLevel) {
-      lines.push(`${inner}level       = ${msg.level}`);
+      lines.push(`${inner}level       = ${String(msg.level)}`);
     }
 
     const sortedFields = [...msg.fields].sort((a, b) =>
@@ -475,7 +477,7 @@ export class DocumentStore {
       lines.push(`${inner}tags         = ${formatStringList(conn.tags)}`);
     }
     if (conn.level !== undefined && conn.level !== parentLevel + 1) {
-      lines.push(`${inner}level        = ${conn.level}`);
+      lines.push(`${inner}level        = ${String(conn.level)}`);
     }
     lines.push(`${inner}from         = ${escapeHclString(conn.from)}`);
     lines.push(`${inner}to           = ${escapeHclString(conn.to)}`);
@@ -763,8 +765,8 @@ export class DocumentStore {
       label: conn.label,
       from: conn.from,
       to: conn.to,
-      description: conn.description || "",
-      tags: conn.tags || [],
+      description: conn.description ?? "",
+      tags: conn.tags ?? [],
       encapsulates: [],
     };
     list.push(newConn);
@@ -819,10 +821,10 @@ export class DocumentStore {
   ): void {
     let view = this.getView(viewLabel);
     if (!view) {
-      const defaultSys = this.systems[0]?.label || "default";
+      const defaultSys = this.systems[0]?.label ?? "default";
       view = this.addView(viewLabel, defaultSys);
     }
-    if (!view.nodes) view.nodes = [];
+    view.nodes ??= [];
     const existingNode = view.nodes.find((n) => n.component === componentKey);
     if (existingNode) {
       existingNode.x = layout.x;
@@ -848,20 +850,18 @@ export class DocumentStore {
   // ── Load / Ingestion from HCL / Model ────────────────────────────────────────
 
   loadFromRawModel(raw: RawModelPayload, viewsHcl?: string): void {
-    if (!raw) return;
-
     this.project = {
-      name: raw.project?.name || "untitled",
-      version: raw.project?.version || "0.1.0",
-      authors: raw.project?.authors || [],
+      name: raw.project?.name ?? "untitled",
+      version: raw.project?.version ?? "0.1.0",
+      authors: raw.project?.authors ?? [],
     };
 
-    const comps = raw.components || [];
-    const protos = raw.protocols || [];
-    const ports = raw.ports || [];
-    const conns = raw.connections || [];
-    const msgs = raw.messages || [];
-    const flds = raw.fields || [];
+    const comps = raw.components ?? [];
+    const protos = raw.protocols ?? [];
+    const ports = raw.ports ?? [];
+    const conns = raw.connections ?? [];
+    const msgs = raw.messages ?? [];
+    const flds = raw.fields ?? [];
 
     this.protocols = protos.map((proto: {
       label: string;
@@ -871,26 +871,26 @@ export class DocumentStore {
       messages?: number[];
     }): ProtocolData => ({
       label: proto.label,
-      description: proto.description || "",
-      tags: proto.tags || [],
-      roles: (proto.roles || []).map((r: string) =>
+      description: proto.description ?? "",
+      tags: proto.tags ?? [],
+      roles: (proto.roles ?? []).map((r: string) =>
         r.toLowerCase() as "provider" | "consumer" | "peer"
       ),
-      messages: (proto.messages || []).map((mid: number): MessageData => {
+      messages: (proto.messages ?? []).map((mid: number): MessageData => {
         const m = arenaAt(msgs, mid);
         return {
           label: m.label,
-          description: m.description || "",
-          tags: m.tags || [],
+          description: m.description ?? "",
+          tags: m.tags ?? [],
           level: m.level,
-          fields: (m.fields || []).map((fid: number): FieldData => {
+          fields: (m.fields ?? []).map((fid: number): FieldData => {
             const f = arenaAt(flds, fid);
             return {
               label: f.label,
-              type: f.field_type || "string",
-              description: f.description || "",
-              unit: f.unit || "",
-              required: Boolean(f.required),
+              type: f.field_type ?? "string",
+              description: f.description ?? "",
+              unit: f.unit ?? "",
+              required: f.required,
             };
           }),
         };
@@ -901,34 +901,34 @@ export class DocumentStore {
       const c = arenaAt(comps, cid);
       return {
         label: c.label,
-        description: c.description || "",
-        icon: c.icon || "",
-        color: c.color || "",
-        border: (c.border as "solid" | "dashed" | "dotted" | undefined) ||
+        description: c.description ?? "",
+        icon: c.icon ?? "",
+        color: c.color ?? "",
+        border: (c.border as "solid" | "dashed" | "dotted" | undefined) ??
           undefined,
-        font: c.font || "",
-        tags: c.tags || [],
+        font: c.font ?? "",
+        tags: c.tags ?? [],
         level: c.level,
-        leaf: Boolean(c.leaf),
-        ports: (c.ports || []).map((pid: number): PortData => {
+        leaf: c.leaf ?? false,
+        ports: (c.ports ?? []).map((pid: number): PortData => {
           const p = arenaAt(ports, pid);
           return {
             label: p.label,
-            description: p.description || "",
-            protocol: p.protocol || "",
-            role: (p.role ? String(p.role).toLowerCase() : "peer") as
+            description: p.description ?? "",
+            protocol: p.protocol ?? "",
+            role: (p.role ? p.role.toLowerCase() : "peer") as
               | "provider"
               | "consumer"
               | "peer",
-            external: Boolean(p.external),
-            required: p.required !== undefined ? Boolean(p.required) : true,
-            tags: p.tags || [],
+            external: p.external,
+            required: p.required ?? true,
+            tags: p.tags ?? [],
           };
         }),
-        components: (c.children || []).map((childId: number) =>
+        components: (c.children ?? []).map((childId: number) =>
           buildComp(childId)
         ),
-        connections: (c.connections || []).map((connId: number) =>
+        connections: (c.connections ?? []).map((connId: number) =>
           buildConn(connId)
         ),
       };
@@ -947,18 +947,18 @@ export class DocumentStore {
 
       return {
         label: cn.label,
-        description: cn.description || "",
-        tags: cn.tags || [],
+        description: cn.description ?? "",
+        tags: cn.tags ?? [],
         level: cn.level,
         from: fromStr,
         to: toStr,
-        encapsulates: (cn.encapsulates || []).map((id: number) =>
+        encapsulates: (cn.encapsulates ?? []).map((id: number) =>
           arenaAt(conns, id).label
         ),
       };
     };
 
-    this.systems = (raw.systems || []).map((
+    this.systems = (raw.systems ?? []).map((
       sys: {
         label: string;
         description?: string;
@@ -969,11 +969,11 @@ export class DocumentStore {
       },
     ) => ({
       label: sys.label,
-      description: sys.description || "",
-      tags: sys.tags || [],
-      level: sys.level || 0,
-      components: (sys.components || []).map((cid: number) => buildComp(cid)),
-      connections: (sys.connections || []).map((connId: number) =>
+      description: sys.description ?? "",
+      tags: sys.tags ?? [],
+      level: sys.level ?? 0,
+      components: (sys.components ?? []).map((cid: number) => buildComp(cid)),
+      connections: (sys.connections ?? []).map((connId: number) =>
         buildConn(connId)
       ),
     }));
@@ -999,7 +999,7 @@ export class DocumentStore {
       );
       return;
     }
-    this.loadFromRawModel(model.to_js(), viewsHcl);
+    this.loadFromRawModel(model.to_js() as RawModelPayload, viewsHcl);
   }
 
   loadFromHcl(systemHcl: string, viewsHcl?: string): void {

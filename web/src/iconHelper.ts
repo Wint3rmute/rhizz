@@ -47,9 +47,16 @@ export function resolveIcon(name?: string | null): ResolvedIcon | null {
     | { icon: [number, number, unknown[], string, string | string[]] }
     | undefined;
 
-  if (iconDef && Array.isArray(iconDef.icon) && iconDef.icon.length >= 5) {
-    const [width, height, , , svgPath] = iconDef.icon;
-    return { width, height, svgPath: toSvgPath(svgPath) };
+  if (iconDef && Array.isArray(iconDef.icon)) {
+    const icon = iconDef.icon as
+      | [number, number, unknown[], string, string | string[]]
+      | [number, number, unknown[], string, string | string[], unknown];
+    const [, , , , svgPath] = icon;
+    return {
+      width: icon[0],
+      height: icon[1],
+      svgPath: toSvgPath(svgPath),
+    };
   }
 
   return null;

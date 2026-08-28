@@ -100,82 +100,116 @@ export class LocalStorageProjectStore implements ProjectStore {
     this.storage.setItem(this.key, JSON.stringify(data));
   }
 
-  async listProjects(): Promise<Project[]> {
-    return ops.listProjects(this.read());
+  // Runs a synchronous `ops.*` call, converting a synchronous throw into a
+  // rejected Promise (matching the async-returning `ProjectStore` interface);
+  // keeps the method body non-`async` so eslint's `require-await` doesn't
+  // fire, and so callers still `await` a rejection on error.
+  private run<T>(op: () => T): Promise<T> {
+    try {
+      return Promise.resolve(op());
+    } catch (err) {
+      return Promise.reject(
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
   }
 
-  async createProject(name: string): Promise<Project> {
-    const { data, project } = ops.createProject(
-      this.read(),
-      crypto.randomUUID(),
-      name,
-      this.now(),
-    );
-    this.write(data);
-    return project;
+  listProjects(): Promise<Project[]> {
+    return this.run(() => ops.listProjects(this.read()));
   }
 
-  async renameProject(id: string, name: string): Promise<void> {
-    this.write(ops.renameProject(this.read(), id, name, this.now()));
+  createProject(name: string): Promise<Project> {
+    return this.run(() => {
+      const { data, project } = ops.createProject(
+        this.read(),
+        crypto.randomUUID(),
+        name,
+        this.now(),
+      );
+      this.write(data);
+      return project;
+    });
   }
 
-  async deleteProject(id: string): Promise<void> {
-    this.write(ops.deleteProject(this.read(), id));
+  renameProject(id: string, name: string): Promise<void> {
+    return this.run(() => {
+      this.write(ops.renameProject(this.read(), id, name, this.now()));
+    });
   }
 
-  async listNodes(projectId: string): Promise<FsNode[]> {
-    return ops.listNodes(this.read(), projectId);
+  deleteProject(id: string): Promise<void> {
+    return this.run(() => {
+      this.write(ops.deleteProject(this.read(), id));
+    });
   }
 
-  async createFile(
+  listNodes(projectId: string): Promise<FsNode[]> {
+    return this.run(() => ops.listNodes(this.read(), projectId));
+  }
+
+  createFile(
     projectId: string,
     parentId: string | null,
     name: string,
     content: string,
   ): Promise<FsFile> {
-    const { data, file } = ops.createFile(
-      this.read(),
-      crypto.randomUUID(),
-      projectId,
-      parentId,
-      name,
-      content,
-      this.now(),
-    );
-    this.write(data);
-    return file;
+    return this.run(() => {
+      const { data, file } = ops.createFile(
+        this.read(),
+        crypto.randomUUID(),
+        projectId,
+        parentId,
+        name,
+        content,
+        this.now(),
+      );
+      this.write(data);
+      return file;
+    });
   }
 
-  async createDirectory(
+  createDirectory(
     projectId: string,
     parentId: string | null,
     name: string,
   ): Promise<FsDirectory> {
-    const { data, directory } = ops.createDirectory(
-      this.read(),
-      crypto.randomUUID(),
-      projectId,
-      parentId,
-      name,
-      this.now(),
-    );
-    this.write(data);
-    return directory;
+    return this.run(() => {
+      const { data, directory } = ops.createDirectory(
+        this.read(),
+        crypto.randomUUID(),
+        projectId,
+        parentId,
+        name,
+        this.now(),
+      );
+      this.write(data);
+      return directory;
+    });
   }
 
-  async updateFileContent(fileId: string, content: string): Promise<void> {
-    this.write(ops.updateFileContent(this.read(), fileId, content, this.now()));
+  updateFileContent(fileId: string, content: string): Promise<void> {
+    return this.run(() => {
+      this.write(
+        ops.updateFileContent(this.read(), fileId, content, this.now()),
+      );
+    });
   }
 
-  async renameNode(nodeId: string, name: string): Promise<void> {
-    this.write(ops.renameNode(this.read(), nodeId, name, this.now()));
+  renameNode(nodeId: string, name: string): Promise<void> {
+    return this.run(() => {
+      this.write(ops.renameNode(this.read(), nodeId, name, this.now()));
+    });
   }
 
-  async moveNode(nodeId: string, newParentId: string | null): Promise<void> {
-    this.write(ops.moveNode(this.read(), nodeId, newParentId, this.now()));
+  moveNode(nodeId: string, newParentId: string | null): Promise<void> {
+    return this.run(() => {
+      this.write(ops.moveNode(this.read(), nodeId, newParentId, this.now()));
+    });
   }
 
-  async deleteNode(nodeId: string): Promise<void> {
-    this.write(ops.deleteNode(this.read(), nodeId, this.now()));
+  deleteNode(nodeId: string): Promise<void> {
+    return this.run(() => {
+      this.write(ops.deleteNode(this.read(), nodeId, this.now()));
+    });
   }
 }
