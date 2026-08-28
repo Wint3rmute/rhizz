@@ -5,6 +5,8 @@ import {
   COLOR_OPTIONS,
   colorToSvgStroke,
   fontStyleToSvg,
+  SELECTION_OUTLINE_DASHARRAY,
+  SELECTION_OUTLINE_OPACITY,
 } from "./visuals";
 
 describe("colorToSvgStroke", () => {
@@ -57,6 +59,13 @@ describe("fontStyleToSvg", () => {
     expect(fontStyleToSvg("underline")).toEqual({
       textDecoration: "underline",
     });
+  });
+});
+
+describe("selection outline", () => {
+  it("uses a 50% transparent dotted outline", () => {
+    expect(SELECTION_OUTLINE_OPACITY).toBe(0.5);
+    expect(SELECTION_OUTLINE_DASHARRAY).toBe("1.5 3");
   });
 });
 

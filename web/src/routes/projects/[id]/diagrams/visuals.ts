@@ -40,6 +40,13 @@ export interface SvgFont {
   textDecoration?: string;
 }
 
+// Presentation of the selection outline drawn on top of a selected node.
+// A 50%-transparent dotted outline (rather than a solid bold border) so the
+// node's own border style stays visible and isn't obscured by the selection
+// indicator.
+export const SELECTION_OUTLINE_OPACITY = 0.5;
+export const SELECTION_OUTLINE_DASHARRAY = "1.5 3";
+
 function isColorOption(c: string): c is ColorOption {
   return (COLOR_OPTIONS as readonly string[]).includes(c);
 }
