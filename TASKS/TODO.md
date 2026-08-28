@@ -13,6 +13,31 @@ How to work on this file:
 
 ---
 
+## Task 87 — Stricter TypeScript and ESLint configuration
+
+Upgrade TypeScript and ESLint linting configuration in `web/` to mirror the strictness applied to Rust in Task 85 (Clippy denial suite).
+
+- **TypeScript compiler options (`web/tsconfig.json`)**
+  - Enable `noUncheckedIndexedAccess: true` to prevent unsafe array/record indexing without handling `undefined`.
+  - Enable `noImplicitOverride: true`, `exactOptionalPropertyTypes: true`, and `noFallthroughCasesInSwitch: true` (if not already set by strict mode).
+- **ESLint rules (`web/eslint.config.js`)**
+  - Upgrade `@typescript-eslint` preset from `ts.configs.recommended` to `ts.configs.strictTypeChecked` and `ts.configs.stylisticTypeChecked` (or add equivalent explicit rule enforcement).
+  - Explicitly enable/deny strict safety rules:
+    - `@typescript-eslint/no-explicit-any`: error
+    - `@typescript-eslint/no-non-null-assertion`: error (disallows `!` assertions)
+    - `@typescript-eslint/no-floating-promises`: error (requires handling all promises)
+    - `@typescript-eslint/no-misused-promises`: error
+    - `@typescript-eslint/only-throw-error`: error
+    - `@typescript-eslint/switch-exhaustiveness-check`: error
+    - `@typescript-eslint/consistent-type-assertions`: error (with `assertionStyle: "never"` or strict guidelines)
+    - `no-warning-comments` / `no-debugger`: error
+- **Codebase fixes**
+  - Fix any resulting lint errors or typing violations across `web/src/` cleanly without blanket suppression comments (unless strictly necessary for third-party boundary types).
+- **Validation**
+  - Verify with `just lint` (or `cd web && deno run lint && deno task check`), `just test`, and `just build`.
+
+---
+
 ## For later Task <N> — Adding annotation to plots
 
 Make it possible to attach a text marker to a component with a specified offset.
