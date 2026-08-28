@@ -205,6 +205,18 @@ fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
     }
 }
 
+/// Serialise `value` as pretty JSON on stdout. If serialisation fails (which
+/// should be impossible for our output types), fall back to a minimal valid
+/// JSON error payload instead of panicking.
+fn print_json<T: serde::Serialize>(value: &T) {
+    match serde_json::to_string_pretty(value) {
+        Ok(s) => println!("{s}"),
+        Err(e) => println!(
+            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"score\": null, \"views\": null}}"
+        ),
+    }
+}
+
 /// Print the summary line, e.g. `1 error, 2 warnings — aborting (fix errors to continue)`.
 fn format_summary(errors: usize, warnings: usize, has_errors: bool) -> String {
     let e_word = if errors == 1 { "error" } else { "errors" };
@@ -328,10 +340,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     score: None,
                     views: None,
                 };
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&out).expect("JSON serialisation")
-                );
+                print_json(&out);
             } else {
                 let d = Diagnostic::error(DiagnosticCode::E000, format!("{e:#}"));
                 eprintln!("{}", format_diagnostic(&d, color));
@@ -393,10 +402,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
             }),
             views: None,
         };
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&json_out).expect("JSON serialisation")
-        );
+        print_json(&json_out);
     } else {
         // Print diagnostics.
         for d in &diagnostics {

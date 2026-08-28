@@ -1,6 +1,11 @@
 //! Wasm smoke tests – run with:
 //!   wasm-pack test --node crates/rhizz-wasm
 
+// `#[wasm_bindgen_test]` is not recognised by clippy's test detection, so the
+// `allow-expect-in-tests` setting in clippy.toml does not apply to this file.
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used)]
+
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::wasm_bindgen_test;
 

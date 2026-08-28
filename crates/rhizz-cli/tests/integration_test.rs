@@ -1,6 +1,11 @@
 //! Integration tests that exercise the CLI pipeline end-to-end against the
 //! worked examples shipped with the repository.
 
+// Integration test crates are not compiled with `#[cfg(test)]`, so the
+// `allow-expect-in-tests` setting in clippy.toml does not apply here.
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used)]
+
 use clap::Parser as _;
 use rhizz_cli::cli::{Cli, run};
 use std::path::PathBuf;
