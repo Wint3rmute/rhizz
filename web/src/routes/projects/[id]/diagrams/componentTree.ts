@@ -23,11 +23,11 @@ export interface ComponentTreeSystem {
 export interface ComponentTreeComponent {
   label: string;
   /** Arena index of the parent component, if this component is nested. */
-  parent_component_index?: number;
+  parent_component_index?: number | undefined;
   /** Arena index of the parent system, if this component is top-level. */
-  parent_system_index?: number;
+  parent_system_index?: number | undefined;
   /** Optional icon name for rendering. */
-  icon?: string;
+  icon?: string | undefined;
 }
 
 /**

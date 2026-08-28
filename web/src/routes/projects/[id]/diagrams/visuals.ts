@@ -22,16 +22,16 @@ export const COLOR_OPTIONS = [
 export type ColorOption = (typeof COLOR_OPTIONS)[number];
 
 export interface ComponentVisuals {
-  color?: string;
-  border?: string;
-  font?: string;
+  color?: string | undefined;
+  border?: string | undefined;
+  font?: string | undefined;
 }
 
 export interface SvgBorder {
   /** SVG `stroke-dasharray` value, or undefined for a solid border. */
-  dasharray?: string;
+  dasharray?: string | undefined;
   /** Stroke color; falls back to the default base-content grey when unset. */
-  stroke?: string;
+  stroke?: string | undefined;
 }
 
 export interface SvgFont {

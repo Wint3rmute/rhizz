@@ -785,7 +785,7 @@ type Interaction =
     type: "connecting";
     sourceComponentIndex: number;
     sourcePortLabel: string | null;
-    startSide?: ConnectionSide;
+    startSide?: ConnectionSide | undefined;
     sourcePoint: { x: number; y: number };
     currentPoint: { x: number; y: number };
   };
@@ -1738,13 +1738,19 @@ async function handleDeleteSelectedConnection(): Promise<void> {
 // Only connections where both endpoints are currently on the canvas.
 let visibleConnections = $derived(
   computeVisibleConnections(
-    connections.map((conn) => ({
-      from: conn.from,
-      to: conn.to,
-      label: conn.label,
-      startSide: savedConnections[conn.label]?.startSide,
-      endSide: savedConnections[conn.label]?.endSide,
-    })),
+    connections.map((conn) => {
+      const entry: {
+        from: number;
+        to: number;
+        label: string;
+        startSide?: ConnectionSide;
+        endSide?: ConnectionSide;
+      } = { from: conn.from, to: conn.to, label: conn.label };
+      const saved = savedConnections[conn.label];
+      if (saved?.startSide !== undefined) entry.startSide = saved.startSide;
+      if (saved?.endSide !== undefined) entry.endSide = saved.endSide;
+      return entry;
+    }),
     (i) => nodeBox(i),
   ),
 );

@@ -6,6 +6,8 @@
 import { z } from "zod";
 import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 import {
+  type ConnectionLayout,
+  type NodeLayout,
   parse_views,
   serialize_views,
   type ViewDefinition,
@@ -83,8 +85,8 @@ export function emptyDiagramLayout(): DiagramLayout {
  */
 export interface ComponentHierarchyItem {
   label: string;
-  parent_component_index?: number;
-  parent_system_index?: number;
+  parent_component_index?: number | undefined;
+  parent_system_index?: number | undefined;
 }
 
 /**
@@ -180,21 +182,25 @@ export function layoutToHcl(
   viewName = "diagram",
   systemName = "",
 ): string {
-  const nodes = Object.entries(layout.checked).map(([component, box]) => ({
-    component,
-    x: box.x,
-    y: box.y,
-    width: box.width,
-    height: box.height,
-    text_align: box.textAlign,
-  }));
+  const nodes = Object.entries(layout.checked).map(([component, box]) => {
+    const node: NodeLayout = {
+      component,
+      x: box.x,
+      y: box.y,
+    };
+    if (box.width !== undefined) node.width = box.width;
+    if (box.height !== undefined) node.height = box.height;
+    if (box.textAlign !== undefined) node.text_align = box.textAlign;
+    return node;
+  });
 
   const connections = Object.entries(layout.connections || {}).map(
-    ([connection, data]) => ({
-      connection,
-      start_side: data.startSide,
-      end_side: data.endSide,
-    }),
+    ([connection, data]) => {
+      const conn: ConnectionLayout = { connection };
+      if (data.startSide !== undefined) conn.start_side = data.startSide;
+      if (data.endSide !== undefined) conn.end_side = data.endSide;
+      return conn;
+    },
   );
 
   const viewDef: ViewDefinition = {

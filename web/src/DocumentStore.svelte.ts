@@ -4,6 +4,7 @@
 
 import {
   compile_system,
+  type NodeLayout,
   parse_views,
   serialize_views,
   type ViewDefinition,
@@ -27,7 +28,7 @@ export interface MessageData {
   label: string;
   description?: string;
   tags?: string[];
-  level?: number;
+  level?: number | undefined;
   fields: FieldData[];
 }
 
@@ -53,7 +54,7 @@ export interface ConnectionData {
   label: string;
   description?: string;
   tags?: string[];
-  level?: number;
+  level?: number | undefined;
   from: string;
   to: string;
   encapsulates?: string[];
@@ -64,10 +65,10 @@ export interface ComponentData {
   description?: string;
   icon?: string;
   color?: string;
-  border?: "solid" | "dashed" | "dotted";
+  border?: "solid" | "dashed" | "dotted" | undefined;
   font?: string;
   tags?: string[];
-  level?: number;
+  level?: number | undefined;
   leaf: boolean;
   ports: PortData[];
   components: ComponentData[];
@@ -832,14 +833,15 @@ export class DocumentStore {
         existingNode.text_align = layout.text_align;
       }
     } else {
-      view.nodes.push({
+      const node: NodeLayout = {
         component: componentKey,
         x: layout.x,
         y: layout.y,
-        width: layout.width,
-        height: layout.height,
-        text_align: layout.text_align,
-      });
+      };
+      if (layout.width !== undefined) node.width = layout.width;
+      if (layout.height !== undefined) node.height = layout.height;
+      if (layout.text_align !== undefined) node.text_align = layout.text_align;
+      view.nodes.push(node);
     }
   }
 
