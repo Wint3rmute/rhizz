@@ -45,6 +45,19 @@ export const Default: Story = {
   },
 };
 
+// Same diagram with a couple of nodes selected, exercising the selection
+// outline in the embed viewport.
+export const Selected: Story = {
+  args: {
+    components: sampleComponents,
+    connections: sampleConnections,
+    boxes: sampleBoxes,
+    projectId: "demo-project",
+    diagramPath: "overview.hcl",
+    selected: new Set([0, 2]),
+  },
+};
+
 export const Mobile: Story = {
   globals: {
     viewport: { value: "mobile1" },

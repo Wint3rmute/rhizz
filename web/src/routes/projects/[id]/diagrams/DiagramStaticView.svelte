@@ -18,6 +18,7 @@ let {
   connections = [],
   boxes = {},
   padding = 40,
+  selected = new Set<number>(),
 }: {
   /** Indexed the same way `connections[].from`/`.to` and `boxes`' keys are — i.e. this is expected to be the *full* component list, not just the placed ones. */
   components: DiagramStaticComponent[];
@@ -26,6 +27,8 @@ let {
   boxes: Record<number, DiagramStaticBox>;
   /** Empty space (world units) left around the content's bounding box in the auto-fit viewBox. */
   padding?: number;
+  /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
+  selected?: Set<number>;
 } = $props();
 
 // Auto-fits the viewBox to whatever's actually placed, rather than
@@ -49,5 +52,5 @@ let viewBox = $derived.by(() => {
   xmlns="http://www.w3.org/2000/svg"
   viewBox={viewBox}
 >
-  <DiagramElements {components} {connections} {boxes} />
+  <DiagramElements {components} {connections} {boxes} {selected} />
 </svg>

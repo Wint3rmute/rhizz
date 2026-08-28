@@ -47,6 +47,28 @@ export const Pipeline: Story = {
   },
 };
 
+// Same pipeline as `Pipeline`, but with a single node selected — exercising
+// the selection outline drawn on top of the node's own border.
+export const SingleSelected: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    selected: new Set([1]),
+  },
+};
+
+// The same pipeline with two nodes selected at once, as a multi-selection
+// (e.g. after a marquee drag) would look.
+export const MultiSelected: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    selected: new Set([0, 2]),
+  },
+};
+
 // A nested composite: "Drone" contains "Flight Controller" and "Motor",
 // which are drawn on top of (rendered after) their parent thanks to
 // DiagramStaticView's depth-based render order — exercising

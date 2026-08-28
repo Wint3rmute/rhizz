@@ -8,7 +8,12 @@ import {
   textPosition,
 } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
-import { borderStyleToSvg, fontStyleToSvg } from "./visuals";
+import {
+  borderStyleToSvg,
+  fontStyleToSvg,
+  SELECTION_OUTLINE_DASHARRAY,
+  SELECTION_OUTLINE_OPACITY,
+} from "./visuals";
 import type {
   DiagramStaticBox,
   DiagramStaticComponent,
@@ -20,11 +25,14 @@ let {
   connections = [],
   boxes = {},
   markerId = "arrow",
+  selected = new Set<number>(),
 }: {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
   boxes: Record<number, DiagramStaticBox>;
   markerId?: string;
+  /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
+  selected?: Set<number>;
 } = $props();
 
 function nodeBox(index: number): (Box & { textAlign: TextAlign }) | null {
@@ -84,6 +92,23 @@ let visibleConnections = $derived(
         stroke-dasharray={borderSvg.dasharray}
         fill="var(--color-base-200)"
       />
+      {#if selected.has(index)}
+        <!-- Selection indicator: a 50%-transparent dotted outline drawn on
+             top of the node's own border, so the component's style (color /
+             border) stays visible and isn't obscured. Mirrors the interactive
+             canvas's selection rendering. -->
+        <rect
+          width={box.width}
+          height={box.height}
+          rx="5"
+          fill="none"
+          stroke="var(--color-primary)"
+          stroke-opacity={SELECTION_OUTLINE_OPACITY}
+          stroke-width="1.5"
+          stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
+          style="pointer-events: none"
+        />
+      {/if}
       {#if icon}
         {#if box.textAlign === "top-left"}
           <svg
