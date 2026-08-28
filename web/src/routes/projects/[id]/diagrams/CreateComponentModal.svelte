@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { PortData } from "../../../../DocumentStore.svelte";
+import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
 import type { TextAlign } from "./geometry";
 import NodeInspector from "./NodeInspector.svelte";
 
@@ -43,12 +43,12 @@ let parentSearch = $state("");
 let parentDropdownOpen = $state(false);
 let textAlign = $state<TextAlign>("center");
 
-let compDetails = $state({
+let compDetails = $state<ComponentData>({
   label: "",
   description: "",
-  tags: [] as string[],
+  tags: [],
   leaf: true,
-  ports: [] as PortData[],
+  ports: [],
   components: [],
   connections: [],
 });
@@ -101,8 +101,8 @@ function handleCreate() {
   } = {
     label: trimmed,
     parentKey: selectedParentKey,
-    description: compDetails.description,
-    tags: compDetails.tags,
+    description: compDetails.description ?? "",
+    tags: compDetails.tags ?? [],
     leaf: compDetails.leaf,
     ports: compDetails.ports,
   };

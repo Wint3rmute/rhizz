@@ -88,6 +88,8 @@ export function colorToSvgStroke(color?: string): string | undefined {
 // value) returns undefined so the renderer keeps its default solid stroke.
 export function borderStyleToDasharray(border?: string): string | undefined {
   switch (border) {
+    case undefined:
+      return undefined;
     case "dashed":
       return "6 4";
     case "dotted":
@@ -100,6 +102,8 @@ export function borderStyleToDasharray(border?: string): string | undefined {
 // Maps a single-word font token to SVG text-presentation values.
 export function fontStyleToSvg(font?: string): SvgFont {
   switch (font) {
+    case undefined:
+      return {};
     case "bold":
       return { fontWeight: "bold" };
     case "italic":

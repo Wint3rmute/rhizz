@@ -28,7 +28,7 @@ async function refresh() {
 }
 
 $effect(() => {
-  refresh();
+  void refresh();
 });
 
 async function openProject(project: Project) {

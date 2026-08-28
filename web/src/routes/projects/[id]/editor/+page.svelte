@@ -37,7 +37,7 @@ $effect(() => {
   if (id === loadedProjectId) return;
   loadedProjectId = id;
   selectedPath = null;
-  refreshEntries().then(() => {
+  void refreshEntries().then(() => {
     selectedPath = firstHclPath();
   });
 });
@@ -61,7 +61,7 @@ $effect(() => {
     fileLoaded = true;
     return;
   }
-  fs.readFile(path)
+  void fs.readFile(path)
     .catch(() => "")
     .then((loaded) => {
       if (loadedPath === path) {
@@ -79,7 +79,7 @@ $effect(() => {
 $effect(() => {
   if (fileLoaded && loadedPath !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
-    fs.writeFile(loadedPath, content);
+    void fs.writeFile(loadedPath, content);
   }
 });
 
@@ -95,7 +95,7 @@ let sources = $state<Source[]>([]);
 $effect(() => {
   const path = loadedPath;
   const liveContent = content;
-  readProjectSources(fs).then((loaded) => {
+  void readProjectSources(fs).then((loaded) => {
     sources = path === null
       ? loaded
       : loaded.map((s) =>

@@ -63,6 +63,38 @@ export default ts.config(
     },
   },
   {
+    // ── Explicit strict safety rules (Task 87) ───────────────────────────
+    // These are type-aware and/or only meaningful on TypeScript sources, so
+    // they're scoped to TS/Svelte files (the global block above would
+    // otherwise try to run them on `eslint.config.js` and other plain JS,
+    // which has no type information).
+    files: ["src/**/*.ts", "src/**/*.svelte", "src/**/*.svelte.ts"],
+    rules: {
+      // Never banned `any` in production type positions.
+      "@typescript-eslint/no-explicit-any": "error",
+      // Disallows `!` non-null assertions — prefer explicit guards.
+      "@typescript-eslint/no-non-null-assertion": "error",
+      // Every Promise must be handled (awaited / .then / .catch / void).
+      "@typescript-eslint/no-floating-promises": "error",
+      // Don't pass Promises where a value is expected (e.g. void callbacks).
+      "@typescript-eslint/no-misused-promises": "error",
+      // Only throw `Error` (or a value that safely narrows to it).
+      "@typescript-eslint/only-throw-error": "error",
+      // `switch` over a union must be exhaustive.
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      // Allow explicit `<Type>`/`as Type` casts (banned `any`/`!` are
+      // enforced by their own rules above).
+      "@typescript-eslint/consistent-type-assertions": ["error", {
+        assertionStyle: "as",
+        arrayLiteralTypeAssertions: "allow-as-parameter",
+        objectLiteralTypeAssertions: "allow-as-parameter",
+      }],
+      // No TODO/FIXME/XXX markers or `debugger` left behind.
+      "no-warning-comments": "error",
+      "no-debugger": "error",
+    },
+  },
+  {
     // A .ts file that imports a first-party non-`.svelte.ts` Svelte module
     // (e.g. `./ProjectState.svelte`) gets its exports typed as `any` by
     // typescript-eslint's `projectService`: ESLint's TS program can't parse

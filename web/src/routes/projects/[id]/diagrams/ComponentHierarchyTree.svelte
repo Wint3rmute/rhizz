@@ -45,7 +45,7 @@ let nodes = $derived(buildComponentTree(systems, components));
 // just that component (matching the canvas's click-to-single-select).
 let selectedIndex = $derived(
   selected && selected.size === 1
-    ? String(selected.values().next().value!)
+    ? String(selected.values().next().value ?? "")
     : null,
 );
 

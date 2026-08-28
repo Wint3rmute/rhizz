@@ -23,7 +23,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {
   args: {
-    diagnostics: [] as DiagnosticJS[],
+    diagnostics: [] satisfies DiagnosticJS[],
   },
 };
 
