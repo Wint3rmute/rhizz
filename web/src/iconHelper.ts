@@ -23,7 +23,7 @@ export function normalizeIconName(name: string): string {
     clean = clean.slice(3);
   } else if (
     clean.startsWith("fa") && clean.length > 2 &&
-    clean[2] === clean[2].toUpperCase()
+    clean.charAt(2) === clean.charAt(2).toUpperCase()
   ) {
     clean = clean.slice(2);
   }
@@ -86,7 +86,7 @@ export const ALL_ICON_NAMES: string[] = Object.keys(solidIcons)
     (key) =>
       key.startsWith("fa") &&
       key.length > 2 &&
-      key[2] === key[2].toUpperCase() &&
+      key.charAt(2) === key.charAt(2).toUpperCase() &&
       key !== "fas",
   )
   .map((key) => {

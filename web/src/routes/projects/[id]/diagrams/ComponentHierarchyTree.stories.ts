@@ -47,7 +47,8 @@ export const Default: Story = {
     expect(rows).toHaveLength(3);
 
     // Toggling a checkbox fires onToggleChecked with the arena index.
-    await userEvent.click(rows[2]); // imu (index 2), currently unchecked
+    const target = rows[2];
+    if (target) await userEvent.click(target); // imu (index 2), currently unchecked
     expect(args.onToggleChecked).toHaveBeenLastCalledWith(2);
 
     // Selecting a component row collapses `selected` to that component.

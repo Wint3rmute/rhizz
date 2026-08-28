@@ -275,15 +275,22 @@ function waypoints(d: string): { x: number; y: number }[] {
   const tokens = d.split(/\s+/);
   const points: { x: number; y: number }[] = [];
   for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i] === "M" || tokens[i] === "L") {
-      const [x, y] = tokens[i + 1].split(",").map(Number);
-      points.push({ x, y });
+    const token = tokens[i];
+    if (token === "M" || token === "L") {
+      const coordToken = tokens[i + 1];
+      if (coordToken) {
+        const [x, y] = coordToken.split(",").map(Number);
+        points.push({ x: x ?? 0, y: y ?? 0 });
+      }
       i += 1;
-    } else if (tokens[i] === "A") {
+    } else if (token === "A") {
       // "A rx,ry rotation large-arc,sweep x,y" — the point is the 4th token
       // after "A".
-      const [x, y] = tokens[i + 4].split(",").map(Number);
-      points.push({ x, y });
+      const coordToken = tokens[i + 4];
+      if (coordToken) {
+        const [x, y] = coordToken.split(",").map(Number);
+        points.push({ x: x ?? 0, y: y ?? 0 });
+      }
       i += 4;
     }
   }
@@ -308,8 +315,8 @@ describe("elbowPath", () => {
     expect(points.at(-1)).toEqual({ x: 200, y: 100 });
     // First leg stays at the starting y (still travelling horizontally);
     // last leg is already at the target y (travelling horizontally again).
-    expect(points[1].y).toBe(0);
-    expect(points.at(-2)!.y).toBe(100);
+    expect(points[1]?.y).toBe(0);
+    expect(points.at(-2)?.y).toBe(100);
   });
 
   it("vertical orientation always starts and ends travelling vertically (V-H-V)", () => {
@@ -318,8 +325,8 @@ describe("elbowPath", () => {
     expect(points[0]).toEqual({ x: 0, y: 0 });
     expect(points.at(-1)).toEqual({ x: 200, y: 100 });
     // First leg stays at the starting x; last leg is already at the target x.
-    expect(points[1].x).toBe(0);
-    expect(points.at(-2)!.x).toBe(200);
+    expect(points[1]?.x).toBe(0);
+    expect(points.at(-2)?.x).toBe(200);
   });
 
   it("produces a different shape than horizontal for the same coordinates (orientation actually matters)", () => {
@@ -333,8 +340,8 @@ describe("elbowPath", () => {
     const points = waypoints(d);
     expect(points[0]).toEqual({ x: 200, y: 100 });
     expect(points.at(-1)).toEqual({ x: 0, y: 0 });
-    expect(points[1].y).toBe(100);
-    expect(points.at(-2)!.y).toBe(0);
+    expect(points[1]?.y).toBe(100);
+    expect(points.at(-2)?.y).toBe(0);
   });
 });
 
@@ -410,9 +417,9 @@ describe("computeVisibleConnections", () => {
     const visible = computeVisibleConnections(connections, (i) => boxes[i]);
 
     expect(visible).toHaveLength(1);
-    expect(visible[0].orientation).toBe("horizontal");
-    expect(visible[0].a).toEqual({ x: 100, y: 25 });
-    expect(visible[0].b).toEqual({ x: 200, y: 25 });
+    expect(visible[0]?.orientation).toBe("horizontal");
+    expect(visible[0]?.a).toEqual({ x: 100, y: 25 });
+    expect(visible[0]?.b).toEqual({ x: 200, y: 25 });
   });
 
   it("computes vertical connection endpoints between vertically stacked boxes", () => {
@@ -420,9 +427,9 @@ describe("computeVisibleConnections", () => {
     const visible = computeVisibleConnections(connections, (i) => boxes[i]);
 
     expect(visible).toHaveLength(1);
-    expect(visible[0].orientation).toBe("vertical");
-    expect(visible[0].a).toEqual({ x: 50, y: 50 });
-    expect(visible[0].b).toEqual({ x: 50, y: 200 });
+    expect(visible[0]?.orientation).toBe("vertical");
+    expect(visible[0]?.a).toEqual({ x: 50, y: 50 });
+    expect(visible[0]?.b).toEqual({ x: 50, y: 200 });
   });
 
   it("filters out connections when either endpoint box is not placed", () => {
@@ -433,7 +440,7 @@ describe("computeVisibleConnections", () => {
     const visible = computeVisibleConnections(connections, (i) => boxes[i]);
 
     expect(visible).toHaveLength(1);
-    expect(visible[0].conn.label).toBe("valid");
+    expect(visible[0]?.conn.label).toBe("valid");
   });
 
   it("respects custom startSide on connection routing", () => {
@@ -444,9 +451,9 @@ describe("computeVisibleConnections", () => {
       startSide: "top" as ConnectionSide,
     }];
     const visTop = computeVisibleConnections(connTop, (i) => boxes[i]);
-    expect(visTop[0].orientation).toBe("vertical");
-    expect(visTop[0].a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visTop[0].b).toEqual({ x: 250, y: 0 }); // box 1 top midpoint (auto-oriented facing top)
+    expect(visTop[0]?.orientation).toBe("vertical");
+    expect(visTop[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
+    expect(visTop[0]?.b).toEqual({ x: 250, y: 0 }); // box 1 top midpoint (auto-oriented facing top)
 
     const connBottom = [{
       from: 0,
@@ -455,9 +462,9 @@ describe("computeVisibleConnections", () => {
       startSide: "bottom" as ConnectionSide,
     }];
     const visBottom = computeVisibleConnections(connBottom, (i) => boxes[i]);
-    expect(visBottom[0].orientation).toBe("vertical");
-    expect(visBottom[0].a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
-    expect(visBottom[0].b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
+    expect(visBottom[0]?.orientation).toBe("vertical");
+    expect(visBottom[0]?.a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
+    expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
 
     const connBoth = [{
       from: 0,
@@ -467,8 +474,8 @@ describe("computeVisibleConnections", () => {
       endSide: "right" as ConnectionSide,
     }];
     const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
-    expect(visBoth[0].a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visBottom[0].b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
+    expect(visBoth[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
+    expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
   });
 });
 

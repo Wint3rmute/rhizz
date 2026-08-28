@@ -473,8 +473,22 @@ async function handleDeleteDiagram(path: string): Promise<void> {
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
   const key = getComponentKey(index);
-  checked[key] = { ...checked[key], ...box };
-  savedLayout[key] = { ...savedLayout[key], ...box };
+  const checkedPrev = checked[key];
+  const savedPrev = savedLayout[key];
+  checked[key] = {
+    x: box.x ?? checkedPrev?.x ?? 0,
+    y: box.y ?? checkedPrev?.y ?? 0,
+    width: box.width ?? checkedPrev?.width,
+    height: box.height ?? checkedPrev?.height,
+    textAlign: box.textAlign ?? checkedPrev?.textAlign,
+  };
+  savedLayout[key] = {
+    x: box.x ?? savedPrev?.x ?? 0,
+    y: box.y ?? savedPrev?.y ?? 0,
+    width: box.width ?? savedPrev?.width,
+    height: box.height ?? savedPrev?.height,
+    textAlign: box.textAlign ?? savedPrev?.textAlign,
+  };
 }
 
 // Returns the placed node's box (position + size + text alignment), or null
@@ -502,7 +516,7 @@ function nodeBox(index: number): {
 // Sets the text alignment of the currently selected node. Only meaningful
 // (and only exposed in the UI) when exactly one node is selected.
 function setSelectedTextAlign(align: TextAlign) {
-  if (primarySelected === null) return;
+  if (primarySelected === null || primarySelected === undefined) return;
   const box = checked[getComponentKey(primarySelected)];
   if (!box) return;
   if (box.textAlign === align) return; // no-op: skip a redundant undo point
@@ -711,7 +725,9 @@ let primarySelected = $derived(
   selected.size === 1 ? [...selected][0] : null,
 );
 let selectedBox = $derived(
-  primarySelected !== null ? nodeBox(primarySelected) : null,
+  primarySelected !== null && primarySelected !== undefined
+    ? nodeBox(primarySelected)
+    : null,
 );
 
 // All pointer-driven canvas interactions (drag, resize, pan, marquee
@@ -974,7 +990,7 @@ async function handleModalCreateComponent(data: {
       doc.addSystem(parent || "main");
       parent = parent || "main";
     } else {
-      parent = doc.systems[0].label;
+      parent = doc.systems[0]?.label ?? "main";
     }
   }
 

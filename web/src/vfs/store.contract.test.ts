@@ -47,8 +47,8 @@ export function runProjectStoreContractTests(
         const project = await store.createProject("old-name");
         await store.renameProject(project.id, "new-name");
         const [renamed] = await store.listProjects();
-        expect(renamed.name).toBe("new-name");
-        expect(renamed.updatedAt).not.toBe(project.updatedAt);
+        expect(renamed?.name).toBe("new-name");
+        expect(renamed?.updatedAt).not.toBe(project.updatedAt);
       });
 
       it("rejects renaming an unknown project", async () => {
@@ -207,7 +207,7 @@ export function runProjectStoreContractTests(
         );
         await store.renameNode(file.id, "b.hcl");
         const [node] = await store.listNodes(project.id);
-        expect(node.name).toBe("b.hcl");
+        expect(node?.name).toBe("b.hcl");
       });
 
       it("rejects renaming an unknown node", async () => {
@@ -349,14 +349,18 @@ export function runProjectStoreContractTests(
 
         await store.updateFileContent(file.id, "v1");
         const [afterFirst] = await store.listNodes(project.id);
-        if (afterFirst.kind !== "file") throw new Error("expected a file");
+        if (!afterFirst || afterFirst.kind !== "file") {
+          throw new Error("expected a file");
+        }
         expect(afterFirst.revision).toBe(1);
         expect(afterFirst.content).toBe("v1");
         expect(afterFirst.updatedAt).not.toBe(file.updatedAt);
 
         await store.updateFileContent(file.id, "v2");
         const [afterSecond] = await store.listNodes(project.id);
-        if (afterSecond.kind !== "file") throw new Error("expected a file");
+        if (!afterSecond || afterSecond.kind !== "file") {
+          throw new Error("expected a file");
+        }
         expect(afterSecond.revision).toBe(2);
       });
 
@@ -378,7 +382,7 @@ export function runProjectStoreContractTests(
         );
         await store.updateFileContent(file.id, "changed");
         const [updatedProject] = await store.listProjects();
-        expect(updatedProject.updatedAt).not.toBe(project.updatedAt);
+        expect(updatedProject?.updatedAt).not.toBe(project.updatedAt);
       });
     });
   });

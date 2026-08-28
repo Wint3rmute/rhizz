@@ -126,7 +126,7 @@ describe("readdir", () => {
     await fs.writeFile("components/imu.hcl", "");
     const entries = await fs.readdir("components");
     expect(entries.map((e) => e.name)).toEqual(["imu.hcl"]);
-    expect(entries[0].path).toBe("imu.hcl");
+    expect(entries[0]?.path).toBe("imu.hcl");
   });
 
   it("returns an empty array for an empty directory", async () => {

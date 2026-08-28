@@ -12,8 +12,9 @@ export function getExampleSystemHcl(): string {
   try {
     const examples = get_example_projects();
     const single = examples.find((e) => e.id === "single-file");
-    if (single && single.files.length > 0) {
-      return single.files[0].content;
+    const first = single?.files[0];
+    if (first) {
+      return first.content;
     }
   } catch {
     // Fallback if called before WASM initialization

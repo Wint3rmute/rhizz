@@ -5,9 +5,9 @@ function linearToSRGB(c: number): number {
 function oklchToHex(str: string): string {
   const m = str.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
   if (!m) return "#000000";
-  const L = parseFloat(m[1]);
-  const C = parseFloat(m[2]);
-  const H = parseFloat(m[3]) * (Math.PI / 180);
+  const L = parseFloat(m[1] ?? "");
+  const C = parseFloat(m[2] ?? "");
+  const H = parseFloat(m[3] ?? "") * (Math.PI / 180);
 
   // oklch -> oklab
   const a = C * Math.cos(H);
@@ -30,7 +30,10 @@ function oklchToHex(str: string): string {
 }
 
 function rgbToHex(str: string): string {
-  const [r, g, b] = str.match(/\d+/g)!.map(Number);
+  const parts = str.match(/\d+/g) ?? [];
+  const r = Number(parts[0] ?? 0);
+  const g = Number(parts[1] ?? 0);
+  const b = Number(parts[2] ?? 0);
   return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
 }
 

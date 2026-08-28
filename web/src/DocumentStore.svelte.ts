@@ -87,9 +87,23 @@ function escapeHclString(s: string): string {
   return JSON.stringify(s);
 }
 
-function formatStringList(items?: string[]): string {
+export function formatStringList(items?: string[]): string {
   if (!items || items.length === 0) return "[]";
   return `[${items.map((it) => escapeHclString(it)).join(", ")}]`;
+}
+
+// Resolves an arena index to its element, throwing if the reference is
+// dangling. Arena indices come from the compiled Rust model which is always
+// densely-populated, so an out-of-range index is a compiler/ingestion bug
+// rather than a condition the UI should silently tolerate.
+function arenaAt<T>(arena: T[], index: number): T {
+  const el = arena[index];
+  if (el === undefined) {
+    throw new Error(
+      `Arena index ${index} is out of range (len ${arena.length})`,
+    );
+  }
+  return el;
 }
 
 export interface RawModelPayload {
@@ -210,7 +224,7 @@ export class DocumentStore {
     );
 
     for (let i = 0; i < sortedSystems.length; i++) {
-      const sys = sortedSystems[i];
+      const sys = arenaAt(sortedSystems, i);
       lines.push(`system ${escapeHclString(sys.label)} {`);
       if (sys.description) {
         lines.push(`  description = ${escapeHclString(sys.description)}`);
@@ -513,7 +527,9 @@ export class DocumentStore {
   ): { sys: SystemData; parentComp?: ComponentData } | null {
     const parts = path.split("/").filter(Boolean);
     if (parts.length === 0) return null;
-    const sys = this.getSystem(parts[0]);
+    const firstPart = parts[0];
+    if (firstPart === undefined) return null;
+    const sys = this.getSystem(firstPart);
     if (!sys) return null;
 
     if (parts.length === 1) {
@@ -630,6 +646,7 @@ export class DocumentStore {
     if (idx === -1) return false;
 
     const [removed] = srcList.splice(idx, 1);
+    if (removed === undefined) return false;
     if (targetContainer.parentComp?.leaf) {
       targetContainer.parentComp.leaf = false;
     }
@@ -858,14 +875,14 @@ export class DocumentStore {
         r.toLowerCase() as "provider" | "consumer" | "peer"
       ),
       messages: (proto.messages || []).map((mid: number): MessageData => {
-        const m = msgs[mid];
+        const m = arenaAt(msgs, mid);
         return {
           label: m.label,
           description: m.description || "",
           tags: m.tags || [],
           level: m.level,
           fields: (m.fields || []).map((fid: number): FieldData => {
-            const f = flds[fid];
+            const f = arenaAt(flds, fid);
             return {
               label: f.label,
               type: f.field_type || "string",
@@ -879,7 +896,7 @@ export class DocumentStore {
     }));
 
     const buildComp = (cid: number): ComponentData => {
-      const c = comps[cid];
+      const c = arenaAt(comps, cid);
       return {
         label: c.label,
         description: c.description || "",
@@ -892,7 +909,7 @@ export class DocumentStore {
         level: c.level,
         leaf: Boolean(c.leaf),
         ports: (c.ports || []).map((pid: number): PortData => {
-          const p = ports[pid];
+          const p = arenaAt(ports, pid);
           return {
             label: p.label,
             description: p.description || "",
@@ -916,14 +933,14 @@ export class DocumentStore {
     };
 
     const buildConn = (connId: number): ConnectionData => {
-      const cn = conns[connId];
-      const fromComp = comps[cn.from.component].label;
+      const cn = arenaAt(conns, connId);
+      const fromComp = arenaAt(comps, cn.from.component).label;
       const fromStr = cn.from.port !== null && cn.from.port !== undefined
-        ? `${fromComp}/${ports[cn.from.port].label}`
+        ? `${fromComp}/${arenaAt(ports, cn.from.port).label}`
         : fromComp;
-      const toComp = comps[cn.to.component].label;
+      const toComp = arenaAt(comps, cn.to.component).label;
       const toStr = cn.to.port !== null && cn.to.port !== undefined
-        ? `${toComp}/${ports[cn.to.port].label}`
+        ? `${toComp}/${arenaAt(ports, cn.to.port).label}`
         : toComp;
 
       return {
@@ -934,7 +951,7 @@ export class DocumentStore {
         from: fromStr,
         to: toStr,
         encapsulates: (cn.encapsulates || []).map((id: number) =>
-          conns[id].label
+          arenaAt(conns, id).label
         ),
       };
     };

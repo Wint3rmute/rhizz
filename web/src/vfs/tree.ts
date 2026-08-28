@@ -178,11 +178,12 @@ export function splitBasename(
   path: string,
 ): { dirname: string; basename: string } {
   const segments = splitPath(path);
-  if (segments.length === 0) {
+  const basename = segments[segments.length - 1];
+  if (basename === undefined) {
     throw new Error(`splitBasename: "${path}" has no basename (it's the root)`);
   }
   return {
     dirname: segments.slice(0, -1).join("/"),
-    basename: segments[segments.length - 1],
+    basename,
   };
 }

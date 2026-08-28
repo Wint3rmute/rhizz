@@ -10,7 +10,7 @@ import FileTree from "./FileTree.svelte";
 function dirent(path: string, kind: "file" | "directory"): Dirent {
   const segments = path.split("/");
   return {
-    name: segments[segments.length - 1],
+    name: segments[segments.length - 1] ?? path,
     path,
     isFile: () => kind === "file",
     isDirectory: () => kind === "directory",

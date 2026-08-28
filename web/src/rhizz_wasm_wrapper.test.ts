@@ -82,12 +82,12 @@ system "quad" {
 
     const views = parse_views(viewsHcl);
     expect(views).toHaveLength(1);
-    expect(views[0].label).toBe("main");
-    expect(views[0].system).toBe("quad");
-    expect(views[0].nodes).toHaveLength(1);
-    expect(views[0].nodes?.[0].component).toBe("fc");
-    expect(views[0].nodes?.[0].x).toBe(120);
-    expect(views[0].nodes?.[0].y).toBe(240);
+    expect(views[0]?.label).toBe("main");
+    expect(views[0]?.system).toBe("quad");
+    expect(views[0]?.nodes).toHaveLength(1);
+    expect(views[0]?.nodes?.[0]?.component).toBe("fc");
+    expect(views[0]?.nodes?.[0]?.x).toBe(120);
+    expect(views[0]?.nodes?.[0]?.y).toBe(240);
 
     const serialized = serialize_views(views);
     expect(serialized).toContain('view "main"');
@@ -124,9 +124,9 @@ system "quad" {
     expect(wasmConns).toHaveLength(1);
 
     // Direct getter access
-    expect(wasmConns[0].from).toBe(0);
-    expect(wasmConns[0].to).toBe(1);
-    expect(wasmConns[0].label).toBe("link");
+    expect(wasmConns[0]?.from).toBe(0);
+    expect(wasmConns[0]?.to).toBe(1);
+    expect(wasmConns[0]?.label).toBe("link");
 
     // Explicit mapping to plain object for computeVisibleConnections
     const mappedConns = wasmConns.map((

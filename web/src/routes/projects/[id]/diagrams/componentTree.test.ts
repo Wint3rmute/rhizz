@@ -114,8 +114,8 @@ describe("buildComponentTree", () => {
       comp("mcu", { parent_component_index: 99 }),
     ]);
     expect(tree.length).toBe(2);
-    expect(tree[0].id).toBe("sys:0"); // system root
-    expect(tree[0].isExpandable).toBe(false);
+    expect(tree[0]?.id).toBe("sys:0"); // system root
+    expect(tree[0]?.isExpandable).toBe(false);
     // The orphan hangs at top level, not under the (nonexistent) parent.
     expect(tree[1]).toMatchObject({ id: "0", isExpandable: false });
   });
