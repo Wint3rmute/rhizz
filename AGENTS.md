@@ -8,7 +8,7 @@ syntax, same as Terraform) that can be version-controlled, diffed, and reviewed
 with or without a GUI. Read `SPEC.md` (and `SPEC/` if needed) for the full
 specification.
 
-Read the last 3 finished tasks in `TASKS/FINISHED_TASKS.md` to get current
+Read the last 3 finished tasks in `TASKS/FINISHED.md` to get current
 project context.
 
 ## Repository Layout
