@@ -16,6 +16,7 @@ resolver = "2"
 #   - unimplemented
 #   - todo
 #   - exit
+#   - unchecked_time_subtraction
 #
 [workspace.lints.clippy]
 # pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
@@ -30,6 +31,7 @@ unreachable = "deny"
 # unimplemented = "deny"
 unimplemented = "deny"
 # unchecked_time_subtraction = "deny"
+unchecked_time_subtraction = "deny"
 # todo = "deny"
 todo = "deny"
 # string_slice = "deny"
