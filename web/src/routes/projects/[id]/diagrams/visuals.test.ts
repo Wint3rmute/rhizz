@@ -65,20 +65,21 @@ describe("fontStyleToSvg", () => {
 });
 
 describe("selection outline", () => {
-  it("uses a 50% transparent dotted outline", () => {
-    expect(SELECTION_OUTLINE_OPACITY).toBe(0.5);
+  it("uses a 75% opaque dotted outline", () => {
+    expect(SELECTION_OUTLINE_OPACITY).toBe(0.75);
     expect(SELECTION_OUTLINE_DASHARRAY).toBe("1.5 3");
   });
 
-  it("expands the outline by the scale constant, centered on the box", () => {
-    const rect = selectionOutlineRect(200, 100);
-    const dx = 200 * SELECTION_OUTLINE_SCALE;
-    const dy = 100 * SELECTION_OUTLINE_SCALE;
+  it("expands uniformly by the scale of the shorter side, centered on the box", () => {
+    // Wide-but-short: the shorter side (height) drives the expansion, so the
+    // outline clearance is the same on all four sides.
+    const rect = selectionOutlineRect(400, 100);
+    const expansion = 100 * SELECTION_OUTLINE_SCALE;
     expect(rect).toEqual({
-      x: -dx / 2,
-      y: -dy / 2,
-      width: 200 + dx,
-      height: 100 + dy,
+      x: -expansion / 2,
+      y: -expansion / 2,
+      width: 400 + expansion,
+      height: 100 + expansion,
     });
   });
 });
