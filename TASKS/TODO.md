@@ -13,6 +13,98 @@ How to work on this file:
 
 ---
 
+## Task 87 — Stricter TypeScript and ESLint configuration
+
+Upgrade TypeScript and ESLint linting configuration in `web/` to mirror the strictness applied to Rust in Task 85 (Clippy denial suite).
+
+- **TypeScript compiler options (`web/tsconfig.json`)**
+  - Enable `noUncheckedIndexedAccess: true` to prevent unsafe array/record indexing without handling `undefined`.
+  - Enable `noImplicitOverride: true`, `exactOptionalPropertyTypes: true`, and `noFallthroughCasesInSwitch: true` (if not already set by strict mode).
+- **ESLint rules (`web/eslint.config.js`)**
+  - Upgrade `@typescript-eslint` preset from `ts.configs.recommended` to `ts.configs.strictTypeChecked` and `ts.configs.stylisticTypeChecked` (or add equivalent explicit rule enforcement).
+  - Explicitly enable/deny strict safety rules:
+    - `@typescript-eslint/no-explicit-any`: error
+    - `@typescript-eslint/no-non-null-assertion`: error (disallows `!` assertions)
+    - `@typescript-eslint/no-floating-promises`: error (requires handling all promises)
+    - `@typescript-eslint/no-misused-promises`: error
+    - `@typescript-eslint/only-throw-error`: error
+    - `@typescript-eslint/switch-exhaustiveness-check`: error
+    - `@typescript-eslint/consistent-type-assertions`: error (with `assertionStyle: "never"` or strict guidelines)
+    - `no-warning-comments` / `no-debugger`: error
+- **Codebase fixes**
+  - Fix any resulting lint errors or typing violations across `web/src/` cleanly without blanket suppression comments (unless strictly necessary for third-party boundary types).
+- **Validation**
+  - Verify with `just lint` (or `cd web && deno run lint && deno task check`), `just test`, and `just build`.
+
+---
+
+## Task 88 — Deterministic simulation & fuzz testing for model transformations
+
+Implement a deterministic property-based and simulation testing harness that validates the robustness and round-trip consistency of AST and HCL model mutations.
+
+- **Strategy**
+  - Use a property-based testing library (e.g. `fast-check` in TypeScript and `proptest` in Rust).
+  - Define an algebraic grammar of valid non-destructive user operations (`AddComponent`, `AddConnection`, `MoveNode`, `SetNodeVisuals`, `RenameComponent`, `AddDiagramView`).
+  - Execute randomized operation sequences from a deterministic seed against `DocumentStore`, serializing to HCL at each step and compiling through `rhizz-core`/WASM.
+- **Implementation Scope**
+  - `web/src/vfs/simulation.test.ts`: Headless simulation runner executing pseudo-random action sequences against `DocumentStore` and `rhizz_wasm_wrapper`.
+  - Invariant assertion checks:
+    - **Compilability:** Every intermediate state compiles with 0 blocking `E###` diagnostics.
+    - **Round-trip fidelity:** Re-parsing generated HCL into a fresh `DocumentStore` yields identical topology and attributes (`deserialize(serialize(S)) == S`).
+    - **Determinism:** Any failure reproduces identically given the same random seed.
+  - Rust-side property testing (`crates/rhizz-core/tests/proptest_serialization.rs`) for parser/serializer round-trip fuzzing on arbitrary valid `RawSystem` models.
+- **Acceptance Criteria**
+  - Simulation test runs at least 500 randomized multi-step action sequences without producing syntax or compiler diagnostic errors.
+  - Shrinking is enabled: minimal failing action sequences are reported on invariant violations.
+  - Validated with `just test`, `just lint`, and `just build`.
+
+---
+
+## Task 89 — Unified command-based transaction history (Undo/Redo)
+
+Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.
+
+- **Strategy**
+  - Replace disparate ad-hoc file writes and layout snapshots with a centralized command/action dispatcher.
+  - Each action encapsulates bidirectional execution (`do()` and `undo()`) or represents an immutable document transaction across both `DocumentStore` and diagram layout files.
+- **Implementation Scope**
+  - Create `web/src/history/TransactionManager.ts` (or extend `web/src/routes/projects/[id]/diagrams/history.ts` into a workspace-wide store).
+  - Define transactions covering:
+    - Model mutations: Component creation/deletion, property updates, connection additions.
+    - Layout mutations: Node moves, resizing, visual attribute styling, alignment changes.
+  - Connect UI trigger points (`CreateComponentModal`, node drags, inspector inputs) to dispatch transactions through the manager.
+  - Wire `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` to the unified manager.
+- **Acceptance Criteria**
+  - Creating a component via the diagram modal and pressing `Ctrl+Z` undoes both its visual placement and deletes the entity from `system.hcl`.
+  - Redo (`Ctrl+Y`) restores both the HCL definition and canvas coordinates.
+  - Existing diagram drag/resize undo/redo remains functional without regressions.
+  - Integrated into the deterministic simulation test harness from Task 88 to verify undo/redo reversibility across arbitrary sequences.
+  - Validated with `just test`, `just lint`, and `just build`.
+
+---
+
+## Task 90 — Modular multi-pane workspace with shared reactive context
+
+Refactor the web architecture from isolated page routes to a unified, dockable multi-pane workspace where multiple synchronized views (Editor, Diagrams, Explore, Diagnostics) operate concurrently on a shared reactive data model.
+
+- **Strategy**
+  - Hoist project file and compiled model state into a shared reactive context (`ProjectWorkspaceContext.svelte.ts`) at the project layout root.
+  - Decouple view pages into standalone, embeddable pane components (`<EditorPane />`, `<DiagramPane />`, `<ExplorePane />`, `<DiagnosticsPane />`).
+  - Introduce a configurable split/tiling layout container supporting resizable horizontal and vertical panes.
+- **Implementation Scope**
+  - **Shared Reactive State:** Single source of truth for VFS `sources`, WASM compilation outputs, diagnostics, and transaction history. Edits in any pane immediately update the reactive model and notify all sibling panes.
+  - **Pane Components:** Extract view logic from `routes/projects/[id]/*` into standalone modular components.
+  - **Layout Manager:** Implement a dockable/splittable window layout container (supporting tabs, 2-column split, 3-column split, grid) with persistent layout configuration in localStorage.
+- **Acceptance Criteria**
+  - User can display the Code Editor and Diagram Canvas side-by-side simultaneously.
+  - Editing HCL text in the Editor pane updates the rendered diagram in real-time.
+  - Creating/moving components in the Diagram pane updates the text in the open Editor pane without cursor jump or desynchronization.
+  - Panes can be resized, split horizontally/vertically, and closed.
+  - Layout configuration persists across page reloads.
+  - Validated with `just test`, `just lint`, and `just build`.
+
+---
+
 ## For later Task <N> — Adding annotation to plots
 
 Make it possible to attach a text marker to a component with a specified offset.
