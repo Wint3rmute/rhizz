@@ -55,7 +55,12 @@ just build    # build release binaries, WASM package, and web frontend
 **Do not directly call `cargo` or `npm` commands**; use `just` instead. It comes
 with a predefined set of correct commands for the project.
 
-## Coding Conventions
+## Frontend
+
+When adding new components or changing functionality of existing components,
+always add new Storybook stories which excercise the new/changed functionality.
+
+## Linting
 
 - All linter (clippy/eslint) warnings must be fixed, never suppressed unless
   there is a strong reason.
@@ -65,8 +70,8 @@ with a predefined set of correct commands for the project.
 - Use `anyhow::Result` for fallible functions that surface errors to the caller.
 - Prefer `thiserror` for library-facing error types when type-safe matching is
   needed.
-- Diagnostics use the `Diagnostic` type with fields `code`, `file`, `line`
-  (optional), and `message`.
+- Rhizz compiler diagnostics use the `Diagnostic` type with fields `code`,
+  `file`, `line` (optional), and `message`.
   - Error codes start with `E` (blocking), warning codes start with `W`
     (non-blocking).
 - All identifier types (`ComponentId`, `InterfaceId`, …) are newtypes over a
@@ -76,7 +81,7 @@ with a predefined set of correct commands for the project.
 
 ## Testing Approach
 
-- Unit tests live in `#[cfg(test)]` modules inside each source file.
+- Rust unit tests live in `#[cfg(test)]` modules inside each source file.
 - Integration tests exercise the three worked examples under `examples/` (drone,
   social-media, software-house).
 - Use `just test` to run all tests.
