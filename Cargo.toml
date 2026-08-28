@@ -17,6 +17,7 @@ resolver = "2"
 #   - todo
 #   - exit
 #   - unchecked_time_subtraction
+#   - panic_in_result_fn
 #
 [workspace.lints.clippy]
 # pedantic = { level = "deny", priority = -1 }   # UM, ACTUALLY
@@ -35,7 +36,7 @@ unchecked_time_subtraction = "deny"
 # todo = "deny"
 todo = "deny"
 # string_slice = "deny"
-# panic_in_result_fn = "deny"
+panic_in_result_fn = "deny"
 # panic = "deny"
 exit = "deny"
 # as_conversions = "deny"
