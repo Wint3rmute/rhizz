@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import init from "rhizz";
+import type { Project } from "../../../../vfs/types";
 import {
   createProjectWithMainFile,
   projectStore,
@@ -24,7 +25,7 @@ system "demo" {
 }
 `;
 
-async function ensureBrokenProject() {
+async function ensureBrokenProject(): Promise<Project> {
   const existing = await projectStore.listProjects();
   const project = existing.find((candidate) =>
     candidate.name === "Broken diagram story"
@@ -35,7 +36,7 @@ async function ensureBrokenProject() {
   );
 }
 
-const brokenProject = await ensureBrokenProject();
+const brokenProject: Project = await ensureBrokenProject();
 
 const meta = {
   title: "Pages/Diagrams/Compilation Error",
@@ -54,6 +55,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DuplicateProjectBlock: Story = {
+  args: {
+    params: {
+      id: brokenProject.id,
+    },
+    data: {
+      projectId: brokenProject.id,
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
