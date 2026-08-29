@@ -13,27 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Deterministic simulation & fuzz testing for model transformations
-
-Implement a deterministic property-based and simulation testing harness that validates the robustness and round-trip consistency of AST and HCL model mutations.
-
-- **Strategy**
-  - Use a property-based testing library (e.g. `fast-check` in TypeScript and `proptest` in Rust).
-  - Define an algebraic grammar of valid non-destructive user operations (`AddComponent`, `AddConnection`, `MoveNode`, `SetNodeVisuals`, `RenameComponent`, `AddDiagramView`).
-  - Execute randomized operation sequences from a deterministic seed against `DocumentStore`, serializing to HCL at each step and compiling through `rhizz-core`/WASM.
-- **Implementation Scope**
-  - `web/src/vfs/simulation.test.ts`: Headless simulation runner executing pseudo-random action sequences against `DocumentStore` and `rhizz_wasm_wrapper`.
-  - Invariant assertion checks:
-    - **Compilability:** Every intermediate state compiles with 0 blocking `E###` diagnostics.
-    - **Round-trip fidelity:** Re-parsing generated HCL into a fresh `DocumentStore` yields identical topology and attributes (`deserialize(serialize(S)) == S`).
-    - **Determinism:** Any failure reproduces identically given the same random seed.
-  - Rust-side property testing (`crates/rhizz-core/tests/proptest_serialization.rs`) for parser/serializer round-trip fuzzing on arbitrary valid `RawSystem` models.
-- **Acceptance Criteria**
-  - Simulation test runs at least 500 randomized multi-step action sequences without producing syntax or compiler diagnostic errors.
-  - Shrinking is enabled: minimal failing action sequences are reported on invariant violations.
-  - Validated with `just test`, `just lint`, and `just build`.
-
----
 
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
