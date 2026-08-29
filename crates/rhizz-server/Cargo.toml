@@ -14,9 +14,13 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 axum = "0.8"
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+anyhow = "1"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

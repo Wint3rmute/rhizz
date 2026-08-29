@@ -12,3 +12,6 @@
 
 /// HTTP server layer: router assembly and handlers.
 pub mod server;
+
+/// Compile-time embedding of the web frontend.
+pub mod assets;

@@ -21,9 +21,11 @@ test:
     {{run}} sh -lc 'cd web && deno run test'
 
 build:
-    {{run}} cargo build --release
+    # Frontend artifacts first, so rhizz-server's build.rs embeds the real
+    # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
     {{run}} wasm-pack build crates/rhizz-wasm --target web --release
     {{run}} sh -lc 'cd web && npx vite build'
+    {{run}} cargo build --release
     {{run}} sh -lc 'cd web && dx storybook build'
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
