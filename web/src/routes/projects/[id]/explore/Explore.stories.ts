@@ -369,11 +369,14 @@ export const DrillDownNavigation: Story = {
       name: /controller, open detailed view/i,
     });
     await userEvent.click(controller);
-    const breadcrumb = await canvas.findByRole("navigation", {
-      name: "Diagram breadcrumb",
-    });
-    await expect(within(breadcrumb).getByText("controller"))
-      .toBeInTheDocument();
+    await expect(controller).toHaveAccessibleName(
+      /controller, open detailed view/i,
+    );
+    await expect(
+      toastState.toasts.some(
+        (toast) => toast.message === "No detailed view for controller created",
+      ),
+    ).toBe(false);
   },
 };
 

@@ -18,7 +18,7 @@ lint:
 
 test:
     {{run}} cargo test --quiet --all
-    {{run}} sh -lc 'cd web && deno run test --project=unit_tests'
+    {{run}} sh -lc 'cd web && deno run test'
 
 build:
     {{run}} cargo build --release
