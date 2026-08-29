@@ -8,25 +8,30 @@ import {
 let { state = toastState }: { state?: ToastState } = $props();
 
 const levelClasses: Record<ToastLevel, string> = {
-  info: "bg-info/10 border-info/25 text-base-content",
-  warning: "bg-warning/10 border-warning/25 text-base-content",
-  error: "bg-error/10 border-error/25 text-base-content",
-  success: "bg-success/10 border-success/25 text-base-content",
+  info: "border-info/40",
+  warning: "border-warning/40",
+  error: "border-error/40",
+  success: "border-success/40",
 };
 </script>
 
 <div class="toast toast-top toast-end z-50" aria-live="polite">
   {#each state.toasts as toast (toast.id)}
-    <div role="alert" class="alert border {levelClasses[toast.level]} shadow-md">
-      <span>{toast.message}</span>
-      <button
-        type="button"
-        class="btn btn-ghost btn-xs"
-        aria-label="Dismiss notification"
-        onclick={() => state.dismiss(toast.id)}
-      >
-        ✕
-      </button>
+    <div
+      role="alert"
+      class="card bg-base-100 border shadow-xl p-3 {levelClasses[toast.level]}"
+    >
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-base-content">{toast.message}</span>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs"
+          aria-label="Dismiss notification"
+          onclick={() => state.dismiss(toast.id)}
+        >
+          ✕
+        </button>
+      </div>
     </div>
   {/each}
 </div>
