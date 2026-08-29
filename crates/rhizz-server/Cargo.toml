@@ -1,0 +1,12 @@
+[package]
+name = "rhizz-server"
+version = "0.1.0"
+edition = "2024"
+description = "Standalone HTTP server for the rhizz web editor"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "rhizz-server"
+path = "src/main.rs"
