@@ -25,6 +25,13 @@ export interface WorkspaceSnapshot {
   componentKeys: string[];
 }
 
+export interface ComponentVisualSnapshot {
+  color: string;
+  border: string;
+  font: string;
+  icon: string;
+}
+
 export type WorkspaceAction =
   | { type: "select-component"; component: string }
   | {
@@ -58,9 +65,11 @@ export class WorkspaceHarness {
   #systems: SystemJS[] = [];
   #canonicalHcl = "";
   #selectedKey: string | null = null;
+  #fixture: ExampleId | "empty";
 
-  private constructor(fs: ProjectFs) {
+  private constructor(fs: ProjectFs, fixture: ExampleId | "empty") {
     this.fs = fs;
+    this.#fixture = fixture;
   }
 
   static async empty(): Promise<WorkspaceHarness> {
@@ -69,7 +78,7 @@ export class WorkspaceHarness {
     const project = await store.createProject("simulation-empty");
     const fs = openProjectFs(store, project.id);
     await fs.writeFile("main.hcl", "# Empty simulation project\n");
-    const harness = new WorkspaceHarness(fs);
+    const harness = new WorkspaceHarness(fs, "empty");
     await harness.recompile();
     return harness;
   }
@@ -83,7 +92,7 @@ export class WorkspaceHarness {
     const project = await store.createProject(`simulation-${id}`);
     const fs = openProjectFs(store, project.id);
     await populateFiles(fs, example.files);
-    const harness = new WorkspaceHarness(fs);
+    const harness = new WorkspaceHarness(fs, id);
     await harness.recompile();
     return harness;
   }
@@ -156,6 +165,34 @@ export class WorkspaceHarness {
         `referential-integrity: selected component ${this.#selectedKey} does not resolve`,
       );
     }
+  }
+
+  async editableComponentKeys(): Promise<string[]> {
+    // The current diagram mutation path rewrites one primary HCL file through
+    // DocumentStore. Multi-file projects and Apollo's sourced component
+    // instances require source-aware editing; flattening a resolved sourced
+    // instance back into the usage site would violate E011. Those fixtures still
+    // participate in compile/round-trip invariants, but generated visual edits
+    // are limited to fixtures the current UI writer can safely round-trip.
+    if (this.#sources.length !== 1 || this.#fixture === "apollo-11") return [];
+    const primary = await this.primaryHclFile();
+    const content = await this.fs.readFile(primary);
+    const doc = new DocumentStore();
+    if (content.trim()) doc.loadFromHcl(content);
+    return this.componentKeys.filter((key) => doc.findComponent(key) !== null);
+  }
+
+  componentVisuals(): Record<string, ComponentVisualSnapshot> {
+    const visuals: Record<string, ComponentVisualSnapshot> = {};
+    this.#components.forEach((component, index) => {
+      visuals[componentKey(index, this.#components, this.#systems)] = {
+        color: component.color,
+        border: component.border,
+        font: component.font,
+        icon: component.icon,
+      };
+    });
+    return visuals;
   }
 
   snapshot(): WorkspaceSnapshot {

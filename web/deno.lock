@@ -21,6 +21,7 @@
     "npm:daisyui@^5.7.7": "5.7.21",
     "npm:eslint-plugin-svelte@^3.22.0": "3.23.0_eslint@10.9.0_svelte@5.56.10",
     "npm:eslint@^10.8.0": "10.9.0",
+    "npm:fast-check@^4.9.0": "4.9.0",
     "npm:globals@^17.8.0": "17.11.0",
     "npm:monaco-editor@~0.55.1": "0.55.1",
     "npm:playwright@1.61.1": "1.61.1",
@@ -1737,6 +1738,12 @@
     "expect-type@1.4.0": {
       "integrity": "sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA=="
     },
+    "fast-check@4.9.0": {
+      "integrity": "sha512-7ms6T7SybUev/PQITciI0yLM2pOSFy5zpG8Ty7tQofcVaQUvrMXp6CBwqF6fThLCLOrfBtuHAtwq6Yu4XPCllg==",
+      "dependencies": [
+        "pure-rand"
+      ]
+    },
     "fast-deep-equal@3.1.3": {
       "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q=="
     },
@@ -2300,6 +2307,9 @@
     "punycode@2.3.1": {
       "integrity": "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="
     },
+    "pure-rand@8.4.2": {
+      "integrity": "sha512-vvuOGgcuPJAirlHvuQw1TrOiw7ptaIXXmIbNuiNOY6lNGJJH49PQ1Kj4nd783nPdQhQdicgOjVI2yI/9BD6/Ng=="
+    },
     "react-dom@19.2.8_react@19.2.8": {
       "integrity": "sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==",
       "dependencies": [
@@ -2833,6 +2843,7 @@
         "npm:daisyui@^5.7.7",
         "npm:eslint-plugin-svelte@^3.22.0",
         "npm:eslint@^10.8.0",
+        "npm:fast-check@^4.9.0",
         "npm:globals@^17.8.0",
         "npm:monaco-editor@~0.55.1",
         "npm:playwright@1.61.1",
