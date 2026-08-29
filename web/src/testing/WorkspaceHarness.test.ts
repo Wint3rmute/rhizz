@@ -19,6 +19,14 @@ describe("WorkspaceHarness", () => {
     expect(workspace.componentKeys).toEqual([]);
   });
 
+  for (const example of ["drone", "software-house", "apollo-11"] as const) {
+    it(`round-trips ${example} through canonical HCL`, async () => {
+      const workspace = await WorkspaceHarness.fromExample(example);
+
+      expect(workspace.roundTripSnapshot()).toEqual(workspace.snapshot());
+    });
+  }
+
   it("resolves selection by qualified component key", async () => {
     const workspace = await WorkspaceHarness.fromExample("software-house");
     const key = workspace.componentKeys[0];

@@ -106,7 +106,7 @@ export class WorkspaceHarness {
   snapshot(): WorkspaceSnapshot {
     return {
       canonicalHcl: this.#canonicalHcl,
-      componentKeys: this.componentKeys,
+      componentKeys: this.componentKeys.toSorted(),
     };
   }
 
@@ -140,9 +140,28 @@ export class WorkspaceHarness {
     this.#canonicalHcl = serialize_model(model);
   }
 
-  async roundTrip(): Promise<WorkspaceSnapshot> {
-    await this.recompile();
-    return this.snapshot();
+  roundTripSnapshot(): WorkspaceSnapshot {
+    if (this.#canonicalHcl === "") return this.snapshot();
+    const output = compile_system([{
+      filename: "roundtrip.hcl",
+      content: this.#canonicalHcl,
+    }]);
+    const model = output.model();
+    if (!model) {
+      const errors = output.diagnostics()
+        .filter((diagnostic) => diagnostic.code.startsWith("E"))
+        .map((diagnostic) => diagnostic.code)
+        .join(", ");
+      throw new Error(`Canonical model failed to round-trip: ${errors}`);
+    }
+    const components = model.components();
+    const systems = model.systems();
+    return {
+      canonicalHcl: serialize_model(model),
+      componentKeys: components.map((_, index) =>
+        componentKey(index, components, systems)
+      ).toSorted(),
+    };
   }
 
   async setSelectedComponentVisuals(
