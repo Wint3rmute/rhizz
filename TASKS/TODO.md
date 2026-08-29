@@ -80,28 +80,34 @@ Refactor the web architecture from isolated page routes to a unified, dockable m
 
 ---
 
-## Task 91 — Interactive drill-down navigation in Explore view via URL routing
+## Task 91 — Interactive drill-down navigation in Explore view via URL routing & global toast/notification service
 
-Enhance the Explore view by allowing users to navigate and drill down into subsystem architecture diagrams by clicking on component nodes.
+Enhance the Explore view by allowing users to navigate and drill down into subsystem architecture diagrams by clicking on component nodes, accompanied by an app-wide non-obtrusive toast/popup service for user feedback.
 
 - **Strategy**
   - Add an interactive click handler on rendered component nodes within the Explore view.
   - Map clicked components to corresponding diagram definitions by convention (e.g. clicking component `engine` resolves to `diagrams/engine.hcl` or matching diagram identifiers in the project VFS).
-  - Sync active diagram navigation directly with URL search parameters (e.g. `?diagram=engine` or route params) using SvelteKit's client-side navigation (`goto` with history pushing/replacing).
+  - If a matching diagram exists, navigate to it via URL search parameters (e.g. `?diagram=engine` or route params) using SvelteKit client-side navigation (`goto` / history updates).
+  - If no matching diagram exists for the clicked component, show a non-obtrusive popup toast: `"No detailed view for <component name> created"`.
+  - Implement a centralized, app-wide toast/popup service in `web/` to manage transient notifications uniformly across all pages.
 - **Implementation Scope**
-  - `web/src/routes/projects/[id]/explore/Explore.svelte`:
+  - **App-Wide Toast/Notification Service:**
+    - Create a lightweight, reactive toast state manager (e.g. `web/src/ToastState.svelte.ts` / `web/src/components/ToastContainer.svelte`) mounted at the root layout level.
+    - Support transient notification popups with automatic auto-dismiss timeout and customizable levels (`info`, `warning`, `error`, `success`).
+  - **Explore View Interaction (`web/src/routes/projects/[id]/explore/Explore.svelte`):**
     - Wire node click events to check for existing diagram definitions matching the target component's name or qualified path.
-    - If a matching diagram exists, update the URL parameter and render the corresponding sub-diagram view.
-    - Ensure visual cues (e.g. cursor styling, hover states, or indicator badges) distinguish components with dedicated drill-down diagrams from leaf/undocumented nodes.
-  - History & Deep Linking:
-    - Listen for URL state changes so browser back/forward buttons navigate cleanly through the drill-down hierarchy.
-    - Support direct link entry to specific sub-diagrams.
+    - If found: update URL parameter and render the sub-diagram view.
+    - If not found: trigger toast notification `"No detailed view for <component name> created"`.
+    - Provide visual affordances (cursor styles, badges, or hover hints) distinguishing components with linked diagrams.
+  - **History & Deep Linking:**
+    - Listen for URL state changes so browser back/forward buttons navigate cleanly through the drill-down hierarchy without full-page reloads.
+    - Support direct deep-linking to sub-diagrams via URL parameter.
 - **Acceptance Criteria**
   - Clicking a component with an associated diagram immediately opens that diagram in the Explore view.
-  - URL reflects the currently open view path/name.
-  - Browser back (`History.back()`) and forward buttons navigate across drill-down steps as expected without reloading the page.
-  - Components without a matching diagram definition gracefully retain current view or show non-clickable/neutral state.
-  - New Storybook stories cover drill-down interaction, breadcrumb/back navigation, and leaf nodes.
+  - Clicking a component without an associated diagram displays a toast with `"No detailed view for <component name> created"`.
+  - The toast service is globally accessible and usable by other components/views.
+  - URL reflects the currently open view path/name, and browser back/forward history navigation works properly.
+  - Storybook stories cover drill-down interaction, missing diagram toast trigger, breadcrumb navigation, and standalone toast components.
   - Validated with `just test`, `just lint`, and `just build`.
 
 ---
