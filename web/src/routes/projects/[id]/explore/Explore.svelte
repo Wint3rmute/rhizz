@@ -25,6 +25,28 @@ import Markdown from "../../../../components/Markdown.svelte";
 import { type ProjectDoc, readProjectDocs } from "./docs";
 import { diagramTitle, findComponentDiagram } from "./navigation";
 
+// Builds a recursive hierarchical tree from a recursive `readdir` listing, for
+// debug-logging the project's filesystem structure.
+function buildFsTree(entries: Dirent[]): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  for (const entry of entries) {
+    const parts = entry.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part === undefined) continue;
+      const isLast = i === parts.length - 1;
+      if (isLast) {
+        node[part] = entry.isDirectory() ? {} : "<file>";
+      } else {
+        node[part] ??= {};
+        node = node[part] as Record<string, unknown>;
+      }
+    }
+  }
+  return root;
+}
+
 let {
   projectId = null,
 }: {
@@ -147,6 +169,18 @@ $effect(() => {
       if (cancelled) return;
       docs = [];
     });
+  // Debug: dump the project's filesystem as a recursive hierarchical tree so
+  // the docs directory layout (and how it maps to component labels) is visible.
+  fs.readdir(".", { recursive: true })
+    .then((entries) => {
+      if (cancelled) return;
+      const tree = buildFsTree(entries);
+      console.log("[fs] project filesystem", JSON.stringify(tree, null, 2));
+    })
+    .catch((error) => {
+      if (cancelled) return;
+      console.log("[fs] failed to list filesystem", error);
+    });
 
   return () => {
     cancelled = true;
@@ -215,8 +249,10 @@ let linkedComponents = $derived.by(() =>
   new SvelteSet<number>(componentDiagrams.keys())
 );
 
-// Docs keyed by component qualified key (e.g. "home-monitor/controller/mcu").
-let docsByKey = $derived.by(() => {
+// Docs keyed by component label. A component is matched by its unique name
+// (its `label`), not its full qualified path — a component may be re-used
+// under different parents, so the path is not a stable identifier.
+let docsByLabel = $derived.by(() => {
   const map = new SvelteMap<string, string>();
   for (const doc of docs) map.set(doc.key, doc.content);
   return map;
@@ -228,17 +264,27 @@ let hoveredIndex = $state<number | null>(null);
 let hoverPos = $state<{ x: number; y: number } | null>(null);
 
 function handleNodeHover(index: number | null, event?: MouseEvent) {
+  console.log("[hover] on-hover listener triggered", { index, event: !!event });
   hoveredIndex = index;
   hoverPos = index !== null && event
     ? { x: event.clientX, y: event.clientY }
     : null;
 }
 
-// The doc content for the hovered component, if one exists.
+// The doc content for the hovered component, if one exists. Matched by the
+// component's unique label rather than its full qualified path.
 let hoveredDoc = $derived(
-  hoveredIndex === null
-    ? null
-    : docsByKey.get(componentKey(hoveredIndex)) ?? null,
+  hoveredIndex === null ? null : (() => {
+    const component = components[hoveredIndex];
+    const label = component?.label;
+    const found = label === undefined ? undefined : docsByLabel.get(label);
+    console.log("[hover] markdown search", {
+      label,
+      docsLoaded: docs.length,
+      found: found !== undefined,
+    });
+    return found ?? null;
+  })(),
 );
 
 function handleNodeClick(index: number) {

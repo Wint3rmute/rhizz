@@ -49,9 +49,7 @@ async function populateFiles(
   files: ExampleProject["files"],
 ): Promise<void> {
   for (const file of files) {
-    const targetPath = file.path.startsWith("diagrams/")
-      ? `.rhizz/${file.path}`
-      : file.path;
+    const targetPath = file.path;
     const lastSlash = targetPath.lastIndexOf("/");
     if (lastSlash !== -1) {
       await fs.mkdir(targetPath.slice(0, lastSlash), { recursive: true });
@@ -315,7 +313,6 @@ export class WorkspaceHarness {
     const entries = await this.fs.readdir(".", { recursive: true });
     const files = entries.filter((entry) =>
       entry.isFile() && entry.name.endsWith(".hcl") &&
-      !entry.path.startsWith(".rhizz/") &&
       !entry.path.startsWith("diagrams/")
     );
     const preferred = ["system.hcl", "systems.hcl", "main.hcl", "project.hcl"]

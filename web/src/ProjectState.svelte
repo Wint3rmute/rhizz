@@ -98,16 +98,14 @@ export async function createProjectWithMainFile(
 }
 
 // Populates a project's virtual filesystem with a list of relative files.
-// Automatically creates parent directories as needed and routes diagram
-// files (e.g. "diagrams/main.hcl") to ".rhizz/diagrams/" for persistence discovery.
+// Automatically creates parent directories as needed. Diagram files (e.g.
+// "diagrams/main.hcl") live at the project root under `diagrams/`.
 export async function populateProjectFiles(
   fs: ReturnType<typeof openProjectFs>,
   files: Array<{ path: string; content: string }>,
 ): Promise<void> {
   for (const file of files) {
-    const targetPath = file.path.startsWith("diagrams/")
-      ? `.rhizz/${file.path}`
-      : file.path;
+    const targetPath = file.path;
 
     const lastSlash = targetPath.lastIndexOf("/");
     if (lastSlash !== -1) {

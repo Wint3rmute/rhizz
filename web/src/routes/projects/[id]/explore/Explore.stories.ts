@@ -209,11 +209,13 @@ const seededProject = await ensureProjectWithDiagrams(
   EXAMPLE_SYSTEM_DIAGRAMS,
 );
 
-// Seed a doc for one component so the hover popup has content to show.
+// Seed a doc for one component so the hover popup has content to show. Docs
+// are matched by the component's unique label, so the doc key is the label
+// ("sensor"), not the full qualified path.
 const fs = openProjectFs(projectStore, seededProject.id);
-await fs.mkdir(`${DOCS_DIR}/home-monitor`, { recursive: true });
+await fs.mkdir(DOCS_DIR, { recursive: true });
 await fs.writeFile(
-  `${DOCS_DIR}/home-monitor/sensor.md`,
+  `${DOCS_DIR}/sensor.md`,
   `# Sensor\n\nThe **environmental sensor** reads temperature and humidity over I2C.`,
 );
 

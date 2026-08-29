@@ -261,7 +261,7 @@ describe("HCL View conversion and persistence", () => {
     const fs = await projectFs();
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());
     const entries = await fs.readdir(".", { recursive: true });
-    expect(entries.some((e) => e.path === ".rhizz" && e.isDirectory())).toBe(
+    expect(entries.some((e) => e.path === "diagrams" && e.isDirectory())).toBe(
       true,
     );
   });

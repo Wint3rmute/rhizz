@@ -1,9 +1,8 @@
 // Schema + loading for the Markdown "knowledge database" persisted into the
 // active project's VFS under `docs/` (mirroring how diagram layouts live under
-// `.rhizz/diagrams/`). Each `.md` file's path (minus the `.md` suffix) is the
-// key that associates it with a component's qualified key, e.g.
-// `docs/home-monitor/controller/mcu.md` ↔ component key
-// `home-monitor/controller/mcu`.
+// `diagrams/`). Each `.md` file's path (minus the `.md` suffix) is the key
+// that associates it with a component's label, e.g. `docs/product.md` ↔
+// component label `product`.
 import { type ProjectFs } from "../../../../vfs/fs";
 
 // Conventional location for Markdown docs inside a project's VFS.
