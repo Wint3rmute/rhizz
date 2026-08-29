@@ -11,9 +11,9 @@ fn main() -> ExitCode {
         .with_writer(std::io::stderr)
         .init();
 
-    // Hardcoded sample address for now; it becomes configurable once the
-    // static-file and persistence steps land.
-    let addr = "127.0.0.1:3000";
+    // Bind address, overridable so a build can be smoke-tested without
+    // clashing with other servers; the persistence step adds RHIZZ_DATA_DIR.
+    let addr = std::env::var("RHIZZ_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_owned());
 
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -23,7 +23,7 @@ fn main() -> ExitCode {
         }
     };
 
-    match runtime.block_on(rhizz_server::server::run(addr)) {
+    match runtime.block_on(rhizz_server::server::run(&addr)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             tracing::error!(%err, "server exited with an error");
