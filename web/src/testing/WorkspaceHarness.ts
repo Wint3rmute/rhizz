@@ -1,5 +1,5 @@
 import init, { type ComponentJS, type SystemJS } from "rhizz";
-import { DocumentStore, type ComponentData } from "../DocumentStore.svelte";
+import { type ComponentData, DocumentStore } from "../DocumentStore.svelte";
 import {
   compile_system,
   type ExampleProject,
@@ -26,10 +26,10 @@ export interface WorkspaceSnapshot {
 }
 
 export interface ComponentVisualSnapshot {
-  color: string;
-  border: string;
-  font: string;
-  icon: string;
+  color: string | undefined;
+  border: string | undefined;
+  font: string | undefined;
+  icon: string | undefined;
 }
 
 export type WorkspaceAction =
@@ -90,7 +90,9 @@ export class WorkspaceHarness {
 
   static async fromExample(id: ExampleId): Promise<WorkspaceHarness> {
     await ensureWasm();
-    const example = get_example_projects().find((candidate) => candidate.id === id);
+    const example = get_example_projects().find((candidate) =>
+      candidate.id === id
+    );
     if (!example) throw new Error(`Example project ${id} not found`);
 
     const store = new InMemoryProjectStore(() => "2026-01-01T00:00:00.000Z");
@@ -152,7 +154,9 @@ export class WorkspaceHarness {
         });
         if (this.selectedComponentKey !== selectedBefore) {
           throw new Error(
-            `selected-component-stability: before=${String(selectedBefore)} after=${String(this.selectedComponentKey)}`,
+            `selected-component-stability: before=${
+              String(selectedBefore)
+            } after=${String(this.selectedComponentKey)}`,
           );
         }
         return;
@@ -181,11 +185,15 @@ export class WorkspaceHarness {
       throw new Error("round-trip-fidelity: canonical model changed");
     }
     if (!this.#diagrams.has(this.#activeDiagram)) {
-      throw new Error(`referential-integrity: active diagram ${this.#activeDiagram} does not resolve`);
+      throw new Error(
+        `referential-integrity: active diagram ${this.#activeDiagram} does not resolve`,
+      );
     }
     for (const key of this.#layout.keys()) {
       if (!this.componentKeys.includes(key)) {
-        throw new Error(`referential-integrity: layout component ${key} does not resolve`);
+        throw new Error(
+          `referential-integrity: layout component ${key} does not resolve`,
+        );
       }
     }
     if (
