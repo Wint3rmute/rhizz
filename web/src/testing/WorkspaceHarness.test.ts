@@ -56,6 +56,20 @@ describe("WorkspaceHarness", () => {
 
     workspace.assertInvariants();
     expect(workspace.selectedComponentKey).toBe(key);
+
+    await workspace.dispatch({
+      type: "move-node",
+      component: key,
+      x: 120,
+      y: -40,
+    });
+    expect(workspace.layoutPosition(key)).toEqual({ x: 120, y: -40 });
+    expect(workspace.selectedComponentKey).toBe(key);
+
+    await workspace.dispatch({ type: "add-diagram-view", name: "detail" });
+    expect(workspace.activeDiagram).toBe("detail");
+    expect(workspace.selectedComponentKey).toBe(key);
+    workspace.assertInvariants();
   });
 
   it("resolves selection by qualified component key", async () => {

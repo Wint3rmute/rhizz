@@ -40,7 +40,9 @@ export type WorkspaceAction =
     color?: string | undefined;
     border?: "solid" | "dashed" | "dotted" | undefined;
     font?: string | undefined;
-  };
+  }
+  | { type: "move-node"; component: string; x: number; y: number }
+  | { type: "add-diagram-view"; name: string };
 
 async function populateFiles(
   fs: ProjectFs,
@@ -65,6 +67,9 @@ export class WorkspaceHarness {
   #systems: SystemJS[] = [];
   #canonicalHcl = "";
   #selectedKey: string | null = null;
+  #activeDiagram = "main";
+  #diagrams = new Set(["main"]);
+  #layout = new Map<string, { x: number; y: number }>();
   #fixture: ExampleId | "empty";
 
   private constructor(fs: ProjectFs, fixture: ExampleId | "empty") {
@@ -111,6 +116,14 @@ export class WorkspaceHarness {
     return this.#selectedKey;
   }
 
+  get activeDiagram(): string {
+    return this.#activeDiagram;
+  }
+
+  layoutPosition(key: string): { x: number; y: number } | undefined {
+    return this.#layout.get(key);
+  }
+
   get selectedIndex(): number | null {
     if (this.#selectedKey === null) return null;
     const index = this.componentKeys.indexOf(this.#selectedKey);
@@ -144,6 +157,16 @@ export class WorkspaceHarness {
         }
         return;
       }
+      case "move-node":
+        if (!this.componentKeys.includes(action.component)) {
+          throw new Error(`Component ${action.component} not found`);
+        }
+        this.#layout.set(action.component, { x: action.x, y: action.y });
+        return;
+      case "add-diagram-view":
+        this.#diagrams.add(action.name);
+        this.#activeDiagram = action.name;
+        return;
     }
   }
 
@@ -156,6 +179,14 @@ export class WorkspaceHarness {
     const current = this.snapshot();
     if (JSON.stringify(roundTrip) !== JSON.stringify(current)) {
       throw new Error("round-trip-fidelity: canonical model changed");
+    }
+    if (!this.#diagrams.has(this.#activeDiagram)) {
+      throw new Error(`referential-integrity: active diagram ${this.#activeDiagram} does not resolve`);
+    }
+    for (const key of this.#layout.keys()) {
+      if (!this.componentKeys.includes(key)) {
+        throw new Error(`referential-integrity: layout component ${key} does not resolve`);
+      }
     }
     if (
       this.#selectedKey !== null &&
