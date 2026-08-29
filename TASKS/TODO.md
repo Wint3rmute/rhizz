@@ -80,6 +80,32 @@ Refactor the web architecture from isolated page routes to a unified, dockable m
 
 ---
 
+## Task 91 — Interactive drill-down navigation in Explore view via URL routing
+
+Enhance the Explore view by allowing users to navigate and drill down into subsystem architecture diagrams by clicking on component nodes.
+
+- **Strategy**
+  - Add an interactive click handler on rendered component nodes within the Explore view.
+  - Map clicked components to corresponding diagram definitions by convention (e.g. clicking component `engine` resolves to `diagrams/engine.hcl` or matching diagram identifiers in the project VFS).
+  - Sync active diagram navigation directly with URL search parameters (e.g. `?diagram=engine` or route params) using SvelteKit's client-side navigation (`goto` with history pushing/replacing).
+- **Implementation Scope**
+  - `web/src/routes/projects/[id]/explore/Explore.svelte`:
+    - Wire node click events to check for existing diagram definitions matching the target component's name or qualified path.
+    - If a matching diagram exists, update the URL parameter and render the corresponding sub-diagram view.
+    - Ensure visual cues (e.g. cursor styling, hover states, or indicator badges) distinguish components with dedicated drill-down diagrams from leaf/undocumented nodes.
+  - History & Deep Linking:
+    - Listen for URL state changes so browser back/forward buttons navigate cleanly through the drill-down hierarchy.
+    - Support direct link entry to specific sub-diagrams.
+- **Acceptance Criteria**
+  - Clicking a component with an associated diagram immediately opens that diagram in the Explore view.
+  - URL reflects the currently open view path/name.
+  - Browser back (`History.back()`) and forward buttons navigate across drill-down steps as expected without reloading the page.
+  - Components without a matching diagram definition gracefully retain current view or show non-clickable/neutral state.
+  - New Storybook stories cover drill-down interaction, breadcrumb/back navigation, and leaf nodes.
+  - Validated with `just test`, `just lint`, and `just build`.
+
+---
+
 ## For later Task <N> — Adding annotation to plots
 
 Make it possible to attach a text marker to a component with a specified offset.
