@@ -1,12 +1,15 @@
 <script lang="ts">
 import type { ComponentJS, SystemJS } from "rhizz";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
+import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import {
   getCurrentProjectId,
   projectStore,
 } from "../../../../ProjectState.svelte";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
+import { toastState } from "../../../../ToastState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import FileTree from "../editor/FileTree.svelte";
@@ -18,6 +21,7 @@ import {
   emptyDiagramLayout,
   readDiagramLayoutFile,
 } from "../diagrams/persistence";
+import { diagramTitle, findComponentDiagram } from "./navigation";
 
 let {
   projectId = null,
@@ -31,26 +35,15 @@ let selectedDiagramPath = $state<string | null>(null);
 let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
 let sources = $state<Source[]>([]);
 
-function getInitialDiagramParam(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return new URLSearchParams(window.location.search).get("diagram");
-  } catch {
-    return null;
-  }
-}
-
-function syncUrlDiagram(path: string | null) {
-  if (typeof window === "undefined" || !path) return;
-  try {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("diagram") !== path) {
-      url.searchParams.set("diagram", path);
-      window.history.replaceState({}, "", url.toString());
-    }
-  } catch {
-    // Ignore in sandboxed / non-standard environments
-  }
+function navigateToDiagram(path: string, replaceState = false) {
+  const url = new URL(page.url);
+  if (url.searchParams.get("diagram") === path) return;
+  url.searchParams.set("diagram", path);
+  void goto(`${url.pathname}${url.search}${url.hash}`, {
+    replaceState,
+    noScroll: true,
+    keepFocus: true,
+  });
 }
 
 $effect(() => {
@@ -71,21 +64,13 @@ $effect(() => {
       );
       diagramEntries = files;
 
-      const urlParam = getInitialDiagramParam();
+      const urlParam = page.url.searchParams.get("diagram");
       const matchingParam = urlParam && files.some((e) => e.path === urlParam)
         ? urlParam
         : null;
-
-      if (matchingParam) {
-        selectedDiagramPath = matchingParam;
-      } else if (
-        selectedDiagramPath === null ||
-        !files.some((entry) => entry.path === selectedDiagramPath)
-      ) {
-        const first = files[0]?.path ?? null;
-        selectedDiagramPath = first;
-        syncUrlDiagram(first);
-      }
+      const first = files[0]?.path ?? null;
+      selectedDiagramPath = matchingParam ?? first;
+      if (!matchingParam && first) navigateToDiagram(first, true);
     })
     .catch(() => {
       if (cancelled) return;
@@ -99,7 +84,10 @@ $effect(() => {
 });
 
 $effect(() => {
-  syncUrlDiagram(selectedDiagramPath);
+  const urlParam = page.url.searchParams.get("diagram");
+  if (urlParam && diagramEntries.some((entry) => entry.path === urlParam)) {
+    selectedDiagramPath = urlParam;
+  }
 });
 
 $effect(() => {
@@ -197,6 +185,34 @@ let keyToIndex = $derived.by(() => {
   return map;
 });
 
+let componentDiagrams = $derived.by(() => {
+  const map = new SvelteMap<number, Dirent>();
+  components.forEach((component: ComponentJS, index: number) => {
+    const diagram = findComponentDiagram(
+      diagramEntries,
+      component.label,
+      componentKey(index),
+    );
+    if (diagram) map.set(index, diagram);
+  });
+  return map;
+});
+
+let linkedComponents = $derived.by(() =>
+  new SvelteSet<number>(componentDiagrams.keys())
+);
+
+function handleNodeClick(index: number) {
+  const component: ComponentJS | undefined = components[index];
+  if (!component) return;
+  const diagram = componentDiagrams.get(index);
+  if (diagram) {
+    navigateToDiagram(diagram.path);
+    return;
+  }
+  toastState.show(`No detailed view for ${component.label} created`, "info");
+}
+
 let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
   const next: Record<number, DiagramStaticBox> = {};
   for (const [key, box] of Object.entries(selectedLayout.checked)) {
@@ -249,7 +265,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
               <button
                 type="button"
                 class="btn btn-xs shrink-0 whitespace-nowrap {selectedDiagramPath === entry.path ? 'btn-primary' : 'btn-ghost'}"
-                onclick={() => (selectedDiagramPath = entry.path)}
+                onclick={() => navigateToDiagram(entry.path)}
               >
                 {entry.name}
               </button>
@@ -272,7 +288,9 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
         {:else}
           <FileTree
             entries={diagramEntries}
-            bind:selectedPath={selectedDiagramPath}
+            bind:selectedPath={() => selectedDiagramPath, (path) => {
+              if (path) navigateToDiagram(path);
+            }}
           />
         {/if}
       </div>
@@ -280,6 +298,17 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
 
     <!-- Main canvas: full-width on mobile (< md), flex-1 on desktop (>= md) -->
     <div class="flex flex-col flex-1 min-w-0 min-h-0 h-full">
+      {#if selectedDiagramPath}
+        <nav
+          class="breadcrumbs px-4 py-2 text-sm border-b border-base-300 bg-base-100"
+          aria-label="Diagram breadcrumb"
+        >
+          <ul>
+            <li><span class="text-base-content/60">Explore</span></li>
+            <li><span>{diagramTitle(selectedDiagramPath)}</span></li>
+          </ul>
+        </nav>
+      {/if}
       <div class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden">
         {#if selectedDiagramPath}
           <div class="w-full h-full">
@@ -287,6 +316,8 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
               components={components}
               connections={connections}
               boxes={boxes}
+              linked={linkedComponents}
+              onnodeclick={handleNodeClick}
             />
           </div>
         {:else}

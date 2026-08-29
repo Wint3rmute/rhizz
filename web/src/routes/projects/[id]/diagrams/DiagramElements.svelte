@@ -27,6 +27,8 @@ let {
   boxes = {},
   markerId = "arrow",
   selected = new Set<number>(),
+  linked = new Set<number>(),
+  onnodeclick,
 }: {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
@@ -34,6 +36,8 @@ let {
   markerId?: string;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
   selected?: Set<number>;
+  linked?: Set<number>;
+  onnodeclick?: ((index: number) => void) | undefined;
 } = $props();
 
 function nodeBox(index: number): (Box & { textAlign: TextAlign }) | null {
@@ -83,7 +87,23 @@ let visibleConnections = $derived(
       border: component.border,
     })}
     {@const fontSvg = fontStyleToSvg(component.font)}
-    <g transform="translate({box.x}, {box.y})">
+    <a
+  href={onnodeclick ? "#" : undefined}
+  aria-label={onnodeclick
+        ? `${component.label}${linked.has(index) ? ", open detailed view" : ", no detailed view"}`
+        : undefined}
+  onclick={onnodeclick
+        ? (event) => {
+          event.preventDefault();
+          onnodeclick(index);
+        }
+        : undefined}
+>
+  <g
+    transform="translate({box.x}, {box.y})"
+    class:cursor-pointer={onnodeclick !== undefined}
+    class:opacity-90={onnodeclick !== undefined && !linked.has(index)}
+  >
       <rect
         width={box.width}
         height={box.height}
@@ -208,6 +228,7 @@ let visibleConnections = $derived(
         </text>
       {/if}
     </g>
+</a>
   {/if}
 {/each}
 

@@ -13,7 +13,7 @@ How to work on this file:
 
 ---
 
-## Task 88 — Deterministic simulation & fuzz testing for model transformations
+## Task <N> — Deterministic simulation & fuzz testing for model transformations
 
 Implement a deterministic property-based and simulation testing harness that validates the robustness and round-trip consistency of AST and HCL model mutations.
 
@@ -35,7 +35,7 @@ Implement a deterministic property-based and simulation testing harness that val
 
 ---
 
-## Task 89 — Unified command-based transaction history (Undo/Redo)
+## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.
 
@@ -58,7 +58,7 @@ Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout ch
 
 ---
 
-## Task 90 — Modular multi-pane workspace with shared reactive context
+## Task <N> — Modular multi-pane workspace with shared reactive context
 
 Refactor the web architecture from isolated page routes to a unified, dockable multi-pane workspace where multiple synchronized views (Editor, Diagrams, Explore, Diagnostics) operate concurrently on a shared reactive data model.
 
@@ -76,38 +76,6 @@ Refactor the web architecture from isolated page routes to a unified, dockable m
   - Creating/moving components in the Diagram pane updates the text in the open Editor pane without cursor jump or desynchronization.
   - Panes can be resized, split horizontally/vertically, and closed.
   - Layout configuration persists across page reloads.
-  - Validated with `just test`, `just lint`, and `just build`.
-
----
-
-## Task 91 — Interactive drill-down navigation in Explore view via URL routing & global toast/notification service
-
-Enhance the Explore view by allowing users to navigate and drill down into subsystem architecture diagrams by clicking on component nodes, accompanied by an app-wide non-obtrusive toast/popup service for user feedback.
-
-- **Strategy**
-  - Add an interactive click handler on rendered component nodes within the Explore view.
-  - Map clicked components to corresponding diagram definitions by convention (e.g. clicking component `engine` resolves to `diagrams/engine.hcl` or matching diagram identifiers in the project VFS).
-  - If a matching diagram exists, navigate to it via URL search parameters (e.g. `?diagram=engine` or route params) using SvelteKit client-side navigation (`goto` / history updates).
-  - If no matching diagram exists for the clicked component, show a non-obtrusive popup toast: `"No detailed view for <component name> created"`.
-  - Implement a centralized, app-wide toast/popup service in `web/` to manage transient notifications uniformly across all pages.
-- **Implementation Scope**
-  - **App-Wide Toast/Notification Service:**
-    - Create a lightweight, reactive toast state manager (e.g. `web/src/ToastState.svelte.ts` / `web/src/components/ToastContainer.svelte`) mounted at the root layout level.
-    - Support transient notification popups with automatic auto-dismiss timeout and customizable levels (`info`, `warning`, `error`, `success`).
-  - **Explore View Interaction (`web/src/routes/projects/[id]/explore/Explore.svelte`):**
-    - Wire node click events to check for existing diagram definitions matching the target component's name or qualified path.
-    - If found: update URL parameter and render the sub-diagram view.
-    - If not found: trigger toast notification `"No detailed view for <component name> created"`.
-    - Provide visual affordances (cursor styles, badges, or hover hints) distinguishing components with linked diagrams.
-  - **History & Deep Linking:**
-    - Listen for URL state changes so browser back/forward buttons navigate cleanly through the drill-down hierarchy without full-page reloads.
-    - Support direct deep-linking to sub-diagrams via URL parameter.
-- **Acceptance Criteria**
-  - Clicking a component with an associated diagram immediately opens that diagram in the Explore view.
-  - Clicking a component without an associated diagram displays a toast with `"No detailed view for <component name> created"`.
-  - The toast service is globally accessible and usable by other components/views.
-  - URL reflects the currently open view path/name, and browser back/forward history navigation works properly.
-  - Storybook stories cover drill-down interaction, missing diagram toast trigger, breadcrumb navigation, and standalone toast components.
   - Validated with `just test`, `just lint`, and `just build`.
 
 ---

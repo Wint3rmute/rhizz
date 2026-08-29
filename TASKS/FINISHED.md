@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 88 — Interactive drill-down navigation in Explore view via URL routing & global toast/notification service
+
+Added URL-driven drill-down navigation to Explore and a reusable app-wide toast service.
+
+- **Explore navigation**
+  - Component nodes now resolve matching detail diagrams by qualified path first and component label second, with linked/unlinked visual affordances.
+  - Linked nodes navigate through SvelteKit `goto` using the `?diagram=` search parameter; URL state drives selection so direct links and browser back/forward remain synchronized.
+  - Missing detail diagrams show `"No detailed view for <component name> created"` through the global toast service.
+  - Added a diagram breadcrumb and kept sidebar/mobile diagram selection on the same URL navigation path.
+- **Reusable diagram rendering**
+  - `DiagramStaticView`/`DiagramElements` accept optional node interaction and linked-node metadata while remaining read-only by default for existing consumers.
+- **Global notifications**
+  - Added a reactive `ToastState` singleton with `info`, `warning`, `error`, and `success` levels, automatic timeouts, and explicit dismissal.
+  - Added `ToastContainer` at the root app layout so notifications are available across all routes.
+- **Coverage**
+  - Added unit tests for toast lifecycle and diagram matching.
+  - Added Storybook coverage for standalone toast levels, Explore drill-down, missing-detail feedback, and breadcrumbs.
+- Validated with `just test`, `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task 87 — Stricter TypeScript and ESLint configuration
 
 Upgraded TypeScript and ESLint linting in `web/` to mirror the strictness applied to Rust in Task 85 (Clippy denial suite).

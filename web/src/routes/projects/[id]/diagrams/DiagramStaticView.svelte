@@ -19,6 +19,8 @@ let {
   boxes = {},
   padding = 40,
   selected = new Set<number>(),
+  linked = new Set<number>(),
+  onnodeclick,
 }: {
   /** Indexed the same way `connections[].from`/`.to` and `boxes`' keys are — i.e. this is expected to be the *full* component list, not just the placed ones. */
   components: DiagramStaticComponent[];
@@ -29,6 +31,10 @@ let {
   padding?: number;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
   selected?: Set<number>;
+  /** Component indices with a linked detail view; used only for interactive affordance. */
+  linked?: Set<number>;
+  /** Optional node interaction. Omitted for the normal read-only renderer. */
+  onnodeclick?: ((index: number) => void) | undefined;
 } = $props();
 
 // Auto-fits the viewBox to whatever's actually placed, rather than
@@ -52,5 +58,12 @@ let viewBox = $derived.by(() => {
   xmlns="http://www.w3.org/2000/svg"
   viewBox={viewBox}
 >
-  <DiagramElements {components} {connections} {boxes} {selected} />
+  <DiagramElements
+    {components}
+    {connections}
+    {boxes}
+    {selected}
+    {linked}
+    {onnodeclick}
+  />
 </svg>

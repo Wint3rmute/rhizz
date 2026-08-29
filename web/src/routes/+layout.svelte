@@ -1,6 +1,7 @@
 <script lang="ts">
 import "../app.css";
 import Navbar from "../components/Navbar.svelte";
+import ToastContainer from "../components/ToastContainer.svelte";
 
 let { children } = $props();
 </script>
@@ -8,4 +9,5 @@ let { children } = $props();
 <div class="h-screen w-screen flex flex-col bg-base-100 text-base-content">
   <Navbar />
   {@render children()}
+  <ToastContainer />
 </div>
