@@ -9,3 +9,6 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 #![deny(warnings)]
+
+/// HTTP server layer: router assembly and handlers.
+pub mod server;
