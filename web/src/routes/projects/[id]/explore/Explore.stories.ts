@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
 import {
   createProjectWithFiles,
@@ -12,6 +13,7 @@ import {
 } from "../../../../example_system";
 import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
 import { openProjectFs } from "../../../../vfs/fs";
+import { toastState } from "../../../../ToastState.svelte";
 import {
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
@@ -166,6 +168,24 @@ const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
       "demo-system/sensor": { x: 550, y: 90, width: 160, height: 90 },
     },
   },
+  "controller.hcl": {
+    checked: {
+      "demo-system/controller": {
+        x: 40,
+        y: 40,
+        width: 230,
+        height: 190,
+        textAlign: "top-left",
+      },
+      "demo-system/controller/mcu": {
+        x: 70,
+        y: 100,
+        width: 170,
+        height: 90,
+      },
+    },
+    savedLayout: {},
+  },
 };
 
 async function ensureProjectWithDiagrams(
@@ -315,6 +335,19 @@ export const MobileManyDiagrams: Story = {
   ],
 };
 
+async function seedCrossLevelDiagrams() {
+  await init();
+  const fs = openProjectFs(projectStore, crossLevelProject.id);
+  for (const [name, layout] of Object.entries(CROSS_LEVEL_SYSTEM_DIAGRAMS)) {
+    await writeDiagramLayoutFile(
+      fs,
+      `${DIAGRAM_LAYOUT_DIR}/${name}`,
+      layout,
+    );
+  }
+  return {};
+}
+
 export const CrossLevelConnections: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
@@ -322,22 +355,65 @@ export const CrossLevelConnections: Story = {
   args: {
     projectId: crossLevelProject.id,
   },
-  loaders: [
-    async () => {
-      await init();
-      const fs = openProjectFs(projectStore, crossLevelProject.id);
-      for (
-        const [name, layout] of Object.entries(CROSS_LEVEL_SYSTEM_DIAGRAMS)
-      ) {
-        await writeDiagramLayoutFile(
-          fs,
-          `${DIAGRAM_LAYOUT_DIR}/${name}`,
-          layout,
-        );
-      }
-      return {};
-    },
-  ],
+  loaders: [seedCrossLevelDiagrams],
+};
+
+export const DrillDownNavigation: Story = {
+  args: {
+    projectId: crossLevelProject.id,
+  },
+  loaders: [seedCrossLevelDiagrams],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const controller = await canvas.findByRole("link", {
+      name: /controller, open detailed view/i,
+    });
+    await userEvent.click(controller);
+    await expect(controller).toHaveAccessibleName(
+      /controller, open detailed view/i,
+    );
+    await expect(
+      toastState.toasts.some(
+        (toast) => toast.message === "No detailed view for controller created",
+      ),
+    ).toBe(false);
+  },
+};
+
+export const MissingDetailToast: Story = {
+  args: {
+    projectId: crossLevelProject.id,
+  },
+  loaders: [seedCrossLevelDiagrams],
+  play: async ({ canvasElement }) => {
+    for (const toast of [...toastState.toasts]) toastState.dismiss(toast.id);
+    const canvas = within(canvasElement);
+    const sensor = await canvas.findByRole("link", {
+      name: /sensor, no detailed view/i,
+    });
+    await userEvent.click(sensor);
+    await expect(
+      toastState.toasts.some(
+        (toast) => toast.message === "No detailed view for sensor created",
+      ),
+    ).toBe(true);
+  },
+};
+
+export const BreadcrumbNavigation: Story = {
+  args: {
+    projectId: crossLevelProject.id,
+  },
+  loaders: [seedCrossLevelDiagrams],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const breadcrumb = await canvas.findByRole("navigation", {
+      name: "Diagram breadcrumb",
+    });
+    await expect(within(breadcrumb).getByText("Explore")).toBeInTheDocument();
+    await expect(within(breadcrumb).getByText(/overview|controller/))
+      .toBeInTheDocument();
+  },
 };
 
 export const Apollo11: Story = {

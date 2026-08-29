@@ -4,7 +4,7 @@
     "npm:@eslint/js@^10.0.1": "10.0.1_eslint@10.9.0",
     "npm:@fortawesome/free-solid-svg-icons@^7.3.1": "7.3.1",
     "npm:@storybook/addon-docs@^10.5.5": "10.5.10_@types+react@19.2.18_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_@types+node@24.13.3_vite@7.3.6__@types+node@24.13.3",
-    "npm:@storybook/addon-vitest@^10.5.5": "10.5.10_@vitest+browser@3.2.7__playwright@1.62.1__vitest@3.2.7__@types+node@24.13.3__vite@7.3.6___@types+node@24.13.3_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.62.1_@types+node@24.13.3_@types+react@19.2.18_playwright@1.62.1_react@19.2.8_vite@7.3.6__@types+node@24.13.3",
+    "npm:@storybook/addon-vitest@^10.5.5": "10.5.10_@vitest+browser@3.2.7__playwright@1.61.1__vitest@3.2.7_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.61.1_playwright@1.61.1",
     "npm:@storybook/svelte@^10.5.5": "10.5.10_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_svelte@5.56.10_@types+react@19.2.18_react@19.2.8",
     "npm:@storybook/sveltekit@^10.5.5": "10.5.10_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_svelte@5.56.10_vite@7.3.6__@types+node@24.13.3_@sveltejs+vite-plugin-svelte@6.2.4__svelte@5.56.10__vite@7.3.6___@types+node@24.13.3__@types+node@24.13.3_@types+node@24.13.3_@types+react@19.2.18_react@19.2.8",
     "npm:@sveltejs/adapter-auto@^7.0.1": "7.0.1_@sveltejs+kit@2.70.3__@sveltejs+vite-plugin-svelte@6.2.4___svelte@5.56.10___vite@7.3.6____@types+node@24.13.3___@types+node@24.13.3__svelte@5.56.10__typescript@6.0.3__vite@7.3.6___@types+node@24.13.3__@types+node@24.13.3_@sveltejs+vite-plugin-svelte@6.2.4__svelte@5.56.10__vite@7.3.6___@types+node@24.13.3__@types+node@24.13.3_@types+node@24.13.3_svelte@5.56.10_typescript@6.0.3_vite@7.3.6__@types+node@24.13.3",
@@ -14,8 +14,8 @@
     "npm:@tailwindcss/vite@^4.3.3": "4.3.3_vite@7.3.6__@types+node@24.13.3_@types+node@24.13.3",
     "npm:@types/d3-force@^3.0.10": "3.0.10",
     "npm:@types/node@^24.13.3": "24.13.3",
-    "npm:@vitest/browser@3.2.7": "3.2.7_playwright@1.62.1_vitest@3.2.7_@types+node@24.13.3_vite@7.3.6__@types+node@24.13.3",
-    "npm:@vitest/coverage-v8@3.2.7": "3.2.7_@vitest+browser@3.2.7__playwright@1.62.1__vitest@3.2.7__@types+node@24.13.3__vite@7.3.6___@types+node@24.13.3_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.62.1_@types+node@24.13.3_playwright@1.62.1_vite@7.3.6__@types+node@24.13.3",
+    "npm:@vitest/browser@3.2.7": "3.2.7_playwright@1.61.1_vitest@3.2.7",
+    "npm:@vitest/coverage-v8@3.2.7": "3.2.7_@vitest+browser@3.2.7__playwright@1.61.1__vitest@3.2.7_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.61.1_playwright@1.61.1",
     "npm:chromatic@^18.1.0": "18.5.0",
     "npm:d3-force@3": "3.0.0",
     "npm:daisyui@^5.7.7": "5.7.21",
@@ -23,7 +23,7 @@
     "npm:eslint@^10.8.0": "10.9.0",
     "npm:globals@^17.8.0": "17.11.0",
     "npm:monaco-editor@~0.55.1": "0.55.1",
-    "npm:playwright@^1.62.0": "1.62.1",
+    "npm:playwright@1.61.1": "1.61.1",
     "npm:storybook@^10.5.5": "10.5.10_@types+react@19.2.18_react@19.2.8",
     "npm:svelte-check@^4.7.4": "4.7.6_svelte@5.56.10_typescript@6.0.3",
     "npm:svelte-check@^4.7.6": "4.7.6_svelte@5.56.10_typescript@6.0.3",
@@ -32,7 +32,7 @@
     "npm:typescript-eslint@^8.65.0": "8.67.0_eslint@10.9.0_typescript@6.0.3",
     "npm:typescript@^6.0.3": "6.0.3",
     "npm:vite@^7.3.6": "7.3.6_@types+node@24.13.3",
-    "npm:vitest@^3.2.7": "3.2.7_@types+node@24.13.3_@vitest+browser@3.2.7_playwright@1.62.1",
+    "npm:vitest@^3.2.7": "3.2.7_@types+node@24.13.3_@vitest+browser@3.2.7_playwright@1.61.1",
     "npm:zod@^4.4.3": "4.4.3"
   },
   "npm": {
@@ -756,7 +756,7 @@
         "@types/react"
       ]
     },
-    "@storybook/addon-vitest@10.5.10_@vitest+browser@3.2.7__playwright@1.62.1__vitest@3.2.7__@types+node@24.13.3__vite@7.3.6___@types+node@24.13.3_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.62.1_@types+node@24.13.3_@types+react@19.2.18_playwright@1.62.1_react@19.2.8_vite@7.3.6__@types+node@24.13.3": {
+    "@storybook/addon-vitest@10.5.10_@vitest+browser@3.2.7__playwright@1.61.1__vitest@3.2.7_storybook@10.5.10__@types+react@19.2.18__react@19.2.8_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.61.1_playwright@1.61.1": {
       "integrity": "sha512-JNQ9DSkLfxC8qqytBCej91zBExIZ7z97B410U2zgfQPki4HkI9Ffz97a15f5yhVZ79ppIrZ/ssI+WcyWn0ykXQ==",
       "dependencies": [
         "@storybook/global",
@@ -1189,7 +1189,7 @@
         "eslint-visitor-keys@5.0.1"
       ]
     },
-    "@vitest/browser@3.2.7_playwright@1.62.1_vitest@3.2.7_@types+node@24.13.3_vite@7.3.6__@types+node@24.13.3": {
+    "@vitest/browser@3.2.7_playwright@1.61.1_vitest@3.2.7": {
       "integrity": "sha512-gIzazUkbQfv6T1rJHOLhMMKQnplKAvvQ7QNGaFwI6oCsp4z2aSDZCojGpX3QX3+MYsvJdyy/8BRIYVEbAkMkEA==",
       "dependencies": [
         "@testing-library/dom",
@@ -1207,7 +1207,7 @@
         "playwright"
       ]
     },
-    "@vitest/coverage-v8@3.2.7_@vitest+browser@3.2.7__playwright@1.62.1__vitest@3.2.7__@types+node@24.13.3__vite@7.3.6___@types+node@24.13.3_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.62.1_@types+node@24.13.3_playwright@1.62.1_vite@7.3.6__@types+node@24.13.3": {
+    "@vitest/coverage-v8@3.2.7_@vitest+browser@3.2.7__playwright@1.61.1__vitest@3.2.7_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.61.1_playwright@1.61.1": {
       "integrity": "sha512-NEGWJS2XNu2PfRLQwOO3CTKj1tTETxNBdk454vDxVBhxJYhPaA/eS0nAI0c+1El1P7a60z8+i+ZrQoGESweGKg==",
       "dependencies": [
         "@ampproject/remapping",
@@ -2234,12 +2234,12 @@
     "picomatch@4.0.5": {
       "integrity": "sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A=="
     },
-    "playwright-core@1.62.1": {
-      "integrity": "sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==",
+    "playwright-core@1.61.1": {
+      "integrity": "sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==",
       "bin": true
     },
-    "playwright@1.62.1": {
-      "integrity": "sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==",
+    "playwright@1.61.1": {
+      "integrity": "sha512-DWnY5o3YbLWK4GovuAVwpqL+1VwGNdUGrRr++8j8PtQQzvAVZUIMjKQ90fY689sEJZJBbZVw1rXaOKSTitkzPQ==",
       "dependencies": [
         "playwright-core"
       ],
@@ -2713,7 +2713,7 @@
         "vite"
       ]
     },
-    "vitest@3.2.7_@types+node@24.13.3_@vitest+browser@3.2.7_playwright@1.62.1": {
+    "vitest@3.2.7_@types+node@24.13.3_@vitest+browser@3.2.7_playwright@1.61.1": {
       "integrity": "sha512-KrxIJ62Fd89gfysR4WotlgZABiz2dqFPgqGzX7s+CwsqLFomRH7777ZcrOD6+WVAh7khPQP41A+BKbpcJFrdEg==",
       "dependencies": [
         "@types/chai",
@@ -2835,7 +2835,7 @@
         "npm:eslint@^10.8.0",
         "npm:globals@^17.8.0",
         "npm:monaco-editor@~0.55.1",
-        "npm:playwright@^1.62.0",
+        "npm:playwright@1.61.1",
         "npm:storybook@^10.5.5",
         "npm:svelte-check@^4.7.4",
         "npm:svelte@^5.56.8",
