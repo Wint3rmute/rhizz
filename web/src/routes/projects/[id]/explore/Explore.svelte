@@ -263,12 +263,23 @@ let docsByLabel = $derived.by(() => {
 let hoveredIndex = $state<number | null>(null);
 let hoverPos = $state<{ x: number; y: number } | null>(null);
 
+// The container the popup is positioned against (the `relative` canvas
+// wrapper). Viewport cursor coordinates are converted to container-relative
+// ones so the popup sits right next to the cursor.
+let canvasContainer: HTMLDivElement | undefined = $state();
+
 function handleNodeHover(index: number | null, event?: MouseEvent) {
   console.log("[hover] on-hover listener triggered", { index, event: !!event });
   hoveredIndex = index;
-  hoverPos = index !== null && event
-    ? { x: event.clientX, y: event.clientY }
-    : null;
+  if (index === null || !event || !canvasContainer) {
+    hoverPos = null;
+    return;
+  }
+  const rect = canvasContainer.getBoundingClientRect();
+  hoverPos = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
 }
 
 // The doc content for the hovered component, if one exists. Matched by the
@@ -394,7 +405,10 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
           </ul>
         </nav>
       {/if}
-      <div class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden">
+      <div
+        bind:this={canvasContainer}
+        class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden"
+      >
         {#if selectedDiagramPath}
           <div class="w-full h-full">
             <DiagramStaticView
@@ -408,7 +422,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
             {#if hoveredDoc && hoverPos}
               <div
                 class="absolute z-30 max-w-sm pointer-events-none"
-                style="left: {hoverPos.x}px; top: {hoverPos.y}px; transform: translate(12px, 12px);"
+                style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
               >
                 <div class="card bg-base-100 border border-base-300 shadow-xl p-3">
                   <Markdown content={hoveredDoc} />

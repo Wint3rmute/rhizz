@@ -104,6 +104,7 @@ let visibleConnections = $derived(
         }
         : undefined}
   onmouseenter={onnodehover ? (e) => onnodehover?.(index, e) : undefined}
+  onmousemove={onnodehover ? (e) => onnodehover?.(index, e) : undefined}
   onmouseleave={onnodehover ? (e) => onnodehover?.(null, e) : undefined}
 >
   <g
