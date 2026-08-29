@@ -49,9 +49,7 @@ examples.
 
 ## Development commands
 
-```bash
-~/.cargo/bin/wasm-pack build crates/rhizz-wasm --target web
-```
+See the [Justfile](Justfile).
 
 ## Links
 

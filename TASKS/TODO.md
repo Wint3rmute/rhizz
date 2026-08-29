@@ -30,6 +30,17 @@ either use the server as storage or run fully in browser without it.
 
 Don't implement any kind of security/auth as of now, assume everything is public.
 
+Implement in small, incremental commits. Follow red/green TDD.
+
+1. First, bootstrap a new crate under `crates/`
+2. Add dependencies (axum, tracing). Write a sample server.
+3. Update build.rs to bundle static application files in the server binary.
+4. Implement serving the static application files.
+5. Implement the endpoint to fetch/persist the VFS state per project. Path to
+   server's data directory is configurable via environment variable.
+6. Implement frontend logic inside the VFS (no other parts can change), so that
+   the filesystem can be persisted into the API.
+
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.
