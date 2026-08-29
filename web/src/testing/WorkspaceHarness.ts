@@ -25,6 +25,16 @@ export interface WorkspaceSnapshot {
   componentKeys: string[];
 }
 
+export type WorkspaceAction =
+  | { type: "select-component"; component: string }
+  | {
+    type: "set-node-visuals";
+    component: string;
+    color?: string | undefined;
+    border?: "solid" | "dashed" | "dotted" | undefined;
+    font?: string | undefined;
+  };
+
 async function populateFiles(
   fs: ProjectFs,
   files: ExampleProject["files"],
@@ -103,6 +113,49 @@ export class WorkspaceHarness {
       throw new Error(`Component ${key} not found`);
     }
     this.#selectedKey = key;
+  }
+
+  async dispatch(action: WorkspaceAction): Promise<void> {
+    switch (action.type) {
+      case "select-component":
+        this.selectComponent(action.component);
+        return;
+      case "set-node-visuals": {
+        this.selectComponent(action.component);
+        const selectedBefore = this.selectedComponentKey;
+        await this.setSelectedComponentVisuals({
+          color: action.color,
+          border: action.border,
+          font: action.font,
+        });
+        if (this.selectedComponentKey !== selectedBefore) {
+          throw new Error(
+            `selected-component-stability: before=${String(selectedBefore)} after=${String(this.selectedComponentKey)}`,
+          );
+        }
+        return;
+      }
+    }
+  }
+
+  assertInvariants(): void {
+    const blocking = this.blockingErrorCodes();
+    if (blocking.length > 0) {
+      throw new Error(`compilability: ${blocking.join(", ")}`);
+    }
+    const roundTrip = this.roundTripSnapshot();
+    const current = this.snapshot();
+    if (JSON.stringify(roundTrip) !== JSON.stringify(current)) {
+      throw new Error("round-trip-fidelity: canonical model changed");
+    }
+    if (
+      this.#selectedKey !== null &&
+      !this.componentKeys.includes(this.#selectedKey)
+    ) {
+      throw new Error(
+        `referential-integrity: selected component ${this.#selectedKey} does not resolve`,
+      );
+    }
   }
 
   snapshot(): WorkspaceSnapshot {

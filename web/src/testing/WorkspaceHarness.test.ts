@@ -39,6 +39,25 @@ describe("WorkspaceHarness", () => {
     expect(workspace.selectedComponentKey).toBe(selectedKey);
   });
 
+  it("dispatches deterministic actions and checks workspace invariants", async () => {
+    const workspace = await WorkspaceHarness.fromExample("drone");
+    const key = workspace.componentKeys.find((candidate) =>
+      candidate.endsWith("/flight-controller")
+    );
+    if (!key) throw new Error("drone flight controller not found");
+
+    await workspace.dispatch({ type: "select-component", component: key });
+    await workspace.dispatch({
+      type: "set-node-visuals",
+      component: key,
+      color: "primary",
+      border: "dashed",
+    });
+
+    workspace.assertInvariants();
+    expect(workspace.selectedComponentKey).toBe(key);
+  });
+
   it("resolves selection by qualified component key", async () => {
     const workspace = await WorkspaceHarness.fromExample("software-house");
     const key = workspace.componentKeys[0];
