@@ -110,6 +110,7 @@ export default ts.config(
       "**/components/Navbar.stories.ts",
       "**/vfs/compile.test.ts",
       "**/diagrams/ComponentHierarchyTree.stories.ts",
+      "**/diagrams/DiagramPage.stories.ts",
       "src/example_system.ts",
     ],
     rules: {

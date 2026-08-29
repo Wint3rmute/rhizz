@@ -534,7 +534,7 @@ function toggleComponentChecked(index: number) {
     delete checked[getComponentKey(index)];
     // savedLayout[getComponentKey(index)] is intentionally left alone, so
     // re-checking this component later restores it where it was.
-    selected.delete(index);
+    deselect(index);
     return;
   }
 
@@ -620,14 +620,35 @@ function reclampChildren(parentIndex: number) {
   });
 }
 
-// Currently selected nodes (component arena indices). Not persisted —
-// selection is transient UI state. Uses SvelteSet (from svelte/reactivity)
-// rather than a plain Set wrapped in $state, since plain Set mutations
-// aren't deeply tracked by Svelte's $state the way plain object/array
-// mutations are — SvelteSet makes add()/delete()/clear() directly
-// reactive, so call sites can mutate it in place instead of always
-// reconstructing and reassigning a fresh Set.
-const selected = new SvelteSet<number>();
+// Currently selected nodes, tracked by stable qualified component key rather
+// than the compiled model's arena index. Arena indices are rebuilt on every
+// compile and may change even when the logical model is unchanged.
+const selectedKeys = new SvelteSet<string>();
+let selected = $derived.by(() => {
+  const indices = new SvelteSet<number>();
+  for (const key of selectedKeys) {
+    const index = keyToIndex.get(key);
+    if (index !== undefined) indices.add(index);
+  }
+  return indices;
+});
+
+function selectOnly(index: number) {
+  selectedKeys.clear();
+  selectedKeys.add(getComponentKey(index));
+}
+
+function clearSelection() {
+  selectedKeys.clear();
+}
+
+function deselect(index: number) {
+  selectedKeys.delete(getComponentKey(index));
+}
+
+function select(index: number) {
+  selectedKeys.add(getComponentKey(index));
+}
 
 // Snapshot of the diagram's persisted content — the unit of undo/redo
 // history. Deliberately excludes `selected` (transient UI state, not
@@ -655,7 +676,7 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
   checked = { ...snapshot.checked };
   savedLayout = { ...snapshot.savedLayout };
   savedConnections = { ...(snapshot.connections || {}) };
-  selected.clear();
+  clearSelection();
   selectedConnection = null;
 }
 
@@ -874,8 +895,11 @@ async function executeReparent(
   }
 
   if (doc.reparentComponent(sourceKey, targetParentKey)) {
+    const label = sourceKey.split("/").at(-1);
+    const newKey = label ? `${targetParentKey}/${label}` : null;
     await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
+    if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
   }
 }
 
@@ -1019,8 +1043,7 @@ async function handleModalCreateComponent(data: {
 
   const newIndex = keyToIndex.get(fullKey);
   if (newIndex !== undefined) {
-    selected.clear();
-    selected.add(newIndex);
+    selectOnly(newIndex);
   }
 }
 
@@ -1060,9 +1083,7 @@ $effect(() => {
 });
 
 let selectedKey = $derived(
-  selected.size === 1
-    ? getComponentKey(selected.values().next().value ?? 0)
-    : null,
+  selectedKeys.size === 1 ? selectedKeys.values().next().value ?? null : null,
 );
 
 let selectedComponentData = $derived(
@@ -1112,6 +1133,7 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
       savedLayout[newKey] = savedLayout[selectedKey];
       delete savedLayout[selectedKey];
     }
+    if (selectedKeys.delete(selectedKey)) selectedKeys.add(newKey);
   }
 }
 
@@ -1130,7 +1152,7 @@ async function handleDeleteSelectedComponent(): Promise<void> {
 
     delete checked[keyToDelete];
     delete savedLayout[keyToDelete];
-    selected.clear();
+    clearSelection();
   }
 }
 
@@ -1270,10 +1292,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   // selection with just that node. Clicking a node that's already
   // selected (as part of a multi-selection) keeps the whole selection, so
   // dragging it moves the whole group.
-  if (!selected.has(index)) {
-    selected.clear();
-    selected.add(index);
-  }
+  if (!selected.has(index)) selectOnly(index);
 
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
@@ -1337,10 +1356,7 @@ function onResizeHandleMouseDown(
   event.stopPropagation();
 
   // If node is not already part of the selection, select only this node
-  if (!selected.has(index)) {
-    selected.clear();
-    selected.add(index);
-  }
+  if (!selected.has(index)) selectOnly(index);
 
   // One undo point per resize gesture, recorded before anything resizes.
   recordUndoPoint();
@@ -1605,9 +1621,9 @@ function onSvgMouseUp() {
     // Otherwise, commit whatever the live preview (marqueeCandidates) was
     // already showing.
     const box = marqueeBox;
-    selected.clear();
+    clearSelection();
     if (box && (box.width > 2 || box.height > 2)) {
-      for (const index of marqueeCandidates) selected.add(index);
+      for (const index of marqueeCandidates) select(index);
     }
   }
   interaction = { type: "idle" };
@@ -2715,7 +2731,7 @@ $effect(() => {
             onclick={(e) => {
               e.stopPropagation();
               selectedConnection = conn.label;
-              selected.clear();
+              clearSelection();
             }}
           >
             <!-- Thicker invisible hit target -->
@@ -2791,7 +2807,7 @@ $effect(() => {
           class="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
         >
           <div
-            class="card bg-base-100/95 border border-error/50 shadow-2xl p-6 text-center max-w-md pointer-events-auto backdrop-blur-xs"
+            class="card bg-base-100/95 border border-error/50 shadow-2xl p-6 text-center max-w-xl pointer-events-auto backdrop-blur-xs"
           >
             <div class="text-error text-3xl mb-2">⚠️</div>
             <h3 class="font-bold text-lg text-error mb-1">
@@ -2804,7 +2820,7 @@ $effect(() => {
             </p>
             {#if firstError}
               <div
-                class="bg-base-200 p-2.5 rounded text-xs font-mono text-left text-error/90 mb-4 border border-error/20 truncate"
+                class="bg-base-200 p-2.5 rounded text-xs font-mono text-left text-error/90 mb-4 border border-error/20 break-words whitespace-normal"
                 title={firstError.message}
               >
                 <span class="font-bold">[{firstError.code}]</span>

@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 89 — Deterministic state-machine simulation & property testing for model/UI transformations
+
+Added headless deterministic simulation and property-based testing across the frontend workspace lifecycle and Rust model serialization.
+
+- **Stable UI identity / regression fix**
+  - Reproduced the software-house first-visual-edit selection jump headlessly: recompilation preserves logical components but can reorder arena indices.
+  - Diagram selection now stores qualified component keys and derives current arena indices for rendering/interactions, preserving selection across recompilation; rename/reparent remap keys and delete/undo clear selection.
+  - Added a deterministic software-house regression covering both first and subsequent visual edits.
+- **Frontend workspace simulation**
+  - Added `WorkspaceHarness` over in-memory project VFS → WASM compile → `DocumentStore` mutation/write → recompile, with empty, drone, software-house and Apollo 11 fixtures.
+  - Added canonical round-trip, compilability, stable selection, mutation-isolation and UI-state referential invariants.
+  - Added `fast-check` and 500 deterministic, shrinking-enabled multi-step runs combining visual mutations, layout moves and diagram-view state changes.
+  - Apollo participates in compile/round-trip/UI-state simulation; sourced-component visual rewrites are excluded because the current primary-file `DocumentStore` writer cannot safely flatten sourced instances without E011.
+- **Rust property testing**
+  - Added `proptest` coverage for generated valid architectural HCL through compile/serialize/recompile canonical round trips and generated view-definition serialize/parse round trips (256 cases each).
+- Validated with `just test` (all Rust tests + 406 frontend unit/Storybook tests, including the 500-run simulation), `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task 88 — Interactive drill-down navigation in Explore view via URL routing & global toast/notification service
 
 Added URL-driven drill-down navigation to Explore and a reusable app-wide toast service.
