@@ -13,6 +13,22 @@ How to work on this file:
 
 ---
 
+## Task <N> - Implement a Rhizz server as a new crate
+
+Add a new crate, `Rhizz-server`, that provides a standalone HTTP server for
+Rhizz. The server shall:
+
+- Serve the Rhizz editor UI over HTTP (static files compiled from the `web/` directory)
+- Provide an API for filesystem persistence
+- Use the Axum rust library, use `tracing` for logging
+
+The rhizz web application shall start utilizing the server API to persist its
+state. Simple mechanism of dumping the entire VFS state to the server on save,
+no optimisation for now. Don't bind the application to the server tightly, make
+a configuration switch (e.g. with an env var), so that the application can
+either use the server as storage or run fully in browser without it.
+
+Don't implement any kind of security/auth as of now, assume everything is public.
 
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
