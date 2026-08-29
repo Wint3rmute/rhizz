@@ -424,7 +424,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
                 class="absolute z-30 max-w-sm pointer-events-none"
                 style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
               >
-                <div class="card bg-base-100 border border-base-300 shadow-xl p-3">
+                <div class="card bg-base-100 border border-base-content/40 shadow-xl p-3">
                   <Markdown content={hoveredDoc} />
                 </div>
               </div>
