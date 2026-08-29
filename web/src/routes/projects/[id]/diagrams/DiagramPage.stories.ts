@@ -25,6 +25,28 @@ system "demo" {
 }
 `;
 
+const LONG_ERROR_HCL = `project {
+  name = "long-error-project"
+}
+
+system "demo" {
+  component "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on" {
+    port "i2c" {
+      role = "provider"
+    }
+  }
+  component "fc" {
+    port "i2c" {
+      role = "consumer"
+    }
+  }
+  connection "sensor-link" {
+    from = "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on/spi"
+    to   = "fc/i2c"
+  }
+}
+`;
+
 async function ensureBrokenProject(): Promise<Project> {
   const existing = await projectStore.listProjects();
   const project = existing.find((candidate) =>
@@ -36,7 +58,19 @@ async function ensureBrokenProject(): Promise<Project> {
   );
 }
 
+async function ensureLongErrorProject(): Promise<Project> {
+  const existing = await projectStore.listProjects();
+  const project = existing.find((candidate) =>
+    candidate.name === "Long error diagram story"
+  );
+  return project ?? await createProjectWithMainFile(
+    "Long error diagram story",
+    LONG_ERROR_HCL,
+  );
+}
+
 const brokenProject: Project = await ensureBrokenProject();
+const longErrorProject: Project = await ensureLongErrorProject();
 
 const meta = {
   title: "Pages/Diagrams/Compilation Error",
@@ -79,5 +113,29 @@ export const DuplicateProjectBlock: Story = {
       "href",
       expect.stringContaining(`/projects/${brokenProject.id}/editor`),
     );
+  },
+};
+
+export const LongErrorMessageWraps: Story = {
+  args: {
+    params: {
+      id: longErrorProject.id,
+    },
+    data: {
+      projectId: longErrorProject.id,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      await canvas.findByRole("heading", { name: "Model failed to compile" }),
+    ).toBeInTheDocument();
+
+    const message = canvas.getByText(/^\[E010\]/);
+    await expect(message).toBeInTheDocument();
+    // The message must wrap (multi-line) rather than truncating on overflow.
+    await expect(message).not.toHaveStyle({ "white-space": "nowrap" });
+    await expect(message).not.toHaveStyle({ "text-overflow": "ellipsis" });
   },
 };

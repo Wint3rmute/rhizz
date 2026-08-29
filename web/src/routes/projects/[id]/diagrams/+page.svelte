@@ -2807,7 +2807,7 @@ $effect(() => {
           class="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
         >
           <div
-            class="card bg-base-100/95 border border-error/50 shadow-2xl p-6 text-center max-w-md pointer-events-auto backdrop-blur-xs"
+            class="card bg-base-100/95 border border-error/50 shadow-2xl p-6 text-center max-w-xl pointer-events-auto backdrop-blur-xs"
           >
             <div class="text-error text-3xl mb-2">⚠️</div>
             <h3 class="font-bold text-lg text-error mb-1">
@@ -2820,7 +2820,7 @@ $effect(() => {
             </p>
             {#if firstError}
               <div
-                class="bg-base-200 p-2.5 rounded text-xs font-mono text-left text-error/90 mb-4 border border-error/20 truncate"
+                class="bg-base-200 p-2.5 rounded text-xs font-mono text-left text-error/90 mb-4 border border-error/20 break-words whitespace-normal"
                 title={firstError.message}
               >
                 <span class="font-bold">[{firstError.code}]</span>
