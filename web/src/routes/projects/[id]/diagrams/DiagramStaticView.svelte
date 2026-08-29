@@ -21,6 +21,7 @@ let {
   selected = new Set<number>(),
   linked = new Set<number>(),
   onnodeclick,
+  onnodehover,
 }: {
   /** Indexed the same way `connections[].from`/`.to` and `boxes`' keys are — i.e. this is expected to be the *full* component list, not just the placed ones. */
   components: DiagramStaticComponent[];
@@ -35,6 +36,10 @@ let {
   linked?: Set<number>;
   /** Optional node interaction. Omitted for the normal read-only renderer. */
   onnodeclick?: ((index: number) => void) | undefined;
+  /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
+  onnodehover?:
+    | ((index: number | null, event?: MouseEvent) => void)
+    | undefined;
 } = $props();
 
 // Auto-fits the viewBox to whatever's actually placed, rather than
@@ -65,5 +70,6 @@ let viewBox = $derived.by(() => {
     {selected}
     {linked}
     {onnodeclick}
+    {onnodehover}
   />
 </svg>

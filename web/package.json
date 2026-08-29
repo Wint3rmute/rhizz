@@ -21,6 +21,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "d3-force": "^3.0.0",
     "daisyui": "^5.7.7",
+    "marked": "^14.0.0",
     "rhizz": "file:../crates/rhizz-wasm/pkg/",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",

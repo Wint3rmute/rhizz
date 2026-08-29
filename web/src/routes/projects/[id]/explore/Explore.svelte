@@ -21,6 +21,8 @@ import {
   emptyDiagramLayout,
   readDiagramLayoutFile,
 } from "../diagrams/persistence";
+import Markdown from "../../../../components/Markdown.svelte";
+import { type ProjectDoc, readProjectDocs } from "./docs";
 import { diagramTitle, findComponentDiagram } from "./navigation";
 
 let {
@@ -34,6 +36,7 @@ let diagramEntries = $state<Dirent[]>([]);
 let selectedDiagramPath = $state<string | null>(null);
 let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
 let sources = $state<Source[]>([]);
+let docs = $state<ProjectDoc[]>([]);
 
 function navigateToDiagram(path: string, replaceState = false) {
   const url = new URL(page.url);
@@ -120,6 +123,7 @@ $effect(() => {
   const id = effectiveProjectId;
   if (!id) {
     sources = [];
+    docs = [];
     return;
   }
 
@@ -133,6 +137,15 @@ $effect(() => {
     .catch(() => {
       if (cancelled) return;
       sources = [];
+    });
+  readProjectDocs(fs)
+    .then((loadedDocs) => {
+      if (cancelled) return;
+      docs = loadedDocs;
+    })
+    .catch(() => {
+      if (cancelled) return;
+      docs = [];
     });
 
   return () => {
@@ -200,6 +213,32 @@ let componentDiagrams = $derived.by(() => {
 
 let linkedComponents = $derived.by(() =>
   new SvelteSet<number>(componentDiagrams.keys())
+);
+
+// Docs keyed by component qualified key (e.g. "home-monitor/controller/mcu").
+let docsByKey = $derived.by(() => {
+  const map = new SvelteMap<string, string>();
+  for (const doc of docs) map.set(doc.key, doc.content);
+  return map;
+});
+
+// The component index currently hovered (if any) and the cursor position at
+// which the popup should be anchored.
+let hoveredIndex = $state<number | null>(null);
+let hoverPos = $state<{ x: number; y: number } | null>(null);
+
+function handleNodeHover(index: number | null, event?: MouseEvent) {
+  hoveredIndex = index;
+  hoverPos = index !== null && event
+    ? { x: event.clientX, y: event.clientY }
+    : null;
+}
+
+// The doc content for the hovered component, if one exists.
+let hoveredDoc = $derived(
+  hoveredIndex === null
+    ? null
+    : docsByKey.get(componentKey(hoveredIndex)) ?? null,
 );
 
 function handleNodeClick(index: number) {
@@ -318,7 +357,18 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
               boxes={boxes}
               linked={linkedComponents}
               onnodeclick={handleNodeClick}
+              onnodehover={(index, event) => handleNodeHover(index, event)}
             />
+            {#if hoveredDoc && hoverPos}
+              <div
+                class="absolute z-30 max-w-sm pointer-events-none"
+                style="left: {hoverPos.x}px; top: {hoverPos.y}px; transform: translate(12px, 12px);"
+              >
+                <div class="card bg-base-100 border border-base-300 shadow-xl p-3">
+                  <Markdown content={hoveredDoc} />
+                </div>
+              </div>
+            {/if}
           </div>
         {:else}
           <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">

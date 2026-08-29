@@ -19,6 +19,7 @@ import {
   type DiagramLayout,
   writeDiagramLayoutFile,
 } from "../diagrams/persistence";
+import { DOCS_DIR } from "./docs";
 import Explore from "./Explore.svelte";
 
 // Initialize WASM module before evaluating story models
@@ -206,6 +207,14 @@ async function ensureProjectWithDiagrams(
 const seededProject = await ensureProjectWithDiagrams(
   "Viewer story",
   EXAMPLE_SYSTEM_DIAGRAMS,
+);
+
+// Seed a doc for one component so the hover popup has content to show.
+const fs = openProjectFs(projectStore, seededProject.id);
+await fs.mkdir(`${DOCS_DIR}/home-monitor`, { recursive: true });
+await fs.writeFile(
+  `${DOCS_DIR}/home-monitor/sensor.md`,
+  `# Sensor\n\nThe **environmental sensor** reads temperature and humidity over I2C.`,
 );
 
 const manyDiagramsProject = await ensureProjectWithDiagrams(
@@ -452,4 +461,39 @@ export const SoftwareHouse: Story = {
       return {};
     },
   ],
+};
+
+export const HoverDocPopup: Story = {
+  args: {
+    projectId: seededProject.id,
+  },
+  loaders: [
+    async () => {
+      await init();
+      const fs = openProjectFs(projectStore, seededProject.id);
+      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
+        await writeDiagramLayoutFile(
+          fs,
+          `${DIAGRAM_LAYOUT_DIR}/${name}`,
+          layout,
+        );
+      }
+      return {};
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The sensor node has a doc seeded for it; hovering should surface it.
+    const sensor = await canvas.findByRole("link", {
+      name: /sensor/i,
+    });
+    await userEvent.hover(sensor);
+
+    await expect(
+      await canvas.findByText((content) =>
+        content.includes("environmental sensor")
+      ),
+    ).toBeInTheDocument();
+  },
 };
