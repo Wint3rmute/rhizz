@@ -98,15 +98,18 @@ fn generate_diagnostic_codes(manifest_dir: &str, out_dir: &str) -> Result<()> {
 type ExampleFileList = Vec<(String, PathBuf)>;
 type ExampleProjectMeta = (String, String, String, ExampleFileList);
 
-fn collect_hcl_files(dir: &Path, base_dir: &Path, acc: &mut ExampleFileList) {
+fn collect_example_files(dir: &Path, base_dir: &Path, acc: &mut ExampleFileList) {
     println!("cargo:rerun-if-changed={}", dir.display());
     if let Ok(read_dir) = fs::read_dir(dir) {
         for entry in read_dir.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                collect_hcl_files(&path, base_dir, acc);
+                collect_example_files(&path, base_dir, acc);
             } else if path.is_file()
-                && path.extension().is_some_and(|ext| ext == "hcl")
+                && path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|ext| ext == "hcl" || ext == "md")
                 && let Ok(rel_path) = path.strip_prefix(base_dir)
             {
                 let rel_str = rel_path.to_string_lossy().replace('\\', "/");
@@ -134,7 +137,7 @@ fn generate_example_projects(manifest_dir: &str, out_dir: &str) -> Result<()> {
 
         let id = entry.file_name().to_string_lossy().to_string();
         let mut files = Vec::new();
-        collect_hcl_files(&path, &path, &mut files);
+        collect_example_files(&path, &path, &mut files);
         if files.is_empty() {
             continue;
         }

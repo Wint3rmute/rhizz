@@ -268,7 +268,10 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
           </div>
         {:else}
           <div class="flex-1 w-full">
-            <MonacoEditor bind:value={content} language="hcl" />
+            <MonacoEditor
+              bind:value={content}
+              language={selectedPath?.endsWith(".md") ? "markdown" : "hcl"}
+            />
           </div>
         {/if}
       </div>

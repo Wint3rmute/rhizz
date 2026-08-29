@@ -4,6 +4,26 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 90 — PoC Markdown-based model knowledge database
+
+Added a Markdown "knowledge database" per project, authored in the Editor and surfaced as a hover popup in Explore.
+
+- **Markdown rendering**
+  - Added `marked` as a dependency and a thin `markdownRenderer.ts` wrapper that escapes raw HTML (marked does not sanitize by default), so docs rendered via `{@html}` cannot execute scripts.
+  - Added a reusable `Markdown.svelte` component (Tailwind `prose` styling) with Storybook coverage.
+- **Docs storage**
+  - Added `docs.ts` with `readProjectDocs(fs)` that recursively reads `docs/*.md`, keyed by path minus the `.md` suffix so a doc maps to a component's qualified key (e.g. `docs/home-monitor/controller/mcu.md` ↔ `home-monitor/controller/mcu`).
+  - Unit tests for key mapping and non-markdown filtering.
+- **Editor authoring**
+  - The Editor now sets Monaco's language to `markdown` for `.md` files (was hardcoded to `hcl`); docs are created/edited through the existing file tree.
+- **Explore hover popup**
+  - `DiagramElements`/`DiagramStaticView` gained an optional `onnodehover` callback (enter with index + mouse event, leave with `null`).
+  - Explore loads docs, matches the hovered component's qualified key to a doc, and renders a positioned popup near the cursor containing the rendered Markdown.
+  - Added an Explore story seeding a doc and asserting the popup appears on hover.
+- Validated with `just test` (421 frontend tests), `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task 89 — Deterministic state-machine simulation & property testing for model/UI transformations
 
 Added headless deterministic simulation and property-based testing across the frontend workspace lifecycle and Rust model serialization.

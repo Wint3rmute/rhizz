@@ -29,6 +29,7 @@ let {
   selected = new Set<number>(),
   linked = new Set<number>(),
   onnodeclick,
+  onnodehover,
 }: {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
@@ -38,6 +39,10 @@ let {
   selected?: Set<number>;
   linked?: Set<number>;
   onnodeclick?: ((index: number) => void) | undefined;
+  /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
+  onnodehover?:
+    | ((index: number | null, event?: MouseEvent) => void)
+    | undefined;
 } = $props();
 
 function nodeBox(index: number): (Box & { textAlign: TextAlign }) | null {
@@ -98,6 +103,9 @@ let visibleConnections = $derived(
           onnodeclick(index);
         }
         : undefined}
+  onmouseenter={onnodehover ? (e) => onnodehover?.(index, e) : undefined}
+  onmousemove={onnodehover ? (e) => onnodehover?.(index, e) : undefined}
+  onmouseleave={onnodehover ? (e) => onnodehover?.(null, e) : undefined}
 >
   <g
     transform="translate({box.x}, {box.y})"

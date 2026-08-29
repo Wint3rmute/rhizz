@@ -66,7 +66,7 @@ export function sanitizeStoredRecord(
 }
 
 // Conventional location for diagram layout data inside a project's VFS.
-export const DIAGRAM_LAYOUT_DIR = ".rhizz/diagrams";
+export const DIAGRAM_LAYOUT_DIR = "diagrams";
 
 // The full persisted content of a single diagram: which components are
 // currently placed on its canvas, every component's last-known box, and connection starting points.
@@ -167,7 +167,7 @@ export function mapLayoutToBoxes(
 }
 
 /**
- * Extracts a clean view name from a file path (e.g. ".rhizz/diagrams/overview.hcl" -> "overview").
+ * Extracts a clean view name from a file path (e.g. "diagrams/overview.hcl" -> "overview").
  */
 export function viewNameFromPath(path: string): string {
   const filename = path.split("/").pop() ?? "diagram";

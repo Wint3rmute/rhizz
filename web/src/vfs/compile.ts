@@ -25,7 +25,7 @@ export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
       (entry) =>
         entry.isFile() &&
         entry.name.endsWith(".hcl") &&
-        !entry.path.startsWith(".rhizz/") &&
+        !entry.path.startsWith("diagrams/") &&
         !entry.path.startsWith(".git/"),
     )
     .map((entry) => entry.path);

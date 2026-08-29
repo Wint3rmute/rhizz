@@ -21,7 +21,31 @@ import {
   emptyDiagramLayout,
   readDiagramLayoutFile,
 } from "../diagrams/persistence";
+import Markdown from "../../../../components/Markdown.svelte";
+import { type ProjectDoc, readProjectDocs } from "./docs";
 import { diagramTitle, findComponentDiagram } from "./navigation";
+
+// Builds a recursive hierarchical tree from a recursive `readdir` listing, for
+// debug-logging the project's filesystem structure.
+function buildFsTree(entries: Dirent[]): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  for (const entry of entries) {
+    const parts = entry.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part === undefined) continue;
+      const isLast = i === parts.length - 1;
+      if (isLast) {
+        node[part] = entry.isDirectory() ? {} : "<file>";
+      } else {
+        node[part] ??= {};
+        node = node[part] as Record<string, unknown>;
+      }
+    }
+  }
+  return root;
+}
 
 let {
   projectId = null,
@@ -34,6 +58,7 @@ let diagramEntries = $state<Dirent[]>([]);
 let selectedDiagramPath = $state<string | null>(null);
 let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
 let sources = $state<Source[]>([]);
+let docs = $state<ProjectDoc[]>([]);
 
 function navigateToDiagram(path: string, replaceState = false) {
   const url = new URL(page.url);
@@ -120,6 +145,7 @@ $effect(() => {
   const id = effectiveProjectId;
   if (!id) {
     sources = [];
+    docs = [];
     return;
   }
 
@@ -133,6 +159,27 @@ $effect(() => {
     .catch(() => {
       if (cancelled) return;
       sources = [];
+    });
+  readProjectDocs(fs)
+    .then((loadedDocs) => {
+      if (cancelled) return;
+      docs = loadedDocs;
+    })
+    .catch(() => {
+      if (cancelled) return;
+      docs = [];
+    });
+  // Debug: dump the project's filesystem as a recursive hierarchical tree so
+  // the docs directory layout (and how it maps to component labels) is visible.
+  fs.readdir(".", { recursive: true })
+    .then((entries) => {
+      if (cancelled) return;
+      const tree = buildFsTree(entries);
+      console.log("[fs] project filesystem", JSON.stringify(tree, null, 2));
+    })
+    .catch((error) => {
+      if (cancelled) return;
+      console.log("[fs] failed to list filesystem", error);
     });
 
   return () => {
@@ -200,6 +247,55 @@ let componentDiagrams = $derived.by(() => {
 
 let linkedComponents = $derived.by(() =>
   new SvelteSet<number>(componentDiagrams.keys())
+);
+
+// Docs keyed by component label. A component is matched by its unique name
+// (its `label`), not its full qualified path — a component may be re-used
+// under different parents, so the path is not a stable identifier.
+let docsByLabel = $derived.by(() => {
+  const map = new SvelteMap<string, string>();
+  for (const doc of docs) map.set(doc.key, doc.content);
+  return map;
+});
+
+// The component index currently hovered (if any) and the cursor position at
+// which the popup should be anchored.
+let hoveredIndex = $state<number | null>(null);
+let hoverPos = $state<{ x: number; y: number } | null>(null);
+
+// The container the popup is positioned against (the `relative` canvas
+// wrapper). Viewport cursor coordinates are converted to container-relative
+// ones so the popup sits right next to the cursor.
+let canvasContainer: HTMLDivElement | undefined = $state();
+
+function handleNodeHover(index: number | null, event?: MouseEvent) {
+  console.log("[hover] on-hover listener triggered", { index, event: !!event });
+  hoveredIndex = index;
+  if (index === null || !event || !canvasContainer) {
+    hoverPos = null;
+    return;
+  }
+  const rect = canvasContainer.getBoundingClientRect();
+  hoverPos = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+}
+
+// The doc content for the hovered component, if one exists. Matched by the
+// component's unique label rather than its full qualified path.
+let hoveredDoc = $derived(
+  hoveredIndex === null ? null : (() => {
+    const component = components[hoveredIndex];
+    const label = component?.label;
+    const found = label === undefined ? undefined : docsByLabel.get(label);
+    console.log("[hover] markdown search", {
+      label,
+      docsLoaded: docs.length,
+      found: found !== undefined,
+    });
+    return found ?? null;
+  })(),
 );
 
 function handleNodeClick(index: number) {
@@ -309,7 +405,10 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
           </ul>
         </nav>
       {/if}
-      <div class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden">
+      <div
+        bind:this={canvasContainer}
+        class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden"
+      >
         {#if selectedDiagramPath}
           <div class="w-full h-full">
             <DiagramStaticView
@@ -318,7 +417,18 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
               boxes={boxes}
               linked={linkedComponents}
               onnodeclick={handleNodeClick}
+              onnodehover={(index, event) => handleNodeHover(index, event)}
             />
+            {#if hoveredDoc && hoverPos}
+              <div
+                class="absolute z-30 max-w-sm pointer-events-none"
+                style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
+              >
+                <div class="card bg-base-100 border border-base-content/40 shadow-xl p-3">
+                  <Markdown content={hoveredDoc} />
+                </div>
+              </div>
+            {/if}
           </div>
         {:else}
           <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">

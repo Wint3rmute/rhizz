@@ -242,12 +242,11 @@ let checked = $state<Record<string, StoredBox>>({});
 let savedLayout = $state<Record<string, StoredBox>>({});
 let savedConnections = $state<Record<string, StoredConnection>>({});
 
-// Which diagram (a `.rhizz/diagrams/<name>.json` file) is currently open
-// on the canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.json" —
-// exactly like the editor's own `selectedPath` is relative to the
-// project root (TASKS.md Task 66). `null` means no diagram exists yet
-// (or none is selected), in which case the canvas below simply has
-// nothing placed on it.
+// Which diagram (a `diagrams/<name>.hcl` file) is currently open on the
+// canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.hcl" — exactly like
+// the editor's own `selectedPath` is relative to the project root. `null`
+// means no diagram exists yet (or none is selected), in which case the
+// canvas below simply has nothing placed on it.
 let selectedDiagramPath = $state<string | null>(null);
 let diagramEntries = $state<Dirent[]>([]);
 
@@ -855,7 +854,6 @@ async function getPrimaryHclPath(): Promise<string> {
     const hclFiles = entries.filter((e) =>
       e.isFile() &&
       e.name.endsWith(".hcl") &&
-      !e.path.startsWith(".rhizz/") &&
       !e.path.startsWith("diagrams/")
     );
     // Prefer the file that actually holds the system model, in priority

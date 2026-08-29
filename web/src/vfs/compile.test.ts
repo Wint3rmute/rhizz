@@ -28,8 +28,8 @@ describe("readProjectSources", () => {
   });
 
   it("excludes non-.hcl files", async () => {
-    await fs.mkdir(".rhizz/diagrams", { recursive: true });
-    await fs.writeFile(".rhizz/diagrams/overview.json", "{}");
+    await fs.mkdir("diagrams", { recursive: true });
+    await fs.writeFile("diagrams/overview.json", "{}");
     await fs.writeFile("main.hcl", 'system "x" {}');
 
     const sources = await readProjectSources(fs);
@@ -38,10 +38,10 @@ describe("readProjectSources", () => {
     ]);
   });
 
-  it("excludes .hcl files inside .rhizz/ directory from compilation sources", async () => {
-    await fs.mkdir(".rhizz/diagrams", { recursive: true });
+  it("excludes .hcl files inside diagrams/ directory from compilation sources", async () => {
+    await fs.mkdir("diagrams", { recursive: true });
     await fs.writeFile(
-      ".rhizz/diagrams/overview.hcl",
+      "diagrams/overview.hcl",
       'view "overview" { system = "main" }',
     );
     await fs.writeFile("main.hcl", "# empty project without system main");
@@ -61,7 +61,7 @@ describe("readProjectSources", () => {
     expect(await readProjectSources(fs)).toEqual([]);
   });
 
-  it("unpacks example diagrams exclusively into .rhizz/diagrams without duplicating at root", async () => {
+  it("unpacks example diagrams into diagrams/ at the project root without duplicating", async () => {
     const files = [
       { path: "project.hcl", content: 'project { name = "apollo" }' },
       {
@@ -77,28 +77,27 @@ describe("readProjectSources", () => {
     const project = await createProjectWithFiles("apollo-test", files);
     const projFs = openProjectFs(projectStore, project.id);
 
-    // Root entries should contain project.hcl, components, and .rhizz, but NOT diagrams
+    // Root entries should contain project.hcl, components, and diagrams
     const rootEntries = await projFs.readdir(".");
     const rootNames = rootEntries.map((e) => e.name);
     expect(rootNames).toContain("project.hcl");
     expect(rootNames).toContain("components");
-    expect(rootNames).toContain(".rhizz");
-    expect(rootNames).not.toContain("diagrams");
+    expect(rootNames).toContain("diagrams");
+    expect(rootNames).not.toContain(".rhizz");
 
-    // Check .rhizz/diagrams contains main.hcl
-    const rhizzDiagrams = await projFs.readdir(".rhizz/diagrams");
-    expect(rhizzDiagrams.map((e) => e.name)).toContain("main.hcl");
+    // Check diagrams contains main.hcl
+    const diagrams = await projFs.readdir("diagrams");
+    expect(diagrams.map((e) => e.name)).toContain("main.hcl");
 
     // Check components directory contains mcu.hcl
     const compEntries = await projFs.readdir("components");
     expect(compEntries.map((e) => e.name)).toContain("mcu.hcl");
 
-    // Check compilation sources: must include project.hcl & components/mcu.hcl, NOT .rhizz diagram files
+    // Check compilation sources: must include project.hcl & components/mcu.hcl, NOT diagram files
     const sources = await readProjectSources(projFs);
     const filenames = sources.map((s) => s.filename);
     expect(filenames).toContain("project.hcl");
     expect(filenames).toContain("components/mcu.hcl");
     expect(filenames).not.toContain("diagrams/main.hcl");
-    expect(filenames).not.toContain(".rhizz/diagrams/main.hcl");
   });
 });
