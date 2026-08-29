@@ -1,9 +1,9 @@
 # Rhizz — Rhizomatic Systems Engineering
 
-An actually useful architecture tool for software architects. Express high-level
-system concepts as code and validate them with a compiler accepting different
-levels of precision, from a business-level description, all the way to a
-byte-by-byte interface definition.
+Rhizz strives to be an actually useful architecture tool for software
+architects. Express high-level system concepts as code and validate them with a
+compiler accepting different levels of precision, from a business-level
+description, all the way to a byte-by-byte interface definition.
 
 In other words - a code-first [MBSE](https://baczek.me/mbse) tool.
 
