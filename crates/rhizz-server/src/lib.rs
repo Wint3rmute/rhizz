@@ -15,3 +15,6 @@ pub mod server;
 
 /// Compile-time embedding of the web frontend.
 pub mod assets;
+
+/// Filesystem persistence for the VFS API.
+pub mod storage;

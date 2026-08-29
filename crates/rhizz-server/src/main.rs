@@ -1,5 +1,6 @@
 //! Entry point for the `rhizz-server` binary.
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -12,8 +13,11 @@ fn main() -> ExitCode {
         .init();
 
     // Bind address, overridable so a build can be smoke-tested without
-    // clashing with other servers; the persistence step adds RHIZZ_DATA_DIR.
+    // clashing with other servers.
     let addr = std::env::var("RHIZZ_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_owned());
+    // Where per-project VFS dumps live.
+    let data_dir =
+        PathBuf::from(std::env::var("RHIZZ_DATA_DIR").unwrap_or_else(|_| "rhizz-data".to_owned()));
 
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -23,7 +27,7 @@ fn main() -> ExitCode {
         }
     };
 
-    match runtime.block_on(rhizz_server::server::run(&addr)) {
+    match runtime.block_on(rhizz_server::server::run(&addr, data_dir)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             tracing::error!(%err, "server exited with an error");
