@@ -1,4 +1,103 @@
 @import "tailwindcss";
+
 @plugin "daisyui" {
-  themes: dark --default, light;
+  themes: false;
+}
+
+/* Rhizz light theme, based on the restrained warm-gray palette from the
+ * personal site. Keeping the public theme names as light/dark means the
+ * existing ThemeState and Storybook integrations need no special mapping. */
+@plugin "daisyui/theme" {
+  name: "light";
+  default: false;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: #f9f9f7;
+  --color-base-200: #f4f4f2;
+  --color-base-300: #eeeeec;
+  --color-base-content: #1a1c1b;
+
+  --color-primary: #09BC8A;
+  --color-primary-content: #ffffff;
+  --color-secondary: #444748;
+  --color-secondary-content: #f9f9f7;
+  --color-accent: #0000cc;
+  --color-accent-content: #ffffff;
+  --color-neutral: #444748;
+  --color-neutral-content: #f9f9f7;
+
+  --color-info: #66829a;
+  --color-info-content: #101820;
+  --color-success: #718c78;
+  --color-success-content: #102015;
+  --color-warning: #a38a59;
+  --color-warning-content: #211a0d;
+  --color-error: #a66f6f;
+  --color-error-content: #251010;
+
+  --radius-selector: 0;
+  --radius-field: 0;
+  --radius-box: 0;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "dark";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #131313;
+  --color-base-200: #1b1c1c;
+  --color-base-300: #1f2020;
+  --color-base-content: #e4e2e1;
+
+  --color-primary: #09BC8A;
+  --color-primary-content: #1a1c1b;
+  --color-secondary: #8e9292;
+  --color-secondary-content: #131313;
+  --color-accent: #e5e2e1;
+  --color-accent-content: #131313;
+  --color-neutral: #444748;
+  --color-neutral-content: #e4e2e1;
+
+  --color-info: #8197a8;
+  --color-info-content: #13191e;
+  --color-success: #829987;
+  --color-success-content: #121a14;
+  --color-warning: #aa966f;
+  --color-warning-content: #1d190f;
+  --color-error: #A52422;
+  --color-error-content: #211313;
+
+  --radius-selector: 0;
+  --radius-field: 0;
+  --radius-box: 0;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@theme {
+  --font-sans: "Times New Roman", Times, serif;
+}
+
+html {
+  font-size: 110%;
+}
+
+body {
+  font-family: "Times New Roman", Times, serif;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: var(--color-primary-content);
 }
