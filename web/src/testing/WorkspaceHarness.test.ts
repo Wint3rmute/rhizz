@@ -27,6 +27,18 @@ describe("WorkspaceHarness", () => {
     });
   }
 
+  it("preserves selected logical identity across the first software-house visual edit", async () => {
+    const workspace = await WorkspaceHarness.fromExample("software-house");
+    const selectedKey = "acme-software/engineering/frontend-team";
+    workspace.selectComponent(selectedKey);
+
+    await workspace.setSelectedComponentVisuals({ color: "primary" });
+    expect(workspace.selectedComponentKey).toBe(selectedKey);
+
+    await workspace.setSelectedComponentVisuals({ border: "dotted" });
+    expect(workspace.selectedComponentKey).toBe(selectedKey);
+  });
+
   it("resolves selection by qualified component key", async () => {
     const workspace = await WorkspaceHarness.fromExample("software-house");
     const key = workspace.componentKeys[0];

@@ -47,7 +47,7 @@ export class WorkspaceHarness {
   #components: ComponentJS[] = [];
   #systems: SystemJS[] = [];
   #canonicalHcl = "";
-  #selectedIndex: number | null = null;
+  #selectedKey: string | null = null;
 
   private constructor(fs: ProjectFs) {
     this.fs = fs;
@@ -89,18 +89,20 @@ export class WorkspaceHarness {
   }
 
   get selectedComponentKey(): string | null {
-    if (this.#selectedIndex === null) return null;
-    return componentKey(this.#selectedIndex, this.#components, this.#systems);
+    return this.#selectedKey;
   }
 
   get selectedIndex(): number | null {
-    return this.#selectedIndex;
+    if (this.#selectedKey === null) return null;
+    const index = this.componentKeys.indexOf(this.#selectedKey);
+    return index === -1 ? null : index;
   }
 
   selectComponent(key: string): void {
-    const index = this.componentKeys.indexOf(key);
-    if (index === -1) throw new Error(`Component ${key} not found`);
-    this.#selectedIndex = index;
+    if (!this.componentKeys.includes(key)) {
+      throw new Error(`Component ${key} not found`);
+    }
+    this.#selectedKey = key;
   }
 
   snapshot(): WorkspaceSnapshot {
