@@ -404,10 +404,12 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
             <li><span class="text-base-content/60">Explore</span></li>
             <li><span>{diagramTitle(selectedDiagramPath)}</span></li>
           </ul>
-          <EmbedDiagramButton
-            projectId={effectiveProjectId}
-            diagramPath={selectedDiagramPath}
-          />
+          <div class="shrink-0 w-40">
+            <EmbedDiagramButton
+              projectId={effectiveProjectId}
+              diagramPath={selectedDiagramPath}
+            />
+          </div>
         </nav>
       {/if}
       <div
