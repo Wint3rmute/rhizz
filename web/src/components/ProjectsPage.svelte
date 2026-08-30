@@ -1,6 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { resolve } from "$app/paths";
+import { base, resolve } from "$app/paths";
 import {
   createProjectWithFiles,
   createProjectWithMainFile,
@@ -38,6 +38,16 @@ let exampleProjects = $state<ExampleProject[]>([]);
 
 let effectiveProjects = $derived(projects ?? localProjects);
 let effectiveLoading = $derived(loading ?? localLoading);
+
+// Screenshots that slowly scroll behind the landing hero. Referenced via
+// `base` so they resolve correctly both locally (base = "") and on GitHub
+// Pages (base = "/<repo>").
+const backgroundImages = [
+  "background_1.png",
+  "background_2.png",
+  "background_3.png",
+  "background_4.png",
+];
 
 async function refresh() {
   const loaded = await projectStore.listProjects();
@@ -114,8 +124,30 @@ async function deleteProject(project: Project) {
       <!-- Empty state doubles as the landing page: a hero with a
            call-to-action to create a new project, either completely new
            or based on one of the bundled examples. -->
-      <div class="hero min-h-[55vh]">
-        <div class="hero-content text-center flex-col">
+      <div class="relative">
+        <!-- Slowly scrolling background of product screenshots. -->
+        <div
+          class="absolute inset-0 overflow-hidden pointer-events-none"
+          aria-hidden="true"
+        >
+          <div class="scrolling-background flex h-full w-max">
+            <!-- Rendered twice so the -50% translate loops seamlessly. -->
+            {#each [0, 1] as _ ( _)}
+              {#each backgroundImages as name (name)}
+                <img
+                  src="{base}/screenshots/{name}"
+                  alt=""
+                  class="h-full w-auto object-cover"
+                  draggable="false"
+                />
+              {/each}
+            {/each}
+          </div>
+          <div class="absolute inset-0 bg-base-100/80"></div>
+        </div>
+
+        <div class="relative hero min-h-[55vh]">
+          <div class="hero-content text-center flex-col">
           <div class="max-w-xl">
             <div class="text-5xl mb-4">🗂️</div>
             <h1 class="text-3xl font-bold text-base-content">rhizz</h1>
@@ -151,6 +183,7 @@ async function deleteProject(project: Project) {
                 software house and more.
               </p>
             </button>
+          </div>
           </div>
         </div>
       </div>

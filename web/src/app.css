@@ -3,3 +3,20 @@
 @plugin "daisyui" {
   themes: dark --default, light;
 }
+
+/* Slowly scrolls the landing-page screenshot strip horizontally. The strip
+   is `w-max` and holds the images side by side; translating it by -50%
+   loops seamlessly because the image sequence is duplicated (see
+   ProjectsPage.svelte). */
+@keyframes landing-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.scrolling-background {
+  animation: landing-scroll 60s linear infinite;
+}
