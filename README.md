@@ -75,6 +75,12 @@ Environment variables:
 No authentication is implemented — the server assumes a public, trusted
 environment.
 
+> **Concurrency:** the VFS persistence API is a read-modify-write of the
+> whole blob with no locking or revision check. Two clients editing the
+> same project concurrently will silently overwrite each other (last write
+> wins). This is an accepted limitation for the current MVP stage; a
+> revision/ETag check is planned before multi-user use.
+
 ## Development commands
 
 See the [Justfile](Justfile).

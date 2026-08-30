@@ -16,8 +16,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use serde_json::Value;
+use thiserror::Error;
 
 /// VFS blob version written into every response, mirroring the frontend's.
 const VFS_VERSION: u64 = 1;
@@ -93,6 +94,19 @@ pub fn load_vfs(data_dir: &Path) -> Result<Value> {
     Ok(vfs)
 }
 
+/// Error type for [`save_vfs`], letting the caller distinguish a malformed
+/// payload (mapped to HTTP 400) from a filesystem failure (mapped to 500)
+/// without downcasting through the `anyhow` context chain.
+#[derive(Debug, Error)]
+pub enum SaveVfsError {
+    /// The payload does not match the whole-VFS shape.
+    #[error("{0}")]
+    Malformed(String),
+    /// The data dir could not be read or written.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
 /// Persists a whole-VFS payload as one file per project.
 ///
 /// The payload must be an object with a `projects` array (and a `nodes`
@@ -103,14 +117,17 @@ pub fn load_vfs(data_dir: &Path) -> Result<Value> {
 ///
 /// # Errors
 ///
-/// Returns an error for malformed payloads (the caller maps it to 400) or
-/// when the data dir cannot be written (maps to 500).
-pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<()> {
+/// Returns [`SaveVfsError::Malformed`] for malformed payloads (the caller
+/// maps it to 400) or [`SaveVfsError::Io`] when the data dir cannot be
+/// written (maps to 500).
+pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
     let obj = payload
         .as_object()
-        .with_context(|| "payload must be a JSON object")?;
+        .ok_or_else(|| SaveVfsError::Malformed("payload must be a JSON object".to_owned()))?;
     let Some(projects) = obj.get("projects").and_then(Value::as_array).cloned() else {
-        bail!("payload must have a `projects` array");
+        return Err(SaveVfsError::Malformed(
+            "payload must have a `projects` array".to_owned(),
+        ));
     };
     let nodes = obj
         .get("nodes")
@@ -122,45 +139,47 @@ pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<()> {
     let mut nodes_by_project: HashMap<&str, Vec<Value>> = HashMap::new();
     for project in &projects {
         let Some(id) = project.get("id").and_then(Value::as_str) else {
-            bail!("every project must have a string `id`");
+            return Err(SaveVfsError::Malformed(
+                "every project must have a string `id`".to_owned(),
+            ));
         };
         if !seen_ids.insert(id) {
-            bail!("duplicate project id `{id}`");
+            return Err(SaveVfsError::Malformed(format!(
+                "duplicate project id `{id}`"
+            )));
         }
         nodes_by_project.insert(id, Vec::new());
     }
     for node in &nodes {
         let Some(project_id) = node.get("projectId").and_then(Value::as_str) else {
-            bail!("every node must have a string `projectId`");
+            return Err(SaveVfsError::Malformed(
+                "every node must have a string `projectId`".to_owned(),
+            ));
         };
         if let Some(project_nodes) = nodes_by_project.get_mut(project_id) {
             project_nodes.push(node.clone());
         }
     }
 
-    fs::create_dir_all(data_dir)
-        .with_context(|| format!("cannot create data dir {}", data_dir.display()))?;
+    fs::create_dir_all(data_dir)?;
     for project in &projects {
         let id = project
             .get("id")
             .and_then(Value::as_str)
-            .context("project id must be a string")?;
+            .ok_or_else(|| SaveVfsError::Malformed("project id must be a string".to_owned()))?;
         let file_payload = serde_json::json!({ "project": project, "nodes": nodes_by_project.remove(id).unwrap_or_default() });
         let target = project_file(data_dir, id);
         let tmp = data_dir.join(format!(".{id}.tmp"));
-        let serialized =
-            serde_json::to_string_pretty(&file_payload).context("cannot serialize project dump")?;
-        fs::write(&tmp, serialized).with_context(|| format!("cannot write {}", tmp.display()))?;
-        fs::rename(&tmp, &target)
-            .with_context(|| format!("cannot rename {} to {}", tmp.display(), target.display()))?;
+        let serialized = serde_json::to_string_pretty(&file_payload)
+            .map_err(|err| SaveVfsError::Io(err.into()))?;
+        fs::write(&tmp, serialized)?;
+        fs::rename(&tmp, &target)?;
     }
 
     // Delete dumps for projects absent from the payload.
-    let existing = fs::read_dir(data_dir)
-        .with_context(|| format!("cannot read data dir {}", data_dir.display()))?;
+    let existing = fs::read_dir(data_dir)?;
     for entry in existing {
-        let entry =
-            entry.with_context(|| format!("cannot read entry in {}", data_dir.display()))?;
+        let entry = entry?;
         let path = entry.path();
         let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
@@ -169,8 +188,7 @@ pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<()> {
             continue;
         };
         if !seen_ids.contains(project_id) {
-            fs::remove_file(&path)
-                .with_context(|| format!("cannot remove stale dump {}", path.display()))?;
+            fs::remove_file(&path)?;
         }
     }
 

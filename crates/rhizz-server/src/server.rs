@@ -60,10 +60,13 @@ async fn put_vfs(State(data_dir): State<PathBuf>, body: Bytes) -> Response {
     match storage::save_vfs(&data_dir, &payload) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => {
-            let status = if err.downcast_ref::<std::io::Error>().is_some() {
-                StatusCode::INTERNAL_SERVER_ERROR
-            } else {
-                StatusCode::BAD_REQUEST
+            // A malformed payload is the client's fault (400); a filesystem
+            // failure is ours (500). The typed error keeps this distinction
+            // reliable — downcasting through the anyhow context chain would
+            // not be.
+            let status = match err {
+                storage::SaveVfsError::Malformed(_) => StatusCode::BAD_REQUEST,
+                storage::SaveVfsError::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
             };
             tracing::error!(?err, ?status, "failed to persist VFS");
             error_response(status, "failed to persist VFS")
@@ -381,6 +384,29 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn put_vfs_maps_io_failure_to_500() {
+        // A data dir that cannot be created (it's a regular file) forces a
+        // filesystem error, which must surface as 500, not 400.
+        let tmp = tempfile::tempdir().unwrap();
+        let blocked = tmp.path().join("blocked");
+        std::fs::write(&blocked, "not a directory").unwrap();
+        let response = app(blocked)
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/vfs")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({ "version": 1, "projects": [], "nodes": [] }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     fn assert_content_type(response: &axum::response::Response, expected: &str) {
