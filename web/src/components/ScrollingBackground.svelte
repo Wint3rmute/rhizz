@@ -6,10 +6,10 @@
 // Import the screenshots directly so Vite processes them into hashed URLs
 // that work regardless of the app's base path (local, GitHub Pages, and
 // Storybook/Chromatic all resolve them correctly).
-import bg1 from "../../static/screenshots/background_1.png";
-import bg2 from "../../static/screenshots/background_2.png";
-import bg3 from "../../static/screenshots/background_3.png";
-import bg4 from "../../static/screenshots/background_4.png";
+import bg1 from "../screenshots/background_1.png";
+import bg2 from "../screenshots/background_2.png";
+import bg3 from "../screenshots/background_3.png";
+import bg4 from "../screenshots/background_4.png";
 
 const images = [bg1, bg2, bg3, bg4];
 
