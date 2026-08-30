@@ -80,6 +80,11 @@ import {
   SELECTION_OUTLINE_OPACITY,
   selectionOutlineRect,
 } from "./visuals";
+import {
+  buildGraduatedGridPatterns,
+  GRID_BASE_SPACING,
+  GRID_GRADUATIONS,
+} from "./grid";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
@@ -90,23 +95,33 @@ let root_svg: SVGElement;
 let canvas_width = $state(800);
 let canvas_height = $state(600);
 
-// Background grid spacing, in world (SVG) units. MAJOR_GRID_SPACING
-// matches the node size (100x100), so the grid doubles as a snapping
-// guide; MINOR_GRID_SPACING subdivides each major cell into tenths.
+// Background grid: a chain of nested SVG patterns, one per "graduation"
+// level (10 / 100 / 1000 world units — see grid.ts), each drawn more
+// visibly than the last so the grid's alignment is easy to read. The
+// GRID_BASE_SPACING constant matches the default node size snapped to the
+// finest level (100x100 nodes land on 10-unit grid lines), so the grid
+// doubles as a snapping guide.
+//
+// The tile sizes and per-level styling (multiples, stroke width, opacity,
+// color) are tuned via the GRID_GRADUATIONS constant in grid.ts — tweak it
+// live there and the canvas below follows, no other code depends on the
+// specific values. The canvas rect fills with the coarsest pattern; every
+// finer pattern nests inside the next coarser one and all stay aligned to
+// world coordinates, panning/zooming with the SVG viewBox.
 //
 // Note: spacing is fixed, so at extreme zoom the grid can get too dense
 // (zoomed out) or too sparse (zoomed in). If that becomes an issue, make
-// spacing adaptive: derive a multiplier from editor_state.view.zoom,
-// snapped to a "nice" progression (1, 2, 5, 10, 20, 50, ...) so that
-// MINOR_GRID_SPACING * zoom stays within a target pixel range (e.g.
-// 8-40px), and feed the result into the pattern's width/height and the
-// minorGridLines offsets below instead of the constants.
-const MAJOR_GRID_SPACING = 100;
-const MINOR_GRID_SPACING = 10;
-const minorGridLines = Array.from(
-  { length: MAJOR_GRID_SPACING / MINOR_GRID_SPACING - 1 },
-  (_, i) => (i + 1) * MINOR_GRID_SPACING,
+// it adaptive: derive a multiplier from editor_state.view.zoom, snapped to
+// a "nice" progression (1, 2, 5, 10, 20, 50, ...) and feed the resulting
+// multiples into buildGraduatedGridPatterns (or a re-render of it).
+const gridPatterns = buildGraduatedGridPatterns(
+  GRID_GRADUATIONS,
+  GRID_BASE_SPACING,
+  "Grid",
 );
+// The pattern id the canvas rect fills with — the coarsest level, which
+// draws every finer level beneath it.
+const gridFillId = gridPatterns[gridPatterns.length - 1]?.id ?? "Grid";
 
 let { data }: PageProps = $props();
 
@@ -168,12 +183,12 @@ const DEFAULT_NODE_HEIGHT = 100;
 // User-selectable snap grid sizes, in world units, offered by the
 // dropdown next to the "Snap to Grid" button. A fixed set (rather than a
 // free-form numeric input) keeps the choices "nice" round numbers that
-// also line up with MINOR_GRID_SPACING/MAJOR_GRID_SPACING above.
+// also line up with the grid's graduation levels in grid.ts.
 const SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 const DEFAULT_SNAP_GRID_SIZE: number = SNAP_GRID_SIZE_OPTIONS[0];
 
 // How many world units position/size snap to when "snap to grid" (below)
-// is enabled. Separate from MINOR_GRID_SPACING so it can be tuned
+// is enabled. Separate from the grid's base spacing so it can be tuned
 // independently. Persisted (unlike gridVisible/snapEnabled below) since
 // it's more of a per-project preference than a transient editing mode —
 // adjustable via the dropdown next to the "Snap to Grid" button.
@@ -2409,58 +2424,56 @@ $effect(() => {
       >
         <defs>
           <!--
-            World-space grid: patternUnits="userSpaceOnUse" ties the tile to
-            the same coordinate system as nodes/connections, so it pans and
-            zooms for free via the SVG's own viewBox transform — no JS math
-            needed. The tile is sized to the major spacing (100 units, same
-            as a node) and draws the minor lines inside it plus one bold
-            line on its own edge, which tiles seamlessly into the major grid.
+            World-space graduated grid: patternUnits="userSpaceOnUse" ties
+            each tile to the same coordinate system as nodes/connections, so
+            it pans and zooms for free via the SVG's own viewBox transform —
+            no JS math needed. The patterns form a chain (finest → coarsest,
+            see grid.ts): each coarser tile is filled with the next-finest
+            pattern and draws its own bolder edge lines on top, so lines at
+            every graduation level (10/100/1000 units) stay aligned to world
+            coordinates and tile seamlessly.
           -->
-          <pattern
-            id="Grid"
-            width={MAJOR_GRID_SPACING}
-            height={MAJOR_GRID_SPACING}
-            patternUnits="userSpaceOnUse"
-          >
-            {#each minorGridLines as i (i)}
+          {#each gridPatterns as pattern (pattern.id)}
+            <pattern
+              id={pattern.id}
+              width={pattern.size}
+              height={pattern.size}
+              patternUnits="userSpaceOnUse"
+            >
+              {#if pattern.fill}
+                <!-- Tile filled with the next-finest level, aligned to the
+                     same world-space origin, so lines at every level line up. -->
+                <rect
+                  x="0"
+                  y="0"
+                  width={pattern.size}
+                  height={pattern.size}
+                  fill="url(#{pattern.fill})"
+                />
+              {/if}
+              <!-- This level's own edge lines (right + bottom of the tile),
+                   drawn on top of the finer fill; each tile's edges meet the
+                   next tile's edges seamlessly. -->
               <line
-                x1={i}
+                x1={pattern.size}
                 y1="0"
-                x2={i}
-                y2={MAJOR_GRID_SPACING}
-                stroke="var(--color-base-content)"
-                stroke-opacity="0.08"
-                stroke-width="1"
+                x2={pattern.size}
+                y2={pattern.size}
+                stroke={pattern.stroke ?? "var(--color-base-content)"}
+                stroke-opacity={pattern.strokeOpacity}
+                stroke-width={pattern.strokeWidth}
               />
               <line
                 x1="0"
-                y1={i}
-                x2={MAJOR_GRID_SPACING}
-                y2={i}
-                stroke="var(--color-base-content)"
-                stroke-opacity="0.08"
-                stroke-width="1"
+                y1={pattern.size}
+                x2={pattern.size}
+                y2={pattern.size}
+                stroke={pattern.stroke ?? "var(--color-base-content)"}
+                stroke-opacity={pattern.strokeOpacity}
+                stroke-width={pattern.strokeWidth}
               />
-            {/each}
-            <line
-              x1="0"
-              y1="0"
-              x2={MAJOR_GRID_SPACING}
-              y2="0"
-              stroke="var(--color-base-content)"
-              stroke-opacity="0.2"
-              stroke-width="1"
-            />
-            <line
-              x1="0"
-              y1="0"
-              x2="0"
-              y2={MAJOR_GRID_SPACING}
-              stroke="var(--color-base-content)"
-              stroke-opacity="0.2"
-              stroke-width="1"
-            />
-          </pattern>
+            </pattern>
+          {/each}
           <marker
             id="arrow"
             markerWidth="8"
@@ -2490,7 +2503,7 @@ $effect(() => {
           </marker>
         </defs>
         <rect
-          fill={gridVisible ? "url(#Grid)" : "transparent"}
+          fill={gridVisible ? `url(#${gridFillId})` : "transparent"}
           x={editor_state.view.x}
           y={editor_state.view.y}
           width={canvas_width / editor_state.view.zoom}

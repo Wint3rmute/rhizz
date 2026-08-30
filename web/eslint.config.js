@@ -111,6 +111,7 @@ export default ts.config(
       "**/vfs/compile.test.ts",
       "**/diagrams/ComponentHierarchyTree.stories.ts",
       "**/diagrams/DiagramPage.stories.ts",
+      "**/diagrams/DiagramGridPage.stories.ts",
       "src/example_system.ts",
     ],
     rules: {
