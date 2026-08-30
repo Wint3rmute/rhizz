@@ -85,8 +85,12 @@ async fn spa_fallback(uri: Uri) -> Response {
     serve_path(path)
 }
 
-/// Serves `path` from the embedded assets. Missing paths that look like
-/// real files (contain a `.`) 404; anything else gets the SPA shell.
+/// Serves `path` from the embedded assets. Any path that isn't a real
+/// embedded file gets the SPA shell — the client router decides whether a
+/// route is valid and renders its own 404. We deliberately don't try to
+/// guess which paths are "real" routes: client-side routes can contain
+/// dots in path segments (e.g. `/diagrams/embed/main.hcl`), so a
+/// "contains a dot ⇒ 404" heuristic would break them.
 fn serve_path(path: &str) -> Response {
     let relative = path.trim_start_matches('/');
     if relative.is_empty() {
@@ -94,9 +98,6 @@ fn serve_path(path: &str) -> Response {
     }
     if let Some(file) = StaticAssets::get(relative) {
         return asset_response(file, relative);
-    }
-    if relative.contains('.') {
-        return error_response(StatusCode::NOT_FOUND, "not found");
     }
     spa_shell()
 }
@@ -224,6 +225,25 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/projects/staging/diagrams")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_content_type(&response, "text/html");
+    }
+
+    #[tokio::test]
+    async fn client_route_with_dot_in_segment_falls_back_to_spa_shell() {
+        // A client-side route whose path contains a dot in a segment (here
+        // the `main.hcl` file name) must still get the SPA shell — it is not
+        // a missing static asset.
+        let tmp = tempfile::tempdir().unwrap();
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .uri("/projects/04e58d81-8bc3-4cc6-9a04-b9da48b996bb/diagrams/embed/main.hcl")
                     .body(Body::empty())
                     .unwrap(),
             )
