@@ -13,8 +13,68 @@ on:
         required: true
 
 jobs:
-  build-frontend:
-    name: build
+  # Code-quality checks (formatting + lint). The lint step is the slowest
+  # (~2m), so it runs in its own job and does not block the build/publish
+  # pipeline.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.4
+          cache-hash: ${{ hashFiles('**/deno.json') }}
+
+      - name: Deno Install
+        run: deno install
+        working-directory: ./web
+
+      - name: Typescript Formatting check
+        run: deno fmt --check
+        working-directory: ./web
+
+      - name: Lint Frontend
+        run: deno run lint
+        working-directory: ./web
+
+  # Type-checking and unit tests, independent of lint and of the build.
+  check-test:
+    name: check-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download wasm artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: 2.9.4
+          cache-hash: ${{ hashFiles('**/deno.json') }}
+
+      - name: Deno Install
+        run: deno install
+        working-directory: ./web
+
+      - name: Svelte Check
+        run: deno run check
+        working-directory: ./web
+
+      - name: Test Frontend
+        run: deno run test --project=unit_tests
+        working-directory: ./web
+
+  # Build, publish to Chromatic, and stage the frontend artifact. Depends only
+  # on the wasm artifact, not on lint/check/test.
+  build-publish:
+    name: build-publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -39,24 +99,8 @@ jobs:
           deno-version: 2.9.4
           cache-hash: ${{ hashFiles('**/deno.json') }}
 
-      - name: Typescript Formatting check
-        run: deno fmt --check
-        working-directory: ./web
-
       - name: Deno Install
         run: deno install
-        working-directory: ./web
-
-      - name: Lint Frontend
-        run: deno run lint
-        working-directory: ./web
-
-      - name: Svelte Check
-        run: deno run check
-        working-directory: ./web
-
-      - name: Test Frontend
-        run: deno run test --project=unit_tests
         working-directory: ./web
 
       - name: Build Frontend
