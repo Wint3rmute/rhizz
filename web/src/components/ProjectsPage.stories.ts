@@ -68,7 +68,7 @@ export const EmptyLanding: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("heading", { name: "rhizz" }))
+    await expect(canvas.getByRole("heading", { name: "Rhizz" }))
       .toBeInTheDocument();
     await expect(
       canvas.getByRole("button", { name: /Start from an example/ }),

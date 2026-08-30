@@ -49,6 +49,12 @@ const backgroundImages = [
   "background_4.png",
 ];
 
+// Tweakable landing-background constants.
+// How wide the scrolling screenshot strip is (per image).
+const backgroundWidth = "100vw";
+// Delicate blur applied to the background screenshots.
+const backgroundBlur = "4px";
+
 async function refresh() {
   const loaded = await projectStore.listProjects();
   // Most recently touched first — the store bumps a project's updatedAt
@@ -117,48 +123,54 @@ async function deleteProject(project: Project) {
 </script>
 
 <div class="flex-1 w-full bg-base-100 overflow-y-auto">
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-    {#if effectiveLoading}
+  {#if effectiveLoading}
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <p class="text-base-content/60">Loading…</p>
-    {:else if effectiveProjects.length === 0}
-      <!-- Empty state doubles as the landing page: a hero with a
-           call-to-action to create a new project, either completely new
-           or based on one of the bundled examples. -->
-      <div class="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
-        <!-- Slowly scrolling background of product screenshots, larger than
-             the hero card and filling the whole landing area behind it. -->
+    </div>
+  {:else if effectiveProjects.length === 0}
+    <!-- Empty state doubles as the landing page: a full-width hero with a
+         call-to-action to create a new project, either completely new
+         or based on one of the bundled examples. -->
+    <div class="relative h-full min-h-[70vh] flex items-center justify-center overflow-hidden">
+      <!-- Slowly scrolling background of product screenshots, larger than
+           the hero card and filling the whole landing area behind it. -->
+      <div
+        class="absolute inset-0 overflow-hidden pointer-events-none"
+        aria-hidden="true"
+      >
         <div
-          class="absolute inset-0 overflow-hidden pointer-events-none"
-          aria-hidden="true"
+          class="scrolling-background flex h-full"
+          style="width: {backgroundWidth}"
         >
-          <div class="scrolling-background flex h-full w-max">
-            <!-- Rendered twice so the -50% translate loops seamlessly. -->
-            {#each [0, 1] as _ ( _)}
-              {#each backgroundImages as name (name)}
-                <img
-                  src="{base}/screenshots/{name}"
-                  alt=""
-                  class="h-full w-auto object-cover"
-                  draggable="false"
-                />
-              {/each}
+          <!-- Rendered twice so the -50% translate loops seamlessly. -->
+          {#each [0, 1] as _ ( _)}
+            {#each backgroundImages as name (name)}
+              <img
+                src="{base}/screenshots/{name}"
+                alt=""
+                class="h-full w-auto object-cover"
+                style="filter: blur({backgroundBlur})"
+                draggable="false"
+              />
             {/each}
-          </div>
-          <div class="absolute inset-0 bg-base-100/60"></div>
+          {/each}
         </div>
+        <div class="absolute inset-0 bg-base-100/60"></div>
+      </div>
 
-        <!-- Solid card holding the hero text and CTAs, sitting on top of the
-             scrolling background. -->
-        <div class="relative card bg-base-100 shadow-2xl border border-base-content/10 max-w-2xl w-full mx-4">
-          <div class="card-body items-center text-center p-8 sm:p-12">
+      <!-- Solid card holding the hero text and CTAs, sitting on top of the
+           scrolling background. -->
+      <div class="relative card bg-base-100 shadow-2xl border border-base-content/10 max-w-2xl w-full mx-4">
+        <div class="card-body items-center text-center p-8 sm:p-12">
             <div class="text-5xl mb-4">🗂️</div>
-            <h1 class="text-3xl font-bold text-base-content">rhizz</h1>
-            <p class="text-base-content/70 py-4 max-w-xl">
+            <h1 class="text-3xl font-bold text-base-content">Rhizz</h1>
+            <p class="text-base-content py-4 max-w-xl">
               Model your system architecture and verify it. Build your system in
               an interactive diagrams editor or write it as code (or have AI
               write it). Explore architecture as interactive, nested diagrams,
-              improve your systems completion metrics. All version-controlled,
-              all owned by you. </p>
+              Detect missing pieces, improve your systems completion metrics.
+              All open source, all owned by you.
+            </p>
             <div class="grid gap-4 sm:grid-cols-2 w-full max-w-xl">
               <button
                 class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20"
@@ -190,51 +202,52 @@ async function deleteProject(project: Project) {
         </div>
       </div>
     {:else}
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
-        <div class="flex gap-2">
-          <button class="btn btn-outline" onclick={openExampleModal}>
-            New from example
-          </button>
-          <button class="btn btn-primary" onclick={createEmpty}>
-            New project
-          </button>
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
+          <div class="flex gap-2">
+            <button class="btn btn-outline" onclick={openExampleModal}>
+              New from example
+            </button>
+            <button class="btn btn-primary" onclick={createEmpty}>
+              New project
+            </button>
+          </div>
         </div>
-      </div>
 
-      <ul class="space-y-2">
-        {#each effectiveProjects as project (project.id)}
-          <li
-            class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
-          >
-            <button
-              class="flex-1 text-left cursor-pointer"
-              onclick={() => openProject(project)}
+        <ul class="space-y-2">
+          {#each effectiveProjects as project (project.id)}
+            <li
+              class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
             >
-              <div class="font-semibold text-base-content">
-                {project.name}
-              </div>
-              <div class="text-xs text-base-content/50">
-                Updated {new Date(project.updatedAt).toLocaleString()}
-              </div>
-            </button>
-            <button
-              class="btn btn-ghost btn-sm"
-              onclick={() => renameProject(project)}
-            >
-              Rename
-            </button>
-            <button
-              class="btn btn-ghost btn-sm text-error"
-              onclick={() => deleteProject(project)}
-            >
-              Delete
-            </button>
-          </li>
-        {/each}
-      </ul>
+              <button
+                class="flex-1 text-left cursor-pointer"
+                onclick={() => openProject(project)}
+              >
+                <div class="font-semibold text-base-content">
+                  {project.name}
+                </div>
+                <div class="text-xs text-base-content/50">
+                  Updated {new Date(project.updatedAt).toLocaleString()}
+                </div>
+              </button>
+              <button
+                class="btn btn-ghost btn-sm"
+                onclick={() => renameProject(project)}
+              >
+                Rename
+              </button>
+              <button
+                class="btn btn-ghost btn-sm text-error"
+                onclick={() => deleteProject(project)}
+              >
+                Delete
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </div>
     {/if}
-  </div>
 </div>
 
 {#if showExampleModal}
