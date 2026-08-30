@@ -115,8 +115,11 @@ describe("DocumentStore", () => {
 
     expect(doc.findComponent("demo/sensor")).toBeNull();
     expect(doc.findComponent("demo/subsys/sensor")).toBeDefined();
+    // Flat serialization: sensor is a standalone definition keyed by path, and
+    // subsys references it via source.
+    expect(doc.systemHcl).toContain('component "demo/subsys/sensor" {');
     expect(doc.systemHcl).toContain(
-      'component "subsys" {\n\n    component "sensor"',
+      'component "subsys" {\n    source = "demo/subsys"',
     );
   });
 
@@ -434,5 +437,121 @@ system "apollo-11" {
     expect(comp).toBeDefined();
     expect(comp?.label).toBe("cm");
     expect(comp?.description).toBe("Command module");
+  });
+
+  it("serializes multi-system reuse as flat standalone definitions", () => {
+    // A component reused across two systems must serialize as standalone
+    // top-level definitions with source references, never inlined.
+    const systemHcl = `component "engine" {
+  description = "shared engine"
+  leaf = true
+}
+system "airborne" {
+  component "plane" {
+    source = "engine"
+  }
+}
+system "hangar" {
+  component "plane" {
+    source = "engine"
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    expect(doc.systems).toHaveLength(2);
+    const hcl = doc.systemHcl;
+
+    // The shared definition is emitted once under its own label, not the
+    // instance paths.
+    expect(hcl).toContain('component "engine" {');
+    expect(hcl).not.toContain('component "airborne/plane" {');
+    expect(hcl).not.toContain('component "hangar/plane" {');
+    // Systems reference their children via source pointing at the definition.
+    expect(hcl).toContain('source = "engine"');
+
+    // Round-trip compiles with no errors.
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
+  it("round-trips a loaded model with child-to-sibling and child-to-child connections", () => {
+    // The HCL the editor produces after: satellite{radio, obc}, ground-station,
+    // plus radio->ground-station and radio->obc connections.
+    const systemHcl = `system "main" {
+  component "satellite" {
+    component "radio" {
+      leaf = true
+    }
+    component "obc" {
+      leaf = true
+    }
+  }
+  component "ground-station" {
+    leaf = true
+  }
+
+  connection "radio-ground-station" {
+    from = "satellite/radio"
+    to   = "ground-station"
+  }
+  connection "radio-obc" {
+    from = "satellite/radio"
+    to   = "satellite/obc"
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    // Re-serializing and recompiling must not produce E002.
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
+  it("keeps a definition's label, not its instantiation path", () => {
+    // A definition instantiated inside a system must keep its definition label
+    // (satellite), not be renamed to the instance path (main/satellite).
+    const systemHcl = `component "satellite" {
+  description = "a satellite"
+  leaf = true
+}
+system "main" {
+  component "satellite" {
+    source = "satellite"
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    const hcl = doc.systemHcl;
+    expect(hcl).toContain('component "satellite" {');
+    expect(hcl).not.toContain('component "main/satellite" {');
+    expect(hcl).toContain('source = "satellite"');
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
+  it("round-trips connections from a child to a sibling and to a sibling child", () => {
+    // Build: main/satellite{radio, obc}, main/ground-station. Connect
+    // radio->ground-station and radio->obc. Both must round-trip without E002.
+    const doc = new DocumentStore();
+    doc.addSystem("main");
+    doc.addComponent("main", "satellite", false);
+    doc.addComponent("main", "ground-station", true);
+    doc.addComponent("main/satellite", "radio", true);
+    doc.addComponent("main/satellite", "obc", true);
+
+    doc.addConnection("main", {
+      label: "radio-ground-station",
+      from: "satellite/radio",
+      to: "ground-station",
+    });
+    doc.addConnection("main", {
+      label: "radio-obc",
+      from: "satellite/radio",
+      to: "satellite/obc",
+    });
+
+    expect(doc.compileResult.error_count()).toBe(0);
   });
 });

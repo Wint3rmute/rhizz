@@ -27,6 +27,18 @@ use serde::Deserialize;
 // ── Model Serialization ───────────────────────────────────────────────────────
 
 /// Serializes a resolved [`Model`] into a canonical, formatted HCL string.
+///
+/// Components are emitted as standalone top-level definitions, never inlined
+/// under a parent:
+///
+/// - A component instantiated via `source = "<label>"` is emitted once as
+///   `component "<label>"` (its definition label, not its instance path).
+/// - An inline component (no `source`) is emitted under its qualified path.
+///
+/// Systems and parent components reference their children via
+/// `source = "<label-or-path>"`. This keeps the model flat and stable across
+/// multi-system reuse instead of inlining clones or renaming definitions to
+/// their instantiation paths.
 #[must_use]
 pub fn serialize_model(model: &Model) -> String {
     let mut out = String::new();
@@ -47,7 +59,30 @@ pub fn serialize_model(model: &Model) -> String {
         serialize_protocol(&mut out, proto, model);
     }
 
-    // 3. System blocks (sorted by label for determinism)
+    // 3. Component definitions. Every component is emitted as a standalone
+    // top-level definition, sorted by its emitted label (its `source` label if
+    // it is an instance of a shared definition, otherwise its qualified path).
+    // Multiple instances of the same shared definition share one emitted label,
+    // so emit only the first (deduplicated by label). Sorting by the emitted
+    // label keeps the block order stable across round-trips (an inline
+    // component becomes a sourced definition after re-parse, but its emitted
+    // label is unchanged).
+    let mut components: Vec<&Component> = model.components.iter().collect();
+    components.sort_by_key(|a| component_label(a, model));
+
+    let mut seen_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for comp in components {
+        let label = component_label(comp, model);
+        if !seen_labels.insert(label.clone()) {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        serialize_component_def(&mut out, comp, model);
+    }
+
+    // 4. System blocks (sorted by label for determinism).
     let mut systems: Vec<&System> = model.systems.iter().collect();
     systems.sort_by(|a, b| a.label.cmp(&b.label));
 
@@ -107,7 +142,8 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
         let _ = writeln!(out, "{indent}level       = {}", sys.level);
     }
 
-    // Child components (sorted by label)
+    // Direct child components, referenced via `source` pointing at their
+    // standalone top-level definition (sorted by label).
     let mut child_comps: Vec<&Component> = sys
         .components
         .iter()
@@ -117,7 +153,13 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
 
     for comp in child_comps {
         out.push('\n');
-        serialize_component(out, comp, model, 1, sys.level);
+        let _ = writeln!(out, "{indent}component {} {{", escape_string(&comp.label));
+        let _ = writeln!(
+            out,
+            "{indent}  source = {}",
+            escape_string(&component_ref(comp, model))
+        );
+        let _ = writeln!(out, "{indent}}}");
     }
 
     // System-level connections (sorted by label)
@@ -136,55 +178,56 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
     out.push_str("}\n");
 }
 
-fn serialize_component(
-    out: &mut String,
-    comp: &Component,
-    model: &Model,
-    depth: usize,
-    parent_level: i32,
-) {
-    let indent = "  ".repeat(depth);
-    let _ = writeln!(out, "{indent}component {} {{", escape_string(&comp.label));
+/// Serializes a single component as a standalone top-level definition. The
+/// definition is keyed by its `source` label when the component is an instance
+/// of a shared definition, otherwise by its qualified path. Children are
+/// referenced via `source` pointing at their own standalone definitions rather
+/// than inlined.
+fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
+    // Definitions are keyed by their source label; inline components by their
+    // qualified path.
+    let label = component_label(comp, model);
+    let _ = writeln!(out, "component {} {{", escape_string(&label));
 
-    let inner_indent = "  ".repeat(depth.saturating_add(1));
+    let indent = "  ";
 
     if !comp.description.is_empty() {
         let _ = writeln!(
             out,
-            "{inner_indent}description = {}",
+            "{indent}description = {}",
             escape_string(&comp.description)
         );
     }
     if let Some(icon) = comp.icon.as_deref().filter(|s| !s.is_empty()) {
-        let _ = writeln!(out, "{inner_indent}icon        = {}", escape_string(icon));
+        let _ = writeln!(out, "{indent}icon        = {}", escape_string(icon));
     }
     if let Some(color) = comp.color.as_deref().filter(|s| !s.is_empty()) {
-        let _ = writeln!(out, "{inner_indent}color       = {}", escape_string(color));
+        let _ = writeln!(out, "{indent}color       = {}", escape_string(color));
     }
     if let Some(border) = comp.border
         && border != BorderStyle::Solid
     {
         let _ = writeln!(
             out,
-            "{inner_indent}border      = {}",
+            "{indent}border      = {}",
             escape_string(border.as_str())
         );
     }
     if let Some(font) = comp.font.as_deref().filter(|s| !s.is_empty()) {
-        let _ = writeln!(out, "{inner_indent}font        = {}", escape_string(font));
+        let _ = writeln!(out, "{indent}font        = {}", escape_string(font));
     }
     if !comp.tags.is_empty() {
         let _ = writeln!(
             out,
-            "{inner_indent}tags        = {}",
+            "{indent}tags        = {}",
             format_string_list(&comp.tags)
         );
     }
-    if comp.level != parent_level.saturating_add(1) {
-        let _ = writeln!(out, "{inner_indent}level       = {}", comp.level);
+    if comp.level != 1 {
+        let _ = writeln!(out, "{indent}level       = {}", comp.level);
     }
     if comp.leaf {
-        let _ = writeln!(out, "{inner_indent}leaf        = true");
+        let _ = writeln!(out, "{indent}leaf        = true");
     }
 
     // Ports (sorted by label)
@@ -193,10 +236,11 @@ fn serialize_component(
 
     for port in ports {
         out.push('\n');
-        serialize_port(out, port, depth.saturating_add(1));
+        serialize_port(out, port, 1);
     }
 
-    // Child components (sorted by label)
+    // Child components, referenced via `source` pointing at their own
+    // standalone top-level definition (sorted by label).
     let mut child_comps: Vec<&Component> = comp
         .children
         .iter()
@@ -206,7 +250,13 @@ fn serialize_component(
 
     for child in child_comps {
         out.push('\n');
-        serialize_component(out, child, model, depth.saturating_add(1), comp.level);
+        let _ = writeln!(out, "{indent}component {} {{", escape_string(&child.label));
+        let _ = writeln!(
+            out,
+            "{indent}  source = {}",
+            escape_string(&component_ref(child, model))
+        );
+        let _ = writeln!(out, "{indent}}}");
     }
 
     // Internal connections (sorted by label)
@@ -219,10 +269,56 @@ fn serialize_component(
 
     for conn in child_conns {
         out.push('\n');
-        serialize_connection(out, conn, model, depth.saturating_add(1), comp.level);
+        serialize_connection(out, conn, model, 1, comp.level);
     }
 
-    let _ = writeln!(out, "{indent}}}");
+    out.push_str("}\n");
+}
+
+/// Builds the qualified path of a component from its root system, e.g.
+/// `airborne/plane/engine` (no leading slash). The root system label is
+/// included so the path is globally unique across systems — this is the
+/// component's identity used as its top-level definition label.
+fn component_path(comp: &Component, model: &Model) -> String {
+    let mut segments: Vec<String> = Vec::new();
+    let mut current = comp;
+    loop {
+        segments.push(current.label.clone());
+        match current.parent {
+            ComponentParent::Component(parent) => {
+                let Some(parent_comp) = model.component(parent) else {
+                    break;
+                };
+                current = parent_comp;
+            }
+            ComponentParent::System(sid) => {
+                if let Some(system) = model.system(sid) {
+                    segments.push(system.label.clone());
+                }
+                break;
+            }
+        }
+    }
+    segments.reverse();
+    segments.join("/")
+}
+
+/// Returns the reference used to point at a component from a parent or system:
+/// its `source` definition label when it is an instance of a shared definition,
+/// otherwise its qualified path.
+fn component_ref(comp: &Component, model: &Model) -> String {
+    comp.source
+        .clone()
+        .unwrap_or_else(|| component_path(comp, model))
+}
+
+/// Returns the label under which a component's definition is emitted: its
+/// `source` label when it is an instance of a shared definition, otherwise its
+/// qualified path.
+fn component_label(comp: &Component, model: &Model) -> String {
+    comp.source
+        .clone()
+        .unwrap_or_else(|| component_path(comp, model))
 }
 
 fn serialize_port(out: &mut String, port: &Port, depth: usize) {
@@ -1286,5 +1382,240 @@ system "monitored-device" {
                 "views serialization idempotency failed for {example_name}"
             );
         }
+    }
+
+    #[test]
+    fn test_flat_serialization_multi_system_reuse() {
+        // A component reused across two systems must serialize as standalone
+        // top-level definitions with `source` references, never inlined.
+        let hcl = r#"
+component "engine" {
+    description = "shared engine"
+    leaf = true
+}
+system "airborne" {
+    component "plane" {
+        source = "engine"
+    }
+}
+system "hangar" {
+    component "plane" {
+        source = "engine"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("should resolve");
+        let serialized = serialize_model(&model1);
+
+        // The shared definition is emitted once under its own label, not the
+        // instance paths.
+        assert!(
+            serialized.contains("component \"engine\" {"),
+            "{serialized}"
+        );
+        assert!(
+            !serialized.contains("component \"airborne/plane\" {"),
+            "definition wrongly keyed by instance path:\n{serialized}"
+        );
+        // Systems reference their children via source pointing at the shared
+        // definition, not inline bodies.
+        assert!(serialized.contains("source = \"engine\""), "{serialized}");
+
+        // Round-trip: recompiling the flat output yields the same systems.
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized,
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}",
+            res2.diagnostics
+        );
+        // No orphan top-level components: every emitted definition is
+        // referenced by a source somewhere.
+        assert!(
+            res2.diagnostics.iter().all(|d| d.code.code != "W012"),
+            "unexpected W012: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("should re-resolve");
+        assert_eq!(model2.systems.len(), 2);
+        assert_eq!(model2.systems[0].components.len(), 1);
+        assert_eq!(model2.systems[1].components.len(), 1);
+    }
+
+    #[test]
+    fn test_definition_label_preserved_across_instantiation() {
+        // A component defined once and instantiated under a system must keep
+        // its *definition* label (`satellite`), not be renamed to the instance
+        // path (`main/satellite`).
+        let hcl = r#"
+component "satellite" {
+    description = "a satellite"
+    leaf = true
+}
+system "main" {
+    component "satellite" {
+        source = "satellite"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors: {:?}",
+            res1.diagnostics
+        );
+        let serialized = serialize_model(&res1.model.expect("should resolve"));
+
+        // The definition must be emitted under its own label, not the instance
+        // path. The instance under `main` must reference it via source.
+        assert!(
+            serialized.contains("component \"satellite\" {"),
+            "definition renamed to instance path:\n{serialized}"
+        );
+        assert!(
+            serialized.contains("source = \"satellite\""),
+            "instance should source the definition:\n{serialized}"
+        );
+        // The definition must not be keyed by the instantiation path.
+        assert!(
+            !serialized.contains("component \"main/satellite\" {"),
+            "definition wrongly keyed by instance path:\n{serialized}"
+        );
+
+        // Round-trip must be stable: idempotent serialization keeps the
+        // definition label.
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}",
+            res2.diagnostics
+        );
+        let serialized2 = serialize_model(&res2.model.expect("should re-resolve"));
+        assert_eq!(serialized, serialized2, "serialization must be idempotent");
+    }
+
+    #[test]
+    fn test_flat_serialization_redundant_siblings() {
+        // Redundant avionics: two instances of the same definition under one
+        // parent must each serialize as their own standalone definition keyed
+        // by path, and round-trip without inlining.
+        let hcl = r#"
+component "avionics" {
+    description = "shared avionics"
+    leaf = true
+}
+system "plane" {
+    component "left-avionics" {
+        source = "avionics"
+    }
+    component "right-avionics" {
+        source = "avionics"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("should resolve");
+        let serialized = serialize_model(&model1);
+
+        // The shared definition is emitted once under its own label, and both
+        // instances reference it via source.
+        assert!(
+            serialized.contains("component \"avionics\" {"),
+            "{serialized}"
+        );
+        assert!(
+            !serialized.contains("component \"plane/left-avionics\" {"),
+            "definition wrongly keyed by instance path:\n{serialized}"
+        );
+        assert!(serialized.contains("source = \"avionics\""), "{serialized}");
+
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized,
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("should re-resolve");
+        assert_eq!(model2.systems[0].components.len(), 2);
+    }
+
+    #[test]
+    fn test_connection_from_child_to_sibling_and_sibling_child() {
+        // Regression: a connection from a child component (radio inside
+        // satellite) to a sibling top-level component (ground-station), plus a
+        // connection from radio to obc (both children of satellite), must
+        // round-trip without E002 (undefined component).
+        let hcl = r#"
+system "main" {
+    component "satellite" {
+        component "radio" {
+            leaf = true
+        }
+        component "obc" {
+            leaf = true
+        }
+    }
+    component "ground-station" {
+        leaf = true
+    }
+
+    connection "radio-ground-station" {
+        from = "satellite/radio"
+        to   = "ground-station"
+    }
+    connection "radio-obc" {
+        from = "satellite/radio"
+        to   = "satellite/obc"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "initial errors: {:?}",
+            res1.diagnostics
+        );
+        let serialized = serialize_model(&res1.model.expect("should resolve"));
+
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}\nserialized:\n{serialized}",
+            res2.diagnostics
+        );
     }
 }

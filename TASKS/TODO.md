@@ -13,16 +13,44 @@ How to work on this file:
 
 ---
 
-## Task <N> - Refresh the landing page
+## Task <N> - reverse "Snap to grid" defaults
 
-The current structure of the landing page is somewhat awkward. When navigating there,
-the user is first greeted with a barebones "rhizz - System Model Explorer" and a "Projects" button.
-Clicking on "projects" takes the user to the projects page. I want to change it:
+Make "snap to grid" enabled by default. Reverse the behavior of the Ctrl key -
+it should now disable snapping to grid while pressed.
 
-1. Replace the landing page with a single, unified "Projects" page that shows all projects.
-2. Simply use the existing "Projects" page
-3. If the user has no projects, show a bit more complex landing page, with a call-to-action to create a new project, either completely new or based on an example.
-4. If there are no Storybook stories for this, create one.
+## Task <N> - multi-select when holding Shift
+
+Change how the focus mechanics work when holding Shift - when holding Shift and
+clicking on the component, that component shall be added to the selection.
+
+## Task <N> - keyboard-driven attribute editing
+
+There's a number of attributes which I change often and I want to be able to edit
+them using keyboard shortcuts. It sounds intuitive to assign shortcuts to letters which start with the attribute name in the component inspector.
+
+Implement a functionality which will cycle through possible values of an attribute
+using keyboard shortcuts:
+
+- t - cycle through "text alignment" values
+- b - cycle through "border" values
+- c - cycle through "color" values
+- f - cycle through "font" values
+
+## Task <N> - deleting components and connections with the `delete` key
+
+Make it possible to use the delete key to trigger the deletion action on
+components and connections. Currently, this requires clicking "Delete" in the
+inspector. Make it possible to trigger this action using the keyboard. 
+
+## Task <N> - Editing/adding connections breaks the least-common-parent principle
+
+When using the diagram editor, adding a connection between two nodes sometimes
+causes the connection to be placed in the wrong place, which triggers an error -
+rhizz is telling me that a component does not exist, while in reality is the
+problem lies in the paths to components specified in the connection body.
+
+Try to find the root cause of the issue and isolate it within a unit test. Only
+after finding and isolating the issue, fix it.
 
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 

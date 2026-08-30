@@ -229,6 +229,11 @@ pub struct System {
 pub struct Component {
     /// Unique label within its parent scope.
     pub label: String,
+    /// The top-level definition this component was instantiated from via
+    /// `source = "..."`, if any. `None` for definitions and for components
+    /// that carry their body inline. Used by the serializer to emit
+    /// `source` references instead of inlining clones.
+    pub source: Option<String>,
     /// Human-readable description.
     pub description: String,
     /// Optional icon name (e.g. `FontAwesome` icon identifier).
