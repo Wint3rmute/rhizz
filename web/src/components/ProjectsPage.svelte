@@ -120,25 +120,12 @@ async function deleteProject(project: Project) {
             <div class="text-5xl mb-4">🗂️</div>
             <h1 class="text-3xl font-bold text-base-content">rhizz</h1>
             <p class="text-base-content/70 py-4">
-              Model your system architecture as code. Write your system in
-              HCL, get a diagram, a completion score and diagnostics —
-              all from a version-controllable text file.
-            </p>
-          </div>
-          <div class="grid gap-4 sm:grid-cols-2 w-full max-w-xl">
-            <button
-              class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
-              onclick={openExampleModal}
-            >
-              <div class="text-2xl mb-2">🚀</div>
-              <div class="font-semibold text-base-content">
-                Start from an example
-              </div>
-              <p class="text-xs text-base-content/70 mt-1">
-                Explore a bundled template system — drone, social media,
-                software house and more.
-              </p>
-            </button>
+              Model your system architecture and verify it. Build your system in
+              an interactive diagrams editor or write it as code (or have AI
+              write it). Explore architecture as interactive, nested diagrams,
+              improve your systems completion metrics. All version-controlled,
+              all owned by you. </p> </div> <div class="grid gap-4
+              sm:grid-cols-2 w-full max-w-xl">
             <button
               class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20"
               onclick={createEmpty}
@@ -149,6 +136,19 @@ async function deleteProject(project: Project) {
                 Start from a blank
                 <code class="font-mono text-xs">system.hcl</code> and build
                 your own model.
+              </p>
+            </button>
+            <button
+              class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
+              onclick={openExampleModal}
+            >
+              <div class="text-2xl mb-2">🚀</div>
+              <div class="font-semibold text-base-content">
+                Start from an example
+              </div>
+              <p class="text-xs text-base-content/70 mt-1">
+                Explore a bundled template system — drone, socia
+                software house and more.
               </p>
             </button>
           </div>
