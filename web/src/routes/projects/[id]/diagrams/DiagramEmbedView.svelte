@@ -16,6 +16,7 @@ let {
   projectId = null,
   diagramPath = null,
   selected = new Set<number>(),
+  onnodehover,
 }: {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
@@ -24,6 +25,10 @@ let {
   diagramPath?: string | null;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
   selected?: Set<number>;
+  /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
+  onnodehover?:
+    | ((index: number | null, event?: MouseEvent) => void)
+    | undefined;
 } = $props();
 
 let bounds = $derived.by(() => {
@@ -43,7 +48,14 @@ let fullDiagramUrl = $derived.by(() => {
 
 <DiagramViewport stateKey="DIAGRAM_EMBED" {bounds}>
   {#snippet content()}
-    <DiagramElements {components} {connections} {boxes} markerId="embed-arrow" {selected} />
+    <DiagramElements
+      {components}
+      {connections}
+      {boxes}
+      markerId="embed-arrow"
+      {selected}
+      {onnodehover}
+    />
   {/snippet}
 
   {#snippet toolbarExtra()}

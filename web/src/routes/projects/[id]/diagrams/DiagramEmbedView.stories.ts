@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, userEvent, within } from "storybook/test";
 import DiagramEmbedView from "./DiagramEmbedView.svelte";
 import type {
   DiagramStaticBox,
@@ -71,5 +72,34 @@ export const Mobile: Story = {
     boxes: sampleBoxes,
     projectId: "demo-project",
     diagramPath: "overview.hcl",
+  },
+};
+
+// The embed view forwards an optional onnodehover callback to the rendered
+// nodes (used by the embed page to show the component docs popup). This story
+// verifies the callback fires with the hovered component index. The callback
+// is captured at story-definition time (reassigning args.onnodehover after
+// mount would not update the already-rendered component).
+const hoveredIndices: (number | null)[] = [];
+export const HoverCallback: Story = {
+  args: {
+    components: sampleComponents,
+    connections: sampleConnections,
+    boxes: sampleBoxes,
+    projectId: "demo-project",
+    diagramPath: "overview.hcl",
+    onnodehover: (index: number | null) => {
+      hoveredIndices.push(index);
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The label <text> has pointer-events: none; the hover handler lives on
+    // the wrapping <a>, so hover that instead.
+    const text = await canvas.findByText("sensor");
+    const anchor = text.closest("a");
+    await expect(anchor).not.toBeNull();
+    await userEvent.hover(anchor as Element);
+    await expect(hoveredIndices).toContain(0);
   },
 };
