@@ -13,35 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - reverse "Snap to grid" defaults
-
-Make "snap to grid" enabled by default. Reverse the behavior of the Ctrl key -
-it should now disable snapping to grid while pressed.
-
-## Task <N> - multi-select when holding Shift
-
-Change how the focus mechanics work when holding Shift - when holding Shift and
-clicking on the component, that component shall be added to the selection.
-
-## Task <N> - keyboard-driven attribute editing
-
-There's a number of attributes which I change often and I want to be able to edit
-them using keyboard shortcuts. It sounds intuitive to assign shortcuts to letters which start with the attribute name in the component inspector.
-
-Implement a functionality which will cycle through possible values of an attribute
-using keyboard shortcuts:
-
-- t - cycle through "text alignment" values
-- b - cycle through "border" values
-- c - cycle through "color" values
-- f - cycle through "font" values
-
-## Task <N> - deleting components and connections with the `delete` key
-
-Make it possible to use the delete key to trigger the deletion action on
-components and connections. Currently, this requires clicking "Delete" in the
-inspector. Make it possible to trigger this action using the keyboard. 
-
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
