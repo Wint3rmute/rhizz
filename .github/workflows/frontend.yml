@@ -22,6 +22,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # ESLint needs the wasm package's generated types to resolve the `rhizz`
+      # import; without them it falls back to `any` and flags no-unsafe-* rules.
+      - name: Download wasm artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
+
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:
