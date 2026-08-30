@@ -62,6 +62,10 @@ export interface ConnectionData {
 
 export interface ComponentData {
   label: string;
+  /** The top-level definition this component was instantiated from via
+   * `source = "..."`, if any; `undefined` for components carrying their body
+   * inline. Used to serialize `source` references instead of inlining clones. */
+  source?: string | undefined;
   description?: string;
   icon?: string | undefined;
   color?: string | undefined;
@@ -117,6 +121,7 @@ export interface RawModelPayload {
   };
   components?: {
     label: string;
+    source?: string;
     description?: string;
     icon?: string;
     color?: string;
@@ -221,13 +226,33 @@ export class DocumentStore {
       lines.push("");
     }
 
-    // System blocks
+    // Component definitions: every component is emitted as a standalone
+    // top-level block keyed by its qualified path (including the root system),
+    // so nothing is inlined under a parent. Systems and parent components
+    // reference children via `source = "<path>"`.
     const sortedSystems = [...this.systems].sort((a, b) =>
       a.label.localeCompare(b.label)
     );
 
+    const allComponents: { sysLabel: string; comp: ComponentData }[] = [];
+    for (const sys of sortedSystems) {
+      this.collectComponents(sys.label, sys.components, allComponents);
+    }
+    allComponents.sort((a, b) =>
+      this.componentPath(a.sysLabel, a.comp).localeCompare(
+        this.componentPath(b.sysLabel, b.comp),
+      )
+    );
+
+    for (const { sysLabel, comp } of allComponents) {
+      lines.push("");
+      this.serializeComponentDef(lines, sysLabel, comp);
+    }
+
+    // System blocks
     for (let i = 0; i < sortedSystems.length; i++) {
       const sys = arenaAt(sortedSystems, i);
+      lines.push("");
       lines.push(`system ${escapeHclString(sys.label)} {`);
       if (sys.description) {
         lines.push(`  description = ${escapeHclString(sys.description)}`);
@@ -239,13 +264,20 @@ export class DocumentStore {
         lines.push(`  level       = ${String(sys.level)}`);
       }
 
-      // Child components
+      // Direct child components, referenced via source pointing at their
+      // standalone top-level definition.
       const sortedComps = [...sys.components].sort((a, b) =>
         a.label.localeCompare(b.label)
       );
       for (const comp of sortedComps) {
         lines.push("");
-        this.serializeComponent(lines, comp, 1, sys.level ?? 0);
+        lines.push(`  component ${escapeHclString(comp.label)} {`);
+        lines.push(
+          `    source = ${
+            escapeHclString(this.componentPath(sys.label, comp))
+          }`,
+        );
+        lines.push("  }");
       }
 
       // System-level connections
@@ -258,7 +290,6 @@ export class DocumentStore {
       }
 
       lines.push("}");
-      if (i + 1 < sortedSystems.length) lines.push("");
     }
 
     return lines.join("\n") + "\n";
@@ -291,15 +322,65 @@ export class DocumentStore {
 
   // ── Serialization Helpers ───────────────────────────────────────────────────
 
-  private serializeComponent(
-    lines: string[],
+  // Recursively collects every component in a system (with its root system
+  // label) so the flat serializer can emit them all as top-level definitions.
+  private collectComponents(
+    sysLabel: string,
+    comps: ComponentData[],
+    acc: { sysLabel: string; comp: ComponentData }[],
+  ): void {
+    for (const comp of comps) {
+      acc.push({ sysLabel, comp });
+      this.collectComponents(sysLabel, comp.components, acc);
+    }
+  }
+
+  // Builds the qualified path of a component from its root system, e.g.
+  // `airborne/plane/engine`. The system label is included so the path is
+  // globally unique across systems.
+  private componentPath(sysLabel: string, comp: ComponentData): string {
+    const segments: string[] = [];
+    let current: ComponentData | undefined = comp;
+    while (current) {
+      segments.unshift(current.label);
+      // Find the parent component by searching the tree.
+      current = this.findParentComponent(sysLabel, current);
+    }
+    segments.unshift(sysLabel);
+    return segments.join("/");
+  }
+
+  // Finds the parent ComponentData of `comp` within `sysLabel`, or undefined
+  // if `comp` is a direct child of the system.
+  private findParentComponent(
+    sysLabel: string,
     comp: ComponentData,
-    depth: number,
-    parentLevel: number,
+  ): ComponentData | undefined {
+    const sys = this.getSystem(sysLabel);
+    if (!sys) return undefined;
+    const search = (list: ComponentData[]): ComponentData | undefined => {
+      for (const c of list) {
+        if (c.components.includes(comp)) return c;
+        const found = search(c.components);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    return search(sys.components);
+  }
+
+  // Serializes a single component as a standalone top-level definition keyed
+  // by its qualified path. Children are referenced via `source` pointing at
+  // their own standalone definitions rather than inlined.
+  private serializeComponentDef(
+    lines: string[],
+    sysLabel: string,
+    comp: ComponentData,
   ) {
-    const indent = "  ".repeat(depth);
-    lines.push(`${indent}component ${escapeHclString(comp.label)} {`);
-    const inner = "  ".repeat(depth + 1);
+    lines.push(
+      `component ${escapeHclString(this.componentPath(sysLabel, comp))} {`,
+    );
+    const inner = "  ";
 
     if (comp.description) {
       lines.push(`${inner}description = ${escapeHclString(comp.description)}`);
@@ -319,12 +400,10 @@ export class DocumentStore {
     if (comp.tags && comp.tags.length > 0) {
       lines.push(`${inner}tags        = ${formatStringList(comp.tags)}`);
     }
-    if (comp.level !== undefined && comp.level !== parentLevel + 1) {
+    if (comp.level !== undefined && comp.level !== 1) {
       lines.push(`${inner}level       = ${String(comp.level)}`);
     }
     if (comp.leaf) lines.push(`${inner}leaf        = true`);
-
-    const curLevel = comp.level ?? parentLevel + 1;
 
     // Ports
     const sortedPorts = [...comp.ports].sort((a, b) =>
@@ -332,16 +411,21 @@ export class DocumentStore {
     );
     for (const port of sortedPorts) {
       lines.push("");
-      this.serializePort(lines, port, depth + 1);
+      this.serializePort(lines, port, 1);
     }
 
-    // Sub-components
+    // Child components, referenced via source pointing at their own standalone
+    // top-level definition.
     const sortedChildren = [...comp.components].sort((a, b) =>
       a.label.localeCompare(b.label)
     );
     for (const child of sortedChildren) {
       lines.push("");
-      this.serializeComponent(lines, child, depth + 1, curLevel);
+      lines.push(`  component ${escapeHclString(child.label)} {`);
+      lines.push(
+        `    source = ${escapeHclString(this.componentPath(sysLabel, child))}`,
+      );
+      lines.push("  }");
     }
 
     // Sub-connections
@@ -350,10 +434,10 @@ export class DocumentStore {
     );
     for (const conn of sortedConns) {
       lines.push("");
-      this.serializeConnection(lines, conn, depth + 1, curLevel);
+      this.serializeConnection(lines, conn, 1, comp.level ?? 1);
     }
 
-    lines.push(`${indent}}`);
+    lines.push("}");
   }
 
   private serializeProtocol(lines: string[], proto: ProtocolData) {
@@ -901,6 +985,7 @@ export class DocumentStore {
       const c = arenaAt(comps, cid);
       return {
         label: c.label,
+        source: c.source ?? undefined,
         description: c.description ?? "",
         icon: c.icon ?? "",
         color: c.color ?? "",

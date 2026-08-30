@@ -115,8 +115,11 @@ describe("DocumentStore", () => {
 
     expect(doc.findComponent("demo/sensor")).toBeNull();
     expect(doc.findComponent("demo/subsys/sensor")).toBeDefined();
+    // Flat serialization: sensor is a standalone definition keyed by path, and
+    // subsys references it via source.
+    expect(doc.systemHcl).toContain('component "demo/subsys/sensor" {');
     expect(doc.systemHcl).toContain(
-      'component "subsys" {\n\n    component "sensor"',
+      'component "subsys" {\n    source = "demo/subsys"',
     );
   });
 
@@ -434,5 +437,40 @@ system "apollo-11" {
     expect(comp).toBeDefined();
     expect(comp?.label).toBe("cm");
     expect(comp?.description).toBe("Command module");
+  });
+
+  it("serializes multi-system reuse as flat standalone definitions", () => {
+    // A component reused across two systems must serialize as standalone
+    // top-level definitions with source references, never inlined.
+    const systemHcl = `component "engine" {
+  description = "shared engine"
+  leaf = true
+}
+system "airborne" {
+  component "plane" {
+    source = "engine"
+  }
+}
+system "hangar" {
+  component "plane" {
+    source = "engine"
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    expect(doc.systems).toHaveLength(2);
+    const hcl = doc.systemHcl;
+
+    // Each instance is its own standalone definition keyed by path.
+    expect(hcl).toContain('component "airborne/plane" {');
+    expect(hcl).toContain('component "hangar/plane" {');
+    // Systems reference their children via source.
+    expect(hcl).toContain('source = "airborne/plane"');
+    expect(hcl).toContain('source = "hangar/plane"');
+
+    // Round-trip compiles with no errors.
+    expect(doc.compileResult.error_count()).toBe(0);
   });
 });
