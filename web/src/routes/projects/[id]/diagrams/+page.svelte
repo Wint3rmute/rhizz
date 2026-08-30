@@ -1287,11 +1287,20 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   // at mousedown, before anything moves.
   recordUndoPoint();
 
-  // Clicking a node that isn't already part of the selection replaces the
-  // selection with just that node. Clicking a node that's already
-  // selected (as part of a multi-selection) keeps the whole selection, so
-  // dragging it moves the whole group.
-  if (!selected.has(index)) selectOnly(index);
+  // Shift+click toggles the node in/out of the selection (multi-select).
+  // A plain click on a node that isn't already part of the selection
+  // replaces the selection with just that node; clicking a node that's
+  // already selected (as part of a multi-selection) keeps the whole
+  // selection, so dragging it moves the whole group.
+  if (event.shiftKey) {
+    if (selected.has(index)) {
+      deselect(index);
+    } else {
+      select(index);
+    }
+  } else if (!selected.has(index)) {
+    selectOnly(index);
+  }
 
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
