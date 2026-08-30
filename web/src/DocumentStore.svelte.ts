@@ -2,6 +2,7 @@
 // Holds mutable in-memory system architecture models and visual view layouts,
 // automatically deriving canonical HCL representations, diagnostics, and scores.
 
+import { SvelteSet } from "svelte/reactivity";
 import {
   compile_system,
   type NodeLayout,
@@ -227,9 +228,11 @@ export class DocumentStore {
     }
 
     // Component definitions: every component is emitted as a standalone
-    // top-level block keyed by its qualified path (including the root system),
-    // so nothing is inlined under a parent. Systems and parent components
-    // reference children via `source = "<path>"`.
+    // top-level block keyed by its definition label (its `source` label if it
+    // is an instance of a shared definition, otherwise its qualified path), so
+    // nothing is inlined under a parent. Systems and parent components
+    // reference children via `source = "<label>"`. Sorted by the emitted label
+    // and deduplicated so shared definitions are emitted once.
     const sortedSystems = [...this.systems].sort((a, b) =>
       a.label.localeCompare(b.label)
     );
@@ -239,12 +242,16 @@ export class DocumentStore {
       this.collectComponents(sys.label, sys.components, allComponents);
     }
     allComponents.sort((a, b) =>
-      this.componentPath(a.sysLabel, a.comp).localeCompare(
-        this.componentPath(b.sysLabel, b.comp),
+      this.componentLabel(a.sysLabel, a.comp).localeCompare(
+        this.componentLabel(b.sysLabel, b.comp),
       )
     );
 
+    const seenLabels = new SvelteSet<string>();
     for (const { sysLabel, comp } of allComponents) {
+      const label = this.componentLabel(sysLabel, comp);
+      if (seenLabels.has(label)) continue;
+      seenLabels.add(label);
       lines.push("");
       this.serializeComponentDef(lines, sysLabel, comp);
     }
@@ -274,7 +281,7 @@ export class DocumentStore {
         lines.push(`  component ${escapeHclString(comp.label)} {`);
         lines.push(
           `    source = ${
-            escapeHclString(this.componentPath(sys.label, comp))
+            escapeHclString(this.componentLabel(sys.label, comp))
           }`,
         );
         lines.push("  }");
@@ -350,6 +357,13 @@ export class DocumentStore {
     return segments.join("/");
   }
 
+  // Returns the label under which a component's definition is emitted: its
+  // `source` label when it is an instance of a shared definition, otherwise its
+  // qualified path.
+  private componentLabel(sysLabel: string, comp: ComponentData): string {
+    return comp.source ?? this.componentPath(sysLabel, comp);
+  }
+
   // Finds the parent ComponentData of `comp` within `sysLabel`, or undefined
   // if `comp` is a direct child of the system.
   private findParentComponent(
@@ -370,15 +384,16 @@ export class DocumentStore {
   }
 
   // Serializes a single component as a standalone top-level definition keyed
-  // by its qualified path. Children are referenced via `source` pointing at
-  // their own standalone definitions rather than inlined.
+  // by its definition label (source label or qualified path). Children are
+  // referenced via `source` pointing at their own standalone definitions rather
+  // than inlined.
   private serializeComponentDef(
     lines: string[],
     sysLabel: string,
     comp: ComponentData,
   ) {
     lines.push(
-      `component ${escapeHclString(this.componentPath(sysLabel, comp))} {`,
+      `component ${escapeHclString(this.componentLabel(sysLabel, comp))} {`,
     );
     const inner = "  ";
 
@@ -423,7 +438,7 @@ export class DocumentStore {
       lines.push("");
       lines.push(`  component ${escapeHclString(child.label)} {`);
       lines.push(
-        `    source = ${escapeHclString(this.componentPath(sysLabel, child))}`,
+        `    source = ${escapeHclString(this.componentLabel(sysLabel, child))}`,
       );
       lines.push("  }");
     }
