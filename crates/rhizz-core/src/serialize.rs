@@ -1409,9 +1409,69 @@ system "hangar" {
             "recompile errors: {:?}",
             res2.diagnostics
         );
+        // No orphan top-level components: every emitted definition is
+        // referenced by a source somewhere.
+        assert!(
+            res2.diagnostics.iter().all(|d| d.code.code != "W012"),
+            "unexpected W012: {:?}",
+            res2.diagnostics
+        );
         let model2 = res2.model.expect("should re-resolve");
         assert_eq!(model2.systems.len(), 2);
         assert_eq!(model2.systems[0].components.len(), 1);
         assert_eq!(model2.systems[1].components.len(), 1);
+    }
+
+    #[test]
+    fn test_flat_serialization_redundant_siblings() {
+        // Redundant avionics: two instances of the same definition under one
+        // parent must each serialize as their own standalone definition keyed
+        // by path, and round-trip without inlining.
+        let hcl = r#"
+component "avionics" {
+    description = "shared avionics"
+    leaf = true
+}
+system "plane" {
+    component "left-avionics" {
+        source = "avionics"
+    }
+    component "right-avionics" {
+        source = "avionics"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("should resolve");
+        let serialized = serialize_model(&model1);
+
+        assert!(
+            serialized.contains("component \"plane/left-avionics\" {"),
+            "{serialized}"
+        );
+        assert!(
+            serialized.contains("component \"plane/right-avionics\" {"),
+            "{serialized}"
+        );
+
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized,
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("should re-resolve");
+        assert_eq!(model2.systems[0].components.len(), 2);
     }
 }
