@@ -28,11 +28,17 @@ use serde::Deserialize;
 
 /// Serializes a resolved [`Model`] into a canonical, formatted HCL string.
 ///
-/// Every resolved component is emitted as a standalone top-level
-/// `component "<qualified-path>"` block (never inlined under a parent), and
-/// systems/parent components reference their children via `source = "<path>"`.
-/// This keeps the model flat and stable across multi-system reuse instead of
-/// inlining clones.
+/// Components are emitted as standalone top-level definitions, never inlined
+/// under a parent:
+///
+/// - A component instantiated via `source = "<label>"` is emitted once as
+///   `component "<label>"` (its definition label, not its instance path).
+/// - An inline component (no `source`) is emitted under its qualified path.
+///
+/// Systems and parent components reference their children via
+/// `source = "<label-or-path>"`. This keeps the model flat and stable across
+/// multi-system reuse instead of inlining clones or renaming definitions to
+/// their instantiation paths.
 #[must_use]
 pub fn serialize_model(model: &Model) -> String {
     let mut out = String::new();
@@ -53,12 +59,23 @@ pub fn serialize_model(model: &Model) -> String {
         serialize_protocol(&mut out, proto, model);
     }
 
-    // 3. Component definitions (sorted by qualified path for determinism).
-    // Every resolved component becomes its own top-level definition.
+    // 3. Component definitions. Every component is emitted as a standalone
+    // top-level definition, sorted by its emitted label (its `source` label if
+    // it is an instance of a shared definition, otherwise its qualified path).
+    // Multiple instances of the same shared definition share one emitted label,
+    // so emit only the first (deduplicated by label). Sorting by the emitted
+    // label keeps the block order stable across round-trips (an inline
+    // component becomes a sourced definition after re-parse, but its emitted
+    // label is unchanged).
     let mut components: Vec<&Component> = model.components.iter().collect();
-    components.sort_by_key(|a| component_path(a, model));
+    components.sort_by_key(|a| component_label(a, model));
 
-    for comp in &components {
+    let mut seen_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for comp in components {
+        let label = component_label(comp, model);
+        if !seen_labels.insert(label.clone()) {
+            continue;
+        }
         if !out.is_empty() {
             out.push('\n');
         }
@@ -140,7 +157,7 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
         let _ = writeln!(
             out,
             "{indent}  source = {}",
-            escape_string(&component_path(comp, model))
+            escape_string(&component_ref(comp, model))
         );
         let _ = writeln!(out, "{indent}}}");
     }
@@ -161,15 +178,16 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
     out.push_str("}\n");
 }
 
-/// Serializes a single component as a standalone top-level definition keyed by
-/// its qualified path (e.g. `plane/engine`). Children are referenced via
-/// `source` pointing at their own standalone definitions rather than inlined.
+/// Serializes a single component as a standalone top-level definition. The
+/// definition is keyed by its `source` label when the component is an instance
+/// of a shared definition, otherwise by its qualified path. Children are
+/// referenced via `source` pointing at their own standalone definitions rather
+/// than inlined.
 fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
-    let _ = writeln!(
-        out,
-        "component {} {{",
-        escape_string(&component_path(comp, model))
-    );
+    // Definitions are keyed by their source label; inline components by their
+    // qualified path.
+    let label = component_label(comp, model);
+    let _ = writeln!(out, "component {} {{", escape_string(&label));
 
     let indent = "  ";
 
@@ -236,7 +254,7 @@ fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
         let _ = writeln!(
             out,
             "{indent}  source = {}",
-            escape_string(&component_path(child, model))
+            escape_string(&component_ref(child, model))
         );
         let _ = writeln!(out, "{indent}}}");
     }
@@ -283,6 +301,24 @@ fn component_path(comp: &Component, model: &Model) -> String {
     }
     segments.reverse();
     segments.join("/")
+}
+
+/// Returns the reference used to point at a component from a parent or system:
+/// its `source` definition label when it is an instance of a shared definition,
+/// otherwise its qualified path.
+fn component_ref(comp: &Component, model: &Model) -> String {
+    comp.source
+        .clone()
+        .unwrap_or_else(|| component_path(comp, model))
+}
+
+/// Returns the label under which a component's definition is emitted: its
+/// `source` label when it is an instance of a shared definition, otherwise its
+/// qualified path.
+fn component_label(comp: &Component, model: &Model) -> String {
+    comp.source
+        .clone()
+        .unwrap_or_else(|| component_path(comp, model))
 }
 
 fn serialize_port(out: &mut String, port: &Port, depth: usize) {
@@ -1380,24 +1416,19 @@ system "hangar" {
         let model1 = res1.model.expect("should resolve");
         let serialized = serialize_model(&model1);
 
-        // Definitions are emitted as top-level component blocks keyed by path.
+        // The shared definition is emitted once under its own label, not the
+        // instance paths.
         assert!(
-            serialized.contains("component \"airborne/plane\" {"),
+            serialized.contains("component \"engine\" {"),
             "{serialized}"
         );
         assert!(
-            serialized.contains("component \"hangar/plane\" {"),
-            "{serialized}"
+            !serialized.contains("component \"airborne/plane\" {"),
+            "definition wrongly keyed by instance path:\n{serialized}"
         );
-        // Systems reference their children via source, not inline bodies.
-        assert!(
-            serialized.contains("source = \"airborne/plane\""),
-            "{serialized}"
-        );
-        assert!(
-            serialized.contains("source = \"hangar/plane\""),
-            "{serialized}"
-        );
+        // Systems reference their children via source pointing at the shared
+        // definition, not inline bodies.
+        assert!(serialized.contains("source = \"engine\""), "{serialized}");
 
         // Round-trip: recompiling the flat output yields the same systems.
         let res2 = compile(&[Source {
@@ -1420,6 +1451,64 @@ system "hangar" {
         assert_eq!(model2.systems.len(), 2);
         assert_eq!(model2.systems[0].components.len(), 1);
         assert_eq!(model2.systems[1].components.len(), 1);
+    }
+
+    #[test]
+    fn test_definition_label_preserved_across_instantiation() {
+        // A component defined once and instantiated under a system must keep
+        // its *definition* label (`satellite`), not be renamed to the instance
+        // path (`main/satellite`).
+        let hcl = r#"
+component "satellite" {
+    description = "a satellite"
+    leaf = true
+}
+system "main" {
+    component "satellite" {
+        source = "satellite"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors: {:?}",
+            res1.diagnostics
+        );
+        let serialized = serialize_model(&res1.model.expect("should resolve"));
+
+        // The definition must be emitted under its own label, not the instance
+        // path. The instance under `main` must reference it via source.
+        assert!(
+            serialized.contains("component \"satellite\" {"),
+            "definition renamed to instance path:\n{serialized}"
+        );
+        assert!(
+            serialized.contains("source = \"satellite\""),
+            "instance should source the definition:\n{serialized}"
+        );
+        // The definition must not be keyed by the instantiation path.
+        assert!(
+            !serialized.contains("component \"main/satellite\" {"),
+            "definition wrongly keyed by instance path:\n{serialized}"
+        );
+
+        // Round-trip must be stable: idempotent serialization keeps the
+        // definition label.
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}",
+            res2.diagnostics
+        );
+        let serialized2 = serialize_model(&res2.model.expect("should re-resolve"));
+        assert_eq!(serialized, serialized2, "serialization must be idempotent");
     }
 
     #[test]
@@ -1453,14 +1542,17 @@ system "plane" {
         let model1 = res1.model.expect("should resolve");
         let serialized = serialize_model(&model1);
 
+        // The shared definition is emitted once under its own label, and both
+        // instances reference it via source.
         assert!(
-            serialized.contains("component \"plane/left-avionics\" {"),
+            serialized.contains("component \"avionics\" {"),
             "{serialized}"
         );
         assert!(
-            serialized.contains("component \"plane/right-avionics\" {"),
-            "{serialized}"
+            !serialized.contains("component \"plane/left-avionics\" {"),
+            "definition wrongly keyed by instance path:\n{serialized}"
         );
+        assert!(serialized.contains("source = \"avionics\""), "{serialized}");
 
         let res2 = compile(&[Source {
             filename: "system.hcl".to_string(),
