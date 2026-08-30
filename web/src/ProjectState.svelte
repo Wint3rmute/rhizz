@@ -12,12 +12,18 @@
 // edits are never at risk of being shadowed by a stale cache living here.
 import { openProjectFs } from "./vfs/fs";
 import { LocalStorageProjectStore } from "./vfs/localStorageStore";
+import { ServerProjectStore } from "./vfs/serverStore";
+import type { ProjectStore } from "./vfs/store";
 import type { Project } from "./vfs/types";
 
-// The single localStorage-backed VFS for the whole app. Every
-// page/component that reads or mutates projects/files goes through this
-// same instance.
-export const projectStore = new LocalStorageProjectStore();
+// Storage backend switch: with VITE_RHIZZ_SERVER_URL set, the whole VFS
+// persists through the rhizz-server HTTP API; without it (the default),
+// everything stays in the browser via localStorage. Build-time env var —
+// e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 deno run build`.
+const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
+export const projectStore: ProjectStore = serverUrl
+  ? new ServerProjectStore(serverUrl)
+  : new LocalStorageProjectStore();
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);

@@ -10,11 +10,14 @@ import {
   type FsDirectory,
   type FsFile,
   type FsNode,
+  FsNodeSchema,
   isDirectory,
   isFile,
   type Project,
+  ProjectSchema,
 } from "./types";
 import { descendantsOf, wouldCreateCycle } from "./tree";
+import { z } from "zod";
 
 export interface VfsData {
   version: 1;
@@ -24,6 +27,44 @@ export interface VfsData {
 
 export function emptyVfsData(): VfsData {
   return { version: 1, projects: [], nodes: [] };
+}
+
+// Validates only the blob's outer shape; each project/node inside is
+// validated (and individually dropped if malformed) in sanitizeVfsData.
+const RawVfsDataSchema = z.object({
+  version: z.literal(1),
+  projects: z.array(z.unknown()),
+  nodes: z.array(z.unknown()),
+});
+
+// Forgiving parse of a stored/remote VFS blob: a blob with an unrecognized
+// outer shape yields an empty VFS, and individually-malformed projects or
+// nodes are dropped rather than discarding the whole blob on one bad
+// record. `warn` (if given) receives a message when the outer shape is
+// unrecognized, so stores can surface that to the console.
+export function sanitizeVfsData(
+  raw: unknown,
+  warn: (message: string) => void = () => {},
+): VfsData {
+  const shape = RawVfsDataSchema.safeParse(raw);
+  if (!shape.success) {
+    warn("unrecognized VFS blob shape; starting from an empty VFS");
+    return emptyVfsData();
+  }
+
+  const projects: Project[] = [];
+  for (const candidate of shape.data.projects) {
+    const result = ProjectSchema.safeParse(candidate);
+    if (result.success) projects.push(result.data);
+  }
+
+  const nodes: FsNode[] = [];
+  for (const candidate of shape.data.nodes) {
+    const result = FsNodeSchema.safeParse(candidate);
+    if (result.success) nodes.push(result.data);
+  }
+
+  return { version: 1, projects, nodes };
 }
 
 function findProject(data: VfsData, id: string): Project {
