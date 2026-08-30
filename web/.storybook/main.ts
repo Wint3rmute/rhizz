@@ -16,6 +16,9 @@ const storybookBase = "/";
 
 export default {
   stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|svelte)"],
+  // Serve the SvelteKit `static/` directory (product screenshots, etc.) so
+  // components referencing `{base}/screenshots/...` render in Storybook.
+  staticDirs: ["../static"],
   // The current Storybook core packages do not currently ship a compatible
   // addon-essentials release, so most of the former "essentials" bundle
   // (controls, actions, backgrounds, ...) is left out — "storybook/viewport"
