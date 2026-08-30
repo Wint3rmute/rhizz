@@ -21,7 +21,7 @@ use crate::storage;
 /// Builds the complete axum router for the server.
 ///
 /// Keep this as the single place that registers routes; the binary only
-/// binds a listener and hands it to [`axum::serve`].
+/// binds a listener and hands it to [`axum::serve()`].
 pub fn app(data_dir: PathBuf) -> Router {
     Router::new()
         .route("/healthz", get(healthz))

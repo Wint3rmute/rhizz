@@ -1,6 +1,6 @@
 //! Compile-time embedding of the web frontend.
 //!
-//! [`StaticAssets`] holds every file `vite build` produced in `web/build`,
+//! [`crate::assets::StaticAssets`] holds every file `vite build` produced in `web/build`,
 //! baked into the binary by [`build.rs`](crate). Serving logic in
 //! `server.rs` reads from this struct; the `rhizz_has_embedded_assets`
 //! cfg (emitted by build.rs) distinguishes a real frontend from the
