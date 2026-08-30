@@ -753,6 +753,18 @@ function onDiagramKeyDown(event: KeyboardEvent) {
       cycleSelectedAttribute(key);
     }
   }
+
+  // Delete key: delete the selected connection, or the selected component.
+  // Only fires when the canvas is focused (so it never triggers while typing
+  // in the inspector or HCL editor).
+  if (canvasFocused && (event.key === "Delete" || event.key === "Backspace")) {
+    event.preventDefault();
+    if (selectedConnection) {
+      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
+    } else if (selectedKey) {
+      void handleDeleteSelectedComponent().catch(reportDiagramError);
+    }
+  }
 }
 
 // The single selected node, or null if zero or more than one are selected.
@@ -1817,10 +1829,13 @@ function setConnectionEndSide(side: ConnectionSide | undefined) {
   }
 }
 
-async function handleDeleteSelectedConnection(): Promise<void> {
+async function handleDeleteSelectedConnection(
+  skipConfirm = false,
+): Promise<void> {
   if (!selectedConnection) return;
   const label = selectedConnection;
   if (
+    !skipConfirm &&
     !confirm(
       `Delete connection "${label}"? This will remove it from the system model.`,
     )
