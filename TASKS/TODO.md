@@ -13,6 +13,17 @@ How to work on this file:
 
 ---
 
+## Task <N> - Refresh the landing page
+
+The current structure of the landing page is somewhat awkward. When navigating there,
+the user is first greeted with a barebones "rhizz - System Model Explorer" and a "Projects" button.
+Clicking on "projects" takes the user to the projects page. I want to change it:
+
+1. Replace the landing page with a single, unified "Projects" page that shows all projects.
+2. Simply use the existing "Projects" page
+3. If the user has no projects, show a bit more complex landing page, with a call-to-action to create a new project, either completely new or based on an example.
+4. If there are no Storybook stories for this, create one.
+
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.
