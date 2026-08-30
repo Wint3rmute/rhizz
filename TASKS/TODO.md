@@ -42,19 +42,10 @@ Make it possible to use the delete key to trigger the deletion action on
 components and connections. Currently, this requires clicking "Delete" in the
 inspector. Make it possible to trigger this action using the keyboard. 
 
-## Task <N> - Editing/adding connections breaks the least-common-parent principle
-
-When using the diagram editor, adding a connection between two nodes sometimes
-causes the connection to be placed in the wrong place, which triggers an error -
-rhizz is telling me that a component does not exist, while in reality is the
-problem lies in the paths to components specified in the connection body.
-
-Try to find the root cause of the issue and isolate it within a unit test. Only
-after finding and isolating the issue, fix it.
-
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
-Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.
+Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
+changes into a single unified transaction and undo/redo history engine.
 
 - **Strategy**
   - Replace disparate ad-hoc file writes and layout snapshots with a centralized command/action dispatcher.
