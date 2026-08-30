@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Note — Flat model serialization for component reuse (UI-first editing)
+
+Refactored the round-trip serialization so the project hierarchy stays flat and
+components can be re-used across parents/systems, keeping the model compatible
+with UI-first editing.
+
+- **Problem:** the round-trip logic inlined every component under its parent,
+  which destroyed multi-system reuse (e.g. the same plane on-air vs in a hangar,
+  or redundant avionics) and broke the editor's model↔HCL round-trip.
+- **Rust core (`rhizz-core`)**: `serialize_model` now emits every component as a
+  standalone top-level definition (keyed by its `source` label when it is an
+  instance of a shared definition, otherwise by its qualified path), and
+  systems/parents reference children via `source = "<label>"` instead of
+  inlining clones. Added `source` provenance to the resolved `Component` so the
+  serializer can emit `source` references rather than losing the sharing.
+- **Frontend (`DocumentStore`)**: the editor's serializer was rewritten to match
+  — capturing `source` from the WASM model, emitting flat standalone definitions,
+  and computing scope-relative connection paths so connections resolve correctly
+  regardless of where they're declared.
+- **Bugs found & fixed along the way:** definitions were being renamed to their
+  instantiation paths (`main/satellite` instead of `satellite`), and connections
+  from a child to a sibling component emitted bare labels that failed to resolve
+  (E002). Both were isolated in regression tests.
+- Validated with `just test`, `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task 96 — Delete components and connections with the `delete` key
 
 Pressing Delete (or Backspace) while the diagram canvas has focus deletes the
