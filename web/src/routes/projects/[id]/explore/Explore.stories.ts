@@ -427,6 +427,42 @@ export const BreadcrumbNavigation: Story = {
   },
 };
 
+export const EmbedDiagramButton: Story = {
+  args: {
+    projectId: seededProject.id,
+  },
+  loaders: [
+    async () => {
+      await init();
+      const fs = openProjectFs(projectStore, seededProject.id);
+      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
+        await writeDiagramLayoutFile(
+          fs,
+          `${DIAGRAM_LAYOUT_DIR}/${name}`,
+          layout,
+        );
+      }
+      return {};
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The embed button sits in the top bar of the Explore view.
+    const button = await canvas.findByRole("button", {
+      name: /embed diagram/i,
+    });
+    await expect(button).toBeInTheDocument();
+    await userEvent.click(button);
+    // The modal opens with the direct embed URL and iframe snippet.
+    await expect(
+      await canvas.findByText("Direct Embed URL"),
+    ).toBeInTheDocument();
+    await expect(
+      await canvas.findByText("HTML <iframe> Embed Code"),
+    ).toBeInTheDocument();
+  },
+};
+
 export const Apollo11: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },

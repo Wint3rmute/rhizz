@@ -14,6 +14,7 @@ import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import FileTree from "../editor/FileTree.svelte";
 import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
+import EmbedDiagramButton from "../diagrams/EmbedDiagramButton.svelte";
 import type { DiagramStaticBox } from "../diagrams/types";
 import {
   DIAGRAM_LAYOUT_DIR,
@@ -396,13 +397,17 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
     <div class="flex flex-col flex-1 min-w-0 min-h-0 h-full">
       {#if selectedDiagramPath}
         <nav
-          class="breadcrumbs px-4 py-2 text-sm border-b border-base-300 bg-base-100"
+          class="flex items-center justify-between px-4 py-2 text-sm border-b border-base-300 bg-base-100"
           aria-label="Diagram breadcrumb"
         >
-          <ul>
+          <ul class="breadcrumbs">
             <li><span class="text-base-content/60">Explore</span></li>
             <li><span>{diagramTitle(selectedDiagramPath)}</span></li>
           </ul>
+          <EmbedDiagramButton
+            projectId={effectiveProjectId}
+            diagramPath={selectedDiagramPath}
+          />
         </nav>
       {/if}
       <div
