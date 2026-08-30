@@ -1076,7 +1076,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "mime_guess",
  "rust-embed",
+ "serde_json",
+ "tempfile",
  "tokio",
  "tower",
  "tracing",
