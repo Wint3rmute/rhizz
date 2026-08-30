@@ -7,6 +7,16 @@ app = 'rhizz'
 primary_region = 'fra'
 
 [build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  RHIZZ_ADDR = '0.0.0.0:8080'
+  RHIZZ_DATA_DIR = '/data'
+  RUST_LOG = 'info'
+
+[[mounts]]
+  source = 'rhizz_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
