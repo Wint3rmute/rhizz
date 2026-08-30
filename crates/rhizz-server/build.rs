@@ -59,8 +59,14 @@ fn main() {
     // Declare the custom cfg so `unexpected_cfgs` doesn't fire on it.
     println!("cargo::rustc-check-cfg=cfg(rhizz_has_embedded_assets)");
 
-    // The SPA shell page doubles as the "frontend was built" marker.
-    if build_dir.join("404.html").is_file() {
+    // A real frontend build emits `_app/` (hashed assets) plus `404.html`;
+    // the placeholder we write below only creates `404.html`. Keying the
+    // cfg on `_app/` — not on `404.html` — distinguishes a real build from
+    // the placeholder, and prevents the placeholder from flipping the cfg
+    // on for a later build (e.g. `cargo clippy` writes the placeholder, then
+    // `cargo test` would otherwise see `404.html` and wrongly run the
+    // embedded-asset tests against a placeholder-only embed).
+    if build_dir.join("_app").is_dir() {
         println!("cargo:rustc-cfg=rhizz_has_embedded_assets");
     } else {
         write_placeholder(&build_dir);
