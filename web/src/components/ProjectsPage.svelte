@@ -180,49 +180,55 @@ async function deleteProject(project: Project) {
         <ScrollingBackground images={backgroundImages} />
 
         <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
-            <div class="flex gap-2">
-              <button class="btn btn-outline" onclick={openExampleModal}>
-                New from example
-              </button>
-              <button class="btn btn-primary" onclick={createEmpty}>
-                New project
-              </button>
+          <!-- Solid card holding the projects list, same style as the landing
+               hero card, sitting on top of the scrolling background. -->
+          <div class="card bg-base-100 shadow-2xl border border-base-content/10">
+            <div class="card-body p-6 sm:p-8">
+              <div class="flex items-center justify-between mb-6">
+                <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
+                <div class="flex gap-2">
+                  <button class="btn btn-outline" onclick={openExampleModal}>
+                    New from example
+                  </button>
+                  <button class="btn btn-primary" onclick={createEmpty}>
+                    New project
+                  </button>
+                </div>
+              </div>
+
+              <ul class="space-y-2">
+                {#each effectiveProjects as project (project.id)}
+                  <li
+                    class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
+                  >
+                    <button
+                      class="flex-1 text-left cursor-pointer"
+                      onclick={() => openProject(project)}
+                    >
+                      <div class="font-semibold text-base-content">
+                        {project.name}
+                      </div>
+                      <div class="text-xs text-base-content/50">
+                        Updated {new Date(project.updatedAt).toLocaleString()}
+                      </div>
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      onclick={() => renameProject(project)}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-sm text-error"
+                      onclick={() => deleteProject(project)}
+                    >
+                      Delete
+                    </button>
+                  </li>
+                {/each}
+              </ul>
             </div>
           </div>
-
-          <ul class="space-y-2">
-            {#each effectiveProjects as project (project.id)}
-              <li
-                class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
-              >
-                <button
-                  class="flex-1 text-left cursor-pointer"
-                  onclick={() => openProject(project)}
-                >
-                  <div class="font-semibold text-base-content">
-                    {project.name}
-                  </div>
-                  <div class="text-xs text-base-content/50">
-                    Updated {new Date(project.updatedAt).toLocaleString()}
-                  </div>
-                </button>
-                <button
-                  class="btn btn-ghost btn-sm"
-                  onclick={() => renameProject(project)}
-                >
-                  Rename
-                </button>
-                <button
-                  class="btn btn-ghost btn-sm text-error"
-                  onclick={() => deleteProject(project)}
-                >
-                  Delete
-                </button>
-              </li>
-            {/each}
-          </ul>
         </div>
       </div>
     {/if}
