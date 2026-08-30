@@ -74,6 +74,7 @@ import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
 import {
   borderStyleToSvg,
+  COLOR_OPTIONS,
   fontStyleToSvg,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
@@ -189,14 +190,15 @@ let gridVisible = $state(true);
 // increments. Toggled via the "Snap to Grid" button; not persisted — it's
 // a transient editing mode, not part of the saved diagram.
 // (snapGridSize itself, above, is persisted.)
-let snapEnabled = $state(false);
+// Enabled by default; holding Ctrl/Cmd temporarily disables it.
+let snapEnabled = $state(true);
 
-// Whether snapping is actually in effect right now: either the toggle is
-// on, or the modifier key (Ctrl/Cmd) is currently held as a quick
-// temporary override. A $derived (rather than inlining the check into
-// snap()) so the "Snap to Grid" button can also reflect the live
-// modifier-key override, not just the persistent toggle.
-let snapActive = $derived(snapEnabled || isModifierHeld());
+// Whether snapping is actually in effect right now: the toggle is on AND
+// the modifier key (Ctrl/Cmd) is not currently held as a quick temporary
+// override. A $derived (rather than inlining the check into snap()) so the
+// "Snap to Grid" button can also reflect the live modifier-key override,
+// not just the persistent toggle.
+let snapActive = $derived(snapEnabled && !isModifierHeld());
 
 // Rounds `value` to the nearest multiple of snapGridSize, or returns it
 // unchanged when snapping is off. Falls back to the default grid size
@@ -720,21 +722,48 @@ function redoDiagramEdit() {
   }
 }
 
-// Handles the undo/redo keyboard shortcuts. Scoped to this page (via the
+// Handles the diagram keyboard shortcuts. Scoped to this page (via the
 // <svelte:window> binding below), rather than living in the app-wide
 // KeyboardState.svelte module, since "undo" here specifically means
 // "undo a diagram edit" — a different page (e.g. the HCL text editor)
 // would want its own, unrelated undo behavior.
+//
+// The t/b/c/f attribute-cycling shortcuts only fire while the canvas has
+// focus (canvasFocused) and no modifier is held, so they never trigger
+// while typing in the inspector or the HCL editor.
 function onDiagramKeyDown(event: KeyboardEvent) {
   const primary = event.ctrlKey || event.metaKey;
-  if (!primary) return;
   const key = event.key.toLowerCase();
-  if (key === "z" && !event.shiftKey) {
+
+  if (primary) {
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      undoDiagramEdit();
+    } else if (key === "y" || (key === "z" && event.shiftKey)) {
+      event.preventDefault();
+      redoDiagramEdit();
+    }
+    return;
+  }
+
+  // Attribute cycling: only when the canvas is focused and no modifier held.
+  if (canvasFocused && !event.altKey && !event.shiftKey) {
+    if (key === "t" || key === "b" || key === "c" || key === "f") {
+      event.preventDefault();
+      cycleSelectedAttribute(key);
+    }
+  }
+
+  // Delete key: delete the selected connection, or the selected component.
+  // Only fires when the canvas is focused (so it never triggers while typing
+  // in the inspector or HCL editor).
+  if (canvasFocused && (event.key === "Delete" || event.key === "Backspace")) {
     event.preventDefault();
-    undoDiagramEdit();
-  } else if (key === "y" || (key === "z" && event.shiftKey)) {
-    event.preventDefault();
-    redoDiagramEdit();
+    if (selectedConnection) {
+      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
+    } else if (selectedKey) {
+      void handleDeleteSelectedComponent().catch(reportDiagramError);
+    }
   }
 }
 
@@ -749,6 +778,92 @@ let selectedBox = $derived(
     ? nodeBox(primarySelected)
     : null,
 );
+
+// Whether the canvas (the SVG) currently has keyboard focus. The t/b/c/f
+// attribute-cycling shortcuts below only fire while the canvas is focused,
+// so they never trigger while the user is typing in the inspector or the
+// HCL editor.
+let canvasFocused = $state(false);
+
+// The ordered value sets the t/b/c/f shortcuts cycle through, matching the
+// choices offered by the component inspector. The first entry is the
+// "unset" value (undefined), so cycling starts from the default.
+const TEXT_ALIGN_CYCLE: TextAlign[] = ["center", "top-center", "top-left"];
+const BORDER_CYCLE: ("solid" | "dashed" | "dotted")[] = [
+  "solid",
+  "dashed",
+  "dotted",
+];
+const FONT_CYCLE: ("bold" | "italic" | "underline")[] = [
+  "bold",
+  "italic",
+  "underline",
+];
+// COLOR_OPTIONS is imported from ./visuals; "none" (undefined) is the unset
+// state, then cycle through the theme colors.
+
+// Returns the next value after `current` in `cycle`, wrapping around to the
+// first. `current` may be undefined (the unset state).
+function nextInCycle<T>(cycle: readonly T[], current: T | undefined): T {
+  const idx = current === undefined ? -1 : cycle.indexOf(current);
+  return cycle[(idx + 1) % cycle.length] as T;
+}
+
+// Cycles the selected component's attribute on the t/b/c/f shortcuts.
+// Only fires when exactly one node is selected and the canvas has focus.
+function cycleSelectedAttribute(key: string) {
+  if (primarySelected === null || primarySelected === undefined) return;
+  const comp = selectedComponentData;
+  if (!comp) return;
+
+  switch (key) {
+    case "t": {
+      const next = nextInCycle(TEXT_ALIGN_CYCLE, selectedBox?.textAlign);
+      setSelectedTextAlign(next);
+      break;
+    }
+    case "b": {
+      const next = nextInCycle(
+        BORDER_CYCLE,
+        comp.border as
+          | "solid"
+          | "dashed"
+          | "dotted"
+          | undefined,
+      );
+      void handleUpdateSelectedComponent({
+        border: next === "solid" ? undefined : next,
+      }).catch(reportDiagramError);
+      break;
+    }
+    case "c": {
+      const next = nextInCycle(
+        COLOR_OPTIONS,
+        comp.color as
+          | (typeof COLOR_OPTIONS)[number]
+          | undefined,
+      );
+      void handleUpdateSelectedComponent({ color: next }).catch(
+        reportDiagramError,
+      );
+      break;
+    }
+    case "f": {
+      const next = nextInCycle(
+        FONT_CYCLE,
+        comp.font as
+          | "bold"
+          | "italic"
+          | "underline"
+          | undefined,
+      );
+      void handleUpdateSelectedComponent({
+        font: next,
+      }).catch(reportDiagramError);
+      break;
+    }
+  }
+}
 
 // All pointer-driven canvas interactions (drag, resize, pan, marquee
 // select) are mutually exclusive, so they're modeled as a single
@@ -1286,11 +1401,20 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   // at mousedown, before anything moves.
   recordUndoPoint();
 
-  // Clicking a node that isn't already part of the selection replaces the
-  // selection with just that node. Clicking a node that's already
-  // selected (as part of a multi-selection) keeps the whole selection, so
-  // dragging it moves the whole group.
-  if (!selected.has(index)) selectOnly(index);
+  // Shift+click toggles the node in/out of the selection (multi-select).
+  // A plain click on a node that isn't already part of the selection
+  // replaces the selection with just that node; clicking a node that's
+  // already selected (as part of a multi-selection) keeps the whole
+  // selection, so dragging it moves the whole group.
+  if (event.shiftKey) {
+    if (selected.has(index)) {
+      deselect(index);
+    } else {
+      select(index);
+    }
+  } else if (!selected.has(index)) {
+    selectOnly(index);
+  }
 
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
   const startPositions: Record<number, { x: number; y: number }> = {};
@@ -1705,10 +1829,13 @@ function setConnectionEndSide(side: ConnectionSide | undefined) {
   }
 }
 
-async function handleDeleteSelectedConnection(): Promise<void> {
+async function handleDeleteSelectedConnection(
+  skipConfirm = false,
+): Promise<void> {
   if (!selectedConnection) return;
   const label = selectedConnection;
   if (
+    !skipConfirm &&
     !confirm(
       `Delete connection "${label}"? This will remove it from the system model.`,
     )
@@ -2253,6 +2380,7 @@ $effect(() => {
       bind:clientHeight={canvas_height}
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <svg
         bind:this={root_svg}
         version="1.1"
@@ -2262,6 +2390,9 @@ $effect(() => {
         viewBox="{editor_state.view.x} {editor_state.view
                     .y} {canvas_width / editor_state.view.zoom} {canvas_height /
                     editor_state.view.zoom}"
+        tabindex="0"
+        onfocus={() => (canvasFocused = true)}
+        onblur={() => (canvasFocused = false)}
         onmousemove={onSvgMouseMove}
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}

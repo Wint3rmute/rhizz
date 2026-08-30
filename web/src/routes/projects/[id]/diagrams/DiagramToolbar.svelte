@@ -48,7 +48,7 @@ let {
     <button
       onclick={() => (snapEnabled = !snapEnabled)}
       class="btn btn-sm join-item {snapActive ? 'btn-primary' : 'btn-ghost'}"
-      title="Snap dragging/resizing to a {snapGridSize}-unit grid — or hold Ctrl/Cmd to snap temporarily"
+      title="Snap dragging/resizing to a {snapGridSize}-unit grid — hold Ctrl/Cmd to disable snapping temporarily"
     >
       Snap to Grid
     </button>

@@ -13,48 +13,20 @@ How to work on this file:
 
 ---
 
-## Task <N> - reverse "Snap to grid" defaults
+## Task <N> - More visible scale/graduation marks on the diagram grid
 
-Make "snap to grid" enabled by default. Reverse the behavior of the Ctrl key -
-it should now disable snapping to grid while pressed.
+I want the diagram grid to have more visible scale/graduation marks so the user
+can easily see the grid's alignment. Create more visible lines depending on
+whether the line number is a multiple of 10, 100, or 1000. Make the line
+thickness and color more visible. Allow tweaking of multiples (e.g. 10, 100,
+1000) via a constant in the code, so I can tweak it live later.
 
-## Task <N> - multi-select when holding Shift
-
-Change how the focus mechanics work when holding Shift - when holding Shift and
-clicking on the component, that component shall be added to the selection.
-
-## Task <N> - keyboard-driven attribute editing
-
-There's a number of attributes which I change often and I want to be able to edit
-them using keyboard shortcuts. It sounds intuitive to assign shortcuts to letters which start with the attribute name in the component inspector.
-
-Implement a functionality which will cycle through possible values of an attribute
-using keyboard shortcuts:
-
-- t - cycle through "text alignment" values
-- b - cycle through "border" values
-- c - cycle through "color" values
-- f - cycle through "font" values
-
-## Task <N> - deleting components and connections with the `delete` key
-
-Make it possible to use the delete key to trigger the deletion action on
-components and connections. Currently, this requires clicking "Delete" in the
-inspector. Make it possible to trigger this action using the keyboard. 
-
-## Task <N> - Editing/adding connections breaks the least-common-parent principle
-
-When using the diagram editor, adding a connection between two nodes sometimes
-causes the connection to be placed in the wrong place, which triggers an error -
-rhizz is telling me that a component does not exist, while in reality is the
-problem lies in the paths to components specified in the connection body.
-
-Try to find the root cause of the issue and isolate it within a unit test. Only
-after finding and isolating the issue, fix it.
+Ensure storybook has stories which demonstrate the grid's scale/graduation marks - editor window with Grid option enabled.
 
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
-Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.
+Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
+changes into a single unified transaction and undo/redo history engine.
 
 - **Strategy**
   - Replace disparate ad-hoc file writes and layout snapshots with a centralized command/action dispatcher.
