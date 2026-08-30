@@ -23,13 +23,6 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
-// A lighter overlay so the screenshots show through more clearly.
-export const LighterOverlay: Story = {
-  args: {
-    overlayOpacity: 30,
-  },
-};
-
 // A wider strip for a faster-feeling scroll across a large area.
 export const WideStrip: Story = {
   args: {

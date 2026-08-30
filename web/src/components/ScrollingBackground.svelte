@@ -9,7 +9,6 @@ let {
   images = [],
   width = "100vw",
   blur = "4px",
-  overlayOpacity = 60,
 }: {
   /** Screenshot filenames (relative to `static/screenshots/`). */
   images: string[];
@@ -17,8 +16,6 @@ let {
   width?: string;
   /** Delicate blur applied to the screenshots. */
   blur?: string;
-  /** Overlay darkness (0-100) to keep foreground text readable. */
-  overlayOpacity?: number;
 } = $props();
 </script>
 
@@ -39,5 +36,6 @@ let {
       {/each}
     {/each}
   </div>
-  <div class="absolute inset-0 bg-base-100/{overlayOpacity}"></div>
+  <div class="absolute inset-0 bg-base-100"
+    style="opacity: var(--scrolling-bg-overlay)"></div>
 </div>

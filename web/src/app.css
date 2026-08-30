@@ -20,3 +20,15 @@
 .scrolling-background {
   animation: landing-scroll 60s linear infinite;
 }
+
+/* Theme-aware overlay darkness for the scrolling screenshot background.
+   daisyUI sets data-theme on <html>; we key the overlay opacity off it so
+   the light and dark themes can be tuned independently. */
+:root,
+[data-theme="dark"] {
+  --scrolling-bg-overlay: 80%;
+}
+
+[data-theme="light"] {
+  --scrolling-bg-overlay: 60%;
+}
