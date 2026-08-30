@@ -16,8 +16,12 @@ FROM rust:1-bookworm AS frontend
 WORKDIR /app
 
 # Rust toolchain is already present; add the wasm32 target + wasm-pack.
+# The frontend build also needs Node (npm + vite), which the rust image
+# doesn't ship — install a pinned Node 22 LTS from the official tarball.
 RUN rustup target add wasm32-unknown-unknown \
-    && cargo install wasm-pack --locked
+    && cargo install wasm-pack --locked \
+    && curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz \
+        | tar -xJ -C /usr/local --strip-components=1
 
 # Build the WASM package that the web frontend imports. Copy the whole
 # crates/ tree: the workspace Cargo.toml lists every crate as a member, so
