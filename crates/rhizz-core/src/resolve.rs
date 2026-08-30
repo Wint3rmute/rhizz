@@ -294,10 +294,12 @@ fn register_component(
     let initial_depth = ancestors.len();
 
     // Resolve source if present, following the chain with cycle detection.
-    // Returns Some(body) when source resolves successfully, or early-returns
-    // (with a placeholder ComponentId) on E013/E014.  Returns None when no
-    // source attribute is set.
-    let source_body: Option<RawComponent> = if let Some(ref src_label) = lc.inner.source {
+    // Returns Some((body, terminal_label)) when source resolves successfully,
+    // or early-returns (with a placeholder ComponentId) on E013/E014. Returns
+    // None when no source attribute is set. `terminal_label` is the last label
+    // in the source chain (the concrete definition), recorded on the resolved
+    // Component so the serializer can emit `source` references.
+    let source_body: Option<(RawComponent, String)> = if let Some(ref src_label) = lc.inner.source {
         // E012: source must be exclusive — no other attrs or child blocks.
         let has_other = lc.inner.description.is_some()
             || !lc.inner.tags.is_empty()
@@ -334,6 +336,7 @@ fn register_component(
                     .insert((parent_scope, lc.label.clone()), cid);
                 r.model.components.push(Component {
                     label: lc.label.clone(),
+                    source: lc.inner.source.clone(),
                     description: String::new(),
                     icon: None,
                     color: None,
@@ -369,6 +372,7 @@ fn register_component(
                         .insert((parent_scope, lc.label.clone()), cid);
                     r.model.components.push(Component {
                         label: lc.label.clone(),
+                        source: lc.inner.source.clone(),
                         description: String::new(),
                         icon: None,
                         color: None,
@@ -386,7 +390,7 @@ fn register_component(
                     return cid;
                 }
                 Some(found_body) => match &found_body.source {
-                    None => break found_body.clone(),
+                    None => break (found_body.clone(), current_label),
                     Some(next) => current_label = next.clone(),
                 },
             }
@@ -396,7 +400,8 @@ fn register_component(
         None
     };
 
-    let body: &RawComponent = source_body.as_ref().unwrap_or(&lc.inner);
+    let body = &source_body.as_ref().map_or(&lc.inner, |(b, _)| b);
+    let source_label = source_body.as_ref().map(|(_, l)| l.clone());
 
     let cid = ComponentId(r.model.components.len());
     let level = body.level.unwrap_or_else(|| parent_level.saturating_add(1));
@@ -421,6 +426,7 @@ fn register_component(
     // Push placeholder; children/ports/connections filled in below.
     r.model.components.push(Component {
         label: lc.label.clone(),
+        source: source_label,
         description: body.description.clone().unwrap_or_default(),
         icon: body.icon.clone(),
         color: body.color.clone(),
@@ -1753,6 +1759,53 @@ system "sys2" {
         let s2 = &model.components[model.systems[1].components[0].0];
         assert_eq!(s1.description, "sensor");
         assert_eq!(s2.description, "sensor");
+    }
+
+    #[test]
+    fn source_records_terminal_definition_label() {
+        // A multi-hop source chain (a -> b -> c) should record the *terminal*
+        // definition label (c) on the resolved instance, so the serializer can
+        // emit a stable `source` reference.
+        let src = r#"
+component "c" {
+    description = "concrete"
+    leaf = true
+}
+component "b" {
+    source = "c"
+}
+component "a" {
+    source = "b"
+}
+system "sys" {
+    component "inst" {
+        source = "a"
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("chain should resolve");
+        let inst = &model.components[model.systems[0].components[0].0];
+        assert_eq!(inst.source.as_deref(), Some("c"));
+        assert_eq!(inst.description, "concrete");
+    }
+
+    #[test]
+    fn source_is_none_for_inline_component() {
+        let src = r#"
+system "sys" {
+    component "plain" {
+        description = "inline"
+        leaf = true
+    }
+}
+"#;
+        let path = std::path::Path::new("test.hcl");
+        let raw = crate::parse::parse_file(src, path).unwrap();
+        let (model, _warnings) = resolve(raw).expect("should resolve");
+        let plain = &model.components[model.systems[0].components[0].0];
+        assert_eq!(plain.source, None);
     }
 
     // ── W012: orphan top-level component ──────────────────────────────────────
