@@ -182,7 +182,7 @@ async function deleteProject(project: Project) {
         <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <!-- Solid card holding the projects list, same style as the landing
                hero card, sitting on top of the scrolling background. -->
-          <div class="card bg-base-100 shadow-2xl border border-base-content/10">
+          <div class="card bg-base-100 shadow-2xl border border-base-content/10 min-h-[100vh]">
             <div class="card-body p-6 sm:p-8">
               <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
