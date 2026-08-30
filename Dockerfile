@@ -19,9 +19,11 @@ WORKDIR /app
 RUN rustup target add wasm32-unknown-unknown \
     && cargo install wasm-pack --locked
 
-# Build the WASM package that the web frontend imports.
-COPY crates/rhizz-core crates/rhizz-core
-COPY crates/rhizz-wasm crates/rhizz-wasm
+# Build the WASM package that the web frontend imports. Copy the whole
+# crates/ tree: the workspace Cargo.toml lists every crate as a member, so
+# `cargo metadata` (which wasm-pack invokes) needs all of them present even
+# though only rhizz-wasm is built here.
+COPY crates crates
 COPY Cargo.toml Cargo.lock ./
 RUN wasm-pack build crates/rhizz-wasm --target web --release
 
