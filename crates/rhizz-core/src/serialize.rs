@@ -1566,4 +1566,56 @@ system "plane" {
         let model2 = res2.model.expect("should re-resolve");
         assert_eq!(model2.systems[0].components.len(), 2);
     }
+
+    #[test]
+    fn test_connection_from_child_to_sibling_and_sibling_child() {
+        // Regression: a connection from a child component (radio inside
+        // satellite) to a sibling top-level component (ground-station), plus a
+        // connection from radio to obc (both children of satellite), must
+        // round-trip without E002 (undefined component).
+        let hcl = r#"
+system "main" {
+    component "satellite" {
+        component "radio" {
+            leaf = true
+        }
+        component "obc" {
+            leaf = true
+        }
+    }
+    component "ground-station" {
+        leaf = true
+    }
+
+    connection "radio-ground-station" {
+        from = "satellite/radio"
+        to   = "ground-station"
+    }
+    connection "radio-obc" {
+        from = "satellite/radio"
+        to   = "satellite/obc"
+    }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "initial errors: {:?}",
+            res1.diagnostics
+        );
+        let serialized = serialize_model(&res1.model.expect("should resolve"));
+
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "recompile errors: {:?}\nserialized:\n{serialized}",
+            res2.diagnostics
+        );
+    }
 }

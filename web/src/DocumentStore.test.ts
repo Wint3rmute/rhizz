@@ -475,6 +475,39 @@ system "hangar" {
     expect(doc.compileResult.error_count()).toBe(0);
   });
 
+  it("round-trips a loaded model with child-to-sibling and child-to-child connections", () => {
+    // The HCL the editor produces after: satellite{radio, obc}, ground-station,
+    // plus radio->ground-station and radio->obc connections.
+    const systemHcl = `system "main" {
+  component "satellite" {
+    component "radio" {
+      leaf = true
+    }
+    component "obc" {
+      leaf = true
+    }
+  }
+  component "ground-station" {
+    leaf = true
+  }
+
+  connection "radio-ground-station" {
+    from = "satellite/radio"
+    to   = "ground-station"
+  }
+  connection "radio-obc" {
+    from = "satellite/radio"
+    to   = "satellite/obc"
+  }
+}
+`;
+    const doc = new DocumentStore();
+    doc.loadFromHcl(systemHcl);
+
+    // Re-serializing and recompiling must not produce E002.
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
   it("keeps a definition's label, not its instantiation path", () => {
     // A definition instantiated inside a system must keep its definition label
     // (satellite), not be renamed to the instance path (main/satellite).
@@ -495,6 +528,30 @@ system "main" {
     expect(hcl).toContain('component "satellite" {');
     expect(hcl).not.toContain('component "main/satellite" {');
     expect(hcl).toContain('source = "satellite"');
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
+
+  it("round-trips connections from a child to a sibling and to a sibling child", () => {
+    // Build: main/satellite{radio, obc}, main/ground-station. Connect
+    // radio->ground-station and radio->obc. Both must round-trip without E002.
+    const doc = new DocumentStore();
+    doc.addSystem("main");
+    doc.addComponent("main", "satellite", false);
+    doc.addComponent("main", "ground-station", true);
+    doc.addComponent("main/satellite", "radio", true);
+    doc.addComponent("main/satellite", "obc", true);
+
+    doc.addConnection("main", {
+      label: "radio-ground-station",
+      from: "satellite/radio",
+      to: "ground-station",
+    });
+    doc.addConnection("main", {
+      label: "radio-obc",
+      from: "satellite/radio",
+      to: "satellite/obc",
+    });
+
     expect(doc.compileResult.error_count()).toBe(0);
   });
 });

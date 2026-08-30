@@ -2,7 +2,7 @@
 // Holds mutable in-memory system architecture models and visual view layouts,
 // automatically deriving canonical HCL representations, diagnostics, and scores.
 
-import { SvelteSet } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import {
   compile_system,
   type NodeLayout,
@@ -1029,21 +1029,61 @@ export class DocumentStore {
           buildComp(childId)
         ),
         connections: (c.connections ?? []).map((connId: number) =>
-          buildConn(connId)
+          buildConn(connId, compPath(cid))
         ),
       };
     };
 
-    const buildConn = (connId: number): ConnectionData => {
+    // Build a parent index (component index -> parent component index) and a
+    // root-system label per component, so connection endpoints can be emitted
+    // as full paths (scope-independent) rather than bare labels.
+    const parentOfComp = new SvelteMap<number, number>();
+    const rootSystemOfComp = new SvelteMap<number, string>();
+    for (const sys of raw.systems ?? []) {
+      const walk = (cid: number, parent: number | null, root: string) => {
+        if (parent === null) {
+          rootSystemOfComp.set(cid, root);
+        } else {
+          parentOfComp.set(cid, parent);
+          rootSystemOfComp.set(cid, root);
+        }
+        const c = arenaAt(comps, cid);
+        for (const child of c.children ?? []) walk(child, cid, root);
+      };
+      for (const cid of sys.components ?? []) walk(cid, null, sys.label);
+    }
+    const compPath = (cid: number): string => {
+      const segs: string[] = [];
+      let cur: number | undefined = cid;
+      while (cur !== undefined) {
+        segs.unshift(arenaAt(comps, cur).label);
+        cur = parentOfComp.get(cur);
+      }
+      const root = rootSystemOfComp.get(cid);
+      if (root) segs.unshift(root);
+      return segs.join("/");
+    };
+
+    // Builds the endpoint path relative to the connection's declaring scope
+    // (the scope path passed in), so it resolves on re-parse regardless of
+    // where the connection is placed.
+    const buildConn = (connId: number, scopePath: string): ConnectionData => {
       const cn = arenaAt(conns, connId);
-      const fromComp = arenaAt(comps, cn.from.component).label;
+      const rel = (cid: number): string => {
+        const full = compPath(cid);
+        if (scopePath && full.startsWith(scopePath + "/")) {
+          return full.slice(scopePath.length + 1);
+        }
+        return full;
+      };
+      const fromPath = rel(cn.from.component);
       const fromStr = cn.from.port !== null && cn.from.port !== undefined
-        ? `${fromComp}/${arenaAt(ports, cn.from.port).label}`
-        : fromComp;
-      const toComp = arenaAt(comps, cn.to.component).label;
+        ? `${fromPath}/${arenaAt(ports, cn.from.port).label}`
+        : fromPath;
+      const toPath = rel(cn.to.component);
       const toStr = cn.to.port !== null && cn.to.port !== undefined
-        ? `${toComp}/${arenaAt(ports, cn.to.port).label}`
-        : toComp;
+        ? `${toPath}/${arenaAt(ports, cn.to.port).label}`
+        : toPath;
 
       return {
         label: cn.label,
@@ -1074,7 +1114,7 @@ export class DocumentStore {
       level: sys.level ?? 0,
       components: (sys.components ?? []).map((cid: number) => buildComp(cid)),
       connections: (sys.connections ?? []).map((connId: number) =>
-        buildConn(connId)
+        buildConn(connId, sys.label)
       ),
     }));
 
