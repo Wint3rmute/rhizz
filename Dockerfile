@@ -22,8 +22,12 @@ RUN rustup target add wasm32-unknown-unknown \
 # Build the WASM package that the web frontend imports. Copy the whole
 # crates/ tree: the workspace Cargo.toml lists every crate as a member, so
 # `cargo metadata` (which wasm-pack invokes) needs all of them present even
-# though only rhizz-wasm is built here.
+# though only rhizz-wasm is built here. Also copy SPEC/ and examples/: the
+# rhizz-core build script embeds SPEC/diagnostics and examples/ via
+# include_str! and fails if they're missing.
 COPY crates crates
+COPY SPEC SPEC
+COPY examples examples
 COPY Cargo.toml Cargo.lock ./
 RUN wasm-pack build crates/rhizz-wasm --target web --release
 
@@ -48,11 +52,14 @@ WORKDIR /app
 COPY --from=frontend /app/web/build web/build
 COPY --from=frontend /app/crates/rhizz-wasm/pkg crates/rhizz-wasm/pkg
 
-# Backend sources.
+# Backend sources. SPEC/ and examples/ are needed by the rhizz-core build
+# script (it embeds SPEC/diagnostics and examples/ via include_str!).
 COPY crates/rhizz-core crates/rhizz-core
 COPY crates/rhizz-cli crates/rhizz-cli
 COPY crates/rhizz-server crates/rhizz-server
 COPY crates/rhizz-wasm crates/rhizz-wasm
+COPY SPEC SPEC
+COPY examples examples
 COPY Cargo.toml Cargo.lock ./
 
 # Compile the server (release). The frontend is embedded here, so this is the
