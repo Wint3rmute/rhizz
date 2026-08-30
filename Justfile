@@ -14,6 +14,7 @@ format:
 
 lint:
     {{run}} cargo clippy --all-targets --all-features -- -D warnings
+    {{run}} cargo doc --no-deps --all
     {{run}} sh -lc 'cd web && deno run lint && deno task check'
 
 test:
