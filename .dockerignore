@@ -1,0 +1,29 @@
+# Build artifacts — never ship these into the image build context.
+target
+out
+web/build
+web/node_modules
+web/.svelte-kit
+web/storybook-static
+crates/rhizz-wasm/pkg
+
+# VCS & tooling
+.git
+.github
+.zed
+.vscode
+.idea
+
+# Local data / env
+rhizz-data
+.env
+.env.*
+!.env.example
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+# Nix
+flake.lock
+result
