@@ -189,14 +189,15 @@ let gridVisible = $state(true);
 // increments. Toggled via the "Snap to Grid" button; not persisted — it's
 // a transient editing mode, not part of the saved diagram.
 // (snapGridSize itself, above, is persisted.)
-let snapEnabled = $state(false);
+// Enabled by default; holding Ctrl/Cmd temporarily disables it.
+let snapEnabled = $state(true);
 
-// Whether snapping is actually in effect right now: either the toggle is
-// on, or the modifier key (Ctrl/Cmd) is currently held as a quick
-// temporary override. A $derived (rather than inlining the check into
-// snap()) so the "Snap to Grid" button can also reflect the live
-// modifier-key override, not just the persistent toggle.
-let snapActive = $derived(snapEnabled || isModifierHeld());
+// Whether snapping is actually in effect right now: the toggle is on AND
+// the modifier key (Ctrl/Cmd) is not currently held as a quick temporary
+// override. A $derived (rather than inlining the check into snap()) so the
+// "Snap to Grid" button can also reflect the live modifier-key override,
+// not just the persistent toggle.
+let snapActive = $derived(snapEnabled && !isModifierHeld());
 
 // Rounds `value` to the nearest multiple of snapGridSize, or returns it
 // unchanged when snapping is off. Falls back to the default grid size
