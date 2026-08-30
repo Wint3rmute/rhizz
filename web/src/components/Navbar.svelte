@@ -49,7 +49,7 @@ function closeMenu() {
         href={resolve("/projects", {})}
         class="btn btn-ghost btn-sm sm:btn-md text-lg sm:text-xl shrink-0 font-bold"
       >
-        ← rhizz
+        Rhizz
       </a>
 
       <!-- Desktop navigation links (positioned next to ← rhizz button) -->

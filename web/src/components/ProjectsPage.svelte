@@ -1,6 +1,7 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { base, resolve } from "$app/paths";
+import { resolve } from "$app/paths";
+import ScrollingBackground from "./ScrollingBackground.svelte";
 import {
   createProjectWithFiles,
   createProjectWithMainFile,
@@ -39,21 +40,15 @@ let exampleProjects = $state<ExampleProject[]>([]);
 let effectiveProjects = $derived(projects ?? localProjects);
 let effectiveLoading = $derived(loading ?? localLoading);
 
-// Screenshots that slowly scroll behind the landing hero. Referenced via
-// `base` so they resolve correctly both locally (base = "") and on GitHub
-// Pages (base = "/<repo>").
+// Screenshots that slowly scroll behind the landing hero and the projects
+// list. Referenced via `base` so they resolve correctly both locally
+// (base = "") and on GitHub Pages (base = "/<repo>").
 const backgroundImages = [
   "background_1.png",
   "background_2.png",
   "background_3.png",
   "background_4.png",
 ];
-
-// Tweakable landing-background constants.
-// How wide the scrolling screenshot strip is (per image).
-const backgroundWidth = "100vw";
-// Delicate blur applied to the background screenshots.
-const backgroundBlur = "4px";
 
 async function refresh() {
   const loaded = await projectStore.listProjects();
@@ -134,29 +129,7 @@ async function deleteProject(project: Project) {
     <div class="relative h-full min-h-[70vh] flex items-center justify-center overflow-hidden">
       <!-- Slowly scrolling background of product screenshots, larger than
            the hero card and filling the whole landing area behind it. -->
-      <div
-        class="absolute inset-0 overflow-hidden pointer-events-none"
-        aria-hidden="true"
-      >
-        <div
-          class="scrolling-background flex h-full"
-          style="width: {backgroundWidth}"
-        >
-          <!-- Rendered twice so the -50% translate loops seamlessly. -->
-          {#each [0, 1] as _ ( _)}
-            {#each backgroundImages as name (name)}
-              <img
-                src="{base}/screenshots/{name}"
-                alt=""
-                class="h-full w-auto object-cover"
-                style="filter: blur({backgroundBlur})"
-                draggable="false"
-              />
-            {/each}
-          {/each}
-        </div>
-        <div class="absolute inset-0 bg-base-100/60"></div>
-      </div>
+      <ScrollingBackground images={backgroundImages} />
 
       <!-- Solid card holding the hero text and CTAs, sitting on top of the
            scrolling background. -->
@@ -202,50 +175,55 @@ async function deleteProject(project: Project) {
         </div>
       </div>
     {:else}
-      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div class="flex items-center justify-between mb-6">
-          <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
-          <div class="flex gap-2">
-            <button class="btn btn-outline" onclick={openExampleModal}>
-              New from example
-            </button>
-            <button class="btn btn-primary" onclick={createEmpty}>
-              New project
-            </button>
-          </div>
-        </div>
+      <div class="relative h-full min-h-[70vh] overflow-hidden">
+        <!-- Scrolling screenshot background fills the space around the list. -->
+        <ScrollingBackground images={backgroundImages} />
 
-        <ul class="space-y-2">
-          {#each effectiveProjects as project (project.id)}
-            <li
-              class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
-            >
-              <button
-                class="flex-1 text-left cursor-pointer"
-                onclick={() => openProject(project)}
-              >
-                <div class="font-semibold text-base-content">
-                  {project.name}
-                </div>
-                <div class="text-xs text-base-content/50">
-                  Updated {new Date(project.updatedAt).toLocaleString()}
-                </div>
+        <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
+            <div class="flex gap-2">
+              <button class="btn btn-outline" onclick={openExampleModal}>
+                New from example
               </button>
-              <button
-                class="btn btn-ghost btn-sm"
-                onclick={() => renameProject(project)}
-              >
-                Rename
+              <button class="btn btn-primary" onclick={createEmpty}>
+                New project
               </button>
-              <button
-                class="btn btn-ghost btn-sm text-error"
-                onclick={() => deleteProject(project)}
+            </div>
+          </div>
+
+          <ul class="space-y-2">
+            {#each effectiveProjects as project (project.id)}
+              <li
+                class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
               >
-                Delete
-              </button>
-            </li>
-          {/each}
-        </ul>
+                <button
+                  class="flex-1 text-left cursor-pointer"
+                  onclick={() => openProject(project)}
+                >
+                  <div class="font-semibold text-base-content">
+                    {project.name}
+                  </div>
+                  <div class="text-xs text-base-content/50">
+                    Updated {new Date(project.updatedAt).toLocaleString()}
+                  </div>
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  onclick={() => renameProject(project)}
+                >
+                  Rename
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm text-error"
+                  onclick={() => deleteProject(project)}
+                >
+                  Delete
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </div>
       </div>
     {/if}
 </div>
