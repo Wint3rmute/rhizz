@@ -4,6 +4,39 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 92 — Refresh the landing page
+
+Replaced the barebones "rhizz — System Model Explorer" landing card with the
+unified Projects page, and upgraded the no-projects state into a proper landing
+with call-to-action cards.
+
+- **Single source of truth**
+  - Extracted the former `routes/projects/+page.svelte` logic into a reusable
+    `web/src/components/ProjectsPage.svelte` (project list sorted by `updatedAt`,
+    open/rename/delete, "New project" via prompt + `createProjectWithMainFile`,
+    "New from example" modal with bundled examples and diagram seeding for the
+    single-file example).
+  - `/` (the landing) and `/projects` (the navbar link) both render the same
+    `<ProjectsPage />` — no more redundant intermediate page.
+- **Richer empty/landing state**
+  - With no projects, the page now shows a hero (rhizz tagline + description)
+    with two CTA cards: "Start from an example" (opens the existing example
+    modal) and "New project" (blank `system.hcl`), both reusing the existing
+    handlers. The populated-list header layout is unchanged.
+- **Testability seam**
+  - Optional `projects`/`loading` props let Storybook (and future component
+    tests) render deterministic fixtures without touching the project store;
+    when absent the component reads live from `projectStore` exactly as before.
+- **Storybook coverage** (new `ProjectsPage.stories.ts`)
+  - `WithProjects`: populated list with rename/delete/new-project controls.
+  - `EmptyLanding`: hero + both call-to-action cards.
+  - `EmptyLandingOpensExampleModal`: clicks "Start from an example" and
+    asserts the modal lists the real bundled example projects (WASM init).
+- Validated with `just test` (18 rust tests + 465 frontend tests, +3 new story
+tests), `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task 91 — Rhizz server as a new crate
 
 Added `rhizz-server`, a standalone axum HTTP server that serves the compiled web
