@@ -2,6 +2,8 @@
 
 Completed tasks are listed here, most recent first.
 
+---
+
 ## Task 97 — More visible scale/graduation marks on the diagram grid
 
 Made the background grid's alignment easy to read at any zoom by drawing one
