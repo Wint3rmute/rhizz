@@ -7,14 +7,6 @@ const meta = {
   parameters: {
     layout: "fullscreen",
   },
-  args: {
-    images: [
-      "background_1.png",
-      "background_2.png",
-      "background_3.png",
-      "background_4.png",
-    ],
-  },
 } satisfies Meta<typeof ScrollingBackground>;
 
 export default meta;

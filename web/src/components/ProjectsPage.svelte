@@ -40,16 +40,6 @@ let exampleProjects = $state<ExampleProject[]>([]);
 let effectiveProjects = $derived(projects ?? localProjects);
 let effectiveLoading = $derived(loading ?? localLoading);
 
-// Screenshots that slowly scroll behind the landing hero and the projects
-// list. Referenced via `base` so they resolve correctly both locally
-// (base = "") and on GitHub Pages (base = "/<repo>").
-const backgroundImages = [
-  "background_1.png",
-  "background_2.png",
-  "background_3.png",
-  "background_4.png",
-];
-
 async function refresh() {
   const loaded = await projectStore.listProjects();
   // Most recently touched first — the store bumps a project's updatedAt
@@ -129,7 +119,7 @@ async function deleteProject(project: Project) {
     <div class="relative h-full min-h-[70vh] flex items-center justify-center overflow-hidden">
       <!-- Slowly scrolling background of product screenshots, larger than
            the hero card and filling the whole landing area behind it. -->
-      <ScrollingBackground images={backgroundImages} />
+      <ScrollingBackground />
 
       <!-- Solid card holding the hero text and CTAs, sitting on top of the
            scrolling background. -->
@@ -177,7 +167,7 @@ async function deleteProject(project: Project) {
     {:else}
       <div class="relative h-full min-h-[70vh] overflow-hidden">
         <!-- Scrolling screenshot background fills the space around the list. -->
-        <ScrollingBackground images={backgroundImages} />
+        <ScrollingBackground />
 
         <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <!-- Solid card holding the projects list, same style as the landing

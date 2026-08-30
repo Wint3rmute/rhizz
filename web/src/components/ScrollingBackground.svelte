@@ -3,15 +3,20 @@
 // parent (which should be `relative` + `overflow-hidden`) and sits behind
 // whatever content is layered on top. The strip is rendered twice so the
 // -50% translate loops seamlessly.
-import { base } from "$app/paths";
+// Import the screenshots directly so Vite processes them into hashed URLs
+// that work regardless of the app's base path (local, GitHub Pages, and
+// Storybook/Chromatic all resolve them correctly).
+import bg1 from "../../static/screenshots/background_1.png";
+import bg2 from "../../static/screenshots/background_2.png";
+import bg3 from "../../static/screenshots/background_3.png";
+import bg4 from "../../static/screenshots/background_4.png";
+
+const images = [bg1, bg2, bg3, bg4];
 
 let {
-  images = [],
   width = "100vw",
   blur = "4px",
 }: {
-  /** Screenshot filenames (relative to `static/screenshots/`). */
-  images: string[];
   /** Width of the scrolling strip (per image). */
   width?: string;
   /** Delicate blur applied to the screenshots. */
@@ -25,9 +30,9 @@ let {
 >
   <div class="scrolling-background flex h-full" style="width: {width}">
     {#each [0, 1] as _ ( _)}
-      {#each images as name (name)}
+      {#each images as src (src)}
         <img
-          src="{base}/screenshots/{name}"
+          {src}
           alt=""
           class="h-full w-auto object-cover"
           style="filter: blur({blur})"
