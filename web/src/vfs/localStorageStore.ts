@@ -8,17 +8,14 @@
 // class is only responsible for the
 // read-parse-validate-mutate-serialize-write cycle around that shared
 // core.
-import { z } from "zod";
 import * as ops from "./operations";
-import { emptyVfsData, type VfsData } from "./operations";
+import { emptyVfsData, sanitizeVfsData, type VfsData } from "./operations";
 import type { ProjectStore } from "./store";
 import {
   type FsDirectory,
   type FsFile,
   type FsNode,
-  FsNodeSchema,
   type Project,
-  ProjectSchema,
 } from "./types";
 
 const DEFAULT_STORAGE_KEY = "rhizz:vfs:v1";
@@ -32,14 +29,6 @@ export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
-
-// Validates only the blob's outer shape; each project/node inside is
-// validated (and individually dropped if malformed) in read() below.
-const RawVfsDataSchema = z.object({
-  version: z.literal(1),
-  projects: z.array(z.unknown()),
-  nodes: z.array(z.unknown()),
-});
 
 export class LocalStorageProjectStore implements ProjectStore {
   private readonly storage: StorageLike;
@@ -70,30 +59,9 @@ export class LocalStorageProjectStore implements ProjectStore {
       return emptyVfsData();
     }
 
-    const shape = RawVfsDataSchema.safeParse(parsed);
-    if (!shape.success) {
-      console.warn(
-        `LocalStorageProjectStore: unrecognized data shape at "${this.key}"; starting from an empty VFS`,
-      );
-      return emptyVfsData();
-    }
-
-    // Individually-malformed entries are dropped rather than discarding
-    // the whole blob on one bad record — same forgiving-parse philosophy
-    // as sanitizeStoredRecord() in routes/diagrams/persistence.ts.
-    const projects: Project[] = [];
-    for (const candidate of shape.data.projects) {
-      const result = ProjectSchema.safeParse(candidate);
-      if (result.success) projects.push(result.data);
-    }
-
-    const nodes: FsNode[] = [];
-    for (const candidate of shape.data.nodes) {
-      const result = FsNodeSchema.safeParse(candidate);
-      if (result.success) nodes.push(result.data);
-    }
-
-    return { version: 1, projects, nodes };
+    return sanitizeVfsData(parsed, (message) => {
+      console.warn(`LocalStorageProjectStore: ${message} at "${this.key}"`);
+    });
   }
 
   private write(data: VfsData): void {

@@ -13,34 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Implement a Rhizz server as a new crate
-
-Add a new crate, `Rhizz-server`, that provides a standalone HTTP server for
-Rhizz. The server shall:
-
-- Serve the Rhizz editor UI over HTTP (static files compiled from the `web/` directory)
-- Provide an API for filesystem persistence
-- Use the Axum rust library, use `tracing` for logging
-
-The rhizz web application shall start utilizing the server API to persist its
-state. Simple mechanism of dumping the entire VFS state to the server on save,
-no optimisation for now. Don't bind the application to the server tightly, make
-a configuration switch (e.g. with an env var), so that the application can
-either use the server as storage or run fully in browser without it.
-
-Don't implement any kind of security/auth as of now, assume everything is public.
-
-Implement in small, incremental commits. Follow red/green TDD.
-
-1. First, bootstrap a new crate under `crates/`
-2. Add dependencies (axum, tracing). Write a sample server.
-3. Update build.rs to bundle static application files in the server binary.
-4. Implement serving the static application files.
-5. Implement the endpoint to fetch/persist the VFS state per project. Path to
-   server's data directory is configurable via environment variable.
-6. Implement frontend logic inside the VFS (no other parts can change), so that
-   the filesystem can be persisted into the API.
-
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout changes into a single unified transaction and undo/redo history engine.

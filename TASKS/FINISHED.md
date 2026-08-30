@@ -4,6 +4,47 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 91 — Rhizz server as a new crate
+
+Added `rhizz-server`, a standalone axum HTTP server that serves the compiled web
+editor and persists the frontend's virtual filesystem, plus a frontend storage
+backend that uses it (with the browser-only mode preserved as the default).
+
+- **Crate bootstrap & sample server**
+  - New workspace member with a `lib`/`bin` split; axum 0.8 router assembled in
+    `server::app()` (single place that registers routes), `server::run()` binds a
+    listener, tracing via `tracing-subscriber` (env-filter, like the CLI).
+    Router exercised in-process with `tower::ServiceExt::oneshot` tests.
+- **Static file bundling**
+  - `build.rs` embeds the vite output (`web/build`) via `rust-embed`; the SPA
+    build produces only `404.html` (shell, `ssr=false`/`prerender=false`) plus
+    `_app/` hashed assets, so that shell is the marker. When the frontend was
+    never built (gitignored output, node-less CI rust job) a placeholder shell
+    is embedded and the `rhizz_has_embedded_assets` cfg stays off.
+  - `just build` now builds wasm + vite *before* `cargo build` so the canonical
+    flow embeds the real UI.
+  - Serving: real files with guessed mime types, immutable caching for `_app/`,
+    SPA fallback to the shell for client-side routes, 404 for missing dotted
+    files and unknown `/api/*` paths.
+- **VFS persistence API**
+  - `GET /api/vfs` / `PUT /api/vfs` dump the whole VFS state (no optimisation),
+    stored as one JSON file per project in a configurable data dir
+    (`RHIZZ_DATA_DIR`, default `./rhizz-data`); malformed payloads 400, IO
+    failures 500. The server is a dumb store — schema ownership stays in the
+    frontend's zod layer.
+- **Frontend integration**
+  - New `ServerProjectStore` implementing the existing async `ProjectStore`
+    interface: read → `ops.*` mutate → dump-back over HTTP. The forgiving blob
+    parser moved from `localStorageStore` into shared `sanitizeVfsData`.
+  - Selection switch: `VITE_RHIZZ_SERVER_URL` build-time env var — set → server
+    persistence, unset (default) → fully in-browser via localStorage. No other
+    app code changed.
+- Validated with `just test` (18 rust tests + 462 frontend tests incl. the full
+  ProjectStore contract suite against the server store), `just lint`, `just
+  build`, and `just format`.
+
+---
+
 ## Task 90 — PoC Markdown-based model knowledge database
 
 Added a Markdown "knowledge database" per project, authored in the Editor and surfaced as a hover popup in Explore.

@@ -1,0 +1,30 @@
+[package]
+name = "rhizz-server"
+version = "0.1.0"
+edition = "2024"
+description = "Standalone HTTP server for the rhizz web editor"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "rhizz-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+mime_guess = "2"
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

@@ -47,6 +47,40 @@ rhizz build [path]   # all of the above (default)
 See `SPEC.md`, `SPEC/`, and `examples/` for the full specification and worked
 examples.
 
+## Server
+
+`rhizz-server` is a standalone HTTP server (axum) that serves the compiled web
+editor and persists the frontend's virtual filesystem:
+
+```
+rhizz-server                  # serves UI on 127.0.0.1:3000
+```
+
+The frontend persists to the server when built with
+`VITE_RHIZZ_SERVER_URL` set (otherwise it runs fully in the browser via
+localStorage):
+
+```
+VITE_RHIZZ_SERVER_URL=http://localhost:3000 just build
+```
+
+Environment variables:
+
+| Variable             | Default          | Meaning                                     |
+| -------------------- | ---------------- | ------------------------------------------- |
+| `RHIZZ_ADDR`         | `127.0.0.1:3000` | Listen address                              |
+| `RHIZZ_DATA_DIR`     | `./rhizz-data`   | Where per-project VFS dumps are stored      |
+| `RUST_LOG`           | `info`           | tracing log level (`debug`, `warn`, ...)    |
+
+No authentication is implemented — the server assumes a public, trusted
+environment.
+
+> **Concurrency:** the VFS persistence API is a read-modify-write of the
+> whole blob with no locking or revision check. Two clients editing the
+> same project concurrently will silently overwrite each other (last write
+> wins). This is an accepted limitation for the current MVP stage; a
+> revision/ETag check is planned before multi-user use.
+
 ## Development commands
 
 See the [Justfile](Justfile).

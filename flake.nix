@@ -24,6 +24,7 @@
               pkgs.deno
               pkgs.lld
               pkgs.playwright-driver
+              pkgs.flyctl
             ];
 
             # Use nixpkgs' patched Playwright browsers instead of downloading

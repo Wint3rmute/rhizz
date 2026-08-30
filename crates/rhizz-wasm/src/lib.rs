@@ -703,7 +703,7 @@ pub fn serialize_model(model: &ModelJS) -> String {
     model.to_hcl()
 }
 
-/// Serializes an array of [`ViewDefinition`] JS objects into canonical HCL for `views.hcl`.
+/// Serializes an array of [`rhizz_core::ViewDefinition`] JS objects into canonical HCL for `views.hcl`.
 ///
 /// # Errors
 ///
@@ -715,7 +715,7 @@ pub fn serialize_views(views: JsValue) -> Result<String, JsError> {
     Ok(rhizz_core::serialize_views(&views))
 }
 
-/// Parses an HCL string representing `views.hcl` into an array of [`ViewDefinition`] JS objects.
+/// Parses an HCL string representing `views.hcl` into an array of [`rhizz_core::ViewDefinition`] JS objects.
 ///
 /// # Errors
 ///

@@ -8,6 +8,7 @@ import {
   LocalStorageProjectStore,
   type StorageLike,
 } from "./localStorageStore";
+import { ServerProjectStore } from "./serverStore";
 import type { ProjectStore } from "./store";
 
 export function runProjectStoreContractTests(
@@ -396,6 +397,37 @@ function makeTestClock(): () => string {
   return () => new Date(2024, 0, 1, 0, 0, 0, counter++).toISOString();
 }
 
+// A fake rhizz-server over fetch: keeps one blob behind GET/PUT /api/vfs
+// semantics (same behavior as the Rust side), so the ServerProjectStore
+// contract run below never touches a real network.
+function makeFakeServerFetch(): (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response> {
+  let stored: unknown = null;
+  return (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.href
+      : input.url;
+    if (!url.endsWith("/api/vfs")) {
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    }
+    if (init?.method === "PUT") {
+      const body = typeof init.body === "string" ? init.body : null;
+      stored = JSON.parse(body ?? "{}");
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return Promise.resolve(
+      new Response(
+        JSON.stringify(stored ?? { version: 1, projects: [], nodes: [] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  };
+}
+
 // A minimal Map-backed StorageLike, so the LocalStorageProjectStore run
 // below never touches a real `localStorage` (this project's Vitest setup
 // has no DOM environment configured).
@@ -422,4 +454,13 @@ runProjectStoreContractTests(
       "contract-test",
       makeTestClock(),
     ),
+);
+
+runProjectStoreContractTests(
+  "ServerProjectStore",
+  () =>
+    new ServerProjectStore("http://rhizz-server", {
+      fetch: makeFakeServerFetch(),
+      now: makeTestClock(),
+    }),
 );
