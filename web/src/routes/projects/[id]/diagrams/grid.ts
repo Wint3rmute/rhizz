@@ -36,12 +36,8 @@ export interface GridGraduation {
 export const GRID_GRADUATIONS: readonly GridGraduation[] = [
   { multiple: 10, strokeWidth: 1, strokeOpacity: 0.08 },
   { multiple: 100, strokeWidth: 1.5, strokeOpacity: 0.28 },
-  {
-    multiple: 1000,
-    strokeWidth: 2.5,
-    strokeOpacity: 0.45,
-    stroke: "primary",
-  },
+  // Maybe add this later if users complain..
+  // { multiple: 1000, strokeWidth: 2.0, strokeOpacity: 0.35 },
 ] as const;
 
 /** A ready-to-render SVG `<pattern>` descriptor for one graduation level. */
