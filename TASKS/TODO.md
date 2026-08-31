@@ -13,36 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — A way to export a sequence of model mutations from frontend logs
-
-I'm often testing out the frontend manually, triggering different edge-cases and validating the overall robustness of Rhizz.
-
-I often have this situation when after doing a bunch of steps, I find an error,
-but I'm unable to backtrack it, providing a reproduction instructions. Would it
-be possible to add logic that would log all frontend actions and let me copy
-them from the browser console?
-
-I want it to make it easy for you to reproduce issues without needing to
-manually replay each action, ideally something which could be almost copy-pasted
-into a Typescript test.
-
-For example, something like this output, though you'll probably want to tweak it
-to better fit the actual codebase:
-
-```
-let project = NewProject();
-project.add_new_system("main");
-project.add_new_component_definition("drone");
-project.add_new_component_definition("antenna");
-
-project.instantiate_component("antenna", "main", "antenna");
-project.instantiate_component("drone", "main", "drone");
-
-project.add_connection("main/drone", "main/antenna", "rf-link");
-assert project.as_hcl().contains("connection \"rf-link\"");
-// or any other more specific assertion verifying the behavior of system modifications
-```
-
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout

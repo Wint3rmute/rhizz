@@ -659,8 +659,20 @@ export class DocumentStore {
   addComponent(
     parentPath: string,
     label: string,
-    leaf = false,
+    leafOrOptions: boolean | {
+      leaf?: boolean;
+      description?: string;
+      tags?: string[];
+      icon?: string;
+      color?: string;
+      border?: "solid" | "dashed" | "dotted";
+      font?: string;
+      ports?: PortData[];
+    } = false,
   ): ComponentData | null {
+    const leaf = typeof leafOrOptions === "boolean"
+      ? leafOrOptions
+      : (leafOrOptions.leaf ?? false);
     const container = this.findContainer(parentPath);
     if (!container) return null;
 
@@ -684,7 +696,48 @@ export class DocumentStore {
       container.parentComp.leaf = false;
     }
     list.push(newComp);
+
+    if (typeof leafOrOptions !== "boolean") {
+      if (leafOrOptions.description !== undefined) {
+        newComp.description = leafOrOptions.description;
+      }
+      if (leafOrOptions.tags !== undefined) newComp.tags = leafOrOptions.tags;
+      if (leafOrOptions.icon !== undefined) newComp.icon = leafOrOptions.icon;
+      if (leafOrOptions.color !== undefined) {
+        newComp.color = leafOrOptions.color;
+      }
+      if (leafOrOptions.border !== undefined) {
+        newComp.border = leafOrOptions.border;
+      }
+      if (leafOrOptions.font !== undefined) newComp.font = leafOrOptions.font;
+      if (leafOrOptions.ports !== undefined) {
+        newComp.ports = leafOrOptions.ports;
+      }
+    }
+
     return newComp;
+  }
+
+  // Renames a component in place, returning false if the path doesn't resolve
+  // or the new label is already taken by a sibling. Mirrors what the inspector
+  // does today (mutating `comp.label` directly) but as a first-class, replayable
+  // mutation so the action log can emit it as a single call.
+  renameComponent(path: string, newLabel: string): boolean {
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length < 2) return false;
+    const oldLabel = parts[parts.length - 1];
+    if (newLabel === oldLabel) return false;
+    const parentPath = parts.slice(0, -1).join("/");
+    const container = this.findContainer(parentPath);
+    if (!container) return false;
+    const list = container.parentComp
+      ? container.parentComp.components
+      : container.sys.components;
+    if (list.some((c) => c.label === newLabel)) return false;
+    const comp = list.find((c) => c.label === oldLabel);
+    if (!comp) return false;
+    comp.label = newLabel;
+    return true;
   }
 
   updateComponent(path: string, patch: Partial<ComponentData>): boolean {
