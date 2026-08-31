@@ -96,24 +96,10 @@ let canvas_width = $state(800);
 let canvas_height = $state(600);
 
 // Background grid: a chain of nested SVG patterns, one per "graduation"
-// level (10 / 100 / 1000 world units — see grid.ts), each drawn more
-// visibly than the last so the grid's alignment is easy to read. The
-// GRID_BASE_SPACING constant matches the default node size snapped to the
-// finest level (100x100 nodes land on 10-unit grid lines), so the grid
-// doubles as a snapping guide.
-//
-// The tile sizes and per-level styling (multiples, stroke width, opacity,
-// color) are tuned via the GRID_GRADUATIONS constant in grid.ts — tweak it
-// live there and the canvas below follows, no other code depends on the
-// specific values. The canvas rect fills with the coarsest pattern; every
-// finer pattern nests inside the next coarser one and all stay aligned to
-// world coordinates, panning/zooming with the SVG viewBox.
-//
-// Note: spacing is fixed, so at extreme zoom the grid can get too dense
-// (zoomed out) or too sparse (zoomed in). If that becomes an issue, make
-// it adaptive: derive a multiplier from editor_state.view.zoom, snapped to
-// a "nice" progression (1, 2, 5, 10, 20, 50, ...) and feed the resulting
-// multiples into buildGraduatedGridPatterns (or a re-render of it).
+// level, built from the constants in grid.ts. Tweak the ladder there and the
+// canvas follows — no other code depends on the specific values. The
+// GRID_BASE_SPACING matches the default node size snapped to the finest
+// level, so the grid doubles as a snapping guide.
 const gridPatterns = buildGraduatedGridPatterns(
   GRID_GRADUATIONS,
   GRID_BASE_SPACING,
