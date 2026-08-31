@@ -139,3 +139,26 @@ export const LongErrorMessageWraps: Story = {
     await expect(message).not.toHaveStyle({ "text-overflow": "ellipsis" });
   },
 };
+
+export const CopyDebugInfoButton: Story = {
+  args: {
+    params: {
+      id: brokenProject.id,
+    },
+    data: {
+      projectId: brokenProject.id,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The Copy Debug Info button lives beside Embed Diagram in the right
+    // sidebar and is always rendered.
+    const button = canvas.getByRole("button", { name: "Copy Debug Info" });
+    await expect(button).toBeInTheDocument();
+    await expect(button).toHaveAttribute(
+      "title",
+      "Copy the session's model mutations as a replayable TypeScript test",
+    );
+  },
+};

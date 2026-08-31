@@ -85,9 +85,37 @@ import {
   GRID_BASE_SPACING,
   GRID_GRADUATIONS,
 } from "./grid";
+import { asTestScript, createActionLog } from "../../../../actionLog";
+import { copyDebugScript } from "../../../../actionLogConsole";
+import { subscribeToMutations } from "../../../../DocumentStore.svelte";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
+
+// Records every durable model mutation the user makes on this canvas (see
+// actionLog.ts). Mutations are captured through DocumentStore's opt-in module-
+// level mutation observer rather than per-handler calls, so the trace covers
+// every route and the page stays free of scattered logging. Cleared when a new
+// project is loaded.
+const actionLog = createActionLog();
+let copiedDebug = $state(false);
+
+subscribeToMutations((action) => {
+  actionLog.record(action);
+});
+
+async function handleCopyDebug(): Promise<void> {
+  const { content: baselineHcl } = await readMainContent();
+  const script = asTestScript(actionLog.actions(), docStore.systemHcl, {
+    baselineHcl,
+  });
+  await copyDebugScript(actionLog, docStore.systemHcl, baselineHcl);
+  console.log(script);
+  copiedDebug = true;
+  setTimeout(() => {
+    copiedDebug = false;
+  }, 2000);
+}
 
 // Tracks the canvas's rendered pixel size so the SVG viewBox can match it
 // exactly (1 SVG unit == 1 pixel), keeping the canvas filling all
@@ -292,6 +320,7 @@ $effect(() => {
   if (id === loadedDiagramProjectId) return;
   loadedDiagramProjectId = id;
   selectedDiagramPath = null;
+  actionLog.clear();
   refreshDiagramEntries()
     .then(async () => {
       if (firstDiagramPath() === null) {
@@ -1132,11 +1161,15 @@ async function handleModalCreateComponent(data: {
     }
   }
 
-  const added = doc.addComponent(parent, data.label, data.leaf);
+  const added = doc.addComponent(parent, data.label, {
+    leaf: data.leaf,
+    description: data.description,
+    tags: data.tags,
+    ports: data.ports,
+  });
   if (added) {
-    added.description = data.description;
-    added.tags = data.tags;
-    added.ports = data.ports;
+    // The mutation (including description/tags/ports) is recorded centrally by
+    // DocumentStore's mutation observer — no per-handler logging here.
   }
 
   await fs.writeFile(targetPath, doc.systemHcl);
@@ -3036,8 +3069,17 @@ $effect(() => {
       </ul>
     </div>
 
-    <!-- Embed Diagram Button -->
-    <div class="pt-3 border-t border-base-300 shrink-0">
+    <!-- Embed Diagram + Copy Debug Info buttons -->
+    <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
+      <button
+        type="button"
+        class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
+        onclick={() => void handleCopyDebug().catch(reportDiagramError)}
+        title="Copy the session's model mutations as a replayable TypeScript test"
+      >
+        <span aria-hidden="true">🚧</span>
+        <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
+      </button>
       <EmbedDiagramButton
         projectId={data.projectId}
         diagramPath={selectedDiagramPath}

@@ -2,7 +2,7 @@ import init from "rhizz";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { DocumentStore } from "./DocumentStore.svelte";
+import { DocumentStore, subscribeToMutations } from "./DocumentStore.svelte";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -553,5 +553,59 @@ system "main" {
     });
 
     expect(doc.compileResult.error_count()).toBe(0);
+  });
+
+  it("notifies the opt-in mutation observer of successful mutations", () => {
+    const recorded: string[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action.op);
+    });
+    try {
+      const doc = new DocumentStore();
+      doc.setProject("obs", "0.1.0", []);
+      doc.addSystem("main");
+      doc.addComponent("main", "drone", {
+        leaf: false,
+        description: "a drone",
+        tags: ["power"],
+        ports: [{ label: "rf", role: "peer" }],
+      });
+      doc.updateComponent("main/drone", { description: "updated" });
+      doc.addConnection("main", {
+        label: "link",
+        from: "drone",
+        to: "antenna",
+      });
+      doc.deleteComponent("main/drone");
+
+      expect(recorded).toEqual([
+        "new_project",
+        "add_system",
+        "add_component",
+        "update_component",
+        "add_connection",
+        "delete_component",
+      ]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("does not notify observers for no-op mutations", () => {
+    const recorded: string[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action.op);
+    });
+    try {
+      const doc = new DocumentStore();
+      doc.addSystem("main");
+      // Duplicate system is a no-op.
+      doc.addSystem("main");
+      // updateComponent on a missing path is a no-op.
+      doc.updateComponent("main/missing", { description: "x" });
+      expect(recorded).toEqual(["add_system"]);
+    } finally {
+      unsubscribe();
+    }
   });
 });

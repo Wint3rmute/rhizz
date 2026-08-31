@@ -4,6 +4,53 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 98 — Export a sequence of model mutations from frontend logs
+
+Added a way to capture every durable model / layout-persistence mutation the
+user makes in the Diagrams editor and turn it into a copy-pasteable TypeScript
+test that replays the exact session — so a bug found by manual clicking can be
+reproduced deterministically without redoing each step.
+
+- **New pure module `actionLog.ts`** (unit-tested, red/green): a dependency-free
+  `ModelAction` union mirroring the real `DocumentStore` mutators (add/rename/
+  delete/reparent component, update component, add/delete connection, ports,
+  protocols, views, node layout) plus `createActionLog()`, `encodeCall()` (one
+  TS line per action, escaping labels/paths/quotes), and `asTestScript()` which
+  renders a self-contained Vitest test body: construct a fresh `DocumentStore`,
+  seed it with the session's baseline HCL (matching how the UI loads the primary
+  file before each edit), replay the actions, and assert the canonical
+  `systemHcl` matches the traced final state.
+- **`actionLogConsole.ts`** (thin browser glue): `attachConsoleMirror()` logs
+  each action to the console under a `[rhizz-replay]` prefix as it happens, and
+  `copyDebugScript()` copies the full test block to the clipboard.
+- **`+page.svelte` instrumentation**: the shared `actionLog` is cleared on
+  project load and records a `ModelAction` next to each *successful* mutation
+  (only when the mutator actually changed something, so no-op edits aren't
+  logged): component create/update/rename/delete, reparent, connection
+  add/delete, and system add. Selection/pan/zoom/grid/snap are deliberately
+  excluded (no UI noise).
+- **`DocumentStore.svelte.ts`**: `addComponent` now also accepts an options
+  object (leaf/description/tags/icon/color/border/font/ports) so the emitted
+  call maps to a real method, and a new `renameComponent(path, newLabel)`
+  first-class mutation (the inspector previously mutated `comp.label` directly).
+- **`DiagramToolbar.svelte`**: new "Copy Debug Info" button (gated on an
+  `oncopydebug` handler, mirroring + System / + Component), showing a transient
+  "✓ Copied Debug Info" state. New Storybook stories (`CopyDebugInfo`,
+  `CopyDebugInfoCopied`) exercise it.
+- **Tests**: `actionLog.test.ts` covers codegen (exact emitted lines, escaping,
+  options-object form, port/protocol/layout variants) and the full test-script
+  shape. All 497 frontend tests pass.
+- Validated with `just test`, `just lint`, `just build`, and `just format`.
+
+  > Note: connection start/end side decorations and diagram node layout persist
+  > through the separate `diagrams/*.hcl` VFS subsystem (not `DocumentStore`),
+  > so they are not part of the emitted replay — the trace faithfully covers
+  > the system-model mutations that affect `systemHcl`. The `update_node_layout`
+  > / `add_view` actions are part of the replayable vocabulary for when a
+  > unified command history (next task) routes layout through the same store.
+
+---
+
 ## Task 97 — More visible scale/graduation marks on the diagram grid
 
 Made the background grid's alignment easy to read at any zoom by drawing one

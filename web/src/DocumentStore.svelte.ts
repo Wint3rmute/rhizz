@@ -10,6 +10,41 @@ import {
   serialize_views,
   type ViewDefinition,
 } from "./rhizz_wasm_wrapper";
+import type { ComponentPatch, ModelAction } from "./actionLog";
+
+// ── Opt-in mutation observer ────────────────────────────────────────────────
+//
+// The UI edits the model through short-lived `new DocumentStore()` instances
+// (each handler loads the primary HCL, mutates, writes back, then discards
+// the instance), so mutations are recorded through a *module-level* observer
+// that every instance fires on, rather than per-instance state. This lets the
+// diagrams page aggregate a whole session's mutations across all its temporary
+// instances without touching the (already large) page.
+//
+// It is opt-in: the observer set is empty by default, so the simulation harness
+// and the unit tests — which create and mutate their own stores to verify
+// invariants — never emit anything unless a caller subscribes. The diagrams
+// page subscribes once at module scope (per page load) to aggregate a session's
+// mutations.
+
+type MutationObserver = (action: ModelAction) => void;
+
+const mutationObservers = new SvelteSet<MutationObserver>();
+
+/** Subscribes a callback to every successful model mutation across all
+ * `DocumentStore` instances. Returns an unsubscribe function. */
+export function subscribeToMutations(
+  observer: MutationObserver,
+): () => void {
+  mutationObservers.add(observer);
+  return () => {
+    mutationObservers.delete(observer);
+  };
+}
+
+function notifyMutations(action: ModelAction): void {
+  for (const observer of mutationObservers) observer(action);
+}
 
 export interface ProjectMetadata {
   name: string;
@@ -593,6 +628,7 @@ export class DocumentStore {
 
   setProject(name: string, version = "0.1.0", authors: string[] = []) {
     this.project = { name, version, authors };
+    notifyMutations({ op: "new_project", name, version, authors });
   }
 
   addSystem(label: string, description = ""): SystemData {
@@ -607,6 +643,7 @@ export class DocumentStore {
       connections: [],
     };
     this.systems.push(sys);
+    notifyMutations({ op: "add_system", label, description });
     return sys;
   }
 
@@ -659,8 +696,20 @@ export class DocumentStore {
   addComponent(
     parentPath: string,
     label: string,
-    leaf = false,
+    leafOrOptions: boolean | {
+      leaf?: boolean;
+      description?: string;
+      tags?: string[];
+      icon?: string;
+      color?: string;
+      border?: "solid" | "dashed" | "dotted";
+      font?: string;
+      ports?: PortData[];
+    } = false,
   ): ComponentData | null {
+    const leaf = typeof leafOrOptions === "boolean"
+      ? leafOrOptions
+      : (leafOrOptions.leaf ?? false);
     const container = this.findContainer(parentPath);
     if (!container) return null;
 
@@ -670,13 +719,38 @@ export class DocumentStore {
     const existing = list.find((c) => c.label === label);
     if (existing) return existing;
 
+    const description = typeof leafOrOptions === "boolean"
+      ? ""
+      : (leafOrOptions.description ?? "");
+    const tags = typeof leafOrOptions === "boolean"
+      ? []
+      : (leafOrOptions.tags ?? []);
+    const icon = typeof leafOrOptions === "boolean"
+      ? undefined
+      : leafOrOptions.icon;
+    const color = typeof leafOrOptions === "boolean"
+      ? undefined
+      : leafOrOptions.color;
+    const border = typeof leafOrOptions === "boolean"
+      ? undefined
+      : leafOrOptions.border;
+    const font = typeof leafOrOptions === "boolean"
+      ? undefined
+      : leafOrOptions.font;
+    const ports = typeof leafOrOptions === "boolean"
+      ? []
+      : (leafOrOptions.ports ?? []);
+
     const newComp: ComponentData = {
       label,
-      description: "",
-      icon: "",
-      tags: [],
+      description,
+      icon: icon ?? "",
+      color,
+      border,
+      font: font ?? "",
+      tags,
       leaf,
-      ports: [],
+      ports,
       components: [],
       connections: [],
     };
@@ -684,13 +758,55 @@ export class DocumentStore {
       container.parentComp.leaf = false;
     }
     list.push(newComp);
+
+    notifyMutations({
+      op: "add_component",
+      parentPath,
+      label,
+      leaf,
+      description,
+      tags,
+      icon,
+      color,
+      border,
+      font,
+      ports,
+    });
     return newComp;
+  }
+
+  // Renames a component in place, returning false if the path doesn't resolve
+  // or the new label is already taken by a sibling. Mirrors what the inspector
+  // does today (mutating `comp.label` directly) but as a first-class, replayable
+  // mutation so the action log can emit it as a single call.
+  renameComponent(path: string, newLabel: string): boolean {
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length < 2) return false;
+    const oldLabel = parts[parts.length - 1];
+    if (newLabel === oldLabel) return false;
+    const parentPath = parts.slice(0, -1).join("/");
+    const container = this.findContainer(parentPath);
+    if (!container) return false;
+    const list = container.parentComp
+      ? container.parentComp.components
+      : container.sys.components;
+    if (list.some((c) => c.label === newLabel)) return false;
+    const comp = list.find((c) => c.label === oldLabel);
+    if (!comp) return false;
+    comp.label = newLabel;
+    notifyMutations({ op: "rename_component", path, newLabel });
+    return true;
   }
 
   updateComponent(path: string, patch: Partial<ComponentData>): boolean {
     const comp = this.findComponent(path);
     if (!comp) return false;
-    Object.assign(comp, patch);
+    const changed: ComponentPatch = {};
+    for (const key of Object.keys(patch) as (keyof ComponentPatch)[]) {
+      (changed as Record<string, unknown>)[key] = patch[key];
+    }
+    Object.assign(comp, changed);
+    notifyMutations({ op: "update_component", path, patch: changed });
     return true;
   }
 
@@ -708,6 +824,7 @@ export class DocumentStore {
     const idx = list.findIndex((c) => c.label === compLabel);
     if (idx !== -1) {
       list.splice(idx, 1);
+      notifyMutations({ op: "delete_component", path });
       return true;
     }
     return false;
@@ -753,6 +870,7 @@ export class DocumentStore {
       targetContainer.parentComp.leaf = false;
     }
     targetList.push(removed);
+    notifyMutations({ op: "reparent_component", sourcePath, targetParentPath });
     return true;
   }
 
@@ -779,6 +897,7 @@ export class DocumentStore {
       tags: [],
     };
     comp.ports.push(newPort);
+    notifyMutations({ op: "add_port", compPath, port: newPort });
     return newPort;
   }
 
@@ -801,6 +920,7 @@ export class DocumentStore {
       messages: [],
     };
     this.protocols.push(proto);
+    notifyMutations({ op: "add_protocol", label, description });
     return proto;
   }
 
@@ -812,6 +932,7 @@ export class DocumentStore {
     const idx = this.protocols.findIndex((p) => p.label === label);
     if (idx !== -1) {
       this.protocols.splice(idx, 1);
+      notifyMutations({ op: "delete_protocol", label });
       return true;
     }
     return false;
@@ -826,7 +947,12 @@ export class DocumentStore {
     if (!comp) return false;
     const port = comp.ports.find((p) => p.label === portLabel);
     if (!port) return false;
-    Object.assign(port, patch);
+    const changed: Partial<PortData> = {};
+    for (const key of Object.keys(patch) as (keyof PortData)[]) {
+      (changed as Record<string, unknown>)[key] = patch[key];
+    }
+    Object.assign(port, changed);
+    notifyMutations({ op: "update_port", compPath, portLabel, patch: changed });
     return true;
   }
 
@@ -836,6 +962,7 @@ export class DocumentStore {
     const idx = comp.ports.findIndex((p) => p.label === portLabel);
     if (idx !== -1) {
       comp.ports.splice(idx, 1);
+      notifyMutations({ op: "delete_port", compPath, portLabel });
       return true;
     }
     return false;
@@ -869,6 +996,13 @@ export class DocumentStore {
       encapsulates: [],
     };
     list.push(newConn);
+    notifyMutations({
+      op: "add_connection",
+      scopePath: parentScopePath,
+      label: conn.label,
+      from: conn.from,
+      to: conn.to,
+    });
     return newConn;
   }
 
@@ -881,6 +1015,11 @@ export class DocumentStore {
     const idx = list.findIndex((c) => c.label === label);
     if (idx !== -1) {
       list.splice(idx, 1);
+      notifyMutations({
+        op: "delete_connection",
+        scopePath: parentScopePath,
+        label,
+      });
       return true;
     }
     return false;
@@ -904,6 +1043,7 @@ export class DocumentStore {
       nodes: [],
     };
     this.views.push(v);
+    notifyMutations({ op: "add_view", label, system });
     return v;
   }
 
@@ -944,6 +1084,18 @@ export class DocumentStore {
       if (layout.text_align !== undefined) node.text_align = layout.text_align;
       view.nodes.push(node);
     }
+    notifyMutations({
+      op: "update_node_layout",
+      viewLabel,
+      componentKey,
+      layout: {
+        x: layout.x,
+        y: layout.y,
+        width: layout.width,
+        height: layout.height,
+        text_align: layout.text_align,
+      },
+    });
   }
 
   // ── Load / Ingestion from HCL / Model ────────────────────────────────────────
