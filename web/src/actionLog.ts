@@ -120,6 +120,17 @@ function tsString(s: string): string {
   return JSON.stringify(s);
 }
 
+// Renders a multi-line document (HCL) as a readable backtick template literal
+// rather than a JSON.stringify-escaped single line (which would escape every
+// newline into \n and bury the content on one line). Newlines inside a template
+// literal are preserved as-is, so the emitted source stays as readable as the
+// HCL itself. Backticks and ${ are escaped so the literal is unambiguous.
+function tsTemplate(s: string): string {
+  return `\`${
+    s.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${")
+  }\``;
+}
+
 function tsStringArray(items: readonly string[]): string {
   return `[${items.map(tsString).join(", ")}]`;
 }
@@ -302,13 +313,13 @@ export function asTestScript(
     `    const ${projVar} = new DocumentStore();`,
   ];
   if (opts.baselineHcl !== undefined && opts.baselineHcl !== "") {
-    lines.push(`    ${projVar}.loadFromHcl(${tsString(opts.baselineHcl)});`);
+    lines.push(`    ${projVar}.loadFromHcl(${tsTemplate(opts.baselineHcl)});`);
   }
   for (const action of actions) {
     lines.push(`    ${encodeCall(action, projVar)}`);
   }
   lines.push(
-    `    expect(${projVar}.systemHcl).toBe(${tsString(finalHcl)});`,
+    `    expect(${projVar}.systemHcl).toBe(${tsTemplate(finalHcl)});`,
     `  });`,
     `});`,
     ``,

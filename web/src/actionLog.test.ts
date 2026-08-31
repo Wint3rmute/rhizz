@@ -197,7 +197,37 @@ describe("actionLog", () => {
       'project.addConnection("main", { label: "rf-link", from: "drone", to: "antenna" });',
     );
     expect(script).toContain(
-      'expect(project.systemHcl).toBe("project { ... }");',
+      "expect(project.systemHcl).toBe(`project { ... }`);",
     );
+  });
+
+  it("renders multi-line HCL as a readable template literal", () => {
+    const baseline = `system "demo" {
+  component "a" {
+    leaf = true
+  }
+}`;
+    const hcl = `system "demo" {
+  component "b" {
+    leaf = true
+  }
+}`;
+    const script = asTestScript([], hcl, { baselineHcl: baseline });
+
+    // Newlines are preserved as literal newlines inside backticks, not escaped
+    // into \n — so the emitted source stays as readable as the HCL itself.
+    expect(script).toContain(
+      '    project.loadFromHcl(`system "demo" {\n  component "a" {',
+    );
+    expect(script).toContain(
+      '    expect(project.systemHcl).toBe(`system "demo" {\n  component "b" {',
+    );
+  });
+
+  it("escapes backticks and ${ inside multi-line HCL", () => {
+    const hcl = "label = `x` and ${y}";
+    const script = asTestScript([], hcl);
+    // Backticks and ${ are escaped inside the template literal.
+    expect(script).toContain(`toBe(\`label = \\\`x\\\` and \\\${y}\`)`);
   });
 });
