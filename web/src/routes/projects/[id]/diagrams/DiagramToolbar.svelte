@@ -23,8 +23,6 @@ interface Props {
   onresetview: () => void;
   onaddsystem?: () => void;
   onaddcomponent?: () => void;
-  oncopydebug?: () => void;
-  copiedDebug?: boolean;
 }
 
 let {
@@ -39,8 +37,6 @@ let {
   onresetview,
   onaddsystem,
   onaddcomponent,
-  oncopydebug,
-  copiedDebug = false,
 }: Props = $props();
 </script>
 
@@ -116,13 +112,4 @@ let {
   >
     Reset View
   </button>
-  {#if oncopydebug}
-    <button
-      onclick={oncopydebug}
-      class="btn btn-sm {copiedDebug ? 'btn-success' : 'btn-ghost'}"
-      title="Copy the session's model mutations as a replayable TypeScript test"
-    >
-      {copiedDebug ? '✓ Copied Debug Info' : 'Copy Debug Info'}
-    </button>
-  {/if}
 </div>

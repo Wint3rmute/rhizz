@@ -24,8 +24,6 @@ const meta = {
     onresetview: () => {},
     onaddsystem: () => {},
     onaddcomponent: () => {},
-    oncopydebug: () => {},
-    copiedDebug: false,
   },
 } satisfies Meta<typeof DiagramToolbar>;
 
@@ -47,22 +45,6 @@ export const SnapActive: Story = {
 export const AutoLayoutRunning: Story = {
   args: {
     autoLayoutRunning: true,
-  },
-};
-
-// The "Copy Debug Info" button is only rendered when an oncopydebug handler
-// is supplied (mirroring how + System / + Component are gated on their own
-// handlers).
-export const CopyDebugInfo: Story = {
-  args: {
-    oncopydebug: () => {},
-  },
-};
-
-export const CopyDebugInfoCopied: Story = {
-  args: {
-    oncopydebug: () => {},
-    copiedDebug: true,
   },
 };
 

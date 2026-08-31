@@ -3010,8 +3010,6 @@ $effect(() => {
         onresetview={() => reset_view(editor_state)}
         onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
         onaddcomponent={() => openCreateComponentModal()}
-        oncopydebug={() => void handleCopyDebug().catch(reportDiagramError)}
-        {copiedDebug}
       />
 
       <div
@@ -3071,8 +3069,17 @@ $effect(() => {
       </ul>
     </div>
 
-    <!-- Embed Diagram Button -->
-    <div class="pt-3 border-t border-base-300 shrink-0">
+    <!-- Embed Diagram + Copy Debug Info buttons -->
+    <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
+      <button
+        type="button"
+        class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
+        onclick={() => void handleCopyDebug().catch(reportDiagramError)}
+        title="Copy the session's model mutations as a replayable TypeScript test"
+      >
+        <span aria-hidden="true">🚧</span>
+        <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
+      </button>
       <EmbedDiagramButton
         projectId={data.projectId}
         diagramPath={selectedDiagramPath}
