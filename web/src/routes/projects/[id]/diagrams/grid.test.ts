@@ -7,8 +7,8 @@ import {
 } from "./grid";
 
 describe("GRID_GRADUATIONS", () => {
-  it("covers the 10/100/1000 scales in increasing order", () => {
-    expect(GRID_GRADUATIONS.map((g) => g.multiple)).toEqual([10, 100, 1000]);
+  it("covers the 10/100 scales in increasing order", () => {
+    expect(GRID_GRADUATIONS.map((g) => g.multiple)).toEqual([10, 100]);
   });
 
   it("makes each level more visible than the previous one", () => {
@@ -32,7 +32,7 @@ describe("GRID_GRADUATIONS", () => {
 describe("buildGraduatedGridPatterns", () => {
   it("returns one pattern per graduation, finest first", () => {
     const patterns = buildGraduatedGridPatterns();
-    expect(patterns.map((p) => p.size)).toEqual([10, 100, 1000]);
+    expect(patterns.map((p) => p.size)).toEqual([10, 100]);
   });
 
   it("gives every pattern a unique prefixed id", () => {
@@ -41,20 +41,15 @@ describe("buildGraduatedGridPatterns", () => {
       GRID_BASE_SPACING,
       "Demo",
     );
-    expect(patterns.map((p) => p.id)).toEqual([
-      "Demo-g10",
-      "Demo-g100",
-      "Demo-g1000",
-    ]);
+    expect(patterns.map((p) => p.id)).toEqual(["Demo-g10", "Demo-g100"]);
     expect(new Set(patterns.map((p) => p.id)).size).toBe(patterns.length);
   });
 
   it("chains each level's fill to the next-finest level", () => {
     const patterns = buildGraduatedGridPatterns();
-    const [fine, mid, coarse] = patterns;
+    const [fine, mid] = patterns;
     expect(fine?.fill).toBeUndefined();
     expect(mid?.fill).toBe("Grid-g10");
-    expect(coarse?.fill).toBe("Grid-g100");
   });
 
   it("converts theme-token strokes to CSS variables and passes raw colors through", () => {

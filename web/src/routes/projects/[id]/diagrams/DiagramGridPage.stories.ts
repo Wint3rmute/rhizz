@@ -151,25 +151,20 @@ export const GridGraduationsEnabled: Story = {
     // first loads the project sources / diagram list, then renders the SVG.
     await canvas.findByRole("button", { name: "Toggle Grid" });
 
-    // All three graduation levels are declared as SVG patterns.
+    // Both graduation levels are declared as SVG patterns.
     const ids = patternIds(canvasElement);
     await expect(ids).toContain("Grid-g10");
     await expect(ids).toContain("Grid-g100");
-    await expect(ids).toContain("Grid-g1000");
 
-    // The coarser patterns stack on the finer ones (fill chain), and the
+    // The coarser pattern stacks on the finer one (fill chain), and the
     // background rect fills with the coarsest level.
     const g100 = canvasElement.querySelector("#Grid-g100");
     await expect(g100?.querySelector("rect")?.getAttribute("fill"))
       .toBe("url(#Grid-g10)");
-    const g1000 = canvasElement.querySelector("#Grid-g1000");
-    await expect(g1000?.querySelector("rect")?.getAttribute("fill"))
-      .toBe("url(#Grid-g100)");
     await expect(backgroundRect(canvasElement)?.getAttribute("fill"))
-      .toBe("url(#Grid-g1000)");
+      .toBe("url(#Grid-g100)");
 
-    // The two placed components render (both sides of the 1000 line). The
-    // sidebar hierarchy tree also lists each component, so multiple matches
+    // The two placed components render. The sidebar hierarchy tree also lists each component, so multiple matches
     // are expected — assert at least one rendered instance of each label.
     const gw = await canvas.findAllByText("gateway");
     await expect(gw.length).toBeGreaterThan(0);
