@@ -13,16 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - More visible scale/graduation marks on the diagram grid
-
-I want the diagram grid to have more visible scale/graduation marks so the user
-can easily see the grid's alignment. Create more visible lines depending on
-whether the line number is a multiple of 10, 100, or 1000. Make the line
-thickness and color more visible. Allow tweaking of multiples (e.g. 10, 100,
-1000) via a constant in the code, so I can tweak it live later.
-
-Ensure storybook has stories which demonstrate the grid's scale/graduation marks - editor window with Grid option enabled.
-
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout

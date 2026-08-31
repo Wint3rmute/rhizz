@@ -4,6 +4,47 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 97 — More visible scale/graduation marks on the diagram grid
+
+Made the background grid's alignment easy to read at any zoom by drawing one
+graduation level per scale, each more visible than the last: faint 1px lines
+every 10 units (base spacing), medium 1.5px lines every 100 units, and bold
+primary-tinted 2.5px lines every 1000 units.
+
+- **New pure module `grid.ts`** (unit-tested, red/green): `GRID_GRADUATIONS`
+  is the tunable ladder — multiples (10/100/1000) plus per-level theme-color,
+  stroke width and opacity — and `buildGraduatedGridPatterns()` turns it into
+  a chain of nested SVG pattern descriptors. Each coarser tile is filled with
+  the next-finest pattern (aligned to the same world-space origin via
+  `patternUnits="userSpaceOnUse"`) and draws its own bolder edge lines on top,
+  so tiles stay small, every line lands exactly on the base spacing, and
+  panning/zooming is free via the viewBox. Misaligned multiples throw loudly.
+- **`+page.svelte`**: replaced the hardcoded two-level pattern (minor 0.08 +
+  tile-edge 0.2, both 1px) with the `{#each gridPatterns}` chain and a canvas
+  rect filled with the coarsest level (`url(#Grid-g1000)`). Nothing else
+  changed — the "Toggle Grid" button hits the same `gridVisible` flag and the
+  transparent pan/marquee hit target is untouched. Snap settings are
+  unaffected (they're orthogonal to display graduations).
+- **Storybook**: new `DiagramGridPage.stories.ts` with two stories —
+  *Grid Graduations Enabled* (editor window, Grid option on by default; a
+  valid 2-component project straddling a 1000-unit line; asserts all three
+  pattern levels, the fill chain and the canvas fill) and *Grid Toggled Off*
+  (toggle hides the grid, toggle again restores it). One gotcha: stories in a
+  file inherit the *default* meta's args, so the grid stories live in their
+  own file with explicit per-story args instead of inheriting the broken
+  project from the compilation-error page's meta.
+- **eslint.config.js**: whitelisted the new story file for the known
+  first-party-Svelte-module unsafe-type false positive.
+- Validated with `just test`, `just lint`, `just build`, and `just format`.
+
+  > Note: two `DocumentStore` round-trip tests (`serializes multi-system
+  > reuse…`, `keeps a definition's label…`) fail intermittently in the full
+  > frontend suite (they pass in isolation; also present on `main` before
+  > this task, verified via `git stash`). Unrelated to this change — flagged
+  > here for whoever picks up the flat-serialization follow-up.
+
+---
+
 ## Note — Flat model serialization for component reuse (UI-first editing)
 
 Refactored the round-trip serialization so the project hierarchy stays flat and
