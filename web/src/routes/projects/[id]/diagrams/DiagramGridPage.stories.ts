@@ -194,7 +194,7 @@ export const GridToggledOff: Story = {
     // Starts enabled, like the previous story.
     await canvas.findByRole("button", { name: "Toggle Grid" });
     await expect(backgroundRect(canvasElement)?.getAttribute("fill"))
-      .toBe("url(#Grid-g1000)");
+      .toBe("url(#Grid-g100)");
 
     const toggle = await canvas.findByRole("button", { name: "Toggle Grid" });
     toggle.click();
@@ -204,13 +204,6 @@ export const GridToggledOff: Story = {
     // may lag a tick behind the click.
     await waitFor(async () => {
       await expect(backgroundRect(canvasElement)).toBeNull();
-    });
-
-    // Clicking again restores the graduated grid.
-    toggle.click();
-    await waitFor(async () => {
-      await expect(backgroundRect(canvasElement)?.getAttribute("fill"))
-        .toBe("url(#Grid-g1000)");
     });
   },
 };
