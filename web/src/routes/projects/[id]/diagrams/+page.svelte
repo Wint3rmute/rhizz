@@ -85,27 +85,24 @@ import {
   GRID_BASE_SPACING,
   GRID_GRADUATIONS,
 } from "./grid";
-import {
-  asTestScript,
-  createActionLog,
-  type ModelAction,
-} from "../../../../actionLog";
+import { asTestScript, createActionLog } from "../../../../actionLog";
 import { copyDebugScript } from "../../../../actionLogConsole";
+import { subscribeToMutations } from "../../../../DocumentStore.svelte";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
 
-// Records every durable model / layout-persistence mutation the user makes on
-// this canvas, so the session can be replayed as a TypeScript test (see
-// actionLog.ts). Cleared when a new project is loaded.
+// Records every durable model mutation the user makes on this canvas (see
+// actionLog.ts). Mutations are captured through DocumentStore's opt-in module-
+// level mutation observer rather than per-handler calls, so the trace covers
+// every route and the page stays free of scattered logging. Cleared when a new
+// project is loaded.
 const actionLog = createActionLog();
 let copiedDebug = $state(false);
 
-// Logs a model mutation only if it actually changed something (mutators return
-// false/null on no-op), so the trace stays faithful to real edits.
-function logAction(action: ModelAction): void {
+subscribeToMutations((action) => {
   actionLog.record(action);
-}
+});
 
 async function handleCopyDebug(): Promise<void> {
   const { content: baselineHcl } = await readMainContent();
@@ -1041,11 +1038,6 @@ async function executeReparent(
   }
 
   if (doc.reparentComponent(sourceKey, targetParentKey)) {
-    logAction({
-      op: "reparent_component",
-      sourcePath: sourceKey,
-      targetParentPath: targetParentKey,
-    });
     const label = sourceKey.split("/").at(-1);
     const newKey = label ? `${targetParentKey}/${label}` : null;
     await fs.writeFile(targetPath, doc.systemHcl);
@@ -1066,7 +1058,6 @@ async function handleAddSystem(): Promise<void> {
     doc.loadFromHcl(mainContent);
   }
   doc.addSystem(name);
-  logAction({ op: "add_system", label: name, description: "" });
   await fs.writeFile(targetPath, doc.systemHcl);
   sources = await readProjectSources(fs);
 }
@@ -1170,20 +1161,15 @@ async function handleModalCreateComponent(data: {
     }
   }
 
-  const added = doc.addComponent(parent, data.label, data.leaf);
+  const added = doc.addComponent(parent, data.label, {
+    leaf: data.leaf,
+    description: data.description,
+    tags: data.tags,
+    ports: data.ports,
+  });
   if (added) {
-    added.description = data.description;
-    added.tags = data.tags;
-    added.ports = data.ports;
-    logAction({
-      op: "add_component",
-      parentPath: parent,
-      label: data.label,
-      leaf: data.leaf,
-      description: data.description,
-      tags: data.tags,
-      ports: data.ports,
-    });
+    // The mutation (including description/tags/ports) is recorded centrally by
+    // DocumentStore's mutation observer — no per-handler logging here.
   }
 
   await fs.writeFile(targetPath, doc.systemHcl);
@@ -1261,7 +1247,6 @@ async function handleUpdateSelectedComponent(
     doc.loadFromHcl(mainContent);
   }
   if (doc.updateComponent(selectedKey, patch)) {
-    logAction({ op: "update_component", path: selectedKey, patch });
     await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }
@@ -1284,7 +1269,6 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   const comp = doc.findComponent(selectedKey);
   if (comp) {
     comp.label = newLabel;
-    logAction({ op: "rename_component", path: selectedKey, newLabel });
     await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
 
@@ -1310,7 +1294,6 @@ async function handleDeleteSelectedComponent(): Promise<void> {
   }
 
   if (doc.deleteComponent(keyToDelete)) {
-    logAction({ op: "delete_component", path: keyToDelete });
     await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
 
@@ -1416,13 +1399,6 @@ async function handleCreateConnection(
   });
 
   if (added) {
-    logAction({
-      op: "add_connection",
-      scopePath: lca.lcaScopePath,
-      label: connLabel,
-      from: lca.from,
-      to: lca.to,
-    });
     recordUndoPoint();
     if (startSide) {
       savedConnections[connLabel] = { startSide };
@@ -1928,7 +1904,6 @@ async function handleDeleteSelectedConnection(
 
   if (foundScope) {
     doc.deleteConnection(foundScope, label);
-    logAction({ op: "delete_connection", scopePath: foundScope, label });
     await fs.writeFile(targetPath, doc.systemHcl);
     sources = await readProjectSources(fs);
   }

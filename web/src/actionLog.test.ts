@@ -106,7 +106,12 @@ describe("actionLog", () => {
         {
           op: "add_port",
           compPath: "main/drone",
-          port: { label: "rf", role: "provider", protocol: "data", external: true },
+          port: {
+            label: "rf",
+            role: "provider",
+            protocol: "data",
+            external: true,
+          },
         },
         "project",
       ),
