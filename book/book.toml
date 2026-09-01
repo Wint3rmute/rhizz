@@ -13,5 +13,5 @@ build-dir = "target-mdbook"
 additional-css = ["css/rhizz.css"]
 
 [preprocessor.rhizz]
-command = "python3 /home/claw/rhizz/book/preprocessors/rhizz.py"
+command = "python3 ./preprocessors/rhizz.py"
 renderer = ["html"]

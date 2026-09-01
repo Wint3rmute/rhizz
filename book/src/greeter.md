@@ -47,5 +47,5 @@ system "app" {
 ```
 
 Every entity has a `description`, every port names a real protocol, and the
-connection references ports that actually exist — so the compiler has nothing
-to complain about. The panel below shows its verdict and the completion score.
+connection references ports that actually exist — so the compiler has nothing to
+complain about. The panel below shows its verdict and the completion score.
