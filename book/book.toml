@@ -7,6 +7,9 @@ language = "en"
 build-dir = "target-mdbook"
 
 [output.html]
+# theme/highlight.js overrides mdBook's default highlight.js bundle with the
+# HCL/Terraform grammar (see book/scripts/build-hljs.py); ```hcl blocks are
+# emitted by the rhizz preprocessor.
 additional-css = ["css/rhizz.css"]
 
 [preprocessor.rhizz]

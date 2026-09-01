@@ -1,6 +1,6 @@
 /target
 /out
-/target-mdbook
+/book/target-mdbook
 .vscode
 
 # LLMs sometimes create this when running under copilot, ignore.
