@@ -137,7 +137,7 @@ html:not(.js) {
 }
 
 .rhizz-warnings li::before {
-  content: "\26a0 ";
+  content: "⚠️ ";
   color: var(--rhizz-warn-border);
   font-weight: 700;
 }
@@ -162,7 +162,7 @@ html:not(.js) {
 }
 
 .rhizz-errors li::before {
-  content: "\2717 ";
+  content: "❌ ";
   color: var(--rhizz-error-border);
   font-weight: 700;
 }
