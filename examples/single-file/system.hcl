@@ -29,7 +29,7 @@ protocol "mqtt" {
   }
 }
 
-# ── Top-level Reusable Component ──────────
+# ── Top-level Reusable Components ─────────
 
 # Reusable top-level component — imported into the system via source = "temp-sensor".
 component "temp-sensor" {
@@ -47,6 +47,44 @@ component "temp-sensor" {
   }
 }
 
+component "controller" {
+  description = "ARM Cortex-M4 processing hub"
+  icon        = "microchip"
+  tags        = ["compute", "data"]
+  leaf        = true
+
+  port "i2c-in" {
+    description = "I2C bus to sensor"
+    protocol    = "i2c"
+    role        = "consumer"
+    external    = true
+    tags        = ["data"]
+  }
+
+  port "mqtt-out" {
+    description = "Outbound MQTT telemetry"
+    protocol    = "mqtt"
+    role        = "provider"
+    external    = true
+    tags        = ["data", "cloud"]
+  }
+}
+
+component "broker" {
+  description = "Cloud MQTT broker and time-series storage"
+  icon        = "cloud"
+  tags        = ["cloud", "data"]
+  leaf        = true
+
+  port "mqtt-in" {
+    description = "Inbound MQTT telemetry"
+    protocol    = "mqtt"
+    role        = "consumer"
+    external    = true
+    tags        = ["data", "cloud"]
+  }
+}
+
 # ── System Definition ─────────────────────
 
 system "home-monitor" {
@@ -54,46 +92,16 @@ system "home-monitor" {
   tags        = ["iot", "data"]
   level       = 0
 
-  component "sensor" {
+  instance "sensor" {
     source = "temp-sensor"
   }
 
-  component "controller" {
-    description = "ARM Cortex-M4 processing hub"
-    icon        = "microchip"
-    tags        = ["compute", "data"]
-    leaf        = true
-
-    port "i2c-in" {
-      description = "I2C bus to sensor"
-      protocol    = "i2c"
-      role        = "consumer"
-      external    = true
-      tags        = ["data"]
-    }
-
-    port "mqtt-out" {
-      description = "Outbound MQTT telemetry"
-      protocol    = "mqtt"
-      role        = "provider"
-      external    = true
-      tags        = ["data", "cloud"]
-    }
+  instance "controller" {
+    source = "controller"
   }
 
-  component "broker" {
-    description = "Cloud MQTT broker and time-series storage"
-    icon        = "cloud"
-    tags        = ["cloud", "data"]
-    leaf        = true
-
-    port "mqtt-in" {
-      description = "Inbound MQTT telemetry"
-      protocol    = "mqtt"
-      role        = "consumer"
-      external    = true
-      tags        = ["data", "cloud"]
-    }
+  instance "broker" {
+    source = "broker"
   }
 
   connection "read-sensor" {

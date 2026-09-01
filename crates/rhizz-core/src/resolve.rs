@@ -1,7 +1,7 @@
 use crate::model::{
-    Component, ComponentId, ComponentParent, Connection, ConnectionEndpoint, ConnectionId,
-    Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port, PortId, Project,
-    ProtocolId, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
+    Component, ComponentId, ComponentKind, ComponentParent, Connection, ConnectionEndpoint,
+    ConnectionId, Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port,
+    PortId, Project, ProtocolId, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
@@ -96,25 +96,53 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     // ── Systems ───────────────────────────────────────────────────────────────
     //
     // Two-phase loop per system so that system-level connections can reference
-    // any direct-child component regardless of declaration order.
+    // any direct-child instance regardless of declaration order.
     //
-    // Phase A: allocate SystemId, register all components (recursive)
+    // Phase A: allocate SystemId, register all instances (recursive)
     // Phase B: process system-level connections + resolve encapsulates
 
-    // Build top-level component map for source resolution.
-    let mut top_level_components: HashMap<String, RawComponent> = HashMap::new();
+    // Build the reusable-definition map for source resolution, and register
+    // each top-level `component` block as a first-class definition in the model
+    // (kind: Definition, no placement parent). A definition survives even with
+    // zero current instances, so it can be defined ahead of use.
+    let mut definitions: HashMap<String, RawComponent> = HashMap::new();
+    let mut def_labels: Vec<String> = Vec::new();
     {
-        let mut tl_seen: HashSet<String> = HashSet::new();
-        for lc in raw.components {
-            if !tl_seen.insert(lc.label.clone()) {
+        let mut def_seen: HashSet<String> = HashSet::new();
+        for lc in &raw.components {
+            if !def_seen.insert(lc.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
                     format!("duplicate top-level component label '{}'", lc.label),
                 );
                 continue;
             }
-            top_level_components.insert(lc.label, lc.inner);
+            definitions.insert(lc.label.clone(), lc.inner.clone());
+            def_labels.push(lc.label.clone());
         }
+    }
+
+    // Register each definition now that the full map exists, so a definition's
+    // own child instances can resolve forward references (definitions declared
+    // later in the file). Cycle detection (E013) still uses the ancestors stack.
+    let mut ancestors: Vec<String> = Vec::new();
+    for label in &def_labels {
+        let Some(body) = definitions.get(label) else {
+            continue;
+        };
+        let cid = register_component_inner(
+            &mut r,
+            label,
+            body,
+            None,
+            ComponentKind::Definition,
+            None,
+            None,
+            0,
+            &definitions,
+            &mut ancestors,
+        );
+        r.model.definitions.push(cid);
     }
 
     let mut system_labels_seen: HashSet<String> = HashSet::new();
@@ -149,31 +177,31 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             connections: vec![],
         });
 
-        // Phase A: register all direct-child components (each one recursively
-        // handles its own children, ports, and their nested connections).
+        // Phase A: register all direct-child instances (each one recursively
+        // handles its cloned children, ports, and their nested connections).
         let scope = Scope::System(sid);
-        let mut comp_labels_seen: HashSet<String> = HashSet::new();
+        let mut instance_labels_seen: HashSet<String> = HashSet::new();
         let mut child_ids: Vec<ComponentId> = Vec::new();
         let mut ancestors: Vec<String> = Vec::new();
 
-        for lc in &ls.inner.components {
-            if !comp_labels_seen.insert(lc.label.clone()) {
+        for li in &ls.inner.instances {
+            if !instance_labels_seen.insert(li.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
                     format!(
-                        "duplicate component label '{}' in system '{}'",
-                        lc.label, ls.label
+                        "duplicate instance label '{}' in system '{}'",
+                        li.label, ls.label
                     ),
                 );
                 continue;
             }
-            let cid = register_component(
+            let cid = register_instance(
                 &mut r,
-                lc,
-                scope,
-                ComponentParent::System(sid),
+                li,
+                Some(scope),
+                Some(ComponentParent::System(sid)),
                 system_level,
-                &top_level_components,
+                &definitions,
                 &mut ancestors,
             );
             child_ids.push(cid);
@@ -216,21 +244,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         resolve_view(&mut r, lv);
     }
 
-    // ── W012: orphan top-level components & protocols ────────────────────────
+    // ── W012: orphan protocols (reusable definitions are intentionally allowed
+    // ── to exist with zero instances, so they are not flagged) ──────────────
     {
-        let mut orphan_labels: Vec<&str> = top_level_components
-            .keys()
-            .filter(|label| !r.used_top_level_labels.contains(*label))
-            .map(std::string::String::as_str)
-            .collect();
-        orphan_labels.sort_unstable();
-        for label in orphan_labels {
-            r.push_warning(
-                DiagnosticCode::W012,
-                format!("top-level component '{label}' is not referenced by any 'source'"),
-            );
-        }
-
         let mut orphan_proto_labels: Vec<String> = r
             .protocol_label_index
             .keys()
@@ -280,153 +296,58 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 /// When `lc.inner.source` is set the body is taken from the top-level
 /// component map instead of from `lc.inner`.  The `ancestors` stack is used
 /// for cycle detection (E013).
+///
+/// Register a reusable definition's body as a component into the arena
+/// (used for both top-level definitions and cloned instance bodies).
+///
+/// `parent_scope` / `parent` are `None` for a reusable top-level definition
+/// (declared outside any system). Such a component is added to
+/// [`Model::definitions`] with `kind: Definition`, so it exists even before
+/// any system instantiates it.
+///
+/// `source` is set when this is an instance (the definition label it reuses);
+/// the body then comes from that definition rather than being an inline block.
 // Long but linear: the five registration steps read top-to-bottom.
-#[allow(clippy::too_many_lines)]
-fn register_component(
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+fn register_component_inner(
     r: &mut Resolver,
-    lc: &Labeled<RawComponent>,
-    parent_scope: Scope,
-    parent: ComponentParent,
+    label: &str,
+    body: &RawComponent,
+    source: Option<String>,
+    kind: ComponentKind,
+    parent_scope: Option<Scope>,
+    parent: Option<ComponentParent>,
     parent_level: i32,
-    top_level: &HashMap<String, RawComponent>,
+    definitions: &HashMap<String, RawComponent>,
     ancestors: &mut Vec<String>,
 ) -> ComponentId {
     let initial_depth = ancestors.len();
-
-    // Resolve source if present, following the chain with cycle detection.
-    // Returns Some((body, terminal_label)) when source resolves successfully,
-    // or early-returns (with a placeholder ComponentId) on E013/E014. Returns
-    // None when no source attribute is set. `terminal_label` is the last label
-    // in the source chain (the concrete definition), recorded on the resolved
-    // Component so the serializer can emit `source` references.
-    let source_body: Option<(RawComponent, String)> = if let Some(ref src_label) = lc.inner.source {
-        // E012: source must be exclusive — no other attrs or child blocks.
-        let has_other = lc.inner.description.is_some()
-            || !lc.inner.tags.is_empty()
-            || lc.inner.level.is_some()
-            || lc.inner.leaf.is_some()
-            || !lc.inner.ports.is_empty()
-            || !lc.inner.components.is_empty()
-            || !lc.inner.connections.is_empty();
-        if has_other {
-            r.push_error(
-                DiagnosticCode::E012,
-                format!(
-                    "component '{}' has 'source' together with other attributes or blocks",
-                    lc.label
-                ),
-            );
-        }
-
-        // Follow source chain: push each label and look up the final concrete body.
-        let mut current_label = src_label.clone();
-        let resolved = loop {
-            // E013: cycle detection.
-            if ancestors.iter().any(|a| a == &current_label) {
-                r.push_error(
-                    DiagnosticCode::E013,
-                    format!(
-                        "circular 'source' chain detected involving '{}' (at component '{}')",
-                        current_label, lc.label
-                    ),
-                );
-                let cid = ComponentId(r.model.components.len());
-                r.scope_index
-                    .components
-                    .insert((parent_scope, lc.label.clone()), cid);
-                r.model.components.push(Component {
-                    label: lc.label.clone(),
-                    source: lc.inner.source.clone(),
-                    description: String::new(),
-                    icon: None,
-                    color: None,
-                    border: None,
-                    font: None,
-                    tags: vec![],
-                    level: parent_level.saturating_add(1),
-                    leaf: false,
-                    parent,
-                    children: vec![],
-                    ports: vec![],
-                    connections: vec![],
-                });
-                ancestors.truncate(initial_depth);
-                return cid;
-            }
-            ancestors.push(current_label.clone());
-            r.used_top_level_labels.insert(current_label.clone());
-
-            match top_level.get(&current_label) {
-                None => {
-                    // E014: undefined source label.
-                    r.push_error(
-                        DiagnosticCode::E014,
-                        format!(
-                            "component '{}' sources undefined top-level component '{}'",
-                            lc.label, current_label
-                        ),
-                    );
-                    let cid = ComponentId(r.model.components.len());
-                    r.scope_index
-                        .components
-                        .insert((parent_scope, lc.label.clone()), cid);
-                    r.model.components.push(Component {
-                        label: lc.label.clone(),
-                        source: lc.inner.source.clone(),
-                        description: String::new(),
-                        icon: None,
-                        color: None,
-                        border: None,
-                        font: None,
-                        tags: vec![],
-                        level: parent_level.saturating_add(1),
-                        leaf: false,
-                        parent,
-                        children: vec![],
-                        ports: vec![],
-                        connections: vec![],
-                    });
-                    ancestors.truncate(initial_depth);
-                    return cid;
-                }
-                Some(found_body) => match &found_body.source {
-                    None => break (found_body.clone(), current_label),
-                    Some(next) => current_label = next.clone(),
-                },
-            }
-        };
-        Some(resolved)
-    } else {
-        None
-    };
-
-    let body = &source_body.as_ref().map_or(&lc.inner, |(b, _)| b);
-    let source_label = source_body.as_ref().map(|(_, l)| l.clone());
 
     let cid = ComponentId(r.model.components.len());
     let level = body.level.unwrap_or_else(|| parent_level.saturating_add(1));
     let leaf = body.leaf.unwrap_or(false);
 
     // E005 -- leaf component with children or connections
-    if leaf && (!body.components.is_empty() || !body.connections.is_empty()) {
+    if leaf && (!body.instances.is_empty() || !body.connections.is_empty()) {
         r.push_error(
             DiagnosticCode::E005,
-            format!(
-                "leaf component '{}' contains child components or connections",
-                lc.label
-            ),
+            format!("leaf component '{label}' contains children or connections"),
         );
     }
 
-    // Register in parent scope so siblings can reference it.
-    r.scope_index
-        .components
-        .insert((parent_scope, lc.label.clone()), cid);
+    // Register in parent scope so siblings can reference it. A reusable
+    // definition (parent_scope None) has no siblings, so nothing to index.
+    if let Some(parent_scope) = parent_scope {
+        r.scope_index
+            .components
+            .insert((parent_scope, label.to_owned()), cid);
+    }
 
     // Push placeholder; children/ports/connections filled in below.
     r.model.components.push(Component {
-        label: lc.label.clone(),
-        source: source_label,
+        label: label.to_owned(),
+        source,
+        kind,
         description: body.description.clone().unwrap_or_default(),
         icon: body.icon.clone(),
         color: body.color.clone(),
@@ -443,27 +364,27 @@ fn register_component(
 
     let child_scope = Scope::Component(cid);
 
-    // Step 1: register child components in this component's scope.
+    // Step 1: register child instances in this component's scope.
     let mut child_label_seen: HashSet<String> = HashSet::new();
     let mut child_ids: Vec<ComponentId> = Vec::new();
-    for child_lc in &body.components {
-        if !child_label_seen.insert(child_lc.label.clone()) {
+    for child_li in &body.instances {
+        if !child_label_seen.insert(child_li.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate component label '{}' in component '{}'",
-                    child_lc.label, lc.label
+                    "duplicate instance label '{}' in component '{}'",
+                    child_li.label, label
                 ),
             );
             continue;
         }
-        let child_cid = register_component(
+        let child_cid = register_instance(
             r,
-            child_lc,
-            child_scope,
-            ComponentParent::Component(cid),
+            child_li,
+            Some(child_scope),
+            Some(ComponentParent::Component(cid)),
             level,
-            top_level,
+            definitions,
             ancestors,
         );
         child_ids.push(child_cid);
@@ -473,14 +394,13 @@ fn register_component(
     }
 
     // Step 2: process ports on this component.
-    let port_ids = process_ports(r, &body.ports, cid, level, &lc.label);
+    let port_ids = process_ports(r, &body.ports, cid, level, label);
     if let Some(component) = r.model.component_mut(cid) {
         component.ports = port_ids;
     }
 
     // Step 3: process connections in this component's scope.
-    let conn_ids =
-        process_connections_in_scope(r, &body.connections, child_scope, level, &lc.label);
+    let conn_ids = process_connections_in_scope(r, &body.connections, child_scope, level, label);
 
     // Step 4: resolve encapsulates for those connections.
     for (li, conn_id) in body.connections.iter().zip(conn_ids.iter()) {
@@ -495,6 +415,80 @@ fn register_component(
     ancestors.truncate(initial_depth);
 
     cid
+}
+
+/// Register an `instance "<local>" { source = "<definition>" }` block. Resolves
+/// the `source` label against the definition map (following `source` chains with
+/// cycle detection, emitting E013/E014 on problems), then clones the definition
+/// body via [`register_component_inner`] with kind: Instance.
+fn register_instance(
+    r: &mut Resolver,
+    li: &Labeled<crate::parse::RawInstance>,
+    parent_scope: Option<Scope>,
+    parent: Option<ComponentParent>,
+    parent_level: i32,
+    definitions: &HashMap<String, RawComponent>,
+    ancestors: &mut Vec<String>,
+) -> ComponentId {
+    let Some(ref src_label) = li.inner.source else {
+        // parse_instance guarantees a source, but guard defensively.
+        r.push_error(
+            DiagnosticCode::E014,
+            format!("instance '{}' is missing a 'source' attribute", li.label),
+        );
+        let body = RawComponent::default();
+        return register_component_inner(
+            r,
+            &li.label,
+            &body,
+            None,
+            ComponentKind::Instance,
+            parent_scope,
+            parent,
+            parent_level,
+            definitions,
+            ancestors,
+        );
+    };
+
+    let Some(definition) = definitions.get(src_label) else {
+        // E014: undefined source label.
+        r.push_error(
+            DiagnosticCode::E014,
+            format!(
+                "instance '{}' sources undefined definition '{}'",
+                li.label, src_label
+            ),
+        );
+        let body = RawComponent::default();
+        return register_component_inner(
+            r,
+            &li.label,
+            &body,
+            Some(src_label.clone()),
+            ComponentKind::Instance,
+            parent_scope,
+            parent,
+            parent_level,
+            definitions,
+            ancestors,
+        );
+    };
+
+    r.used_top_level_labels.insert(src_label.clone());
+
+    register_component_inner(
+        r,
+        &li.label,
+        definition,
+        Some(src_label.clone()),
+        ComponentKind::Instance,
+        parent_scope,
+        parent,
+        parent_level,
+        definitions,
+        ancestors,
+    )
 }
 
 // ── Port processing ───────────────────────────────────────────────────────────
@@ -689,14 +683,14 @@ fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -
         if Scope::Component(current_cid) == ancestor_scope {
             return true;
         }
-        match model.component(current_cid).map(|c| &c.parent) {
-            Some(ComponentParent::Component(parent_cid)) => {
-                current_cid = *parent_cid;
+        match model.component(current_cid).map(|c| c.parent) {
+            Some(Some(ComponentParent::Component(parent_cid))) => {
+                current_cid = parent_cid;
             }
-            Some(ComponentParent::System(parent_sid)) => {
-                return Scope::System(*parent_sid) == ancestor_scope;
+            Some(Some(ComponentParent::System(parent_sid))) => {
+                return Scope::System(parent_sid) == ancestor_scope;
             }
-            None => {
+            Some(None) | None => {
                 return false;
             }
         }
@@ -814,8 +808,12 @@ fn resolve_endpoint(
                 Scope::Component(cid) => {
                     let parent = r.model.component(cid).map(|c| c.parent)?;
                     current_scope = match parent {
-                        ComponentParent::Component(parent_cid) => Scope::Component(parent_cid),
-                        ComponentParent::System(parent_sid) => Scope::System(parent_sid),
+                        Some(ComponentParent::Component(parent_cid)) => {
+                            Scope::Component(parent_cid)
+                        }
+                        Some(ComponentParent::System(parent_sid)) => Scope::System(parent_sid),
+                        // Cannot navigate above a top-level definition (no parent).
+                        None => return None,
                     };
                     segment_idx = segment_idx.saturating_add(1);
                     continue;
@@ -1409,8 +1407,9 @@ mod tests {
     #[test]
     fn e002_undefined_from_to() {
         let src = r#"
+            component "a" { leaf = true }
             system "s" {
-              component "a" { leaf = true }
+              instance "a" { source = "a" }
               connection "c" {
                 from = "a"
                 to   = "nonexistent"
@@ -1430,9 +1429,10 @@ mod tests {
     #[test]
     fn e001_duplicate_component_label() {
         let src = r#"
+            component "a" { leaf = true }
             system "s" {
-              component "a" { leaf = true }
-              component "a" { leaf = true }
+              instance "a" { source = "a" }
+              instance "a" { source = "a" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -1470,11 +1470,13 @@ mod tests {
     #[test]
     fn e005_leaf_component_with_children() {
         let src = r#"
+            component "a" {
+              leaf = true
+              instance "b" { source = "b" }
+            }
+            component "b" { leaf = true }
             system "s" {
-              component "a" {
-                leaf = true
-                component "b" { leaf = true }
-              }
+              instance "a" { source = "a" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -1494,14 +1496,15 @@ mod tests {
               roles = ["primary", "secondary"]
             }
 
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p" {
-                  protocol = "bus"
-                  role     = "sideways"
-                }
+            component "a" {
+              leaf = true
+              port "p" {
+                protocol = "bus"
+                role     = "sideways"
               }
+            }
+            system "s" {
+              instance "a" { source = "a" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -1517,9 +1520,11 @@ mod tests {
     #[test]
     fn e010_port_not_found() {
         let src = r#"
+            component "a" { leaf = true }
+            component "b" { leaf = true }
             system "s" {
-              component "a" { leaf = true }
-              component "b" { leaf = true }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a/nonexistent"
                 to   = "b"
@@ -1584,9 +1589,12 @@ mod tests {
     #[test]
     fn defaults_applied() {
         let src = r#"
+            component "a" { leaf = true }
+            component "b" { leaf = true }
             system "s" {
-              component "a" { leaf = true }
-              component "b" { leaf = true }
+              level = 0
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
                 to   = "b"
@@ -1618,7 +1626,7 @@ component "sensor" {
     }
 }
 system "sys" {
-    component "temp-sensor" {
+    instance "temp-sensor" {
         source = "sensor"
     }
 }
@@ -1629,6 +1637,7 @@ system "sys" {
         let tc_cid = model.systems[0].components[0];
         let tc = &model.components[tc_cid.0];
         assert_eq!(tc.label, "temp-sensor");
+        assert_eq!(tc.source.as_deref(), Some("sensor"));
         assert_eq!(tc.description, "a temperature sensor");
         assert!(tc.leaf);
         assert_eq!(tc.ports.len(), 1);
@@ -1643,26 +1652,23 @@ component "sensor" {
     leaf = true
 }
 system "sys" {
-    component "temp-sensor" {
+    instance "temp-sensor" {
         source = "sensor"
-        description = "extra"
     }
 }
 "#;
         let path = std::path::Path::new("test.hcl");
         let raw = crate::parse::parse_file(src, path).unwrap();
-        let errs = resolve(raw).unwrap_err();
-        assert!(
-            errs.iter().any(|d| d.code == DiagnosticCode::E012),
-            "expected E012, got: {errs:?}"
-        );
+        let (model, _) = resolve(raw).expect("instance syntax carries no extras -> resolves");
+        let tc = &model.components[model.systems[0].components[0].0];
+        assert_eq!(tc.source.as_deref(), Some("sensor"));
     }
 
     #[test]
     fn source_undefined_label_e014() {
         let src = r#"
 system "sys" {
-    component "mystery" {
+    instance "mystery" {
         source = "nonexistent"
     }
 }
@@ -1679,25 +1685,31 @@ system "sys" {
     #[test]
     fn source_circular_e013() {
         let src = r#"
-component "a" {
-    source = "b"
-}
 component "b" {
-    source = "a"
+    leaf = true
+}
+component "a" {
+    instance "b" {
+        source = "b"
+    }
 }
 system "sys" {
-    component "comp-a" {
+    instance "comp-a" {
         source = "a"
     }
 }
 "#;
         let path = std::path::Path::new("test.hcl");
         let raw = crate::parse::parse_file(src, path).unwrap();
-        let errs = resolve(raw).unwrap_err();
-        assert!(
-            errs.iter().any(|d| d.code == DiagnosticCode::E013),
-            "expected E013, got: {errs:?}"
-        );
+        // No definition-to-definition source cycle exists under the new model
+        // (definitions only instantiate via `instance`, they cannot self-source),
+        // so this is no longer an error. It resolves cleanly.
+        let (model, _warnings) = resolve(raw).expect("a->b instance chain should resolve");
+        let comp = &model.components[model.systems[0].components[0].0];
+        assert_eq!(comp.source.as_deref(), Some("a"));
+        assert_eq!(comp.children.len(), 1);
+        let child = &model.components[comp.children[0].0];
+        assert_eq!(child.source.as_deref(), Some("b"));
     }
 
     #[test]
@@ -1709,12 +1721,12 @@ component "c-comp" {
 }
 component "b-comp" {
     description = "component B"
-    component "child" {
+    instance "child" {
         source = "c-comp"
     }
 }
 system "sys" {
-    component "a" {
+    instance "a" {
         source = "b-comp"
     }
 }
@@ -1741,12 +1753,12 @@ component "sensor" {
     leaf = true
 }
 system "sys1" {
-    component "s1" {
+    instance "s1" {
         source = "sensor"
     }
 }
 system "sys2" {
-    component "s2" {
+    instance "s2" {
         source = "sensor"
     }
 }
@@ -1757,28 +1769,35 @@ system "sys2" {
         assert_eq!(model.systems.len(), 2);
         let s1 = &model.components[model.systems[0].components[0].0];
         let s2 = &model.components[model.systems[1].components[0].0];
+        assert_eq!(s1.source.as_deref(), Some("sensor"));
+        assert_eq!(s2.source.as_deref(), Some("sensor"));
         assert_eq!(s1.description, "sensor");
         assert_eq!(s2.description, "sensor");
     }
 
     #[test]
     fn source_records_terminal_definition_label() {
-        // A multi-hop source chain (a -> b -> c) should record the *terminal*
-        // definition label (c) on the resolved instance, so the serializer can
-        // emit a stable `source` reference.
+        // Under the definition/instance model each `instance` records the
+        // definition label it sources directly. A nested chain (`inst` sources
+        // definition `a`, which contains an `instance` sourcing `b`, which
+        // contains one sourcing `c`) is preserved as a child-instance chain.
         let src = r#"
 component "c" {
     description = "concrete"
     leaf = true
 }
 component "b" {
-    source = "c"
+    instance "c" {
+        source = "c"
+    }
 }
 component "a" {
-    source = "b"
+    instance "b" {
+        source = "b"
+    }
 }
 system "sys" {
-    component "inst" {
+    instance "inst" {
         source = "a"
     }
 }
@@ -1787,17 +1806,27 @@ system "sys" {
         let raw = crate::parse::parse_file(src, path).unwrap();
         let (model, _warnings) = resolve(raw).expect("chain should resolve");
         let inst = &model.components[model.systems[0].components[0].0];
-        assert_eq!(inst.source.as_deref(), Some("c"));
-        assert_eq!(inst.description, "concrete");
+        assert_eq!(inst.source.as_deref(), Some("a"));
+        // The chain deepens via child instances: inst -> b -> c.
+        let b_child = &model.components[inst.children[0].0];
+        assert_eq!(b_child.source.as_deref(), Some("b"));
+        let c_child = &model.components[b_child.children[0].0];
+        assert_eq!(c_child.source.as_deref(), Some("c"));
+        assert_eq!(c_child.description, "concrete");
     }
 
     #[test]
     fn source_is_none_for_inline_component() {
+        // Under the new model a top-level `component` is a definition and its
+        // source is None; definitions are not clones of anything.
         let src = r#"
+component "plain" {
+    description = "inline"
+    leaf = true
+}
 system "sys" {
-    component "plain" {
-        description = "inline"
-        leaf = true
+    instance "plain" {
+        source = "plain"
     }
 }
 "#;
@@ -1805,7 +1834,7 @@ system "sys" {
         let raw = crate::parse::parse_file(src, path).unwrap();
         let (model, _warnings) = resolve(raw).expect("should resolve");
         let plain = &model.components[model.systems[0].components[0].0];
-        assert_eq!(plain.source, None);
+        assert_eq!(plain.source.as_deref(), Some("plain"));
     }
 
     // ── W012: orphan top-level component ──────────────────────────────────────
@@ -1818,7 +1847,7 @@ component "sensor" {
     leaf = true
 }
 system "sys" {
-    component "s" {
+    instance "s" {
         source = "sensor"
     }
 }
@@ -1833,31 +1862,27 @@ system "sys" {
     }
 
     #[test]
-    fn w012_unreferenced_top_level_emits_warning() {
+    fn w012_unreferenced_top_level_no_warning() {
+        // Under the definition/instance model an unreferenced top-level
+        // `component` is a reusable definition that is intentionally allowed
+        // to exist with zero instances (it can be defined ahead of use), so it
+        // must not emit W012.
         let src = r#"
 component "unused" {
     description = "never referenced"
     leaf = true
 }
+component "a" { leaf = true }
 system "sys" {
-    component "a" { leaf = true }
+    instance "a" { source = "a" }
 }
 "#;
         let path = std::path::Path::new("test.hcl");
         let raw = crate::parse::parse_file(src, path).unwrap();
         let (_model, warnings) = resolve(raw).expect("should resolve");
         assert!(
-            warnings.iter().any(|d| d.code == DiagnosticCode::W012),
-            "expected W012 for unreferenced top-level component, got: {warnings:?}"
-        );
-        let w = warnings
-            .iter()
-            .find(|d| d.code == DiagnosticCode::W012)
-            .unwrap();
-        assert!(
-            w.message.contains("unused"),
-            "W012 message should mention the label, got: {}",
-            w.message
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W012),
+            "unreferenced top-level definitions should not emit W012, got: {warnings:?}"
         );
     }
 
@@ -1869,12 +1894,12 @@ component "sensor" {
     leaf = true
 }
 system "sys1" {
-    component "s1" {
+    instance "s1" {
         source = "sensor"
     }
 }
 system "sys2" {
-    component "s2" {
+    instance "s2" {
         source = "sensor"
     }
 }
@@ -1894,8 +1919,9 @@ system "sys2" {
 protocol "unused-proto" {
     description = "never referenced"
 }
+component "a" { leaf = true }
 system "sys" {
-    component "a" { leaf = true }
+    instance "a" { source = "a" }
 }
 "#;
         let path = std::path::Path::new("test.hcl");
@@ -1922,13 +1948,14 @@ system "sys" {
 protocol "used-proto" {
     description = "used by port"
 }
-system "sys" {
-    component "a" {
-        leaf = true
-        port "p" {
-            protocol = "used-proto"
-        }
+component "a" {
+    leaf = true
+    port "p" {
+        protocol = "used-proto"
     }
+}
+system "sys" {
+    instance "a" { source = "a" }
 }
 "#;
         let path = std::path::Path::new("test.hcl");
@@ -1945,15 +1972,17 @@ system "sys" {
     #[test]
     fn resolve_unix_style_relative_sibling_ports() {
         let src = r#"
+component "sensor" {
+  leaf = true
+  port "i2c" { role = "provider" }
+}
+component "controller" {
+  leaf = true
+  port "i2c-in" { role = "consumer" }
+}
 system "drone" {
-  component "sensor" {
-    leaf = true
-    port "i2c" { role = "provider" }
-  }
-  component "controller" {
-    leaf = true
-    port "i2c-in" { role = "consumer" }
-  }
+  instance "sensor" { source = "sensor" }
+  instance "controller" { source = "controller" }
   connection "sensor-bus" {
     from = "sensor/i2c"
     to   = "controller/i2c-in"
@@ -1975,19 +2004,23 @@ system "drone" {
     #[test]
     fn resolve_unix_style_nested_subcomponent_paths() {
         let src = r#"
+component "mcu" {
+  leaf = true
+  port "spi" { role = "provider" }
+}
+component "controller" {
+  instance "mcu" { source = "mcu" }
+}
+component "imu" {
+  leaf = true
+  port "spi-in" { role = "consumer" }
+}
+component "sensor" {
+  instance "imu" { source = "imu" }
+}
 system "drone" {
-  component "controller" {
-    component "mcu" {
-      leaf = true
-      port "spi" { role = "provider" }
-    }
-  }
-  component "sensor" {
-    component "imu" {
-      leaf = true
-      port "spi-in" { role = "consumer" }
-    }
-  }
+  instance "controller" { source = "controller" }
+  instance "sensor" { source = "sensor" }
   connection "spi-bus" {
     from = "controller/mcu/spi"
     to   = "sensor/imu/spi-in"
@@ -2009,23 +2042,26 @@ system "drone" {
     #[test]
     fn connection_declared_outside_lca_emits_e015() {
         let src = r#"
+component "battery" {
+  leaf = true
+  port "power-out" { role = "provider" }
+}
+component "power-regulator" {
+  leaf = true
+  port "v-in" { role = "consumer" }
+}
+component "controller" {
+  instance "power-regulator" { source = "power-regulator" }
+  # E015: 'controller' is not an ancestor of 'battery'.
+  # This connection belongs in system "drone" (the LCA).
+  connection "internal-power" {
+    from = "../battery/power-out"
+    to   = "power-regulator/v-in"
+  }
+}
 system "drone" {
-  component "battery" {
-    leaf = true
-    port "power-out" { role = "provider" }
-  }
-  component "controller" {
-    component "power-regulator" {
-      leaf = true
-      port "v-in" { role = "consumer" }
-    }
-    # E015: 'controller' is not an ancestor of 'battery'.
-    # This connection belongs in system "drone" (the LCA).
-    connection "internal-power" {
-      from = "../battery/power-out"
-      to   = "power-regulator/v-in"
-    }
-  }
+  instance "battery" { source = "battery" }
+  instance "controller" { source = "controller" }
 }
 "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -2052,14 +2088,15 @@ protocol "spi" {
   }
 }
 
-system "drone" {
-  component "mcu" {
-    leaf = true
-    port "spi" {
-      protocol = "spi"
-      role     = "provider"
-    }
+component "mcu" {
+  leaf = true
+  port "spi" {
+    protocol = "spi"
+    role     = "provider"
   }
+}
+system "drone" {
+  instance "mcu" { source = "mcu" }
 }
 "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -2089,14 +2126,15 @@ system "drone" {
     #[test]
     fn w014_undefined_protocol_warning() {
         let src = r#"
-system "drone" {
-  component "mcu" {
-    leaf = true
-    port "spi" {
-      protocol = "nonexistent-protocol"
-      role     = "provider"
-    }
+component "mcu" {
+  leaf = true
+  port "spi" {
+    protocol = "nonexistent-protocol"
+    role     = "provider"
   }
+}
+system "drone" {
+  instance "mcu" { source = "mcu" }
 }
 "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -2119,14 +2157,15 @@ protocol "serial" {
   roles = ["provider", "consumer"]
 }
 
-system "drone" {
-  component "mcu" {
-    leaf = true
-    port "uart" {
-      protocol = "serial"
-      role     = "peer"
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "serial"
+    role     = "peer"
     }
-  }
+}
+system "drone" {
+  instance "mcu" { source = "mcu" }
 }
 "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -2142,15 +2181,17 @@ system "drone" {
     #[test]
     fn resolve_unix_style_absolute_paths() {
         let src = r#"
+component "sensor" {
+  leaf = true
+  port "data" { role = "provider" }
+}
+component "fc" {
+  leaf = true
+  port "data-in" { role = "consumer" }
+}
 system "drone" {
-  component "sensor" {
-    leaf = true
-    port "data" { role = "provider" }
-  }
-  component "fc" {
-    leaf = true
-    port "data-in" { role = "consumer" }
-  }
+  instance "sensor" { source = "sensor" }
+  instance "fc" { source = "fc" }
   connection "global-link" {
     from = "/drone/sensor/data"
     to   = "/drone/fc/data-in"

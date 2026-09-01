@@ -62,17 +62,15 @@ pub struct RawSystem {
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
     pub level: Option<i32>,
-    /// Child component blocks.
-    pub components: Vec<Labeled<RawComponent>>,
+    /// Child instance blocks (`instance "<local>" { source = "<def>" }`).
+    pub instances: Vec<Labeled<RawInstance>>,
     /// Child connection blocks.
     pub connections: Vec<Labeled<RawConnection>>,
 }
 
-/// Raw component block before resolution.
+/// Raw component block before resolution (a reusable definition).
 #[derive(Debug, Clone, Default)]
 pub struct RawComponent {
-    /// Optional source label referring to a top-level component definition.
-    pub source: Option<String>,
     /// Optional description text.
     pub description: Option<String>,
     /// Optional icon name (e.g. `FontAwesome` icon identifier).
@@ -91,10 +89,19 @@ pub struct RawComponent {
     pub leaf: Option<bool>,
     /// Port blocks declared on this component.
     pub ports: Vec<Labeled<RawPort>>,
-    /// Nested child component blocks.
-    pub components: Vec<Labeled<Self>>,
+    /// Child instance blocks (`instance "<local>" { source = "<def>" }`).
+    pub instances: Vec<Labeled<RawInstance>>,
     /// Nested connection blocks.
     pub connections: Vec<Labeled<RawConnection>>,
+}
+
+/// Raw instance block before resolution (`instance "<local>" { source = "<def>" }`).
+/// An instance reuses a top-level reusable definition's body and has no body of
+/// its own.
+#[derive(Debug, Clone, Default)]
+pub struct RawInstance {
+    /// Label of the top-level definition this instance reuses.
+    pub source: Option<String>,
 }
 
 /// Raw protocol block before resolution.
@@ -200,8 +207,6 @@ struct SystemAttrs {
 /// Serde helper for deserializing component attributes.
 #[derive(Deserialize, Default)]
 struct ComponentAttrs {
-    /// Optional source reference.
-    source: Option<String>,
     /// Optional description.
     description: Option<String>,
     /// Optional icon name.
@@ -219,6 +224,13 @@ struct ComponentAttrs {
     level: Option<i32>,
     /// Optional leaf flag.
     leaf: Option<bool>,
+}
+
+/// Serde helper for deserializing instance attributes.
+#[derive(Deserialize, Default)]
+struct InstanceAttrs {
+    /// Required source reference to a top-level definition.
+    source: Option<String>,
 }
 
 /// Serde helper for deserializing protocol attributes.
@@ -471,7 +483,7 @@ fn parse_connection(body: &hcl::Body) -> Result<RawConnection> {
 fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
     let a: ComponentAttrs = attrs(body)?;
     let mut ports = Vec::new();
-    let mut components = Vec::new();
+    let mut instances = Vec::new();
     let mut connections = Vec::new();
     for block in body.blocks() {
         match block.identifier() {
@@ -481,11 +493,11 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
                     parse_port(block.body()).with_context(|| format!("in port '{label}'"))?;
                 ports.push(Labeled { label, inner });
             }
-            "component" => {
+            "instance" => {
                 let label = first_label(block)?;
-                let inner = parse_component(block.body())
-                    .with_context(|| format!("in component '{label}'"))?;
-                components.push(Labeled { label, inner });
+                let inner = parse_instance(block.body())
+                    .with_context(|| format!("in instance '{label}'"))?;
+                instances.push(Labeled { label, inner });
             }
             "connection" => {
                 let label = first_label(block)?;
@@ -497,7 +509,6 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
         }
     }
     Ok(RawComponent {
-        source: a.source,
         description: a.description,
         icon: a.icon,
         color: a.color,
@@ -507,23 +518,33 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
         level: a.level,
         leaf: a.leaf,
         ports,
-        components,
+        instances,
         connections,
     })
+}
+
+/// Parse an `instance "<local>" { source = "<definition>" }` block. An instance
+/// has no body — only a `source` attribute naming the definition it reuses.
+fn parse_instance(body: &hcl::Body) -> Result<RawInstance> {
+    let a: InstanceAttrs = attrs(body)?;
+    if a.source.is_none() {
+        bail!("instance block is missing a 'source' attribute");
+    }
+    Ok(RawInstance { source: a.source })
 }
 
 /// Parse a `system` block body into a [`RawSystem`].
 fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
     let a: SystemAttrs = attrs(body)?;
-    let mut components = Vec::new();
+    let mut instances = Vec::new();
     let mut connections = Vec::new();
     for block in body.blocks() {
         match block.identifier() {
-            "component" => {
+            "instance" => {
                 let label = first_label(block)?;
-                let inner = parse_component(block.body())
-                    .with_context(|| format!("in component '{label}'"))?;
-                components.push(Labeled { label, inner });
+                let inner = parse_instance(block.body())
+                    .with_context(|| format!("in instance '{label}'"))?;
+                instances.push(Labeled { label, inner });
             }
             "connection" => {
                 let label = first_label(block)?;
@@ -538,7 +559,7 @@ fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
         description: a.description,
         tags: a.tags.unwrap_or_default(),
         level: a.level,
-        components,
+        instances,
         connections,
     })
 }
@@ -702,38 +723,44 @@ mod tests {
             .unwrap();
         assert!(quad.inner.description.is_some());
 
-        // Components at top level of quadcopter
+        // The quadcopter system references reusable definitions via `instance`.
         let comp_labels: Vec<&str> = quad
             .inner
-            .components
+            .instances
             .iter()
-            .map(|c| c.label.as_str())
+            .map(|i| i.label.as_str())
             .collect();
         assert!(comp_labels.contains(&"flight-controller"));
         assert!(comp_labels.contains(&"esc"));
         assert!(comp_labels.contains(&"battery"));
 
-        // flight-controller is now inlined (single-file model); no source attr
-        let fc = quad
+        // flight-controller is now a reusable top-level definition referenced
+        // from the system via an `instance` block (single-file model).
+        let fc_inst = quad
             .inner
+            .instances
+            .iter()
+            .find(|i| i.label == "flight-controller")
+            .unwrap();
+        assert_eq!(
+            fc_inst.inner.source.as_deref(),
+            Some("flight-controller"),
+            "flight-controller instance should source the definition"
+        );
+
+        // The flight-controller *definition* carries its children and ports directly.
+        let fc_def = raw
             .components
             .iter()
             .find(|c| c.label == "flight-controller")
-            .unwrap();
-        assert_eq!(
-            fc.inner.source.as_deref(),
-            None,
-            "flight-controller should be inlined in the single-file model"
-        );
+            .expect("flight-controller definition");
         assert!(
-            !fc.inner.components.is_empty(),
-            "inlined flight-controller should have child components"
+            !fc_def.inner.instances.is_empty(),
+            "defined flight-controller should have child instances"
         );
-
-        // The inlined flight-controller carries its children and ports directly
-        let fc_child_labels: Vec<&str> = fc
+        let fc_child_labels: Vec<&str> = fc_def
             .inner
-            .components
+            .instances
             .iter()
             .map(|c| c.label.as_str())
             .collect();
@@ -742,7 +769,12 @@ mod tests {
         assert!(fc_child_labels.contains(&"barometer"));
 
         // FC definition should have ports
-        let fc_port_labels: Vec<&str> = fc.inner.ports.iter().map(|p| p.label.as_str()).collect();
+        let fc_port_labels: Vec<&str> = fc_def
+            .inner
+            .ports
+            .iter()
+            .map(|p| p.label.as_str())
+            .collect();
         assert!(fc_port_labels.contains(&"motor-out"));
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
@@ -776,15 +808,23 @@ mod tests {
             .iter()
             .find(|s| s.label == "ground-control")
             .expect("ground-control system missing");
-        // ground-station-pc has no description and no children — should still parse
-        let gpc = gc
+        // ground-station-pc is referenced via an instance in the system.
+        let gpc_inst = gc
             .inner
+            .instances
+            .iter()
+            .find(|i| i.label == "ground-station-pc")
+            .expect("ground-station-pc instance missing");
+        assert_eq!(gpc_inst.inner.source.as_deref(), Some("ground-station-pc"));
+
+        // The definition has no description and no children — should still parse.
+        let gpc = raw
             .components
             .iter()
             .find(|c| c.label == "ground-station-pc")
-            .expect("ground-station-pc component missing");
+            .expect("ground-station-pc definition missing");
         assert!(gpc.inner.description.is_none());
-        assert!(gpc.inner.components.is_empty());
+        assert!(gpc.inner.instances.is_empty());
     }
 
     // ── social-media ───────────────────────────────────────────────────────
@@ -798,16 +838,24 @@ mod tests {
         let bv = &raw.systems[0];
         assert_eq!(bv.label, "buzzvid");
 
-        // Backend is a non-leaf component with children
+        // backend references its children via instances.
         let backend = bv
             .inner
-            .components
+            .instances
             .iter()
             .find(|c| c.label == "backend")
             .expect("backend component missing");
-        let backend_children: Vec<&str> = backend
-            .inner
+        assert_eq!(backend.inner.source.as_deref(), Some("backend"));
+
+        // The backend *definition* carries its children as instances.
+        let backend_def = raw
             .components
+            .iter()
+            .find(|c| c.label == "backend")
+            .expect("backend definition missing");
+        let backend_children: Vec<&str> = backend_def
+            .inner
+            .instances
             .iter()
             .map(|c| c.label.as_str())
             .collect();
@@ -815,23 +863,21 @@ mod tests {
         assert!(backend_children.contains(&"feed-service"));
         assert!(backend_children.contains(&"recommendation-engine"));
 
-        // recommendation-engine has no children (in-progress)
-        let rec = backend
-            .inner
+        // recommendation-engine definition has no children (in-progress)
+        let rec = raw
             .components
             .iter()
             .find(|c| c.label == "recommendation-engine")
             .unwrap();
-        assert!(rec.inner.components.is_empty());
+        assert!(rec.inner.instances.is_empty());
 
         // mobile-app should have ports
-        let app = bv
-            .inner
+        let app_def = raw
             .components
             .iter()
             .find(|c| c.label == "mobile-app")
-            .expect("mobile-app component missing");
-        let api_port = app
+            .expect("mobile-app definition missing");
+        let api_port = app_def
             .inner
             .ports
             .iter()
@@ -863,10 +909,10 @@ mod tests {
         let acme = &raw.systems[0];
         assert_eq!(acme.label, "acme-software");
 
-        // Departments exist as top-level components
+        // Departments exist as top-level instances in the system
         let dept_labels: Vec<&str> = acme
             .inner
-            .components
+            .instances
             .iter()
             .map(|c| c.label.as_str())
             .collect();
@@ -876,16 +922,15 @@ mod tests {
         assert!(dept_labels.contains(&"sales"));
         assert!(dept_labels.contains(&"operations"));
 
-        // Engineering has sub-teams
-        let eng = acme
-            .inner
+        // Engineering has sub-teams (instances referencing definitions)
+        let eng = raw
             .components
             .iter()
             .find(|c| c.label == "engineering")
-            .unwrap();
+            .expect("engineering definition");
         let team_labels: Vec<&str> = eng
             .inner
-            .components
+            .instances
             .iter()
             .map(|c| c.label.as_str())
             .collect();
@@ -893,15 +938,14 @@ mod tests {
         assert!(team_labels.contains(&"backend-team"));
         assert!(team_labels.contains(&"platform-team"));
 
-        // operations has no description and no children
-        let ops = acme
-            .inner
+        // operations has no description and no children (definition-side)
+        let ops = raw
             .components
             .iter()
             .find(|c| c.label == "operations")
             .unwrap();
         assert!(ops.inner.description.is_none());
-        assert!(ops.inner.components.is_empty());
+        assert!(ops.inner.instances.is_empty());
 
         // Cross-department connections
         let conn_labels: Vec<&str> = acme
@@ -913,14 +957,13 @@ mod tests {
         assert!(conn_labels.contains(&"sprint-planning"));
         assert!(conn_labels.contains(&"bug-reports"));
 
-        // Product has ports
-        let product = acme
-            .inner
+        // Product has ports (defined on the product definition)
+        let product_def = raw
             .components
             .iter()
             .find(|c| c.label == "product")
             .unwrap();
-        let sprint_port = product
+        let sprint_port = product_def
             .inner
             .ports
             .iter()
@@ -957,7 +1000,7 @@ mod tests {
                 tags = ["a", "b"]
                 level = 0
 
-                component "c1" { leaf = true }
+                instance "c1" { source = "c1" }
                 connection "i1" {
                     from = "c1"
                     to   = "c1"
@@ -971,7 +1014,7 @@ mod tests {
         assert_eq!(sys.label, "my-sys");
         assert_eq!(sys.inner.tags, vec!["a", "b"]);
         assert_eq!(sys.inner.level, Some(0));
-        assert_eq!(sys.inner.components.len(), 1);
+        assert_eq!(sys.inner.instances.len(), 1);
         assert_eq!(sys.inner.connections.len(), 1);
         let conn = &sys.inner.connections[0];
         assert_eq!(conn.inner.from.as_deref(), Some("c1"));
@@ -1054,13 +1097,13 @@ mod tests {
     #[test]
     fn parse_mixed_system_component_view_blocks() {
         let src = r#"
-            system "sys-a" {
-                component "inline-comp" { leaf = true }
-            }
-
             component "shared-comp" {
                 description = "top-level component"
                 port "p1" { role = "provider" }
+            }
+
+            system "sys-a" {
+                instance "shared-comp" { source = "shared-comp" }
             }
 
             view "v1" {

@@ -176,30 +176,42 @@ fn render_valid_model(input: &ModelInput) -> String {
     let _ = writeln!(hcl, "  }}");
     let _ = writeln!(hcl, "}}\n");
 
-    let _ = writeln!(hcl, "system {} {{", quoted(&system_label));
-    let _ = writeln!(hcl, "  description = {}", quoted(&input.description));
-    let _ = writeln!(hcl, "  tags = {}", string_list(&input.tags));
+    // Emit each component as a reusable top-level definition.
     for (index, component) in input.components.iter().enumerate() {
         let component_label = format!("component-{index}-{}", component.suffix);
-        let _ = writeln!(hcl, "  component {} {{", quoted(&component_label));
-        let _ = writeln!(hcl, "    description = {}", quoted(&component.description));
-        let _ = writeln!(hcl, "    tags = {}", string_list(&component.tags));
+        let _ = writeln!(hcl, "component {} {{", quoted(&component_label));
+        let _ = writeln!(hcl, "  description = {}", quoted(&component.description));
+        let _ = writeln!(hcl, "  tags = {}", string_list(&component.tags));
         if let Some(border) = component.border {
-            let _ = writeln!(hcl, "    border = {}", quoted(border));
+            let _ = writeln!(hcl, "  border = {}", quoted(border));
         }
-        let _ = writeln!(hcl, "    leaf = true");
-        let _ = writeln!(hcl, "    port \"port-generated\" {{");
-        let _ = writeln!(hcl, "      protocol = {}", quoted(&protocol_label));
+        let _ = writeln!(hcl, "  leaf = true");
+        let _ = writeln!(hcl, "  port \"port-generated\" {{");
+        let _ = writeln!(hcl, "    protocol = {}", quoted(&protocol_label));
         let role = if index % 2 == 0 {
             "provider"
         } else {
             "consumer"
         };
-        let _ = writeln!(hcl, "      role = {}", quoted(role));
-        let _ = writeln!(hcl, "      external = {}", component.external);
-        let _ = writeln!(hcl, "      required = {}", component.required);
-        let _ = writeln!(hcl, "    }}");
+        let _ = writeln!(hcl, "    role = {}", quoted(role));
+        let _ = writeln!(hcl, "    external = {}", component.external);
+        let _ = writeln!(hcl, "    required = {}", component.required);
         let _ = writeln!(hcl, "  }}");
+        let _ = writeln!(hcl, "}}");
+    }
+
+    // The system references the definitions via `instance` blocks.
+    let _ = writeln!(hcl, "system {} {{", quoted(&system_label));
+    let _ = writeln!(hcl, "  description = {}", quoted(&input.description));
+    let _ = writeln!(hcl, "  tags = {}", string_list(&input.tags));
+    for (index, component) in input.components.iter().enumerate() {
+        let component_label = format!("component-{index}-{}", component.suffix);
+        let _ = writeln!(
+            hcl,
+            "  instance {} {{ source = {} }}",
+            quoted(&component_label),
+            quoted(&component_label)
+        );
     }
     for (previous_index, pair) in input.components.windows(2).enumerate() {
         let [previous, current] = pair else {

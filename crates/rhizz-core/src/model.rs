@@ -92,6 +92,19 @@ pub enum ComponentParent {
     Component(ComponentId),
 }
 
+// ── ComponentKind ─────────────────────────────────────────────────────────────
+
+/// Whether a component is a reusable definition or a placed instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ComponentKind {
+    /// A reusable top-level definition (`component "<label>" { ...body... }`),
+    /// keyed by its own label and reusable from any system.
+    Definition,
+    /// A placed instance (`instance "<local>" { source = "<definition>" }`)
+    /// that clones a definition's body.
+    Instance,
+}
+
 // ── Resolved model ────────────────────────────────────────────────────────────
 
 /// The fully-resolved system model, containing all arenas.
@@ -101,6 +114,11 @@ pub struct Model {
     pub project: Project,
     /// All systems, indexed by [`SystemId`].
     pub systems: Vec<System>,
+    /// Root [`ComponentId`]s of reusable top-level component definitions
+    /// (`ComponentKind::Definition`). The definitions themselves live in
+    /// [`Self::components`] with `parent` absent (they are not placed in any
+    /// system). Kept separately so a definition survives with zero instances.
+    pub definitions: Vec<ComponentId>,
     /// All components, indexed by [`ComponentId`].
     pub components: Vec<Component>,
     /// All protocols, indexed by [`ProtocolId`].
@@ -126,6 +144,7 @@ impl Default for Model {
                 authors: vec![],
             },
             systems: vec![],
+            definitions: vec![],
             components: vec![],
             protocols: vec![],
             ports: vec![],
@@ -234,6 +253,8 @@ pub struct Component {
     /// that carry their body inline. Used by the serializer to emit
     /// `source` references instead of inlining clones.
     pub source: Option<String>,
+    /// Whether this is a reusable definition or a placed instance.
+    pub kind: ComponentKind,
     /// Human-readable description.
     pub description: String,
     /// Optional icon name (e.g. `FontAwesome` icon identifier).
@@ -250,8 +271,9 @@ pub struct Component {
     pub level: i32,
     /// If `true`, the component is atomic (no further decomposition).
     pub leaf: bool,
-    /// Parent entity (system or component).
-    pub parent: ComponentParent,
+    /// Parent entity (system or component). `None` for a top-level reusable
+    /// definition, which is not placed in any system.
+    pub parent: Option<ComponentParent>,
     /// Direct child components.
     pub children: Vec<ComponentId>,
     /// Ports declared on this component.
