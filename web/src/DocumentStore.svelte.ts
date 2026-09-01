@@ -782,6 +782,17 @@ export class DocumentStore {
       comp = this.definitions.find((c) => c.label === parts[0]) ?? null;
     }
     if (!comp) return false;
+
+    // Body/visual attributes (description, icon, color, border, font, tags,
+    // leaf, ports) are definition-bound: an `instance` clones the definition's
+    // body and serializes as a bare `source` reference, so editing an instance
+    // must update its definition (not the instance, whose local fields are
+    // never serialized). The definition is looked up by the instance's `source`.
+    if (comp.source) {
+      const targetDef = this.definitions.find((d) => d.label === comp.source);
+      if (targetDef) return this.updateComponent(targetDef.label, patch);
+    }
+
     const changed: ComponentPatch = {};
     for (const key of Object.keys(patch) as (keyof ComponentPatch)[]) {
       (changed as Record<string, unknown>)[key] = patch[key];

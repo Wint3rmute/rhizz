@@ -453,6 +453,27 @@ component "plain" {
     expect(doc.systemHcl).not.toContain("font        =");
   });
 
+  it("redirects instance visual edits to the shared definition", () => {
+    const doc = new DocumentStore();
+    doc.addComponentDefinition("engine", { leaf: true });
+    doc.addSystem("drone");
+    doc.addInstance("drone", "engine", "engine");
+
+    // Editing the *instance* must update the *definition* (visual/body fields
+    // are definition-bound). The instance serializes as a bare source reference.
+    expect(doc.updateComponent("drone/engine", { color: "#ff0000" })).toBe(
+      true,
+    );
+
+    const def = doc.definitions.find((d) => d.label === "engine");
+    expect(def?.color).toBe("#ff0000");
+    // The instance itself carries no color (never serialized).
+    const inst = doc.findComponent("drone/engine");
+    expect(inst?.color).toBe(undefined);
+    // The definition emits the color in its body.
+    expect(doc.systemHcl).toContain('color       = "#ff0000"');
+  });
+
   it("loads components across multi-file sources and finds them by persistence key", () => {
     const sources = [
       {
