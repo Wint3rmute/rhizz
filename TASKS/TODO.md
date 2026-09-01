@@ -13,13 +13,13 @@ How to work on this file:
 
 ---
 
-## Task 99 — Component reuse via existing definitions (end-to-end demo, Option B)
+## Task 99 — Component reuse via existing definitions (end-to-end demo)
 
 Allow reusing an already-instantiated component definition in multiple systems
 from the GUI, as a preliminary end-to-end reachable demo, without changing the
-compiler's roundtrip invariants. This is the pragmatic **Option B** slice: reuse
-works for components whose definition already has **at least one current
-instance**; it does **not** yet model definitions with zero instances.
+compiler's roundtrip invariants. Reuse works for components whose definition
+already has **at least one current instance**; it does **not** yet model
+definitions with zero instances (that is the follow-up, Task 100).
 
 Motivating scenario: model an `engine` definition instantiated inside both
 `drone` and `testing-harness`, each instance cloning the same body.
@@ -55,18 +55,18 @@ Motivating scenario: model an `engine` definition instantiated inside both
   - The resulting `system.hcl` round-trips the model without errors (existing
     roundtrip/`source` tests still pass).
   - Definitions whose `source` is not currently referenced anywhere are not
-    offered (Option B scope: only already-materialized definitions are reusable).
+    offered (only already-materialized definitions are reusable).
   - Existing create flow ("New Component Definition") is unchanged.
   - New Storybook stories exercise the "Use Existing Component" mode.
   - Validated with `just test`, `just lint`, `just build`.
 
 ---
 
-## Task 100 — First-class reusable component definitions (Option A)
+## Task 100 — First-class reusable component definitions
 
-Complete the reuse story by making a reusable top-level component definition a
-first-class entity that can exist with **zero current instances** and survive the
-roundtrip, plus a full GUI path to define and reuse parts.
+Follow-up to Task 99: make a reusable top-level component definition a first-class
+entity that can exist with **zero current instances** and survive the roundtrip,
+plus a full GUI path to define and reuse parts.
 
 - **Strategy**
   - Rework `rhizz-core` so a top-level (outside-system) `component` block is a
@@ -99,12 +99,10 @@ roundtrip, plus a full GUI path to define and reuse parts.
     Existing Component", and add a way to create a reusable definition with zero
     instances (not only instances).
 - **Acceptance Criteria**
-  - The Example from the task discussion (an unused `component "engine"` with
-    children + internal connections round-trips; then both `drone` and
-    `testing-harness` can `source` it) works end-to-end.
+  - An unused `component "engine" { ... }` (with children + internal connections
+    worth keeping) round-trips; then both `drone` and `testing-harness` can
+    `source = "engine"` it, each materializing the same body.
   - A definition can exist with zero current instances and survive the roundtrip.
-    - Recursive reuse works: a composite definition whose children are themselves
-    sourced definitions resolves and round-trips stably.
   - All existing reuse / orphan (W012) / cycle (E013) / roundtrip tests pass;
     new tests cover unused definitions and recursive reuse.
   - GUI: define once, reuse in arbitrary systems, including zero-instance
