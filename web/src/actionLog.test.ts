@@ -246,4 +246,35 @@ describe("actionLog", () => {
       'project.addComponentSource("testing-harness", "engine", "engine");',
     );
   });
+
+  it("emits the expected baseline (pre-session state), not the post-session state", () => {
+    // The user's trace: baseline already contains drone/engine + a drone system.
+    // The replay must seed from the *pre-session* baseline (an empty project),
+    // then apply the mutations once — never double-apply them.
+    const preSessionBaseline = `project {
+}
+`;
+    const actions: ModelAction[] = [
+      { op: "add_system", label: "drone", description: "" },
+      {
+        op: "add_component",
+        parentPath: "drone",
+        label: "engine",
+        leaf: true,
+        description: "",
+        tags: [],
+        ports: [],
+      },
+    ];
+    const script = asTestScript(actions, "<final>", {
+      baselineHcl: preSessionBaseline,
+    });
+    // The baseline seeded into the replay is the pre-session content.
+    expect(script).toContain("    project.loadFromHcl(`project {\n}");
+    // And the actions are applied exactly once.
+    expect(script).toContain('project.addSystem("drone", "");');
+    expect(script).toContain(
+      'project.addComponent("drone", "engine", { leaf: true });',
+    );
+  });
 });

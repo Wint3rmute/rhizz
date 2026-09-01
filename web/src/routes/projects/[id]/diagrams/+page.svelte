@@ -100,12 +100,21 @@ let root_svg: SVGElement;
 const actionLog = createActionLog();
 let copiedDebug = $state(false);
 
+// Pre-session baseline of the primary system HCL, captured once when the action
+// log is cleared (project load) — i.e. the state *before* any logged mutation.
+// Used by handleCopyDebug as the replay seed; the current on-disk content would
+// already include the session's mutations and double-apply them.
+let debugBaselineHcl = "";
+
 subscribeToMutations((action) => {
   actionLog.record(action);
 });
 
 async function handleCopyDebug(): Promise<void> {
-  const { content: baselineHcl } = await readMainContent();
+  // Seed the replay from the pre-session baseline captured at project load,
+  // NOT the current on-disk content (which already includes this session's
+  // mutations and would double-apply them).
+  const baselineHcl = debugBaselineHcl;
   const script = asTestScript(actionLog.actions(), docStore.systemHcl, {
     baselineHcl,
   });
@@ -321,6 +330,11 @@ $effect(() => {
   loadedDiagramProjectId = id;
   selectedDiagramPath = null;
   actionLog.clear();
+  // Snapshot the pre-session content of the primary system HCL file so the
+  // debug replay seeds from the state before any of this session's mutations.
+  void readMainContent().then(({ content }) => {
+    debugBaselineHcl = content;
+  });
   refreshDiagramEntries()
     .then(async () => {
       if (firstDiagramPath() === null) {
