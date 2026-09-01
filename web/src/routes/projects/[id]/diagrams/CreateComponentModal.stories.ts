@@ -28,6 +28,18 @@ const meta = {
       },
     ],
     defaultParentKey: "quadcopter",
+    reusableDefinitions: [
+      {
+        sourceLabel: "flight-controller",
+        label: "flight-controller",
+        icon: "microchip",
+      },
+      {
+        sourceLabel: "gps-module",
+        label: "gps-module",
+        icon: "location-crosshairs",
+      },
+    ],
     oncreate: fn(),
     onclose: fn(),
   },
@@ -87,5 +99,49 @@ export const TextAlignSelection: Story = {
         textAlign: "top-left",
       }),
     );
+  },
+};
+
+export const UseExistingComponent: Story = {
+  args: {},
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    // Switch to "Use Existing Component" mode.
+    const reuseBtn = canvas.getByRole("button", {
+      name: "Use Existing Component",
+    });
+    await userEvent.click(reuseBtn);
+
+    // Open the definition dropdown (its label is "Reusable Definition") and
+    // pick the second definition.
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Reusable Definition *" }),
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "gps-module" }),
+    );
+
+    // Enter the instance label.
+    const nameInput = canvas.getByPlaceholderText(/flight-controller/i);
+    await userEvent.type(nameInput, "gps");
+
+    // Submit.
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Create Component" }),
+    );
+
+    await expect(args.oncreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "gps",
+        sourceLabel: "gps-module",
+      }),
+    );
+  },
+};
+
+export const NoReusableDefinitions: Story = {
+  args: {
+    reusableDefinitions: [],
   },
 };

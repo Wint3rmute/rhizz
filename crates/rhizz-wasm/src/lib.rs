@@ -456,6 +456,9 @@ pub struct ComponentJS {
     color: Option<String>,
     border: Option<String>,
     font: Option<String>,
+    /// The top-level definition this component was instantiated from via
+    /// `source = "..."`, if any. `None` for definitions and inline components.
+    source: Option<String>,
     /// Set when the parent is another component; `None` when the parent is a system.
     parent_component_index: Option<usize>,
     /// Set when the parent is a top-level system; `None` when the parent is a component.
@@ -529,6 +532,14 @@ impl ComponentJS {
         self.leaf
     }
 
+    /// The top-level definition this component was instantiated from via
+    /// `source = "..."`, if any (`undefined` for definitions / inline comps).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn source(&self) -> Option<String> {
+        self.source.clone()
+    }
+
     /// Arena index into `model.components()` for the parent component, or `undefined` if the parent is a system.
     #[wasm_bindgen(getter)]
     #[must_use]
@@ -562,6 +573,7 @@ impl From<&rhizz_core::Component> for ComponentJS {
             color: c.color.clone(),
             border: c.border.map(|b| b.as_str().to_string()),
             font: c.font.clone(),
+            source: c.source.clone(),
             parent_component_index,
             parent_system_index,
         }

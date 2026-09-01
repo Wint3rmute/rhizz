@@ -13,55 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 99 — Component reuse via existing definitions (end-to-end demo)
-
-Allow reusing an already-instantiated component definition in multiple systems
-from the GUI, as a preliminary end-to-end reachable demo, without changing the
-compiler's roundtrip invariants. Reuse works for components whose definition
-already has **at least one current instance**; it does **not** yet model
-definitions with zero instances (that is the follow-up, Task 100).
-
-Motivating scenario: model an `engine` definition instantiated inside both
-`drone` and `testing-harness`, each instance cloning the same body.
-
-- **Strategy**
-  - Leave `rhizz-core` resolution/model/serialization fundamentally unchanged
-    (definitions keep materializing via the existing `source`-clone resolve
-    path). Do NOT touch the `parent`/`ComponentParent` model or the flat
-    serializer.
-  - Surface, on the frontend, the set of *already-materialized* reusable
-    definitions: components that have a `source` label in the compiled model
-    (i.e. shared definitions that at least one system references).
-  - Add a "Use Existing Component" mode to `CreateComponentModal` that lists
-    these definitions and creates a new sourced instance in the chosen parent.
-- **Implementation Scope**
-  - `DocumentStore` (web):
-    - Expose the available reusable definitions (derived from components that
-      carry a `source` label / are referenced by `source`, computed from the
-      compiled model or the existing `systemHcl`).
-    - Add a primitive that creates a *sourced instance* in a parent system
-      (e.g. `addComponentSource(parentPath, label, sourceLabel)`), emitting
-      `component "<label>" { source = "<sourceLabel>" }` inside that system.
-  - `CreateComponentModal` + diagrams `+page.svelte`:
-    - Add a mode toggle at the top of the modal: **"New Component Definition"**
-      (current inline-body behaviour) vs **"Use Existing Component"**.
-    - In "Use Existing" mode, let the user pick from the list of reusable
-      definitions and (optionally) give the instance a distinct label later.
-    - Wire the chosen mode into `handleModalCreateComponent` in `+page.svelte`.
-- **Acceptance Criteria**
-  - From a fresh project, the user can create an `engine` in `drone`, then in
-    `testing-harness` choose "Use Existing Component" and see `engine` listed,
-    producing a `component "engine" { source = "engine" }` in each system.
-  - The resulting `system.hcl` round-trips the model without errors (existing
-    roundtrip/`source` tests still pass).
-  - Definitions whose `source` is not currently referenced anywhere are not
-    offered (only already-materialized definitions are reusable).
-  - Existing create flow ("New Component Definition") is unchanged.
-  - New Storybook stories exercise the "Use Existing Component" mode.
-  - Validated with `just test`, `just lint`, `just build`.
-
----
-
 ## Task 100 — First-class reusable component definitions
 
 Follow-up to Task 99: make a reusable top-level component definition a first-class

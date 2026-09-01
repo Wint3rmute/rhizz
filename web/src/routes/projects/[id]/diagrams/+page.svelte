@@ -1092,6 +1092,43 @@ let availableParents = $derived.by(() => {
   return options;
 });
 
+// The set of reusable component definitions available for "Use Existing
+// Component". For Task 99 (no core changes), a reusable definition is any
+// top-level component that already exists — offered by its canonical reference
+// label (the `source` label it would be referenced by): the `source` label for
+// sourced instances, otherwise the component's structural path. Deduplicated so
+// each definition is offered once.
+let reusableDefinitions = $derived.by(() => {
+  const seen = new SvelteSet<string>();
+  const defs: {
+    sourceLabel: string;
+    label: string;
+    icon?: string | undefined;
+  }[] = [];
+
+  const add = (label: string, icon?: string | undefined) => {
+    if (seen.has(label)) return;
+    seen.add(label);
+    defs.push({ sourceLabel: label, label, icon });
+  };
+
+  components.forEach((comp, index) => {
+    if (comp.source) {
+      // A sourced instance: the definition is referenceable by its source label.
+      add(comp.source, comp.icon);
+      return;
+    }
+    // An inline top-level component is itself a reusable definition,
+    // referenceable by its structural path.
+    if (comp.parent_system_index !== undefined) {
+      add(getComponentKey(index), comp.icon);
+    }
+  });
+
+  defs.sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel));
+  return defs;
+});
+
 let isCreateModalOpen = $state(false);
 let createModalPosition = $state<{ x: number; y: number } | undefined>(
   undefined,
@@ -1139,6 +1176,7 @@ async function handleModalCreateComponent(data: {
   tags: string[];
   leaf: boolean;
   ports: PortData[];
+  sourceLabel?: string;
   textAlign?: TextAlign;
   position?: { x: number; y: number };
 }): Promise<void> {
@@ -1161,15 +1199,17 @@ async function handleModalCreateComponent(data: {
     }
   }
 
-  const added = doc.addComponent(parent, data.label, {
-    leaf: data.leaf,
-    description: data.description,
-    tags: data.tags,
-    ports: data.ports,
-  });
-  if (added) {
-    // The mutation (including description/tags/ports) is recorded centrally by
-    // DocumentStore's mutation observer — no per-handler logging here.
+  // Reuse mode: create a `source` instance of the chosen definition instead
+  // of an inline body.
+  if (data.sourceLabel) {
+    doc.addComponentSource(parent, data.label, data.sourceLabel);
+  } else {
+    doc.addComponent(parent, data.label, {
+      leaf: data.leaf,
+      description: data.description,
+      tags: data.tags,
+      ports: data.ports,
+    });
   }
 
   await fs.writeFile(targetPath, doc.systemHcl);
@@ -3091,6 +3131,7 @@ $effect(() => {
 <CreateComponentModal
   isOpen={isCreateModalOpen}
   {availableParents}
+  {reusableDefinitions}
   defaultParentKey={createModalDefaultParent}
   initialPosition={createModalPosition}
   oncreate={(data) => void handleModalCreateComponent(data).catch(reportDiagramError)}

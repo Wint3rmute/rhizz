@@ -230,4 +230,20 @@ describe("actionLog", () => {
     // Backticks and ${ are escaped inside the template literal.
     expect(script).toContain(`toBe(\`label = \\\`x\\\` and \\\${y}\`)`);
   });
+
+  it("encodes a sourced add_component as addComponentSource", () => {
+    const action: ModelAction = {
+      op: "add_component",
+      parentPath: "testing-harness",
+      label: "engine",
+      leaf: false,
+      description: "",
+      tags: [],
+      ports: [],
+      source: "engine",
+    };
+    expect(encodeCall(action, "project")).toBe(
+      'project.addComponentSource("testing-harness", "engine", "engine");',
+    );
+  });
 });

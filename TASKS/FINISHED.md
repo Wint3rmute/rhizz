@@ -4,6 +4,40 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 99 — Component reuse via existing definitions (end-to-end demo)
+
+Made it possible to reuse an already-instantiated component definition in
+multiple systems from the GUI, as a preliminary end-to-end demo. No compiler
+roundtrip invariants were changed.
+
+- **`DocumentStore` (web)**: added `addComponentSource(parentPath, label,
+  sourceLabel)` — creates a component whose body is a `source = "<sourceLabel>"`
+  reference (an instance) rather than an inline body. Mirrors the model's
+  existing `source` reuse semantics and emits the mutation to the action-log
+  observer.
+- **`CreateComponentModal`**: added a mode toggle at the top — **"New Component
+  Definition"** (unchanged inline-body flow) vs **"Use Existing Component"**
+  (pick a reusable definition from a searchable dropdown; the instance
+  references it via `source`). The inline-body inspector is shown only in "new"
+  mode.
+- **diagrams `+page.svelte`**: computed the reusable-definitions pool from the
+  compiled model — sourced components' `source` labels plus inline top-level
+  components' structural paths, deduplicated — and dispatched to
+  `addComponentSource` when the modal returns a `sourceLabel` (the modal is
+  reached from both the "+ Component" button and canvas double-click).
+- **`rhizz-wasm`**: exposed `ComponentJS.source()` so the frontend can read the
+  `source` label of compiled components.
+- **`actionLog.ts`**: extended the `add_component` action with an optional
+  `source`; codegen emits `addComponentSource(...)` for sourced instances so
+  the debug replay stays faithful.
+- **Tests / stories**: unit tests for `addComponentSource` round-trip/reuse and
+  the `addComponentSource` codegen; Storybook stories for "Use Existing
+  Component" and the empty-definitions state.
+- Validated with `just test` (504 tests), `just lint`, `just build`, and
+  `just format`.
+
+---
+
 ## Task 98 — Export a sequence of model mutations from frontend logs
 
 Added a way to capture every durable model / layout-persistence mutation the

@@ -608,4 +608,41 @@ system "main" {
       unsubscribe();
     }
   });
+
+  it("creates a source instance that round-trips and reuses across systems", () => {
+    const doc = new DocumentStore();
+    doc.addSystem("drone");
+    doc.addSystem("testing-harness");
+
+    // Define a reusable composite engine inline in the first system.
+    doc.addComponent("drone", "engine", {
+      leaf: false,
+      description: "turboprop engine",
+    });
+    doc.addComponent("drone/engine", "fuel-pump", true);
+
+    // Reuse it in a second system via source, referencing the definition by
+    // its canonical path (the system-qualified label under which it's emitted).
+    const inst = doc.addComponentSource(
+      "testing-harness",
+      "engine",
+      "drone/engine",
+    );
+    expect(inst).toBeDefined();
+    expect(inst?.source).toBe("drone/engine");
+
+    const hcl = doc.systemHcl;
+    expect(hcl).toContain('component "drone/engine" {');
+    expect(hcl).toContain('description = "turboprop engine"');
+    // Both systems reference the same definition by source.
+    expect(hcl).toContain('system "drone"');
+    expect(hcl).toContain('system "testing-harness"');
+    expect(hcl.match(/source\s*=\s*"drone\/engine"/g)?.length)
+      .toBeGreaterThanOrEqual(
+        2,
+      );
+
+    // The sourced model still compiles with no errors.
+    expect(doc.compileResult.error_count()).toBe(0);
+  });
 });
