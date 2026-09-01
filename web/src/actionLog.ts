@@ -57,6 +57,9 @@ export type ModelAction =
     border?: string | undefined;
     font?: string | undefined;
     ports: PortData[];
+    /** When set, the component is a `source` instance of an existing
+     * definition rather than an inline-body definition. */
+    source?: string | undefined;
   }
   | { op: "rename_component"; path: string; newLabel: string }
   | { op: "delete_component"; path: string }
@@ -154,6 +157,13 @@ export function encodeCall(action: ModelAction, projVar: string): string {
         tsString(action.description)
       });`;
     case "add_component": {
+      // A `source` instance is created via addComponentSource (a one-line
+      // call), not the inline addComponent options form.
+      if (action.source !== undefined) {
+        return `${projVar}.addComponentSource(${tsString(action.parentPath)}, ${
+          tsString(action.label)
+        }, ${tsString(action.source)});`;
+      }
       const opts: string[] = [];
       if (action.leaf) opts.push(`leaf: true`);
       if (action.description !== "") {

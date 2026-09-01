@@ -775,6 +775,54 @@ export class DocumentStore {
     return newComp;
   }
 
+  // Creates a component that is an *instance* of an existing reusable
+  // definition, referenced via `source = "<sourceLabel>"`. Unlike addComponent
+  // (which builds an inline body), the instance carries no body of its own —
+  // the resolver clones the definition. Mirrors the existing `source` reuse
+  // semantics in the model.
+  addComponentSource(
+    parentPath: string,
+    label: string,
+    sourceLabel: string,
+  ): ComponentData | null {
+    const container = this.findContainer(parentPath);
+    if (!container) return null;
+
+    const list = container.parentComp
+      ? container.parentComp.components
+      : container.sys.components;
+    const existing = list.find((c) => c.label === label);
+    if (existing) return existing;
+
+    const newComp: ComponentData = {
+      label,
+      source: sourceLabel,
+      description: "",
+      icon: "",
+      tags: [],
+      leaf: false,
+      ports: [],
+      components: [],
+      connections: [],
+    };
+    if (container.parentComp?.leaf) {
+      container.parentComp.leaf = false;
+    }
+    list.push(newComp);
+
+    notifyMutations({
+      op: "add_component",
+      parentPath,
+      label,
+      leaf: false,
+      description: "",
+      tags: [],
+      ports: [],
+      source: sourceLabel,
+    });
+    return newComp;
+  }
+
   // Renames a component in place, returning false if the path doesn't resolve
   // or the new label is already taken by a sibling. Mirrors what the inspector
   // does today (mutating `comp.label` directly) but as a first-class, replayable
