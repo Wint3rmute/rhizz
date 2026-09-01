@@ -13,6 +13,106 @@ How to work on this file:
 
 ---
 
+## Task 99 — Component reuse via existing definitions (end-to-end demo, Option B)
+
+Allow reusing an already-instantiated component definition in multiple systems
+from the GUI, as a preliminary end-to-end reachable demo, without changing the
+compiler's roundtrip invariants. This is the pragmatic **Option B** slice: reuse
+works for components whose definition already has **at least one current
+instance**; it does **not** yet model definitions with zero instances.
+
+Motivating scenario: model an `engine` definition instantiated inside both
+`drone` and `testing-harness`, each instance cloning the same body.
+
+- **Strategy**
+  - Leave `rhizz-core` resolution/model/serialization fundamentally unchanged
+    (definitions keep materializing via the existing `source`-clone resolve
+    path). Do NOT touch the `parent`/`ComponentParent` model or the flat
+    serializer.
+  - Surface, on the frontend, the set of *already-materialized* reusable
+    definitions: components that have a `source` label in the compiled model
+    (i.e. shared definitions that at least one system references).
+  - Add a "Use Existing Component" mode to `CreateComponentModal` that lists
+    these definitions and creates a new sourced instance in the chosen parent.
+- **Implementation Scope**
+  - `DocumentStore` (web):
+    - Expose the available reusable definitions (derived from components that
+      carry a `source` label / are referenced by `source`, computed from the
+      compiled model or the existing `systemHcl`).
+    - Add a primitive that creates a *sourced instance* in a parent system
+      (e.g. `addComponentSource(parentPath, label, sourceLabel)`), emitting
+      `component "<label>" { source = "<sourceLabel>" }` inside that system.
+  - `CreateComponentModal` + diagrams `+page.svelte`:
+    - Add a mode toggle at the top of the modal: **"New Component Definition"**
+      (current inline-body behaviour) vs **"Use Existing Component"**.
+    - In "Use Existing" mode, let the user pick from the list of reusable
+      definitions and (optionally) give the instance a distinct label later.
+    - Wire the chosen mode into `handleModalCreateComponent` in `+page.svelte`.
+- **Acceptance Criteria**
+  - From a fresh project, the user can create an `engine` in `drone`, then in
+    `testing-harness` choose "Use Existing Component" and see `engine` listed,
+    producing a `component "engine" { source = "engine" }` in each system.
+  - The resulting `system.hcl` round-trips the model without errors (existing
+    roundtrip/`source` tests still pass).
+  - Definitions whose `source` is not currently referenced anywhere are not
+    offered (Option B scope: only already-materialized definitions are reusable).
+  - Existing create flow ("New Component Definition") is unchanged.
+  - New Storybook stories exercise the "Use Existing Component" mode.
+  - Validated with `just test`, `just lint`, `just build`.
+
+---
+
+## Task 100 — First-class reusable component definitions (Option A)
+
+Complete the reuse story by making a reusable top-level component definition a
+first-class entity that can exist with **zero current instances** and survive the
+roundtrip, plus a full GUI path to define and reuse parts.
+
+- **Strategy**
+  - Rework `rhizz-core` so a top-level (outside-system) `component` block is a
+    retained definition, not merely a clone that only materializes inside its
+    first using system.
+  - Separate the **definition identity label** (`source = "..."` target, e.g.
+    `engine`) from the **per-instance reference path** (system-qualified, e.g.
+    `apollo/cm/agc`), and keep the flat serializer's emitted labels consistent
+    with both so parse → resolve → serialize → re-parse is stable.
+  - Ensure the definition model supports definitions built of definitions
+    (recursive `source` reuse).
+- **Implementation Scope**
+  - `rhizz-core` model: add a first-class representation for top-level reusable
+    definitions (e.g. a `definitions` container or `parent: None`) distinct from
+    placed instances, plus `parent` modelling changes), without duplicating the
+    global `Component`/`Port`/`ConnectionId` arenas.
+  - `rhizz-core` resolver: register top-level components as retained definitions;
+    resolve instances against them; keep `source` chains (E013 cycle detection)
+    and orphan/unused-definition diagnostics coherent.
+  - `rhizz-core` serializer: emit each definition once keyed by its identity
+    label, and emit instances as `source` references with system-qualified
+    internal paths, keeping roundtrip idempotence (already guarded by the
+    `test_examples_idempotent_roundtrip` / nested-connection roundtrip tests).
+  - `rhizz-wasm`: expose the definitions list (`ModelJS.definitions()` and via
+    `to_js()`).
+  - Frontend `DocumentStore`: track `definitions` separately from systems/com-
+    ponents; load them in `loadFromRawModel`; serialize them; add
+    `addComponentDefinition(...)` and reuse via `addComponentSource(...)`.
+  - `CreateComponentModal`: offer both "New Component Definition" and "Use
+    Existing Component", and add a way to create a reusable definition with zero
+    instances (not only instances).
+- **Acceptance Criteria**
+  - The Example from the task discussion (an unused `component "engine"` with
+    children + internal connections round-trips; then both `drone` and
+    `testing-harness` can `source` it) works end-to-end.
+  - A definition can exist with zero current instances and survive the roundtrip.
+    - Recursive reuse works: a composite definition whose children are themselves
+    sourced definitions resolves and round-trips stably.
+  - All existing reuse / orphan (W012) / cycle (E013) / roundtrip tests pass;
+    new tests cover unused definitions and recursive reuse.
+  - GUI: define once, reuse in arbitrary systems, including zero-instance
+    definitions.
+  - Validated with `just test`, `just lint`, `just build`.
+
+---
+
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
