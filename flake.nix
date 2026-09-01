@@ -19,6 +19,8 @@
               pkgs.cargo
               pkgs.cargo-audit
               pkgs.clippy
+              pkgs.mdbook
+              pkgs.python3
               pkgs.rustfmt
               pkgs.wasm-pack
               pkgs.deno

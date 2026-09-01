@@ -1,0 +1,135 @@
+/*
+ * Results panels emitted by the rhizz mdbook preprocessor
+ * (book/preprocessors/rhizz.py).
+ */
+.rhizz-diag {
+  margin: 0.9rem 0 1.4rem;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 0.9em;
+  overflow: hidden;
+}
+
+.rhizz-head {
+  padding: 0.45rem 0.8rem;
+  font-weight: 600;
+}
+
+.rhizz-diagnostics {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0.8rem 0.6rem 2rem;
+}
+
+.rhizz-diagnostics li {
+  padding: 0.1rem 0;
+  font-size: 0.95em;
+}
+
+.rhizz-errors li {
+  color: #7f0000;
+}
+
+.rhizz-errors li::before {
+  content: "\2717 ";
+  color: #c62828;
+  font-weight: 700;
+}
+
+.rhizz-warnings li {
+  color: #7a4f01;
+}
+
+.rhizz-warnings li::before {
+  content: "\26a0 ";
+  color: #b26a00;
+  font-weight: 700;
+}
+
+.rhizz-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+}
+
+.rhizz-loc {
+  color: #888;
+  font-size: 0.9em;
+}
+
+.rhizz-stats {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.4rem;
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  border-top: 1px dashed rgba(0, 0, 0, 0.15);
+}
+
+.rhizz-stat span {
+  opacity: 0.75;
+}
+
+.rhizz-stat b {
+  margin-left: 0.3em;
+}
+
+/* success (no errors, no warnings) */
+.rhizz-ok {
+  border-color: #2e7d32;
+  background: #f1f8f1;
+}
+
+.rhizz-ok .rhizz-head {
+  background: #a5d6a7;
+  color: #1b5e20;
+}
+
+/* warnings only */
+.rhizz-warn {
+  border-color: #e6a700;
+  background: #fffbe9;
+}
+
+.rhizz-warn .rhizz-head {
+  background: #ffe082;
+  color: #7a4f01;
+}
+
+.rhizz-warn .rhizz-stats {
+  border-top-color: rgba(166, 127, 0, 0.25);
+}
+
+/* errors (with or without additional warnings) */
+.rhizz-error {
+  border-color: #c62828;
+  background: #fdf1f1;
+}
+
+.rhizz-error .rhizz-head {
+  background: #ef9a9a;
+  color: #7f0000;
+}
+
+/* not-compiled / tool-error panels */
+.rhizz-ignore {
+  border-color: #90a4ae;
+  background: #f4f6f7;
+}
+
+.rhizz-ignore .rhizz-head,
+.rhizz-tool .rhizz-head {
+  background: #cfd8dc;
+  color: #37474f;
+}
+
+.rhizz-tool {
+  border-color: #37474f;
+  background: #f4f6f7;
+}
+
+.rhizz-msg {
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  color: #455a64;
+}

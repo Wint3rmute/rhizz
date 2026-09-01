@@ -1,0 +1,14 @@
+[book]
+title = "rhizz"
+authors = ["Mateusz Bączek"]
+language = "en"
+
+[build]
+build-dir = "target-mdbook"
+
+[output.html]
+additional-css = ["css/rhizz.css"]
+
+[preprocessor.rhizz]
+command = "python3 /home/claw/rhizz/book/preprocessors/rhizz.py"
+renderer = ["html"]
