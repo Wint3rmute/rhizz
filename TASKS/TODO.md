@@ -49,9 +49,11 @@ plus a full GUI path to define and reuse parts.
     global `Component`/`Port`/`ConnectionId` arenas.
   - `rhizz-core` parser/resolver: recognize the `instance "<label>" { source =
     "<definition>" }` block. An `instance` has no body; it resolves against the
-    definitions container (cycle/undefined diagnostics E013/E014). Keep parsing
-    `component { source = "..." }` for backward compatibility (existing
-    examples), but the canonical emitted form is `instance`.
+    definitions container (cycle/undefined diagnostics E013/E014). The backend
+    **no longer accepts** `component { source = "..." }` — `instance` is the only
+    reuse form, so there is exactly one way to express each concept (breaking
+    change; the project is pre-1.0 so the existing examples/ and moel editor
+    output migrate to `instance`).
   - `rhizz-core` serializer: emit each definition once keyed by its identity
     label, and emit instances as `instance` blocks keyed by their local label
     with a `source` reference, keeping roundtrip idempotence (guarded by
