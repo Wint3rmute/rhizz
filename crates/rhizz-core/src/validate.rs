@@ -105,8 +105,10 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W006 -- `level` value decreases relative to parent (likely a mistake)
     for comp in &model.components {
         let parent_level = match comp.parent {
-            ComponentParent::System(sid) => model.system(sid).map_or(0, |s| s.level),
-            ComponentParent::Component(pid) => model.component(pid).map_or(0, |c| c.level),
+            Some(ComponentParent::System(sid)) => model.system(sid).map_or(0, |s| s.level),
+            Some(ComponentParent::Component(pid)) => model.component(pid).map_or(0, |c| c.level),
+            // A top-level definition has no placement parent; nothing to compare.
+            None => continue,
         };
         if comp.level < parent_level {
             warnings.push(Diagnostic::warning(
@@ -361,15 +363,17 @@ mod tests {
               }
             }
 
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p" {
-                  protocol = "proto"
-                  role     = "provider"
-                }
+            component "a" {
+              leaf = true
+              port "p" {
+                protocol = "proto"
+                role     = "provider"
               }
-              component "b" { leaf = true }
+            }
+            component "b" { leaf = true }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
                 to   = "b"
@@ -393,8 +397,9 @@ mod tests {
     #[test]
     fn w005_from_equals_to() {
         let src = r#"
+            component "a" { leaf = true }
             system "s" {
-              component "a" { leaf = true }
+              instance "a" { source = "a" }
               connection "self-loop" {
                 from = "a"
                 to   = "a"
@@ -418,12 +423,13 @@ mod tests {
     #[test]
     fn w006_level_decreases() {
         let src = r#"
+            component "c" {
+              level = 2
+              leaf  = true
+            }
             system "s" {
               level = 5
-              component "c" {
-                level = 2
-                leaf  = true
-              }
+              instance "c" { source = "c" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -443,12 +449,14 @@ mod tests {
     #[test]
     fn w007_mixed_typed_untyped() {
         let src = r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" { leaf = true }
             system "s" {
-              component "a" {
-                leaf = true
-                port "p" { role = "provider" }
-              }
-              component "b" { leaf = true }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "mixed" {
                 from = "a/p"
                 to   = "b"
@@ -472,21 +480,23 @@ mod tests {
     #[test]
     fn w008_protocol_mismatch() {
         let src = r#"
+            component "a" {
+              leaf = true
+              port "p1" {
+                protocol = "spi"
+                role = "provider"
+              }
+            }
+            component "b" {
+              leaf = true
+              port "p2" {
+                protocol = "i2c"
+                role = "consumer"
+              }
+            }
             system "s" {
-              component "a" {
-                leaf = true
-                port "p1" {
-                  protocol = "spi"
-                  role = "provider"
-                }
-              }
-              component "b" {
-                leaf = true
-                port "p2" {
-                  protocol = "i2c"
-                  role = "consumer"
-                }
-              }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "mismatch" {
                 from = "a/p1"
                 to   = "b/p2"
@@ -510,14 +520,15 @@ mod tests {
     #[test]
     fn w010_optional_external_port_no_warning() {
         let src = r#"
-            system "s" {
-              component "sensor" {
-                leaf = true
-                port "debug-uart" {
-                  external = true
-                  required = false
-                }
+            component "sensor" {
+              leaf = true
+              port "debug-uart" {
+                external = true
+                required = false
               }
+            }
+            system "s" {
+              instance "sensor" { source = "sensor" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -533,14 +544,15 @@ mod tests {
     #[test]
     fn w010_required_external_port_emits_warning() {
         let src = r#"
-            system "s" {
-              component "sensor" {
-                leaf = true
-                port "data-out" {
-                  external = true
-                  required = true
-                }
+            component "sensor" {
+              leaf = true
+              port "data-out" {
+                external = true
+                required = true
               }
+            }
+            system "s" {
+              instance "sensor" { source = "sensor" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
@@ -556,13 +568,14 @@ mod tests {
     #[test]
     fn w010_internal_port_unconnected_emits_warning() {
         let src = r#"
-            system "s" {
-              component "sensor" {
-                leaf = true
-                port "internal-bus" {
-                  external = false
-                }
+            component "sensor" {
+              leaf = true
+              port "internal-bus" {
+                external = false
               }
+            }
+            system "s" {
+              instance "sensor" { source = "sensor" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();

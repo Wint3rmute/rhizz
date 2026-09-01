@@ -204,6 +204,11 @@ function handleCreate() {
           Use Existing Component
         </button>
       </div>
+      <p class="text-xs text-base-content/50 mt-2">
+        {mode === "new"
+          ? "Creates a top-level reusable definition (no system parent) that any system can reuse."
+          : "Places an instance of an existing definition inside the chosen system/container."}
+      </p>
     </div>
 
     <div class="overflow-y-auto flex-1 py-1 space-y-4 pr-1">
@@ -212,7 +217,7 @@ function handleCreate() {
         <label class="label py-1" for="new-comp-name">
           <span
             class="label-text font-semibold text-xs uppercase tracking-wider text-base-content/70">
-              Component Name <span class="text-error">*</span>
+              {mode === "new" ? "Definition Name" : "Instance Name"} <span class="text-error">*</span>
             </span>
         </label>
         <!-- svelte-ignore a11y_autofocus -->
@@ -220,7 +225,9 @@ function handleCreate() {
           id="new-comp-name"
           type="text"
           bind:value={label}
-          placeholder="e.g. flight-controller, sensor, battery"
+          placeholder={mode === "new"
+            ? "e.g. flight-controller, sensor, battery"
+            : "Local instance name"}
           class="input input-sm input-bordered w-full font-medium"
           autofocus
           onkeydown={(e) => {
@@ -231,7 +238,8 @@ function handleCreate() {
         />
       </div>
 
-      <!-- 2. Searchable Parent Container Selector -->
+      {#if mode === "reuse"}
+      <!-- 2. Searchable Parent Container Selector (only for instances) -->
       <div class="form-control relative">
         <label class="label py-1" for="new-comp-parent">
           <span
@@ -297,6 +305,7 @@ function handleCreate() {
             {/if}
           </div>
       </div>
+      {/if}
 
       {#if mode === "reuse"}
         <!-- Definition picker: pick which reusable definition to source -->
@@ -401,10 +410,10 @@ function handleCreate() {
       <button onclick={onclose} class="btn btn-sm btn-ghost">Cancel</button>
       <button
         onclick={handleCreate}
-        disabled={!label.trim() || !selectedParentKey}
+        disabled={!label.trim() || (mode === "reuse" && !selectedParentKey)}
         class="btn btn-sm btn-primary"
       >
-          Create Component
+          Create {mode === "new" ? "Definition" : "Instance"}
         </button>
     </div>
   </div>

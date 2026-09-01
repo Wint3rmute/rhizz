@@ -13,55 +13,6 @@ How to work on this file:
 
 ---
 
-## Task 100 — First-class reusable component definitions
-
-Follow-up to Task 99: make a reusable top-level component definition a first-class
-entity that can exist with **zero current instances** and survive the roundtrip,
-plus a full GUI path to define and reuse parts.
-
-- **Strategy**
-  - Rework `rhizz-core` so a top-level (outside-system) `component` block is a
-    retained definition, not merely a clone that only materializes inside its
-    first using system.
-  - Separate the **definition identity label** (`source = "..."` target, e.g.
-    `engine`) from the **per-instance reference path** (system-qualified, e.g.
-    `apollo/cm/agc`), and keep the flat serializer's emitted labels consistent
-    with both so parse → resolve → serialize → re-parse is stable.
-  - Ensure the definition model supports definitions built of definitions
-    (recursive `source` reuse).
-- **Implementation Scope**
-  - `rhizz-core` model: add a first-class representation for top-level reusable
-    definitions (e.g. a `definitions` container or `parent: None`) distinct from
-    placed instances, plus `parent` modelling changes), without duplicating the
-    global `Component`/`Port`/`ConnectionId` arenas.
-  - `rhizz-core` resolver: register top-level components as retained definitions;
-    resolve instances against them; keep `source` chains (E013 cycle detection)
-    and orphan/unused-definition diagnostics coherent.
-  - `rhizz-core` serializer: emit each definition once keyed by its identity
-    label, and emit instances as `source` references with system-qualified
-    internal paths, keeping roundtrip idempotence (already guarded by the
-    `test_examples_idempotent_roundtrip` / nested-connection roundtrip tests).
-  - `rhizz-wasm`: expose the definitions list (`ModelJS.definitions()` and via
-    `to_js()`).
-  - Frontend `DocumentStore`: track `definitions` separately from systems/com-
-    ponents; load them in `loadFromRawModel`; serialize them; add
-    `addComponentDefinition(...)` and reuse via `addComponentSource(...)`.
-  - `CreateComponentModal`: offer both "New Component Definition" and "Use
-    Existing Component", and add a way to create a reusable definition with zero
-    instances (not only instances).
-- **Acceptance Criteria**
-  - An unused `component "engine" { ... }` (with children + internal connections
-    worth keeping) round-trips; then both `drone` and `testing-harness` can
-    `source = "engine"` it, each materializing the same body.
-  - A definition can exist with zero current instances and survive the roundtrip.
-  - All existing reuse / orphan (W012) / cycle (E013) / roundtrip tests pass;
-    new tests cover unused definitions and recursive reuse.
-  - GUI: define once, reuse in arbitrary systems, including zero-instance
-    definitions.
-  - Validated with `just test`, `just lint`, `just build`.
-
----
-
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout

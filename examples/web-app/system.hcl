@@ -113,142 +113,174 @@ protocol "postgresql" {
     }
 }
 
+component "login_page" {
+    description = "Available at /login"
+    leaf = true
+
+    port "nav-out" {
+        description = "Navigation event emitted after a successful login"
+        protocol    = "ui-nav"
+        role        = "provider"
+    }
+}
+
+component "settings_page" {
+    description = "Available at /settings"
+    leaf = true
+
+    port "nav-in" {
+        description = "Navigation event that opens the settings page"
+        protocol    = "ui-nav"
+        role        = "consumer"
+    }
+}
+
+component "swipe_mode" {
+    description = "Swipe horses left or right to like or pass"
+    leaf = true
+
+    port "match-out" {
+        description = "Match event emitted when a user swipes right"
+        protocol    = "websocket"
+        role        = "provider"
+    }
+}
+
+component "chat_mode" {
+    description = "Chat with horses you have matched with"
+    leaf = true
+
+    port "match-in" {
+        description = "Match event that opens a new chat thread"
+        protocol    = "websocket"
+        role        = "consumer"
+    }
+}
+
+component "main_app" {
+    description = "Root page (/), shows pictures of horses"
+
+    port "nav-in" {
+        description = "Navigation event that enters the main application"
+        protocol    = "ui-nav"
+        role        = "consumer"
+    }
+
+    port "settings-out" {
+        description = "Navigation event that opens the settings page"
+        protocol    = "ui-nav"
+        role        = "provider"
+    }
+
+    instance "swipe_mode" {
+        source = "swipe_mode"
+    }
+
+    instance "chat_mode" {
+        source = "chat_mode"
+    }
+
+    connection "mode-switch" {
+        description = "Match event bridge: new matches open a chat thread"
+        from = "swipe_mode/match-out"
+        to   = "chat_mode/match-in"
+    }
+}
+
+component "frontend" {
+    description = "Frontend application"
+
+    port "auth-out" {
+        description = "Authentication requests sent to the backend"
+        protocol    = "jwt"
+        role        = "consumer"
+        external    = true
+    }
+
+    port "api-out" {
+        description = "REST API calls sent to the backend"
+        protocol    = "https"
+        role        = "consumer"
+        external    = true
+    }
+
+    instance "login_page" {
+        source = "login_page"
+    }
+
+    instance "settings_page" {
+        source = "settings_page"
+    }
+
+    instance "main_app" {
+        source = "main_app"
+    }
+
+    connection "login-to-app" {
+        description = "Navigation from the login page into the main application"
+        from = "login_page/nav-out"
+        to   = "main_app/nav-in"
+    }
+
+    connection "app-to-settings" {
+        description = "Navigation from the main application to the settings page"
+        from = "main_app/settings-out"
+        to   = "settings_page/nav-in"
+    }
+}
+
+component "backend" {
+    description = "Backend server"
+    leaf = true
+
+    port "auth-in" {
+        description = "JWT authentication endpoint"
+        protocol    = "jwt"
+        role        = "provider"
+        external    = true
+    }
+
+    port "api-in" {
+        description = "REST API endpoint"
+        protocol    = "https"
+        role        = "provider"
+        external    = true
+    }
+
+    port "db-out" {
+        description = "Database query connection"
+        protocol    = "postgresql"
+        role        = "provider"
+        external    = true
+    }
+}
+
+component "database" {
+    description = "PostgreSQL database"
+    leaf = true
+
+    port "db-in" {
+        description = "Database query listener"
+        protocol    = "postgresql"
+        role        = "consumer"
+        external    = true
+    }
+}
+
 system "Web Application" {
     description = "Web Application - Tinder for Horses"
     tags        = ["web", "application"]
 
-    component frontend {
-        description = "Frontend application"
-
-        port "auth-out" {
-            description = "Authentication requests sent to the backend"
-            protocol    = "jwt"
-            role        = "consumer"
-            external    = true
-        }
-
-        port "api-out" {
-            description = "REST API calls sent to the backend"
-            protocol    = "https"
-            role        = "consumer"
-            external    = true
-        }
-
-        component login_page {
-            description = "Available at /login"
-            leaf = true
-
-            port "nav-out" {
-                description = "Navigation event emitted after a successful login"
-                protocol    = "ui-nav"
-                role        = "provider"
-            }
-        }
-
-        component settings_page {
-            description = "Available at /settings"
-            leaf = true
-
-            port "nav-in" {
-                description = "Navigation event that opens the settings page"
-                protocol    = "ui-nav"
-                role        = "consumer"
-            }
-        }
-
-        component main_app {
-            description = "Root page (/), shows pictures of horses"
-
-            port "nav-in" {
-                description = "Navigation event that enters the main application"
-                protocol    = "ui-nav"
-                role        = "consumer"
-            }
-
-            port "settings-out" {
-                description = "Navigation event that opens the settings page"
-                protocol    = "ui-nav"
-                role        = "provider"
-            }
-
-            component swipe_mode {
-                description = "Swipe horses left or right to like or pass"
-                leaf = true
-
-                port "match-out" {
-                    description = "Match event emitted when a user swipes right"
-                    protocol    = "websocket"
-                    role        = "provider"
-                }
-            }
-
-            component chat_mode {
-                description = "Chat with horses you have matched with"
-                leaf = true
-
-                port "match-in" {
-                    description = "Match event that opens a new chat thread"
-                    protocol    = "websocket"
-                    role        = "consumer"
-                }
-            }
-
-            connection "mode-switch" {
-                description = "Match event bridge: new matches open a chat thread"
-                from = "swipe_mode/match-out"
-                to   = "chat_mode/match-in"
-            }
-        }
-
-        connection "login-to-app" {
-            description = "Navigation from the login page into the main application"
-            from = "login_page/nav-out"
-            to   = "main_app/nav-in"
-        }
-
-        connection "app-to-settings" {
-            description = "Navigation from the main application to the settings page"
-            from = "main_app/settings-out"
-            to   = "settings_page/nav-in"
-        }
+    instance "frontend" {
+        source = "frontend"
     }
 
-    component backend {
-        description = "Backend server"
-        leaf = true
-
-        port "auth-in" {
-            description = "JWT authentication endpoint"
-            protocol    = "jwt"
-            role        = "provider"
-            external    = true
-        }
-
-        port "api-in" {
-            description = "REST API endpoint"
-            protocol    = "https"
-            role        = "provider"
-            external    = true
-        }
-
-        port "db-out" {
-            description = "Database query connection"
-            protocol    = "postgresql"
-            role        = "provider"
-            external    = true
-        }
+    instance "backend" {
+        source = "backend"
     }
 
-    component database {
-        description = "PostgreSQL database"
-        leaf = true
-
-        port "db-in" {
-            description = "Database query listener"
-            protocol    = "postgresql"
-            role        = "consumer"
-            external    = true
-        }
+    instance "database" {
+        source = "database"
     }
 
     connection "database-connection" {

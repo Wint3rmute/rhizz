@@ -46,8 +46,7 @@ export type ModelAction =
   | { op: "new_project"; name: string; version: string; authors: string[] }
   | { op: "add_system"; label: string; description: string }
   | {
-    op: "add_component";
-    parentPath: string;
+    op: "add_component_definition";
     label: string;
     leaf: boolean;
     description: string;
@@ -57,9 +56,12 @@ export type ModelAction =
     border?: string | undefined;
     font?: string | undefined;
     ports: PortData[];
-    /** When set, the component is a `source` instance of an existing
-     * definition rather than an inline-body definition. */
-    source?: string | undefined;
+  }
+  | {
+    op: "add_instance";
+    parentPath: string;
+    label: string;
+    source: string;
   }
   | { op: "rename_component"; path: string; newLabel: string }
   | { op: "delete_component"; path: string }
@@ -156,14 +158,7 @@ export function encodeCall(action: ModelAction, projVar: string): string {
       return `${projVar}.addSystem(${tsString(action.label)}, ${
         tsString(action.description)
       });`;
-    case "add_component": {
-      // A `source` instance is created via addComponentSource (a one-line
-      // call), not the inline addComponent options form.
-      if (action.source !== undefined) {
-        return `${projVar}.addComponentSource(${tsString(action.parentPath)}, ${
-          tsString(action.label)
-        }, ${tsString(action.source)});`;
-      }
+    case "add_component_definition": {
       const opts: string[] = [];
       if (action.leaf) opts.push(`leaf: true`);
       if (action.description !== "") {
@@ -187,10 +182,14 @@ export function encodeCall(action: ModelAction, projVar: string): string {
       if (action.ports.length > 0) {
         opts.push(`ports: [${action.ports.map(encodePort).join(", ")}]`);
       }
-      return `${projVar}.addComponent(${tsString(action.parentPath)}, ${
-        tsString(action.label)
-      }${opts.length > 0 ? `, { ${opts.join(", ")} }` : ""});`;
+      return `${projVar}.addComponentDefinition(${tsString(action.label)}${
+        opts.length > 0 ? `, { ${opts.join(", ")} }` : ""
+      });`;
     }
+    case "add_instance":
+      return `${projVar}.addInstance(${tsString(action.parentPath)}, ${
+        tsString(action.label)
+      }, ${tsString(action.source)});`;
     case "rename_component":
       return `${projVar}.renameComponent(${tsString(action.path)}, ${
         tsString(action.newLabel)

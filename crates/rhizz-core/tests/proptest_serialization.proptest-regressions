@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3b7f6a1661922a585bd2c577f2ce8ad4506ceb41dd007f0f513606266d82c87c # shrinks to input = ModelInput { project_name: "", system_suffix: "a", protocol_suffix: "a", description: "", tags: [], components: [ComponentInput { suffix: "a", description: "", tags: [], external: false, required: false, border: None }, ComponentInput { suffix: "a", description: "", tags: [], external: false, required: false, border: None }], fields: [] }

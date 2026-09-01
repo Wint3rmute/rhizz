@@ -17,9 +17,9 @@
 use std::fmt::Write as _;
 
 use crate::model::{
-    BorderStyle, Component, ComponentParent, Connection, ConnectionEndpoint, ConnectionLayout,
-    ConnectionSide, Field, Message, Model, NodeLayout, Port, Project, Protocol, System, View,
-    ViewDefinition, ViewFilterDefinition,
+    BorderStyle, Component, ComponentKind, ComponentParent, Connection, ConnectionEndpoint,
+    ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout, Port, Project, Protocol,
+    System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -59,23 +59,19 @@ pub fn serialize_model(model: &Model) -> String {
         serialize_protocol(&mut out, proto, model);
     }
 
-    // 3. Component definitions. Every component is emitted as a standalone
-    // top-level definition, sorted by its emitted label (its `source` label if
-    // it is an instance of a shared definition, otherwise its qualified path).
-    // Multiple instances of the same shared definition share one emitted label,
-    // so emit only the first (deduplicated by label). Sorting by the emitted
-    // label keeps the block order stable across round-trips (an inline
-    // component becomes a sourced definition after re-parse, but its emitted
-    // label is unchanged).
-    let mut components: Vec<&Component> = model.components.iter().collect();
-    components.sort_by_key(|a| component_label(a, model));
+    // 3. Component definitions. Each reusable top-level definition
+    // (`model.definitions`, kind: Definition) is emitted once as a standalone
+    // `component` block keyed by its own label. Instances never get their own
+    // definition block — they reference a definition via `source` inside a
+    // system/component below.
+    let mut definitions: Vec<&Component> = model
+        .definitions
+        .iter()
+        .filter_map(|id| model.component(*id))
+        .collect();
+    definitions.sort_by(|a, b| a.label.cmp(&b.label));
 
-    let mut seen_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for comp in components {
-        let label = component_label(comp, model);
-        if !seen_labels.insert(label.clone()) {
-            continue;
-        }
+    for comp in &definitions {
         if !out.is_empty() {
             out.push('\n');
         }
@@ -142,8 +138,8 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
         let _ = writeln!(out, "{indent}level       = {}", sys.level);
     }
 
-    // Direct child components, referenced via `source` pointing at their
-    // standalone top-level definition (sorted by label).
+    // Direct child components: instances are emitted as `instance` blocks using
+    // their `source` reference; inline components (rare) as `component` blocks.
     let mut child_comps: Vec<&Component> = sys
         .components
         .iter()
@@ -153,13 +149,22 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
 
     for comp in child_comps {
         out.push('\n');
-        let _ = writeln!(out, "{indent}component {} {{", escape_string(&comp.label));
-        let _ = writeln!(
-            out,
-            "{indent}  source = {}",
-            escape_string(&component_ref(comp, model))
-        );
-        let _ = writeln!(out, "{indent}}}");
+        if comp.kind == ComponentKind::Instance {
+            let src = comp.source.clone().unwrap_or_default();
+            let _ = writeln!(
+                out,
+                "{indent}instance {} {{ source = {} }}",
+                escape_string(&comp.label),
+                escape_string(&src)
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "{indent}component {} {{ source = {} }}",
+                escape_string(&comp.label),
+                escape_string(&component_ref(comp, model))
+            );
+        }
     }
 
     // System-level connections (sorted by label)
@@ -184,9 +189,8 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
 /// referenced via `source` pointing at their own standalone definitions rather
 /// than inlined.
 fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
-    // Definitions are keyed by their source label; inline components by their
-    // qualified path.
-    let label = component_label(comp, model);
+    // A definition is keyed by its own label (it has no source).
+    let label = comp.label.clone();
     let _ = writeln!(out, "component {} {{", escape_string(&label));
 
     let indent = "  ";
@@ -239,8 +243,8 @@ fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
         serialize_port(out, port, 1);
     }
 
-    // Child components, referenced via `source` pointing at their own
-    // standalone top-level definition (sorted by label).
+    // Child components: instances as `instance` blocks (via their `source`),
+    // inline components as `component` blocks.
     let mut child_comps: Vec<&Component> = comp
         .children
         .iter()
@@ -250,13 +254,22 @@ fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
 
     for child in child_comps {
         out.push('\n');
-        let _ = writeln!(out, "{indent}component {} {{", escape_string(&child.label));
-        let _ = writeln!(
-            out,
-            "{indent}  source = {}",
-            escape_string(&component_ref(child, model))
-        );
-        let _ = writeln!(out, "{indent}}}");
+        if child.kind == ComponentKind::Instance {
+            let src = child.source.clone().unwrap_or_default();
+            let _ = writeln!(
+                out,
+                "{indent}instance {} {{ source = {} }}",
+                escape_string(&child.label),
+                escape_string(&src)
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "{indent}component {} {{ source = {} }}",
+                escape_string(&child.label),
+                escape_string(&component_ref(child, model))
+            );
+        }
     }
 
     // Internal connections (sorted by label)
@@ -285,18 +298,21 @@ fn component_path(comp: &Component, model: &Model) -> String {
     loop {
         segments.push(current.label.clone());
         match current.parent {
-            ComponentParent::Component(parent) => {
+            Some(ComponentParent::Component(parent)) => {
                 let Some(parent_comp) = model.component(parent) else {
                     break;
                 };
                 current = parent_comp;
             }
-            ComponentParent::System(sid) => {
+            Some(ComponentParent::System(sid)) => {
                 if let Some(system) = model.system(sid) {
                     segments.push(system.label.clone());
                 }
                 break;
             }
+            // A top-level reusable definition (or an internal component of one)
+            // has no placement path — its path is just its own label chain.
+            None => break,
         }
     }
     segments.reverse();
@@ -307,15 +323,6 @@ fn component_path(comp: &Component, model: &Model) -> String {
 /// its `source` definition label when it is an instance of a shared definition,
 /// otherwise its qualified path.
 fn component_ref(comp: &Component, model: &Model) -> String {
-    comp.source
-        .clone()
-        .unwrap_or_else(|| component_path(comp, model))
-}
-
-/// Returns the label under which a component's definition is emitted: its
-/// `source` label when it is an instance of a shared definition, otherwise its
-/// qualified path.
-fn component_label(comp: &Component, model: &Model) -> String {
     comp.source
         .clone()
         .unwrap_or_else(|| component_path(comp, model))
@@ -540,8 +547,14 @@ fn serialize_connection(
 /// re-parse regardless of the connection's own scope (a relative label like
 /// `agc/port` would break for deeply-nested endpoints — see the nested
 /// connection roundtrip regression test).
+///
+/// Endpoints rooted in a reusable definition (top-level `component`, no
+/// placement parent) have no system in their chain; these are emitted as a
+/// relative path (no leading slash) so they re-parse as definition-local
+/// references rather than being mistaken for a `/system/...` absolute path.
 fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
     let mut segments: Vec<String> = Vec::new();
+    let mut definition_rooted = false;
 
     if let Some(pid) = endpoint.port
         && let Some(port) = model.port(pid)
@@ -555,8 +568,8 @@ fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
         let parent = comp.parent;
         segments.push(label);
         match parent {
-            ComponentParent::Component(parent) => current = parent,
-            ComponentParent::System(sid) => {
+            Some(ComponentParent::Component(parent)) => current = parent,
+            Some(ComponentParent::System(sid)) => {
                 let system_label = model
                     .system(sid)
                     .map(|s| s.label.clone())
@@ -564,11 +577,29 @@ fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
                 segments.push(system_label);
                 break;
             }
+            // A top-level reusable definition (or an internal component of one)
+            // has no placement path — its path is just its own label chain, and
+            // stays relative.
+            None => {
+                definition_rooted = true;
+                break;
+            }
         }
     }
 
     segments.reverse();
-    format!("/{}", segments.join("/"))
+    if definition_rooted {
+        // The endpoint lives inside a reusable definition's scope. Its path
+        // must be relative to that definition (drop the definition's own label,
+        // which is the scope root and is not a child of itself), so the
+        // reference resolves within the definition body.
+        if segments.len() > 1 {
+            segments.remove(0);
+        }
+        segments.join("/")
+    } else {
+        format!("/{}", segments.join("/"))
+    }
 }
 
 // ── Views and Layout Serialization ────────────────────────────────────────────
@@ -920,27 +951,35 @@ protocol "proto" {
   }
 }
 
+component "comp-a" {
+  leaf = true
+
+  port "p1" {
+    description = "Port 1"
+    protocol    = "proto"
+    role        = "provider"
+  }
+}
+
+component "comp-b" {
+  leaf = true
+
+  port "p2" {
+    protocol    = "proto"
+    role        = "consumer"
+  }
+}
+
 system "demo" {
   description = "A demo system"
   tags        = ["demo"]
 
-  component "comp-a" {
-    leaf        = true
-
-    port "p1" {
-      description = "Port 1"
-      protocol    = "proto"
-      role        = "provider"
-    }
+  instance "comp-a" {
+    source = "comp-a"
   }
 
-  component "comp-b" {
-    leaf        = true
-
-    port "p2" {
-      protocol    = "proto"
-      role        = "consumer"
-    }
+  instance "comp-b" {
+    source = "comp-b"
   }
 
   connection "c1" {
@@ -1154,18 +1193,21 @@ system "monitored-device" {
 
     #[test]
     fn test_component_visual_attributes_roundtrip() {
-        let hcl = r##"system "style-demo" {
-  component "danger" {
+        let src = r##"component "danger" {
     color  = "#ff0000"
     border = "dashed"
     font   = "bold"
+}
+system "style-demo" {
+  instance "danger" {
+    source = "danger"
   }
 }
 "##;
 
         let res1 = compile(&[Source {
             filename: "system.hcl".to_string(),
-            content: hcl.to_string(),
+            content: src.to_string(),
         }]);
         assert!(
             res1.diagnostics.iter().all(|d| !d.is_error()),
@@ -1204,21 +1246,32 @@ system "monitored-device" {
         // component (cm/agc/rcs-commands) must round-trip. Regression test for
         // the serializer emitting endpoint labels without their full scope
         // path, which broke resolution on re-parse (E011).
-        let hcl = r#"system "apollo" {
-  component "cm" {
-    component "agc" {
-      port "rcs-commands" {
-        role = "provider"
-      }
-    }
+        let hcl = r#"component "agc" {
+  port "rcs-commands" {
+    role = "provider"
   }
-
-  component "sm" {
-    component "rcs-quads" {
-      port "driver-signals" {
-        role = "consumer"
-      }
-    }
+}
+component "rcs-quads" {
+  port "driver-signals" {
+    role = "consumer"
+  }
+}
+component "cm" {
+  instance "agc" {
+    source = "agc"
+  }
+}
+component "sm" {
+  instance "rcs-quads" {
+    source = "rcs-quads"
+  }
+}
+system "apollo" {
+  instance "cm" {
+    source = "cm"
+  }
+  instance "sm" {
+    source = "sm"
   }
 
   connection "cm-agc-to-sm-rcs" {
@@ -1394,12 +1447,12 @@ component "engine" {
     leaf = true
 }
 system "airborne" {
-    component "plane" {
+    instance "plane" {
         source = "engine"
     }
 }
 system "hangar" {
-    component "plane" {
+    instance "plane" {
         source = "engine"
     }
 }
@@ -1426,9 +1479,12 @@ system "hangar" {
             !serialized.contains("component \"airborne/plane\" {"),
             "definition wrongly keyed by instance path:\n{serialized}"
         );
-        // Systems reference their children via source pointing at the shared
-        // definition, not inline bodies.
-        assert!(serialized.contains("source = \"engine\""), "{serialized}");
+        // Systems reference their children via instance blocks pointing at the
+        // shared definition.
+        assert!(
+            serialized.contains("instance \"plane\" { source = \"engine\" }"),
+            "{serialized}"
+        );
 
         // Round-trip: recompiling the flat output yields the same systems.
         let res2 = compile(&[Source {
@@ -1464,7 +1520,7 @@ component "satellite" {
     leaf = true
 }
 system "main" {
-    component "satellite" {
+    instance "satellite" {
         source = "satellite"
     }
 }
@@ -1487,7 +1543,7 @@ system "main" {
             "definition renamed to instance path:\n{serialized}"
         );
         assert!(
-            serialized.contains("source = \"satellite\""),
+            serialized.contains("instance \"satellite\" { source = \"satellite\" }"),
             "instance should source the definition:\n{serialized}"
         );
         // The definition must not be keyed by the instantiation path.
@@ -1522,10 +1578,10 @@ component "avionics" {
     leaf = true
 }
 system "plane" {
-    component "left-avionics" {
+    instance "left-avionics" {
         source = "avionics"
     }
-    component "right-avionics" {
+    instance "right-avionics" {
         source = "avionics"
     }
 }
@@ -1552,7 +1608,14 @@ system "plane" {
             !serialized.contains("component \"plane/left-avionics\" {"),
             "definition wrongly keyed by instance path:\n{serialized}"
         );
-        assert!(serialized.contains("source = \"avionics\""), "{serialized}");
+        assert!(
+            serialized.contains("instance \"left-avionics\" { source = \"avionics\" }"),
+            "left instance should source the shared definition:\n{serialized}"
+        );
+        assert!(
+            serialized.contains("instance \"right-avionics\" { source = \"avionics\" }"),
+            "right instance should source the shared definition:\n{serialized}"
+        );
 
         let res2 = compile(&[Source {
             filename: "system.hcl".to_string(),
@@ -1574,18 +1637,22 @@ system "plane" {
         // connection from radio to obc (both children of satellite), must
         // round-trip without E002 (undefined component).
         let hcl = r#"
+component "radio" {
+    leaf = true
+}
+component "obc" {
+    leaf = true
+}
+component "ground-station" {
+    leaf = true
+}
+component "satellite" {
+    instance "radio" { source = "radio" }
+    instance "obc" { source = "obc" }
+}
 system "main" {
-    component "satellite" {
-        component "radio" {
-            leaf = true
-        }
-        component "obc" {
-            leaf = true
-        }
-    }
-    component "ground-station" {
-        leaf = true
-    }
+    instance "satellite" { source = "satellite" }
+    instance "ground-station" { source = "ground-station" }
 
     connection "radio-ground-station" {
         from = "satellite/radio"

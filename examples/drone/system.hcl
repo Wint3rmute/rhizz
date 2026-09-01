@@ -95,6 +95,213 @@ protocol "i2c" {
   roles       = ["provider", "consumer"]
 }
 
+# ── Component definitions ─────────────────
+# Reusable component definitions declared outside any system.
+# Inside systems (and other definitions) they are referenced via `instance`.
+
+component "flight-controller" {
+  description = "Main flight computer"
+  tags        = ["electronics", "compute"]
+  leaf        = false
+
+  port "motor-out" {
+    description = "DShot600 motor control output"
+    protocol    = "dshot600"
+    role        = "provider"
+    external    = true
+    tags        = ["motor", "data"]
+  }
+
+  port "gps-serial" {
+    description = "UART link for GPS data"
+    protocol    = "uart"
+    role        = "peer"
+    external    = true
+    tags        = ["data", "navigation"]
+  }
+
+  port "rc-in" {
+    description = "CRSF serial: receiver → FC"
+    protocol    = "crsf"
+    role        = "consumer"
+    external    = true
+    tags        = ["rf", "control"]
+  }
+
+  instance "mcu" {
+    source = "mcu"
+  }
+
+  instance "imu" {
+    source = "imu"
+  }
+
+  instance "barometer" {
+    source = "barometer"
+  }
+
+  connection "spi-imu" {
+    description = "SPI bus: MCU ↔ IMU"
+    tags        = ["data"]
+    from        = "mcu/spi"
+    to          = "imu/spi"
+  }
+
+  connection "i2c-baro" {
+    description = "I2C bus: MCU ↔ barometer"
+    tags        = ["data"]
+    from        = "mcu"
+    to          = "barometer"
+  }
+}
+
+component "mcu" {
+  description = "STM32H7 ARM Cortex-M7"
+  tags        = ["electronics", "compute"]
+  leaf        = true
+
+  port "spi" {
+    description = "SPI master bus"
+    protocol    = "spi"
+    role        = "provider"
+    tags        = ["data"]
+  }
+}
+
+component "imu" {
+  description = "BMI270 6-axis IMU"
+  tags        = ["electronics", "sensor"]
+  leaf        = true
+
+  port "spi" {
+    description = "SPI slave interface"
+    protocol    = "spi"
+    role        = "consumer"
+    tags        = ["data"]
+  }
+}
+
+component "barometer" {
+  description = "BMP390 barometric pressure sensor"
+  tags        = ["electronics", "sensor"]
+  leaf        = true
+}
+
+component "esc" {
+  description = "4-in-1 ESC board"
+  tags        = ["electronics", "power", "motor"]
+  leaf        = true
+
+  port "motor-in" {
+    description = "DShot600 motor control input"
+    protocol    = "dshot600"
+    role        = "consumer"
+    tags        = ["motor", "data"]
+  }
+
+  port "power-in" {
+    description = "Battery main power input"
+    protocol    = "power-dc"
+    role        = "consumer"
+    tags        = ["power"]
+  }
+
+  port "bec-out" {
+    description = "5V BEC regulated output"
+    protocol    = "power-dc"
+    role        = "provider"
+    tags        = ["power"]
+  }
+}
+
+component "gps" {
+  description = "u-blox M10 GNSS receiver"
+  color       = "success"
+  border      = "dashed"
+  font        = "italic"
+  tags        = ["electronics", "sensor", "navigation"]
+  leaf        = true
+
+  port "serial" {
+    description = "UART data port"
+    protocol    = "uart"
+    role        = "peer"
+    tags        = ["data", "navigation"]
+  }
+}
+
+component "battery" {
+  description = "4S 1300mAh LiPo"
+  tags        = ["power"]
+  leaf        = true
+
+  port "power-out" {
+    description = "Main discharge output"
+    protocol    = "power-dc"
+    role        = "provider"
+    tags        = ["power"]
+  }
+}
+
+component "radio-rx" {
+  description = "ELRS 868MHz receiver"
+  tags        = ["electronics", "rf"]
+  leaf        = true
+
+  port "crsf" {
+    description = "CRSF serial output"
+    protocol    = "crsf"
+    role        = "provider"
+    tags        = ["rf", "control"]
+  }
+}
+
+component "vtx" {
+  description = "5.8GHz video transmitter"
+  tags        = ["electronics", "rf", "video"]
+  leaf        = true
+
+  port "video-in" {
+    description = "Analog video input"
+    protocol    = "analog-video"
+    role        = "consumer"
+    tags        = ["video"]
+  }
+}
+
+component "camera" {
+  description = "FPV camera (analog)"
+  tags        = ["electronics", "video"]
+  leaf        = true
+
+  port "video-out" {
+    description = "Analog video output"
+    protocol    = "analog-video"
+    role        = "provider"
+    tags        = ["video"]
+  }
+}
+
+component "transmitter" {
+  description = "ELRS radio transmitter"
+  tags        = ["electronics", "rf"]
+  leaf        = true
+}
+
+component "goggles" {
+  description = "FPV goggles with DVR"
+  tags        = ["electronics", "video"]
+  leaf        = true
+}
+
+# This component is non-leaf but has no children yet → W001
+component "ground-station-pc" {
+  tags = ["compute"]
+  leaf = false
+  # description intentionally missing → W004
+  # children not yet modeled   → W001
+}
+
 # ── Systems ───────────────────────────────
 
 system "quadcopter" {
@@ -102,177 +309,34 @@ system "quadcopter" {
   tags        = ["hardware", "drone"]
   level       = 0
 
-  # ── Components ────────────────────────────
+  # ── Component instances ────────────────────
 
-  component "flight-controller" {
-    description = "Main flight computer"
-    tags        = ["electronics", "compute"]
-    leaf        = false
-
-    port "motor-out" {
-      description = "DShot600 motor control output"
-      protocol    = "dshot600"
-      role        = "provider"
-      external    = true
-      tags        = ["motor", "data"]
-    }
-
-    port "gps-serial" {
-      description = "UART link for GPS data"
-      protocol    = "uart"
-      role        = "peer"
-      external    = true
-      tags        = ["data", "navigation"]
-    }
-
-    port "rc-in" {
-      description = "CRSF serial: receiver → FC"
-      protocol    = "crsf"
-      role        = "consumer"
-      external    = true
-      tags        = ["rf", "control"]
-    }
-
-    component "mcu" {
-      description = "STM32H7 ARM Cortex-M7"
-      tags        = ["electronics", "compute"]
-      leaf        = true
-
-      port "spi" {
-        description = "SPI master bus"
-        protocol    = "spi"
-        role        = "provider"
-        tags        = ["data"]
-      }
-    }
-
-    component "imu" {
-      description = "BMI270 6-axis IMU"
-      tags        = ["electronics", "sensor"]
-      leaf        = true
-
-      port "spi" {
-        description = "SPI slave interface"
-        protocol    = "spi"
-        role        = "consumer"
-        tags        = ["data"]
-      }
-    }
-
-    component "barometer" {
-      description = "BMP390 barometric pressure sensor"
-      tags        = ["electronics", "sensor"]
-      leaf        = true
-    }
-
-    connection "spi-imu" {
-      description = "SPI bus: MCU ↔ IMU"
-      tags        = ["data"]
-      from        = "mcu/spi"
-      to          = "imu/spi"
-    }
-
-    connection "i2c-baro" {
-      description = "I2C bus: MCU ↔ barometer"
-      tags        = ["data"]
-      from        = "mcu"
-      to          = "barometer"
-    }
+  instance "flight-controller" {
+    source = "flight-controller"
   }
 
-  component "esc" {
-    description = "4-in-1 ESC board"
-    tags        = ["electronics", "power", "motor"]
-    leaf        = true
-
-    port "motor-in" {
-      description = "DShot600 motor control input"
-      protocol    = "dshot600"
-      role        = "consumer"
-      tags        = ["motor", "data"]
-    }
-
-    port "power-in" {
-      description = "Battery main power input"
-      protocol    = "power-dc"
-      role        = "consumer"
-      tags        = ["power"]
-    }
-
-    port "bec-out" {
-      description = "5V BEC regulated output"
-      protocol    = "power-dc"
-      role        = "provider"
-      tags        = ["power"]
-    }
+  instance "esc" {
+    source = "esc"
   }
 
-  component "gps" {
-    description = "u-blox M10 GNSS receiver"
-    color       = "success"
-    border      = "dashed"
-    font        = "italic"
-    tags        = ["electronics", "sensor", "navigation"]
-    leaf        = true
-
-    port "serial" {
-      description = "UART data port"
-      protocol    = "uart"
-      role        = "peer"
-      tags        = ["data", "navigation"]
-    }
+  instance "gps" {
+    source = "gps"
   }
 
-  component "battery" {
-    description = "4S 1300mAh LiPo"
-    tags        = ["power"]
-    leaf        = true
-
-    port "power-out" {
-      description = "Main discharge output"
-      protocol    = "power-dc"
-      role        = "provider"
-      tags        = ["power"]
-    }
+  instance "battery" {
+    source = "battery"
   }
 
-  component "radio-rx" {
-    description = "ELRS 868MHz receiver"
-    tags        = ["electronics", "rf"]
-    leaf        = true
-
-    port "crsf" {
-      description = "CRSF serial output"
-      protocol    = "crsf"
-      role        = "provider"
-      tags        = ["rf", "control"]
-    }
+  instance "radio-rx" {
+    source = "radio-rx"
   }
 
-  component "vtx" {
-    description = "5.8GHz video transmitter"
-    tags        = ["electronics", "rf", "video"]
-    leaf        = true
-
-    port "video-in" {
-      description = "Analog video input"
-      protocol    = "analog-video"
-      role        = "consumer"
-      tags        = ["video"]
-    }
+  instance "vtx" {
+    source = "vtx"
   }
 
-  component "camera" {
-    description = "FPV camera (analog)"
-    tags        = ["electronics", "video"]
-    leaf        = true
-
-    port "video-out" {
-      description = "Analog video output"
-      protocol    = "analog-video"
-      role        = "provider"
-      tags        = ["video"]
-    }
+  instance "camera" {
+    source = "camera"
   }
 
   # ── Connections ────────────────────────────
@@ -332,24 +396,16 @@ system "ground-control" {
   tags        = ["hardware", "ground"]
   level       = 0
 
-  component "transmitter" {
-    description = "ELRS radio transmitter"
-    tags        = ["electronics", "rf"]
-    leaf        = true
+  instance "transmitter" {
+    source = "transmitter"
   }
 
-  component "goggles" {
-    description = "FPV goggles with DVR"
-    tags        = ["electronics", "video"]
-    leaf        = true
+  instance "goggles" {
+    source = "goggles"
   }
 
-  # This component is non-leaf but has no children yet → W001
-  component "ground-station-pc" {
-    tags = ["compute"]
-    leaf = false
-    # description intentionally missing → W004
-    # children not yet modeled   → W001
+  instance "ground-station-pc" {
+    source = "ground-station-pc"
   }
 
   connection "rf-control" {

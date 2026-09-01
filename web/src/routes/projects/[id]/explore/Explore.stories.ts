@@ -59,51 +59,67 @@ protocol "spi" {
   roles       = ["provider", "consumer"]
 }
 
+component "battery" {
+  description = "Main power source"
+  leaf        = true
+
+  port "power-out" {
+    protocol = "power"
+    role     = "provider"
+    external = true
+  }
+}
+
+component "controller" {
+  description = "Processing hub with internal MCU"
+  leaf        = false
+
+  port "power-in" {
+    protocol = "power"
+    role     = "consumer"
+    external = true
+  }
+
+  instance "mcu" {
+    source = "mcu"
+  }
+}
+
+component "mcu" {
+  description = "Microcontroller unit"
+  leaf        = true
+
+  port "spi" {
+    protocol = "spi"
+    role     = "provider"
+    external = true
+  }
+}
+
+component "sensor" {
+  description = "External IMU sensor"
+  leaf        = true
+
+  port "spi" {
+    protocol = "spi"
+    role     = "consumer"
+    external = true
+  }
+}
+
 system "demo-system" {
   description = "System with sibling and non-sibling cross-level connections"
 
-  component "battery" {
-    description = "Main power source"
-    leaf        = true
-
-    port "power-out" {
-      protocol = "power"
-      role     = "provider"
-      external = true
-    }
+  instance "battery" {
+    source = "battery"
   }
 
-  component "controller" {
-    description = "Processing hub with internal MCU"
-    leaf        = false
-
-    port "power-in" {
-      protocol = "power"
-      role     = "consumer"
-      external = true
-    }
-
-    component "mcu" {
-      description = "Microcontroller unit"
-      leaf        = true
-
-      port "spi" {
-        protocol = "spi"
-        role     = "provider"
-        external = true
-      }
-    }
+  instance "controller" {
+    source = "controller"
   }
 
-  component "sensor" {
-    description = "External IMU sensor"
-    leaf        = true
-
-    port "spi" {
-      protocol = "spi"
-      role     = "consumer"
-      external = true
-    }
+  instance "sensor" {
+    source = "sensor"
   }
 
   # Sibling-level connection: battery to controller

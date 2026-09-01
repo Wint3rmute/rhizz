@@ -560,8 +560,9 @@ impl ComponentJS {
 impl From<&rhizz_core::Component> for ComponentJS {
     fn from(c: &rhizz_core::Component) -> Self {
         let (parent_component_index, parent_system_index) = match c.parent {
-            rhizz_core::ComponentParent::Component(id) => (Some(id.0), None),
-            rhizz_core::ComponentParent::System(id) => (None, Some(id.0)),
+            Some(rhizz_core::ComponentParent::Component(id)) => (Some(id.0), None),
+            Some(rhizz_core::ComponentParent::System(id)) => (None, Some(id.0)),
+            None => (None, None),
         };
         Self {
             label: c.label.clone(),

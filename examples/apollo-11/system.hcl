@@ -947,21 +947,13 @@ component "saturn-v-stack" {
   tags        = ["saturn-v", "launch-vehicle"]
   leaf        = false
 
-  component "s-ic" {
-    source = "stage-s-ic"
-  }
+  instance "s-ic" { source = "stage-s-ic" }
 
-  component "s-ii" {
-    source = "stage-s-ii"
-  }
+  instance "s-ii" { source = "stage-s-ii" }
 
-  component "s-ivb" {
-    source = "stage-s-ivb"
-  }
+  instance "s-ivb" { source = "stage-s-ivb" }
 
-  component "iu" {
-    source = "instrument-unit"
-  }
+  instance "iu" { source = "instrument-unit" }
 
   connection "s1-to-s2-staging" {
     description = "S-IC to S-II staging command and telemetry link"
@@ -992,29 +984,17 @@ component "command-module" {
   tags        = ["csm", "cm", "spacecraft"]
   leaf        = false
 
-  component "cabin" {
-    source = "cm-cabin-structure"
-  }
+  instance "cabin" { source = "cm-cabin-structure" }
 
-  component "agc" {
-    source = "cm-agc"
-  }
+  instance "agc" { source = "cm-agc" }
 
-  component "dsky" {
-    source = "cm-dsky"
-  }
+  instance "dsky" { source = "cm-dsky" }
 
-  component "imu" {
-    source = "cm-imu"
-  }
+  instance "imu" { source = "cm-imu" }
 
-  component "optics" {
-    source = "cm-optics"
-  }
+  instance "optics" { source = "cm-optics" }
 
-  component "rcs" {
-    source = "cm-rcs"
-  }
+  instance "rcs" { source = "cm-rcs" }
 
   connection "agc-to-dsky" {
     description = "DSKY display updates and keypad entries"
@@ -1066,29 +1046,17 @@ component "service-module" {
   tags        = ["csm", "sm", "spacecraft"]
   leaf        = false
 
-  component "sps-tanks" {
-    source = "sm-sps-propellant-tanks"
-  }
+  instance "sps-tanks" { source = "sm-sps-propellant-tanks" }
 
-  component "sps" {
-    source = "sm-service-propulsion"
-  }
+  instance "sps" { source = "sm-service-propulsion" }
 
-  component "rcs-quads" {
-    source = "sm-rcs-quads"
-  }
+  instance "rcs-quads" { source = "sm-rcs-quads" }
 
-  component "fuel-cells" {
-    source = "sm-fuel-cells"
-  }
+  instance "fuel-cells" { source = "sm-fuel-cells" }
 
-  component "cryo-tanks" {
-    source = "sm-cryogenic-storage"
-  }
+  instance "cryo-tanks" { source = "sm-cryogenic-storage" }
 
-  component "hga" {
-    source = "sm-high-gain-antenna"
-  }
+  instance "hga" { source = "sm-high-gain-antenna" }
 
   connection "cryo-to-fuel-cells" {
     description = "Supercritical H2 and O2 feed to fuel cells"
@@ -1112,37 +1080,21 @@ component "lunar-module-ascent" {
   tags        = ["lm", "ascent"]
   leaf        = false
 
-  component "cabin" {
-    source = "lm-cabin"
-  }
+  instance "cabin" { source = "lm-cabin" }
 
-  component "lgc" {
-    source = "lm-lgc"
-  }
+  instance "lgc" { source = "lm-lgc" }
 
-  component "dsky" {
-    source = "lm-dsky"
-  }
+  instance "dsky" { source = "lm-dsky" }
 
-  component "imu" {
-    source = "lm-imu"
-  }
+  instance "imu" { source = "lm-imu" }
 
-  component "aps-tanks" {
-    source = "lm-aps-propellant-tanks"
-  }
+  instance "aps-tanks" { source = "lm-aps-propellant-tanks" }
 
-  component "aps" {
-    source = "lm-ascent-propulsion"
-  }
+  instance "aps" { source = "lm-ascent-propulsion" }
 
-  component "rcs" {
-    source = "lm-rcs-quads"
-  }
+  instance "rcs" { source = "lm-rcs-quads" }
 
-  component "comms" {
-    source = "lm-comms-subsystem"
-  }
+  instance "comms" { source = "lm-comms-subsystem" }
 
   connection "lgc-to-dsky" {
     description = "Lunar DSKY readout and keystroke bus"
@@ -1187,21 +1139,13 @@ component "lunar-module-descent" {
   tags        = ["lm", "descent"]
   leaf        = false
 
-  component "dps-tanks" {
-    source = "lm-dps-propellant-tanks"
-  }
+  instance "dps-tanks" { source = "lm-dps-propellant-tanks" }
 
-  component "dps" {
-    source = "lm-descent-propulsion"
-  }
+  instance "dps" { source = "lm-descent-propulsion" }
 
-  component "landing-radar" {
-    source = "lm-landing-radar"
-  }
+  instance "landing-radar" { source = "lm-landing-radar" }
 
-  component "batteries" {
-    source = "lm-batteries"
-  }
+  instance "batteries" { source = "lm-batteries" }
 
   connection "dps-propellant-feed" {
     description = "Descent propellant tanks manifold supply to DPS engine"
@@ -1220,29 +1164,17 @@ system "apollo-11" {
   tags        = ["apollo", "aerospace", "nasa"]
   level       = 0
 
-  component "saturn-v" {
-    source = "saturn-v-stack"
-  }
+  instance "saturn-v" { source = "saturn-v-stack" }
 
-  component "cm" {
-    source = "command-module"
-  }
+  instance "cm" { source = "command-module" }
 
-  component "sm" {
-    source = "service-module"
-  }
+  instance "sm" { source = "service-module" }
 
-  component "lm-ascent" {
-    source = "lunar-module-ascent"
-  }
+  instance "lm-ascent" { source = "lunar-module-ascent" }
 
-  component "lm-descent" {
-    source = "lunar-module-descent"
-  }
+  instance "lm-descent" { source = "lunar-module-descent" }
 
-  component "mcc" {
-    source = "mission-control-center"
-  }
+  instance "mcc" { source = "mission-control-center" }
 
   # ── Launch Vehicle to CSM Connections ─────────
 

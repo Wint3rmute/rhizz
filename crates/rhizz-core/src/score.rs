@@ -320,7 +320,7 @@ mod tests {
         // Components: ground-station-pc is incomplete (non-leaf, no children)
         // All others should be complete (leaf with description or non-leaf with complete children)
         assert_eq!(
-            report.components.incomplete, 1,
+            report.components.incomplete, 2,
             "drone components incomplete"
         );
         assert!(report.components.total() >= 13, "drone components total");
@@ -397,14 +397,16 @@ mod tests {
     #[test]
     fn leaf_component_with_description_scores_1() {
         let src = r#"
+            component "a" {
+              description = "has one"
+              leaf = true
+            }
+            component "b" {
+              leaf = true
+            }
             system "s" {
-              component "a" {
-                description = "has one"
-                leaf = true
-              }
-              component "b" {
-                leaf = true
-              }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
                 to   = "b"
@@ -414,9 +416,11 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        // "a" -> 1.0, "b" -> 0.5
-        assert_eq!(report.components.complete, 1);
-        assert_eq!(report.components.partial, 1);
+        // Under the definition/instance model each entity appears once as a
+        // definition and once per placed instance, so counts are doubled.
+        // "a" -> 1.0 (def + instance), "b" -> 0.5 (def + instance)
+        assert_eq!(report.components.complete, 2);
+        assert_eq!(report.components.partial, 2);
         assert_eq!(report.components.incomplete, 0);
     }
 
@@ -425,13 +429,15 @@ mod tests {
     #[test]
     fn non_leaf_component_no_children_scores_0() {
         let src = r#"
+            component "a" {
+              leaf = true
+            }
+            component "parent" {
+              leaf = false
+            }
             system "s" {
-              component "a" {
-                leaf = true
-              }
-              component "parent" {
-                leaf = false
-              }
+              instance "a" { source = "a" }
+              instance "parent" { source = "parent" }
               connection "c" {
                 from = "a"
                 to   = "parent"
@@ -441,8 +447,10 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
+        // Non-leaf 'parent' with no children scores 0.0 for both its
+        // definition and its placed instance.
         assert_eq!(
-            report.components.incomplete, 1,
+            report.components.incomplete, 2,
             "parent has no children -> 0.0"
         );
     }
@@ -462,15 +470,17 @@ mod tests {
               }
             }
 
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p" {
-                  protocol = "proto"
-                  role     = "provider"
-                }
+            component "a" {
+              leaf = true
+              port "p" {
+                protocol = "proto"
+                role     = "provider"
               }
-              component "b" { leaf = true }
+            }
+            component "b" { leaf = true }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
                 to   = "b"
@@ -480,8 +490,8 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        // Port "p" has messages but not all complete -> 0.5
-        assert_eq!(report.ports.partial, 1);
+        // Port appears on the definition and on the placed instance.
+        assert_eq!(report.ports.partial, 2);
         assert_eq!(report.ports.complete, 0);
         assert_eq!(report.ports.incomplete, 0);
     }
@@ -496,15 +506,17 @@ mod tests {
               }
             }
 
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p" {
-                  protocol = "proto"
-                  role     = "provider"
-                }
+            component "a" {
+              leaf = true
+              port "p" {
+                protocol = "proto"
+                role     = "provider"
               }
-              component "b" { leaf = true }
+            }
+            component "b" { leaf = true }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
                 to   = "b"
@@ -514,7 +526,7 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        assert_eq!(report.ports.complete, 1);
+        assert_eq!(report.ports.complete, 2);
         assert_eq!(report.ports.partial, 0);
         assert_eq!(report.ports.incomplete, 0);
         assert_eq!(report.messages.complete, 1);
@@ -527,20 +539,21 @@ mod tests {
               description = "no messages defined"
             }
 
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p" {
-                  protocol = "empty-proto"
-                  role     = "provider"
-                }
+            component "a" {
+              leaf = true
+              port "p" {
+                protocol = "empty-proto"
+                role     = "provider"
               }
+            }
+            system "s" {
+              instance "a" { source = "a" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        assert_eq!(report.ports.incomplete, 1);
+        assert_eq!(report.ports.incomplete, 2);
         assert_eq!(report.ports.complete, 0);
         assert_eq!(report.ports.partial, 0);
     }
@@ -550,21 +563,23 @@ mod tests {
     #[test]
     fn connection_both_typed_matching_protocol() {
         let src = r#"
+            component "a" {
+              leaf = true
+              port "p1" {
+                protocol = "spi"
+                role = "provider"
+              }
+            }
+            component "b" {
+              leaf = true
+              port "p2" {
+                protocol = "spi"
+                role = "consumer"
+              }
+            }
             system "s" {
-              component "a" {
-                leaf = true
-                port "p1" {
-                  protocol = "spi"
-                  role = "provider"
-                }
-              }
-              component "b" {
-                leaf = true
-                port "p2" {
-                  protocol = "spi"
-                  role = "consumer"
-                }
-              }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a/p1"
                 to   = "b/p2"
@@ -583,15 +598,17 @@ mod tests {
     #[test]
     fn connection_one_typed_scores_partial() {
         let src = r#"
-            system "s" {
-              component "a" {
-                leaf = true
-                port "p1" {
-                  protocol = "spi"
-                  role = "provider"
-                }
+            component "a" {
+              leaf = true
+              port "p1" {
+                protocol = "spi"
+                role = "provider"
               }
-              component "b" { leaf = true }
+            }
+            component "b" { leaf = true }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a/p1"
                 to   = "b"
@@ -607,9 +624,11 @@ mod tests {
     #[test]
     fn connection_both_untyped_scores_incomplete() {
         let src = r#"
+            component "a" { leaf = true }
+            component "b" { leaf = true }
             system "s" {
-              component "a" { leaf = true }
-              component "b" { leaf = true }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
                 to   = "b"

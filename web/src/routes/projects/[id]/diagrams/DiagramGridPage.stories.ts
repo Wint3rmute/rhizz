@@ -33,23 +33,31 @@ protocol "tcp" {
   }
 }
 
-system "demo" {
-  component "gateway" {
-    leaf = true
+component "gateway" {
+  leaf = true
 
-    port "api" {
-      protocol = "tcp"
-      role     = "provider"
-    }
+  port "api" {
+    protocol = "tcp"
+    role     = "provider"
+  }
+}
+
+component "database" {
+  leaf = true
+
+  port "api" {
+    protocol = "tcp"
+    role     = "consumer"
+  }
+}
+
+system "demo" {
+  instance "gateway" {
+    source = "gateway"
   }
 
-  component "database" {
-    leaf = true
-
-    port "api" {
-      protocol = "tcp"
-      role     = "consumer"
-    }
+  instance "database" {
+    source = "database"
   }
 
   connection "gw-db" {

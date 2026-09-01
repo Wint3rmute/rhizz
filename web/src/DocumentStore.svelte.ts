@@ -98,10 +98,14 @@ export interface ConnectionData {
 
 export interface ComponentData {
   label: string;
-  /** The top-level definition this component was instantiated from via
-   * `source = "..."`, if any; `undefined` for components carrying their body
-   * inline. Used to serialize `source` references instead of inlining clones. */
+  /** The label of the top-level reusable definition this component is an
+   * *instance* of (`instance "<local>" { source = "<definition>" }`), if any.
+   * `undefined` when the component is a definition or carries its body inline
+   * (the old `source`-carrying inline bodies are gone). */
   source?: string | undefined;
+  /** Whether this is a top-level reusable definition (lives in `definitions`,
+   * has no parent) as opposed to a placed instance. */
+  isDefinition?: boolean | undefined;
   description?: string;
   icon?: string | undefined;
   color?: string | undefined;
@@ -120,6 +124,7 @@ export interface SystemData {
   description?: string;
   tags?: string[];
   level?: number;
+  /** Placed `instance` children (source-bearing references to definitions). */
   components: ComponentData[];
   connections: ConnectionData[];
 }
@@ -158,6 +163,9 @@ export interface RawModelPayload {
   components?: {
     label: string;
     source?: string;
+    kind?: string;
+    // Parent is serialized as e.g. `{"Component": 0}` or `{"System": 0}`.
+    parent?: { Component?: number; System?: number };
     description?: string;
     icon?: string;
     color?: string;
@@ -170,6 +178,8 @@ export interface RawModelPayload {
     children?: number[];
     connections?: number[];
   }[];
+  /** Arena indices into `components` of the top-level reusable definitions. */
+  definitions?: number[];
   protocols?: {
     label: string;
     description?: string;
@@ -228,6 +238,8 @@ export class DocumentStore {
 
   protocols = $state<ProtocolData[]>([]);
   systems = $state<SystemData[]>([]);
+  /** Top-level reusable component definitions (no parent). */
+  definitions = $state<ComponentData[]>([]);
   views = $state<ViewDefinition[]>([]);
 
   // ── Derived HCL text ─────────────────────────────────────────────────────────
@@ -262,36 +274,22 @@ export class DocumentStore {
       lines.push("");
     }
 
-    // Component definitions: every component is emitted as a standalone
-    // top-level block keyed by its definition label (its `source` label if it
-    // is an instance of a shared definition, otherwise its qualified path), so
-    // nothing is inlined under a parent. Systems and parent components
-    // reference children via `source = "<label>"`. Sorted by the emitted label
-    // and deduplicated so shared definitions are emitted once.
-    const sortedSystems = [...this.systems].sort((a, b) =>
+    // Component definitions: every top-level reusable definition is emitted
+    // as a standalone `component` block keyed by its own label. Instances never
+    // get a definition block of their own — a system / definition reuses a
+    // definition via an `instance` block below. Sorted by label.
+    const sortedDefinitions = [...this.definitions].sort((a, b) =>
       a.label.localeCompare(b.label)
     );
-
-    const allComponents: { sysLabel: string; comp: ComponentData }[] = [];
-    for (const sys of sortedSystems) {
-      this.collectComponents(sys.label, sys.components, allComponents);
-    }
-    allComponents.sort((a, b) =>
-      this.componentLabel(a.sysLabel, a.comp).localeCompare(
-        this.componentLabel(b.sysLabel, b.comp),
-      )
-    );
-
-    const seenLabels = new SvelteSet<string>();
-    for (const { sysLabel, comp } of allComponents) {
-      const label = this.componentLabel(sysLabel, comp);
-      if (seenLabels.has(label)) continue;
-      seenLabels.add(label);
+    for (const def of sortedDefinitions) {
       lines.push("");
-      this.serializeComponentDef(lines, sysLabel, comp);
+      this.serializeComponentDef(lines, def);
     }
 
     // System blocks
+    const sortedSystems = [...this.systems].sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
     for (let i = 0; i < sortedSystems.length; i++) {
       const sys = arenaAt(sortedSystems, i);
       lines.push("");
@@ -306,18 +304,16 @@ export class DocumentStore {
         lines.push(`  level       = ${String(sys.level)}`);
       }
 
-      // Direct child components, referenced via source pointing at their
-      // standalone top-level definition.
+      // Direct child instances, referenced via `source` pointing at their
+      // top-level definition.
       const sortedComps = [...sys.components].sort((a, b) =>
         a.label.localeCompare(b.label)
       );
       for (const comp of sortedComps) {
         lines.push("");
-        lines.push(`  component ${escapeHclString(comp.label)} {`);
+        lines.push(`  instance ${escapeHclString(comp.label)} {`);
         lines.push(
-          `    source = ${
-            escapeHclString(this.componentLabel(sys.label, comp))
-          }`,
+          `    source = ${escapeHclString(comp.source ?? comp.label)}`,
         );
         lines.push("  }");
       }
@@ -364,72 +360,11 @@ export class DocumentStore {
 
   // ── Serialization Helpers ───────────────────────────────────────────────────
 
-  // Recursively collects every component in a system (with its root system
-  // label) so the flat serializer can emit them all as top-level definitions.
-  private collectComponents(
-    sysLabel: string,
-    comps: ComponentData[],
-    acc: { sysLabel: string; comp: ComponentData }[],
-  ): void {
-    for (const comp of comps) {
-      acc.push({ sysLabel, comp });
-      this.collectComponents(sysLabel, comp.components, acc);
-    }
-  }
-
-  // Builds the qualified path of a component from its root system, e.g.
-  // `airborne/plane/engine`. The system label is included so the path is
-  // globally unique across systems.
-  private componentPath(sysLabel: string, comp: ComponentData): string {
-    const segments: string[] = [];
-    let current: ComponentData | undefined = comp;
-    while (current) {
-      segments.unshift(current.label);
-      // Find the parent component by searching the tree.
-      current = this.findParentComponent(sysLabel, current);
-    }
-    segments.unshift(sysLabel);
-    return segments.join("/");
-  }
-
-  // Returns the label under which a component's definition is emitted: its
-  // `source` label when it is an instance of a shared definition, otherwise its
-  // qualified path.
-  private componentLabel(sysLabel: string, comp: ComponentData): string {
-    return comp.source ?? this.componentPath(sysLabel, comp);
-  }
-
-  // Finds the parent ComponentData of `comp` within `sysLabel`, or undefined
-  // if `comp` is a direct child of the system.
-  private findParentComponent(
-    sysLabel: string,
-    comp: ComponentData,
-  ): ComponentData | undefined {
-    const sys = this.getSystem(sysLabel);
-    if (!sys) return undefined;
-    const search = (list: ComponentData[]): ComponentData | undefined => {
-      for (const c of list) {
-        if (c.components.includes(comp)) return c;
-        const found = search(c.components);
-        if (found) return found;
-      }
-      return undefined;
-    };
-    return search(sys.components);
-  }
-
-  // Serializes a single component as a standalone top-level definition keyed
-  // by its definition label (source label or qualified path). Children are
-  // referenced via `source` pointing at their own standalone definitions rather
-  // than inlined.
-  private serializeComponentDef(
-    lines: string[],
-    sysLabel: string,
-    comp: ComponentData,
-  ) {
-    lines.push(
-      `component ${escapeHclString(this.componentLabel(sysLabel, comp))} {`,
-    );
+  // Serializes a single top-level reusable definition as a standalone
+  // `component` block keyed by its own label. Children (instances) are emitted
+  // as `instance` blocks referencing their definitions rather than inlined.
+  private serializeComponentDef(lines: string[], comp: ComponentData) {
+    lines.push(`component ${escapeHclString(comp.label)} {`);
     const inner = "  ";
 
     if (comp.description) {
@@ -464,16 +399,16 @@ export class DocumentStore {
       this.serializePort(lines, port, 1);
     }
 
-    // Child components, referenced via source pointing at their own standalone
-    // top-level definition.
+    // Child instances, referenced via `source` pointing at their own
+    // definition.
     const sortedChildren = [...comp.components].sort((a, b) =>
       a.label.localeCompare(b.label)
     );
     for (const child of sortedChildren) {
       lines.push("");
-      lines.push(`  component ${escapeHclString(child.label)} {`);
+      lines.push(`  instance ${escapeHclString(child.label)} {`);
       lines.push(
-        `    source = ${escapeHclString(this.componentLabel(sysLabel, child))}`,
+        `    source = ${escapeHclString(child.source ?? child.label)}`,
       );
       lines.push("  }");
     }
@@ -660,14 +595,29 @@ export class DocumentStore {
     return this.systems.find((s) => s.label === label);
   }
 
-  // Finds a component container by path (e.g. "quad" -> SystemData, or "quad/fc" -> ComponentData)
+  // Finds a component container by path. A path like "quad" resolves to a
+  // SystemData; "quad/fc" to the ComponentData `fc` inside that system, and
+  // a bare definition label ("engine") resolves to that top-level reusable
+  // definition's body.
   findContainer(
     path: string,
-  ): { sys: SystemData; parentComp?: ComponentData } | null {
+  ): {
+    sys?: SystemData;
+    def?: ComponentData;
+    parentComp?: ComponentData;
+  } | null {
     const parts = path.split("/").filter(Boolean);
     if (parts.length === 0) return null;
     const firstPart = parts[0];
     if (firstPart === undefined) return null;
+
+    // A bare label that matches a top-level reusable definition resolves to
+    // that definition's body.
+    const def = parts.length === 1
+      ? this.definitions.find((c) => c.label === firstPart)
+      : undefined;
+    if (def && parts.length === 1) return { def };
+
     const sys = this.getSystem(firstPart);
     if (!sys) return null;
 
@@ -690,13 +640,30 @@ export class DocumentStore {
 
   findComponent(path: string): ComponentData | null {
     const container = this.findContainer(path);
-    return container?.parentComp ?? null;
+    if (container?.parentComp) return container.parentComp;
+    if (container?.def) return container.def;
+    return null;
   }
 
-  addComponent(
-    parentPath: string,
+  /**
+   * Resolves the component list for a given container so mutations can find
+   * the right array to push into.
+   */
+  private containerList(
+    container: NonNullable<ReturnType<DocumentStore["findContainer"]>>,
+  ): ComponentData[] {
+    if (container.parentComp) return container.parentComp.components;
+    if (container.def) return container.def.components;
+    if (container.sys) return container.sys.components;
+    return [];
+  }
+
+  // Creates a new top-level reusable definition (`component "<label>"` with
+  // no parent). Unlike the old inline-body creator, a definition lives in
+  // `definitions` and has no system parent.
+  addComponentDefinition(
     label: string,
-    leafOrOptions: boolean | {
+    options: {
       leaf?: boolean;
       description?: string;
       tags?: string[];
@@ -705,82 +672,48 @@ export class DocumentStore {
       border?: "solid" | "dashed" | "dotted";
       font?: string;
       ports?: PortData[];
-    } = false,
+    } = {},
   ): ComponentData | null {
-    const leaf = typeof leafOrOptions === "boolean"
-      ? leafOrOptions
-      : (leafOrOptions.leaf ?? false);
-    const container = this.findContainer(parentPath);
-    if (!container) return null;
-
-    const list = container.parentComp
-      ? container.parentComp.components
-      : container.sys.components;
-    const existing = list.find((c) => c.label === label);
+    const existing = this.definitions.find((c) => c.label === label);
     if (existing) return existing;
-
-    const description = typeof leafOrOptions === "boolean"
-      ? ""
-      : (leafOrOptions.description ?? "");
-    const tags = typeof leafOrOptions === "boolean"
-      ? []
-      : (leafOrOptions.tags ?? []);
-    const icon = typeof leafOrOptions === "boolean"
-      ? undefined
-      : leafOrOptions.icon;
-    const color = typeof leafOrOptions === "boolean"
-      ? undefined
-      : leafOrOptions.color;
-    const border = typeof leafOrOptions === "boolean"
-      ? undefined
-      : leafOrOptions.border;
-    const font = typeof leafOrOptions === "boolean"
-      ? undefined
-      : leafOrOptions.font;
-    const ports = typeof leafOrOptions === "boolean"
-      ? []
-      : (leafOrOptions.ports ?? []);
 
     const newComp: ComponentData = {
       label,
-      description,
-      icon: icon ?? "",
-      color,
-      border,
-      font: font ?? "",
-      tags,
-      leaf,
-      ports,
+      source: undefined,
+      isDefinition: true,
+      description: options.description ?? "",
+      icon: options.icon ?? "",
+      color: options.color,
+      border: options.border,
+      font: options.font ?? "",
+      tags: options.tags ?? [],
+      leaf: options.leaf ?? false,
+      ports: options.ports ?? [],
       components: [],
       connections: [],
     };
-    if (container.parentComp?.leaf) {
-      container.parentComp.leaf = false;
-    }
-    list.push(newComp);
+    this.definitions.push(newComp);
 
     notifyMutations({
-      op: "add_component",
-      parentPath,
+      op: "add_component_definition",
       label,
-      leaf,
-      description,
-      tags,
-      icon,
-      color,
-      border,
-      font,
-      ports,
+      leaf: options.leaf ?? false,
+      description: options.description ?? "",
+      tags: options.tags ?? [],
+      icon: options.icon,
+      color: options.color,
+      border: options.border,
+      font: options.font,
+      ports: options.ports ?? [],
     });
     return newComp;
   }
 
-  // Creates a component that is an *instance* of an existing reusable
-  // definition, referenced via `source = "<sourceLabel>"`. Unlike addComponent
-  // (which builds an inline body), the instance carries no body of its own —
-  // the resolver clones the definition. Mirrors the existing `source` reuse
-  // semantics in the model.
-  addComponentSource(
+  // Creates an instance of an existing reusable definition inside a system or
+  // another definition's body, emitted as `instance "<local>" { source =
+  // "<definition>" }`. The instance carries no body of its own — the resolver
+  // clones the definition.
+  addInstance(
     parentPath: string,
     label: string,
     sourceLabel: string,
@@ -788,15 +721,14 @@ export class DocumentStore {
     const container = this.findContainer(parentPath);
     if (!container) return null;
 
-    const list = container.parentComp
-      ? container.parentComp.components
-      : container.sys.components;
+    const list = this.containerList(container);
     const existing = list.find((c) => c.label === label);
     if (existing) return existing;
 
     const newComp: ComponentData = {
       label,
       source: sourceLabel,
+      isDefinition: false,
       description: "",
       icon: "",
       tags: [],
@@ -808,16 +740,15 @@ export class DocumentStore {
     if (container.parentComp?.leaf) {
       container.parentComp.leaf = false;
     }
+    if (container.def?.leaf) {
+      container.def.leaf = false;
+    }
     list.push(newComp);
 
     notifyMutations({
-      op: "add_component",
+      op: "add_instance",
       parentPath,
       label,
-      leaf: false,
-      description: "",
-      tags: [],
-      ports: [],
       source: sourceLabel,
     });
     return newComp;
@@ -835,9 +766,7 @@ export class DocumentStore {
     const parentPath = parts.slice(0, -1).join("/");
     const container = this.findContainer(parentPath);
     if (!container) return false;
-    const list = container.parentComp
-      ? container.parentComp.components
-      : container.sys.components;
+    const list = this.containerList(container);
     if (list.some((c) => c.label === newLabel)) return false;
     const comp = list.find((c) => c.label === oldLabel);
     if (!comp) return false;
@@ -847,8 +776,23 @@ export class DocumentStore {
   }
 
   updateComponent(path: string, patch: Partial<ComponentData>): boolean {
-    const comp = this.findComponent(path);
+    const parts = path.split("/").filter(Boolean);
+    let comp = this.findComponent(path);
+    if (!comp && parts.length === 1) {
+      comp = this.definitions.find((c) => c.label === parts[0]) ?? null;
+    }
     if (!comp) return false;
+
+    // Body/visual attributes (description, icon, color, border, font, tags,
+    // leaf, ports) are definition-bound: an `instance` clones the definition's
+    // body and serializes as a bare `source` reference, so editing an instance
+    // must update its definition (not the instance, whose local fields are
+    // never serialized). The definition is looked up by the instance's `source`.
+    if (comp.source) {
+      const targetDef = this.definitions.find((d) => d.label === comp.source);
+      if (targetDef) return this.updateComponent(targetDef.label, patch);
+    }
+
     const changed: ComponentPatch = {};
     for (const key of Object.keys(patch) as (keyof ComponentPatch)[]) {
       (changed as Record<string, unknown>)[key] = patch[key];
@@ -860,15 +804,22 @@ export class DocumentStore {
 
   deleteComponent(path: string): boolean {
     const parts = path.split("/").filter(Boolean);
-    if (parts.length < 2) return false;
+    if (parts.length === 1) {
+      // A bare label refers to a top-level reusable definition.
+      const idx = this.definitions.findIndex((c) => c.label === parts[0]);
+      if (idx !== -1) {
+        this.definitions.splice(idx, 1);
+        notifyMutations({ op: "delete_component", path });
+        return true;
+      }
+      return false;
+    }
     const compLabel = parts[parts.length - 1];
     const parentPath = parts.slice(0, -1).join("/");
     const container = this.findContainer(parentPath);
     if (!container) return false;
 
-    const list = container.parentComp
-      ? container.parentComp.components
-      : container.sys.components;
+    const list = this.containerList(container);
     const idx = list.findIndex((c) => c.label === compLabel);
     if (idx !== -1) {
       list.splice(idx, 1);
@@ -897,12 +848,8 @@ export class DocumentStore {
     const targetContainer = this.findContainer(targetParentPath);
     if (!srcContainer || !targetContainer) return false;
 
-    const srcList = srcContainer.parentComp
-      ? srcContainer.parentComp.components
-      : srcContainer.sys.components;
-    const targetList = targetContainer.parentComp
-      ? targetContainer.parentComp.components
-      : targetContainer.sys.components;
+    const srcList = this.containerList(srcContainer);
+    const targetList = this.containerList(targetContainer);
 
     // Guard (b): Target container must not already have a child with the same label
     if (targetList.some((c) => c.label === compLabel)) {
@@ -1031,7 +978,7 @@ export class DocumentStore {
 
     const list = container.parentComp
       ? container.parentComp.connections
-      : container.sys.connections;
+      : (container.def?.connections ?? container.sys?.connections ?? []);
     const existing = list.find((c) => c.label === conn.label);
     if (existing) return existing;
 
@@ -1059,7 +1006,7 @@ export class DocumentStore {
     if (!container) return false;
     const list = container.parentComp
       ? container.parentComp.connections
-      : container.sys.connections;
+      : (container.def?.connections ?? container.sys?.connections ?? []);
     const idx = list.findIndex((c) => c.label === label);
     if (idx !== -1) {
       list.splice(idx, 1);
@@ -1201,6 +1148,7 @@ export class DocumentStore {
       return {
         label: c.label,
         source: c.source ?? undefined,
+        isDefinition: c.kind === "Definition",
         description: c.description ?? "",
         icon: c.icon ?? "",
         color: c.color ?? "",
@@ -1297,6 +1245,10 @@ export class DocumentStore {
         ),
       };
     };
+
+    this.definitions = (raw.definitions ?? []).map((cid: number) =>
+      buildComp(cid)
+    );
 
     this.systems = (raw.systems ?? []).map((
       sys: {

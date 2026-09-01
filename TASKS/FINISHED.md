@@ -4,6 +4,52 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 100 — First-class reusable component definitions
+
+Made a reusable component definition a first-class, top-level entity that can
+exist with **zero current instances** and survive the roundtrip, end-to-end from
+core to GUI. Reuse is an explicit `instance` block.
+
+**Backend (`rhizz-core` + `rhizz-wasm`):** `component "<label>" { ...body... }`
+is now ONLY a top-level reusable definition; a system or definition reuses it
+via `instance "<local>" { source = "<definition>" }`, and the old
+`component { source = ... }` form is removed. Added `ComponentKind`
+(Definition|Instance), `Model.definitions`, and `Component.parent: Option`
+(`None` for definitions). The parser accepts `instance`; the resolver registers
+definitions as retained (surviving with zero instances) and clones their body
+per instance; the serializer emits definitions by label and instances as
+`instance` blocks. W012 no longer flags unused definitions. All six worked
+examples (drone, social-media, software-house, web-app, apollo-11, single-file)
+were migrated to definitions + `instance`. W006 skips parentless definitions;
+definitions and placed instances are both scored.
+
+**Frontend (`web`):**
+- **`DocumentStore` (web)**: added `definitions: ComponentData[]` (top-level,
+  no parent); `systemHcl` emits definitions first (sorted), then systems with
+  their instances + connections; definitions' bodies emit their child instances,
+  ports and sub-connections. `loadFromRawModel` reads `raw.definitions` plus
+  each component's `kind`/`source`/`parent`, populating `definitions` and each
+  system's instances. Wired `addComponentDefinition(label, options)`
+  (top-level) and `addInstance(parentPath, label, sourceLabel)`; the mutation
+  observer, `deleteComponent`/`updateComponent`/`renameComponent`/reparent and
+  connection mutations all resolve definitions by bare label.
+- **`CreateComponentModal` + diagrams `+page.svelte`**: "New Component
+  Definition" now creates a top-level reusable definition with no system
+  parent; "Use Existing Component" creates an instance in the chosen parent.
+  The reusable-definitions pool is derived from `DocumentStore.definitions` (so
+  zero-instance definitions are offered). Added a Definitions list to the
+diagram sidebar.
+- **`actionLog.ts`**: `add_component` split into `add_component_definition`
+  (→ `addComponentDefinition`) and `add_instance` (→ `addInstance`); codegen
+  updated.
+- **Tests / stories**: rewrote `DocumentStore.test.ts` (definitions + instances
+  round-trips, reuse across systems) and `actionLog.test.ts`; migrated storybook
+  HCL fixtures (`DiagramPage`, `DiagramGridPage`, `Explore`, `rhizz_wasm_wrapper`)
+  to definitions + instance syntax; added a `TopLevelDefinition` modal story.
+
+Validated with `just test` (507 frontend + all Rust), `just lint`, `just build`,
+and `just format`.
+
 ## Task 99 — Component reuse via existing definitions (end-to-end demo)
 
 Made it possible to reuse an already-instantiated component definition in
