@@ -29,12 +29,16 @@ describe("rhizz_wasm_wrapper", () => {
   version = "1.0.0"
 }
 
+component "fc" {
+  description = "Flight controller"
+  leaf        = true
+}
+
 system "quad" {
   description = "Quadcopter"
 
-  component "fc" {
-    description = "Flight controller"
-    leaf        = true
+  instance "fc" {
+    source = "fc"
   }
 }
 `,
@@ -53,6 +57,7 @@ system "quad" {
       );
       expect(hcl).toContain('system "quad"');
       expect(hcl).toContain('component "fc"');
+      expect(hcl).toContain('instance "fc" { source = "fc" }');
     }
   });
 
@@ -102,9 +107,15 @@ system "quad" {
     const sources = [
       {
         filename: "main.hcl",
-        content: `system "demo" {
-  component "c1" { leaf = true }
-  component "c2" { leaf = true }
+        content: `component "c1" { leaf = true }
+component "c2" { leaf = true }
+system "demo" {
+  instance "c1" {
+    source = "c1"
+  }
+  instance "c2" {
+    source = "c2"
+  }
   connection "link" {
     from = "c1"
     to   = "c2"
@@ -123,9 +134,23 @@ system "quad" {
     const wasmConns = model.connections();
     expect(wasmConns).toHaveLength(1);
 
+    // The connection's endpoints are arena indices into model.components(). The
+    // two definitions (c1, c2) come first, followed by the two system
+    // instances, so the instance indices are 2 and 3 — never assume the
+    // definition indices.
+    const componentsNow = model.components();
+    const c1Idx = componentsNow.findIndex((c) =>
+      c.label === "c1" && c.parent_system_index !== undefined
+    );
+    const c2Idx = componentsNow.findIndex((c) =>
+      c.label === "c2" && c.parent_system_index !== undefined
+    );
+    expect(c1Idx).toBeGreaterThanOrEqual(0);
+    expect(c2Idx).toBeGreaterThanOrEqual(0);
+
     // Direct getter access
-    expect(wasmConns[0]?.from).toBe(0);
-    expect(wasmConns[0]?.to).toBe(1);
+    expect(wasmConns[0]?.from).toBe(c1Idx);
+    expect(wasmConns[0]?.to).toBe(c2Idx);
     expect(wasmConns[0]?.label).toBe("link");
 
     // Explicit mapping to plain object for computeVisibleConnections
@@ -136,7 +161,11 @@ system "quad" {
       to: c.to,
       label: c.label,
     }));
-    expect(mappedConns[0]).toEqual({ from: 0, to: 1, label: "link" });
+    expect(mappedConns[0]).toEqual({
+      from: c1Idx,
+      to: c2Idx,
+      label: "link",
+    });
   });
 
   it("returns embedded example projects from WASM", () => {

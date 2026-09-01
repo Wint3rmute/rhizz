@@ -88,7 +88,7 @@ export const TextAlignSelection: Story = {
 
     // Submit modal
     const createBtn = canvas.getByRole("button", {
-      name: "Create Component",
+      name: "Create Definition",
     });
     await userEvent.click(createBtn);
 
@@ -122,13 +122,14 @@ export const UseExistingComponent: Story = {
       canvas.getByRole("button", { name: "gps-module" }),
     );
 
-    // Enter the instance label.
-    const nameInput = canvas.getByPlaceholderText(/flight-controller/i);
+    // Enter the instance label (the placeholder becomes "Local instance name"
+    // in reuse mode).
+    const nameInput = canvas.getByPlaceholderText(/local instance name/i);
     await userEvent.type(nameInput, "gps");
 
     // Submit.
     await userEvent.click(
-      canvas.getByRole("button", { name: "Create Component" }),
+      canvas.getByRole("button", { name: "Create Instance" }),
     );
 
     await expect(args.oncreate).toHaveBeenCalledWith(
@@ -143,5 +144,40 @@ export const UseExistingComponent: Story = {
 export const NoReusableDefinitions: Story = {
   args: {
     reusableDefinitions: [],
+  },
+};
+
+export const TopLevelDefinition: Story = {
+  args: {},
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    // New-definition mode is the default; it creates a top-level reusable
+    // definition with NO system parent.
+    const nameInput = canvas.getByPlaceholderText(/flight-controller/i);
+    await userEvent.type(nameInput, "battery");
+
+    // The definition name label is shown (not "Instance Name").
+    await expect(canvas.getByLabelText(/Definition Name/)).toBeDefined();
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Create Definition" }),
+    );
+
+    // New-definition mode does not set a sourceLabel (it creates a top-level
+    // definition, not an instance).
+    interface CreateData {
+      label: string;
+      sourceLabel?: string;
+    }
+    const created = args.oncreate as unknown as (
+      data: CreateData,
+    ) => void;
+    const oncreateMock = created as unknown as {
+      mock?: { calls?: [CreateData][] };
+    };
+    const callArgs = oncreateMock.mock?.calls?.[0]?.[0];
+    await expect(callArgs?.label).toBe("battery");
+    await expect(callArgs?.sourceLabel).toBeUndefined();
   },
 };

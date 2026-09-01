@@ -38,10 +38,9 @@ describe("actionLog", () => {
     ).toBe('p.addSystem("main", "A system");');
   });
 
-  it("encodes an add_component call with ports", () => {
+  it("encodes an add_component_definition call with ports", () => {
     const action: ModelAction = {
-      op: "add_component",
-      parentPath: "main",
+      op: "add_component_definition",
       label: "drone",
       leaf: false,
       description: "",
@@ -53,14 +52,13 @@ describe("actionLog", () => {
       ports: [{ label: "rf", role: "peer" }],
     };
     expect(encodeCall(action, "project")).toBe(
-      'project.addComponent("main", "drone", { tags: ["power"], icon: "rocket", color: "primary", border: "dashed", font: "bold", ports: [{ label: "rf", role: "peer" }] });',
+      'project.addComponentDefinition("drone", { tags: ["power"], icon: "rocket", color: "primary", border: "dashed", font: "bold", ports: [{ label: "rf", role: "peer" }] });',
     );
   });
 
-  it("omits the options object when a component has no extra fields", () => {
+  it("omits the options object when a definition has no extra fields", () => {
     const action: ModelAction = {
-      op: "add_component",
-      parentPath: "main",
+      op: "add_component_definition",
       label: "drone",
       leaf: false,
       description: "",
@@ -68,7 +66,7 @@ describe("actionLog", () => {
       ports: [],
     };
     expect(encodeCall(action, "project")).toBe(
-      'project.addComponent("main", "drone");',
+      'project.addComponentDefinition("drone");',
     );
   });
 
@@ -141,8 +139,7 @@ describe("actionLog", () => {
 
   it("escapes quotes and backslashes in labels", () => {
     const action: ModelAction = {
-      op: "add_component",
-      parentPath: "main",
+      op: "add_component_definition",
       label: 'say "hi" \\ now',
       leaf: true,
       description: "",
@@ -150,7 +147,7 @@ describe("actionLog", () => {
       ports: [],
     };
     expect(encodeCall(action, "project")).toContain(
-      'project.addComponent("main", "say \\"hi\\" \\\\ now", { leaf: true });',
+      'project.addComponentDefinition("say \\"hi\\" \\\\ now", { leaf: true });',
     );
   });
 
@@ -159,8 +156,7 @@ describe("actionLog", () => {
       { op: "new_project", name: "drone", version: "0.1.0", authors: [] },
       { op: "add_system", label: "main", description: "" },
       {
-        op: "add_component",
-        parentPath: "main",
+        op: "add_component_definition",
         label: "drone",
         leaf: false,
         description: "",
@@ -168,13 +164,10 @@ describe("actionLog", () => {
         ports: [],
       },
       {
-        op: "add_component",
+        op: "add_instance",
         parentPath: "main",
-        label: "antenna",
-        leaf: false,
-        description: "",
-        tags: [],
-        ports: [],
+        label: "drone",
+        source: "drone",
       },
       {
         op: "add_connection",
@@ -203,13 +196,13 @@ describe("actionLog", () => {
 
   it("renders multi-line HCL as a readable template literal", () => {
     const baseline = `system "demo" {
-  component "a" {
-    leaf = true
+  instance "a" {
+    source = "a"
   }
 }`;
     const hcl = `system "demo" {
-  component "b" {
-    leaf = true
+  instance "b" {
+    source = "b"
   }
 }`;
     const script = asTestScript([], hcl, { baselineHcl: baseline });
@@ -217,10 +210,10 @@ describe("actionLog", () => {
     // Newlines are preserved as literal newlines inside backticks, not escaped
     // into \n — so the emitted source stays as readable as the HCL itself.
     expect(script).toContain(
-      '    project.loadFromHcl(`system "demo" {\n  component "a" {',
+      '    project.loadFromHcl(`system "demo" {\n  instance "a" {',
     );
     expect(script).toContain(
-      '    expect(project.systemHcl).toBe(`system "demo" {\n  component "b" {',
+      '    expect(project.systemHcl).toBe(`system "demo" {\n  instance "b" {',
     );
   });
 
@@ -231,19 +224,15 @@ describe("actionLog", () => {
     expect(script).toContain(`toBe(\`label = \\\`x\\\` and \\\${y}\`)`);
   });
 
-  it("encodes a sourced add_component as addComponentSource", () => {
+  it("encodes an add_instance call", () => {
     const action: ModelAction = {
-      op: "add_component",
+      op: "add_instance",
       parentPath: "testing-harness",
       label: "engine",
-      leaf: false,
-      description: "",
-      tags: [],
-      ports: [],
       source: "engine",
     };
     expect(encodeCall(action, "project")).toBe(
-      'project.addComponentSource("testing-harness", "engine", "engine");',
+      'project.addInstance("testing-harness", "engine", "engine");',
     );
   });
 
@@ -257,8 +246,7 @@ describe("actionLog", () => {
     const actions: ModelAction[] = [
       { op: "add_system", label: "drone", description: "" },
       {
-        op: "add_component",
-        parentPath: "drone",
+        op: "add_component_definition",
         label: "engine",
         leaf: true,
         description: "",
@@ -274,7 +262,7 @@ describe("actionLog", () => {
     // And the actions are applied exactly once.
     expect(script).toContain('project.addSystem("drone", "");');
     expect(script).toContain(
-      'project.addComponent("drone", "engine", { leaf: true });',
+      'project.addComponentDefinition("engine", { leaf: true });',
     );
   });
 });

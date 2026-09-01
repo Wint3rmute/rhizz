@@ -1106,41 +1106,16 @@ let availableParents = $derived.by(() => {
   return options;
 });
 
-// The set of reusable component definitions available for "Use Existing
-// Component". For Task 99 (no core changes), a reusable definition is any
-// top-level component that already exists — offered by its canonical reference
-// label (the `source` label it would be referenced by): the `source` label for
-// sourced instances, otherwise the component's structural path. Deduplicated so
-// each definition is offered once.
+// The pool of reusable component definitions offered by "Use Existing
+// Component". Derives directly from the top-level definitions in the compiled
+// model (DocumentStore.definitions), so a definition is offered even with zero
+// current instances. Sorted by label.
 let reusableDefinitions = $derived.by(() => {
-  const seen = new SvelteSet<string>();
-  const defs: {
-    sourceLabel: string;
-    label: string;
-    icon?: string | undefined;
-  }[] = [];
-
-  const add = (label: string, icon?: string | undefined) => {
-    if (seen.has(label)) return;
-    seen.add(label);
-    defs.push({ sourceLabel: label, label, icon });
-  };
-
-  components.forEach((comp, index) => {
-    if (comp.source) {
-      // A sourced instance: the definition is referenceable by its source label.
-      add(comp.source, comp.icon);
-      return;
-    }
-    // An inline top-level component is itself a reusable definition,
-    // referenceable by its structural path.
-    if (comp.parent_system_index !== undefined) {
-      add(getComponentKey(index), comp.icon);
-    }
-  });
-
-  defs.sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel));
-  return defs;
+  return docStore.definitions.map((def) => ({
+    sourceLabel: def.label,
+    label: def.label,
+    icon: def.icon || undefined,
+  })).sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel));
 });
 
 let isCreateModalOpen = $state(false);
@@ -1205,46 +1180,58 @@ async function handleModalCreateComponent(data: {
 
   let parent = data.parentKey;
   if (!parent || !doc.findContainer(parent)) {
-    if (doc.systems.length === 0) {
-      doc.addSystem(parent || "main");
-      parent = parent || "main";
+    if (data.sourceLabel) {
+      // Instances need a real container; fall back to the first system.
+      if (doc.systems.length === 0) {
+        doc.addSystem(parent || "main");
+        parent = parent || "main";
+      } else {
+        parent = doc.systems[0]?.label ?? "main";
+      }
     } else {
-      parent = doc.systems[0]?.label ?? "main";
+      // New reusable definitions have no system parent.
+      parent = "";
     }
   }
 
-  // Reuse mode: create a `source` instance of the chosen definition instead
-  // of an inline body.
-  if (data.sourceLabel) {
-    doc.addComponentSource(parent, data.label, data.sourceLabel);
-  } else {
-    doc.addComponent(parent, data.label, {
+  // New-definition mode: create a top-level reusable definition (no system
+  // parent); it becomes available for instances from anywhere.
+  if (!data.sourceLabel) {
+    doc.addComponentDefinition(data.label, {
       leaf: data.leaf,
       description: data.description,
       tags: data.tags,
       ports: data.ports,
     });
+  } else {
+    // Reuse mode: create an `instance` of the chosen definition inside the
+    // selected parent system/container.
+    doc.addInstance(parent, data.label, data.sourceLabel);
   }
 
   await fs.writeFile(targetPath, doc.systemHcl);
   sources = await readProjectSources(fs);
 
-  const fullKey = `${parent}/${data.label}`;
-  const worldX = data.position ? snap(data.position.x) : 100;
-  const worldY = data.position ? snap(data.position.y) : 100;
+  const fullKey = data.sourceLabel || parent
+    ? `${parent}/${data.label}`
+    : data.label;
+  if (data.sourceLabel || parent) {
+    const worldX = data.position ? snap(data.position.x) : 100;
+    const worldY = data.position ? snap(data.position.y) : 100;
 
-  checked[fullKey] = {
-    x: worldX,
-    y: worldY,
-    width: DEFAULT_NODE_WIDTH,
-    height: DEFAULT_NODE_HEIGHT,
-    textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
-  };
-  savedLayout[fullKey] = { ...checked[fullKey] };
+    checked[fullKey] = {
+      x: worldX,
+      y: worldY,
+      width: DEFAULT_NODE_WIDTH,
+      height: DEFAULT_NODE_HEIGHT,
+      textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
+    };
+    savedLayout[fullKey] = { ...checked[fullKey] };
 
-  const newIndex = keyToIndex.get(fullKey);
-  if (newIndex !== undefined) {
-    selectOnly(newIndex);
+    const newIndex = keyToIndex.get(fullKey);
+    if (newIndex !== undefined) {
+      selectOnly(newIndex);
+    }
   }
 }
 
@@ -3104,6 +3091,32 @@ $effect(() => {
           isChecked={(index) => checkedIndices.has(index)}
           onToggleChecked={(index) => toggleComponentChecked(index)}
         />
+      {/if}
+
+        <div class="divider"></div>
+
+      <h3
+        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+      >
+        Definitions
+      </h3>
+
+      {#if reusableDefinitions.length === 0}
+        <p class="text-xs text-base-content/50 italic">
+          No reusable definitions yet — create one with "New Component
+          Definition".
+        </p>
+      {:else}
+        <ul class="space-y-1">
+          {#each reusableDefinitions as def (def.sourceLabel)}
+            <li
+              class="flex items-center gap-2 text-sm truncate font-mono"
+              title={def.label}
+            >
+              <span class="truncate">{def.label}</span>
+            </li>
+          {/each}
+        </ul>
       {/if}
 
         <div class="divider"></div>

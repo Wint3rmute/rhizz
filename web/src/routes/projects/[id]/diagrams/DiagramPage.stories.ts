@@ -29,16 +29,22 @@ const LONG_ERROR_HCL = `project {
   name = "long-error-project"
 }
 
-system "demo" {
-  component "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on" {
-    port "i2c" {
-      role = "provider"
-    }
+component "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on" {
+  port "i2c" {
+    role = "provider"
   }
-  component "fc" {
-    port "i2c" {
-      role = "consumer"
-    }
+}
+component "fc" {
+  port "i2c" {
+    role = "consumer"
+  }
+}
+system "demo" {
+  instance "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on" {
+    source = "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on"
+  }
+  instance "fc" {
+    source = "fc"
   }
   connection "sensor-link" {
     from = "this-is-a-very-long-component-name-that-goes-on-and-on-and-on-and-on/spi"

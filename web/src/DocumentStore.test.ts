@@ -23,45 +23,67 @@ describe("DocumentStore", () => {
     );
   });
 
-  it("adds system and components and derives valid systemHcl with diagnostics", () => {
+  it("adds systems, definitions, and instances and derives valid systemHcl", () => {
     const doc = new DocumentStore();
     doc.setProject("drone-v1", "1.0.0", ["Alice"]);
-    const sys = doc.addSystem("drone", "A quadcopter platform");
-    expect(sys.label).toBe("drone");
 
-    const fc = doc.addComponent("drone", "flight-controller", false);
+    const fc = doc.addComponentDefinition("flight-controller");
     expect(fc).toBeDefined();
     expect(fc?.label).toBe("flight-controller");
+    expect(fc?.isDefinition).toBe(true);
 
-    const mcu = doc.addComponent("drone/flight-controller", "mcu", true);
+    const mcu = doc.addComponentDefinition("mcu", { leaf: true });
     expect(mcu).toBeDefined();
     expect(mcu?.leaf).toBe(true);
 
+    const sys = doc.addSystem("drone", "A quadcopter platform");
+    expect(sys.label).toBe("drone");
+
+    const inst = doc.addInstance(
+      "drone",
+      "flight-controller",
+      "flight-controller",
+    );
+    expect(inst).toBeDefined();
+    expect(inst?.source).toBe("flight-controller");
+    expect(inst?.isDefinition).toBe(false);
+
     const hcl = doc.systemHcl;
     expect(hcl).toContain('system "drone"');
-    expect(hcl).toContain('component "flight-controller"');
-    expect(hcl).toContain('component "mcu"');
+    expect(hcl).toContain('component "flight-controller" {');
+    expect(hcl).toContain(
+      'instance "flight-controller" {\n    source = "flight-controller"',
+    );
+    expect(hcl).toContain('component "mcu" {');
     expect(hcl).toContain("leaf        = true");
 
-    // Compilation diagnostics should be available
+    // Compilation diagnostics should be available.
     expect(doc.compileResult.error_count()).toBe(0);
     const model = doc.model;
     expect(model).toBeDefined();
-    expect(model?.components()).toHaveLength(2);
+    // Two definitions + a system instance.
+    expect(model?.components()).toHaveLength(3);
+    expect(doc.definitions).toHaveLength(2);
   });
 
-  it("automatically clears leaf flag on parent when adding a child component", () => {
+  it("automatically clears leaf flag on parent definition when adding an instance child", () => {
     const doc = new DocumentStore();
-    doc.addSystem("demo");
-    const parent = doc.addComponent("demo", "parent-comp", true);
+    const parent = doc.addComponentDefinition("parent-comp", { leaf: true });
     expect(parent?.leaf).toBe(true);
     expect(doc.systemHcl).toContain("leaf        = true");
 
-    const child = doc.addComponent("demo/parent-comp", "child-comp", true);
-    expect(child?.leaf).toBe(true);
+    doc.addComponentDefinition("child-comp", { leaf: true });
+    const childInst = doc.addInstance(
+      "parent-comp",
+      "child-comp",
+      "child-comp",
+    );
+    // An instance does not carry its own body/leaf flag (it clones the
+    // definition) — but the parent's leaf is cleared once it gains a child.
+    expect(childInst?.leaf).toBe(false);
     expect(parent?.leaf).toBe(false);
 
-    expect(doc.findComponent("demo/parent-comp")?.leaf).toBe(false);
+    expect(doc.findComponent("parent-comp")?.leaf).toBe(false);
     expect(doc.compileResult.error_count()).toBe(0);
   });
 
@@ -77,11 +99,10 @@ describe("DocumentStore", () => {
       ],
     });
 
-    doc.addSystem("demo");
-    doc.addComponent("demo", "sensor", true);
-    doc.updateComponent("demo/sensor", { description: "IMU sensor" });
+    doc.addComponentDefinition("sensor", { leaf: true });
+    doc.updateComponent("sensor", { description: "IMU sensor" });
 
-    const port = doc.addPort("demo/sensor", "spi", "spi", "provider", true);
+    const port = doc.addPort("sensor", "spi", "spi", "provider", true);
     expect(port).toBeDefined();
     expect(port?.protocol).toBe("spi");
     expect(port?.external).toBe(true);
@@ -102,11 +123,13 @@ describe("DocumentStore", () => {
     expect(score?.overall_percentage).toBeGreaterThan(0);
   });
 
-  it("supports reparenting components", () => {
+  it("supports reparenting instances", () => {
     const doc = new DocumentStore();
+    doc.addComponentDefinition("subsys");
+    doc.addComponentDefinition("sensor", { leaf: true });
     doc.addSystem("demo");
-    doc.addComponent("demo", "subsys", false);
-    doc.addComponent("demo", "sensor", true);
+    doc.addInstance("demo", "subsys", "subsys");
+    doc.addInstance("demo", "sensor", "sensor");
 
     expect(doc.findComponent("demo/sensor")).toBeDefined();
 
@@ -115,20 +138,19 @@ describe("DocumentStore", () => {
 
     expect(doc.findComponent("demo/sensor")).toBeNull();
     expect(doc.findComponent("demo/subsys/sensor")).toBeDefined();
-    // Flat serialization: sensor is a standalone definition keyed by path, and
-    // subsys references it via source.
-    expect(doc.systemHcl).toContain('component "demo/subsys/sensor" {');
-    expect(doc.systemHcl).toContain(
-      'component "subsys" {\n    source = "demo/subsys"',
-    );
+    expect(doc.compileResult.error_count()).toBe(0);
   });
 
   it("rejects reparenting into own descendant or creating duplicate label", () => {
     const doc = new DocumentStore();
     doc.addSystem("demo");
-    doc.addComponent("demo", "parent", false);
-    doc.addComponent("demo/parent", "child", false);
-    doc.addComponent("demo/parent/child", "grandchild", true);
+    doc.addComponentDefinition("parent");
+    doc.addComponentDefinition("child");
+    doc.addComponentDefinition("grandchild", { leaf: true });
+    doc.addComponentDefinition("dup", { leaf: true });
+    doc.addInstance("demo", "parent", "parent");
+    doc.addInstance("demo/parent", "child", "child");
+    doc.addInstance("demo/parent/child", "grandchild", "grandchild");
 
     // Reject cycle: cannot reparent parent into its own grandchild
     expect(
@@ -139,16 +161,18 @@ describe("DocumentStore", () => {
     expect(doc.reparentComponent("demo/parent", "demo/parent")).toBe(false);
 
     // Reject duplicate label collision
-    expect(doc.addComponent("demo", "dup", true)).toBeDefined();
-    expect(doc.addComponent("demo/parent", "dup", true)).toBeDefined();
+    expect(doc.addInstance("demo", "dup", "dup")).toBeDefined();
+    expect(doc.addInstance("demo/parent", "dup", "dup")).toBeDefined();
     expect(doc.reparentComponent("demo/dup", "demo/parent")).toBe(false);
   });
 
-  it("supports deleting components and connections", () => {
+  it("supports deleting instances and connections", () => {
     const doc = new DocumentStore();
+    doc.addComponentDefinition("compA", { leaf: true });
+    doc.addComponentDefinition("compB", { leaf: true });
     doc.addSystem("demo");
-    doc.addComponent("demo", "compA", true);
-    doc.addComponent("demo", "compB", true);
+    doc.addInstance("demo", "compA", "compA");
+    doc.addInstance("demo", "compB", "compB");
     doc.addConnection("demo", { label: "link", from: "compA", to: "compB" });
 
     expect(doc.systemHcl).toContain('connection "link"');
@@ -156,7 +180,15 @@ describe("DocumentStore", () => {
     expect(doc.systemHcl).not.toContain('connection "link"');
 
     expect(doc.deleteComponent("demo/compA")).toBe(true);
-    expect(doc.systemHcl).not.toContain('component "compA"');
+    expect(doc.systemHcl).not.toContain('instance "compA"');
+  });
+
+  it("deletes top-level definitions by bare label", () => {
+    const doc = new DocumentStore();
+    doc.addComponentDefinition("unused", { leaf: true });
+    expect(doc.definitions).toHaveLength(1);
+    expect(doc.deleteComponent("unused")).toBe(true);
+    expect(doc.definitions).toHaveLength(0);
   });
 
   it("manages views and layout coordinates cleanly in viewsHcl", () => {
@@ -191,27 +223,35 @@ describe("DocumentStore", () => {
   authors = ["RoboCorp"]
 }
 
+component "gripper" {
+  description = "Pneumatic end-effector"
+  leaf        = true
+
+  port "ctrl" {
+    protocol = "can"
+    role     = "consumer"
+  }
+}
+
+component "base" {
+  description = "Motor controller"
+  leaf        = true
+
+  port "ctrl-out" {
+    protocol = "can"
+    role     = "provider"
+  }
+}
+
 system "arm" {
   description = "6-DOF manipulator"
 
-  component "gripper" {
-    description = "Pneumatic end-effector"
-    leaf        = true
-
-    port "ctrl" {
-      protocol = "can"
-      role     = "consumer"
-    }
+  instance "gripper" {
+    source = "gripper"
   }
 
-  component "base" {
-    description = "Motor controller"
-    leaf        = true
-
-    port "ctrl-out" {
-      protocol = "can"
-      role     = "provider"
-    }
+  instance "base" {
+    source = "base"
   }
 
   connection "can-bus" {
@@ -242,6 +282,7 @@ system "arm" {
     expect(doc.systems[0]?.label).toBe("arm");
     expect(doc.systems[0]?.components).toHaveLength(2);
     expect(doc.systems[0]?.connections).toHaveLength(1);
+    expect(doc.definitions).toHaveLength(2);
 
     expect(doc.views).toHaveLength(1);
     expect(doc.views[0]?.label).toBe("wiring");
@@ -255,8 +296,7 @@ system "arm" {
   });
 
   it("preserves UNIX path notation in connections after loading and editing (no colon regression)", () => {
-    const systemHcl = `system "demo" {
-  component "sensor" {
+    const systemHcl = `component "sensor" {
     leaf = true
     port "out" {
       role = "provider"
@@ -270,17 +310,25 @@ system "arm" {
     }
   }
 
-  connection "link" {
-    from = "sensor/out"
-    to   = "actuator/in"
+  system "demo" {
+    instance "sensor" {
+      source = "sensor"
+    }
+    instance "actuator" {
+      source = "actuator"
+    }
+
+    connection "link" {
+      from = "sensor/out"
+      to   = "actuator/in"
+    }
   }
-}
 `;
     const doc = new DocumentStore();
     doc.loadFromHcl(systemHcl);
 
     // Edit a component in the diagram (e.g. update description)
-    doc.updateComponent("demo/sensor", {
+    doc.updateComponent("sensor", {
       description: "Updated sensor description",
     });
 
@@ -300,21 +348,28 @@ system "arm" {
   roles       = ["provider", "consumer"]
 }
 
-system "demo" {
-  component "sensor" {
-    leaf = true
-    port "data" {
-      protocol = "i2c"
-      role     = "provider"
-    }
+component "sensor" {
+  leaf = true
+  port "data" {
+    protocol = "i2c"
+    role     = "provider"
   }
+}
 
-  component "mcu" {
-    leaf = true
-    port "data-in" {
-      protocol = "i2c"
-      role     = "consumer"
-    }
+component "mcu" {
+  leaf = true
+  port "data-in" {
+    protocol = "i2c"
+    role     = "consumer"
+  }
+}
+
+system "demo" {
+  instance "sensor" {
+    source = "sensor"
+  }
+  instance "mcu" {
+    source = "mcu"
   }
 }
 `;
@@ -338,22 +393,20 @@ system "demo" {
   });
 
   it("round-trips component visual attributes (color, border, font)", () => {
-    const systemHcl = `system "style-demo" {
-  component "danger" {
-    color  = "#ff0000"
-    border = "dashed"
-    font   = "bold"
-  }
+    const systemHcl = `component "danger" {
+  color  = "#ff0000"
+  border = "dashed"
+  font   = "bold"
+}
 
-  component "plain" {
-    leaf = true
-  }
+component "plain" {
+  leaf = true
 }
 `;
     const doc = new DocumentStore();
     doc.loadFromHcl(systemHcl);
 
-    const comp = doc.findComponent("style-demo/danger");
+    const comp = doc.findComponent("danger");
     expect(comp).toBeDefined();
     expect(comp?.color).toBe("#ff0000");
     expect(comp?.border).toBe("dashed");
@@ -365,23 +418,21 @@ system "demo" {
     expect(doc.systemHcl).toContain('font        = "bold"');
     expect(doc.systemHcl).not.toContain('border      = "solid"');
 
-    // A bare component exposes no visual attributes.
-    const plain = doc.findComponent("style-demo/plain");
+    // A bare definition exposes no visual attributes.
+    const plain = doc.findComponent("plain");
     expect(plain?.color).toBeFalsy();
     expect(plain?.border).toBeFalsy();
     expect(plain?.font).toBeFalsy();
   });
 
   it("persists visual attributes set via updateComponent (inspector path)", () => {
-    const systemHcl = `system "style-demo" {
-  component "compA" {
-    leaf = true
-  }
+    const systemHcl = `component "compA" {
+  leaf = true
 }
 `;
     const doc = new DocumentStore();
     doc.loadFromHcl(systemHcl);
-    doc.updateComponent("style-demo/compA", {
+    doc.updateComponent("compA", {
       color: "#00ff00",
       border: "dotted",
       font: "italic",
@@ -391,7 +442,7 @@ system "demo" {
     expect(doc.systemHcl).toContain('border      = "dotted"');
     expect(doc.systemHcl).toContain('font        = "italic"');
 
-    doc.updateComponent("style-demo/compA", {
+    doc.updateComponent("compA", {
       color: undefined,
       border: undefined,
       font: undefined,
@@ -407,10 +458,13 @@ system "demo" {
       {
         filename: "project.hcl",
         content: `project { name = "apollo-11" }
-system "apollo-11" {
-  component "cm" {
+component "cm" {
     description = "Command module"
     leaf = true
+  }
+system "apollo-11" {
+  instance "cm" {
+    source = "cm"
   }
 }
 `,
@@ -436,23 +490,25 @@ system "apollo-11" {
     const comp = doc.findComponent("apollo-11/cm");
     expect(comp).toBeDefined();
     expect(comp?.label).toBe("cm");
-    expect(comp?.description).toBe("Command module");
+    expect(comp?.source).toBe("cm");
+    // The definition preserves its description.
+    expect(doc.definitions[0]?.description).toBe("Command module");
   });
 
-  it("serializes multi-system reuse as flat standalone definitions", () => {
-    // A component reused across two systems must serialize as standalone
-    // top-level definitions with source references, never inlined.
+  it("serializes multi-system reuse as standalone definitions + instances", () => {
+    // A definition reused across two systems must serialize as one standalone
+    // top-level `component` block with `instance` references, never inlined.
     const systemHcl = `component "engine" {
   description = "shared engine"
   leaf = true
 }
 system "airborne" {
-  component "plane" {
+  instance "plane" {
     source = "engine"
   }
 }
 system "hangar" {
-  component "plane" {
+  instance "plane" {
     source = "engine"
   }
 }
@@ -468,8 +524,10 @@ system "hangar" {
     expect(hcl).toContain('component "engine" {');
     expect(hcl).not.toContain('component "airborne/plane" {');
     expect(hcl).not.toContain('component "hangar/plane" {');
-    // Systems reference their children via source pointing at the definition.
-    expect(hcl).toContain('source = "engine"');
+    // Systems reference their children via instance/source pointing at the
+    // definition.
+    expect(hcl).toContain('instance "plane" {\n    source = "engine"');
+    expect(hcl).toContain('instance "plane" {\n    source = "engine"');
 
     // Round-trip compiles with no errors.
     expect(doc.compileResult.error_count()).toBe(0);
@@ -478,17 +536,29 @@ system "hangar" {
   it("round-trips a loaded model with child-to-sibling and child-to-child connections", () => {
     // The HCL the editor produces after: satellite{radio, obc}, ground-station,
     // plus radio->ground-station and radio->obc connections.
-    const systemHcl = `system "main" {
-  component "satellite" {
-    component "radio" {
-      leaf = true
-    }
-    component "obc" {
-      leaf = true
-    }
+    const systemHcl = `component "radio" {
+  leaf = true
+}
+component "obc" {
+  leaf = true
+}
+component "satellite" {
+  instance "radio" {
+    source = "radio"
   }
-  component "ground-station" {
-    leaf = true
+  instance "obc" {
+    source = "obc"
+  }
+}
+component "ground-station" {
+  leaf = true
+}
+system "main" {
+  instance "satellite" {
+    source = "satellite"
+  }
+  instance "ground-station" {
+    source = "ground-station"
   }
 
   connection "radio-ground-station" {
@@ -516,7 +586,7 @@ system "hangar" {
   leaf = true
 }
 system "main" {
-  component "satellite" {
+  instance "satellite" {
     source = "satellite"
   }
 }
@@ -527,29 +597,35 @@ system "main" {
     const hcl = doc.systemHcl;
     expect(hcl).toContain('component "satellite" {');
     expect(hcl).not.toContain('component "main/satellite" {');
-    expect(hcl).toContain('source = "satellite"');
+    expect(hcl).toContain('instance "satellite" {\n    source = "satellite"');
     expect(doc.compileResult.error_count()).toBe(0);
   });
 
   it("round-trips connections from a child to a sibling and to a sibling child", () => {
-    // Build: main/satellite{radio, obc}, main/ground-station. Connect
-    // radio->ground-station and radio->obc. Both must round-trip without E002.
+    // Build: mobile/antenna, mobile/baseband{rf, dsp}. Connect
+    // rf->antenna and rf->dsp. Both must round-trip without E002.
     const doc = new DocumentStore();
-    doc.addSystem("main");
-    doc.addComponent("main", "satellite", false);
-    doc.addComponent("main", "ground-station", true);
-    doc.addComponent("main/satellite", "radio", true);
-    doc.addComponent("main/satellite", "obc", true);
-
-    doc.addConnection("main", {
-      label: "radio-ground-station",
-      from: "satellite/radio",
-      to: "ground-station",
+    doc.addComponentDefinition("antenna", { leaf: true });
+    doc.addComponentDefinition("rf", { leaf: true });
+    doc.addComponentDefinition("dsp", { leaf: true });
+    doc.addComponentDefinition("baseband", {
+      description: "baseband processor",
     });
-    doc.addConnection("main", {
-      label: "radio-obc",
-      from: "satellite/radio",
-      to: "satellite/obc",
+    doc.addSystem("mobile");
+    doc.addInstance("mobile", "antenna", "antenna");
+    doc.addInstance("mobile", "baseband", "baseband");
+    doc.addInstance("baseband", "rf", "rf");
+    doc.addInstance("baseband", "dsp", "dsp");
+
+    doc.addConnection("mobile", {
+      label: "rf-antenna",
+      from: "baseband/rf",
+      to: "antenna",
+    });
+    doc.addConnection("mobile", {
+      label: "rf-dsp",
+      from: "baseband/rf",
+      to: "baseband/dsp",
     });
 
     expect(doc.compileResult.error_count()).toBe(0);
@@ -563,27 +639,23 @@ system "main" {
     try {
       const doc = new DocumentStore();
       doc.setProject("obs", "0.1.0", []);
-      doc.addSystem("main");
-      doc.addComponent("main", "drone", {
+      doc.addComponentDefinition("drone", {
         leaf: false,
         description: "a drone",
         tags: ["power"],
         ports: [{ label: "rf", role: "peer" }],
       });
-      doc.updateComponent("main/drone", { description: "updated" });
-      doc.addConnection("main", {
-        label: "link",
-        from: "drone",
-        to: "antenna",
-      });
+      doc.updateComponent("drone", { description: "updated" });
+      doc.addSystem("main");
+      doc.addInstance("main", "drone", "drone");
       doc.deleteComponent("main/drone");
 
       expect(recorded).toEqual([
         "new_project",
-        "add_system",
-        "add_component",
+        "add_component_definition",
         "update_component",
-        "add_connection",
+        "add_system",
+        "add_instance",
         "delete_component",
       ]);
     } finally {
@@ -609,38 +681,33 @@ system "main" {
     }
   });
 
-  it("creates a source instance that round-trips and reuses across systems", () => {
+  it("creates an instance that round-trips and reuses across systems", () => {
     const doc = new DocumentStore();
     doc.addSystem("drone");
     doc.addSystem("testing-harness");
 
-    // Define a reusable composite engine inline in the first system.
-    doc.addComponent("drone", "engine", {
+    // Define a reusable composite engine as a top-level definition.
+    doc.addComponentDefinition("engine", {
       leaf: false,
       description: "turboprop engine",
     });
-    doc.addComponent("drone/engine", "fuel-pump", true);
+    doc.addComponentDefinition("fuel-pump", { leaf: true });
+    doc.addInstance("engine", "fuel-pump", "fuel-pump");
 
-    // Reuse it in a second system via source, referencing the definition by
-    // its canonical path (the system-qualified label under which it's emitted).
-    const inst = doc.addComponentSource(
-      "testing-harness",
-      "engine",
-      "drone/engine",
-    );
+    // Reuse it in both systems via instance.
+    const inst = doc.addInstance("testing-harness", "engine", "engine");
     expect(inst).toBeDefined();
-    expect(inst?.source).toBe("drone/engine");
+    expect(inst?.source).toBe("engine");
+
+    doc.addInstance("drone", "engine", "engine");
 
     const hcl = doc.systemHcl;
-    expect(hcl).toContain('component "drone/engine" {');
+    expect(hcl).toContain('component "engine" {');
     expect(hcl).toContain('description = "turboprop engine"');
-    // Both systems reference the same definition by source.
-    expect(hcl).toContain('system "drone"');
-    expect(hcl).toContain('system "testing-harness"');
-    expect(hcl.match(/source\s*=\s*"drone\/engine"/g)?.length)
-      .toBeGreaterThanOrEqual(
-        2,
-      );
+    // The definition body holds the nested instance.
+    expect(hcl).toContain('instance "fuel-pump" {\n    source = "fuel-pump"');
+    // Both systems reference the same definition by instance.
+    expect(hcl).toContain('instance "engine" {\n    source = "engine"');
 
     // The sourced model still compiles with no errors.
     expect(doc.compileResult.error_count()).toBe(0);
