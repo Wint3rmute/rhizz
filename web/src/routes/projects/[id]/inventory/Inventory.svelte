@@ -355,7 +355,7 @@ let editHref = $derived(
 );
 </script>
 
-<div class="flex flex-1 w-full h-full overflow-hidden bg-base-300">
+<div class="flex flex-1 w-full h-screen overflow-hidden bg-base-300">
   {#if !projectId}
     <div class="flex-1 flex items-center justify-center p-4">
       <div class="card bg-base-200 shadow-xl">
