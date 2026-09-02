@@ -3,6 +3,8 @@ name = "rhizz-wasm"
 version = "0.1.0"
 edition = "2024"
 description = "WebAssembly bindings for rhizz-core"
+repository = "https://github.com/Wint3rmute/rhizz"
+license = "AGPL"
 
 [lints]
 workspace = true
