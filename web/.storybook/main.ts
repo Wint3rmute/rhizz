@@ -26,6 +26,7 @@ export default {
     "@storybook/addon-vitest",
     "storybook/viewport",
     "@storybook/addon-docs",
+    "@storybook/addon-themes",
   ],
   framework: {
     name: "@storybook/sveltekit",
