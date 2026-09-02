@@ -6,6 +6,11 @@ has_nix := if shell('command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -
     "false"
 }
 
+alias b := build
+alias t := test
+alias d := dev
+alias fmt := format
+
 run := if has_nix == "true" { "nix develop --command" } else { "" }
 
 format:
