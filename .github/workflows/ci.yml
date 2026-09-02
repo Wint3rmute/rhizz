@@ -43,5 +43,7 @@ jobs:
   frontend:
     needs: wasm
     uses: ./.github/workflows/frontend.yml
+    with:
+      publish: false
     secrets:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
