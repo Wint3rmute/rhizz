@@ -1,6 +1,6 @@
 {
   description = "rhizz dev environment";
-  inputs.nixpkgs.url = "nixpkgs";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
   outputs = { self, nixpkgs }:
     let
