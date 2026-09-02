@@ -13,6 +13,80 @@ How to work on this file:
 
 ---
 
+## Task 101 — Inventory subpage (browse & inspect all model entities)
+
+Add an "Inventory" subpage under `web/src/routes/projects/[id]/inventory/`
+that lists every **component definition** in the compiled model (not instances)
+in a searchable, filterable sidebar, and shows a detail pane for the selected
+definition combining a live diagram preview with tabbed metadata.
+
+Reference mockup: `web/src/screenshots/` (Inventory Browser — sidebar list,
+filter tabs All/Components/Interfaces, detail pane with diagram preview and
+Description / Ports / Requirements / Metadata tabs).
+
+- **Layout (three regions)**
+  - **Left sidebar — Inventory Browser:** filter tabs (`All`, `Components`,
+    `Interfaces`) and a scrollable list of entity cards. The list shows only
+    **component definitions** (`DocumentStore.definitions` / `Model.definitions`
+    — top-level reusable entities with `ComponentKind::Definition`); instances
+    are never listed. Each card shows the
+    entity icon, label (e.g. `CM - Command Module`), a completion badge
+    (`100% Specified` / `85% Specified` / `Draft`, colored green/amber/gray), a
+    hierarchy-level badge (`L1`, `L2`, … = decomposition depth), and a short
+    description. Selected card is highlighted.
+  - **Main area — diagram preview:** renders the selected definition's
+    **default diagram** — the diagram file named after the component,
+    `diagrams/<component_name>.hcl` in the project VFS — using the existing
+    diagram loading/rendering stack (`readDiagramLayoutFile` /
+    `DiagramStaticView` / `DiagramViewport`), read-only. If no such diagram
+    file exists, display an empty-state editor with the text: *"Please create a
+    default view diagram under `diagrams/<component_name>.hcl`"*. The selected
+    entity is visually emphasized in the preview.
+  - **Bottom detail pane:** tabs for the selected entity:
+    - `Description` — rendered Markdown overview (reuse `Markdown.svelte`).
+    - `Ports (N)` — table of the entity's ports with direction/protocol info.
+    - `Requirements` — placeholder tab for future requirement links (may render
+      an empty state for now).
+    - `Metadata` — tags, visual attributes, path, kind (definition/instance),
+      parent, and completion breakdown for this entity.
+    - An `Edit` button that deep-links into the Diagrams editor with the entity
+      selected (or opens the inspector for it).
+  - **Data sources**
+  - Read from the compiled model via `DocumentStore` + `rhizz_wasm_wrapper`
+    (definitions, ports, connections) and from `ScoreReportJS`/`CategoryScoreJS`
+    for the per-entity completion badges — no new backend surface expected
+    unless per-definition scores are not already exposed; if missing, extend
+    `rhizz-wasm` minimally. Note: definitions are retained by the resolver even
+    with zero instances (Task 100), so they always appear in the compiled model.
+  - The page is read-only in this task: no model mutations are dispatched from
+    Inventory (the `Edit` button navigates to the existing editors). If the
+    default diagram file is missing, the empty state is display-only — do not
+    auto-create the file from this page.
+- **Implementation notes**
+  - Follow the existing route patterns (`projects/[id]/explore/` is the closest
+    analogue: page + pure helper modules + `.stories.ts`).
+  - Extract pure logic (filtering/sorting/search, badge derivation from score +
+    depth) into unit-tested helper modules, e.g. `inventory/filters.ts`.
+  - Add Storybook stories for the page and for the entity-card / detail-pane
+    components, including empty-model and mixed-completion states.
+  - Known UI polish visible in the mockup to avoid: the Description tab must not
+    render the overview text twice.
+- **Acceptance Criteria**
+  - Navigating to `/projects/[id]/inventory` lists all component definitions
+    (and interfaces when that tab is active) from the compiled model, with
+    correct completion and level badges. Instances are never listed.
+  - Selecting an entity loads and renders its default diagram
+    (`diagrams/<component_name>.hcl`) in the preview and updates all detail
+    tabs. When the file does not exist, the empty-state message naming the
+    expected path is shown instead.
+  - Filter tabs and a free-text search narrow the list; empty results show an
+    empty state.
+  - `Edit` navigates to the Diagrams editor for the selected entity.
+  - Unit tests for helper modules + Storybook stories for new components;
+    validated with `just test`, `just lint`, `just build`, `just format`.
+
+---
+
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
