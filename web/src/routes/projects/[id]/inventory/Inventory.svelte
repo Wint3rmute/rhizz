@@ -9,7 +9,7 @@
 // Data is taken from the compiled model's raw payload (`model.to_js()`),
 // which — unlike the typed wasm wrappers — exposes children/ports/parent
 // indices needed to reconstruct definition trees and hierarchy paths.
-import { SvelteMap, SvelteSet } from "svelte/reactivity";
+import { SvelteMap } from "svelte/reactivity";
 import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -297,34 +297,6 @@ let previewBoxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
 
 // The definition (or one of its placed instances) that the preview
 // emphasizes, plus its whole subtree.
-let selectedPreviewIndex = $derived.by(() => {
-  const label = selectedDefinition?.label;
-  if (!label) return null;
-  // Placed instances first (they appear in systems' layouts), then the
-  // definition's own arena entry.
-  for (const [index, c] of comps.entries()) {
-    if (c.source === label) return index;
-  }
-  for (const [index, c] of comps.entries()) {
-    if (c.label === label) return index;
-  }
-  return null;
-});
-
-let previewSelected = $derived.by(() => {
-  const root = selectedPreviewIndex;
-  if (root === null) return new SvelteSet<number>();
-  const set = new SvelteSet<number>([root]);
-  const walk = (cid: number) => {
-    for (const child of comps[cid]?.children ?? []) {
-      set.add(child);
-      walk(child);
-    }
-  };
-  walk(root);
-  return set;
-});
-
 let staticComponents = $derived.by<DiagramStaticComponent[]>(() => {
   return comps.map((c: RawComponent) => ({
     label: c.label,
@@ -442,7 +414,6 @@ let editHref = $derived(
               components={staticComponents}
               connections={staticConnections}
               boxes={previewBoxes}
-              selected={previewSelected}
             />
           </div>
         {:else if selectedDefinition}
