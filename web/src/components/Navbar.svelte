@@ -68,6 +68,10 @@ function closeMenu() {
             class="btn btn-ghost btn-sm"
           >Explore</a>
           <a
+            href={resolve("/projects/[id]/inventory", { id: activeProjectId })}
+            class="btn btn-ghost btn-sm"
+          >Inventory</a>
+          <a
             href={resolve("/projects/[id]/overview", { id: activeProjectId })}
             class="btn btn-ghost btn-sm"
           >System Overview</a>
@@ -154,6 +158,13 @@ function closeMenu() {
             onclick={closeMenu}
           >
             🧭 Explore
+          </a>
+          <a
+            href={resolve("/projects/[id]/inventory", { id: activeProjectId })}
+            class="btn btn-ghost btn-sm justify-start w-full text-left"
+            onclick={closeMenu}
+          >
+            📦 Inventory
           </a>
           <a
             href={resolve("/projects/[id]/overview", { id: activeProjectId })}

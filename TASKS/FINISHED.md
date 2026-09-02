@@ -4,6 +4,53 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 101 — Inventory subpage (browse & inspect all model entities)
+
+Added an "Inventory" subpage at `/projects/[id]/inventory` that lists every
+**component definition** (never instances) in the compiled model in a
+searchable, filterable sidebar, with a read-only preview of the definition's
+default diagram (`diagrams/<label>.hcl`) and a tabbed detail pane.
+
+- **`web/src/routes/projects/[id]/inventory/`** (new route, mirroring the
+  `explore/` page + pure-helpers + stories pattern):
+  - `inventory.ts` (pure, unit-tested): `InventoryTab` (All / Components /
+    Interfaces), `filterDefinitions` (tab + free-text search across label,
+    description, tags), `definitionDepth` (drives `L1`/`L2`/… badges),
+    `completionBadge` (mirrors `rhizz-core`'s `score_component` semantics
+    locally, since `rhizz-wasm` only exposes aggregate category scores), and
+    `defaultDiagramPath` (`diagrams/<label>.hcl`). 14 unit tests.
+  - `Inventory.svelte`: three-region layout — Inventory Browser sidebar (filter
+    tabs, search, definition cards), diagram preview, detail pane. Data comes
+    from the compiled model's raw payload (`model.to_js()`), reading
+    `raw.definitions` so zero-instance definitions are listed (Task 100
+    retention). The preview loads `diagrams/<label>.hcl` via
+    `readDiagramLayoutFile` (existence probed first to distinguish an empty
+    diagram from a missing file), maps layout keys to component indices like
+    Explore, and emphasizes the selected definition's subtree via
+    `DiagramStaticView`'s `selected` set. Missing diagram file → empty state:
+    *"Please create a default view diagram under `diagrams/<label>.hcl`"*
+    (display-only, no auto-create). Read-only: no model mutations; `Edit`
+    deep-links to the Diagrams editor.
+  - `DefinitionCard.svelte`: icon, label, completion badge
+    (`100% Specified` / partial % / `Draft`), level badge, description.
+  - `DetailPane.svelte`: Description (single-rendered Markdown — the mockup's
+    duplicated-text defect is avoided), Ports (N) table, Requirements
+    placeholder tab, Metadata (kind/level/leaf/visual attrs/tags/children),
+    and an `Edit` button deep-linking into the Diagrams editor.
+  - `+page.svelte`: SvelteKit route passing `projectId`.
+  - `InventoryPage.stories.ts`: Desktop (asserts 4 definitions listed, no
+    instances), Mobile, MissingDefaultDiagram (empty state), EmptyModel, and
+    an Apollo-11 example story.
+- **`Navbar.svelte`**: added an "Inventory" link (desktop + mobile menus).
+- **`eslint.config.js`**: added the stories file to the existing scoped
+  override for `.ts` files importing first-party `.svelte` modules
+  (documented false-positive pattern).
+
+Validated with `just test` (527 tests incl. storybook), `just lint`,
+`just build`, and `just format`.
+
+---
+
 ## Task 100 — First-class reusable component definitions
 
 Made a reusable component definition a first-class, top-level entity that can

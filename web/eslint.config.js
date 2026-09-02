@@ -107,6 +107,7 @@ export default ts.config(
     // files that import such modules.
     files: [
       "**/explore/Explore.stories.ts",
+      "**/inventory/InventoryPage.stories.ts",
       "**/components/Navbar.stories.ts",
       "**/vfs/compile.test.ts",
       "**/diagrams/ComponentHierarchyTree.stories.ts",
