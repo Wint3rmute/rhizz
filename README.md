@@ -7,7 +7,7 @@ description, all the way to a byte-by-byte interface definition.
 
 In other words - a code-first [MBSE](https://baczek.me/mbse) tool.
 
-![Landing page screenshot](./rhizz_landing.jpg)
+![Landing page screenshot](.book/src/rhizz_landing.jpg)
 
 ## Core Ideas
 
