@@ -9,6 +9,7 @@ has_nix := if shell('command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -
 alias b := build
 alias t := test
 alias d := dev
+alias s := storybook
 alias fmt := format
 
 run := if has_nix == "true" { "nix develop --command" } else { "" }
@@ -37,3 +38,7 @@ build:
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev:
     {{run}} sh -lc 'cd web && deno run dev'
+
+# Starts a storybook server. If you're an AI, never use this. It will just hang forever.
+storybook:
+    {{run}} sh -lc 'cd web && dx storybook dev'
