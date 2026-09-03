@@ -156,7 +156,16 @@ fn error_response(status: StatusCode, body: &'static str) -> Response {
 pub async fn run(addr: &str, data_dir: PathBuf) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, data_dir = %data_dir.display(), "rhizz-server listening");
-    axum::serve(listener, app(data_dir)).await?;
+
+    // Wait for a termination signal (SIGINT / SIGTERM) and then shut the
+    // server down gracefully. Running as PID 1 (the container's init), the
+    // kernel does NOT apply default dispositions to us, so SIGINT/SIGTERM
+    // would otherwise be silently dropped — that's why running the image
+    // locally with `docker run` didn't react to Ctrl-C.
+    let shutdown = crate::signal::shutdown_signal();
+    axum::serve(listener, app(data_dir))
+        .with_graceful_shutdown(shutdown)
+        .await?;
     Ok(())
 }
 

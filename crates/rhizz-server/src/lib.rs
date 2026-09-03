@@ -13,6 +13,9 @@
 /// HTTP server layer: router assembly and handlers.
 pub mod server;
 
+/// Signal handling for graceful shutdown.
+pub mod signal;
+
 /// Compile-time embedding of the web frontend.
 pub mod assets;
 
