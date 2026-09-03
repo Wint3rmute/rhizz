@@ -1,7 +1,7 @@
 // GitHub Actions sets this to "true" for every workflow run (see
 // https://docs.github.com/en/actions/reference/variables-reference).
 // Only that specific CI job nests this build under /storybook/ on the
-// same GitHub Pages deployment as the main app (see frontend.yml) —
+// same GitHub Pages deployment as the main app (see .github/workflows/ci.yml) —
 // everywhere else (local builds, Chromatic, ...) the static output gets
 // served from an arbitrary/unknown root, so a relative base is what
 // actually works there: it resolves against wherever iframe.html/
