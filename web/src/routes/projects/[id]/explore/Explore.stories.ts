@@ -447,6 +447,9 @@ export const BreadcrumbNavigation: Story = {
 export const EmbedDiagramButton: Story = {
   args: {
     projectId: SEEDED_PROJECT_ID,
+    // Pin a deterministic origin so the embed URL in this story is stable
+    // across runs — Chromatic runners each get a different window.location.
+    embedBaseUrl: "https://rhizz.example.dev",
   },
   loaders: [ensureSeededProject],
   play: async ({ canvasElement }) => {

@@ -5,10 +5,12 @@ let {
   projectId,
   diagramPath = null,
   disabled = false,
+  baseUrl = null,
 }: {
   projectId: string;
   diagramPath?: string | null;
   disabled?: boolean;
+  baseUrl?: string | null;
 } = $props();
 
 let isModalOpen = $state(false);
@@ -28,9 +30,14 @@ let embedPath = $derived.by(() => {
 });
 
 let fullEmbedUrl = $derived.by(() => {
-  if (typeof window === "undefined") return embedPath;
+  // baseUrl lets callers pin a deterministic origin (e.g. in Storybook, where
+  // window.location.origin changes between runs and would make visual
+  // regression snapshots unstable). Falls back to the real origin in browsers.
+  const origin = baseUrl ??
+    (typeof window !== "undefined" ? window.location.origin : undefined);
+  if (origin === undefined) return embedPath;
   try {
-    return new URL(embedPath, window.location.origin).toString();
+    return new URL(embedPath, origin).toString();
   } catch {
     return embedPath;
   }

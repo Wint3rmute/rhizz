@@ -50,8 +50,10 @@ function buildFsTree(entries: Dirent[]): Record<string, unknown> {
 
 let {
   projectId = null,
+  embedBaseUrl = null,
 }: {
   projectId?: string | null;
+  embedBaseUrl?: string | null;
 } = $props();
 
 let effectiveProjectId = $derived(projectId ?? getCurrentProjectId());
@@ -408,6 +410,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
             <EmbedDiagramButton
               projectId={effectiveProjectId}
               diagramPath={selectedDiagramPath}
+              baseUrl={embedBaseUrl}
             />
           </div>
         </nav>
