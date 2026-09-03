@@ -83,6 +83,16 @@ jobs:
 
       - run: mdbook build book
 
+      - run: |
+          rm -rf book-artifact
+          mkdir -p book-artifact
+          cp -a book/target-mdbook/. book-artifact/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rhizz-book
+          path: book-artifact/
+
   frontend:
     needs: wasm
     runs-on: ubuntu-latest
@@ -188,11 +198,13 @@ jobs:
           path: docs-artifact/
 
   deploy-pages:
-    needs: [publish, docs]
+    needs: [publish, docs, book]
     # Publish is skipped unless the "chromatic" trigger fires; deploy still
-    # runs (docs are always deployed) but never after a failed publish.
+    # runs (docs & book are always deployed) but never after a failed publish
+    # or a failed book/docs build.
     if: ${{ github.event_name != 'pull_request' && !cancelled() &&
-      needs.publish.result != 'failure' && needs.docs.result == 'success' }}
+      needs.publish.result != 'failure' && needs.docs.result == 'success' &&
+      needs.book.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -208,6 +220,11 @@ jobs:
         with:
           name: rhizz-docs
           path: pages/docs/
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: rhizz-book
+          path: pages/book/
 
       - uses: actions/upload-pages-artifact@v3
         with:
