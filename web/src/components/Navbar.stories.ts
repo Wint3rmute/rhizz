@@ -4,6 +4,8 @@ import {
   createProjectWithMainFile,
   projectStore,
 } from "../ProjectState.svelte";
+import { getSelection, setSelection } from "../ThemeState.svelte";
+import type { ThemeSelection } from "../theme";
 import Navbar from "./Navbar.svelte";
 
 type StoryProject = Pick<ProjectJS, "name" | "version" | "authors">;
@@ -41,6 +43,13 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+// The theme selection lives in a module-level singleton (ThemeState) that
+// is shared across all stories and persists to localStorage, so stories
+// that need a specific selection must pin it before rendering and restore
+// it afterwards — otherwise the choice would leak into every other story's
+// screenshots.
+let savedSelection: ThemeSelection = getSelection();
+
 export const Desktop: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
@@ -70,3 +79,16 @@ export const MobileExpanded: Story = {
     isOpen: true,
   },
 };
+
+export const MobileThemePicker = {
+  ...MobileExpanded,
+  beforeEach: () => {
+    savedSelection = getSelection();
+    // Pin a concrete value so the picker shows the 🌙 Dark option
+    // selected; the tri-state row is the functionality under test.
+    setSelection("dark");
+  },
+  afterEach: () => {
+    setSelection(savedSelection);
+  },
+} satisfies Story;
