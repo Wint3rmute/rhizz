@@ -5,14 +5,9 @@ on:
     branches: [main, master]
   # Frontend publishing (Chromatic + GitHub Pages deploy) only happens when
   # explicitly requested: run this workflow manually via the Actions tab
-  # ("Run workflow") and the frontend build-publish job opts in.
+  # ("Run workflow"). The frontend build-publish job runs only on
+  # workflow_dispatch, so regular pushes/PRs can never publish.
   workflow_dispatch:
-    inputs:
-      publish:
-        description: "Build and publish the frontend (Chromatic + Pages)"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -30,8 +25,6 @@ jobs:
   frontend:
     needs: wasm
     uses: ./.github/workflows/frontend.yml
-    with:
-      publish: ${{ inputs.publish == true }}
     secrets:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
@@ -47,8 +40,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       # The frontend artifact only exists when the frontend was published
-      # (manual dispatch with publish=true); on regular pushes only the docs
-      # artifact is present.
+      # (manual dispatch); on regular pushes only the docs artifact is
+      # present.
       - name: Download frontend artifact
         uses: actions/download-artifact@v8
         with:

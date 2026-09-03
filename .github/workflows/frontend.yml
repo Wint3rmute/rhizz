@@ -2,16 +2,6 @@ name: Frontend
 
 on:
   workflow_call:
-    inputs:
-      # When false, the build-publish job (frontend build + Chromatic upload
-      # + artifact staging) is skipped — lint/check-test still run. Callers
-      # pass `publish: true` to opt in (release.yml does so on manual
-      # dispatch).
-      publish:
-        description: "Build and publish the frontend (Chromatic + artifact)"
-        required: false
-        type: boolean
-        default: false
     secrets:
       # Reusable workflows don't automatically receive the caller's
       # secrets (even if they're configured in the repo's Settings) —
@@ -90,11 +80,14 @@ jobs:
         working-directory: ./web
 
   # Build, publish to Chromatic, and stage the frontend artifact. Depends only
-  # on the wasm artifact, not on lint/check/test. Skipped entirely unless the
-  # caller opted in via the `publish` input.
+  # on the wasm artifact, not on lint/check/test. Runs only when the `pages`
+  # workflow is manually dispatched from the Actions tab ("Run workflow") —
+  # on every other event (push, pull_request) the job is skipped entirely, so
+  # nothing can publish by accident. `github.event_name` passes through from
+  # the caller, so this works even inside a reusable workflow.
   build-publish:
     name: build-publish
-    if: ${{ inputs.publish == true }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
