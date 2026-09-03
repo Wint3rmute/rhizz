@@ -2,6 +2,17 @@ name: Frontend
 
 on:
   workflow_call:
+    inputs:
+      # When true, the build-publish job (frontend build + Chromatic upload
+      # + artifact staging) runs. The caller decides the trigger: release.yml
+      # publishes on a push to main whose (latest) commit message contains
+      # "chromatic", or on manual workflow_dispatch; ci.yml always passes
+      # false so PRs can never publish.
+      publish:
+        description: "Build and publish the frontend (Chromatic + artifact)"
+        required: false
+        type: boolean
+        default: false
     secrets:
       # Reusable workflows don't automatically receive the caller's
       # secrets (even if they're configured in the repo's Settings) —
@@ -79,15 +90,15 @@ jobs:
         run: deno run test --project=unit_tests
         working-directory: ./web
 
-  # Build, publish to Chromatic, and stage the frontend artifact. Depends only
-  # on the wasm artifact, not on lint/check/test. Runs only when the `pages`
-  # workflow is manually dispatched from the Actions tab ("Run workflow") —
-  # on every other event (push, pull_request) the job is skipped entirely, so
-  # nothing can publish by accident. `github.event_name` passes through from
-  # the caller, so this works even inside a reusable workflow.
+  # Build, publish to Chromatic, and stage the frontend artifact. Depends
+  # only on the wasm artifact, not on lint/check/test. Runs only when a
+  # caller opts in explicitly — release.yml's "chromatic"-tagged push, or a
+  # manual dispatch; ci.yml passes false so PRs never publish. The input is
+  # computed by the caller from the triggering event, so it still can't be
+  # triggered by accident.
   build-publish:
     name: build-publish
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ inputs.publish == true }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

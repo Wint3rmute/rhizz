@@ -43,5 +43,9 @@ jobs:
   frontend:
     needs: wasm
     uses: ./.github/workflows/frontend.yml
+    with:
+      # Never publish on PRs (or main pushes through ci) – that path lives
+      # in release.yml.
+      publish: false
     secrets:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}

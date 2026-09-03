@@ -3,10 +3,10 @@ name: pages
 on:
   push:
     branches: [main, master]
-  # Frontend publishing (Chromatic + GitHub Pages deploy) only happens when
-  # explicitly requested: run this workflow manually via the Actions tab
-  # ("Run workflow"). The frontend build-publish job runs only on
-  # workflow_dispatch, so regular pushes/PRs can never publish.
+  # Frontend publishing (Chromatic + GitHub Pages deploy) happens only when
+  # explicitly requested: push to main with "chromatic" in the (latest)
+  # commit message, or run this workflow manually via the Actions tab.
+  # Every other push skips the publish job.
   workflow_dispatch:
 
 permissions:
@@ -25,6 +25,13 @@ jobs:
   frontend:
     needs: wasm
     uses: ./.github/workflows/frontend.yml
+    with:
+      # The trigger: a push whose (latest) commit message contains
+      # "chromatic" (case-sensitive), or a manual dispatch. No other event
+      # can publish.
+      publish: ${{ github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' &&
+         contains(github.event.head_commit.message, 'chromatic')) }}
     secrets:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
