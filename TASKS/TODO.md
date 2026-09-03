@@ -13,6 +13,21 @@ How to work on this file:
 
 ---
 
+## Task <N> — Rewrite the book/ preprocessor in rust
+
+Currently, the book preprocessor is written in Python, which pulls an entirely
+new software stack into the project. I don't want it. Create a new crate
+"rhizz-book" under crates/, rewrite the current Python-based preprocessor into
+that new crate.
+
+Then, modify mdbook book.toml configuration to use the new binary target as the
+command to run as the preprocessor, something like:
+
+> command = "cargo run --bin rhizz-book"
+
+Ensure to trace the book building process end-to-end, from code, through manual
+tests, to CICD configuration.
+
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
