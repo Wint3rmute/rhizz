@@ -6,10 +6,20 @@ on:
       # When true, the build-publish job (frontend build + Chromatic upload
       # + artifact staging) runs. The caller decides the trigger: release.yml
       # publishes on a push to main whose (latest) commit message contains
-      # "chromatic", or on manual workflow_dispatch; ci.yml always passes
-      # false so PRs can never publish.
+      # "chromatic", on an open main-PR titled with "chromatic", or on
+      # manual workflow_dispatch; ci.yml always passes false so PRs can never
+      # publish.
       publish:
         description: "Build and publish the frontend (Chromatic + artifact)"
+        required: false
+        type: boolean
+        default: false
+      # When true, skip the lint/check-test jobs. ci.yml runs those (and
+      # gates on them); release.yml only needs the build-publish job, so it
+      # passes skipCheck: true to avoid re-running the same ~4min of checks
+      # twice on a push/PR that fires both workflows.
+      skipCheck:
+        description: "Skip the lint/check-test jobs (they run in ci.yml)"
         required: false
         type: boolean
         default: false
@@ -29,6 +39,7 @@ jobs:
   # pipeline.
   lint:
     name: lint
+    if: ${{ !inputs.skipCheck }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -62,6 +73,7 @@ jobs:
   # Type-checking and unit tests, independent of lint and of the build.
   check-test:
     name: check-test
+    if: ${{ !inputs.skipCheck }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

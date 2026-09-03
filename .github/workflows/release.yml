@@ -39,6 +39,9 @@ jobs:
          contains(github.event.head_commit.message, 'chromatic')) ||
         (github.event_name == 'pull_request' &&
          contains(github.event.pull_request.title, 'chromatic')) }}
+      # lint/check-test run in ci.yml for every push and PR — don't re-run
+      # them here (that's the duplicate pipeline you saw).
+      skipCheck: true
     secrets:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
@@ -47,6 +50,9 @@ jobs:
 
   deploy-pages:
     name: Deploy to GitHub Pages
+    # Pages is production: only ever deploy on a push to main/master (or a
+    # manual dispatch) — never from a pull_request, which is for previewing.
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     needs: [frontend, docs]
     runs-on: ubuntu-latest
     environment:
