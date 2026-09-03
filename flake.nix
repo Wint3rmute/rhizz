@@ -25,15 +25,9 @@
               pkgs.wasm-pack
               pkgs.deno
               pkgs.lld
-              pkgs.playwright-driver
               pkgs.flyctl
               pkgs.gh
             ];
-
-            # Use nixpkgs' patched Playwright browsers instead of downloading
-            # generic Linux binaries into ~/.cache/ms-playwright. Keep the
-            # web Playwright dependency pinned to playwright-driver.version.
-            PLAYWRIGHT_BROWSERS_PATH = pkgs.playwright-driver.browsers;
           };
         });
     };
