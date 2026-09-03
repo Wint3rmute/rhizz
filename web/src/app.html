@@ -1,6 +1,53 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
+    <script>
+      // Apply the theme before first paint to avoid flashing the wrong
+      // colors. Mirrors the logic in web/src/theme.ts (kept deliberately
+      // small and dependency-free): read the stored selection — accepting
+      // both the legacy raw format ("dark") and JSON-encoded values —
+      // and fall back to the browser's preferred color scheme ("auto").
+      (function () {
+        try {
+          var stored = localStorage.getItem("THEME");
+          var value = null;
+          if (typeof stored === "string") {
+            var trimmed = stored.trim();
+            if (trimmed === "auto" || trimmed === "light" || trimmed === "dark") {
+              value = trimmed;
+            } else {
+              try {
+                var parsed = JSON.parse(stored);
+                if (
+                  parsed === "auto" ||
+                  parsed === "light" ||
+                  parsed === "dark"
+                ) {
+                  value = parsed;
+                }
+              } catch (e) {
+                /* corrupt stored value — fall through to auto */
+              }
+            }
+          }
+          var prefersDark = false;
+          if (typeof window.matchMedia === "function") {
+            prefersDark = window.matchMedia(
+              "(prefers-color-scheme: dark)",
+            ).matches;
+          }
+          var theme =
+            value === "light" || value === "dark"
+              ? value
+              : prefersDark
+                ? "dark"
+                : "light";
+          document.documentElement.dataset.theme = theme;
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rhizz</title>

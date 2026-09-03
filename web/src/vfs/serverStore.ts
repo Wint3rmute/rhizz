@@ -60,11 +60,11 @@ export class ServerProjectStore implements ProjectStore {
     return ops.listProjects(await this.read());
   }
 
-  async createProject(name: string): Promise<Project> {
+  async createProject(name: string, id?: string): Promise<Project> {
     const data = await this.read();
     const { data: next, project } = ops.createProject(
       data,
-      crypto.randomUUID(),
+      id ?? crypto.randomUUID(),
       name,
       this.now(),
     );

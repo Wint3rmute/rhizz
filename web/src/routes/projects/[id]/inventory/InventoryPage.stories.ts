@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
+import type { Project } from "../../../../vfs/types";
 import {
   createProjectWithFiles,
   projectStore,
@@ -14,8 +15,13 @@ import {
 } from "../diagrams/persistence";
 import Inventory from "./Inventory.svelte";
 
-// Initialize WASM module before evaluating story models
-await init();
+// Deterministic project ids so story args can be built synchronously at
+// module scope while the async seeding runs lazily from loaders (top-level
+// await in story files races the vitest-addon's test registration — see
+// Explore.stories.ts).
+const SEEDED_PROJECT_ID = "story-inventory-main";
+const EMPTY_PROJECT_ID = "story-inventory-empty";
+const APOLLO_PROJECT_ID = "story-inventory-apollo";
 
 // A small definitions-first model: three top-level definitions with mixed
 // completion, plus a system that instantiates two of them.
@@ -111,12 +117,15 @@ const DEFINITION_DIAGRAMS: Record<string, DiagramLayout> = {
   },
 };
 
-async function ensureInventoryProject(name: string) {
+async function ensureInventoryProject(): Promise<Project> {
+  await init();
   const existing = await projectStore.listProjects();
-  let project = existing.find((p) => p.name === name);
-  project ??= await createProjectWithFiles(name, [
-    { path: "main.hcl", content: INVENTORY_HCL },
-  ]);
+  const project = existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
+    await createProjectWithFiles(
+      "Inventory story",
+      [{ path: "main.hcl", content: INVENTORY_HCL }],
+      SEEDED_PROJECT_ID,
+    );
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
     await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);
@@ -124,32 +133,29 @@ async function ensureInventoryProject(name: string) {
   return project;
 }
 
-const seededProject = await ensureInventoryProject("Inventory story");
-
 // An empty project: no definitions at all.
-async function ensureEmptyProject() {
+async function ensureEmptyProject(): Promise<Project> {
   const existing = await projectStore.listProjects();
-  return existing.find((p) => p.name === "Inventory empty story") ??
-    await createProjectWithFiles("Inventory empty story", [
-      { path: "main.hcl", content: 'project {\n  name    = "empty"\n}\n' },
-    ]);
+  return existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
+    await createProjectWithFiles(
+      "Inventory empty story",
+      [{ path: "main.hcl", content: 'project {\n  name    = "empty"\n}\n' }],
+      EMPTY_PROJECT_ID,
+    );
 }
-const emptyProject = await ensureEmptyProject();
 
-const apolloExample = get_example_projects().find((e) => e.id === "apollo-11");
-
-async function ensureApolloProject() {
+async function ensureApolloProject(): Promise<Project | undefined> {
+  await init();
+  const example = get_example_projects().find((e) => e.id === "apollo-11");
   const existing = await projectStore.listProjects();
-  const existingProject = existing.find(
-    (p) => p.name === "Inventory apollo story",
-  );
-  if (existingProject || !apolloExample) return existingProject;
+  const existingProject = existing.find((p) => p.id === APOLLO_PROJECT_ID);
+  if (existingProject || !example) return existingProject;
   return await createProjectWithFiles(
     "Inventory apollo story",
-    apolloExample.files,
+    example.files,
+    APOLLO_PROJECT_ID,
   );
 }
-const apolloProject = await ensureApolloProject();
 
 const meta = {
   title: "Pages/Inventory",
@@ -158,7 +164,7 @@ const meta = {
     layout: "fullscreen",
   },
   args: {
-    projectId: seededProject.id,
+    projectId: SEEDED_PROJECT_ID,
   },
 } satisfies Meta<typeof Inventory>;
 
@@ -170,12 +176,7 @@ export const Desktop: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
-  loaders: [
-    async () => {
-      await init();
-      return {};
-    },
-  ],
+  loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // All four definitions are listed; instances are not.
@@ -191,9 +192,11 @@ export const Mobile: Story = {
   parameters: {
     viewport: { defaultViewport: "mobile1" },
   },
+  loaders: [ensureInventoryProject],
 };
 
 export const MissingDefaultDiagram: Story = {
+  loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const card = canvas.getByText("draft-module");
@@ -209,8 +212,9 @@ export const MissingDefaultDiagram: Story = {
 
 export const EmptyModel: Story = {
   args: {
-    projectId: emptyProject.id,
+    projectId: EMPTY_PROJECT_ID,
   },
+  loaders: [ensureEmptyProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
@@ -221,6 +225,7 @@ export const EmptyModel: Story = {
 
 export const Apollo11: Story = {
   args: {
-    projectId: apolloProject?.id ?? null,
+    projectId: APOLLO_PROJECT_ID,
   },
+  loaders: [ensureApolloProject],
 };

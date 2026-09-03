@@ -4,6 +4,40 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 102 — Respect browser's default theme (Auto / Light / Dark)
+
+On startup the web app now follows the browser's preferred color scheme
+(`prefers-color-scheme`) instead of defaulting to dark, and only a manual
+user interaction "pins" the theme to a concrete Light/Dark value. The theme
+is a tri-state selection ("auto" | "light" | "dark", persisted under the
+existing `THEME` key) with a resolved "light"/"dark" that daisyUI actually
+applies.
+
+- **`web/src/theme.ts`** (new, pure & unit-tested — 17 tests):
+  `ThemeSelection`/`ResolvedTheme` types, `loadSelection` (tolerates corrupt
+  storage, accepts both the legacy raw format `"dark"` and JSON-encoded
+  values, falls back to "auto"), `resolveTheme` ("auto" maps to the OS
+  preference), and `nextSelectionOnToggle` (toggling always pins the
+  opposite of the currently applied theme).
+- **`web/src/ThemeState.svelte`**: thin Svelte wrapper over `theme.ts`.
+  `selection` + tracked `prefersDark` ($state), `matchMedia` change listener
+  so live OS theme switches apply while in Auto mode, `$effect.root` keeps
+  `<html data-theme>` and localStorage in sync, exports `getTheme`,
+  `getSelection`, `setSelection`, `toggleTheme`.
+- **`web/src/app.html`**: tiny dependency-free pre-paint script that reads
+  the stored selection + `matchMedia` and sets `data-theme` before first
+  paint — kills the wrong-theme flash for light-mode users (previously
+  hardcoded `data-theme="dark"`).
+- **`web/src/components/Navbar.svelte`**: desktop toggle unchanged in
+  behavior (now pins an explicit value when leaving Auto); the mobile menu's
+  single toggle became a tri-state picker (Auto / 🌙 Dark / ☀️ Light) using
+  daisyUI `join`, so users can explicitly unpin back to Auto.
+- **`web/src/components/Navbar.stories.ts`**: new `MobileThemePicker` story
+  exercising the tri-state row; uses CSF `beforeEach`/`afterEach` to pin a
+  concrete selection without leaking global ThemeState into other stories.
+
+---
+
 ## Task 101 — Inventory subpage (browse & inspect all model entities)
 
 Added an "Inventory" subpage at `/projects/[id]/inventory` that lists every

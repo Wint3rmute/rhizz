@@ -94,8 +94,9 @@ export async function refreshCurrentProject(): Promise<void> {
 export async function createProjectWithMainFile(
   name: string,
   content: string,
+  id?: string,
 ): Promise<Project> {
-  const project = await projectStore.createProject(name);
+  const project = await projectStore.createProject(name, id);
   await openProjectFs(projectStore, project.id).writeFile(
     "main.hcl",
     content,
@@ -126,8 +127,9 @@ export async function populateProjectFiles(
 export async function createProjectWithFiles(
   name: string,
   files: Array<{ path: string; content: string }>,
+  id?: string,
 ): Promise<Project> {
-  const project = await projectStore.createProject(name);
+  const project = await projectStore.createProject(name, id);
   const fs = openProjectFs(projectStore, project.id);
   await populateProjectFiles(fs, files);
   return project;

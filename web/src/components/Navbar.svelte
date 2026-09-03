@@ -1,7 +1,12 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
 import type { ProjectJS } from "rhizz";
-import { getTheme, toggleTheme } from "../ThemeState.svelte";
+import {
+  getSelection,
+  getTheme,
+  setSelection,
+  toggleTheme,
+} from "../ThemeState.svelte";
 import {
   getCurrentDiagnostics,
   getCurrentProject,
@@ -111,7 +116,7 @@ function closeMenu() {
         <button
           onclick={toggleTheme}
           class="btn btn-ghost btn-sm"
-          title="Toggle light/dark theme"
+          title="Toggle light/dark theme (pins the choice; Auto follows the browser preference)"
           type="button"
         >
           {getTheme() === "dark" ? "🌙" : "☀️"}
@@ -193,16 +198,30 @@ function closeMenu() {
         {/if}
       </div>
 
-      <!-- Mobile theme toggle -->
+      <!-- Mobile theme picker: Auto follows the browser preference;
+           picking Light/Dark explicitly pins the theme. -->
       <div class="flex items-center justify-between pt-1">
         <span class="text-xs text-base-content/70">Theme</span>
-        <button
-          onclick={toggleTheme}
-          class="btn btn-ghost btn-xs flex items-center gap-1.5"
-          type="button"
-        >
-          <span>{getTheme() === "dark" ? "🌙 Dark" : "☀️ Light"}</span>
-        </button>
+        <div class="join">
+          <button
+            onclick={() => setSelection("auto")}
+            class="btn btn-ghost btn-xs join-item {getSelection() === 'auto' ? 'btn-active' : ''}"
+            type="button"
+            title="Follow the browser's preferred color scheme"
+          >Auto</button>
+          <button
+            onclick={() => setSelection("dark")}
+            class="btn btn-ghost btn-xs join-item {getSelection() === 'dark' ? 'btn-active' : ''}"
+            type="button"
+            title="Always use dark theme"
+          >🌙 Dark</button>
+          <button
+            onclick={() => setSelection("light")}
+            class="btn btn-ghost btn-xs join-item {getSelection() === 'light' ? 'btn-active' : ''}"
+            type="button"
+            title="Always use light theme"
+          >☀️ Light</button>
+        </div>
       </div>
     </nav>
   {/if}

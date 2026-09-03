@@ -86,11 +86,11 @@ export class LocalStorageProjectStore implements ProjectStore {
     return this.run(() => ops.listProjects(this.read()));
   }
 
-  createProject(name: string): Promise<Project> {
+  createProject(name: string, id?: string): Promise<Project> {
     return this.run(() => {
       const { data, project } = ops.createProject(
         this.read(),
-        crypto.randomUUID(),
+        id ?? crypto.randomUUID(),
         name,
         this.now(),
       );

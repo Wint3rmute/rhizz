@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
+import type { Project } from "../../../../vfs/types";
 import {
   createProjectWithFiles,
   createProjectWithMainFile,
@@ -22,8 +23,25 @@ import {
 import { DOCS_DIR } from "./docs";
 import Explore from "./Explore.svelte";
 
-// Initialize WASM module before evaluating story models
-await init();
+// ---------------------------------------------------------------------------
+// Deterministic seeding contract.
+//
+// Storybook's vitest add-on registers one `test()` per story *while the story
+// module evaluates*, and that registration only works when module evaluation
+// is fully synchronous (top-level `await` races the browser runner's suite
+// bookkeeping — see the "Vitest failed to find the current suite" flake).
+// So nothing below awaits at module scope: async seeding is deferred into
+// per-story `loaders`, and story `args` reference deterministic project ids
+// derived here synchronously. Each seed looks up its project by that id and
+// creates it (with the same id) only if missing, so repeated runs — module
+// re-evaluation included — stay idempotent.
+// ---------------------------------------------------------------------------
+
+const SEEDED_PROJECT_ID = "story-explore-viewer";
+const MANY_DIAGRAMS_PROJECT_ID = "story-explore-many-diagrams";
+const CROSS_LEVEL_PROJECT_ID = "story-explore-cross-level";
+const APOLLO_PROJECT_ID = "story-explore-apollo-11";
+const SOFTWARE_HOUSE_PROJECT_ID = "story-explore-software-house";
 
 const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
 const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.hcl"];
@@ -206,13 +224,15 @@ const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
 };
 
 async function ensureProjectWithDiagrams(
+  id: string,
   name: string,
   diagrams: Record<string, DiagramLayout>,
   hclContent: string = EXAMPLE_SYSTEM_HCL,
 ) {
+  await init();
   const existing = await projectStore.listProjects();
-  let project = existing.find((p) => p.name === name);
-  project ??= await createProjectWithMainFile(name, hclContent);
+  const project = existing.find((p) => p.id === id) ??
+    await createProjectWithMainFile(name, hclContent, id);
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(diagrams)) {
     await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);
@@ -220,63 +240,96 @@ async function ensureProjectWithDiagrams(
   return project;
 }
 
-const seededProject = await ensureProjectWithDiagrams(
-  "Viewer story",
-  EXAMPLE_SYSTEM_DIAGRAMS,
-);
+// --- "Viewer story": the main seeded project, plus a doc file for the
+// sensor node so the hover popup has content to show. Docs are matched by
+// the component's unique label, so the doc key is the label ("sensor"),
+// not the full qualified path.
+async function ensureSeededProject(): Promise<Project> {
+  const project = await ensureProjectWithDiagrams(
+    SEEDED_PROJECT_ID,
+    "Viewer story",
+    EXAMPLE_SYSTEM_DIAGRAMS,
+  );
+  const fs = openProjectFs(projectStore, project.id);
+  await fs.mkdir(DOCS_DIR, { recursive: true });
+  await fs.writeFile(
+    `${DOCS_DIR}/sensor.md`,
+    `# Sensor\n\nThe **environmental sensor** reads temperature and humidity over I2C.`,
+  );
+  return project;
+}
 
-// Seed a doc for one component so the hover popup has content to show. Docs
-// are matched by the component's unique label, so the doc key is the label
-// ("sensor"), not the full qualified path.
-const fs = openProjectFs(projectStore, seededProject.id);
-await fs.mkdir(DOCS_DIR, { recursive: true });
-await fs.writeFile(
-  `${DOCS_DIR}/sensor.md`,
-  `# Sensor\n\nThe **environmental sensor** reads temperature and humidity over I2C.`,
-);
+async function ensureManyDiagramsProject(): Promise<Project> {
+  return ensureProjectWithDiagrams(
+    MANY_DIAGRAMS_PROJECT_ID,
+    "Many diagrams story",
+    manyDiagramsMap,
+  );
+}
 
-const manyDiagramsProject = await ensureProjectWithDiagrams(
-  "Many diagrams story",
-  manyDiagramsMap,
-);
+async function ensureCrossLevelProject(): Promise<Project> {
+  return ensureProjectWithDiagrams(
+    CROSS_LEVEL_PROJECT_ID,
+    "Cross level connections story",
+    CROSS_LEVEL_SYSTEM_DIAGRAMS,
+    CROSS_LEVEL_SYSTEM_HCL,
+  );
+}
 
-const crossLevelProject = await ensureProjectWithDiagrams(
-  "Cross level connections story",
-  CROSS_LEVEL_SYSTEM_DIAGRAMS,
-  CROSS_LEVEL_SYSTEM_HCL,
-);
-
-const apolloExample = get_example_projects().find((e) => e.id === "apollo-11");
-const softwareHouseExample = get_example_projects().find(
-  (e) => e.id === "software-house",
-);
-
-async function ensureApolloProject() {
+async function ensureApolloProject(): Promise<Project | undefined> {
+  const example = get_example_projects().find((e) => e.id === "apollo-11");
   const existing = await projectStore.listProjects();
-  let project = existing.find((p) => p.name === "Apollo 11 story");
-  if (!project && apolloExample) {
-    project = await createProjectWithFiles(
+  const project = existing.find((p) => p.id === APOLLO_PROJECT_ID);
+  if (!project && example) {
+    return createProjectWithFiles(
       "Apollo 11 story",
-      apolloExample.files,
+      example.files,
+      APOLLO_PROJECT_ID,
     );
   }
   return project;
 }
 
-async function ensureSoftwareHouseProject() {
+async function seedApolloProject(): Promise<void> {
+  await ensureApolloProject();
+  // Loaders in one array run concurrently, so the re-seed must not race
+  // the ensure — it runs only after the project exists, and writeFile
+  // updates (rather than re-creates) existing files.
+  await init();
+  const apolloExample = get_example_projects().find(
+    (e) => e.id === "apollo-11",
+  );
+  if (apolloExample) {
+    const fs = openProjectFs(projectStore, APOLLO_PROJECT_ID);
+    await populateProjectFiles(fs, apolloExample.files);
+  }
+}
+
+async function ensureSoftwareHouseProject(): Promise<Project | undefined> {
+  const example = get_example_projects().find((e) => e.id === "software-house");
   const existing = await projectStore.listProjects();
-  let project = existing.find((p) => p.name === "Software House story");
-  if (!project && softwareHouseExample) {
-    project = await createProjectWithFiles(
+  const project = existing.find((p) => p.id === SOFTWARE_HOUSE_PROJECT_ID);
+  if (!project && example) {
+    return createProjectWithFiles(
       "Software House story",
-      softwareHouseExample.files,
+      example.files,
+      SOFTWARE_HOUSE_PROJECT_ID,
     );
   }
   return project;
 }
 
-const apolloProject = await ensureApolloProject();
-const softwareHouseProject = await ensureSoftwareHouseProject();
+async function seedSoftwareHouseProject(): Promise<void> {
+  await ensureSoftwareHouseProject();
+  await init();
+  const softwareHouseExample = get_example_projects().find(
+    (e) => e.id === "software-house",
+  );
+  if (softwareHouseExample) {
+    const fs = openProjectFs(projectStore, SOFTWARE_HOUSE_PROJECT_ID);
+    await populateProjectFiles(fs, softwareHouseExample.files);
+  }
+}
 
 const meta = {
   title: "Pages/Explore",
@@ -285,7 +338,7 @@ const meta = {
     layout: "fullscreen",
   },
   args: {
-    projectId: seededProject.id,
+    projectId: SEEDED_PROJECT_ID,
   },
 } satisfies Meta<typeof Explore>;
 
@@ -297,20 +350,7 @@ export const Desktop: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
-  loaders: [
-    async () => {
-      await init();
-      const fs = openProjectFs(projectStore, seededProject.id);
-      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
-        await writeDiagramLayoutFile(
-          fs,
-          `${DIAGRAM_LAYOUT_DIR}/${name}`,
-          layout,
-        );
-      }
-      return {};
-    },
-  ],
+  loaders: [ensureSeededProject],
 };
 
 export const Mobile: Story = {
@@ -320,20 +360,7 @@ export const Mobile: Story = {
   parameters: {
     viewport: { defaultViewport: "mobile1" },
   },
-  loaders: [
-    async () => {
-      await init();
-      const fs = openProjectFs(projectStore, seededProject.id);
-      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
-        await writeDiagramLayoutFile(
-          fs,
-          `${DIAGRAM_LAYOUT_DIR}/${name}`,
-          layout,
-        );
-      }
-      return {};
-    },
-  ],
+  loaders: [ensureSeededProject],
 };
 
 export const MobileManyDiagrams: Story = {
@@ -344,52 +371,26 @@ export const MobileManyDiagrams: Story = {
     viewport: { defaultViewport: "mobile1" },
   },
   args: {
-    projectId: manyDiagramsProject.id,
+    projectId: MANY_DIAGRAMS_PROJECT_ID,
   },
-  loaders: [
-    async () => {
-      await init();
-      const fs = openProjectFs(projectStore, manyDiagramsProject.id);
-      for (const [name, layout] of Object.entries(manyDiagramsMap)) {
-        await writeDiagramLayoutFile(
-          fs,
-          `${DIAGRAM_LAYOUT_DIR}/${name}`,
-          layout,
-        );
-      }
-      return {};
-    },
-  ],
+  loaders: [ensureManyDiagramsProject],
 };
-
-async function seedCrossLevelDiagrams() {
-  await init();
-  const fs = openProjectFs(projectStore, crossLevelProject.id);
-  for (const [name, layout] of Object.entries(CROSS_LEVEL_SYSTEM_DIAGRAMS)) {
-    await writeDiagramLayoutFile(
-      fs,
-      `${DIAGRAM_LAYOUT_DIR}/${name}`,
-      layout,
-    );
-  }
-  return {};
-}
 
 export const CrossLevelConnections: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
   args: {
-    projectId: crossLevelProject.id,
+    projectId: CROSS_LEVEL_PROJECT_ID,
   },
-  loaders: [seedCrossLevelDiagrams],
+  loaders: [ensureCrossLevelProject],
 };
 
 export const DrillDownNavigation: Story = {
   args: {
-    projectId: crossLevelProject.id,
+    projectId: CROSS_LEVEL_PROJECT_ID,
   },
-  loaders: [seedCrossLevelDiagrams],
+  loaders: [ensureCrossLevelProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const controller = await canvas.findByRole("link", {
@@ -409,9 +410,9 @@ export const DrillDownNavigation: Story = {
 
 export const MissingDetailToast: Story = {
   args: {
-    projectId: crossLevelProject.id,
+    projectId: CROSS_LEVEL_PROJECT_ID,
   },
-  loaders: [seedCrossLevelDiagrams],
+  loaders: [ensureCrossLevelProject],
   play: async ({ canvasElement }) => {
     for (const toast of [...toastState.toasts]) toastState.dismiss(toast.id);
     const canvas = within(canvasElement);
@@ -429,9 +430,9 @@ export const MissingDetailToast: Story = {
 
 export const BreadcrumbNavigation: Story = {
   args: {
-    projectId: crossLevelProject.id,
+    projectId: CROSS_LEVEL_PROJECT_ID,
   },
-  loaders: [seedCrossLevelDiagrams],
+  loaders: [ensureCrossLevelProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const breadcrumb = await canvas.findByRole("navigation", {
@@ -445,22 +446,12 @@ export const BreadcrumbNavigation: Story = {
 
 export const EmbedDiagramButton: Story = {
   args: {
-    projectId: seededProject.id,
+    projectId: SEEDED_PROJECT_ID,
+    // Pin a deterministic origin so the embed URL in this story is stable
+    // across runs — Chromatic runners each get a different window.location.
+    embedBaseUrl: "https://rhizz.example.dev",
   },
-  loaders: [
-    async () => {
-      await init();
-      const fs = openProjectFs(projectStore, seededProject.id);
-      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
-        await writeDiagramLayoutFile(
-          fs,
-          `${DIAGRAM_LAYOUT_DIR}/${name}`,
-          layout,
-        );
-      }
-      return {};
-    },
-  ],
+  loaders: [ensureSeededProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // The embed button sits in the top bar of the Explore view.
@@ -484,18 +475,9 @@ export const Apollo11: Story = {
     viewport: { defaultViewport: "responsive" },
   },
   args: {
-    projectId: apolloProject?.id ?? seededProject.id,
+    projectId: APOLLO_PROJECT_ID,
   },
-  loaders: [
-    async () => {
-      await init();
-      if (apolloProject && apolloExample) {
-        const fs = openProjectFs(projectStore, apolloProject.id);
-        await populateProjectFiles(fs, apolloExample.files);
-      }
-      return {};
-    },
-  ],
+  loaders: [seedApolloProject],
 };
 
 export const SoftwareHouse: Story = {
@@ -503,38 +485,16 @@ export const SoftwareHouse: Story = {
     viewport: { defaultViewport: "responsive" },
   },
   args: {
-    projectId: softwareHouseProject?.id ?? seededProject.id,
+    projectId: SOFTWARE_HOUSE_PROJECT_ID,
   },
-  loaders: [
-    async () => {
-      await init();
-      if (softwareHouseProject && softwareHouseExample) {
-        const fs = openProjectFs(projectStore, softwareHouseProject.id);
-        await populateProjectFiles(fs, softwareHouseExample.files);
-      }
-      return {};
-    },
-  ],
+  loaders: [seedSoftwareHouseProject],
 };
 
 export const HoverDocPopup: Story = {
   args: {
-    projectId: seededProject.id,
+    projectId: SEEDED_PROJECT_ID,
   },
-  loaders: [
-    async () => {
-      await init();
-      const fs = openProjectFs(projectStore, seededProject.id);
-      for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
-        await writeDiagramLayoutFile(
-          fs,
-          `${DIAGRAM_LAYOUT_DIR}/${name}`,
-          layout,
-        );
-      }
-      return {};
-    },
-  ],
+  loaders: [ensureSeededProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 

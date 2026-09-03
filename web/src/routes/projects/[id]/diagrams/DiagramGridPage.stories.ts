@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, waitFor, within } from "storybook/test";
-import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
 import {
   createProjectWithFiles,
@@ -8,7 +7,11 @@ import {
 } from "../../../../ProjectState.svelte";
 import DiagramPage from "./+page.svelte";
 
-await init();
+// Deterministic project id so story args can be built synchronously at
+// module scope while the async (re)seeding runs lazily from loaders —
+// top-level await in story files races the vitest-addon's test
+// registration (see Explore.stories.ts).
+const GRID_PROJECT_ID = "story-diagrams-grid";
 
 // Storybook groups every story in a file under its default meta, so the
 // grid stories deliberately live in their own file with their own meta —
@@ -98,19 +101,19 @@ async function ensureGridProject(): Promise<Project> {
   // in the shared chromium profile), so an existing project can't be
   // trusted to still match the fixtures below.
   const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.name === "Graduated grid story"
-  );
+  const stale = existing.find((candidate) => candidate.id === GRID_PROJECT_ID);
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
   }
-  return createProjectWithFiles("Graduated grid story", [
-    { path: "system.hcl", content: GRID_SYSTEM_HCL },
-    { path: "diagrams/main.hcl", content: GRID_VIEWS_HCL },
-  ]);
+  return createProjectWithFiles(
+    "Graduated grid story",
+    [
+      { path: "system.hcl", content: GRID_SYSTEM_HCL },
+      { path: "diagrams/main.hcl", content: GRID_VIEWS_HCL },
+    ],
+    GRID_PROJECT_ID,
+  );
 }
-
-const gridProject: Project = await ensureGridProject();
 
 const meta = {
   title: "Pages/Diagrams/Grid Graduations",
@@ -146,12 +149,13 @@ function patternIds(canvasElement: HTMLElement): string[] {
 export const GridGraduationsEnabled: Story = {
   args: {
     params: {
-      id: gridProject.id,
+      id: GRID_PROJECT_ID,
     },
     data: {
-      projectId: gridProject.id,
+      projectId: GRID_PROJECT_ID,
     },
   },
+  loaders: [ensureGridProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -185,12 +189,13 @@ export const GridGraduationsEnabled: Story = {
 export const GridToggledOff: Story = {
   args: {
     params: {
-      id: gridProject.id,
+      id: GRID_PROJECT_ID,
     },
     data: {
-      projectId: gridProject.id,
+      projectId: GRID_PROJECT_ID,
     },
   },
+  loaders: [ensureGridProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
