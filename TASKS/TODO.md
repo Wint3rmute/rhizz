@@ -13,6 +13,13 @@ How to work on this file:
 
 ---
 
+## Task <N> — Respect browser's default theme
+
+Upon startup, Rhizz web app should first determine what's the theme preferred by the
+browser. Once it figures it out, it should apply the theme. Later, only a manual
+change of the theme by the user shall "pin" the theme into a specific value.
+Something like "auto" vs "dark" vs "light".
+
 ## Task <N> — Unified command-based transaction history (Undo/Redo)
 
 Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
