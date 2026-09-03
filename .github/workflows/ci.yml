@@ -78,8 +78,10 @@ jobs:
       - uses: peaceiris/actions-mdbook@v2
         with:
           mdbook-version: "0.5.4"
-          # The preprocessor finds the CLI in target/debug/rhizz.
-      - run: cargo build --bin rhizz --quiet
+          # The Rust preprocessor (crates/rhizz-book) is spawned via
+          # `cargo run`; pre-building keeps its probe/run fast. The compiler
+          # runs in-process, so no rhizz binary is needed here.
+      - run: cargo build --bin rhizz-book --quiet
 
       - run: mdbook build book
 

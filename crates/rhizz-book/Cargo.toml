@@ -1,0 +1,18 @@
+[package]
+name = "rhizz-book"
+version = "0.1.0"
+edition = "2024"
+description = "mdBook preprocessor that compiles ```rhizz code blocks with the rhizz compiler and verifies them against book.lock"
+
+[lints]
+workspace = true
+
+[dependencies]
+rhizz-core = { path = "../rhizz-core" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"

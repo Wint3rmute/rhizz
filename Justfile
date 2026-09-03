@@ -26,7 +26,6 @@ lint:
 test:
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
-    {{run}} sh -lc 'cd book/preprocessors && python3 -m unittest -q'
 
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
@@ -36,17 +35,18 @@ build:
     {{run}} sh -lc 'cd web && dx storybook build'
     {{run}} cargo build --release --all-targets
 
-# Builds the mdBook (book/). The preprocessor compiles every ```rhizz block
-# with the current CLI and verifies the results against book/book.lock
-# (regenerate with `just book-accept` after intentional changes).
+# Builds the mdBook (book/). The preprocessor (crates/rhizz-book) compiles
+# every ```rhizz block in-process and verifies the results against
+# book/book.lock (regenerate with `just book-accept` after intentional
+# changes).
 book:
-    {{run}} cargo build --quiet --bin rhizz
+    {{run}} cargo build --quiet --bin rhizz-book
     {{run}} mdbook build book
 
 # Regenerates book/book.lock from the current compiler output.
 # Review the per-block diff it prints before committing.
 book-accept:
-    {{run}} cargo build --quiet --bin rhizz
+    {{run}} cargo build --quiet --bin rhizz-book
     {{run}} sh -lc 'BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book'
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
