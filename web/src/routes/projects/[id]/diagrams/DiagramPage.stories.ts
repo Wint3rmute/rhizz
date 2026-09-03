@@ -8,7 +8,12 @@ import {
 } from "../../../../ProjectState.svelte";
 import DiagramPage from "./+page.svelte";
 
-await init();
+// Deterministic project ids so story args can be built synchronously at
+// module scope while the async seeding runs lazily from loaders (top-level
+// await in story files races the vitest-addon's test registration — see
+// Explore.stories.ts).
+const BROKEN_PROJECT_ID = "story-diagrams-broken";
+const LONG_ERROR_PROJECT_ID = "story-diagrams-long-error";
 
 const INVALID_SYSTEM_HCL = `project {
   name = "broken-project"
@@ -54,29 +59,30 @@ system "demo" {
 `;
 
 async function ensureBrokenProject(): Promise<Project> {
+  await init();
   const existing = await projectStore.listProjects();
   const project = existing.find((candidate) =>
-    candidate.name === "Broken diagram story"
+    candidate.id === BROKEN_PROJECT_ID
   );
   return project ?? await createProjectWithMainFile(
     "Broken diagram story",
     INVALID_SYSTEM_HCL,
+    BROKEN_PROJECT_ID,
   );
 }
 
 async function ensureLongErrorProject(): Promise<Project> {
+  await init();
   const existing = await projectStore.listProjects();
   const project = existing.find((candidate) =>
-    candidate.name === "Long error diagram story"
+    candidate.id === LONG_ERROR_PROJECT_ID
   );
   return project ?? await createProjectWithMainFile(
     "Long error diagram story",
     LONG_ERROR_HCL,
+    LONG_ERROR_PROJECT_ID,
   );
 }
-
-const brokenProject: Project = await ensureBrokenProject();
-const longErrorProject: Project = await ensureLongErrorProject();
 
 const meta = {
   title: "Pages/Diagrams/Compilation Error",
@@ -86,7 +92,7 @@ const meta = {
   },
   args: {
     data: {
-      projectId: brokenProject.id,
+      projectId: BROKEN_PROJECT_ID,
     },
   },
 } satisfies Meta<typeof DiagramPage>;
@@ -97,12 +103,13 @@ type Story = StoryObj<typeof meta>;
 export const DuplicateProjectBlock: Story = {
   args: {
     params: {
-      id: brokenProject.id,
+      id: BROKEN_PROJECT_ID,
     },
     data: {
-      projectId: brokenProject.id,
+      projectId: BROKEN_PROJECT_ID,
     },
   },
+  loaders: [ensureBrokenProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -117,7 +124,7 @@ export const DuplicateProjectBlock: Story = {
     const editorLink = canvas.getByRole("link", { name: "Open Editor to Fix" });
     await expect(editorLink).toHaveAttribute(
       "href",
-      expect.stringContaining(`/projects/${brokenProject.id}/editor`),
+      expect.stringContaining(`/projects/${BROKEN_PROJECT_ID}/editor`),
     );
   },
 };
@@ -125,12 +132,13 @@ export const DuplicateProjectBlock: Story = {
 export const LongErrorMessageWraps: Story = {
   args: {
     params: {
-      id: longErrorProject.id,
+      id: LONG_ERROR_PROJECT_ID,
     },
     data: {
-      projectId: longErrorProject.id,
+      projectId: LONG_ERROR_PROJECT_ID,
     },
   },
+  loaders: [ensureLongErrorProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -149,12 +157,13 @@ export const LongErrorMessageWraps: Story = {
 export const CopyDebugInfoButton: Story = {
   args: {
     params: {
-      id: brokenProject.id,
+      id: BROKEN_PROJECT_ID,
     },
     data: {
-      projectId: brokenProject.id,
+      projectId: BROKEN_PROJECT_ID,
     },
   },
+  loaders: [ensureBrokenProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 

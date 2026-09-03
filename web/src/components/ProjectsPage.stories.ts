@@ -1,13 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
-import init from "rhizz";
 import { get_example_projects } from "../rhizz_wasm_wrapper";
 import type { Project } from "../vfs/types";
 import ProjectsPage from "./ProjectsPage.svelte";
-
-// The examples modal needs the compiled WASM (bundled example projects),
-// so initialize it up front like the other page-level stories do.
-await init();
 
 const sampleProject = (
   id: string,

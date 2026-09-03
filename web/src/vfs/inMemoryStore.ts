@@ -34,11 +34,11 @@ export class InMemoryProjectStore implements ProjectStore {
     return this.run(() => ops.listProjects(this.data));
   }
 
-  createProject(name: string): Promise<Project> {
+  createProject(name: string, id?: string): Promise<Project> {
     return this.run(() => {
       const { data, project } = ops.createProject(
         this.data,
-        crypto.randomUUID(),
+        id ?? crypto.randomUUID(),
         name,
         this.now(),
       );

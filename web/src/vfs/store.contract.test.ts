@@ -31,6 +31,21 @@ export function runProjectStoreContractTests(
         expect(await store.listProjects()).toEqual([project]);
       });
 
+      it("honours a caller-supplied deterministic id", async () => {
+        const store = makeStore();
+        const project = await store.createProject(
+          "viewer story",
+          "story-viewer",
+        );
+        expect(project.id).toBe("story-viewer");
+        expect(project.name).toBe("viewer story");
+        // Repeated seeding with the same id + name stays single: the id is
+        // stable, so a caller can derive it synchronously at module scope
+        // while the async "ensure exists" seeding runs later.
+        const [listed] = await store.listProjects();
+        expect(listed?.id).toBe("story-viewer");
+      });
+
       it("deletes a project", async () => {
         const store = makeStore();
         const project = await store.createProject("temp");
