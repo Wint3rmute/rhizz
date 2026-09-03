@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mdbook preprocessor for ```rhizz code blocks.
+"""mdbook preprocessor for ```rhizz code blocks, with book.lock golden checks.
 
 Each fenced block tagged `rhizz` is written to a temp project, compiled with
 the rhizz CLI (`--json build`), and replaced by the original HCL code block
@@ -12,6 +12,34 @@ plus an HTML panel summarizing the compiler's verdict:
 
 Block attributes after the tag (e.g. ```rhizz,ignore) are supported: `ignore`
 renders the code without compiling it.
+
+Golden-file verification (`book/book.lock`)
+-------------------------------------------
+
+The preprocessor also acts as a guard against silently drifting documentation:
+every compiled block is traced from its HCL input to its normalized compiler
+output ({errors, warnings, score}) and compared against `book/book.lock`
+inside the book directory:
+
+- key = (chapter path, sha256 of the exact HCL input), value = normalized
+  compiler output;
+- on a normal build a mismatch (changed output, new block, removed block,
+  missing or corrupt lock file) aborts the build with a per-entry diff;
+- set `BOOKLOCK_ACCEPT_CHANGES=1` to regenerate `book/book.lock` in place
+  (review the diff it prints before committing).
+
+Normalization keeps the comparison deterministic:
+
+- diagnostics are sorted by (code, line, message) so compiler reordering
+  cannot cause spurious failures;
+- the `file` field of a diagnostic is dropped (its value is a tempdir path
+  that legitimately changes between runs);
+- the lock is written as indented, key-sorted JSON.
+
+Metadata (`format` number, `rhizz_version`) is stored for humans and is not
+part of the comparison. A state where the compiler could not run (missing
+binary, per-block tool failures) is never locked and always fails the build:
+a lock must mean "the current toolchain produced exactly this output".
 
 Requires only the Python standard library. The rhizz binary is located via
 $RHIZZ_BIN, then $PATH, then the repository's target/{release,debug} dirs.
@@ -34,6 +62,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+LOCK_FILE = REPO_ROOT / "book" / "book.lock"
+LOCK_FORMAT = 1
 
 # ```
 _FENCE_OPEN_RE = re.compile(r"^[ \t]*```[ \t]*rhizz[ \t]*(.*)$")
@@ -58,6 +88,16 @@ def find_rhizz() -> str | None:
 
 
 RHIZZ_BIN = find_rhizz()
+
+
+def accept_changes_enabled() -> bool:
+    """True when book.lock may be regenerated from current compiler output."""
+    return os.environ.get("BOOKLOCK_ACCEPT_CHANGES", "").lower() not in ("", "0", "false", "no")
+
+
+def die(message: str) -> None:
+    sys.stderr.write(f"book.lock: {message}\n")
+    sys.exit(1)
 
 
 def parse_block_attrs(raw: str) -> set[str]:
@@ -128,6 +168,143 @@ def compile_one(content: str) -> dict:
         return {"tool_error": f"{type(exc).__name__}: {exc}"}
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def rhizz_version(bin_path: str | None) -> str | None:
+    """Best-effort `rhizz --version` output; None when unavailable."""
+    if not bin_path:
+        return None
+    try:
+        proc = subprocess.run([bin_path, "--version"], capture_output=True, text=True, timeout=30)
+        return (proc.stdout or proc.stderr).strip() or None
+    except Exception:  # noqa: BLE001 - metadata only, never fatal
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Normalization: turn raw `--json build` dicts into the deterministic form
+# that book.lock compares.
+# ---------------------------------------------------------------------------
+
+
+def normalize_diag(d: dict) -> dict:
+    """Keep code / line / message; drop `file` (a tempdir path that changes)."""
+    out = {"code": str(d.get("code", ""))}
+    line = d.get("line")
+    if line is not None:
+        out["line"] = int(line)
+    out["message"] = str(d.get("message", ""))
+    return out
+
+
+def diag_sort_key(d: dict):
+    return (d.get("code", ""), d.get("line", -1), d.get("message", ""))
+
+
+def normalize_output(raw: dict) -> dict | None:
+    """Return the comparable {errors, warnings, score} for a compile result.
+
+    Returns None when the compile did not run (`tool_error`). Such a state is
+    never written to book.lock and never accepted as a match — a lock must
+    always describe what the current toolchain really produced.
+    """
+    if raw.get("tool_error"):
+        return None
+    out = {
+        "errors": sorted((normalize_diag(e) for e in raw.get("errors") or []), key=diag_sort_key),
+        "warnings": sorted((normalize_diag(w) for w in raw.get("warnings") or []), key=diag_sort_key),
+    }
+    if raw.get("score"):
+        out["score"] = raw["score"]
+    return out
+
+
+# ---------------------------------------------------------------------------
+# The lock file.
+# ---------------------------------------------------------------------------
+
+
+def lock_payload(entries: list[dict], compiler_version: str | None) -> dict:
+    return {
+        "format": LOCK_FORMAT,
+        "rhizz_version": compiler_version or "unknown",
+        "entries": sorted(entries, key=lambda e: (e["chapter"], e["input_sha256"])),
+    }
+
+
+def write_lock(entries: list[dict], compiler_version: str | None) -> None:
+    text = json.dumps(lock_payload(entries, compiler_version), indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    tmp = LOCK_FILE.with_name(LOCK_FILE.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, LOCK_FILE)
+
+
+def read_lock() -> tuple[dict | None, str | None]:
+    """Return (parsed lock, error). A missing file is (None, None)."""
+    try:
+        return json.loads(LOCK_FILE.read_text(encoding="utf-8")), None
+    except FileNotFoundError:
+        return None, None
+    except Exception as exc:  # noqa: BLE001 - corrupt file is a hard failure
+        return None, f"{LOCK_FILE} exists but cannot be parsed: {exc}"
+
+
+def render_output(out) -> str:
+    return json.dumps(out, sort_keys=True, ensure_ascii=False)
+
+
+def compare_lock(lock: dict, blocks: dict, current_version: str | None) -> tuple[list[str], list[str]]:
+    """Diff the current blocks against the lock.
+
+    Returns (diffs, notes). Diffs abort the build (unless accepting);
+    notes are informational (metadata drift, not output drift).
+    """
+    diffs: list[str] = []
+    notes: list[str] = []
+
+    if lock.get("format") != LOCK_FORMAT:
+        diffs.append(
+            f"{LOCK_FILE} uses lock format {lock.get('format')!r}, expected {LOCK_FORMAT} "
+            f"(regenerate with BOOKLOCK_ACCEPT_CHANGES=1)"
+        )
+        return diffs, notes
+
+    locked = {(e.get("chapter"), e.get("input_sha256")): e for e in lock.get("entries") or []}
+
+    for (chapter, sha), block in sorted(blocks.items()):
+        if (chapter, sha) not in locked:
+            diffs.append(
+                f"new block in {chapter!r} (input {sha[:8]}) is not present in book.lock"
+            )
+            continue
+        old = locked[(chapter, sha)].get("output")
+        new = block.get("output")
+        if old != new:
+            diffs.append(
+                f"output changed for block in {chapter!r} (input {sha[:8]}):\n"
+                f"    lock: {render_output(old)}\n"
+                f"    now:  {render_output(new)}"
+            )
+
+    for (chapter, sha), entry in sorted(locked.items()):
+        if (chapter, sha) not in blocks:
+            diffs.append(
+                f"block in {chapter!r} (input {sha[:8]}) was removed from the book "
+                f"but is still present in book.lock"
+            )
+
+    locked_version = lock.get("rhizz_version")
+    if locked_version and current_version and locked_version != current_version:
+        notes.append(
+            f"book.lock was generated with {locked_version!r}, the current compiler "
+            f"reports {current_version!r} (outputs still match)"
+        )
+    return diffs, notes
+
+
+# ---------------------------------------------------------------------------
+# Rendering.
+# ---------------------------------------------------------------------------
 
 
 def esc(value) -> str:
@@ -209,75 +386,74 @@ def panel_html(data: dict) -> str:
 IGNORE_PANEL = '<div class="rhizz-diag rhizz-ignore"><div class="rhizz-head">Not compiled in this book</div></div>'
 
 
-def transform_content(content: str) -> str:
-    """Replace every ```rhizz block with ```hcl + a compilation results panel."""
+def body_hash(body: str) -> str:
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def transform_chapter(chapter: dict, results: dict[str, dict]) -> tuple[str, dict]:
+    """Replace every ```rhizz block with ```hcl + a verdict panel.
+
+    Returns (new content, {(chapter, sha): block entry}) where each entry is
+    {"chapter", "input_sha256", "hcl", "output"} — the tracing written to
+    book.lock. Block output may be None when the tool failed; callers treat
+    that as a degraded environment.
+    """
+    content = chapter.get("content") or ""
+    chapter_path = chapter.get("path") or chapter.get("source_path") or chapter.get("name") or "<unknown>"
     segments = parse_blocks(content.splitlines())
 
-    # Collect unique block bodies (compile each distinct model once).
-    unique: dict[str, str] = {}
-    for seg in segments:
-        if seg[0] == "block":
-            _, attrs, body = seg
-            if "ignore" not in attrs:
-                key = hashlib.sha256("\n".join(body).encode("utf-8")).hexdigest()
-                unique[key] = "\n".join(body)
-
-    results: dict[str, dict] = {}
-    if unique:
-        with ThreadPoolExecutor(max_workers=MAX_COMPILE_WORKERS) as pool:
-            for key, data in zip(unique.keys(), pool.map(compile_one, unique.values())):
-                results[key] = data
-
     out: list[str] = []
+    blocks: dict[tuple[str, str], dict] = {}
     for seg in segments:
         if seg[0] == "text":
             out.extend(seg[1])
             continue
-        _, attrs, body = seg
+        _, attrs, body_lines = seg
+        body = "\n".join(body_lines)
+        sha = body_hash(body)
+
         out.append("```hcl")
-        out.extend(body)
+        out.extend(body_lines)
         out.append("```")
         out.append("")
         if "ignore" in attrs:
             out.append(IGNORE_PANEL)
-        else:
-            key = hashlib.sha256("\n".join(body).encode("utf-8")).hexdigest()
-            try:
-                out.append(panel_html(results[key]))
-            except Exception as exc:  # noqa: BLE001 - never break the book over one panel
-                out.append(
-                    f'<div class="rhizz-diag rhizz-tool"><div class="rhizz-head">'
-                    f"\u26a0 Panel error</div><p class=\"rhizz-msg\">{esc(exc)}</p></div>"
-                )
+            out.append("")
+            continue
+
+        raw = results.get(sha, {"tool_error": "no compile result recorded"})
+        blocks[(chapter_path, sha)] = {
+            "chapter": chapter_path,
+            "input_sha256": sha,
+            "hcl": body,
+            "output": normalize_output(raw),
+        }
+        out.append(panel_html(raw))
         out.append("")
-    return "\n".join(out)
+
+    return "\n".join(out), blocks
 
 
-def process_item(item: dict) -> None:
-    kind = item.get("Chapter")
-    if kind:
-        process_chapter(kind)
+# ---------------------------------------------------------------------------
+# mdbook traversal.
+# ---------------------------------------------------------------------------
 
 
-def process_chapter(chapter: dict) -> None:
-    content = chapter.get("content")
-    if isinstance(content, str):
-        chapter["content"] = transform_content(content)
-    for sub in chapter.get("sub_items") or []:
-        if isinstance(sub, dict):
-            process_item(sub)
-
-
-def process_section(section: dict) -> None:
-    chapter = section.get("Chapter")
-    if not chapter:
-        return
-    content = chapter.get("content")
-    if isinstance(content, str):
-        chapter["content"] = transform_content(content)
-    for sub in chapter.get("sub_items") or []:
-        if isinstance(sub, dict):
-            process_section(sub)
+def iter_chapters(items) -> list[dict]:
+    """Flatten mdbook's book items into the chapter dicts, depth-first."""
+    chapters: list[dict] = []
+    stack = list(items or [])
+    while stack:
+        item = stack.pop()
+        if not isinstance(item, dict):
+            continue
+        chapter = item.get("Chapter")
+        if isinstance(chapter, dict):
+            chapters.append(chapter)
+            stack.extend(chapter.get("sub_items") or [])
+        else:
+            stack.extend(item.get("sub_items") or [])
+    return chapters
 
 
 def main() -> None:
@@ -295,12 +471,72 @@ def main() -> None:
         json.dump({"items": []}, sys.stdout)
         return
 
-    ctx, book = json.loads(raw)
-    for item in book.get("items") or []:
-        if isinstance(item, dict):
-            process_item(item)
+    _ctx, book = json.loads(raw)
+    chapters = iter_chapters(book.get("items") or [])
 
-    # mdbook expects a Book object (same shape) back, not the tuple.
+    # Degraded environment: cannot compile -> cannot verify -> must not lock.
+    if RHIZZ_BIN is None:
+        die("rhizz binary not found (set $RHIZZ_BIN or add it to PATH); cannot compile blocks or verify book.lock")
+
+    # Compile each distinct HCL body once.
+    unique_bodies: dict[str, str] = {}
+    for ch in chapters:
+        for seg in parse_blocks((ch.get("content") or "").splitlines()):
+            if seg[0] == "block" and "ignore" not in seg[1]:
+                unique_bodies.setdefault(body_hash("\n".join(seg[2])), "\n".join(seg[2]))
+
+    results: dict[str, dict] = {}
+    if unique_bodies:
+        with ThreadPoolExecutor(max_workers=MAX_COMPILE_WORKERS) as pool:
+            for sha, data in zip(unique_bodies.keys(), pool.map(compile_one, unique_bodies.values())):
+                results[sha] = data
+
+    # Transform every chapter, collecting the input -> output trace.
+    entries: dict[tuple[str, str], dict] = {}
+    degraded: list[str] = []
+    for ch in chapters:
+        new_content, chapter_entries = transform_chapter(ch, results)
+        ch["content"] = new_content
+        for key, entry in chapter_entries.items():
+            entries[key] = entry
+            if entry["output"] is None:
+                degraded.append(f"{entry['chapter']!r} (input {entry['input_sha256'][:8]})")
+
+    if degraded:
+        die(
+            "cannot verify book.lock: the compiler failed for block(s) "
+            + ", ".join(degraded)
+            + "; fix the toolchain first"
+        )
+
+    # book.lock verification.
+    current_version = rhizz_version(RHIZZ_BIN)
+    lock, lock_error = read_lock()
+    if lock_error:
+        die(f"{lock_error}; delete it and regenerate with BOOKLOCK_ACCEPT_CHANGES=1")
+
+    if lock is None:
+        if accept_changes_enabled():
+            write_lock(list(entries.values()), current_version)
+            sys.stderr.write(f"book.lock: generated {len(entries)} entries\n")
+        else:
+            die(
+                f"{LOCK_FILE} not found; generate it once with BOOKLOCK_ACCEPT_CHANGES=1"
+            )
+    else:
+        diffs, notes = compare_lock(lock, entries, current_version)
+        if diffs:
+            rendered = "\n".join(f"  - {d}" for d in diffs)
+            if accept_changes_enabled():
+                write_lock(list(entries.values()), current_version)
+                sys.stderr.write(f"book.lock regenerated ({len(entries)} entries):\n{rendered}\n")
+            else:
+                sys.stderr.write(f"book.lock is out of date ({len(diffs)} difference(s)):\n{rendered}\n")
+                die("re-run with BOOKLOCK_ACCEPT_CHANGES=1 to regenerate book.lock")
+        else:
+            for note in notes:
+                sys.stderr.write(f"book.lock: note: {note}\n")
+
     json.dump(book, sys.stdout, ensure_ascii=False)
 
 

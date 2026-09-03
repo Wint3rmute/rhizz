@@ -83,6 +83,27 @@ environment.
 > wins). This is an accepted limitation for the current MVP stage; a
 > revision/ETag check is planned before multi-user use.
 
+## Documentation (book)
+
+The mdBook in `book/` documents the language with live examples: its preprocessor
+compiles every ```rhizz block with the current `rhizz` CLI and renders a verdict
+panel (errors, warnings, completion score).
+
+Compiler outputs of the examples are traced in `book/book.lock` (keyed by chapter
+and input hash). Any build that produces different output — a stale example, or a
+compiler change that alters its diagnostics — **fails** with a per-block diff:
+
+```
+just book          # build + verify book.lock
+```
+
+To intentionally regenerate the lock (after fixing examples or changing the
+compiler), review the printed diff and commit the result:
+
+```
+just book-accept   # BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book
+```
+
 ## Development commands
 
 See the [Justfile](Justfile).

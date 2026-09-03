@@ -63,6 +63,26 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  # Builds the mdBook with the current compiler and verifies that the
+  # compiled ```rhizz blocks still match book/book.lock. Any drift in the
+  # book's examples or the compiler's diagnostics fails this job.
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: "0.5.4"
+          # The preprocessor finds the CLI in target/debug/rhizz.
+      - run: cargo build --bin rhizz --quiet
+
+      - run: mdbook build book
+
   frontend:
     needs: wasm
     runs-on: ubuntu-latest

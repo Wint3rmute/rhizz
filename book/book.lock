@@ -1,0 +1,103 @@
+{
+  "entries": [
+    {
+      "chapter": "greeter.md",
+      "hcl": "project {\n  name = \"greeter\"\n}\n\nprotocol \"greeting\" {\n  description = \"A simple greeting\"\n\n  message \"hello\" {\n    description = \"The greeting payload\"\n    field \"text\" { type = \"string\" }\n  }\n}\n\nsystem \"app\" {\n  description = \"A minimal two-component model\"\n\n  component \"sender\" {\n    description = \"Sends a greeting\"\n    leaf        = true\n\n    port \"out\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  component \"receiver\" {\n    description = \"Receives a greeting\"\n    leaf        = true\n\n    port \"in\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  connection \"greet\" {\n    description = \"Carries the greeting\"\n    from        = \"sender/out\"\n    to          = \"receiver/in\"\n  }\n}",
+      "input_sha256": "8524fa00c3378f9180548b8eac3376979f955fe5a5e000d06b3f0c3c04ef31e8",
+      "output": {
+        "errors": [
+          {
+            "code": "E011",
+            "message": "connection 'greet' references undefined component 'receiver' in 'to'"
+          },
+          {
+            "code": "E011",
+            "message": "connection 'greet' references undefined component 'sender' in 'from'"
+          }
+        ],
+        "warnings": [
+          {
+            "code": "W005",
+            "message": "connection 'greet' has 'from' and 'to' pointing to the same component"
+          },
+          {
+            "code": "W012",
+            "message": "top-level protocol 'greeting' is not referenced by any port"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "sketch.md",
+      "hcl": "project {\n  name = \"sketch\"\n}\n\nprotocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  component \"controller\" {\n    leaf = true\n\n    port \"uart\" {\n      protocol = \"serial\"\n    }\n  }\n\n  component \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
+      "input_sha256": "b152e530691ecdfad4caa46930628fb375578bf1de9b57ad0b8d770a8d60644c",
+      "output": {
+        "errors": [
+          {
+            "code": "E011",
+            "message": "connection 'link' references undefined component 'controller' in 'from'"
+          },
+          {
+            "code": "E011",
+            "message": "connection 'link' references undefined component 'sensor' in 'to'"
+          }
+        ],
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'sensor-hat' is not referenced by any connection"
+          },
+          {
+            "code": "W004",
+            "message": "connection 'link' is missing a description"
+          },
+          {
+            "code": "W005",
+            "message": "connection 'link' has 'from' and 'to' pointing to the same component"
+          },
+          {
+            "code": "W010",
+            "message": "port 'data' is not referenced by any connection"
+          },
+          {
+            "code": "W011",
+            "message": "protocol 'serial' has no messages defined"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "wiring-bug.md",
+      "hcl": "project {\n  name = \"wiring-bug\"\n}\n\nprotocol \"greeting\" {\n  description = \"A simple greeting\"\n\n  message \"hello\" {\n    description = \"The greeting payload\"\n    field \"text\" { type = \"string\" }\n  }\n}\n\nsystem \"app\" {\n  description = \"Two components with a broken connection\"\n\n  component \"sender\" {\n    description = \"Sends a greeting\"\n    leaf        = true\n\n    port \"out\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  component \"receiver\" {\n    description = \"Receives a greeting\"\n    leaf        = true\n\n    port \"in\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  connection \"greet\" {\n    from = \"sender/outgoing\" // typo: this port does not exist\n    to   = \"receiver/in\"\n  }\n}",
+      "input_sha256": "4f58b6a87ec8e504d5c64c18e73f7061d5376d85bad577ba617bb0dece3e1855",
+      "output": {
+        "errors": [
+          {
+            "code": "E011",
+            "message": "connection 'greet' references undefined component 'receiver' in 'to'"
+          },
+          {
+            "code": "E011",
+            "message": "connection 'greet' references undefined component 'sender' in 'from'"
+          }
+        ],
+        "warnings": [
+          {
+            "code": "W004",
+            "message": "connection 'greet' is missing a description"
+          },
+          {
+            "code": "W005",
+            "message": "connection 'greet' has 'from' and 'to' pointing to the same component"
+          },
+          {
+            "code": "W012",
+            "message": "top-level protocol 'greeting' is not referenced by any port"
+          }
+        ]
+      }
+    }
+  ],
+  "format": 1,
+  "rhizz_version": "rhizz 0.1.0"
+}

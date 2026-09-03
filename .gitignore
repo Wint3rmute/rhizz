@@ -9,3 +9,6 @@ web/package-lock.json
 
 # macos temporaries
 .DS_Store
+
+# Python bytecode (book preprocessor + tests)
+__pycache__/
