@@ -1,6 +1,7 @@
 // Public API consumed by the resolve module.
 
 use crate::model::BorderStyle;
+use crate::{Diagnostic, DiagnosticCode};
 /// Raw (deserialization) model and file-level parsing.
 ///
 /// Two concerns live here:
@@ -40,6 +41,9 @@ pub struct RawFile {
     pub protocols: Vec<Labeled<RawProtocol>>,
     /// All parsed view blocks.
     pub views: Vec<Labeled<RawView>>,
+    /// Non-fatal diagnostics collected while parsing (e.g. W015 for unexpected
+    /// block types). Errors are returned via `Result`; warnings land here.
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 /// Raw project metadata before resolution.
@@ -480,7 +484,10 @@ fn parse_connection(body: &hcl::Body) -> Result<RawConnection> {
 }
 
 /// Parse a `component` block body into a [`RawComponent`].
-fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
+///
+/// Unknown block types inside a component are skipped but recorded as a W015
+/// warning on `diagnostics` (so they surface instead of being silently ignored).
+fn parse_component(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<RawComponent> {
     let a: ComponentAttrs = attrs(body)?;
     let mut ports = Vec::new();
     let mut instances = Vec::new();
@@ -505,7 +512,12 @@ fn parse_component(body: &hcl::Body) -> Result<RawComponent> {
                     .with_context(|| format!("in connection '{label}'"))?;
                 connections.push(Labeled { label, inner });
             }
-            _ => {}
+            other => {
+                diagnostics.push(Diagnostic::warning(
+                    DiagnosticCode::W015,
+                    format!("unexpected block type '{other}' inside component ignored"),
+                ));
+            }
         }
     }
     Ok(RawComponent {
@@ -534,7 +546,10 @@ fn parse_instance(body: &hcl::Body) -> Result<RawInstance> {
 }
 
 /// Parse a `system` block body into a [`RawSystem`].
-fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
+///
+/// Unknown block types inside a system are skipped but recorded as a W015
+/// warning on `diagnostics` (so they surface instead of being silently ignored).
+fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<RawSystem> {
     let a: SystemAttrs = attrs(body)?;
     let mut instances = Vec::new();
     let mut connections = Vec::new();
@@ -552,7 +567,12 @@ fn parse_system(body: &hcl::Body) -> Result<RawSystem> {
                     .with_context(|| format!("in connection '{label}'"))?;
                 connections.push(Labeled { label, inner });
             }
-            _ => {}
+            other => {
+                diagnostics.push(Diagnostic::warning(
+                    DiagnosticCode::W015,
+                    format!("unexpected block type '{other}' inside system ignored"),
+                ));
+            }
         }
     }
     Ok(RawSystem {
@@ -616,13 +636,13 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
             }
             "system" => {
                 let label = first_label(block)?;
-                let inner =
-                    parse_system(block.body()).with_context(|| format!("in system '{label}'"))?;
+                let inner = parse_system(block.body(), &mut file.diagnostics)
+                    .with_context(|| format!("in system '{label}'"))?;
                 file.systems.push(Labeled { label, inner });
             }
             "component" => {
                 let label = first_label(block)?;
-                let inner = parse_component(block.body())
+                let inner = parse_component(block.body(), &mut file.diagnostics)
                     .with_context(|| format!("in component '{label}'"))?;
                 file.components.push(Labeled { label, inner });
             }
@@ -664,6 +684,7 @@ pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result
     dst.components.extend(src.components);
     dst.protocols.extend(src.protocols);
     dst.views.extend(src.views);
+    dst.diagnostics.extend(src.diagnostics);
     Ok(())
 }
 
@@ -988,6 +1009,69 @@ mod tests {
             err.to_string().contains("E010"),
             "expected E010 error, got: {err}"
         );
+    }
+
+    #[test]
+    fn w015_unknown_block_in_system_is_warning_not_silent() {
+        // The old inline grammar — a `component` nested directly inside a
+        // `system` — must surface as a W015 warning, not a hard parse error.
+        let src = r#"
+            system "app" {
+              component "sender" { leaf = true }
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let file = parse_file(src, &path).unwrap();
+        let w015: Vec<_> = file
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.code == "W015")
+            .collect();
+        assert_eq!(w015.len(), 1, "expected exactly one W015, got {w015:?}");
+        assert!(
+            w015[0].message.contains("component"),
+            "expected the message to name the block type: {}",
+            w015[0].message
+        );
+        // The nested component is ignored, so the system still parses (no hard error).
+        assert_eq!(file.systems.len(), 1);
+        assert_eq!(file.systems[0].inner.instances.len(), 0);
+    }
+
+    #[test]
+    fn w015_unknown_block_in_component_is_warning() {
+        let src = r#"
+            component "board" {
+              component "chip" { leaf = true }
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let file = parse_file(src, &path).unwrap();
+        let w015: Vec<_> = file
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.code == "W015")
+            .collect();
+        assert_eq!(w015.len(), 1, "expected exactly one W015, got {w015:?}");
+        assert!(w015[0].message.contains("component"));
+    }
+
+    #[test]
+    fn w015_is_emitted_once_per_unknown_block() {
+        let src = r#"
+            system "s" {
+              component "a" {}
+              component "b" {}
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let file = parse_file(src, &path).unwrap();
+        let count = file
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.code == "W015")
+            .count();
+        assert_eq!(count, 2, "expected one W015 per skipped block");
     }
 
     // ── Inline unit parse tests ─────────────────────────────────────────────

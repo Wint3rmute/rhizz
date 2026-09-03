@@ -23,6 +23,14 @@
           {
             "code": "W012",
             "message": "top-level protocol 'greeting' is not referenced by any port"
+          },
+          {
+            "code": "W015",
+            "message": "unexpected block type 'component' inside system ignored"
+          },
+          {
+            "code": "W015",
+            "message": "unexpected block type 'component' inside system ignored"
           }
         ]
       }
@@ -62,6 +70,14 @@
           {
             "code": "W011",
             "message": "protocol 'serial' has no messages defined"
+          },
+          {
+            "code": "W015",
+            "message": "unexpected block type 'component' inside system ignored"
+          },
+          {
+            "code": "W015",
+            "message": "unexpected block type 'component' inside system ignored"
           }
         ]
       }
@@ -93,6 +109,14 @@
           {
             "code": "W012",
             "message": "top-level protocol 'greeting' is not referenced by any port"
+          },
+          {
+            "code": "W015",
+            "message": "unexpected block type 'component' inside system ignored"
+          },
+          {
+            "code": "W015",
+            "message": "unexpected block type 'component' inside system ignored"
           }
         ]
       }
