@@ -150,7 +150,11 @@ async function ensureApolloProject(): Promise<Project | undefined> {
   const existing = await projectStore.listProjects();
   const existingProject = existing.find((p) => p.id === APOLLO_PROJECT_ID);
   if (existingProject || !example) return existingProject;
-  return await createProjectWithFiles(APOLLO_PROJECT_ID, example.files);
+  return await createProjectWithFiles(
+    "Inventory apollo story",
+    example.files,
+    APOLLO_PROJECT_ID,
+  );
 }
 
 const meta = {
