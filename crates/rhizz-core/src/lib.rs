@@ -61,10 +61,11 @@ pub struct CompileResult {
 pub fn compile(sources: &[Source]) -> CompileResult {
     let mut merged = parse::RawFile::default();
     let mut system_files = Vec::new();
+    let mut pre_diagnostics = Vec::new();
 
     for source in sources {
         let path = Path::new(&source.filename);
-        let file = match parse::parse_file(&source.content, path) {
+        let mut file = match parse::parse_file(&source.content, path) {
             Ok(f) => f,
             Err(e) => {
                 return CompileResult {
@@ -73,6 +74,10 @@ pub fn compile(sources: &[Source]) -> CompileResult {
                 };
             }
         };
+        // Non-fatal parse warnings (e.g. W015 unexpected block type) surface
+        // alongside the resolution/validation diagnostics below. Draining
+        // keeps `file` intact for `merge_into`.
+        pre_diagnostics.extend(std::mem::take(&mut file.diagnostics));
         if !file.systems.is_empty() {
             system_files.push(path.to_path_buf());
         }
@@ -84,7 +89,6 @@ pub fn compile(sources: &[Source]) -> CompileResult {
         }
     }
 
-    let mut pre_diagnostics = Vec::new();
     if validate_single_system_model(&system_files, &mut pre_diagnostics) {
         return CompileResult {
             model: None,

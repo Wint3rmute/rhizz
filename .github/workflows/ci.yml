@@ -63,6 +63,36 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  # Builds the mdBook with the current compiler and verifies that the
+  # compiled ```rhizz blocks still match book/book.lock. Any drift in the
+  # book's examples or the compiler's diagnostics fails this job.
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: "0.5.4"
+          # The preprocessor finds the CLI in target/debug/rhizz.
+      - run: cargo build --bin rhizz --quiet
+
+      - run: mdbook build book
+
+      - run: |
+          rm -rf book-artifact
+          mkdir -p book-artifact
+          cp -a book/target-mdbook/. book-artifact/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rhizz-book
+          path: book-artifact/
+
   frontend:
     needs: wasm
     runs-on: ubuntu-latest
@@ -168,11 +198,13 @@ jobs:
           path: docs-artifact/
 
   deploy-pages:
-    needs: [publish, docs]
+    needs: [publish, docs, book]
     # Publish is skipped unless the "chromatic" trigger fires; deploy still
-    # runs (docs are always deployed) but never after a failed publish.
+    # runs (docs & book are always deployed) but never after a failed publish
+    # or a failed book/docs build.
     if: ${{ github.event_name != 'pull_request' && !cancelled() &&
-      needs.publish.result != 'failure' && needs.docs.result == 'success' }}
+      needs.publish.result != 'failure' && needs.docs.result == 'success' &&
+      needs.book.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -188,6 +220,11 @@ jobs:
         with:
           name: rhizz-docs
           path: pages/docs/
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: rhizz-book
+          path: pages/book/
 
       - uses: actions/upload-pages-artifact@v3
         with:
