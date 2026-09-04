@@ -49,18 +49,6 @@ book-accept:
     {{run}} cargo build --quiet --bin rhizz-book
     {{run}} sh -lc 'BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book'
 
-# Run Rust unit-test coverage with cargo-tarpaulin and write the lcov.info
-# report, the Cobertura XML report (coverage.xml, consumed by CI's upload to
-# GitHub's built-in code coverage) and an HTML report (local viewing) to
-# target/coverage/. rhizz-wasm is excluded (wasm cdylib, no host tests) and
-# integration-test files under crates/*/tests are not counted as source.
-coverage:
-    {{run}} cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --out html --output-dir target/coverage
-
-# Open the local HTML coverage report in the browser.
-coverage-open:
-    {{run}} xdg-open target/coverage/tarpaulin-report.html
-
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev:
     {{run}} sh -lc 'cd web && deno run dev'
