@@ -2,37 +2,110 @@
   "entries": [
     {
       "chapter": "greeter.md",
-      "hcl": "project {\n  name = \"greeter\"\n}\n\nprotocol \"greeting\" {\n  description = \"A simple greeting\"\n\n  message \"hello\" {\n    description = \"The greeting payload\"\n    field \"text\" { type = \"string\" }\n  }\n}\n\nsystem \"app\" {\n  description = \"A minimal two-component model\"\n\n  component \"sender\" {\n    description = \"Sends a greeting\"\n    leaf        = true\n\n    port \"out\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  component \"receiver\" {\n    description = \"Receives a greeting\"\n    leaf        = true\n\n    port \"in\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  connection \"greet\" {\n    description = \"Carries the greeting\"\n    from        = \"sender/out\"\n    to          = \"receiver/in\"\n  }\n}",
-      "input_sha256": "8524fa00c3378f9180548b8eac3376979f955fe5a5e000d06b3f0c3c04ef31e8",
+      "hcl": "component \"battery\" {\n  description = \"Small AAA battery providing power\"\n}",
+      "input_sha256": "b1097d26434c7a13d7d57b14f55ae9c5904f46419b3ff5b5ef66efded355c307",
       "output": {
-        "errors": [
-          {
-            "code": "E011",
-            "message": "connection 'greet' references undefined component 'receiver' in 'to'"
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 0,
+            "total": 1
           },
-          {
-            "code": "E011",
-            "message": "connection 'greet' references undefined component 'sender' in 'from'"
-          }
-        ],
+          "connections": {
+            "complete": 0,
+            "total": 0
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 0,
+            "percent": 0.0,
+            "total": 1
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
         "warnings": [
           {
-            "code": "W005",
-            "message": "connection 'greet' has 'from' and 'to' pointing to the same component"
+            "code": "W001",
+            "message": "component 'battery' is non-leaf but has no child components"
           },
           {
-            "code": "W012",
-            "message": "top-level protocol 'greeting' is not referenced by any port"
-          },
-          {
-            "code": "W015",
-            "message": "unexpected block type 'component' inside system ignored"
-          },
-          {
-            "code": "W015",
-            "message": "unexpected block type 'component' inside system ignored"
+            "code": "W003",
+            "message": "component 'battery' is not referenced by any connection"
           }
         ]
+      }
+    },
+    {
+      "chapter": "greeter.md",
+      "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}\n\nsystem \"also-nothing\" {\n  description = \"Nothingness 2.0: Electric Bongaloo\"\n}",
+      "input_sha256": "ea62c8ea8a728e4fae990f0287978800f2d93189bad9eeee612d385193777b5c",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 0,
+            "total": 0
+          },
+          "connections": {
+            "complete": 0,
+            "total": 0
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 0,
+            "percent": 0.0,
+            "total": 0
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": []
+      }
+    },
+    {
+      "chapter": "greeter.md",
+      "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}",
+      "input_sha256": "fa10bcd472f8d57c7e8b5444c160fc7f8f73a0d0296583dfdaa0a1905243289c",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 0,
+            "total": 0
+          },
+          "connections": {
+            "complete": 0,
+            "total": 0
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 0,
+            "percent": 0.0,
+            "total": 0
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": []
       }
     },
     {

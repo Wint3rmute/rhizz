@@ -2,6 +2,6 @@
 
 [Introduction](intro.md)
 
-- [A complete model](greeter.md)
+- [Basics of Rhizz Syntax](greeter.md)
 - [Warnings, not errors](sketch.md)
 - [Compilation errors](wiring-bug.md)
