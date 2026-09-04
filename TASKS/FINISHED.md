@@ -26,6 +26,10 @@ the nix dev shell and cached in CI.
   runs fmt + clippy + tests, then installs pinned tarpaulin (same cache key,
   so the Swatinem/rust-cache hit is shared) and runs coverage with
   `--fail-under 80` (gate: the job/PR fails below 80%; currently 83.34%).
+  There is no separate plain `cargo test` step — tarpaulin executes the
+  identical unit + integration suite under instrumentation, fails on test
+  failures, and enforces the gate (host crates have no doctests, the only
+  thing `cargo test` would additionally run).
   The lcov report is uploaded as a `rust-coverage` artifact; `--out xml`
   keeps the Cobertura report ready for when GitHub's native Code Quality
   upload (beta, not yet available) can be enabled.
