@@ -29,9 +29,8 @@
               pkgs.gh
             ];
 
-            # Dev tooling that needs extras (python3 + pyyaml for YAML validation
-            # of workflow files) must live in buildInputs: the pinned nixpkgs'
-            # mkShell packages slot chokes on withPackages env derivations.
+            # LLMs often want to use a Python environment with some popular
+            # libraries for running one-off validation/exploration commands
             buildInputs = [
               (pkgs.python3.withPackages (python: [
                 python.pyyaml
