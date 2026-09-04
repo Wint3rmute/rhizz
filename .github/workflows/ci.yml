@@ -48,11 +48,11 @@ jobs:
 
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - run: cargo test --all --quiet
-
-      # Coverage runs in the same job so the Swatinem/rust-cache key (which
-      # includes RUSTFLAGS) is shared and tests run in exactly one place.
-      # Pinned to the same version as the nix dev shell
+      # No separate `cargo test` step: the tarpaulin run below executes the
+      # identical test suite (unit + integration tests; doctests are absent
+      # from all host crates) under instrumentation, fails the job on any
+      # test failure, and enforces the coverage gate — one test run, one
+      # place. Pinned to the same version as the nix dev shell
       # (pkgs.cargo-tarpaulin); --locked is not usable: the published crate
       # does not carry a Cargo.lock.
       - run: cargo install cargo-tarpaulin --version 0.37.2
