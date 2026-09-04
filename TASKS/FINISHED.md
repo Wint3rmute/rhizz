@@ -21,15 +21,22 @@ the nix dev shell and cached in CI.
   down); `crates/*/tests/*` integration-test files are excluded from the
   source denominator (their own lines executing would otherwise inflate
   coverage).
-- **`.github/workflows/ci.yml`**: new `coverage` job — `dtolnay/rust-toolchain`
-  with `llvm-tools-preview`, `Swatinem/rust-cache` (persists the cargo-installed
-  tarpaulin binary in `~/.cargo/bin` and the target dir, so the expensive
-  `cargo install` and rebuild happen once per cache key), pinned
-  `cargo install cargo-tarpaulin --version 0.37.2` (no `--locked`: the
-  published crate carries no Cargo.lock — verified against the crates.io
-  .crate archive), same tarpaulin flags as `just coverage`, and the lcov
-  report uploaded as a `rust-coverage` artifact. Reporting only — no
-  `--fail-under` gate yet.
+- **`.github/workflows/code-coverage.yml`**: new dedicated workflow following
+  GitHub's built-in code coverage setup guide (no third-party service). Runs
+  on push to the default branch (baseline) and on pull requests; checks out
+  the PR head commit so line numbers map to the diff; requires
+  `code-quality: write` permission; installs pinned tarpaulin (cached via
+  `Swatinem/rust-cache`); runs the same flags as `just coverage` plus
+  `--out xml`; uploads the Cobertura report via
+  `actions/upload-code-coverage@v1` (`language: Rust`,
+  `label: code-coverage/rust`) so `github-code-quality[bot]` posts coverage
+  on PRs. The raw `lcov.info` is still uploaded as a `rust-coverage`
+  artifact. The `coverage` job previously added to ci.yml was removed
+  (superseded). **One-time manual prerequisite** (not doable from the
+  repo): repo Settings → Security → Code quality → Enable code quality
+  (free for public repositories).
+- **`Justfile`**: `coverage` now also emits `--out xml` (`cobertura.xml`),
+  matching the CI command; `coverage-open` opens the HTML report.
 - **Current numbers**: 83.39% line coverage, 1792/2149 lines (4 host crates:
   rhizz-core, rhizz-cli, rhizz-server, rhizz-book).
 - Validated with `just lint`, `just build`, Rust tests (16 suites) + web unit

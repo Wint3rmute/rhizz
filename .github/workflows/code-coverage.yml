@@ -1,0 +1,62 @@
+# Uploads Rust unit-test coverage to GitHub's built-in code coverage,
+# following the docs setup guide
+# (docs.github.com/en/code-security/how-tos/maintain-quality-code/set-up-code-coverage):
+# - runs on pushes to the default branch (establishes the baseline) and on
+#   pull requests (coverage is compared against the baseline);
+# - generates a Cobertura XML report (cargo-tarpaulin --out xml) and uploads
+#   it with actions/upload-code-coverage, which requires no third-party
+#   service; github-code-quality[bot] then posts coverage on the PR;
+# - `code-quality: write` permission is required for the upload.
+#
+# Prerequisite (one-time, repo settings): Settings > Security > Code quality
+# > Enable code quality. Free for public repositories.
+name: code-coverage
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      code-quality: write
+    steps:
+      # Check out the PR head commit (not the merge commit) so coverage line
+      # numbers map correctly to the diff.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Pinned to the same version as the nix dev shell (pkgs.cargo-tarpaulin)
+      # so local and CI numbers match. --locked is not usable: the published
+      # crate does not carry a Cargo.lock.
+      - run: cargo install cargo-tarpaulin --version 0.37.2
+
+      # Same flags as `just coverage`; rhizz-wasm is excluded (no host tests)
+      # and crates/*/tests are not counted as source. --out xml produces the
+      # Cobertura report the upload action consumes.
+      - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --output-dir target/coverage
+
+      - name: Upload coverage report
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/upload-code-coverage@v1
+        with:
+          file: target/coverage/cobertura.xml
+          language: Rust
+          label: code-coverage/rust
+
+      # Raw lcov report kept for humans who want the data outside GitHub's UI.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rust-coverage
+          path: target/coverage/lcov.info
