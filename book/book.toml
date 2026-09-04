@@ -8,10 +8,10 @@ build-dir = "target-mdbook"
 
 [output.html]
 # theme/highlight.js overrides mdBook's default highlight.js bundle with the
-# HCL/Terraform grammar (see book/scripts/build-hljs.py); ```hcl blocks are
-# emitted by the rhizz preprocessor.
+# HCL/Terraform grammar; ```hcl blocks are emitted by the rhizz preprocessor.
 additional-css = ["css/rhizz.css"]
 
 [preprocessor.rhizz]
-command = "python3 ./preprocessors/rhizz.py"
+# cargo walks up from book/ to the workspace root, so no wrapper is needed.
+command = "cargo run --release --quiet --bin rhizz-book"
 renderer = ["html"]

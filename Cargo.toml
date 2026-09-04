@@ -4,6 +4,7 @@ members = [
     "crates/rhizz-cli",
     "crates/rhizz-server",
     "crates/rhizz-wasm",
+    "crates/rhizz-book",
 ]
 resolver = "2"
 

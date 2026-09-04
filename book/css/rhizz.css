@@ -1,6 +1,5 @@
 /*
- * Results panels emitted by the rhizz mdbook preprocessor
- * (book/preprocessors/rhizz.py).
+ * Results panels emitted by the rhizz mdbook preprocessor.
  *
  * Theme-aware: mdbook applies the active theme as a class on <html>
  * (.light / .coal / .navy / .ayu / .rust; html:not(.js) defaults to light)

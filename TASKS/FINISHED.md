@@ -4,6 +4,80 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 103 — Rewrite the book/ preprocessor in Rust
+
+Replaced the Python mdBook preprocessor (`book/preprocessors/rhizz.py` + its
+unittest suite, ~1180 lines) with a new workspace crate `crates/rhizz-book`.
+Python is fully gone from the repo and the dev shell; the book build chain is
+now pure Rust end-to-end.
+
+- **`crates/rhizz-book`** (new crate, bin + lib, workspace lints, in-process
+  compile via `rhizz-core` — no CLI spawning, no tempdirs, no binary discovery):
+  - `blocks.rs` — `` ```rhizz `` fence parsing (attrs incl. `ignore`),
+    `str.splitlines()`-parity splitting, SHA-256 body hashing.
+  - `compile.rs` — one compile per distinct body keyed by hash; `Verdict`
+    keeps diagnostics in compiler emission order for panels plus a stably
+    sorted copy for the lock; score object byte-matches `--json build`.
+  - `normalize.rs` — lock-comparable diagnostics (`code` / optional `line` /
+    `message`, file dropped), canonical `(code, line, message)` ordering.
+  - `lock.rs` — `book.lock` read/write (atomic tmp+rename) / compare
+    (new/changed/removed block, format mismatch, version-drift note),
+    `BOOKLOCK_ACCEPT_CHANGES` flag parser. Field order is alphabetical to
+    keep the JSON byte-identical to the historical Python writer. Output
+    changes render as a git-style unified diff (`--- book.lock` vs
+    `+++ current compiler`) of the pretty-printed JSON via the `similar`
+    crate, so reviewers see exactly which diagnostic/score lines drifted;
+    when stderr is a terminal (and `NO_COLOR` is unset) the diff is
+    ANSI-colored with git's own scheme (bold-yellow headers, cyan hunks,
+    red removals, green additions).
+  - **tracing logs**: block processing is now instrumented with `tracing`
+    (already in the workspace) — `info!` events per distinct body (bytes,
+    error/warning counts, scored flag) and per rendered block (chapter, sha,
+    counts, compiled flag), plus a pipeline summary. `main` installs a
+    stderr-only subscriber defaulting to `info` (overridable via `RUST_LOG`)
+    with the same TTY/`NO_COLOR` color policy as the lock diff; stdout stays
+    clean for the mdbook protocol. The formatter mirrors mdbook's own style
+    (bare `LEVEL message`, no timestamps/targets/span context — all useful
+    fields are inline on each event). Compile events name their owning chapter
+    (or `chapters=N` for bodies shared by several chapters, tracked via a
+    reverse chapter index during collection).
+  - `render.rs` — HTML verdict panels reproduced byte-for-byte (same class
+    names, ✓/⚠/✗ glyphs, em dashes, score stats, `html.escape` semantics).
+  - `transform.rs` — chapter rewriting (`` ```hcl `` + panel) and lock traces.
+  - `protocol.rs` — mdbook 0.5.x protocol (`supports` probe + stdin/stdout
+    JSON roundtrip, `preserve_order` serde_json so untouched bytes survive),
+    depth-first chapter traversal, and the `process_book` pipeline.
+  - `main.rs` — thin entry point returning `ExitCode` (no `process::exit`).
+- **54 unit tests** (red/green): ported the entire Python unittest suite 1:1
+  (normalization, sorting, lock compare, accept flag, block parsing, chapter
+  transformation) and added pipeline tests (`process_book` end-to-end with a
+  temp lock: generate → verify → stale-lock refusal + diff output).
+- **Wiring:** `book.toml` → `command = "cargo run --quiet --bin rhizz-book"`
+  (mdbook runs preprocessors with cwd = book root, so cargo walks up to the
+  workspace root; verified empirically with mdbook 0.5.4); Justfile `book`/
+  `book-accept` build `--bin rhizz-book`; `just test` drops the Python
+  unittest step; `flake.nix` drops `pkgs.python3`; CI book job builds both
+  binaries. Deleted `book/preprocessors/`.
+- **E2E trace, verified byte-for-byte:** (1) probe `supports html`/`latex`
+  exit codes; (2) hand-built book JSON through the binary; (3) full `mdbook
+  build book` against the committed `book.lock` — validates with **zero lock
+  churn** (the circulated lock needed no regeneration; `book.lock` stays
+  byte-identical, including the historical Python `sort_keys` key order and
+  trailing newline); (4) cross-check: built the book with the old Python
+  preprocessor pinned to the same compiler (`RHIZZ_BIN`) — the two outputs
+  are byte-for-byte identical; (5) CI config updated (rust job already covers
+  `cargo test --all`; book job `cargo build --bin rhizz --bin rhizz-book`).
+- Bonus fix: Python's binary discovery preferred a stale `target/release/
+  rhizz` over the fresh debug build, so book builds could silently run an old
+  compiler (it briefly corrupted `book.lock` mid-session; the Rust
+  preprocessor eliminates the class of bug entirely by compiling in-process).
+- Validated with `just format`, `just test` (all Rust + 474 web unit tests),
+  `just lint`, `just build`. (`just test`'s storybook leg needs Playwright's
+  Chromium, which is not installed on this NixOS machine — pre-existing
+  local limitation, unrelated to this change.)
+
+---
+
 ## Task 102 — Respect browser's default theme (Auto / Light / Dark)
 
 On startup the web app now follows the browser's preferred color scheme
