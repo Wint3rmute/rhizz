@@ -13,5 +13,5 @@ additional-css = ["css/rhizz.css"]
 
 [preprocessor.rhizz]
 # cargo walks up from book/ to the workspace root, so no wrapper is needed.
-command = "cargo run --quiet --bin rhizz-book"
+command = "cargo run --release --quiet --bin rhizz-book"
 renderer = ["html"]
