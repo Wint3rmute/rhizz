@@ -117,9 +117,95 @@ pub fn short_sha(hash: &str) -> String {
 }
 
 /// Compact single-line JSON of a normalized output, for diff messages.
+/// One difference between the lock file and the current build state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Diff {
+    /// A compiled block exists now that the lock does not know.
+    NewBlock {
+        /// Chapter path the block lives in.
+        chapter: String,
+        /// SHA-256 digest of the block body.
+        hash: String,
+    },
+    /// A locked block no longer exists in the book.
+    RemovedBlock {
+        /// Chapter path the block lived in.
+        chapter: String,
+        /// SHA-256 digest of the block body.
+        hash: String,
+    },
+    /// The same block compiled to a different verdict than the lock stores.
+    OutputChanged {
+        /// Chapter path the block lives in.
+        chapter: String,
+        /// SHA-256 digest of the block body.
+        hash: String,
+        /// Verdict recorded in the lock.
+        old: Box<NormalizedOutput>,
+        /// Verdict the compiler produced now.
+        new: Box<NormalizedOutput>,
+    },
+    /// The lock file predates the current schema.
+    FormatMismatch {
+        /// Format version found in the lock.
+        found: u64,
+    },
+}
+
+/// Pretty-print a normalized output the same way `book.lock` serializes it,
+/// so the diff below compares like with like.
 #[must_use]
-pub fn render_output(output: &NormalizedOutput) -> String {
-    serde_json::to_string(output).unwrap_or_else(|_| "<unserializable>".to_owned())
+fn render_pretty(output: &NormalizedOutput) -> String {
+    serde_json::to_string_pretty(output).unwrap_or_else(|_| "<unserializable>".to_owned())
+}
+
+/// Build a git-style unified diff between two verdicts (`--- book.lock` vs
+/// `+++ current compiler`), with three context lines so changes are easy to
+/// locate inside the JSON.
+#[must_use]
+fn verdict_diff(old: &NormalizedOutput, new: &NormalizedOutput) -> String {
+    similar::TextDiff::from_lines(render_pretty(old), render_pretty(new))
+        .unified_diff()
+        .context_radius(3)
+        .header("book.lock", "current compiler")
+        .to_string()
+}
+
+/// Render a difference as an indented, multi-line report suitable for stderr.
+/// Output-changed diffs carry the pretty-printed, git-style unified diff of
+/// the two verdicts; the other cases are one-liners.
+#[must_use]
+pub fn format_diff(diff: &Diff) -> String {
+    match diff {
+        Diff::NewBlock { chapter, hash } => format!(
+            "  - new block in '{chapter}' (input {}) is not present in book.lock",
+            short_sha(hash)
+        ),
+        Diff::RemovedBlock { chapter, hash } => format!(
+            "  - block in '{chapter}' (input {}) was removed from the book but is still present in book.lock",
+            short_sha(hash)
+        ),
+        Diff::FormatMismatch { found } => format!(
+            "  - book.lock uses lock format {found}, expected {LOCK_FORMAT} (regenerate with BOOKLOCK_ACCEPT_CHANGES=1)"
+        ),
+        Diff::OutputChanged {
+            chapter,
+            hash,
+            old,
+            new,
+        } => {
+            let header = format!(
+                "  - output changed for block in '{chapter}' (input {}):",
+                short_sha(hash)
+            );
+            let body = verdict_diff(old, new)
+                .lines()
+                .map(|line| format!("    {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("{header}\n{body}")
+        }
+    }
 }
 
 /// Compare the current block traces against the existing lock.
@@ -131,15 +217,12 @@ pub fn compare_lock(
     lock: &LockPayload,
     blocks: &[LockEntry],
     current_version: &str,
-) -> (Vec<String>, Vec<String>) {
+) -> (Vec<Diff>, Vec<String>) {
     let mut diffs = Vec::new();
     let mut notes = Vec::new();
 
     if lock.format != LOCK_FORMAT {
-        diffs.push(format!(
-            "book.lock uses lock format {}, expected {} (regenerate with BOOKLOCK_ACCEPT_CHANGES=1)",
-            lock.format, LOCK_FORMAT
-        ));
+        diffs.push(Diff::FormatMismatch { found: lock.format });
         return (diffs, notes);
     }
 
@@ -147,11 +230,10 @@ pub fn compare_lock(
 
     for block in blocks {
         if !locked.contains(&entry_key(block)) {
-            diffs.push(format!(
-                "new block in '{}' (input {}) is not present in book.lock",
-                block.chapter,
-                short_sha(&block.input_sha256)
-            ));
+            diffs.push(Diff::NewBlock {
+                chapter: block.chapter.clone(),
+                hash: block.input_sha256.clone(),
+            });
             continue;
         }
         if let Some(previous) = lock
@@ -160,24 +242,22 @@ pub fn compare_lock(
             .find(|entry| entry_key(entry) == entry_key(block))
             && previous.output != block.output
         {
-            diffs.push(format!(
-                "output changed for block in '{}' (input {}):\n    lock: {}\n    now:  {}",
-                block.chapter,
-                short_sha(&block.input_sha256),
-                render_output(&previous.output),
-                render_output(&block.output)
-            ));
+            diffs.push(Diff::OutputChanged {
+                chapter: block.chapter.clone(),
+                hash: block.input_sha256.clone(),
+                old: Box::new(previous.output.clone()),
+                new: Box::new(block.output.clone()),
+            });
         }
     }
 
     let current: HashSet<(&str, &str)> = blocks.iter().map(entry_key).collect();
     for entry in &lock.entries {
         if !current.contains(&entry_key(entry)) {
-            diffs.push(format!(
-                "block in '{}' (input {}) was removed from the book but is still present in book.lock",
-                entry.chapter,
-                short_sha(&entry.input_sha256)
-            ));
+            diffs.push(Diff::RemovedBlock {
+                chapter: entry.chapter.clone(),
+                hash: entry.input_sha256.clone(),
+            });
         }
     }
 
@@ -210,8 +290,8 @@ pub fn sorted_entries(mut entries: Vec<LockEntry>) -> Vec<LockEntry> {
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCK_FORMAT, LockEntry, LockPayload, accept_flag, compare_lock, lock_path, render_output,
-        short_sha, sorted_entries,
+        Diff, LOCK_FORMAT, LockEntry, LockPayload, accept_flag, compare_lock, format_diff,
+        lock_path, short_sha, sorted_entries,
     };
     use crate::normalize::{NormDiagnostic, NormalizedOutput};
     use std::path::Path;
@@ -289,18 +369,28 @@ mod tests {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let lock = payload(vec![], "rhizz 0.1.0");
         let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
-        assert_eq!(diffs.len(), 1);
-        assert!(diffs[0].contains("new block"));
-        assert!(diffs[0].contains("a.md"));
+        assert_eq!(
+            diffs,
+            vec![Diff::NewBlock {
+                chapter: "a.md".to_owned(),
+                hash: "1".to_owned(),
+            }]
+        );
+        assert!(format_diff(&diffs[0]).contains("new block in 'a.md'"));
     }
 
     #[test]
     fn removed_block_detected() {
         let lock = payload(vec![entry("a.md", "1", output(vec![]))], "rhizz 0.1.0");
         let (diffs, _) = compare_lock(&lock, &[], "rhizz 0.1.0");
-        assert_eq!(diffs.len(), 1);
-        assert!(diffs[0].contains("removed"));
-        assert!(diffs[0].contains("a.md"));
+        assert_eq!(
+            diffs,
+            vec![Diff::RemovedBlock {
+                chapter: "a.md".to_owned(),
+                hash: "1".to_owned(),
+            }]
+        );
+        assert!(format_diff(&diffs[0]).contains("removed from the book"));
     }
 
     #[test]
@@ -326,9 +416,50 @@ mod tests {
         let lock = payload(locked, "rhizz 0.1.0");
         let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
         assert_eq!(diffs.len(), 1);
-        assert!(diffs[0].contains("output changed"));
-        assert!(diffs[0].contains("E002")); // lock shows old
-        assert!(diffs[0].contains("E001")); // now shows new
+        let Diff::OutputChanged {
+            chapter,
+            hash,
+            old,
+            new,
+        } = &diffs[0]
+        else {
+            panic!("expected OutputChanged");
+        };
+        assert_eq!(chapter, "a.md");
+        assert_eq!(hash, "1");
+        assert_eq!(old.errors[0].code, "E002"); // lock shows old
+        assert_eq!(new.errors[0].code, "E001"); // now shows new
+    }
+
+    #[test]
+    fn output_changed_diff_renders_git_style_unified_diff() {
+        let old = output(vec![NormDiagnostic {
+            code: "E002".to_owned(),
+            line: None,
+            message: "old".to_owned(),
+        }]);
+        let new = output(vec![NormDiagnostic {
+            code: "E001".to_owned(),
+            line: None,
+            message: "new".to_owned(),
+        }]);
+        let rendered = format_diff(&Diff::OutputChanged {
+            chapter: "greeter.md".to_owned(),
+            hash: "8524fa00c3378f9180548b8eac3376979f955fe5a5e000d06b3f0c3c04ef31e8".to_owned(),
+            old: Box::new(old),
+            new: Box::new(new),
+        });
+        assert!(rendered.contains("output changed for block in 'greeter.md'"));
+        assert!(rendered.contains("8524fa00"));
+        assert!(rendered.contains("    --- book.lock"));
+        assert!(rendered.contains("    +++ current compiler"));
+        assert!(rendered.contains("@@"));
+        assert!(rendered.contains("-      \"code\": \"E002\","));
+        assert!(rendered.contains("+      \"code\": \"E001\","));
+        assert!(rendered.contains("-      \"message\": \"old\""));
+        // No stray lock:/now: one-liners anymore.
+        assert!(!rendered.contains("    lock: {"));
+        assert!(!rendered.contains("    now:  {"));
     }
 
     #[test]
@@ -337,8 +468,8 @@ mod tests {
         let mut lock = payload(blocks.clone(), "rhizz 0.1.0");
         lock.format = 99;
         let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
-        assert_eq!(diffs.len(), 1);
-        assert!(diffs[0].contains("format"));
+        assert_eq!(diffs, vec![Diff::FormatMismatch { found: 99 }]);
+        assert!(format_diff(&diffs[0]).contains("lock format 99"));
     }
 
     #[test]
@@ -358,9 +489,19 @@ mod tests {
     }
 
     #[test]
-    fn render_output_is_compact_single_line() {
-        let rendered = render_output(&output(vec![]));
-        assert_eq!(rendered, "{\"errors\":[],\"warnings\":[]}");
+    fn render_pretty_matches_lock_serialization() {
+        let o = output(vec![NormDiagnostic {
+            code: "E001".to_owned(),
+            line: None,
+            message: "m".to_owned(),
+        }]);
+        // The pretty form rendered in diffs must re-parse to the same verdict
+        // the lock entries serialize as, so a mismatch diffs like with like.
+        let pretty = serde_json::to_string_pretty(&o).expect("serialize output");
+        assert!(pretty.contains("\n  \"errors\": ["));
+        let parsed: NormalizedOutput =
+            serde_json::from_str(&pretty).expect("pretty json should reparse");
+        assert_eq!(parsed, o);
     }
 
     #[test]

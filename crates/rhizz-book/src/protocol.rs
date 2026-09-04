@@ -9,8 +9,8 @@
 use crate::blocks::{Segment, body_hash, parse_blocks, split_lines};
 use crate::compile::compile_body;
 use crate::lock::{
-    LOCK_FORMAT, LockPayload, accept_changes_enabled, compare_lock, read_lock, sorted_entries,
-    write_lock,
+    LOCK_FORMAT, LockPayload, accept_changes_enabled, compare_lock, format_diff, read_lock,
+    sorted_entries, write_lock,
 };
 use crate::transform::{CompileResults, transform_chapter};
 use anyhow::{Context, Result, bail};
@@ -202,11 +202,7 @@ pub fn process_book(
                     writeln!(err, "book.lock: note: {note}").context("write progress to stderr")?;
                 }
             } else {
-                let rendered = diffs
-                    .iter()
-                    .map(|diff| format!("  - {diff}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let rendered = diffs.iter().map(format_diff).collect::<Vec<_>>().join("\n");
                 if accept_changes {
                     write_lock(lock_path, &payload)?;
                     writeln!(

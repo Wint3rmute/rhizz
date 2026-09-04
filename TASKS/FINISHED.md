@@ -23,7 +23,10 @@ now pure Rust end-to-end.
   - `lock.rs` — `book.lock` read/write (atomic tmp+rename) / compare
     (new/changed/removed block, format mismatch, version-drift note),
     `BOOKLOCK_ACCEPT_CHANGES` flag parser. Field order is alphabetical to
-    keep the JSON byte-identical to the historical Python writer.
+    keep the JSON byte-identical to the historical Python writer. Output
+    changes render as a git-style unified diff (`--- book.lock` vs
+    `+++ current compiler`) of the pretty-printed JSON via the `similar`
+    crate, so reviewers see exactly which diagnostic/score lines drifted.
   - `render.rs` — HTML verdict panels reproduced byte-for-byte (same class
     names, ✓/⚠/✗ glyphs, em dashes, score stats, `html.escape` semantics).
   - `transform.rs` — chapter rewriting (`` ```hcl `` + panel) and lock traces.
