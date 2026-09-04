@@ -4,46 +4,37 @@ Completed tasks are listed here, most recent first.
 
 ---
 
-## Task 104 — Rust unit-test coverage reporting (cargo-tarpaulin)
+## Task 104 — Rust unit-test coverage reporting (cargo-llvm-cov)
 
-Added Rust unit-test coverage reporting with `cargo-tarpaulin`, installed in
-the nix dev shell and cached in CI.
+Added Rust unit-test coverage reporting with `cargo-llvm-cov` (migrated from
+`cargo-tarpaulin` per the migration guide), in the nix dev shell and gated in
+CI.
 
-- **`flake.nix`**: `pkgs.cargo-tarpaulin` (0.37.2) added to the dev shell, so
-  `just coverage` works locally with no extra setup.
-- **`Justfile`**: new `coverage` recipe runs
-  `cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*'
-  --out lcov --out html --output-dir target/coverage` — writes the CI-upload
-  `lcov.info` plus a human-readable `tarpaulin-report.html`; `coverage-open`
-  opens the HTML report.
-- **Scope decisions**: `rhizz-wasm` is excluded (statically-linked wasm
-  cdylib with no host tests — it showed as 0/218 and dragged the number
-  down); `crates/*/tests/*` integration-test files are excluded from the
-  source denominator (their own lines executing would otherwise inflate
-  coverage).
-- **`.github/workflows/ci.yml`** (coverage merged into the main `rust` job,
-  separate `code-coverage.yml` removed per user request): the `rust` job now
-  runs fmt + clippy + tests, then installs pinned tarpaulin (same cache key,
-  so the Swatinem/rust-cache hit is shared) and runs coverage with
-  `--fail-under 80` (gate: the job/PR fails below 80%; currently 83.34%).
-  There is no separate plain `cargo test` step — tarpaulin executes the
-  identical unit + integration suite under instrumentation, fails on test
-  failures, and enforces the gate (host crates have no doctests, the only
-  thing `cargo test` would additionally run).
-  The lcov report is uploaded as a `rust-coverage` artifact; `--out xml`
-  keeps the Cobertura report ready for when GitHub's native Code Quality
-  upload (beta, not yet available) can be enabled.
-- **One-time manual prerequisite** for native coverage later: repo Settings →
-  Security → Code quality → Enable code quality (free for public
-  repositories).
-- **`Justfile`**: `coverage` now also emits `--out xml` (`cobertura.xml`),
-  matching the CI command; `coverage-open` opens the HTML report.
-- **Coverage gate**: the CI workflow runs `--fail-under 80`, so the job
-  (and any pull request) fails when line coverage drops below 80%. The
-  workflow re-runs on both default-branch pushes and pull requests — the
-  per-PR instrumented rebuild is the accepted cost of a real gate.
-- **Current numbers**: 83.34% line coverage, 1791/2149 lines (4 host crates:
-  rhizz-core, rhizz-cli, rhizz-server, rhizz-book).
+- **`flake.nix`**: `pkgs.cargo-llvm-cov` in the dev shell; also
+  `pkgs.llvmPackages_21.llvm` (LLVM 21.1.8, matching rustc 1.97) with
+  `LLVM_COV`/`LLVM_PROFDATA` exported in `shellHook` — the NixOS equivalent of
+  rustup's `llvm-tools-preview` component.
+- **Scope decisions**: `rhizz-wasm` is excluded (`--exclude`; wasm cdylib
+  with no host tests) and `crates/*/tests/*` are excluded from the source
+  denominator via `--ignore-filename-regex`.
+- **`.github/workflows/ci.yml`** (coverage lives in the main `rust` job,
+  tests run in exactly one place): fmt + clippy, then
+  `taiki-e/install-action@v2` (prebuilt `cargo-llvm-cov` binary), then one
+  instrumented pass `cargo llvm-cov --workspace --all-features --exclude
+  rhizz-wasm --ignore-filename-regex 'crates/.*/tests/' --fail-under-lines 80
+  --lcov --output-path target/coverage/lcov.info` — runs the identical test
+  suite (fails the job on test failures and on <80% line coverage), plus a
+  fast `report` pass for `cobertura.xml` (reuses saved data, for when GitHub's
+  native Code Quality upload — beta — can be enabled). lcov uploaded as a
+  `rust-coverage` artifact. There is no separate plain `cargo test`.
+- **Numbers (validated per guide)**: llvm-cov measures regions, so totals
+  differ from tarpaulin's line count — 90.41% lines / 91.24% functions /
+  88.23% regions (vs tarpaulin 83.34% lines). Gate verified: exits 1 below
+  the threshold, 0 above (current 90.41% ≥ 80).
+- **`cargo-tarpaulin` fully removed** (no leftover references, no
+  tarpaulin.toml); local `Justfile` coverage tasks were dropped earlier by the
+  user's Justfile cleanup, so local coverage is dev-shell-only
+  (`cargo llvm-cov` with the flake-provided LLVM env).
 - Validated with `just lint`, `just build`, Rust tests (16 suites) + web unit
   tests (474) — all green. (`just test`'s storybook leg still needs Playwright's
   Chromium, which is not installed on this NixOS machine — pre-existing local
