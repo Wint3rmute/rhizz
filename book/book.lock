@@ -2,8 +2,100 @@
   "entries": [
     {
       "chapter": "greeter.md",
-      "hcl": "component \"battery\" {\n  description = \"Small AAA battery providing power\"\n}",
-      "input_sha256": "b1097d26434c7a13d7d57b14f55ae9c5904f46419b3ff5b5ef66efded355c307",
+      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
+      "input_sha256": "c6df9297fcd60ca8df1f49594b62ba4996109c49612ea0d4d35f3af9382b741a",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 3,
+            "total": 3
+          },
+          "connections": {
+            "complete": 0,
+            "total": 0
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 3,
+            "percent": 100.0,
+            "total": 3
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'front-wheel' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'rear-wheel' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'wheel' is not referenced by any connection"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "greeter.md",
+      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n}",
+      "input_sha256": "dbaef0c2bccfebfd5243e8c95378e53ce91dbb6a72c774ed3a248a9035520f1c",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 7,
+            "total": 7
+          },
+          "connections": {
+            "complete": 0,
+            "total": 2
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 7,
+            "percent": 77.8,
+            "total": 9
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'fork' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'frame' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'wheel' is not referenced by any connection"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "greeter.md",
+      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n}",
+      "input_sha256": "e60a19d0d7a42325a736f04e05be52a9d526b2796a98fe1af3a3dfc9803c7204",
       "output": {
         "errors": [],
         "score": {
@@ -33,11 +125,11 @@
         "warnings": [
           {
             "code": "W001",
-            "message": "component 'battery' is non-leaf but has no child components"
+            "message": "component 'wheel' is non-leaf but has no child components"
           },
           {
             "code": "W003",
-            "message": "component 'battery' is not referenced by any connection"
+            "message": "component 'wheel' is not referenced by any connection"
           }
         ]
       }

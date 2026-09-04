@@ -67,8 +67,8 @@ rest of your product's infrastructure.
 ## Components
 
 ```rhizz
-component "battery" {
-  description = "Small AAA battery providing power"
+component "wheel" {
+  description = "A spinning round object"
 }
 ```
 
@@ -80,3 +80,74 @@ how to "place" (instantiate) your `component` definitions in your systems.
 You can already see that the Rhizz compiler started warning you about some
 issues with that definition. More on those issues in the Components in Detail
 page!
+
+> TODO: add component details page
+
+## Instances
+
+You now know about `systems` and about `components`, lets put this together
+and place a component in a system:
+
+```rhizz
+component "wheel" {
+  description = "A spinning round object"
+  leaf = true
+}
+
+system "bicycle" {
+  description = "Personal transport vehicle"
+
+  instance "front-wheel" {source = "wheel"}
+  instance "rear-wheel" {source = "wheel"}
+}
+```
+
+We've reused a `battery` 3 times to create a `battery-pack`! For the sake of
+brevity, I marked `battery` with `leaf = true`, so that the compiler won't
+complain about the battery not being fully defined. We'll come back to this
+later, you can ignore this fact for now.
+
+## Connections
+
+The warning *"component 'SOME_NAME' is not referenced by any connection"* keeps on
+appearing, let's fix it!
+
+```rhizz
+component "wheel" {
+  description = "A spinning round object"
+  leaf = true
+}
+
+component "fork" {
+  description = "Holds the front wheel"
+  leaf = true
+}
+
+component "frame"  {
+  description = "main component of a bicycle"
+  leaf = true
+}
+
+system "bicycle" {
+  description = "Personal transport vehicle"
+
+  instance "front-wheel" {source = "wheel"}
+  instance "rear-wheel" {source = "wheel"}
+  instance "fork" {source = "fork"}
+  instance "frame" {source = "frame"}
+
+  connection "front-wheel-mount" {
+    description = "keeps the front wheel attached"
+    from = "./front-wheel"
+    to = "fork"
+  }
+
+  connection "rear-wheel-mount" {
+    description = "keeps the rear wheel attached"
+    from = "./rear-wheel"
+    to = "./frame"
+  }
+}
+```
+
+> TODO: why W003 still appears for standalone components...?
