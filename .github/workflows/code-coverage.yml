@@ -1,12 +1,18 @@
 # Uploads Rust unit-test coverage to GitHub's built-in code coverage,
 # following the docs setup guide
-# (docs.github.com/en/code-security/how-tos/maintain-quality-code/set-up-code-coverage):
-# - runs on pushes to the default branch (establishes the baseline) and on
-#   pull requests (coverage is compared against the baseline);
-# - generates a Cobertura XML report (cargo-tarpaulin --out xml) and uploads
-#   it with actions/upload-code-coverage, which requires no third-party
-#   service; github-code-quality[bot] then posts coverage on the PR;
-# - `code-quality: write` permission is required for the upload.
+# (docs.github.com/en/code-security/how-tos/maintain-quality-code/set-up-code-coverage).
+#
+# Runs only on the default branch for now: the results are reporting-only
+# (upload disabled until Code Quality reaches this repo), so there is no
+# point in paying the instrumented rebuild + test time on every PR. When the
+# native coverage feature becomes available, re-enable the upload step and
+# add pull_request back to `on` so code-quality[bot] can compare PR coverage
+# against this baseline.
+#
+# - generates a Cobertura XML report (cargo-tarpaulin --out xml) and keeps
+#   the raw lcov report as an artifact;
+# - `code-quality: write` permission is kept ready for the (currently
+#   commented out) upload step.
 #
 # Prerequisite (one-time, repo settings): Settings > Security > Code quality
 # > Enable code quality. Free for public repositories.
@@ -14,8 +20,6 @@ name: code-coverage
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
     branches: [main, master]
 
 jobs:
@@ -25,11 +29,9 @@ jobs:
       contents: read
       code-quality: write
     steps:
-      # Check out the PR head commit (not the merge commit) so coverage line
-      # numbers map correctly to the diff.
+      # Plain checkout; the ref defaults to the pushed commit (the PR-head
+      # checkout was needed only when the workflow also ran on PRs).
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
