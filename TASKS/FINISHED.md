@@ -21,20 +21,17 @@ the nix dev shell and cached in CI.
   down); `crates/*/tests/*` integration-test files are excluded from the
   source denominator (their own lines executing would otherwise inflate
   coverage).
-- **`.github/workflows/code-coverage.yml`**: new dedicated workflow following
-  GitHub's built-in code coverage setup guide (no third-party service). Runs
-  on push to the default branch (baseline) and on pull requests; checks out
-  the PR head commit so line numbers map to the diff; requires
-  `code-quality: write` permission; installs pinned tarpaulin (cached via
-  `Swatinem/rust-cache`); runs the same flags as `just coverage` plus
-  `--out xml`; uploads the Cobertura report via
-  `actions/upload-code-coverage@v1` (`language: Rust`,
-  `label: code-coverage/rust`) so `github-code-quality[bot]` posts coverage
-  on PRs. The raw `lcov.info` is still uploaded as a `rust-coverage`
-  artifact. The `coverage` job previously added to ci.yml was removed
-  (superseded). **One-time manual prerequisite** (not doable from the
-  repo): repo Settings → Security → Code quality → Enable code quality
-  (free for public repositories).
+- **`.github/workflows/ci.yml`** (coverage merged into the main `rust` job,
+  separate `code-coverage.yml` removed per user request): the `rust` job now
+  runs fmt + clippy + tests, then installs pinned tarpaulin (same cache key,
+  so the Swatinem/rust-cache hit is shared) and runs coverage with
+  `--fail-under 80` (gate: the job/PR fails below 80%; currently 83.34%).
+  The lcov report is uploaded as a `rust-coverage` artifact; `--out xml`
+  keeps the Cobertura report ready for when GitHub's native Code Quality
+  upload (beta, not yet available) can be enabled.
+- **One-time manual prerequisite** for native coverage later: repo Settings →
+  Security → Code quality → Enable code quality (free for public
+  repositories).
 - **`Justfile`**: `coverage` now also emits `--out xml` (`cobertura.xml`),
   matching the CI command; `coverage-open` opens the HTML report.
 - **Coverage gate**: the CI workflow runs `--fail-under 80`, so the job
