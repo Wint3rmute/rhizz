@@ -33,11 +33,12 @@ now pure Rust end-to-end.
   - **tracing logs**: block processing is now instrumented with `tracing`
     (already in the workspace) — `info!` events per distinct body (bytes,
     error/warning counts, scored flag) and per rendered block (chapter, sha,
-    counts, compiled flag) under `process_book`/`compile_body`/
-    `transform_chapter` spans, plus a pipeline summary. `main` installs a
+    counts, compiled flag), plus a pipeline summary. `main` installs a
     stderr-only subscriber defaulting to `info` (overridable via `RUST_LOG`)
     with the same TTY/`NO_COLOR` color policy as the lock diff; stdout stays
-    clean for the mdbook protocol.
+    clean for the mdbook protocol. The formatter mirrors mdbook's own style
+    (bare `LEVEL message`, no timestamps/targets/span context — all useful
+    fields are inline on each event).
   - `render.rs` — HTML verdict panels reproduced byte-for-byte (same class
     names, ✓/⚠/✗ glyphs, em dashes, score stats, `html.escape` semantics).
   - `transform.rs` — chapter rewriting (`` ```hcl `` + panel) and lock traces.

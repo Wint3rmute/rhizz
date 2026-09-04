@@ -81,8 +81,10 @@ fn color_enabled() -> bool {
 /// Install a `tracing` subscriber for info-level processing logs, written to
 /// stderr (never stdout, which carries the mdbook protocol payload).
 ///
-/// `RUST_LOG` overrides the default `info` filter; colors follow the same
-/// TTY + `NO_COLOR` policy as the lock diff.
+/// The formatter mirrors mdbook's own `env_logger` style: bare level +
+/// message, no timestamps, targets or span context — all useful context lives
+/// on the event fields. `RUST_LOG` overrides the default `info` filter; colors
+/// follow the same TTY + `NO_COLOR` policy as the lock diff.
 fn init_tracing() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -90,6 +92,7 @@ fn init_tracing() {
         .with_env_filter(filter)
         .with_writer(io::stderr)
         .with_ansi(color_enabled())
+        .without_time()
         .with_target(false)
         .init();
 }

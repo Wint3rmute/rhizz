@@ -91,7 +91,6 @@ pub fn normalize_result(result: &CompileResult) -> Verdict {
 }
 
 /// Compile one `` ```rhizz `` block body.
-#[tracing::instrument(skip(body), fields(bytes = body.len()))]
 #[must_use]
 pub fn compile_body(body: &str) -> Verdict {
     let source = Source {
@@ -100,6 +99,7 @@ pub fn compile_body(body: &str) -> Verdict {
     };
     let verdict = normalize_result(&rhizz_core::compile(std::slice::from_ref(&source)));
     tracing::info!(
+        bytes = body.len(),
         errors = verdict.errors.len(),
         warnings = verdict.warnings.len(),
         scored = verdict.score.is_some(),
