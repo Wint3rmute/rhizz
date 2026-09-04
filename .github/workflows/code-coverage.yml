@@ -44,16 +44,23 @@ jobs:
 
       # Same flags as `just coverage`; rhizz-wasm is excluded (no host tests)
       # and crates/*/tests are not counted as source. --out xml produces the
-      # Cobertura report the upload action consumes.
+      # Cobertura report the upload step would consume once GitHub's native
+      # coverage (Code Quality) reaches this repository (currently a beta,
+      # not yet available to this account).
       - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --output-dir target/coverage
 
-      - name: Upload coverage report
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/upload-code-coverage@v1
-        with:
-          file: target/coverage/cobertura.xml
-          language: Rust
-          label: code-coverage/rust
+      # GitHub's native code coverage (Code Quality) is in beta and has not
+      # rolled out to this repository yet, so uploading is disabled for now.
+      # When Settings > Security > Code quality becomes available and is
+      # enabled, re-enable the upload step; it needs `code-quality: write`
+      # permission (see the permissions block above).
+      # - name: Upload coverage report
+      #   if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+      #   uses: actions/upload-code-coverage@v1
+      #   with:
+      #     file: target/coverage/cobertura.xml
+      #     language: Rust
+      #     label: code-coverage/rust
 
       # Raw lcov report kept for humans who want the data outside GitHub's UI.
       - uses: actions/upload-artifact@v7
