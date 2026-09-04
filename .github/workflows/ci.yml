@@ -40,7 +40,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
 
@@ -49,6 +49,25 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
       - run: cargo test --all --quiet
+
+      # Coverage runs in the same job so the Swatinem/rust-cache key (which
+      # includes RUSTFLAGS) is shared and tests run in exactly one place.
+      # Pinned to the same version as the nix dev shell
+      # (pkgs.cargo-tarpaulin); --locked is not usable: the published crate
+      # does not carry a Cargo.lock.
+      - run: cargo install cargo-tarpaulin --version 0.37.2
+
+      # Same flags as `just coverage`, plus the 80% gate; rhizz-wasm is
+      # excluded (wasm cdylib, no host tests) and crates/*/tests are not
+      # counted as source. --out xml produces the Cobertura report the
+      # native Code Quality upload (beta, not yet available) would consume.
+      - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --fail-under 80 --output-dir target/coverage
+
+      # Raw lcov report kept for humans who want the data outside the log.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rust-coverage
+          path: target/coverage/lcov.info
 
       - run: cargo build --release --quiet
 
