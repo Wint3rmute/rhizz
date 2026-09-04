@@ -1109,6 +1109,8 @@ dependencies = [
  "sha2 0.10.9",
  "similar",
  "tempfile",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

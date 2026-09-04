@@ -91,13 +91,21 @@ pub fn normalize_result(result: &CompileResult) -> Verdict {
 }
 
 /// Compile one `` ```rhizz `` block body.
+#[tracing::instrument(skip(body), fields(bytes = body.len()))]
 #[must_use]
 pub fn compile_body(body: &str) -> Verdict {
     let source = Source {
         filename: BLOCK_FILENAME.to_owned(),
         content: body.to_owned(),
     };
-    normalize_result(&rhizz_core::compile(std::slice::from_ref(&source)))
+    let verdict = normalize_result(&rhizz_core::compile(std::slice::from_ref(&source)));
+    tracing::info!(
+        errors = verdict.errors.len(),
+        warnings = verdict.warnings.len(),
+        scored = verdict.score.is_some(),
+        "compiled rhizz block"
+    );
+    verdict
 }
 
 /// Build the JSON score object with the same shape as `rhizz --json build`

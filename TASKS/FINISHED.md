@@ -30,6 +30,14 @@ now pure Rust end-to-end.
     when stderr is a terminal (and `NO_COLOR` is unset) the diff is
     ANSI-colored with git's own scheme (bold-yellow headers, cyan hunks,
     red removals, green additions).
+  - **tracing logs**: block processing is now instrumented with `tracing`
+    (already in the workspace) — `info!` events per distinct body (bytes,
+    error/warning counts, scored flag) and per rendered block (chapter, sha,
+    counts, compiled flag) under `process_book`/`compile_body`/
+    `transform_chapter` spans, plus a pipeline summary. `main` installs a
+    stderr-only subscriber defaulting to `info` (overridable via `RUST_LOG`)
+    with the same TTY/`NO_COLOR` color policy as the lock diff; stdout stays
+    clean for the mdbook protocol.
   - `render.rs` — HTML verdict panels reproduced byte-for-byte (same class
     names, ✓/⚠/✗ glyphs, em dashes, score stats, `html.escape` semantics).
   - `transform.rs` — chapter rewriting (`` ```hcl `` + panel) and lock traces.

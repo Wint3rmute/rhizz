@@ -138,6 +138,7 @@ fn walk_mut(items: &mut [Value], rewrite: &mut impl FnMut(&str, &str) -> String)
 /// happen), when the lock file is missing or stale (unless
 /// `accept_changes`), when the lock is corrupt, or when lock I/O fails.
 /// Progress and diff output are written to `err`.
+#[tracing::instrument(skip_all, fields(lock = %lock_path.display(), version = %version, accept_changes = %accept_changes))]
 pub fn process_book(
     book: &mut Value,
     lock_path: &Path,
@@ -160,6 +161,10 @@ pub fn process_book(
     });
 
     // Compile each distinct body once, keyed by hash.
+    tracing::info!(
+        distinct_blocks = bodies.len(),
+        "compiling distinct rhizz blocks"
+    );
     let results: CompileResults = bodies
         .into_iter()
         .map(|(hash, body)| (hash, compile_body(&body)))

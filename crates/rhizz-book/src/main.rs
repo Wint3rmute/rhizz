@@ -42,6 +42,8 @@ fn run() -> anyhow::Result<ExitCode> {
         });
     }
 
+    init_tracing();
+
     let raw = read_stdin(&mut io::stdin())?;
     if raw.trim().is_empty() {
         println!("{{\"items\": []}}");
@@ -74,4 +76,20 @@ fn color_enabled() -> bool {
     let interactive = std::io::stderr().is_terminal();
     let no_color = std::env::var_os("NO_COLOR").is_some();
     interactive && !no_color
+}
+
+/// Install a `tracing` subscriber for info-level processing logs, written to
+/// stderr (never stdout, which carries the mdbook protocol payload).
+///
+/// `RUST_LOG` overrides the default `info` filter; colors follow the same
+/// TTY + `NO_COLOR` policy as the lock diff.
+fn init_tracing() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(io::stderr)
+        .with_ansi(color_enabled())
+        .with_target(false)
+        .init();
 }

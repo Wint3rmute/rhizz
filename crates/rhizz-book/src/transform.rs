@@ -20,6 +20,7 @@ pub type CompileResults = HashMap<String, Verdict>;
 /// Returns the new chapter content (blocks replaced by `` ```hcl `` + panel)
 /// and the per-block traces for `book.lock`. Ignored blocks are rendered but
 /// never traced.
+#[tracing::instrument(skip_all, fields(chapter = %chapter_path))]
 #[must_use]
 pub fn transform_chapter(
     chapter_path: &str,
@@ -43,6 +44,7 @@ pub fn transform_chapter(
                 out.push(String::new());
 
                 if attrs.iter().any(|attr| attr == "ignore") {
+                    tracing::info!(input_sha = %sha, compiled = false, "processed rhizz block (ignored)");
                     out.push(IGNORE_PANEL.to_owned());
                     out.push(String::new());
                     continue;
@@ -50,6 +52,13 @@ pub fn transform_chapter(
 
                 match results.get(&sha) {
                     Some(verdict) => {
+                        tracing::info!(
+                            input_sha = %sha,
+                            compiled = true,
+                            errors = verdict.errors.len(),
+                            warnings = verdict.warnings.len(),
+                            "processed rhizz block"
+                        );
                         traces.push(LockEntry {
                             chapter: chapter_path.to_owned(),
                             hcl: body_new,
