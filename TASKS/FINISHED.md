@@ -37,7 +37,11 @@ the nix dev shell and cached in CI.
   (free for public repositories).
 - **`Justfile`**: `coverage` now also emits `--out xml` (`cobertura.xml`),
   matching the CI command; `coverage-open` opens the HTML report.
-- **Current numbers**: 83.39% line coverage, 1792/2149 lines (4 host crates:
+- **Coverage gate**: the CI workflow runs `--fail-under 80`, so the job
+  (and any pull request) fails when line coverage drops below 80%. The
+  workflow re-runs on both default-branch pushes and pull requests — the
+  per-PR instrumented rebuild is the accepted cost of a real gate.
+- **Current numbers**: 83.34% line coverage, 1791/2149 lines (4 host crates:
   rhizz-core, rhizz-cli, rhizz-server, rhizz-book).
 - Validated with `just lint`, `just build`, Rust tests (16 suites) + web unit
   tests (474) — all green. (`just test`'s storybook leg still needs Playwright's

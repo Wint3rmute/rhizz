@@ -1,25 +1,22 @@
-# Uploads Rust unit-test coverage to GitHub's built-in code coverage,
-# following the docs setup guide
-# (docs.github.com/en/code-security/how-tos/maintain-quality-code/set-up-code-coverage).
+# Rust unit-test coverage, produced by cargo-tarpaulin.
 #
-# Runs only on the default branch for now: the results are reporting-only
-# (upload disabled until Code Quality reaches this repo), so there is no
-# point in paying the instrumented rebuild + test time on every PR. When the
-# native coverage feature becomes available, re-enable the upload step and
-# add pull_request back to `on` so code-quality[bot] can compare PR coverage
-# against this baseline.
-#
-# - generates a Cobertura XML report (cargo-tarpaulin --out xml) and keeps
-#   the raw lcov report as an artifact;
-# - `code-quality: write` permission is kept ready for the (currently
-#   commented out) upload step.
-#
-# Prerequisite (one-time, repo settings): Settings > Security > Code quality
-# > Enable code quality. Free for public repositories.
+# - Generates a Cobertura XML report (--out xml) and keeps the raw lcov
+#   report as a rust-coverage artifact.
+# - GATES on line coverage: --fail-under 80 fails the job (and thus any
+#   pull request that runs it) when coverage drops below 80%.
+# - Runs on pushes to the default branch (baseline) and on pull requests so
+#   the gate actually blocks PRs — the per-PR instrumented rebuild is the
+#   accepted cost of a coverage gate.
+# - The native-upload step (GitHub Code Quality) stays commented out: the
+#   feature is in beta and not yet available to this repository. When it
+#   arrives, enable it — it needs `code-quality: write` permission (kept in
+#   the permissions block below) and the Cobertura report this job produces.
 name: code-coverage
 
 on:
   push:
+    branches: [main, master]
+  pull_request:
     branches: [main, master]
 
 jobs:
@@ -29,9 +26,11 @@ jobs:
       contents: read
       code-quality: write
     steps:
-      # Plain checkout; the ref defaults to the pushed commit (the PR-head
-      # checkout was needed only when the workflow also ran on PRs).
+      # Check out the PR head commit (not the merge commit) so coverage and
+      # any future per-file diff reporting map line numbers to the diff.
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -44,12 +43,11 @@ jobs:
       # crate does not carry a Cargo.lock.
       - run: cargo install cargo-tarpaulin --version 0.37.2
 
-      # Same flags as `just coverage`; rhizz-wasm is excluded (no host tests)
-      # and crates/*/tests are not counted as source. --out xml produces the
-      # Cobertura report the upload step would consume once GitHub's native
-      # coverage (Code Quality) reaches this repository (currently a beta,
-      # not yet available to this account).
-      - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --output-dir target/coverage
+      # Same flags as `just coverage`, plus the 80% gate; rhizz-wasm is
+      # excluded (no host tests) and crates/*/tests are not counted as source.
+      # --out xml produces the Cobertura report the upload step would consume
+      # once GitHub's native coverage (Code Quality) reaches this repository.
+      - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --fail-under 80 --output-dir target/coverage
 
       # GitHub's native code coverage (Code Quality) is in beta and has not
       # rolled out to this repository yet, so uploading is disabled for now.
