@@ -141,7 +141,6 @@ fn compile_distinct_bodies(
         match chapters {
             [chapter] => tracing::info!(
                 chapter = %chapter,
-                bytes = body.len(),
                 errors = verdict.errors.len(),
                 warnings = verdict.warnings.len(),
                 scored = verdict.score.is_some(),
@@ -149,7 +148,6 @@ fn compile_distinct_bodies(
             ),
             chapters => tracing::info!(
                 chapters = chapters.len(),
-                bytes = body.len(),
                 errors = verdict.errors.len(),
                 warnings = verdict.warnings.len(),
                 scored = verdict.score.is_some(),
