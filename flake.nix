@@ -18,6 +18,7 @@
               pkgs.rustc
               pkgs.cargo
               pkgs.cargo-audit
+              pkgs.cargo-tarpaulin
               pkgs.clippy
               pkgs.mdbook
               pkgs.rustfmt

@@ -4,6 +4,41 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 104 — Rust unit-test coverage reporting (cargo-tarpaulin)
+
+Added Rust unit-test coverage reporting with `cargo-tarpaulin`, installed in
+the nix dev shell and cached in CI.
+
+- **`flake.nix`**: `pkgs.cargo-tarpaulin` (0.37.2) added to the dev shell, so
+  `just coverage` works locally with no extra setup.
+- **`Justfile`**: new `coverage` recipe runs
+  `cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*'
+  --out lcov --out html --output-dir target/coverage` — writes the CI-upload
+  `lcov.info` plus a human-readable `tarpaulin-report.html`; `coverage-open`
+  opens the HTML report.
+- **Scope decisions**: `rhizz-wasm` is excluded (statically-linked wasm
+  cdylib with no host tests — it showed as 0/218 and dragged the number
+  down); `crates/*/tests/*` integration-test files are excluded from the
+  source denominator (their own lines executing would otherwise inflate
+  coverage).
+- **`.github/workflows/ci.yml`**: new `coverage` job — `dtolnay/rust-toolchain`
+  with `llvm-tools-preview`, `Swatinem/rust-cache` (persists the cargo-installed
+  tarpaulin binary in `~/.cargo/bin` and the target dir, so the expensive
+  `cargo install` and rebuild happen once per cache key), pinned
+  `cargo install cargo-tarpaulin --version 0.37.2` (no `--locked`: the
+  published crate carries no Cargo.lock — verified against the crates.io
+  .crate archive), same tarpaulin flags as `just coverage`, and the lcov
+  report uploaded as a `rust-coverage` artifact. Reporting only — no
+  `--fail-under` gate yet.
+- **Current numbers**: 83.39% line coverage, 1792/2149 lines (4 host crates:
+  rhizz-core, rhizz-cli, rhizz-server, rhizz-book).
+- Validated with `just lint`, `just build`, Rust tests (16 suites) + web unit
+  tests (474) — all green. (`just test`'s storybook leg still needs Playwright's
+  Chromium, which is not installed on this NixOS machine — pre-existing local
+  limitation, unrelated to this change.)
+
+---
+
 ## Task 103 — Rewrite the book/ preprocessor in Rust
 
 Replaced the Python mdBook preprocessor (`book/preprocessors/rhizz.py` + its
