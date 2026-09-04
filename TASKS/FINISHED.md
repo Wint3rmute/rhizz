@@ -38,7 +38,9 @@ now pure Rust end-to-end.
     with the same TTY/`NO_COLOR` color policy as the lock diff; stdout stays
     clean for the mdbook protocol. The formatter mirrors mdbook's own style
     (bare `LEVEL message`, no timestamps/targets/span context — all useful
-    fields are inline on each event).
+    fields are inline on each event). Compile events name their owning chapter
+    (or `chapters=N` for bodies shared by several chapters, tracked via a
+    reverse chapter index during collection).
   - `render.rs` — HTML verdict panels reproduced byte-for-byte (same class
     names, ✓/⚠/✗ glyphs, em dashes, score stats, `html.escape` semantics).
   - `transform.rs` — chapter rewriting (`` ```hcl `` + panel) and lock traces.

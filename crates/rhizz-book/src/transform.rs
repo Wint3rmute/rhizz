@@ -44,7 +44,7 @@ pub fn transform_chapter(
 
                 if attrs.iter().any(|attr| attr == "ignore") {
                     tracing::info!(
-                        chapter = chapter_path,
+                        chapter = %chapter_path,
                         input_sha = %sha,
                         compiled = false,
                         "processed rhizz block (ignored)"
@@ -57,7 +57,7 @@ pub fn transform_chapter(
                 match results.get(&sha) {
                     Some(verdict) => {
                         tracing::info!(
-                            chapter = chapter_path,
+                            chapter = %chapter_path,
                             input_sha = %sha,
                             compiled = true,
                             errors = verdict.errors.len(),

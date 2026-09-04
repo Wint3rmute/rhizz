@@ -97,15 +97,7 @@ pub fn compile_body(body: &str) -> Verdict {
         filename: BLOCK_FILENAME.to_owned(),
         content: body.to_owned(),
     };
-    let verdict = normalize_result(&rhizz_core::compile(std::slice::from_ref(&source)));
-    tracing::info!(
-        bytes = body.len(),
-        errors = verdict.errors.len(),
-        warnings = verdict.warnings.len(),
-        scored = verdict.score.is_some(),
-        "compiled rhizz block"
-    );
-    verdict
+    normalize_result(&rhizz_core::compile(std::slice::from_ref(&source)))
 }
 
 /// Build the JSON score object with the same shape as `rhizz --json build`

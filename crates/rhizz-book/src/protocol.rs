@@ -126,6 +126,41 @@ fn walk_mut(items: &mut [Value], rewrite: &mut impl FnMut(&str, &str) -> String)
     }
 }
 
+/// Compile each distinct body once and log one line per body, naming the
+/// owning chapter when the body is used by exactly one chapter and the share
+/// count otherwise.
+#[must_use]
+fn compile_distinct_bodies(
+    bodies: &HashMap<String, String>,
+    used_by: &HashMap<String, Vec<String>>,
+) -> CompileResults {
+    let mut results: CompileResults = HashMap::with_capacity(bodies.len());
+    for (hash, body) in bodies {
+        let verdict = compile_body(body);
+        let chapters = used_by.get(hash).map_or(&[][..], Vec::as_slice);
+        match chapters {
+            [chapter] => tracing::info!(
+                chapter = %chapter,
+                bytes = body.len(),
+                errors = verdict.errors.len(),
+                warnings = verdict.warnings.len(),
+                scored = verdict.score.is_some(),
+                "compiled rhizz block"
+            ),
+            chapters => tracing::info!(
+                chapters = chapters.len(),
+                bytes = body.len(),
+                errors = verdict.errors.len(),
+                warnings = verdict.warnings.len(),
+                scored = verdict.score.is_some(),
+                "compiled rhizz block (shared body)"
+            ),
+        }
+        results.insert(hash.clone(), verdict);
+    }
+    results
+}
+
 /// Run the full pipeline for one mdbook build.
 ///
 /// Compiles every distinct block body once, transforms every chapter,
@@ -146,28 +181,33 @@ pub fn process_book(
     color: bool,
     err: &mut dyn Write,
 ) -> Result<String> {
-    // Collect the distinct block bodies first.
+    // Collect the distinct block bodies, tracking which chapters reference
+    // each one so the compile logs below can name their origin even though a
+    // body is compiled once across the whole book (and may be shared).
     let mut bodies: HashMap<String, String> = HashMap::new();
-    for_each_chapter(book, &mut |_, content| {
+    let mut used_by: HashMap<String, Vec<String>> = HashMap::new();
+    for_each_chapter(book, &mut |chapter, content| {
         for segment in &parse_blocks(&split_lines(content)) {
             if let Segment::Block { attrs, body } = segment
                 && !attrs.iter().any(|attr| attr == "ignore")
             {
                 let body_new = body.join("\n");
-                bodies.entry(body_hash(&body_new)).or_insert(body_new);
+                let hash = body_hash(&body_new);
+                if !used_by.contains_key(&hash) {
+                    bodies.insert(hash.clone(), body_new);
+                }
+                used_by.entry(hash).or_default().push(chapter.to_owned());
             }
         }
     });
 
-    // Compile each distinct body once, keyed by hash.
+    // Compile each distinct body once, attributing the log line to its
+    // chapter when the body is unique, otherwise noting the share count.
     tracing::info!(
         distinct_blocks = bodies.len(),
         "compiling distinct rhizz blocks"
     );
-    let results: CompileResults = bodies
-        .into_iter()
-        .map(|(hash, body)| (hash, compile_body(&body)))
-        .collect();
+    let results = compile_distinct_bodies(&bodies, &used_by);
 
     // Transform every chapter, collecting the input→output traces.
     let mut traces = Vec::new();
