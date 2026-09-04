@@ -52,34 +52,6 @@ jobs:
 
       - run: cargo build --release --quiet
 
-  # Produces Rust unit-test coverage (lcov) and uploads it as an artifact.
-  # Swatinem/rust-cache persists both the cargo-installed tarpaulin binary
-  # (in ~/.cargo/bin) and the target dir, so subsequent runs reuse the cache.
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy, llvm-tools-preview
-
-      - uses: Swatinem/rust-cache@v2
-
-      # Pinned to the same version as the nix dev shell (pkgs.cargo-tarpaulin)
-      # so local and CI numbers match. --locked is not usable: the published
-      # crate does not carry a Cargo.lock.
-      - run: cargo install cargo-tarpaulin --version 0.37.2
-
-      # Same flags as `just coverage`; rhizz-wasm is excluded (no host tests)
-      # and crates/*/tests are not counted as source.
-      - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --output-dir target/coverage
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rust-coverage
-          path: target/coverage/lcov.info
-
   audit:
     runs-on: ubuntu-latest
     permissions:
