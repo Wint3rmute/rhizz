@@ -48,20 +48,25 @@ jobs:
 
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
-      # No separate `cargo test` step: the tarpaulin run below executes the
-      # identical test suite (unit + integration tests; doctests are absent
-      # from all host crates) under instrumentation, fails the job on any
-      # test failure, and enforces the coverage gate — one test run, one
-      # place. Pinned to the same version as the nix dev shell
-      # (pkgs.cargo-tarpaulin); --locked is not usable: the published crate
-      # does not carry a Cargo.lock.
-      - run: cargo install cargo-tarpaulin --version 0.37.2
+      # No separate `cargo test` step: the coverage run below executes the
+      # identical test suite (unit + integration; doctests are absent from
+      # all host crates) under instrumentation, fails on test failures, and
+      # enforces the gate — one test run, one place. cargo-llvm-cov is
+      # installed via prebuilt binary (same version locally via nixpkgs).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
-      # Same flags as `just coverage`, plus the 80% gate; rhizz-wasm is
-      # excluded (wasm cdylib, no host tests) and crates/*/tests are not
-      # counted as source. --out xml produces the Cobertura report the
-      # native Code Quality upload (beta, not yet available) would consume.
-      - run: cargo tarpaulin --workspace -e rhizz-wasm --exclude-files 'crates/*/tests/*' --out lcov --out xml --fail-under 80 --output-dir target/coverage
+      # Single instrumented pass: runs all tests + writes lcov + enforces the
+      # 80% line-coverage gate. rhizz-wasm is excluded (wasm cdylib, no host
+      # tests) and crates/*/tests are not counted as source. The cobertura
+      # report is generated from the same saved data (no re-test) for when
+      # GitHub's native Code Quality upload (beta) becomes available.
+      - name: Rust coverage (llvm-cov)
+        run: |
+          mkdir -p target/coverage
+          cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex 'crates/.*/tests/' --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
+          cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex 'crates/.*/tests/' --cobertura --output-path target/coverage/cobertura.xml
 
       # Raw lcov report kept for humans who want the data outside the log.
       - uses: actions/upload-artifact@v7

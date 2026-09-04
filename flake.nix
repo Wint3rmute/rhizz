@@ -18,7 +18,7 @@
               pkgs.rustc
               pkgs.cargo
               pkgs.cargo-audit
-              pkgs.cargo-tarpaulin
+              pkgs.cargo-llvm-cov
               pkgs.clippy
               pkgs.mdbook
               pkgs.rustfmt
@@ -27,7 +27,17 @@
               pkgs.lld
               pkgs.flyctl
               pkgs.gh
+              # LLVM tools matching rustc's LLVM (21.1.8), required by
+              # cargo-llvm-cov (NixOS equivalent of rustup's
+              # llvm-tools-preview component).
+              pkgs.llvmPackages_21.llvm
             ];
+
+            # Point cargo-llvm-cov at the Nix-managed LLVM tools.
+            shellHook = ''
+              export LLVM_COV="${pkgs.llvmPackages_21.llvm}/bin/llvm-cov"
+              export LLVM_PROFDATA="${pkgs.llvmPackages_21.llvm}/bin/llvm-profdata"
+            '';
 
             # LLMs often want to use a Python environment with some popular
             # libraries for running one-off validation/exploration commands
