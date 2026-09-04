@@ -15,7 +15,7 @@ use rhizz_book::protocol::{
 };
 use serde_json::Value;
 use std::env;
-use std::io;
+use std::io::{self, IsTerminal};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -60,9 +60,18 @@ fn run() -> anyhow::Result<ExitCode> {
         &lock_path,
         &version_string(),
         accept_changes_enabled(),
+        color_enabled(),
         &mut io::stderr(),
     )?;
     print!("{json}");
 
     Ok(ExitCode::SUCCESS)
+}
+
+/// Whether diagnostics may be ANSI-colored: only when stderr is a terminal
+/// and `NO_COLOR` is not set (git's own convention).
+fn color_enabled() -> bool {
+    let interactive = std::io::stderr().is_terminal();
+    let no_color = std::env::var_os("NO_COLOR").is_some();
+    interactive && !no_color
 }

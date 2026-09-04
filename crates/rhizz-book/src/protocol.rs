@@ -143,6 +143,7 @@ pub fn process_book(
     lock_path: &Path,
     version: &str,
     accept_changes: bool,
+    color: bool,
     err: &mut dyn Write,
 ) -> Result<String> {
     // Collect the distinct block bodies first.
@@ -202,7 +203,11 @@ pub fn process_book(
                     writeln!(err, "book.lock: note: {note}").context("write progress to stderr")?;
                 }
             } else {
-                let rendered = diffs.iter().map(format_diff).collect::<Vec<_>>().join("\n");
+                let rendered = diffs
+                    .iter()
+                    .map(|diff| format_diff(diff, color))
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 if accept_changes {
                     write_lock(lock_path, &payload)?;
                     writeln!(
@@ -356,7 +361,7 @@ mod tests {
         let mut err = Cursor::new(Vec::new());
 
         let mut book = sample_book();
-        let json_out = process_book(&mut book, &lock_path, "rhizz 0.1.0", true, &mut err)
+        let json_out = process_book(&mut book, &lock_path, "rhizz 0.1.0", true, false, &mut err)
             .expect("pipeline should succeed when accepting changes");
         assert!(json_out.contains("rhizz-diag"));
         assert!(json_out.contains("```hcl"));
@@ -364,7 +369,7 @@ mod tests {
 
         // Second run without accepting: lock matches -> no diff, same output.
         let mut book = sample_book();
-        let again = process_book(&mut book, &lock_path, "rhizz 0.1.0", false, &mut err)
+        let again = process_book(&mut book, &lock_path, "rhizz 0.1.0", false, false, &mut err)
             .expect("unchanged book should verify against the lock");
         assert_eq!(json_out, again);
         let err_bytes = err.into_inner();
@@ -378,7 +383,7 @@ mod tests {
         let lock_path = PathBuf::from(dir.path()).join("book.lock");
         let mut err = Cursor::new(Vec::new());
         let mut book = sample_book();
-        let result = process_book(&mut book, &lock_path, "rhizz 0.1.0", false, &mut err);
+        let result = process_book(&mut book, &lock_path, "rhizz 0.1.0", false, false, &mut err);
         let message = result
             .expect_err("missing lock must fail without accept")
             .to_string();
@@ -392,7 +397,8 @@ mod tests {
         let lock_path = PathBuf::from(dir.path()).join("book.lock");
         let mut err = Cursor::new(Vec::new());
         let mut book = sample_book();
-        process_book(&mut book, &lock_path, "rhizz 0.1.0", true, &mut err).expect("seed lock");
+        process_book(&mut book, &lock_path, "rhizz 0.1.0", true, false, &mut err)
+            .expect("seed lock");
         err = Cursor::new(Vec::new());
 
         // A second chapter whose block is not in the lock must fail without accept.
@@ -406,7 +412,14 @@ mod tests {
             chapter["content"] =
                 Value::String("# T\n\n```rhizz\nproject { name = \"other\" }\n```\n".to_owned());
         }
-        let result = process_book(&mut drifted, &lock_path, "rhizz 0.1.0", false, &mut err);
+        let result = process_book(
+            &mut drifted,
+            &lock_path,
+            "rhizz 0.1.0",
+            false,
+            false,
+            &mut err,
+        );
         let message = result
             .expect_err("stale lock must fail without accept")
             .to_string();

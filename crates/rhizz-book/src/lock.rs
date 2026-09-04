@@ -171,11 +171,39 @@ fn verdict_diff(old: &NormalizedOutput, new: &NormalizedOutput) -> String {
         .to_string()
 }
 
-/// Render a difference as an indented, multi-line report suitable for stderr.
-/// Output-changed diffs carry the pretty-printed, git-style unified diff of
-/// the two verdicts; the other cases are one-liners.
+/// Apply ANSI color to a unified diff using git's scheme.
+///
+/// Header lines bold yellow, `@@` hunks cyan, `-` removals red, `+`
+/// additions green; context lines stay plain. Detection trims leading
+/// whitespace so nested lines inside `format_diff`'s indentation match.
 #[must_use]
-pub fn format_diff(diff: &Diff) -> String {
+pub fn colorize_unified_diff(diff: &str) -> String {
+    diff.lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("---") || trimmed.starts_with("+++") {
+                format!("\x1b[33;1m{line}\x1b[0m")
+            } else if trimmed.starts_with("@@") {
+                format!("\x1b[36m{line}\x1b[0m")
+            } else if trimmed.starts_with('-') {
+                format!("\x1b[31m{line}\x1b[0m")
+            } else if trimmed.starts_with('+') {
+                format!("\x1b[32m{line}\x1b[0m")
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Render a difference as an indented, multi-line report for stderr.
+///
+/// Output-changed diffs carry the pretty-printed, git-style unified diff of
+/// the two verdicts, ANSI-colored when `color` is true. The other cases
+/// are one-liners.
+#[must_use]
+pub fn format_diff(diff: &Diff, color: bool) -> String {
     match diff {
         Diff::NewBlock { chapter, hash } => format!(
             "  - new block in '{chapter}' (input {}) is not present in book.lock",
@@ -203,6 +231,11 @@ pub fn format_diff(diff: &Diff) -> String {
                 .map(|line| format!("    {line}"))
                 .collect::<Vec<_>>()
                 .join("\n");
+            let body = if color {
+                colorize_unified_diff(&body)
+            } else {
+                body
+            };
             format!("{header}\n{body}")
         }
     }
@@ -290,8 +323,8 @@ pub fn sorted_entries(mut entries: Vec<LockEntry>) -> Vec<LockEntry> {
 #[cfg(test)]
 mod tests {
     use super::{
-        Diff, LOCK_FORMAT, LockEntry, LockPayload, accept_flag, compare_lock, format_diff,
-        lock_path, short_sha, sorted_entries,
+        Diff, LOCK_FORMAT, LockEntry, LockPayload, accept_flag, colorize_unified_diff,
+        compare_lock, format_diff, lock_path, short_sha, sorted_entries,
     };
     use crate::normalize::{NormDiagnostic, NormalizedOutput};
     use std::path::Path;
@@ -376,7 +409,7 @@ mod tests {
                 hash: "1".to_owned(),
             }]
         );
-        assert!(format_diff(&diffs[0]).contains("new block in 'a.md'"));
+        assert!(format_diff(&diffs[0], false).contains("new block in 'a.md'"));
     }
 
     #[test]
@@ -390,7 +423,7 @@ mod tests {
                 hash: "1".to_owned(),
             }]
         );
-        assert!(format_diff(&diffs[0]).contains("removed from the book"));
+        assert!(format_diff(&diffs[0], false).contains("removed from the book"));
     }
 
     #[test]
@@ -443,12 +476,15 @@ mod tests {
             line: None,
             message: "new".to_owned(),
         }]);
-        let rendered = format_diff(&Diff::OutputChanged {
-            chapter: "greeter.md".to_owned(),
-            hash: "8524fa00c3378f9180548b8eac3376979f955fe5a5e000d06b3f0c3c04ef31e8".to_owned(),
-            old: Box::new(old),
-            new: Box::new(new),
-        });
+        let rendered = format_diff(
+            &Diff::OutputChanged {
+                chapter: "greeter.md".to_owned(),
+                hash: "8524fa00c3378f9180548b8eac3376979f955fe5a5e000d06b3f0c3c04ef31e8".to_owned(),
+                old: Box::new(old),
+                new: Box::new(new),
+            },
+            false,
+        );
         assert!(rendered.contains("output changed for block in 'greeter.md'"));
         assert!(rendered.contains("8524fa00"));
         assert!(rendered.contains("    --- book.lock"));
@@ -469,7 +505,7 @@ mod tests {
         lock.format = 99;
         let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
         assert_eq!(diffs, vec![Diff::FormatMismatch { found: 99 }]);
-        assert!(format_diff(&diffs[0]).contains("lock format 99"));
+        assert!(format_diff(&diffs[0], false).contains("lock format 99"));
     }
 
     #[test]
@@ -502,6 +538,69 @@ mod tests {
         let parsed: NormalizedOutput =
             serde_json::from_str(&pretty).expect("pretty json should reparse");
         assert_eq!(parsed, o);
+    }
+
+    #[test]
+    fn output_changed_diff_is_plain_without_color() {
+        let old = output(vec![NormDiagnostic {
+            code: "E002".to_owned(),
+            line: None,
+            message: "old".to_owned(),
+        }]);
+        let new = output(vec![NormDiagnostic {
+            code: "E001".to_owned(),
+            line: None,
+            message: "new".to_owned(),
+        }]);
+        let rendered = format_diff(
+            &Diff::OutputChanged {
+                chapter: "greeter.md".to_owned(),
+                hash: "8524fa00c3378f9180548b8eac3376979f955fe5a5e000d06b3f0c3c04ef31e8".to_owned(),
+                old: Box::new(old),
+                new: Box::new(new),
+            },
+            false,
+        );
+        // No ANSI escapes, ever, when color is disabled.
+        assert!(!rendered.contains('\x1b'));
+        assert!(rendered.contains("-      \"code\": \"E002\","));
+    }
+
+    #[test]
+    fn colorize_unified_diff_uses_git_scheme() {
+        let diff = [
+            "--- book.lock",
+            "+++ current compiler",
+            "@@ -11,7 +11,7 @@",
+            "       \"warnings\": [",
+            "-      \"code\": \"W999\",",
+            "+      \"code\": \"W005\",",
+            "        \"message\": \"same\",",
+        ]
+        .join("\n");
+        let colored = colorize_unified_diff(&diff);
+        let lines: Vec<&str> = colored.lines().collect();
+        // Headers bold yellow, hunk cyan, removal red, addition green, context plain.
+        assert!(lines[0].starts_with("\x1b[33;1m") && lines[0].ends_with("\x1b[0m"));
+        assert!(lines[1].starts_with("\x1b[33;1m"));
+        assert!(lines[2].starts_with("\x1b[36m"));
+        assert_eq!(lines[3], "       \"warnings\": [");
+        assert!(lines[4].starts_with("\x1b[31m"));
+        assert!(lines[5].starts_with("\x1b[32m"));
+        // Content survives intact next to the codes.
+        assert!(lines[4].contains("\"code\": \"W999\","));
+        assert!(lines[6].starts_with("        \"message\": \"same\","));
+    }
+
+    #[test]
+    fn colorize_handles_nested_indentation() {
+        // format_diff indents every diff line by four spaces; detection must
+        // trim before matching so colors still apply.
+        let diff = "    - a\n    + b\n      c\n";
+        let colored = colorize_unified_diff(diff);
+        assert!(colored.contains("\x1b[31m    - a\x1b[0m"));
+        assert!(colored.contains("\x1b[32m    + b\x1b[0m"));
+        assert!(colored.contains("      c"));
     }
 
     #[test]
