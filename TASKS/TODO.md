@@ -151,6 +151,44 @@ offset to avoid overlapping.
 
 ---
 
+## (For later) Task <N> — Pressing "delete" on a component should not delete it from the whole model
+
+In the diagrams menu, pressing "delete" while having a compoent selected causes
+this component to be wiped out from the entire system model. This is unintuitive
+and dangerous. Change this behavior, so that using "delete" will only delete the
+system from the **current view**.
+
+## (For later brainstorming) Task <N> - when adding a new node - place it in the center of the viewport
+
+As in the title. Position of the node is persisted across deletes, so it can
+be "brought back" into the same position as it was before, but only if it was
+in the diagram before! For completely new nodes, they always appear in a fixed
+place in the diagram. This is cumbersome, as the user might not have that part
+of the diagram in their viewport, which might make them think that nothing
+happened.
+
+Definition of done:
+
+- If a new element is added to the diagram, this element is placed at the center of the viewport by default
+
+---
+
+## (For later) Task <N> — Allow for panning & zooming in the Explore view
+
+Currently, only the Diagrams page allows panning & zooming. I want to extract
+this feature and make it possible to pan & zoom in other pages:
+
+- Explore
+- Inventory
+- Embedded diagrams viewer
+
+Definition of done:
+
+- Panning & zooming is clearly extracted, ideally as a reusable system
+- Panning & zooming now works in Explore/Inventory/Embedded diagrams viewer
+
+--
+
 ## (For later brainstorming) Task <N> - visual regression testing
 
 As we now have a virtual filesystem hierarchy for the frontend, we can create
