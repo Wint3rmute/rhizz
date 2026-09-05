@@ -695,6 +695,7 @@ let selected = $derived.by(() => {
 
 function selectOnly(index: number) {
   selectedKeys.clear();
+  selectedAnnotations.clear();
   selectedKeys.add(getComponentKey(index));
 }
 
@@ -731,6 +732,9 @@ function deselect(index: number) {
 }
 
 function select(index: number) {
+  // Selecting a node drops annotation selection: the two selection modes
+  // are mutually exclusive (mirrors selectAnnotation clearing node keys).
+  selectedAnnotations.clear();
   selectedKeys.add(getComponentKey(index));
 }
 
