@@ -363,7 +363,8 @@ struct Field {
 7. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
 8. Resolve views — look up `system` label → `SystemId` (E006 if missing).
 9. Validation checks:
-   - Unconnected port verification:
+   - Unconnected port verification (applies to **placed instances only**;
+     a definition's ports are part of its contract and cannot be connected):
      - In isolated components: unconnected `external = true` ports are permitted. Unconnected internal (`external = false`) ports emit W010.
      - In instantiated systems: unconnected `external = true, required = true` ports emit W010.
    - Protocol / role compatibility on typed connections (W008, W009).
