@@ -1,19 +1,19 @@
-view "full-platform" {
-  description = "Complete BuzzVid platform overview"
-  system      = "buzzvid"
-
-  filter {
-    max_level = 1
-  }
-}
-
 view "backend-services" {
   description = "Backend service decomposition"
   system      = "buzzvid"
 
   filter {
-    components = ["backend"]
-    max_level  = 3
+    max_level     = 3
+    components    = ["backend"]
+  }
+}
+
+view "full-platform" {
+  description = "Complete BuzzVid platform overview"
+  system      = "buzzvid"
+
+  filter {
+    max_level     = 1
   }
 }
 
@@ -23,6 +23,5 @@ view "video-pipeline" {
 
   filter {
     include_tags  = ["video"]
-    show_messages = false
   }
 }

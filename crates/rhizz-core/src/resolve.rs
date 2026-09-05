@@ -1264,7 +1264,11 @@ mod tests {
         );
 
         // 5 views should resolve (4 in views.hcl + 1 in diagrams/main.hcl)
-        assert_eq!(model.views.len(), 5);
+        assert_eq!(
+            model.views.len(),
+            6,
+            "expected 6 views (incl. diagrams/main.hcl)"
+        );
     }
 
     // ── social-media ───────────────────────────────────────────────────────
@@ -1399,7 +1403,11 @@ mod tests {
             "expected W004 for operations"
         );
 
-        assert_eq!(model.views.len(), 4);
+        assert_eq!(
+            model.views.len(),
+            5,
+            "expected 5 views (incl. diagrams/main.hcl)"
+        );
     }
 
     // ── Error cases ────────────────────────────────────────────────────────

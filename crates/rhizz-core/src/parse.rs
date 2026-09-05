@@ -811,7 +811,11 @@ mod tests {
         assert!(conn_labels.contains(&"rc-link"));
 
         // Views
-        assert_eq!(raw.views.len(), 5, "expected 5 views");
+        assert_eq!(
+            raw.views.len(),
+            6,
+            "expected 6 views (incl. diagrams/main.hcl)"
+        );
         let ov = raw
             .views
             .iter()
@@ -992,7 +996,11 @@ mod tests {
             .expect("sprint-out port missing");
         assert_eq!(sprint_port.label, "sprint-out");
 
-        assert_eq!(raw.views.len(), 4);
+        assert_eq!(
+            raw.views.len(),
+            5,
+            "expected 5 views (incl. diagrams/main.hcl)"
+        );
     }
 
     // ── E010 detection ─────────────────────────────────────────────────────
