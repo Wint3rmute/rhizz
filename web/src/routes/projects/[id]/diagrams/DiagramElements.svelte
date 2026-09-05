@@ -272,7 +272,6 @@ let visibleConnections = $derived(
   x={ann.x}
   y={ann.y}
   fill="var(--color-base-content)"
-  fill-opacity="0.7"
   font-size="12"
   text-anchor="start"
   style="pointer-events: none; user-select: none; white-space: pre"
