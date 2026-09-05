@@ -212,11 +212,35 @@ describe("HCL View conversion and persistence", () => {
     expect(layout2.annotations).toEqual(layout.annotations);
   });
 
-  it("returns an empty layout when the file has never been saved", async () => {
+  it("persists an annotation added after load, survives reload", async () => {
+    // Mimics the user repro: fresh project -> load (empty layout) -> add an
+    // annotation -> write -> reload -> annotation still there.
     const fs = await projectFs();
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+
+    // Fresh project starts with an empty (auto-seeded) diagram.
+    await writeDiagramLayoutFile(
+      fs,
+      MAIN_DIAGRAM_PATH,
       emptyDiagramLayout(),
+      "sys",
     );
+    const layout = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(layout.annotations).toEqual([]);
+
+    const anns = layout.annotations ?? [];
+    // User adds an annotation (as addAnnotationHandler does) and edits text.
+    anns.push({ text: "New note", x: 10, y: 10 });
+    if (anns[0]) anns[0].text = "test";
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    // "Reload" (page switch) reads from the file again.
+    const reloaded = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(reloaded.annotations).toEqual([
+      { text: "test", x: 10, y: 10 },
+    ]);
+    // And the raw file on disk has the annotation block.
+    const raw = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(raw).toContain("annotation {");
   });
 
   it("round-trips a written layout to HCL and back", async () => {

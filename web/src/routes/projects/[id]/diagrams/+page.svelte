@@ -381,12 +381,24 @@ $effect(() => {
 // layout.
 let diagramLayoutLoaded = $state(false);
 let loadedDiagramPath: string | null = null;
+// Monotonic stamp bumped on any user diagram mutation (adding/moving a node,
+// editing an annotation). The load effect records the stamp when a read
+// starts and only applies the result if no mutation happened in the meantime
+// — so a slow read can never clobber edits made while it was in flight.
+let diagramEditStamp = 0;
+let loadStartStamp = 0;
+
+// Called by every user-diagram mutation path so the load race guard works.
+function noteDiagramEdited(): void {
+  diagramEditStamp += 1;
+}
 
 $effect(() => {
   const path = fullDiagramPath;
   if (path === loadedDiagramPath) return;
   loadedDiagramPath = path;
   diagramLayoutLoaded = false;
+  loadStartStamp = diagramEditStamp;
 
   if (path === null) {
     checked = {};
@@ -401,10 +413,17 @@ $effect(() => {
     // after a newer one already changed the selection — guard against
     // overwriting the newer selection's state with the older one.
     if (loadedDiagramPath !== path) return;
-    checked = layout.checked;
-    savedLayout = layout.savedLayout;
-    savedConnections = layout.connections ?? {};
-    annotations = layout.annotations ?? [];
+    // If the user edited the diagram while this read was in flight, don't
+    // clobber their changes with the (possibly empty) file contents — but
+    // still mark the diagram as loaded so the save effect is armed and can
+    // persist the user's edits.
+    const editedDuringLoad = diagramEditStamp !== loadStartStamp;
+    if (!editedDuringLoad) {
+      checked = layout.checked;
+      savedLayout = layout.savedLayout;
+      savedConnections = layout.connections ?? {};
+      annotations = layout.annotations ?? [];
+    }
     diagramLayoutLoaded = true;
     // Frames the newly-opened diagram's content immediately, rather than
     // leaving the view wherever the previously-open diagram (or the
@@ -532,6 +551,7 @@ async function handleDeleteDiagram(path: string): Promise<void> {
 // keeps the remembered layout up to date, instead of relying on each call
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
+  noteDiagramEdited();
   const key = getComponentKey(index);
   const checkedPrev = checked[key];
   const savedPrev = savedLayout[key];
@@ -711,6 +731,7 @@ function selectAnnotation(index: number) {
 }
 
 function addAnnotationHandler(): void {
+  noteDiagramEdited();
   // Place at the canvas center (world coords) if we can, else 0,0.
   const x = editor_state.view.x + canvas_width / 2 / editor_state.view.zoom;
   const y = editor_state.view.y + canvas_height / 2 / editor_state.view.zoom;
@@ -722,6 +743,7 @@ function addAnnotationHandler(): void {
 
 function deleteSelectedAnnotations(): void {
   if (selectedAnnotations.size === 0) return;
+  noteDiagramEdited();
   const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
   for (const idx of toDelete) annotations.splice(idx, 1);
   selectedAnnotations.clear();
@@ -1613,6 +1635,7 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
 // drag-start snapshot — recomputed from the snapshot each event (like
 // applyGroupDelta), never accumulated, so there is no drift or flicker.
 function applyAnnotationDelta(deltaX: number, deltaY: number): void {
+  noteDiagramEdited();
   const current = interaction;
   if (current.type !== "dragging") return;
   const starts = current.annotationStartPositions;
@@ -1771,6 +1794,7 @@ function applyGroupDelta(
   deltaX: number,
   deltaY: number,
 ) {
+  noteDiagramEdited();
   for (const [indexStr, start] of Object.entries(startPositions)) {
     const index = Number(indexStr);
     const box = nodeBox(index);
@@ -3289,13 +3313,17 @@ $effect(() => {
           onkeydown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
+              noteDiagramEdited();
               editingAnnotation = null;
             }
             if (e.key === "Escape") {
               editingAnnotation = null;
             }
           }}
-          onblur={() => (editingAnnotation = null)}
+          onblur={() => {
+            noteDiagramEdited();
+            editingAnnotation = null;
+          }}
           class="absolute z-30 input input-sm input-bordered w-64"
           style="left:{(editingAnnotationObj.x - editor_state.view.x) * editor_state.view.zoom}px; top:{(editingAnnotationObj.y - editor_state.view.y) * editor_state.view.zoom}px"
           data-testid="annotation-editor"
