@@ -3,17 +3,7 @@ view "drone-overview" {
   system      = "quadcopter"
 
   filter {
-    max_level = 1
-  }
-}
-
-view "power-paths" {
-  description = "Power distribution only"
-  system      = "quadcopter"
-
-  filter {
-    include_tags  = ["power"]
-    show_messages = false
+    max_level     = 1
   }
 }
 
@@ -22,8 +12,8 @@ view "fc-internals" {
   system      = "quadcopter"
 
   filter {
-    components = ["flight-controller"]
-    max_level  = 3
+    max_level     = 3
+    components    = ["flight-controller"]
   }
 }
 
@@ -32,6 +22,19 @@ view "ground-station" {
   system      = "ground-control"
 
   filter {
-    max_level = 1
+    max_level     = 1
+  }
+}
+
+view "main" {
+  system      = "ground-control"
+}
+
+view "power-paths" {
+  description = "Power distribution only"
+  system      = "quadcopter"
+
+  filter {
+    include_tags  = ["power"]
   }
 }

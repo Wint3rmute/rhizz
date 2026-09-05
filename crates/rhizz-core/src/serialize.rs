@@ -14,6 +14,7 @@
 //!    system model files, while visual layout coordinates and views are serialized into
 //!    separate `views.hcl` files.
 
+use std::collections::HashSet;
 use std::fmt::Write as _;
 
 use crate::model::{
@@ -624,10 +625,16 @@ pub fn serialize_views(views: &[ViewDefinition]) -> String {
 /// Helper to serialize resolved [`View`] models from a [`Model`] into HCL.
 #[must_use]
 pub fn serialize_resolved_views(views: &[View], model: &Model) -> String {
-    let view_defs: Vec<ViewDefinition> = views
-        .iter()
-        .map(|v| ViewDefinition::from_resolved(v, model))
-        .collect();
+    // Deduplicate by label: parse merges every `.hcl` in the project (including
+    // `diagrams/*.hcl`), so the same view may appear both in `views.hcl` and a
+    // diagram file. Emit each view exactly once to keep the output idempotent.
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut view_defs: Vec<ViewDefinition> = Vec::new();
+    for v in views {
+        if seen.insert(v.label.as_str()) {
+            view_defs.push(ViewDefinition::from_resolved(v, model));
+        }
+    }
     serialize_views(&view_defs)
 }
 
@@ -1683,6 +1690,38 @@ system "main" {
             res2.diagnostics.iter().all(|d| !d.is_error()),
             "recompile errors: {:?}\nserialized:\n{serialized}",
             res2.diagnostics
+        );
+    }
+
+    #[test]
+    fn serialize_resolved_views_dedups_duplicate_labels() {
+        // A project may define the same view in views.hcl and in a
+        // diagrams/*.hcl file; parsing merges both, so the resolved view list
+        // contains duplicates. The serializer must emit each view once.
+        let hcl = r#"project {
+  name = "dup"
+}
+system "s" {
+  description = "d"
+}
+view "main" {
+  system = "s"
+}
+"#;
+        let res = crate::compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        let model = res.model.expect("should resolve");
+        // Simulate the duplicate: a second view with the same label.
+        let mut views = model.views.clone();
+        let dup = views[0].clone();
+        views.push(dup);
+        let out = serialize_resolved_views(&views, &model);
+        assert_eq!(
+            out.matches("view \"main\"").count(),
+            1,
+            "duplicate view must be emitted once: {out}"
         );
     }
 }
