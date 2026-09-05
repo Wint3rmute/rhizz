@@ -102,15 +102,19 @@ system "bicycle" {
 }
 ```
 
-We've reused a `battery` 3 times to create a `battery-pack`! For the sake of
-brevity, I marked `battery` with `leaf = true`, so that the compiler won't
+We instantiated the `wheel` 2 times to create a `bicycle`! For the sake of
+brevity, I marked `wheel` with `leaf = true`, so that the compiler won't
 complain about the battery not being fully defined. We'll come back to this
 later, you can ignore this fact for now.
 
 ## Connections
 
 The warning *"component 'SOME_NAME' is not referenced by any connection"* keeps on
-appearing, let's fix it!
+appearing, let's fix it by building a bike with:
+
+- A bicycle frame
+- A bicycle fork
+- Wheels attached
 
 ```rhizz
 component "wheel" {
@@ -147,7 +151,21 @@ system "bicycle" {
     from = "./rear-wheel"
     to = "./frame"
   }
+
+  connection "fork-mount" {
+    description = "bearing connecting the fork to the frame"
+    from = "./fork"
+    to = "./frame"
+  }
 }
 ```
 
 > TODO: why W003 still appears for standalone components...?
+
+We now have a simple (and incomplete) bicycle model. This model is small enough
+to be visualised with just a single diagram, so Rhizz's diagramming capabilities
+won't shine for such a trivial example.
+
+In the upcoming chapters, you'll see how Rhizz can model complex, nested and
+multi-dimentional systems, which cannot be grasped without looking at them from
+multiple different angles.

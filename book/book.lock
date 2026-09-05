@@ -1,7 +1,53 @@
 {
   "entries": [
     {
-      "chapter": "greeter.md",
+      "chapter": "basics.md",
+      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    description = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
+      "input_sha256": "a5821a30e07f6aa317009b666d79611c367f011268341d5a1cdcdf43bb420e1b",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 7,
+            "total": 7
+          },
+          "connections": {
+            "complete": 0,
+            "total": 3
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 7,
+            "percent": 70.0,
+            "total": 10
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'fork' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'frame' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'wheel' is not referenced by any connection"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
       "input_sha256": "c6df9297fcd60ca8df1f49594b62ba4996109c49612ea0d4d35f3af9382b741a",
       "output": {
@@ -33,50 +79,21 @@
         "warnings": [
           {
             "code": "W003",
-            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
+            "message": "component 'front-wheel' is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+            "message": "component 'rear-wheel' is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'wheel' is not referenced by any connection"
           }
         ]
       }
     },
     {
-      "chapter": "greeter.md",
-      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n}",
-      "input_sha256": "dbaef0c2bccfebfd5243e8c95378e53ce91dbb6a72c774ed3a248a9035520f1c",
-      "output": {
-        "errors": [],
-        "score": {
-          "components": {
-            "complete": 7,
-            "total": 7
-          },
-          "connections": {
-            "complete": 0,
-            "total": 2
-          },
-          "messages": {
-            "complete": 0,
-            "total": 0
-          },
-          "overall": {
-            "complete": 7,
-            "percent": 77.8,
-            "total": 9
-          },
-          "ports": {
-            "complete": 0,
-            "total": 0
-          },
-          "system": ""
-        },
-        "warnings": []
-      }
-    },
-    {
-      "chapter": "greeter.md",
+      "chapter": "basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n}",
       "input_sha256": "e60a19d0d7a42325a736f04e05be52a9d526b2796a98fe1af3a3dfc9803c7204",
       "output": {
@@ -109,12 +126,16 @@
           {
             "code": "W001",
             "message": "component 'wheel' is non-leaf but has no child components"
+          },
+          {
+            "code": "W003",
+            "message": "component 'wheel' is not referenced by any connection"
           }
         ]
       }
     },
     {
-      "chapter": "greeter.md",
+      "chapter": "basics.md",
       "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}\n\nsystem \"also-nothing\" {\n  description = \"Nothingness 2.0: Electric Bongaloo\"\n}",
       "input_sha256": "ea62c8ea8a728e4fae990f0287978800f2d93189bad9eeee612d385193777b5c",
       "output": {
@@ -147,7 +168,7 @@
       }
     },
     {
-      "chapter": "greeter.md",
+      "chapter": "basics.md",
       "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}",
       "input_sha256": "fa10bcd472f8d57c7e8b5444c160fc7f8f73a0d0296583dfdaa0a1905243289c",
       "output": {
@@ -196,12 +217,20 @@
         ],
         "warnings": [
           {
+            "code": "W003",
+            "message": "component 'sensor-hat' is not referenced by any connection"
+          },
+          {
             "code": "W004",
             "message": "connection 'link' is missing a description"
           },
           {
             "code": "W005",
             "message": "connection 'link' has 'from' and 'to' pointing to the same component"
+          },
+          {
+            "code": "W010",
+            "message": "port 'data' is not referenced by any connection"
           },
           {
             "code": "W011",
