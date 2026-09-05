@@ -425,6 +425,7 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
               components={components}
               connections={connections}
               boxes={boxes}
+              annotations={selectedLayout.annotations ?? []}
               linked={linkedComponents}
               onnodeclick={handleNodeClick}
               onnodehover={(index, event) => handleNodeHover(index, event)}
