@@ -3205,17 +3205,18 @@ $effect(() => {
                 stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
                 style="pointer-events: none"
               />
-              <!-- Bottom-right corner resize handle (font scale). -->
+              <!-- Top-right corner resize handle (font scale), tucked INSIDE
+                   the selection box (x/y within annX..annX+annWidth). -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <rect
-                x={annX + annWidth - CORNER_HANDLE_SIZE / 2}
-                y={annY + annHeight - CORNER_HANDLE_SIZE / 2}
+                x={annX + annWidth - CORNER_HANDLE_SIZE}
+                y={annY}
                 width={CORNER_HANDLE_SIZE}
                 height={CORNER_HANDLE_SIZE}
                 fill="var(--color-primary)"
                 fill-opacity="0.9"
-                style="cursor: nwse-resize"
-                onmousedown={(e) => onAnnotationResizeMouseDown(e, i, "bottom-right")}
+                style="cursor: nesw-resize"
+                onmousedown={(e) => onAnnotationResizeMouseDown(e, i, "top-right")}
               />
             {/if}
             {#if editingAnnotation === i}
