@@ -16,6 +16,7 @@ import {
   selectionOutlineRect,
 } from "./visuals";
 import type {
+  DiagramStaticAnnotation,
   DiagramStaticBox,
   DiagramStaticComponent,
   DiagramStaticConnection,
@@ -25,6 +26,7 @@ let {
   components = [],
   connections = [],
   boxes = {},
+  annotations = [],
   markerId = "arrow",
   selected = new Set<number>(),
   linked = new Set<number>(),
@@ -34,6 +36,8 @@ let {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
   boxes: Record<number, DiagramStaticBox>;
+  /** View-level text annotations (absolute canvas positions). */
+  annotations?: DiagramStaticAnnotation[];
   markerId?: string;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
   selected?: Set<number>;
@@ -260,5 +264,19 @@ let visibleConnections = $derived(
   style="pointer-events: none; user-select: none"
 >
     {conn.label}
+  </text>
+{/each}
+
+{#each annotations as ann (ann.text + ann.x + ann.y)}
+  <text
+  x={ann.x}
+  y={ann.y}
+  fill="var(--color-base-content)"
+  fill-opacity="0.7"
+  font-size="12"
+  text-anchor="start"
+  style="pointer-events: none; user-select: none; white-space: pre"
+>
+    {ann.text}
   </text>
 {/each}

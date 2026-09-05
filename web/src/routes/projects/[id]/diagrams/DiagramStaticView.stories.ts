@@ -107,3 +107,18 @@ export const Empty: Story = {
     boxes: {},
   },
 };
+
+// The pipeline with free-standing view annotations rendered at absolute
+// canvas positions — including a multi-line annotation (newline in text).
+export const WithAnnotations: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    annotations: [
+      { text: "Ingest path", x: 10, y: 10 },
+      { text: "Processed here\n(2 workers)", x: 230, y: 140 },
+      { text: "Note on queue", x: 200, y: 160 },
+    ],
+  },
+};

@@ -8,6 +8,7 @@
 import { unionBox } from "./geometry";
 import DiagramElements from "./DiagramElements.svelte";
 import type {
+  DiagramStaticAnnotation,
   DiagramStaticBox,
   DiagramStaticComponent,
   DiagramStaticConnection,
@@ -17,6 +18,7 @@ let {
   components = [],
   connections = [],
   boxes = {},
+  annotations = [],
   padding = 40,
   selected = new Set<number>(),
   linked = new Set<number>(),
@@ -28,6 +30,8 @@ let {
   connections: DiagramStaticConnection[];
   /** Which components are actually placed on the canvas, and where — keyed by index into `components`. A component with no entry here simply isn't rendered. */
   boxes: Record<number, DiagramStaticBox>;
+  /** View-level text annotations, rendered at absolute positions. */
+  annotations?: DiagramStaticAnnotation[];
   /** Empty space (world units) left around the content's bounding box in the auto-fit viewBox. */
   padding?: number;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
@@ -67,6 +71,7 @@ let viewBox = $derived.by(() => {
     {components}
     {connections}
     {boxes}
+    {annotations}
     {selected}
     {linked}
     {onnodeclick}

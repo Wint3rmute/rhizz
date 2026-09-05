@@ -1036,6 +1036,7 @@ export class DocumentStore {
       system,
       filter: { include_tags: [], exclude_tags: [], components: [] },
       nodes: [],
+      annotations: [],
     };
     this.views.push(v);
     notifyMutations({ op: "add_view", label, system });

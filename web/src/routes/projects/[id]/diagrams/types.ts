@@ -20,3 +20,10 @@ export interface DiagramStaticConnection {
 
 /** A placed node's position/size/label alignment — `textAlign` defaults to "center" when omitted. */
 export type DiagramStaticBox = Box & { textAlign?: TextAlign };
+
+/** A view-level text annotation placed at an absolute canvas position. */
+export interface DiagramStaticAnnotation {
+  text: string;
+  x: number;
+  y: number;
+}

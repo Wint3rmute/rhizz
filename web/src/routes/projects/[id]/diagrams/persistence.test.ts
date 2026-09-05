@@ -11,6 +11,7 @@ import {
   emptyDiagramLayout,
   layoutToHcl,
   mapLayoutToBoxes,
+  parse_views,
   readDiagramLayoutFile,
   sanitizeStoredRecord,
   StoredBoxSchema,
@@ -187,6 +188,26 @@ describe("HCL View conversion and persistence", () => {
       height: 170,
       textAlign: "top-left",
     });
+  });
+
+  it("round-trips annotations through layoutToHcl and viewsToLayout", () => {
+    const layout = {
+      checked: {},
+      savedLayout: {},
+      annotations: [
+        { text: "First line\nSecond line", x: 12.5, y: -3 },
+        { text: "Standalone note", x: 0, y: 100 },
+      ],
+    };
+    const hcl = layoutToHcl(layout, "overview", "home");
+    expect(hcl).toContain("annotation {");
+    expect(hcl).toContain('text = "First line\\nSecond line"');
+
+    const back = parse_views(hcl)[0];
+    expect(back?.annotations).toEqual(layout.annotations);
+
+    const layout2 = viewsToLayout(back ? [back] : []);
+    expect(layout2.annotations).toEqual(layout.annotations);
   });
 
   it("returns an empty layout when the file has never been saved", async () => {
