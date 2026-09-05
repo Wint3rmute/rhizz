@@ -180,6 +180,72 @@
       }
     },
     {
+      "chapter": "connections_ports.md",
+      "hcl": "component \"computer\" {\n  description = \"Personal Computer (PC)\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\ncomponent \"mouse\" {\n  description = \"Computer Mouse\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\nsystem \"work-computer\" {\n  description = \"My work computer\"\n  instance \"computer\" { source = \"computer\" }\n  instance \"mouse\" { source = \"mouse\" }\n\n  connection \"mouse-to-computer\" {\n    description = \"Mouse connected to the PC by a USB-C cable\"\n    from = \"computer/usb-c\"\n    to = \"mouse/usb-c\"\n  }\n}",
+      "input_sha256": "630dc0355ff1cf2008b550835b8d88ce7fb4e422429b6099d34d41e7f3e63048",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 4,
+            "total": 4
+          },
+          "connections": {
+            "complete": 0,
+            "total": 1
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 4,
+            "percent": 50.0,
+            "total": 9
+          },
+          "ports": {
+            "complete": 0,
+            "total": 4
+          },
+          "system": ""
+        },
+        "warnings": []
+      }
+    },
+    {
+      "chapter": "connections_ports.md",
+      "hcl": "component \"server\" {\n  description = \"Server in the cloud\"\n  leaf = true\n}\n\ncomponent \"client\" {\n  description = \"Client's computer\"\n  leaf = true\n}\n\nsystem \"banking-application\" {\n  description = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    description = \"REST API with OAuth2\"\n    from = \"server\"\n    to = \"client\"\n  }\n}",
+      "input_sha256": "c1426e020bdd5ab8e52b3cf3171956f7737f8aa16aeea57fc80b40641ff8b2fc",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 4,
+            "total": 4
+          },
+          "connections": {
+            "complete": 0,
+            "total": 1
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 4,
+            "percent": 80.0,
+            "total": 5
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": []
+      }
+    },
+    {
       "chapter": "sketch.md",
       "hcl": "project {\n  name = \"sketch\"\n}\n\nprotocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  component \"controller\" {\n    leaf = true\n\n    port \"uart\" {\n      protocol = \"serial\"\n    }\n  }\n\n  component \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
       "input_sha256": "b152e530691ecdfad4caa46930628fb375578bf1de9b57ad0b8d770a8d60644c",
