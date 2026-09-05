@@ -240,15 +240,21 @@ describe("HCL View conversion and persistence", () => {
           textAlign: "top-left" as const,
         },
       },
+      annotations: [
+        { text: "Persisted note", x: 30, y: 40, scale: 1.5 },
+      ],
     };
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
 
     const content = await fs.readFile(MAIN_DIAGRAM_PATH);
     expect(content).toContain('view "main"');
     expect(content).toContain('node "sys/a"');
+    expect(content).toContain("annotation {");
+    expect(content).toContain("scale = 1.5");
 
     const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
     expect(read.checked["sys/a"]).toEqual(layout.checked["sys/a"]);
+    expect(read.annotations).toEqual(layout.annotations);
   });
 
   it("persists and reads connection startSide and endSide configuration", async () => {
