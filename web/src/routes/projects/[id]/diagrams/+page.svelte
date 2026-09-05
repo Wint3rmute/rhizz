@@ -3166,7 +3166,6 @@ $effect(() => {
                 fill={isAnnSelected
                   ? "var(--color-primary)"
                   : "var(--color-base-content)"}
-                fill-opacity={isAnnSelected ? 1 : 0.7}
                 font-size="12"
                 text-anchor="start"
                 style="pointer-events: none; user-select: none; white-space: pre"
