@@ -57,15 +57,18 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      # Single instrumented pass: runs all tests + writes lcov + enforces the
-      # 80% line-coverage gate. rhizz-wasm is excluded (wasm cdylib, no host
-      # tests) and crates/*/tests are not counted as source. The cobertura
+      # Single instrumented pass: runs all tests (incl. doctests) + writes
+      # lcov + enforces the 80% line-coverage gate. rhizz-wasm is excluded
+      # (wasm cdylib, no host tests) and crates/*/tests are not counted as
+      # source. --doctests is unstable, hence RUSTC_BOOTSTRAP=1; the cobertura
       # report is generated from the same saved data (no re-test) for when
       # GitHub's native Code Quality upload (beta) becomes available.
       - name: Rust coverage (llvm-cov)
+        env:
+          RUSTC_BOOTSTRAP: "1"
         run: |
           mkdir -p target/coverage
-          cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex 'crates/.*/tests/' --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
+          cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex 'crates/.*/tests/' --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
           cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex 'crates/.*/tests/' --cobertura --output-path target/coverage/cobertura.xml
 
       # Raw lcov report kept for humans who want the data outside the log.
