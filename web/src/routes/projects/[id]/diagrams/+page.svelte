@@ -30,6 +30,7 @@ import {
 } from "../../../../DocumentStore.svelte";
 
 import {
+  type Annotation,
   buildKeyToIndexMap,
   componentKey,
   DIAGRAM_LAYOUT_DIR,
@@ -281,6 +282,7 @@ let checked = $state<Record<string, StoredBox>>({});
 // different lifetimes (checked entries disappear on uncheck; these don't).
 let savedLayout = $state<Record<string, StoredBox>>({});
 let savedConnections = $state<Record<string, StoredConnection>>({});
+let annotations = $state<Annotation[]>([]);
 
 // Which diagram (a `diagrams/<name>.hcl` file) is currently open on the
 // canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.hcl" — exactly like
@@ -380,6 +382,7 @@ $effect(() => {
     checked = {};
     savedLayout = {};
     savedConnections = {};
+    annotations = [];
     return;
   }
 
@@ -391,6 +394,7 @@ $effect(() => {
     checked = layout.checked;
     savedLayout = layout.savedLayout;
     savedConnections = layout.connections ?? {};
+    annotations = layout.annotations ?? [];
     diagramLayoutLoaded = true;
     // Frames the newly-opened diagram's content immediately, rather than
     // leaving the view wherever the previously-open diagram (or the
@@ -416,6 +420,7 @@ $effect(() => {
     checked: $state.snapshot(checked),
     savedLayout: $state.snapshot(savedLayout),
     connections: $state.snapshot(savedConnections),
+    annotations: $state.snapshot(annotations),
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;

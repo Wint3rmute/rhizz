@@ -18,9 +18,9 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 
 use crate::model::{
-    BorderStyle, Component, ComponentKind, ComponentParent, Connection, ConnectionEndpoint,
-    ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout, Port, Project, Protocol,
-    System, View, ViewDefinition, ViewFilterDefinition,
+    Annotation, BorderStyle, Component, ComponentKind, ComponentParent, Connection,
+    ConnectionEndpoint, ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout, Port,
+    Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -672,6 +672,14 @@ fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
         serialize_connection_layout(out, conn);
     }
 
+    let mut sorted_anns: Vec<&Annotation> = view.annotations.iter().collect();
+    sorted_anns.sort_by(|a, b| a.text.cmp(&b.text));
+
+    for ann in sorted_anns {
+        out.push('\n');
+        serialize_annotation(out, ann);
+    }
+
     out.push_str("}\n");
 }
 
@@ -742,6 +750,15 @@ fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
     out.push_str("  }\n");
 }
 
+/// Serialize one annotation block: `annotation { x y text }`.
+fn serialize_annotation(out: &mut String, ann: &Annotation) {
+    let _ = writeln!(out, "  annotation {{");
+    let _ = writeln!(out, "    x    = {}", format_number(ann.x));
+    let _ = writeln!(out, "    y    = {}", format_number(ann.y));
+    let _ = writeln!(out, "    text = {}", escape_string(&ann.text));
+    out.push_str("  }\n");
+}
+
 fn format_number(n: f64) -> String {
     if n.fract() == 0.0 && n.is_finite() {
         // The value is a finite whole number. Clamp to the i64 range so the
@@ -789,6 +806,13 @@ struct RawConnectionLayoutAttrs {
     end_side: Option<String>,
 }
 
+#[derive(Deserialize, Default)]
+struct RawAnnotationAttrs {
+    x: Option<f64>,
+    y: Option<f64>,
+    text: Option<String>,
+}
+
 fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
     match s {
         Some("top") => Some(ConnectionSide::Top),
@@ -823,6 +847,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
             let mut filter = ViewFilterDefinition::default();
             let mut nodes = Vec::new();
             let mut connections = Vec::new();
+            let mut annotations = Vec::new();
 
             for child in block.body().blocks() {
                 match child.identifier() {
@@ -870,6 +895,15 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             end_side: parse_connection_side(ca.end_side.as_deref()),
                         });
                     }
+                    "annotation" => {
+                        let aa: RawAnnotationAttrs = hcl::from_body(child.body().clone())
+                            .context("failed to deserialize annotation attributes")?;
+                        annotations.push(Annotation {
+                            text: aa.text.unwrap_or_default(),
+                            x: aa.x.unwrap_or(0.0),
+                            y: aa.y.unwrap_or(0.0),
+                        });
+                    }
                     _ => {}
                 }
             }
@@ -882,6 +916,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                 filter,
                 nodes,
                 connections,
+                annotations,
             });
         }
     }
@@ -1723,5 +1758,46 @@ view "main" {
             1,
             "duplicate view must be emitted once: {out}"
         );
+    }
+
+    #[test]
+    fn annotations_round_trip_through_views_hcl() {
+        let hcl = r#"view "overview" {
+  system = "s"
+  annotation {
+    x    = 12.5
+    y    = -3
+    text = "First line\nSecond line"
+  }
+  annotation {
+    x    = 0
+    y    = 100
+    text = "Standalone note"
+  }
+}
+"#;
+        let views = parse_views(hcl).expect("parse annotations");
+        assert_eq!(views.len(), 1);
+        let view = &views[0];
+        assert_eq!(view.annotations.len(), 2, "two annotations expected");
+        assert!(
+            (view.annotations[0].x - 12.5).abs() < 1e-9,
+            "x={}",
+            view.annotations[0].x
+        );
+        assert!(
+            (view.annotations[0].y + 3.0).abs() < 1e-9,
+            "y={}",
+            view.annotations[0].y
+        );
+        assert_eq!(view.annotations[0].text, "First line\nSecond line");
+        assert_eq!(view.annotations[1].text, "Standalone note");
+
+        // Serialize back and re-parse: idempotent round trip, sorted by text.
+        let serialized = serialize_views(&views);
+        let reparsed = parse_views(&serialized).expect("reparse");
+        assert_eq!(reparsed, views, "annotation round trip must be stable");
+        assert!(serialized.contains("annotation {"));
+        assert!(serialized.contains("text = \"First line\\nSecond line\""));
     }
 }

@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 import {
+  type Annotation,
   type ConnectionLayout,
   type NodeLayout,
   parse_views,
@@ -69,15 +70,17 @@ export function sanitizeStoredRecord(
 export const DIAGRAM_LAYOUT_DIR = "diagrams";
 
 // The full persisted content of a single diagram: which components are
-// currently placed on its canvas, every component's last-known box, and connection starting points.
+// currently placed on its canvas, every component's last-known box, connection
+// starting points, and free-standing text annotations.
 export interface DiagramLayout {
   checked: Record<string, StoredBox>;
   savedLayout: Record<string, StoredBox>;
   connections?: Record<string, StoredConnection>;
+  annotations?: Annotation[];
 }
 
 export function emptyDiagramLayout(): DiagramLayout {
-  return { checked: {}, savedLayout: {}, connections: {} };
+  return { checked: {}, savedLayout: {}, connections: {}, annotations: [] };
 }
 
 /**
@@ -215,6 +218,7 @@ export function layoutToHcl(
     },
     nodes,
     connections,
+    annotations: (layout.annotations ?? []).map((a) => ({ ...a })),
   };
 
   return serialize_views([viewDef]);
@@ -227,6 +231,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
   const savedLayout: Record<string, StoredBox> = {};
   const connections: Record<string, StoredConnection> = {};
+  const annotations: Annotation[] = [];
 
   for (const view of views) {
     for (const node of view.nodes ?? []) {
@@ -260,9 +265,12 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
         connections[conn.connection] = entry;
       }
     }
+    for (const ann of view.annotations ?? []) {
+      annotations.push(ann);
+    }
   }
 
-  return { checked, savedLayout, connections };
+  return { checked, savedLayout, connections, annotations };
 }
 
 /**
@@ -312,3 +320,6 @@ export async function writeDiagramLayoutFile(
   const hclContent = layoutToHcl(layout, viewName, systemName);
   await fs.writeFile(path, hclContent);
 }
+
+// Re-export so consumers/tests can parse canonical views HCL back.
+export { type Annotation, parse_views };

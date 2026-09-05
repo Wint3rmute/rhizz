@@ -329,6 +329,7 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                         },
                     )
                     .collect(),
+                annotations: vec![],
             },
         )
 }
