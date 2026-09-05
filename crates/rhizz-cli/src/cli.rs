@@ -1,6 +1,7 @@
 //! Command-line interface: argument parsing, pipeline orchestration, and output
 //! formatting.
 
+use std::fs;
 use std::io::{IsTerminal, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,7 +12,7 @@ use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use walkdir::WalkDir;
 
-use rhizz_core::{Diagnostic, DiagnosticCode, Source};
+use rhizz_core::{Diagnostic, DiagnosticCode, Source, serialize_model, serialize_resolved_views};
 
 // ── CLI argument types ───────────────────────────────────────────────────────
 
@@ -79,6 +80,17 @@ pub enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Canonically format the model .hcl files in place (or, with --check,
+    /// only verify formatting without writing).
+    Fmt {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Verify formatting without making any filesystem changes; exit
+        /// non-zero if files need formatting.
+        #[arg(long)]
+        check: bool,
+    },
     /// Run check + score + views, then watch for .hcl changes and re-run.
     Watch {
         /// Path to project directory containing .hcl files.
@@ -98,6 +110,8 @@ enum CommandKind {
     Views,
     /// Run check + score + views in sequence (default).
     Build,
+    /// Canonically format the model .hcl files (or verify with --check).
+    Fmt,
     /// Watch for .hcl changes and re-run Build automatically.
     Watch,
 }
@@ -110,6 +124,7 @@ impl Cli {
             Some(Command::Score { path }) => (CommandKind::Score, path),
             Some(Command::Views { path }) => (CommandKind::Views, path),
             Some(Command::Build { path }) => (CommandKind::Build, path),
+            Some(Command::Fmt { path, .. }) => (CommandKind::Fmt, path),
             Some(Command::Watch { path }) => (CommandKind::Watch, path),
             None => (CommandKind::Build, &self.path),
         }
@@ -427,6 +442,121 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
     i32::from(effective_failure)
 }
 
+// ── fmt ───────────────────────────────────────────────────────────────────────
+
+/// Canonically format the model in `project_dir` (or, with `--check`, verify
+/// it without writing).
+///
+/// Loads every `.hcl` file, compiles, and rewrites the merged canonical
+/// `system.hcl` + `views.hcl` in place (atomic, will not clobber on compile
+/// errors). Returns an exit code: 0 formatted/already-correct, 1 if `--check`
+/// found unformatted files (or a hard error occurred).
+fn run_fmt(cli: &Cli, path: &Path, _color: bool) -> i32 {
+    let check = matches!(cli.command, Some(Command::Fmt { check: true, .. }));
+    let Some(out) = format_project(path) else {
+        eprintln!("rhizz fmt: compile failed; no files modified");
+        return 1;
+    };
+
+    let model_path = path.join("system.hcl");
+    let views_path = path.join("views.hcl");
+    let needs_model = read_if_absent(&model_path).is_none_or(|cur| cur != out.system);
+    let needs_views = read_if_absent(&views_path).is_none_or(|cur| cur != out.views);
+
+    if !needs_model && !needs_views {
+        if check {
+            // Already formatted.
+            return 0;
+        }
+        println!("rhizz fmt: already formatted");
+        return 0;
+    }
+
+    if check {
+        // Print a human-readable diff of the changes that would be made.
+        eprintln!("rhizz fmt: files would be reformatted:");
+        if needs_model {
+            let cur = read_if_absent(&model_path).unwrap_or_default();
+            eprintln!("{}", unified_diff("system.hcl", &cur, &out.system));
+        }
+        if needs_views {
+            let cur = read_if_absent(&views_path).unwrap_or_default();
+            eprintln!("{}", unified_diff("views.hcl", &cur, &out.views));
+        }
+        return 1;
+    }
+
+    // Write atomically.
+    let mut files = Vec::new();
+    if needs_model {
+        if atomic_write(&model_path, &out.system).is_err() {
+            eprintln!("rhizz fmt: cannot write {}", model_path.display());
+            return 1;
+        }
+        files.push("system.hcl".to_owned());
+    }
+    if needs_views {
+        if atomic_write(&views_path, &out.views).is_err() {
+            eprintln!("rhizz fmt: cannot write {}", views_path.display());
+            return 1;
+        }
+        files.push("views.hcl".to_owned());
+    }
+
+    match files.len() {
+        1 => println!(
+            "rhizz fmt: 1 file reformatted ({})",
+            files.first().map_or("", String::as_str)
+        ),
+        n => println!("rhizz fmt: {n} files reformatted ({})", files.join(", ")),
+    }
+    0
+}
+
+/// Canonical output of a project: `system.hcl` + `views.hcl` bodies.
+struct FormattedProject {
+    /// Canonical merged model HCL.
+    system: String,
+    /// Canonical views HCL.
+    views: String,
+}
+
+/// Compile a project and produce its canonical (formatted) projections.
+fn format_project(path: &Path) -> Option<FormattedProject> {
+    let sources = load_sources(path).ok()?;
+    let result = rhizz_core::compile(&sources);
+    if result.diagnostics.iter().any(Diagnostic::is_error) || result.model.is_none() {
+        return None;
+    }
+    let model = result.model?;
+    let views = serialize_resolved_views(&model.views, &model);
+    Some(FormattedProject {
+        system: serialize_model(&model),
+        views,
+    })
+}
+
+/// Atomically write `content` to `path` (temp file + rename).
+fn atomic_write(path: &Path, content: &str) -> anyhow::Result<()> {
+    let tmp = path.with_extension("hcl.tmp");
+    fs::write(&tmp, content).with_context(|| format!("write {}", tmp.display()))?;
+    fs::rename(&tmp, path).with_context(|| format!("rename {} into place", path.display()))?;
+    Ok(())
+}
+
+/// Read `path` if it exists, else `None`.
+fn read_if_absent(path: &Path) -> Option<String> {
+    fs::read_to_string(path).ok()
+}
+
+/// Build a git-style unified diff between `old` and `new` for `filename`.
+fn unified_diff(filename: &str, old: &str, new: &str) -> String {
+    similar::TextDiff::from_lines(old, new)
+        .unified_diff()
+        .header(filename, filename)
+        .to_string()
+}
+
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Dispatch to the appropriate pipeline based on the parsed CLI command.
@@ -441,6 +571,10 @@ pub fn run(cli: &Cli) -> i32 {
         // Best-effort: a second call (e.g. in parallel tests) returns an error we can ignore.
         let _ = ctrlc::set_handler(move || r.store(false, Ordering::SeqCst));
         return run_watch(cli, path, color, &running);
+    }
+
+    if cmd == CommandKind::Fmt {
+        return run_fmt(cli, path, color);
     }
 
     run_pipeline(cli, cmd, path, color)
@@ -633,6 +767,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_fmt_subcommand() {
+        let cli = parse_args(&["fmt", "examples/drone"]);
+        assert!(matches!(
+            cli.command,
+            Some(Command::Fmt { check: false, .. })
+        ));
+        assert!(
+            matches!(cli.command, Some(Command::Fmt { .. })),
+            "expected Fmt subcommand"
+        );
+    }
+
+    #[test]
+    fn parse_fmt_check_flag() {
+        let cli = parse_args(&["fmt", "examples/drone", "--check"]);
+        assert!(matches!(
+            cli.command,
+            Some(Command::Fmt { check: true, .. })
+        ));
+    }
+
+    #[test]
     fn parse_json_flag() {
         let cli = parse_args(&["--json", "examples/drone"]);
         assert!(cli.json);
@@ -714,6 +870,93 @@ mod tests {
         ]);
         let code = run(&cli);
         assert_eq!(code, 1, "invalid path should exit 1");
+    }
+
+    // ── fmt command ───────────────────────────────────────────────────────
+
+    /// Write a minimal project into a temp dir (system.hcl with messy
+    /// whitespace) and return its path.
+    fn messy_project() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("system.hcl"),
+            "project {\n  name = \"fmt-test\"\n}\n\nprotocol \"sig\" {\n  \n  description = \"x\"\n}\n\n\ncomponent \"a\" {\n  \t\tleaf = true\ndescription = \"A\"\n}\n",
+        )
+        .expect("write messy system.hcl");
+        dir
+    }
+
+    #[test]
+    fn fmt_check_no_op_when_already_formatted() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // This is the canonical output of serializer for a minimal project
+        // (note the aligned `name    =`). An already-formatted project must
+        // make `--check` exit 0.
+        std::fs::write(
+            dir.path().join("system.hcl"),
+            "project {\n  name    = \"fmt-test\"\n}\n",
+        )
+        .expect("write clean system.hcl");
+        std::fs::write(dir.path().join("views.hcl"), "").expect("write empty views.hcl");
+        let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        // Should not fail (exit 0) because the input is already canonical.
+        let code = run(&cli);
+        assert_eq!(code, 0, "--check on formatted project should exit 0");
+    }
+
+    #[test]
+    fn fmt_check_detects_messy_and_formats() {
+        let dir = messy_project();
+        let check_cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        let code = run(&check_cli);
+        assert_eq!(code, 1, "--check should fail on messy formatting");
+
+        // Now actually format.
+        let fmt_cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        let code = run(&fmt_cli);
+        assert_eq!(code, 0, "fmt should exit 0 after writing");
+
+        // And check should pass now.
+        let check_cli2 =
+            parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        assert_eq!(run(&check_cli2), 0, "--check should pass after formatting");
+
+        // The canonical file should round-trip: reformatting is idempotent.
+        let again = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        assert_eq!(run(&again), 0);
+        let check3 = parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        assert_eq!(run(&check3), 0, "second check after second fmt stays clean");
+    }
+
+    #[test]
+    fn fmt_does_not_write_on_compile_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("system.hcl"), "this is not hcl").expect("write broken hcl");
+        let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        let code = run(&cli);
+        assert_eq!(code, 1, "fmt on compile error should exit 1");
+        // No views.hcl should have been created (fmt refuses on errors).
+        assert!(
+            !dir.path().join("views.hcl").exists(),
+            "views.hcl should not be created"
+        );
+    }
+
+    #[test]
+    fn fmt_creates_views_hcl() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("system.hcl"),
+            "project { name = \"x\" }\nsystem \"s\" { description = \"d\" }\nview \"v\" { system = \"s\" }\n",
+        )
+        .expect("write hcl with view");
+        let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        let code = run(&cli);
+        assert_eq!(code, 0);
+        assert!(
+            dir.path().join("views.hcl").exists(),
+            "views.hcl should be generated"
+        );
     }
 
     // ── watch command ─────────────────────────────────────────────────────
