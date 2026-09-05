@@ -1125,6 +1125,7 @@ dependencies = [
  "rhizz-core",
  "serde",
  "serde_json",
+ "similar",
  "tempfile",
  "tracing",
  "tracing-subscriber",
