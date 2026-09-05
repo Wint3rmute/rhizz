@@ -284,7 +284,9 @@ let savedLayout = $state<Record<string, StoredBox>>({});
 let savedConnections = $state<Record<string, StoredConnection>>({});
 let annotations = $state<Annotation[]>([]);
 // Indices into `annotations` currently selected (for drag/delete).
-let selectedAnnotations = $state<Set<number>>(new Set());
+// SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
+// tracked and the outline re-renders — mirrors the node `selectedKeys`.
+let selectedAnnotations = new SvelteSet<number>();
 // When editing an annotation's text inline (index, or null when not editing).
 let editingAnnotation = $state<number | null>(null);
 // The annotation object currently being edited (undefined when not editing).
@@ -969,8 +971,10 @@ type Interaction =
     offsetX: number;
     offsetY: number;
     startPositions: Record<number, { x: number; y: number }>;
-    /** Selected annotations' start positions (absolute), moved alongside nodes. */
-    annotationStartPositions?: { x: number; y: number }[];
+    /** Selected annotations' start positions (absolute), keyed by index, moved alongside nodes. */
+    annotationStartPositions?: Map<number, { x: number; y: number }>;
+    /** The annotation index grabbed to start an annotation-only drag (delta base). */
+    annotationAnchor?: number;
   }
   | {
     // Resizing any node via any of its 8 edge/corner handles.
@@ -1549,12 +1553,15 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   };
 }
 
-// Snapshot the currently selected annotations' positions for a group drag.
-function snapshotAnnotationPositions(): { x: number; y: number }[] {
-  return [...selectedAnnotations].map((i) => ({
-    x: annotations[i]?.x ?? 0,
-    y: annotations[i]?.y ?? 0,
-  }));
+// Snapshot the currently selected annotations' positions for a group drag,
+// keyed by annotation index (stable for the whole drag).
+function snapshotAnnotationPositions(): Map<number, { x: number; y: number }> {
+  const map = new Map<number, { x: number; y: number }>();
+  for (const i of selectedAnnotations) {
+    const a = annotations[i];
+    if (a) map.set(i, { x: a.x, y: a.y });
+  }
+  return map;
 }
 
 // Mouse down on an annotation label: select it and start dragging it (and
@@ -1582,31 +1589,34 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
   const anchor = annotations[index] ?? { x: 0, y: 0 };
   interaction = {
     type: "dragging",
-    anchorIndex: -1, // no node anchor; annotations move by their own delta
+    anchorIndex: -1, // no node anchor
     offsetX: svgCoords.x - anchor.x,
     offsetY: svgCoords.y - anchor.y,
     startPositions: {},
+    // The dragged annotation's index (delta base) + the snapshot of the
+    // whole annotation selection at drag start.
+    annotationAnchor: index,
     annotationStartPositions: snapshotAnnotationPositions(),
   };
 }
 
-// Move the selected annotations by the same delta as the node group drag.
+// Move every selected annotation by the same (deltaX, deltaY) from its own
+// drag-start snapshot — recomputed from the snapshot each event (like
+// applyGroupDelta), never accumulated, so there is no drift or flicker.
 function applyAnnotationDelta(deltaX: number, deltaY: number): void {
   const current = interaction;
-  if (current.type !== "dragging" || !current.annotationStartPositions) return;
+  if (current.type !== "dragging") return;
   const starts = current.annotationStartPositions;
-  const sel = [...selectedAnnotations].sort((a, b) => a - b);
-  sel.forEach((idx, k) => {
-    const start = starts[k] ??
-      { x: annotations[idx]?.x ?? 0, y: annotations[idx]?.y ?? 0 };
-    if (annotations[idx]) {
-      annotations[idx] = {
-        ...annotations[idx],
-        x: snap(start.x + deltaX),
-        y: snap(start.y + deltaY),
-      };
-    }
-  });
+  if (!starts) return;
+  for (const [idx, start] of starts) {
+    const a = annotations[idx];
+    if (!a) continue;
+    annotations[idx] = {
+      ...a,
+      x: snap(start.x + deltaX),
+      y: snap(start.y + deltaY),
+    };
+  }
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
@@ -1822,13 +1832,17 @@ function onSvgMouseMove(event: MouseEvent) {
       } else if (
         current.anchorIndex === -1 && current.annotationStartPositions
       ) {
-        // Annotation-only drag: no node anchor, move by absolute pointer
-        // delta so selected annotations follow the cursor exactly.
+        // Annotation-only drag (no node anchor): compute the delta from the
+        // grabbed anchor annotation's DRAG-START snapshot (like nodes do),
+        // never from its live position, so each move is a clean delta off a
+        // fixed base — no feedback, no runaway/flicker, cursor-accurate.
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        const anchor = annotations[0] ?? { x: 0, y: 0 };
-        if (annotations[0]) {
-          const deltaX = svgCoords.x - current.offsetX - anchor.x;
-          const deltaY = svgCoords.y - current.offsetY - anchor.y;
+        const anchorStart = current.annotationStartPositions.get(
+          current.annotationAnchor ?? -1,
+        );
+        if (anchorStart) {
+          const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
+          const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
           applyAnnotationDelta(deltaX, deltaY);
         }
       }
