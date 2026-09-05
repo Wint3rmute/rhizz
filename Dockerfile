@@ -58,10 +58,13 @@ COPY --from=frontend /app/crates/rhizz-wasm/pkg crates/rhizz-wasm/pkg
 
 # Backend sources. SPEC/ and examples/ are needed by the rhizz-core build
 # script (it embeds SPEC/diagnostics and examples/ via include_str!).
+# Every workspace member crate must be present so the workspace manifest
+# resolves (rhizz-book is a member even though the server doesn't link it).
 COPY crates/rhizz-core crates/rhizz-core
 COPY crates/rhizz-cli crates/rhizz-cli
 COPY crates/rhizz-server crates/rhizz-server
 COPY crates/rhizz-wasm crates/rhizz-wasm
+COPY crates/rhizz-book crates/rhizz-book
 COPY SPEC SPEC
 COPY examples examples
 COPY Cargo.toml Cargo.lock ./
