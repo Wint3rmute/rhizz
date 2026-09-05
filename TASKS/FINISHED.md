@@ -30,7 +30,9 @@ CI.
 - **Numbers (validated per guide)**: llvm-cov measures regions, so totals
   differ from tarpaulin's line count — 90.41% lines / 91.24% functions /
   88.23% regions (vs tarpaulin 83.34% lines). Gate verified: exits 1 below
-  the threshold, 0 above (current 90.41% ≥ 80).
+  the threshold, 0 above (current 90.41% ≥ 80). CI runs `--doctests`
+  (unstable flag, hence `RUSTC_BOOTSTRAP=1`) so doctest coverage is
+  collected as soon as any host crate gets doctests.
 - **`cargo-tarpaulin` fully removed** (no leftover references, no
   tarpaulin.toml); local `Justfile` coverage tasks were dropped earlier by the
   user's Justfile cleanup, so local coverage is dev-shell-only
