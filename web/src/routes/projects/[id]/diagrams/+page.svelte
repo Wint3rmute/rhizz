@@ -3086,9 +3086,15 @@ $effect(() => {
         {/each}
 
         <!-- Free-standing text annotations, rendered at absolute positions.
-             Selectable + draggable like nodes; double-click to edit text. -->
+             Selectable + draggable like nodes; double-click to edit text.
+             The text itself is pointer-events: none; an invisible rect behind
+             it is the actual hit target (SVG <g> has no geometry of its own,
+             so without it the whole annotation is invisible to the mouse). -->
         {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}`)}
           {@const isAnnSelected = selectedAnnotations.has(i)}
+          {@const annLines = ann.text.split("\n")}
+          {@const annWidth = Math.max(...annLines.map((l) => l.length * 7.5 + 14), 40)}
+          {@const annHeight = annLines.length * 16 + 8}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <g
             class="cursor-grab"
@@ -3099,6 +3105,14 @@ $effect(() => {
               editingAnnotation = i;
             }}
           >
+            <rect
+              x={ann.x - 4}
+              y={ann.y - 16}
+              width={annWidth}
+              height={annHeight}
+              fill="transparent"
+              style="cursor: grab"
+            />
             {#if editingAnnotation === i}
               <text
                 x={ann.x}
