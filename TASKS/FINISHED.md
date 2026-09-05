@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Add a `rhizz fmt` command
+
+Added a canonical `rhizz fmt` command to the CLI (merged on main as
+`14c4b0a` + `aa690cc`).
+
+- **`rhizz fmt <path>`** — loads the project's `.hcl` files, compiles, and
+  rewrites the canonical `system.hcl` + `views.hcl` projections in place
+  (via `rhizz-core::serialize_model` / `serialize_resolved_views`), with
+  atomic temp+rename writes and no clobbering on compile errors. Prints
+  cargo-fmt-style messages (`rhizz fmt: 1 file reformatted (system.hcl)` /
+  `already formatted`).
+- **`rhizz fmt <path> --check`** — makes no filesystem changes, exits 1 if
+  anything would change (0 if already canonical), and emits a git-style
+  unified diff of exactly what would change, reusing the book preprocessor's
+  `similar` diff approach.
+- **Bug fixes surfaced by formatting the examples**: `serialize_resolved_views`
+  emitted duplicate views when the same view appeared in `views.hcl` and a
+  `diagrams/*.hcl` (parse merges all `.hcl` recursively) → dedup by label
+  with a regression test; stale parse/resolve test assertions updated (drone
+  5→6 views incl. `diagrams/main.hcl`, software-house 4→5).
+- **Examples**: all 6 worked examples (drone, social-media, software-house,
+  web-app, apollo-11, single-file) canonicalized with `rhizz fmt`. Per user
+  decision, comments are removed at MVP stage; apollo-11/single-file gained
+  a canonical `views.hcl`. All pass `rhizz fmt --check`.
+- Tests: 206 Rust tests (rhizz-cli 24 + integration 7 incl. fmt cases),
+  clippy/fmt clean; mdBook still builds against the unchanged `book.lock`.
+
+---
+
 ## Task 104 — Rust unit-test coverage reporting (cargo-llvm-cov)
 
 Added Rust unit-test coverage reporting with `cargo-llvm-cov` (migrated from

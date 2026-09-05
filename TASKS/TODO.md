@@ -13,30 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Add a `rhizz fmt` command
-
-There's a multitude of ways to write HCL code, Rhizz compiler will accept any
-combination of tabs, spaces, multiple newlines, etc. To minimize
-the amount of accidental changes between hand-writing the model and running
-it through UI-based mutations, I want to be only a single correct way to
-format Rhizz models.
-
-Add a new `fmt` command to rhizz CLI, which will:
-
-1. Load the model
-2. Compile the model
-3. Convert the converted model back into HCL
-4. Write the HCL back
-5. Say something like "1 file reformatted", similar to how `cargo fmt` works
-
-I also want the `fmt` command to accept a `--check` flag, which will not make
-any filesystem changes, but exit with a non-zero status if the code needs
-formatting.
-
-Extra: if it's easy to implement using existing diff algorithms in the book
-preprocessor - when running with `--check`, emit the diff which would be made by
-formatting the code using a human-readable diff into the terminal.
-
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
