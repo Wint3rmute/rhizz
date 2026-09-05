@@ -3113,6 +3113,23 @@ $effect(() => {
               fill="transparent"
               style="cursor: grab"
             />
+            {#if isAnnSelected}
+              <!-- Selection frame identical in style to components: a dotted
+                   primary outline around the annotation's hit box. -->
+              <rect
+                x={ann.x - 4}
+                y={ann.y - 16}
+                width={annWidth}
+                height={annHeight}
+                rx="3"
+                fill="none"
+                stroke="var(--color-primary)"
+                stroke-opacity={SELECTION_OUTLINE_OPACITY}
+                stroke-width="1.5"
+                stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
+                style="pointer-events: none"
+              />
+            {/if}
             {#if editingAnnotation === i}
               <text
                 x={ann.x}
