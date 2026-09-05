@@ -26,6 +26,8 @@ export interface Annotation {
   text: string;
   x: number;
   y: number;
+  /** Font size multiplier; 1 = 100% (default). */
+  scale?: number;
 }
 
 export interface ViewFilterDefinition {

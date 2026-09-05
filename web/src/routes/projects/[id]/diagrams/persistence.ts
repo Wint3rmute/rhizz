@@ -266,7 +266,12 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
       }
     }
     for (const ann of view.annotations ?? []) {
-      annotations.push(ann);
+      // Normalize: scale 1 (the serde default for a missing scale) means the
+      // annotation is at the default 100%; drop it so it round-trips as
+      // absent, matching how layoutToHcl omits the default.
+      const normalized = { ...ann };
+      if (normalized.scale === 1) delete normalized.scale;
+      annotations.push(normalized);
     }
   }
 

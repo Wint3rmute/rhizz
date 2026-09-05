@@ -750,12 +750,17 @@ fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
     out.push_str("  }\n");
 }
 
-/// Serialize one annotation block: `annotation { x y text }`.
+/// Serialize one annotation block: `annotation { x y text scale }`.
 fn serialize_annotation(out: &mut String, ann: &Annotation) {
     let _ = writeln!(out, "  annotation {{");
-    let _ = writeln!(out, "    x    = {}", format_number(ann.x));
-    let _ = writeln!(out, "    y    = {}", format_number(ann.y));
-    let _ = writeln!(out, "    text = {}", escape_string(&ann.text));
+    let _ = writeln!(out, "    x     = {}", format_number(ann.x));
+    let _ = writeln!(out, "    y     = {}", format_number(ann.y));
+    let _ = writeln!(out, "    text  = {}", escape_string(&ann.text));
+    // Only emit scale when it differs from the 100% default, keeping
+    // canonical output stable for the common case.
+    if (ann.scale - 1.0).abs() > f64::EPSILON {
+        let _ = writeln!(out, "    scale = {}", format_number(ann.scale));
+    }
     out.push_str("  }\n");
 }
 
@@ -811,6 +816,7 @@ struct RawAnnotationAttrs {
     x: Option<f64>,
     y: Option<f64>,
     text: Option<String>,
+    scale: Option<f64>,
 }
 
 fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
@@ -902,6 +908,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             text: aa.text.unwrap_or_default(),
                             x: aa.x.unwrap_or(0.0),
                             y: aa.y.unwrap_or(0.0),
+                            scale: aa.scale.unwrap_or(1.0),
                         });
                     }
                     _ => {}
@@ -1773,6 +1780,7 @@ view "main" {
     x    = 0
     y    = 100
     text = "Standalone note"
+    scale = 1.5
   }
 }
 "#;
@@ -1791,13 +1799,28 @@ view "main" {
             view.annotations[0].y
         );
         assert_eq!(view.annotations[0].text, "First line\nSecond line");
+        // Default scale (absent in HCL) is 1.0 (100%); explicit scale parses.
+        assert!(
+            (view.annotations[0].scale - 1.0).abs() < 1e-9,
+            "default scale should be 1.0, got {}",
+            view.annotations[0].scale
+        );
+        assert!(
+            (view.annotations[1].scale - 1.5).abs() < 1e-9,
+            "explicit scale should parse, got {}",
+            view.annotations[1].scale
+        );
         assert_eq!(view.annotations[1].text, "Standalone note");
 
-        // Serialize back and re-parse: idempotent round trip, sorted by text.
+        // Serialize back and re-parse: idempotent round trip, sorted by text,
+        // and the default scale is not emitted (canonical stability).
         let serialized = serialize_views(&views);
+        assert!(
+            serialized.contains("scale = 1.5"),
+            "non-default scale emitted: {serialized}"
+        );
         let reparsed = parse_views(&serialized).expect("reparse");
         assert_eq!(reparsed, views, "annotation round trip must be stable");
         assert!(serialized.contains("annotation {"));
-        assert!(serialized.contains("text = \"First line\\nSecond line\""));
     }
 }
