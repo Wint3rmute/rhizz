@@ -523,6 +523,14 @@ pub struct Annotation {
     pub x: f64,
     /// Y coordinate on canvas (absolute, in world units).
     pub y: f64,
+    /// Font size multiplier; 1.0 = 100% (the default size).
+    #[serde(default = "default_annotation_scale")]
+    pub scale: f64,
+}
+
+/// Default annotation scale: 100%.
+const fn default_annotation_scale() -> f64 {
+    1.0
 }
 
 /// A view definition containing filter, output settings, and node layouts.

@@ -976,7 +976,7 @@ type Interaction =
     offsetY: number;
     startPositions: Record<number, { x: number; y: number }>;
     /** Selected annotations' start positions (absolute), keyed by index, moved alongside nodes. */
-    annotationStartPositions?: Map<number, { x: number; y: number }>;
+    annotationStartPositions?: Record<number, { x: number; y: number }>;
     /** The annotation index grabbed to start an annotation-only drag (delta base). */
     annotationAnchor?: number;
   }
@@ -989,6 +989,8 @@ type Interaction =
     startPointer: { x: number; y: number };
     groupBox: Box;
     startBoxes: Record<number, Box>;
+    /** When set, this is an annotation resize: index into annotations + its start scale. */
+    annotationResize?: { index: number; startScale: number };
   }
   | {
     // Canvas pan. Started by the middle mouse button, or the left
@@ -1559,11 +1561,14 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
 
 // Snapshot the currently selected annotations' positions for a group drag,
 // keyed by annotation index (stable for the whole drag).
-function snapshotAnnotationPositions(): Map<number, { x: number; y: number }> {
-  const map = new Map<number, { x: number; y: number }>();
+function snapshotAnnotationPositions(): Record<
+  number,
+  { x: number; y: number }
+> {
+  const map: Record<number, { x: number; y: number }> = {};
   for (const i of selectedAnnotations) {
     const a = annotations[i];
-    if (a) map.set(i, { x: a.x, y: a.y });
+    if (a) map[i] = { x: a.x, y: a.y };
   }
   return map;
 }
@@ -1612,15 +1617,47 @@ function applyAnnotationDelta(deltaX: number, deltaY: number): void {
   if (current.type !== "dragging") return;
   const starts = current.annotationStartPositions;
   if (!starts) return;
-  for (const [idx, start] of starts) {
+  for (const idxStr of Object.keys(starts)) {
+    const idx = Number(idxStr);
+    const start = starts[idx];
     const a = annotations[idx];
-    if (!a) continue;
+    if (!a || !start) continue;
     annotations[idx] = {
       ...a,
       x: snap(start.x + deltaX),
       y: snap(start.y + deltaY),
     };
   }
+}
+
+// Start resizing a selected annotation from one of its corner handles.
+// The drag changes the annotation's `scale` (100% = 1.0) — corner-pull
+// distance scales the font multiplier, mirroring how node resize handles
+// work but as a pure scale factor instead of a box.
+function onAnnotationResizeMouseDown(
+  event: MouseEvent,
+  index: number,
+  handle: ResizeHandle,
+): void {
+  event.stopPropagation();
+  if (autoLayoutRunning) return;
+  if (event.button !== 0) return;
+  event.preventDefault();
+  if (!selectedAnnotations.has(index)) selectAnnotation(index);
+  recordUndoPoint();
+  const a = annotations[index];
+  if (!a) return;
+  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+  interaction = {
+    type: "resizing",
+    anchorIndex: -1,
+    handle,
+    startBox: { x: a.x, y: a.y, width: 0, height: 0 },
+    startPointer: svgCoords,
+    groupBox: { x: a.x, y: a.y, width: 0, height: 0 },
+    startBoxes: {},
+    annotationResize: { index, startScale: a.scale ?? 1 },
+  };
 }
 
 function onCanvasMouseDown(event: MouseEvent) {
@@ -1841,9 +1878,9 @@ function onSvgMouseMove(event: MouseEvent) {
         // never from its live position, so each move is a clean delta off a
         // fixed base — no feedback, no runaway/flicker, cursor-accurate.
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        const anchorStart = current.annotationStartPositions.get(
-          current.annotationAnchor ?? -1,
-        );
+        const anchorStart = current.annotationStartPositions[
+          current.annotationAnchor ?? -1
+        ];
         if (anchorStart) {
           const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
           const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
@@ -1853,6 +1890,24 @@ function onSvgMouseMove(event: MouseEvent) {
       return;
     }
     case "resizing": {
+      if (current.annotationResize) {
+        // Annotation resize: the corner drag maps (deltaX, deltaY) to a new
+        // font scale — startScale + fractional distance. A minimum guard
+        // keeps the note from collapsing to nothing.
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        const deltaX = svgCoords.x - current.startPointer.x;
+        const deltaY = svgCoords.y - current.startPointer.y;
+        const a = annotations[current.annotationResize.index];
+        if (a) {
+          const start = current.annotationResize.startScale;
+          const scale = Math.max(0.5, start + (deltaX + deltaY) / 100);
+          annotations[current.annotationResize.index] = {
+            ...a,
+            scale,
+          };
+        }
+        return;
+      }
       const anchorStart = current.startBox;
       if (anchorStart) {
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
@@ -3104,15 +3159,18 @@ $effect(() => {
         {/each}
 
         <!-- Free-standing text annotations, rendered at absolute positions.
-             Selectable + draggable like nodes; double-click to edit text.
-             The text itself is pointer-events: none; an invisible rect behind
-             it is the actual hit target (SVG <g> has no geometry of its own,
-             so without it the whole annotation is invisible to the mouse). -->
-        {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}`)}
+             Selectable + draggable like nodes; double-click to edit text;
+             corner-drag to resize (changes the font scale). The text itself
+             is pointer-events: none; an invisible rect behind it is the hit
+             target (SVG <g> has no geometry of its own). -->
+        {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}-${ann.scale}`)}
           {@const isAnnSelected = selectedAnnotations.has(i)}
+          {@const annFontSize = 12 * (ann.scale ?? 1)}
           {@const annLines = ann.text.split("\n")}
-          {@const annWidth = Math.max(...annLines.map((l) => l.length * 7.5 + 14), 40)}
-          {@const annHeight = annLines.length * 16 + 8}
+          {@const annWidth = Math.max(...annLines.map((l) => l.length * 7.5 * (ann.scale ?? 1) + 14), 40)}
+          {@const annHeight = annLines.length * 16 * (ann.scale ?? 1) + 8}
+          {@const annX = ann.x - 4}
+          {@const annY = ann.y - 16 * (ann.scale ?? 1)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <g
             class="cursor-grab"
@@ -3124,8 +3182,8 @@ $effect(() => {
             }}
           >
             <rect
-              x={ann.x - 4}
-              y={ann.y - 16}
+              x={annX}
+              y={annY}
               width={annWidth}
               height={annHeight}
               fill="transparent"
@@ -3135,8 +3193,8 @@ $effect(() => {
               <!-- Selection frame identical in style to components: a dotted
                    primary outline around the annotation's hit box. -->
               <rect
-                x={ann.x - 4}
-                y={ann.y - 16}
+                x={annX}
+                y={annY}
                 width={annWidth}
                 height={annHeight}
                 rx="3"
@@ -3147,13 +3205,25 @@ $effect(() => {
                 stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
                 style="pointer-events: none"
               />
+              <!-- Bottom-right corner resize handle (font scale). -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <rect
+                x={annX + annWidth - CORNER_HANDLE_SIZE / 2}
+                y={annY + annHeight - CORNER_HANDLE_SIZE / 2}
+                width={CORNER_HANDLE_SIZE}
+                height={CORNER_HANDLE_SIZE}
+                fill="var(--color-primary)"
+                fill-opacity="0.9"
+                style="cursor: nwse-resize"
+                onmousedown={(e) => onAnnotationResizeMouseDown(e, i, "bottom-right")}
+              />
             {/if}
             {#if editingAnnotation === i}
               <text
                 x={ann.x}
                 y={ann.y}
                 fill="var(--color-primary)"
-                font-size="12"
+                font-size={annFontSize}
                 text-anchor="start"
                 style="user-select: none"
               >
@@ -3166,7 +3236,7 @@ $effect(() => {
                 fill={isAnnSelected
                   ? "var(--color-primary)"
                   : "var(--color-base-content)"}
-                font-size="12"
+                font-size={annFontSize}
                 text-anchor="start"
                 style="pointer-events: none; user-select: none; white-space: pre"
               >

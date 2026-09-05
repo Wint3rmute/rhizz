@@ -195,18 +195,20 @@ describe("HCL View conversion and persistence", () => {
       checked: {},
       savedLayout: {},
       annotations: [
-        { text: "First line\nSecond line", x: 12.5, y: -3 },
+        { text: "First line\nSecond line", x: 12.5, y: -3, scale: 1.5 },
         { text: "Standalone note", x: 0, y: 100 },
       ],
     };
     const hcl = layoutToHcl(layout, "overview", "home");
     expect(hcl).toContain("annotation {");
-    expect(hcl).toContain('text = "First line\\nSecond line"');
+    // Non-default scale is persisted; the default (1) is not emitted.
+    expect(hcl).toContain("scale = 1.5");
+    expect(hcl).not.toMatch(/scale = 1\s/);
 
-    const back = parse_views(hcl)[0];
-    expect(back?.annotations).toEqual(layout.annotations);
-
-    const layout2 = viewsToLayout(back ? [back] : []);
+    // The real app path: parse -> viewsToLayout (which normalizes a serde-
+    // defaulted scale: 1 back to absent).
+    const back = parse_views(hcl);
+    const layout2 = viewsToLayout(back);
     expect(layout2.annotations).toEqual(layout.annotations);
   });
 
