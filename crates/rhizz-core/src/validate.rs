@@ -1,6 +1,6 @@
 //! Validation pass -- warning pass over the resolved Model.
 
-use crate::model::{ComponentParent, Diagnostic, DiagnosticCode, Model};
+use crate::model::{ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -14,8 +14,14 @@ use tracing::instrument;
 pub fn validate(model: &Model) -> Vec<Diagnostic> {
     let mut warnings: Vec<Diagnostic> = Vec::new();
 
-    // W001 -- non-leaf component with no child components (decomposition pending)
+    // W001 -- non-leaf component with no child components (decomposition
+    // pending). Only definitions are checked: an instance clones the
+    // definition's body, so a structural defect would be reported on the
+    // definition itself and must not be duplicated per instance.
     for comp in &model.components {
+        if comp.kind == ComponentKind::Instance {
+            continue;
+        }
         if !comp.leaf && comp.children.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W001,
@@ -37,19 +43,28 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W003 -- component is not referenced by any connection (orphan)
+    // W003 -- placed instance is not referenced by any connection (orphan).
+    // Reusable definitions are abstractions that cannot be connected, so only
+    // instances are checked; the source definition is appended for context.
     let mut referenced: HashSet<usize> = HashSet::new();
     for conn in &model.connections {
         referenced.insert(conn.from.component.0);
         referenced.insert(conn.to.component.0);
     }
     for (cid, comp) in model.components.iter().enumerate() {
+        if comp.kind == ComponentKind::Definition {
+            continue;
+        }
         if !referenced.contains(&cid) {
+            let source_suffix = comp
+                .source
+                .as_deref()
+                .map_or_else(String::new, |source| format!(" (source '{source}')"));
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W003,
                 format!(
-                    "component '{}' is not referenced by any connection",
-                    comp.label
+                    "component '{}'{} is not referenced by any connection",
+                    comp.label, source_suffix
                 ),
             ));
         }
@@ -65,6 +80,9 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
     for comp in &model.components {
+        if comp.kind == ComponentKind::Instance {
+            continue;
+        }
         if comp.description.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
@@ -196,6 +214,15 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
     for (idx, port) in model.ports.iter().enumerate() {
+        // Connectivity warnings apply to placed instances only; a definition's
+        // port is part of an abstraction's contract and cannot be connected.
+        let owner = model
+            .components
+            .get(port.owner.0)
+            .map_or(ComponentKind::Definition, |comp| comp.kind);
+        if owner != ComponentKind::Instance {
+            continue;
+        }
         if !used_ports.contains(&idx) {
             // Unconnected ports emit W010 unless marked as an optional external port (external = true, required = false)
             if !port.external || port.required {
@@ -584,6 +611,136 @@ mod tests {
         assert!(
             warnings.iter().any(|d| d.code == DiagnosticCode::W010),
             "unconnected internal port must emit W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    // ── Definition vs instance scoping of W001/W003/W004/W010 ─────────────
+
+    #[test]
+    fn w003_not_emitted_for_definitions() {
+        let src = r#"
+            component "sensor" {
+              description = "Reusable definition"
+              leaf = true
+              port "data" { protocol = "sig" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W003),
+            "a definition must never emit W003, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert_eq!(model.components.len(), 1);
+        assert_eq!(
+            model.components[0].kind,
+            crate::model::ComponentKind::Definition
+        );
+    }
+
+    #[test]
+    fn w003_emitted_for_unconnected_instance_with_source_suffix() {
+        let src = r#"
+            component "sensor" {
+              description = "Reusable definition"
+              leaf = true
+            }
+            system "s" {
+              instance "sensor" { source = "sensor" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        let w003: Vec<&Diagnostic> = warnings
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W003)
+            .collect();
+        assert_eq!(
+            w003.len(),
+            1,
+            "expected one W003, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert!(
+            w003[0]
+                .message
+                .contains("component 'sensor' (source 'sensor') is not referenced"),
+            "W003 should name the local label with source context: {}",
+            w003[0].message
+        );
+    }
+
+    #[test]
+    fn w010_not_emitted_for_definition_ports() {
+        let src = r#"
+            component "sensor" {
+              description = "Reusable definition"
+              leaf = true
+              port "data" { protocol = "sig" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W010),
+            "a definition port must never emit W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w001_and_w004_emitted_once_for_definition_not_per_instance() {
+        let src = r#"
+            component "motor" {
+              description = ""
+              leaf = false
+            }
+            system "s" {
+              instance "m1" { source = "motor" }
+              instance "m2" { source = "motor" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        // Structural and description warnings come from the definition only,
+        // once each, even though two instances clone the (empty) body.
+        let w001: Vec<&Diagnostic> = warnings
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W001)
+            .collect();
+        let w004: Vec<&Diagnostic> = warnings
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W004 && d.message.contains("component"))
+            .collect();
+        assert_eq!(
+            w001.len(),
+            1,
+            "expected exactly one W001, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert_eq!(
+            w004.len(),
+            1,
+            "expected exactly one component-W004, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert!(w001[0].message.contains("motor"));
+        assert!(w004[0].message.contains("motor"));
+        // The two unconnected instances still each emit W003.
+        let w003_count = warnings
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W003)
+            .count();
+        assert_eq!(
+            w003_count,
+            2,
+            "expected two W003, got: {:?}",
             warning_codes(&warnings)
         );
     }

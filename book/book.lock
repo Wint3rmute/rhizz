@@ -33,15 +33,11 @@
         "warnings": [
           {
             "code": "W003",
-            "message": "component 'front-wheel' is not referenced by any connection"
+            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'rear-wheel' is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'wheel' is not referenced by any connection"
+            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
           }
         ]
       }
@@ -76,20 +72,7 @@
           },
           "system": ""
         },
-        "warnings": [
-          {
-            "code": "W003",
-            "message": "component 'fork' is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'frame' is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'wheel' is not referenced by any connection"
-          }
-        ]
+        "warnings": []
       }
     },
     {
@@ -126,10 +109,6 @@
           {
             "code": "W001",
             "message": "component 'wheel' is non-leaf but has no child components"
-          },
-          {
-            "code": "W003",
-            "message": "component 'wheel' is not referenced by any connection"
           }
         ]
       }
@@ -217,20 +196,12 @@
         ],
         "warnings": [
           {
-            "code": "W003",
-            "message": "component 'sensor-hat' is not referenced by any connection"
-          },
-          {
             "code": "W004",
             "message": "connection 'link' is missing a description"
           },
           {
             "code": "W005",
             "message": "connection 'link' has 'from' and 'to' pointing to the same component"
-          },
-          {
-            "code": "W010",
-            "message": "port 'data' is not referenced by any connection"
           },
           {
             "code": "W011",
