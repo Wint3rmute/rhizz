@@ -1,8 +1,98 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import BookExampleView from "./BookExampleView.svelte";
-import { DEMO_FILES } from "./demo";
 import type { BookPayloadFile } from "./payload";
+
+// Sample project for stories: tiny but complete (protocol + definitions +
+// instances + connection + placed diagram + annotation) so every surface
+// has something to render.
+const SAMPLE_FILES: BookPayloadFile[] = [
+  {
+    path: "system.hcl",
+    content: `project {
+  name = "book-demo"
+}
+
+protocol "temp-bus" {
+  description = "Temperature sensor bus"
+  roles       = ["provider", "consumer"]
+
+  message "reading" {
+    description = "A single temperature reading"
+
+    field "celsius" {
+      type        = "f32"
+      description = "Temperature in Celsius"
+    }
+  }
+}
+
+component "sensor" {
+  description = "Temperature sensor"
+  leaf        = true
+
+  port "out" {
+    description = "Reading output"
+    protocol    = "temp-bus"
+    role        = "provider"
+  }
+}
+
+component "hub" {
+  description = "Reading collector"
+  leaf        = true
+
+  port "in" {
+    description = "Reading input"
+    protocol    = "temp-bus"
+    role        = "consumer"
+  }
+}
+
+system "demo" {
+  description = "Minimal book example"
+
+  instance "sensor" { source = "sensor" }
+  instance "hub" { source = "hub" }
+
+  connection "reading" {
+    description = "Delivers readings to the hub"
+    from        = "sensor/out"
+    to          = "hub/in"
+  }
+}
+`,
+  },
+  {
+    path: "diagrams/main.hcl",
+    content: `view "main" {
+  system = "demo"
+
+  node "demo/sensor" {
+    x          = 80
+    y          = 120
+    width      = 140
+    height     = 90
+    text_align = "center"
+  }
+
+  node "demo/hub" {
+    x          = 360
+    y          = 120
+    width      = 140
+    height     = 90
+    text_align = "center"
+  }
+
+  annotation {
+    x    = 80
+    y    = 40
+    text = "Book demo: two components, one connection"
+  }
+}
+`,
+  },
+];
 
 const meta = {
   title: "Book/BookExampleView",
@@ -32,7 +122,7 @@ async function findCodeWith(
 // The fallback demo project: diagram tab with two placed nodes.
 export const DiagramTab: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -44,7 +134,7 @@ export const DiagramTab: Story = {
 // Clicking a file tab shows its highlighted HCL.
 export const CodeTab: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -63,7 +153,7 @@ export const CodeTab: Story = {
 // completion stats.
 export const CleanProject: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -76,7 +166,7 @@ export const CleanProject: Story = {
 // Dropping the hub description triggers W004, shown directly at the bottom
 // with no click needed. (Alert text runs together across <br/> elements,
 // so the assertion uses a regex.)
-const warningFiles: BookPayloadFile[] = DEMO_FILES.map((file) =>
+const warningFiles: BookPayloadFile[] = SAMPLE_FILES.map((file) =>
   file.path === "system.hcl"
     ? {
       path: file.path,
@@ -102,7 +192,7 @@ export const WarningsShownDirectly: Story = {
 // ?open=system.hcl lands directly on the code tab.
 export const OpenCodeFile: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
     open: "system.hcl",
   },
   play: async ({ canvasElement }) => {
@@ -115,7 +205,7 @@ export const OpenCodeFile: Story = {
 // ?open=diagrams/main.hcl lands on that diagram (and not on the code).
 export const OpenDiagram: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
     open: "diagrams/main.hcl",
   },
   play: async ({ canvasElement }) => {
@@ -129,7 +219,7 @@ export const OpenDiagram: Story = {
 // checkmark confirming success.
 export const CopyCode: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
     open: "system.hcl",
   },
   play: async ({ canvasElement }) => {
@@ -154,7 +244,7 @@ export const CopyCode: Story = {
 
 // A lone file hides the top bar entirely: just code plus diagnostics,
 // like a plain ```rhizz block.
-const singleFile: BookPayloadFile[] = DEMO_FILES.filter((file) =>
+const singleFile: BookPayloadFile[] = SAMPLE_FILES.filter((file) =>
   file.path === "system.hcl"
 );
 
@@ -174,7 +264,7 @@ export const SingleFile: Story = {
 // A bare filename also resolves (?open=main.hcl finds diagrams/main.hcl).
 export const OpenBareFilename: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
     open: "main.hcl",
   },
   play: async ({ canvasElement }) => {
@@ -186,7 +276,7 @@ export const OpenBareFilename: Story = {
 // The toggle flips a diagram file to its source and back.
 export const ToggleDiagramCode: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -205,7 +295,7 @@ export const ToggleDiagramCode: Story = {
 
 export const ToggleDisabledForSource: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
     open: "system.hcl",
   },
   play: async ({ canvasElement }) => {
@@ -224,7 +314,7 @@ export const ToggleDisabledForSource: Story = {
 // would measure the harness, not the component.
 export const ThemeSwitcher: Story = {
   args: {
-    files: DEMO_FILES,
+    files: SAMPLE_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
