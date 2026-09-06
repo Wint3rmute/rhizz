@@ -126,6 +126,33 @@ export const OpenDiagram: Story = {
   },
 };
 
+// The code view offers copying through the clipboard icon, with a
+// checkmark confirming success.
+export const CopyCode: Story = {
+  args: {
+    files: DEMO_FILES,
+    open: "system.hcl",
+  },
+  play: async ({ canvasElement }) => {
+    let written: string | null = null;
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: {
+        writeText: (text: string): Promise<void> => {
+          written = text;
+          return Promise.resolve();
+        },
+      },
+      configurable: true,
+    });
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Copy code" }),
+    );
+    await canvas.findByRole("button", { name: "Copied" });
+    await expect(written).toContain('protocol "temp-bus"');
+  },
+};
+
 // A bare filename also resolves (?open=main.hcl finds diagrams/main.hcl).
 export const OpenBareFilename: Story = {
   args: {
