@@ -27,3 +27,6 @@ vite.config.ts.timestamp-*
 /storybook-static
 build-storybook.log
 chromatic.log
+
+# ESLint cache
+.eslintcache
