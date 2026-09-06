@@ -7,8 +7,7 @@ language = "en"
 build-dir = "target-mdbook"
 
 [output.html]
-# theme/highlight.js overrides mdBook's default highlight.js bundle with the
-# HCL/Terraform grammar; ```hcl blocks are emitted by the rhizz preprocessor.
+# Code highlighting uses mdBook's stock highlight.js bundle.
 additional-css = ["css/rhizz.css"]
 # Auto-sizes rhizz-project iframes to their content (see js/rhizz-embed.js).
 additional-js = ["js/rhizz-embed.js"]
