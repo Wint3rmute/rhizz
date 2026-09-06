@@ -15,20 +15,19 @@ import {
 import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
 import type { BookPayloadFile } from "./payload";
 
-type Tab = "diagram" | "code";
-
 let { files, open = null }: { files: BookPayloadFile[]; open?: string | null } =
   $props();
 
 // Resolve the `?open=` target: exact path first, then a bare filename
-// (e.g. `main.hcl` matches `diagrams/main.hcl`). A file that is both a
-// diagram and a source opens as a diagram.
+// (e.g. `main.hcl` matches `diagrams/main.hcl`).
 function matchOpen(candidates: string[], target: string | null): string | null {
   if (target === null) return null;
   if (candidates.includes(target)) return target;
   return candidates.find((path) => path.split("/").pop() === target) ?? null;
 }
 const infoIcon = resolveIcon("circle-info");
+const codeIcon = resolveIcon("code");
+const diagramIcon = resolveIcon("diagram-project");
 
 // Sources mirror `readProjectSources`: every `.hcl` file except diagram
 // layouts (those live under `diagrams/` and are parsed as views instead).
@@ -109,48 +108,50 @@ let diagramFiles = $derived.by((): DiagramFile[] => {
   }
   return out;
 });
-let openDiagram = $derived(
-  matchOpen(
-    diagramFiles.map((file) => file.path),
-    open,
-  ),
-);
-let openCode = $derived(
+
+function isDiagram(path: string | null): boolean {
+  return path !== null &&
+    diagramFiles.some((file) => file.path === path);
+}
+
+let selectedFile = $state<string | null>(null);
+let diagramView = $state(true);
+$effect(() => {
+  if (
+    selectedFile === null ||
+    !files.some((file) => file.path === selectedFile)
+  ) {
+    selectedFile = diagramFiles[0]?.path ?? files[0]?.path ?? null;
+    diagramView = true;
+  }
+});
+
+// `open` selects the initial file only: apply once files are present, then
+// never again so later navigation is undisturbed.
+let openFile = $derived(
   matchOpen(
     files.map((file) => file.path),
     open,
   ),
 );
-let tab = $state<Tab>("diagram");
-let selectedDiagram = $state<string | null>(null);
-
-// `open` selects the initial view only: apply once files are present, then
-// never again so later tab navigation is undisturbed.
 let openConsumed = $state(false);
 $effect(() => {
   if (openConsumed || files.length === 0) return;
   openConsumed = true;
-  if (openDiagram !== null) {
-    tab = "diagram";
-    selectedDiagram = openDiagram;
-  } else if (openCode !== null) {
-    tab = "code";
-    selectedCodeFile = openCode;
-  }
-});
-$effect(() => {
-  if (
-    selectedDiagram === null ||
-    !diagramFiles.some((file) => file.path === selectedDiagram)
-  ) {
-    selectedDiagram = diagramFiles[0]?.path ?? null;
+  if (openFile !== null) {
+    selectedFile = openFile;
+    diagramView = true;
   }
 });
 
 let selectedViews = $derived.by((): ViewDefinition[] => {
-  return diagramFiles.find((entry) => entry.path === selectedDiagram)?.views ??
+  return diagramFiles.find((entry) => entry.path === selectedFile)?.views ??
     [];
 });
+
+// Diagram files render as diagrams unless toggled to code; anything else
+// always renders as code.
+let showDiagram = $derived(diagramView && isDiagram(selectedFile));
 
 let keyToIndex = $derived(buildKeyToIndexMap(components, systems));
 let boxes = $derived(
@@ -172,49 +173,68 @@ let annotations = $derived.by((): DiagramStaticAnnotation[] => {
   return out;
 });
 
-let selectedCodeFile = $state<string | null>(null);
-$effect(() => {
-  if (
-    selectedCodeFile === null ||
-    !files.some((file) => file.path === selectedCodeFile)
-  ) {
-    selectedCodeFile = files.find((file) => file.path === "system.hcl")?.path ??
-      files[0]?.path ?? null;
-  }
-});
 let codeContent = $derived(
-  files.find((file) => file.path === selectedCodeFile)?.content ?? "",
+  files.find((file) => file.path === selectedFile)?.content ?? "",
+);
+
+// The toggle offers the *other* view of a diagram file; for anything else
+// it renders grayed out so the bar never shifts.
+let toggleIcon = $derived(
+  !isDiagram(selectedFile) || !diagramView ? diagramIcon : codeIcon,
+);
+let toggleLabel = $derived(
+  !isDiagram(selectedFile)
+    ? "Diagram view unavailable"
+    : diagramView
+    ? "Show code"
+    : "Show diagram",
 );
 </script>
 
 <div class="flex flex-col w-full h-full bg-base-100 text-base-content">
-  <!-- Top bar: tabs + score + info only, so its height never shifts. -->
+  <!-- Top bar: one tab per file (full paths) + view toggle + info. The
+       toggle is always rendered so the bar never shifts. -->
   <div class="flex items-center gap-2 px-3 pt-2">
-    <div role="tablist" class="tabs tabs-box">
-      <button
-        role="tab"
-        class="tab"
-        class:tab-active={tab === "diagram"}
-        onclick={() => {
-          tab = "diagram";
-        }}
-      >
-        Diagram
-      </button>
-      <button
-        role="tab"
-        class="tab"
-        class:tab-active={tab === "code"}
-        onclick={() => {
-          tab = "code";
-        }}
-      >
-        Code
-      </button>
+    <div role="tablist" class="tabs tabs-box flex-nowrap overflow-x-auto">
+      {#each files as file (file.path)}
+        <button
+          role="tab"
+          class="tab whitespace-nowrap"
+          class:tab-active={file.path === selectedFile}
+          onclick={() => {
+            selectedFile = file.path;
+            diagramView = true;
+          }}
+        >
+          {file.path}
+        </button>
+      {/each}
     </div>
+    <button
+      class="btn btn-ghost btn-sm btn-square shrink-0"
+      class:opacity-40={!isDiagram(selectedFile)}
+      disabled={!isDiagram(selectedFile)}
+      title={toggleLabel}
+      aria-label={toggleLabel}
+      onclick={() => {
+        diagramView = !diagramView;
+      }}
+    >
+      {#if toggleIcon}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 {toggleIcon.width} {toggleIcon.height}"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d={toggleIcon.svgPath} />
+        </svg>
+      {/if}
+    </button>
     {#if infoIcon}
       <div
-        class="tooltip tooltip-left flex items-center ml-auto"
+        class="tooltip tooltip-left flex items-center ml-auto shrink-0"
         data-tip="Rhizz book example — rendered locally in your browser, nothing is saved."
       >
         <svg
@@ -232,36 +252,8 @@ let codeContent = $derived(
     {/if}
   </div>
 
-  <!-- File selectors live on their own row so the top bar never moves. -->
-  {#if tab === "diagram" && diagramFiles.length > 1}
-    <div class="px-3 pt-2">
-      <select
-        class="select select-sm select-bordered"
-        aria-label="Select diagram"
-        bind:value={selectedDiagram}
-      >
-        {#each diagramFiles as file (file.path)}
-          <option value={file.path}>{file.path}</option>
-        {/each}
-      </select>
-    </div>
-  {/if}
-  {#if tab === "code" && files.length > 1}
-    <div class="px-3 pt-2">
-      <select
-        class="select select-sm select-bordered"
-        aria-label="Select file"
-        bind:value={selectedCodeFile}
-      >
-        {#each files as file (file.path)}
-          <option value={file.path}>{file.path}</option>
-        {/each}
-      </select>
-    </div>
-  {/if}
-
   <div class="flex-1 min-h-0 p-3">
-    {#if tab === "diagram"}
+    {#if showDiagram}
       {#if compileCrashed}
         <div role="alert" class="alert alert-error">
           The project failed to compile in the browser — details below.

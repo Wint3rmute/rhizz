@@ -28,14 +28,16 @@ export const DiagramTab: Story = {
   },
 };
 
-// Switching to the Code tab shows the raw HCL with a file selector.
+// Clicking a file tab shows its raw HCL.
 export const CodeTab: Story = {
   args: {
     files: DEMO_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole("tab", { name: "Code" }));
+    await userEvent.click(
+      await canvas.findByRole("tab", { name: "system.hcl" }),
+    );
     await canvas.findByText(/protocol "temp-bus"/);
   },
 };
@@ -116,5 +118,42 @@ export const OpenBareFilename: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByText("sensor");
+  },
+};
+
+// The toggle flips a diagram file to its source and back.
+export const ToggleDiagramCode: Story = {
+  args: {
+    files: DEMO_FILES,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("sensor");
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Show code" }),
+    );
+    await canvas.findByText(/view "main"/);
+    await expect(canvas.queryByText("sensor")).toBeNull();
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Show diagram" }),
+    );
+    await canvas.findByText("sensor");
+  },
+};
+
+// For a plain source file the toggle is grayed out but still rendered,
+// so the bar never shifts.
+export const ToggleDisabledForSource: Story = {
+  args: {
+    files: DEMO_FILES,
+    open: "system.hcl",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText(/protocol "temp-bus"/);
+    const toggle = await canvas.findByRole("button", {
+      name: "Diagram view unavailable",
+    });
+    await expect(toggle.getAttribute("disabled")).not.toBeNull();
   },
 };
