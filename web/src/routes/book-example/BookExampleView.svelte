@@ -303,23 +303,19 @@ let toggleLabel = $derived(
 </div>
 
 <style>
-/* Read-only HCL highlighting: theme-aware via daisyUI variables. */
+/* Read-only HCL highlighting, matching the book's highlight.js theme. */
 .hcl-keyword {
-  color: var(--color-primary);
+  color: #9d00ec;
   font-weight: 600;
 }
 .hcl-string {
-  color: var(--color-success);
+  color: #008200;
 }
-.hcl-comment {
-  color: var(--color-base-content);
-  opacity: 0.5;
-  font-style: italic;
+/* Dark-theme placeholders: light values until reviewed in dark mode. */
+:global(html[data-theme="dark"]) .hcl-keyword {
+  color: #9d00ec;
 }
-.hcl-number {
-  color: var(--color-accent);
-}
-.hcl-attr {
-  color: var(--color-base-content);
+:global(html[data-theme="dark"]) .hcl-string {
+  color: #008200;
 }
 </style>
