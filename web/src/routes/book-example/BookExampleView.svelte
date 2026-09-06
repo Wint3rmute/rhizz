@@ -13,6 +13,7 @@ import {
   viewsToLayout,
 } from "../projects/[id]/diagrams/persistence";
 import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
+import { highlightHcl } from "./hclHighlight";
 import type { BookPayloadFile } from "./payload";
 
 let { files, open = null }: { files: BookPayloadFile[]; open?: string | null } =
@@ -176,6 +177,7 @@ let annotations = $derived.by((): DiagramStaticAnnotation[] => {
 let codeContent = $derived(
   files.find((file) => file.path === selectedFile)?.content ?? "",
 );
+let highlightedCode = $derived(highlightHcl(codeContent));
 
 // The toggle offers the *other* view of a diagram file; for anything else
 // it renders grayed out so the bar never shifts.
@@ -266,7 +268,7 @@ let toggleLabel = $derived(
         <DiagramStaticView {components} {connections} {boxes} {annotations} />
       {/if}
     {:else}
-      <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm">{codeContent}</pre>
+      <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm"><code>{#each highlightedCode as token, i (i)}{#if token.cls === "plain"}{token.text}{:else}<span class="hcl-{token.cls}">{token.text}</span>{/if}{/each}</code></pre>
     {/if}
   </div>
 
@@ -299,3 +301,25 @@ let toggleLabel = $derived(
     </div>
   {/if}
 </div>
+
+<style>
+/* Read-only HCL highlighting: theme-aware via daisyUI variables. */
+.hcl-keyword {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.hcl-string {
+  color: var(--color-success);
+}
+.hcl-comment {
+  color: var(--color-base-content);
+  opacity: 0.5;
+  font-style: italic;
+}
+.hcl-number {
+  color: var(--color-accent);
+}
+.hcl-attr {
+  color: var(--color-base-content);
+}
+</style>
