@@ -335,14 +335,17 @@ $effect(() => {
     {:else}
       <div class="relative w-full">
         <pre class="w-full max-h-[480px] overflow-auto rounded-lg bg-base-200 p-4 text-sm"><code>{#each highlightedCode as token, i (i)}{#if token.cls === "plain"}{token.text}{:else}<span class="hcl-{token.cls}">{token.text}</span>{/if}{/each}</code></pre>
-        <button
-          class="btn btn-ghost btn-xs btn-square absolute right-2 top-2 bg-base-200/80"
-          title="Copy code"
-          aria-label={copied ? "Copied" : "Copy code"}
-          onclick={() => {
-            void copyCode();
-          }}
+        <div
+          class="tooltip tooltip-left absolute right-2 top-2"
+          data-tip="Copy to clipboard"
         >
+          <button
+            class="btn btn-ghost btn-xs btn-square bg-base-200/80"
+            aria-label={copied ? "Copied" : "Copy code"}
+            onclick={() => {
+              void copyCode();
+            }}
+          >
           {#if copied && checkIcon}
             <svg
               width="14"
@@ -365,7 +368,8 @@ $effect(() => {
               <path d={clipboardIcon.svgPath} />
             </svg>
           {/if}
-        </button>
+          </button>
+        </div>
       </div>
     {/if}
   </div>
