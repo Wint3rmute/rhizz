@@ -13,6 +13,7 @@ import {
   viewsToLayout,
 } from "../projects/[id]/diagrams/persistence";
 import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
+import { postExampleHeight } from "./autosize";
 import { copyToClipboard } from "./clipboard";
 import { highlightHcl } from "./hclHighlight";
 import type { BookPayloadFile } from "./payload";
@@ -58,7 +59,7 @@ let model = $derived(output?.model());
 let components = $derived(model?.components() ?? []);
 let connections = $derived(model?.connections() ?? []);
 let systems = $derived(model?.systems() ?? []);
-let diagnostics = $derived(output?.diagnostics() ?? []);
+let diagnostics = $derived.by(() => output?.diagnostics() ?? []);
 let score = $derived(model?.score());
 
 interface StatRow {
@@ -212,12 +213,32 @@ let toggleLabel = $derived(
     ? "Show code"
     : "Show diagram",
 );
+
+// Report the content height to the embedding page (book iframes shrink to
+// fit; skipped entirely outside an iframe). ResizeObserver re-fires on any
+// layout change: tab switches, file switches, verdicts, font loads.
+let container: HTMLDivElement | undefined = $state();
+$effect(() => {
+  const el = container;
+  if (
+    el === undefined ||
+    typeof window === "undefined" ||
+    window.parent === window ||
+    typeof ResizeObserver === "undefined"
+  ) {
+    return;
+  }
+  const observer = new ResizeObserver(() => postExampleHeight(el));
+  observer.observe(el);
+  return () => observer.disconnect();
+});
 </script>
 
-<div class="flex flex-col w-full h-full bg-base-100 text-base-content">
+<div
+  bind:this={container}
+  class="flex flex-col w-full bg-base-100 text-base-content"
+>
   {#if !singleFile}
-    <!-- Top bar: one tab per file (full paths) + view toggle + info. The
-       toggle is always rendered so the bar never shifts. -->
     <div class="flex items-center gap-2 px-3 pt-2">
     <div
       class="tooltip tooltip-right shrink-0"
@@ -281,22 +302,24 @@ let toggleLabel = $derived(
   </div>
   {/if}
 
-  <div class="flex-1 min-h-0 p-3">
+  <div class="px-3 pt-2">
     {#if showDiagram}
       {#if compileCrashed}
         <div role="alert" class="alert alert-error">
           The project failed to compile in the browser — details below.
         </div>
       {:else if Object.keys(boxes).length === 0}
-        <div class="flex h-full items-center justify-center text-sm text-base-content/60">
+        <div class="py-6 text-center text-sm text-base-content/60">
           No placed components in this diagram.
         </div>
       {:else}
-        <DiagramStaticView {components} {connections} {boxes} {annotations} />
+        <div class="h-[420px]">
+          <DiagramStaticView {components} {connections} {boxes} {annotations} />
+        </div>
       {/if}
     {:else}
-      <div class="relative w-full h-full">
-        <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm"><code>{#each highlightedCode as token, i (i)}{#if token.cls === "plain"}{token.text}{:else}<span class="hcl-{token.cls}">{token.text}</span>{/if}{/each}</code></pre>
+      <div class="relative w-full">
+        <pre class="w-full max-h-[480px] overflow-auto rounded-lg bg-base-200 p-4 text-sm"><code>{#each highlightedCode as token, i (i)}{#if token.cls === "plain"}{token.text}{:else}<span class="hcl-{token.cls}">{token.text}</span>{/if}{/each}</code></pre>
         <button
           class="btn btn-ghost btn-xs btn-square absolute right-2 top-2 bg-base-200/80"
           title="Copy code"

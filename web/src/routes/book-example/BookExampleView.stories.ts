@@ -204,8 +204,6 @@ export const ToggleDiagramCode: Story = {
   },
 };
 
-// For a plain source file the toggle is grayed out but still rendered,
-// so the bar never shifts.
 export const ToggleDisabledForSource: Story = {
   args: {
     files: DEMO_FILES,
