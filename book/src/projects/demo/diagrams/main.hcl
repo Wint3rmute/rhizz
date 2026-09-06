@@ -16,10 +16,4 @@ view "main" {
     height     = 90
     text_align = "center"
   }
-
-  annotation {
-    x    = 80
-    y    = 40
-    text = "Book demo: two components, one connection"
-  }
 }
