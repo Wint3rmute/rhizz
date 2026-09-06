@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  annotationBounds,
+  annotationLines,
   type Box,
   boxBoundaryPoint,
   boxCenter,
@@ -726,5 +728,62 @@ describe("computeLcaConnection", () => {
       "in",
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("annotationLines", () => {
+  it("returns a single line when there is no newline", () => {
+    expect(annotationLines("note")).toEqual(["note"]);
+  });
+
+  it("splits on newlines, keeping empty lines", () => {
+    expect(annotationLines("a\n\nb")).toEqual(["a", "", "b"]);
+  });
+
+  it("keeps a trailing newline as an empty final line", () => {
+    expect(annotationLines("a\n")).toEqual(["a", ""]);
+  });
+});
+
+describe("annotationBounds", () => {
+  it("sizes a single-line annotation at default scale", () => {
+    // "XYZ" -> 3 chars * 7.5 + 14 = 36.5, clamped to the 40 minimum;
+    // one line -> 16 + 8 tall; anchored 4 left / 16 above (x, y).
+    const bounds = annotationBounds({ text: "XYZ", x: 10, y: 100 });
+    expect(bounds).toEqual({ x: 6, y: 84, width: 40, height: 24 });
+  });
+
+  it("grows with text length beyond the minimum width", () => {
+    // 16 chars * 7.5 + 14 = 134.
+    const bounds = annotationBounds({
+      text: "abcdefghijklmnop",
+      x: 0,
+      y: 0,
+    });
+    expect(bounds.width).toBe(134);
+  });
+
+  it("scales extents and offsets with scale", () => {
+    // "second" is the longest line: 6 chars * 7.5 * 2 + 14 = 104 wide;
+    // 2 lines * 16 * 2 + 8 = 72 tall; anchored 4 left / 16 * 2 = 32 above.
+    const bounds = annotationBounds({
+      text: "XYZ\nsecond",
+      x: 10,
+      y: 100,
+      scale: 2,
+    });
+    expect(bounds).toEqual({ x: 6, y: 68, width: 104, height: 72 });
+  });
+
+  it("treats missing scale as 1 (default)", () => {
+    const noScale = annotationBounds({ text: "note", x: 0, y: 0 });
+    const unitScale = annotationBounds({ text: "note", x: 0, y: 0, scale: 1 });
+    expect(noScale).toEqual(unitScale);
+  });
+
+  it("sizes multi-line text by its longest line and full line count", () => {
+    const bounds = annotationBounds({ text: "a\nb", x: 0, y: 0 });
+    expect(bounds.width).toBe(40); // single-char lines hit the minimum
+    expect(bounds.height).toBe(40); // 2 lines * 16 + 8
   });
 });

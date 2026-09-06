@@ -303,3 +303,43 @@ fn views_serialization_and_parsing_via_wasm() {
     assert!(serialized_hcl.contains("node \"server\""));
     assert!(serialized_hcl.contains("x          = 150"));
 }
+
+#[wasm_bindgen_test]
+fn annotations_round_trip_through_wasm_boundary() {
+    // Regression: annotations were silently dropped by serialize_views when
+    // the compiled wasm pkg predates annotation support in rhizz-core (serde
+    // ignores unknown JS fields). This test pins the JS<->Rust boundary: a
+    // JsValue carrying annotations must serialize to HCL and parse back.
+    let view = rhizz_core::ViewDefinition {
+        label: "main".to_string(),
+        description: String::new(),
+        tags: Vec::new(),
+        system: "web".to_string(),
+        filter: rhizz_core::ViewFilterDefinition::default(),
+        nodes: Vec::new(),
+        connections: Vec::new(),
+        annotations: vec![rhizz_core::Annotation {
+            text: "New note".to_string(),
+            x: 12.5,
+            y: -3.0,
+            scale: 1.5,
+        }],
+    };
+    let js = serde_wasm_bindgen::to_value(&vec![view]).expect("to_value should succeed");
+    let hcl = rhizz_wasm::serialize_views(js).expect("serialize_views should succeed");
+    assert!(
+        hcl.contains("annotation {"),
+        "annotation block must be serialized: {hcl}"
+    );
+    assert!(hcl.contains("New note"));
+    assert!(hcl.contains("scale = 1.5"));
+
+    let parsed = rhizz_wasm::parse_views(&hcl).expect("parse_views should succeed");
+    let reparsed: Vec<rhizz_core::ViewDefinition> =
+        serde_wasm_bindgen::from_value(parsed).expect("from_value should succeed");
+    assert_eq!(reparsed.len(), 1);
+    assert_eq!(reparsed[0].annotations.len(), 1);
+    assert_eq!(reparsed[0].annotations[0].text, "New note");
+    assert!((reparsed[0].annotations[0].x - 12.5).abs() < 1e-9);
+    assert!((reparsed[0].annotations[0].scale - 1.5).abs() < 1e-9);
+}

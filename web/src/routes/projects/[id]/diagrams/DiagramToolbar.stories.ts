@@ -24,6 +24,7 @@ const meta = {
     onresetview: () => {},
     onaddsystem: () => {},
     onaddcomponent: () => {},
+    onaddannotation: () => {},
   },
 } satisfies Meta<typeof DiagramToolbar>;
 
@@ -45,6 +46,14 @@ export const SnapActive: Story = {
 export const AutoLayoutRunning: Story = {
   args: {
     autoLayoutRunning: true,
+  },
+};
+
+// Exercises the "+ Note" annotation button alongside the system/component
+// buttons — the new annotation entry point.
+export const WithAnnotationButton: Story = {
+  args: {
+    onaddannotation: () => {},
   },
 };
 

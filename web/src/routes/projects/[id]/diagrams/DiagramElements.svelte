@@ -1,5 +1,8 @@
 <script lang="ts">
 import {
+  ANNOTATION_FONT_SIZE,
+  ANNOTATION_LINE_HEIGHT,
+  annotationLines,
   type Box,
   computeRenderOrder,
   computeVisibleConnections,
@@ -16,6 +19,7 @@ import {
   selectionOutlineRect,
 } from "./visuals";
 import type {
+  DiagramStaticAnnotation,
   DiagramStaticBox,
   DiagramStaticComponent,
   DiagramStaticConnection,
@@ -25,6 +29,7 @@ let {
   components = [],
   connections = [],
   boxes = {},
+  annotations = [],
   markerId = "arrow",
   selected = new Set<number>(),
   linked = new Set<number>(),
@@ -34,6 +39,8 @@ let {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
   boxes: Record<number, DiagramStaticBox>;
+  /** View-level text annotations (absolute canvas positions). */
+  annotations?: DiagramStaticAnnotation[];
   markerId?: string;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
   selected?: Set<number>;
@@ -260,5 +267,23 @@ let visibleConnections = $derived(
   style="pointer-events: none; user-select: none"
 >
     {conn.label}
+  </text>
+{/each}
+
+{#each annotations as ann (ann.text + ann.x + ann.y)}
+  {@const annScale = ann.scale ?? 1}
+  <text
+  x={ann.x}
+  y={ann.y}
+  fill="var(--color-base-content)"
+  font-size={ANNOTATION_FONT_SIZE * annScale}
+  text-anchor="start"
+  style="pointer-events: none; user-select: none"
+>
+    {#each annotationLines(ann.text) as line, li (li)}
+      <tspan x={ann.x} dy={li === 0 ? 0 : ANNOTATION_LINE_HEIGHT * annScale}>
+        {line || '\u00a0'}
+      </tspan>
+    {/each}
   </text>
 {/each}

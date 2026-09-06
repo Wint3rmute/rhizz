@@ -30,6 +30,7 @@ import {
 } from "../../../../DocumentStore.svelte";
 
 import {
+  type Annotation,
   buildKeyToIndexMap,
   componentKey,
   DIAGRAM_LAYOUT_DIR,
@@ -53,6 +54,10 @@ import {
   type LayoutNode,
 } from "./forceLayout";
 import {
+  ANNOTATION_FONT_SIZE,
+  ANNOTATION_LINE_HEIGHT,
+  annotationBounds,
+  annotationLines,
   boxContains,
   clampWithin,
   computeDirectionalHandles,
@@ -281,6 +286,17 @@ let checked = $state<Record<string, StoredBox>>({});
 // different lifetimes (checked entries disappear on uncheck; these don't).
 let savedLayout = $state<Record<string, StoredBox>>({});
 let savedConnections = $state<Record<string, StoredConnection>>({});
+let annotations = $state<Annotation[]>([]);
+// Indices into `annotations` currently selected (for drag/delete).
+// SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
+// tracked and the outline re-renders — mirrors the node `selectedKeys`.
+let selectedAnnotations = new SvelteSet<number>();
+// When editing an annotation's text inline (index, or null when not editing).
+let editingAnnotation = $state<number | null>(null);
+// The annotation object currently being edited (undefined when not editing).
+let editingAnnotationObj = $derived(
+  editingAnnotation === null ? undefined : annotations[editingAnnotation],
+);
 
 // Which diagram (a `diagrams/<name>.hcl` file) is currently open on the
 // canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.hcl" — exactly like
@@ -369,17 +385,30 @@ $effect(() => {
 // layout.
 let diagramLayoutLoaded = $state(false);
 let loadedDiagramPath: string | null = null;
+// Monotonic stamp bumped on any user diagram mutation (adding/moving a node,
+// editing an annotation). The load effect records the stamp when a read
+// starts and only applies the result if no mutation happened in the meantime
+// — so a slow read can never clobber edits made while it was in flight.
+let diagramEditStamp = 0;
+let loadStartStamp = 0;
+
+// Called by every user-diagram mutation path so the load race guard works.
+function noteDiagramEdited(): void {
+  diagramEditStamp += 1;
+}
 
 $effect(() => {
   const path = fullDiagramPath;
   if (path === loadedDiagramPath) return;
   loadedDiagramPath = path;
   diagramLayoutLoaded = false;
+  loadStartStamp = diagramEditStamp;
 
   if (path === null) {
     checked = {};
     savedLayout = {};
     savedConnections = {};
+    annotations = [];
     return;
   }
 
@@ -388,9 +417,17 @@ $effect(() => {
     // after a newer one already changed the selection — guard against
     // overwriting the newer selection's state with the older one.
     if (loadedDiagramPath !== path) return;
-    checked = layout.checked;
-    savedLayout = layout.savedLayout;
-    savedConnections = layout.connections ?? {};
+    // If the user edited the diagram while this read was in flight, don't
+    // clobber their changes with the (possibly empty) file contents — but
+    // still mark the diagram as loaded so the save effect is armed and can
+    // persist the user's edits.
+    const editedDuringLoad = diagramEditStamp !== loadStartStamp;
+    if (!editedDuringLoad) {
+      checked = layout.checked;
+      savedLayout = layout.savedLayout;
+      savedConnections = layout.connections ?? {};
+      annotations = layout.annotations ?? [];
+    }
     diagramLayoutLoaded = true;
     // Frames the newly-opened diagram's content immediately, rather than
     // leaving the view wherever the previously-open diagram (or the
@@ -416,6 +453,7 @@ $effect(() => {
     checked: $state.snapshot(checked),
     savedLayout: $state.snapshot(savedLayout),
     connections: $state.snapshot(savedConnections),
+    annotations: $state.snapshot(annotations),
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
@@ -517,6 +555,7 @@ async function handleDeleteDiagram(path: string): Promise<void> {
 // keeps the remembered layout up to date, instead of relying on each call
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
+  noteDiagramEdited();
   const key = getComponentKey(index);
   const checkedPrev = checked[key];
   const savedPrev = savedLayout[key];
@@ -680,11 +719,38 @@ let selected = $derived.by(() => {
 
 function selectOnly(index: number) {
   selectedKeys.clear();
+  selectedAnnotations.clear();
   selectedKeys.add(getComponentKey(index));
 }
 
 function clearSelection() {
   selectedKeys.clear();
+  selectedAnnotations.clear();
+}
+
+function selectAnnotation(index: number) {
+  selectedAnnotations.clear();
+  selectedKeys.clear();
+  selectedAnnotations.add(index);
+}
+
+function addAnnotationHandler(): void {
+  noteDiagramEdited();
+  // Place at the canvas center (world coords) if we can, else 0,0.
+  const x = editor_state.view.x + canvas_width / 2 / editor_state.view.zoom;
+  const y = editor_state.view.y + canvas_height / 2 / editor_state.view.zoom;
+  const idx = annotations.length;
+  annotations.push({ text: "New note", x, y });
+  selectAnnotation(idx);
+  editingAnnotation = idx;
+}
+
+function deleteSelectedAnnotations(): void {
+  if (selectedAnnotations.size === 0) return;
+  noteDiagramEdited();
+  const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
+  for (const idx of toDelete) annotations.splice(idx, 1);
+  selectedAnnotations.clear();
 }
 
 function deselect(index: number) {
@@ -692,6 +758,9 @@ function deselect(index: number) {
 }
 
 function select(index: number) {
+  // Selecting a node drops annotation selection: the two selection modes
+  // are mutually exclusive (mirrors selectAnnotation clearing node keys).
+  selectedAnnotations.clear();
   selectedKeys.add(getComponentKey(index));
 }
 
@@ -798,12 +867,14 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     }
   }
 
-  // Delete key: delete the selected connection, or the selected component.
-  // Only fires when the canvas is focused (so it never triggers while typing
-  // in the inspector or HCL editor).
+  // Delete key: delete the selected connection, selected annotation, or the
+  // selected component. Only fires when the canvas is focused (so it never
+  // triggers while typing in the inspector or HCL editor).
   if (canvasFocused && (event.key === "Delete" || event.key === "Backspace")) {
     event.preventDefault();
-    if (selectedConnection) {
+    if (selectedAnnotations.size > 0) {
+      deleteSelectedAnnotations();
+    } else if (selectedConnection) {
       void handleDeleteSelectedConnection(true).catch(reportDiagramError);
     } else if (selectedKey) {
       void handleDeleteSelectedComponent().catch(reportDiagramError);
@@ -930,6 +1001,10 @@ type Interaction =
     offsetX: number;
     offsetY: number;
     startPositions: Record<number, { x: number; y: number }>;
+    /** Selected annotations' start positions (absolute), keyed by index, moved alongside nodes. */
+    annotationStartPositions?: Record<number, { x: number; y: number }>;
+    /** The annotation index grabbed to start an annotation-only drag (delta base). */
+    annotationAnchor?: number;
   }
   | {
     // Resizing any node via any of its 8 edge/corner handles.
@@ -940,6 +1015,8 @@ type Interaction =
     startPointer: { x: number; y: number };
     groupBox: Box;
     startBoxes: Record<number, Box>;
+    /** When set, this is an annotation resize: index into annotations + its start scale. */
+    annotationResize?: { index: number; startScale: number };
   }
   | {
     // Canvas pan. Started by the middle mouse button, or the left
@@ -1504,6 +1581,109 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
     offsetX: svgCoords.x - anchorStart.x,
     offsetY: svgCoords.y - anchorStart.y,
     startPositions,
+    annotationStartPositions: snapshotAnnotationPositions(),
+  };
+}
+
+// Snapshot the currently selected annotations' positions for a group drag,
+// keyed by annotation index (stable for the whole drag).
+function snapshotAnnotationPositions(): Record<
+  number,
+  { x: number; y: number }
+> {
+  const map: Record<number, { x: number; y: number }> = {};
+  for (const i of selectedAnnotations) {
+    const a = annotations[i];
+    if (a) map[i] = { x: a.x, y: a.y };
+  }
+  return map;
+}
+
+// Mouse down on an annotation label: select it and start dragging it (and
+// any other selected annotations) with the same interaction as nodes.
+function onAnnotationMouseDown(event: MouseEvent, index: number): void {
+  event.stopPropagation();
+  selectedConnection = null;
+  if (autoLayoutRunning) return;
+  if (event.button !== 0) return;
+  event.preventDefault();
+  recordUndoPoint();
+
+  if (event.shiftKey) {
+    if (selectedAnnotations.has(index)) {
+      selectedAnnotations.delete(index);
+    } else {
+      selectedAnnotations.add(index);
+    }
+    selectedKeys.clear();
+  } else if (!selectedAnnotations.has(index)) {
+    selectAnnotation(index);
+  }
+
+  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+  const anchor = annotations[index] ?? { x: 0, y: 0 };
+  interaction = {
+    type: "dragging",
+    anchorIndex: -1, // no node anchor
+    offsetX: svgCoords.x - anchor.x,
+    offsetY: svgCoords.y - anchor.y,
+    startPositions: {},
+    // The dragged annotation's index (delta base) + the snapshot of the
+    // whole annotation selection at drag start.
+    annotationAnchor: index,
+    annotationStartPositions: snapshotAnnotationPositions(),
+  };
+}
+
+// Move every selected annotation by the same (deltaX, deltaY) from its own
+// drag-start snapshot — recomputed from the snapshot each event (like
+// applyGroupDelta), never accumulated, so there is no drift or flicker.
+function applyAnnotationDelta(deltaX: number, deltaY: number): void {
+  noteDiagramEdited();
+  const current = interaction;
+  if (current.type !== "dragging") return;
+  const starts = current.annotationStartPositions;
+  if (!starts) return;
+  for (const idxStr of Object.keys(starts)) {
+    const idx = Number(idxStr);
+    const start = starts[idx];
+    const a = annotations[idx];
+    if (!a || !start) continue;
+    annotations[idx] = {
+      ...a,
+      x: snap(start.x + deltaX),
+      y: snap(start.y + deltaY),
+    };
+  }
+}
+
+// Start resizing a selected annotation from one of its corner handles.
+// The drag changes the annotation's `scale` (100% = 1.0) — corner-pull
+// distance scales the font multiplier, mirroring how node resize handles
+// work but as a pure scale factor instead of a box.
+function onAnnotationResizeMouseDown(
+  event: MouseEvent,
+  index: number,
+  handle: ResizeHandle,
+): void {
+  event.stopPropagation();
+  if (autoLayoutRunning) return;
+  if (event.button !== 0) return;
+  event.preventDefault();
+  if (!selectedAnnotations.has(index)) selectAnnotation(index);
+  recordUndoPoint();
+  const a = annotations[index];
+  if (!a) return;
+  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+  interaction = {
+    type: "resizing",
+    anchorIndex: -1,
+    handle,
+    startBox: { x: a.x, y: a.y, width: 0, height: 0 },
+    startPointer: svgCoords,
+    groupBox: { x: a.x, y: a.y, width: 0, height: 0 },
+    startBoxes: {},
+    annotationResize: { index, startScale: a.scale ?? 1 },
   };
 }
 
@@ -1618,6 +1798,7 @@ function applyGroupDelta(
   deltaX: number,
   deltaY: number,
 ) {
+  noteDiagramEdited();
   for (const [indexStr, start] of Object.entries(startPositions)) {
     const index = Number(indexStr);
     const box = nodeBox(index);
@@ -1688,6 +1869,7 @@ function onSvgMouseMove(event: MouseEvent) {
         const deltaX = anchorNext.x - anchorStart.x;
         const deltaY = anchorNext.y - anchorStart.y;
         applyGroupDelta(current.startPositions, deltaX, deltaY);
+        applyAnnotationDelta(deltaX, deltaY);
 
         // Check potential drop/reparent target candidate only if Alt is held
         if (event.altKey) {
@@ -1716,10 +1898,44 @@ function onSvgMouseMove(event: MouseEvent) {
         } else {
           reparentTargetIndex = null;
         }
+      } else if (
+        current.anchorIndex === -1 && current.annotationStartPositions
+      ) {
+        // Annotation-only drag (no node anchor): compute the delta from the
+        // grabbed anchor annotation's DRAG-START snapshot (like nodes do),
+        // never from its live position, so each move is a clean delta off a
+        // fixed base — no feedback, no runaway/flicker, cursor-accurate.
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        const anchorStart = current.annotationStartPositions[
+          current.annotationAnchor ?? -1
+        ];
+        if (anchorStart) {
+          const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
+          const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
+          applyAnnotationDelta(deltaX, deltaY);
+        }
       }
       return;
     }
     case "resizing": {
+      if (current.annotationResize) {
+        // Annotation resize: the corner drag maps (deltaX, deltaY) to a new
+        // font scale — startScale + fractional distance. A minimum guard
+        // keeps the note from collapsing to nothing.
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        const deltaX = svgCoords.x - current.startPointer.x;
+        const deltaY = svgCoords.y - current.startPointer.y;
+        const a = annotations[current.annotationResize.index];
+        if (a) {
+          const start = current.annotationResize.startScale;
+          const scale = Math.max(0.5, start + (deltaX + deltaY) / 100);
+          annotations[current.annotationResize.index] = {
+            ...a,
+            scale,
+          };
+        }
+        return;
+      }
       const anchorStart = current.startBox;
       if (anchorStart) {
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
@@ -1821,6 +2037,7 @@ function onSvgMouseUp() {
     clearSelection();
     if (box && (box.width > 2 || box.height > 2)) {
       for (const index of marqueeCandidates) select(index);
+      for (const i of marqueeAnnotationCandidates) selectedAnnotations.add(i);
     }
   }
   interaction = { type: "idle" };
@@ -2010,20 +2227,46 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
   return candidates;
 });
 
+// Hit-box of an annotation, matching the geometry used for rendering and
+// click hit-testing exactly (so marquee selection, the highlight state and
+// the visible box all agree). Delegates to the shared annotationBounds so
+// "zoom to fill" and the static renderers can't drift from hit-testing.
+function annotationHitBox(
+  ann: Annotation,
+): { x: number; y: number; width: number; height: number } {
+  return annotationBounds(ann);
+}
+
+// Annotations caught by the current marquee box (live preview), parallel to
+// marqueeCandidates for nodes.
+let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
+  if (!marqueeBox) return new Set();
+  const box = marqueeBox;
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const candidates = new Set<number>();
+  annotations.forEach((ann, i) => {
+    if (boxContains(box, annotationHitBox(ann))) candidates.add(i);
+  });
+  return candidates;
+});
+
 // Fraction of the viewport the diagram's bounding box should fill (in
 // whichever axis is more constraining, so it fits fully in both) when
 // "Zoom to Fill" is used.
 const ZOOM_TO_FILL_FRACTION = 0.8;
 
-// Zooms and pans so every currently-placed node's combined bounding box
-// fills ZOOM_TO_FILL_FRACTION of the viewport, centered. No-op if nothing
-// is placed on canvas.
+// Zooms and pans so every currently-placed node's AND annotation's combined
+// bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
+// annotations far from the node cluster are never panned out of view.
+// No-op if nothing is placed on canvas.
 function zoomToFill() {
-  const boxes = renderOrder
+  const nodeBoxes = renderOrder
     .map((index) => nodeBox(index))
     .filter(
       (box): box is NonNullable<ReturnType<typeof nodeBox>> => box !== null,
     );
+  const annotationBoxes = annotations.map(annotationBounds);
+  const boxes = [...nodeBoxes, ...annotationBoxes];
   if (boxes.length === 0) return;
   const bounds = unionBox(boxes);
 
@@ -2970,6 +3213,106 @@ $effect(() => {
           </g>
         {/each}
 
+        <!-- Free-standing text annotations, rendered at absolute positions.
+             Selectable + draggable like nodes; double-click to edit text;
+             corner-drag to resize (changes the font scale). The text itself
+             is pointer-events: none; an invisible rect behind it is the hit
+             target (SVG <g> has no geometry of its own). -->
+        {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}-${ann.scale}`)}
+          {@const isAnnSelected = interaction.type === "marquee"
+            ? marqueeAnnotationCandidates.has(i)
+            : selectedAnnotations.has(i)}
+          {@const annFontSize = ANNOTATION_FONT_SIZE * (ann.scale ?? 1)}
+          {@const annLineStep = ANNOTATION_LINE_HEIGHT * (ann.scale ?? 1)}
+          {@const annHit = annotationHitBox(ann)}
+          {@const annX = annHit.x}
+          {@const annY = annHit.y}
+          {@const annWidth = annHit.width}
+          {@const annHeight = annHit.height}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <g
+            class="cursor-grab"
+            onmousedown={(e) => onAnnotationMouseDown(e, i)}
+            ondblclick={(e) => {
+              e.stopPropagation();
+              selectAnnotation(i);
+              editingAnnotation = i;
+            }}
+          >
+            <rect
+              x={annX}
+              y={annY}
+              width={annWidth}
+              height={annHeight}
+              fill="transparent"
+              style="cursor: grab"
+            />
+            {#if isAnnSelected}
+              <!-- Selection frame identical in style to components: a dotted
+                   primary outline around the annotation's hit box. -->
+              <rect
+                x={annX}
+                y={annY}
+                width={annWidth}
+                height={annHeight}
+                rx="3"
+                fill="none"
+                stroke="var(--color-primary)"
+                stroke-opacity={SELECTION_OUTLINE_OPACITY}
+                stroke-width="1.5"
+                stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
+                style="pointer-events: none"
+              />
+              <!-- Top-right corner resize handle (font scale), tucked INSIDE
+                   the selection box (x/y within annX..annX+annWidth). -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <rect
+                x={annX + annWidth - CORNER_HANDLE_SIZE}
+                y={annY}
+                width={CORNER_HANDLE_SIZE}
+                height={CORNER_HANDLE_SIZE}
+                fill="var(--color-primary)"
+                fill-opacity="0.9"
+                style="cursor: nesw-resize"
+                onmousedown={(e) => onAnnotationResizeMouseDown(e, i, "top-right")}
+              />
+            {/if}
+            {#if editingAnnotation === i}
+              <text
+                x={ann.x}
+                y={ann.y}
+                fill="var(--color-primary)"
+                font-size={annFontSize}
+                text-anchor="start"
+                style="user-select: none"
+              >
+                {#each annotationLines(ann.text) as line, li (li)}
+                  <tspan x={ann.x} dy={li === 0 ? 0 : annLineStep}>
+                    {line || '\u00a0'}
+                  </tspan>
+                {/each}
+              </text>
+            {:else}
+              <text
+                x={ann.x}
+                y={ann.y}
+                fill={isAnnSelected
+                  ? "var(--color-primary)"
+                  : "var(--color-base-content)"}
+                font-size={annFontSize}
+                text-anchor="start"
+                style="pointer-events: none; user-select: none"
+              >
+                {#each annotationLines(ann.text) as line, li (li)}
+                  <tspan x={ann.x} dy={li === 0 ? 0 : annLineStep}>
+                    {line || '\u00a0'}
+                  </tspan>
+                {/each}
+              </text>
+            {/if}
+          </g>
+        {/each}
+
         {#if interaction.type === "connecting"}
           <path
             d={elbowPath(
@@ -3003,6 +3346,36 @@ $effect(() => {
           />
         {/if}
       </svg>
+
+      {#if editingAnnotationObj}
+        <!-- Inline text editor for the annotation being edited. Positioned in
+             screen space (world coords x zoom + view origin). Multiline:
+             plain Enter commits (matching the pre-multiline behavior),
+             Alt+Enter (or Shift/Ctrl+Enter) inserts a newline. -->
+        <textarea
+          bind:value={editingAnnotationObj.text}
+          onkeydown={(e) => {
+            if (e.key === "Enter" && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+              e.preventDefault();
+              noteDiagramEdited();
+              editingAnnotation = null;
+            }
+            if (e.key === "Escape") {
+              editingAnnotation = null;
+            }
+          }}
+          onblur={() => {
+            noteDiagramEdited();
+            editingAnnotation = null;
+          }}
+          class="absolute z-30 textarea textarea-sm textarea-bordered w-64"
+          rows={Math.max(2, annotationLines(editingAnnotationObj.text).length)}
+          placeholder="Alt+Enter for a new line"
+          title="Enter commits, Alt+Enter inserts a newline"
+          style="left:{(editingAnnotationObj.x - editor_state.view.x) * editor_state.view.zoom}px; top:{(editingAnnotationObj.y - editor_state.view.y) * editor_state.view.zoom}px"
+          data-testid="annotation-editor"
+        ></textarea>
+      {/if}
 
       {#if !model && output.error_count() > 0}
         <div
@@ -3051,6 +3424,7 @@ $effect(() => {
         onresetview={() => reset_view(editor_state)}
         onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
         onaddcomponent={() => openCreateComponentModal()}
+        onaddannotation={() => addAnnotationHandler()}
       />
 
       <div

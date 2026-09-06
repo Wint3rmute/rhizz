@@ -104,4 +104,17 @@ view "main" {
     height     = 100
     text_align = "center"
   }
+
+  annotation {
+    x    = 400
+    y    = 480
+    text = "GPS feed is noisy — see issue #42"
+  }
+
+  annotation {
+    x    = -120
+    y    = 1960
+    text = "Ground station shown with optional goggles"
+    scale = 1.5
+  }
 }

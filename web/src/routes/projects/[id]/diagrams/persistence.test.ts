@@ -11,6 +11,7 @@ import {
   emptyDiagramLayout,
   layoutToHcl,
   mapLayoutToBoxes,
+  parse_views,
   readDiagramLayoutFile,
   sanitizeStoredRecord,
   StoredBoxSchema,
@@ -189,11 +190,57 @@ describe("HCL View conversion and persistence", () => {
     });
   });
 
-  it("returns an empty layout when the file has never been saved", async () => {
+  it("round-trips annotations through layoutToHcl and viewsToLayout", () => {
+    const layout = {
+      checked: {},
+      savedLayout: {},
+      annotations: [
+        { text: "First line\nSecond line", x: 12.5, y: -3, scale: 1.5 },
+        { text: "Standalone note", x: 0, y: 100 },
+      ],
+    };
+    const hcl = layoutToHcl(layout, "overview", "home");
+    expect(hcl).toContain("annotation {");
+    // Non-default scale is persisted; the default (1) is not emitted.
+    expect(hcl).toContain("scale = 1.5");
+    expect(hcl).not.toMatch(/scale = 1\s/);
+
+    // The real app path: parse -> viewsToLayout (which normalizes a serde-
+    // defaulted scale: 1 back to absent).
+    const back = parse_views(hcl);
+    const layout2 = viewsToLayout(back);
+    expect(layout2.annotations).toEqual(layout.annotations);
+  });
+
+  it("persists an annotation added after load, survives reload", async () => {
+    // Mimics the user repro: fresh project -> load (empty layout) -> add an
+    // annotation -> write -> reload -> annotation still there.
     const fs = await projectFs();
-    expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
+
+    // Fresh project starts with an empty (auto-seeded) diagram.
+    await writeDiagramLayoutFile(
+      fs,
+      MAIN_DIAGRAM_PATH,
       emptyDiagramLayout(),
+      "sys",
     );
+    const layout = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(layout.annotations).toEqual([]);
+
+    const anns = layout.annotations ?? [];
+    // User adds an annotation (as addAnnotationHandler does) and edits text.
+    anns.push({ text: "New note", x: 10, y: 10 });
+    if (anns[0]) anns[0].text = "test";
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    // "Reload" (page switch) reads from the file again.
+    const reloaded = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(reloaded.annotations).toEqual([
+      { text: "test", x: 10, y: 10 },
+    ]);
+    // And the raw file on disk has the annotation block.
+    const raw = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(raw).toContain("annotation {");
   });
 
   it("round-trips a written layout to HCL and back", async () => {
@@ -217,15 +264,21 @@ describe("HCL View conversion and persistence", () => {
           textAlign: "top-left" as const,
         },
       },
+      annotations: [
+        { text: "Persisted note", x: 30, y: 40, scale: 1.5 },
+      ],
     };
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
 
     const content = await fs.readFile(MAIN_DIAGRAM_PATH);
     expect(content).toContain('view "main"');
     expect(content).toContain('node "sys/a"');
+    expect(content).toContain("annotation {");
+    expect(content).toContain("scale = 1.5");
 
     const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
     expect(read.checked["sys/a"]).toEqual(layout.checked["sys/a"]);
+    expect(read.annotations).toEqual(layout.annotations);
   });
 
   it("persists and reads connection startSide and endSide configuration", async () => {

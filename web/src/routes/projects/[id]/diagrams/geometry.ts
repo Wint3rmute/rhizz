@@ -19,6 +19,50 @@ export interface Box {
 export type ConnectionOrientation = "horizontal" | "vertical";
 export type ConnectionSide = "top" | "bottom" | "left" | "right";
 
+// A view annotation as stored in persisted layouts (the structural subset
+// both rhizz-wasm's Annotation and DiagramStaticAnnotation share).
+export interface AnnotationLike {
+  text: string;
+  x: number;
+  y: number;
+  scale?: number;
+}
+
+// Base font size (px at 1x scale) and line step for view annotation text.
+// Shared by annotationBounds below and every SVG renderer so metrics,
+// hit-testing and the visible text can never drift apart.
+export const ANNOTATION_FONT_SIZE = 12;
+export const ANNOTATION_LINE_HEIGHT = 16;
+
+// Split annotation text into renderable lines. SVG <text> collapses "\n",
+// so renderers must emit one <tspan> per line returned here. Empty lines
+// (including a trailing newline) are kept so vertical rhythm is preserved.
+export function annotationLines(text: string): string[] {
+  return text.split("\n");
+}
+
+// Extent box of a view annotation's text, using the same geometry constants
+// as the interactive canvas's hit-testing (see annotationHitBox in
+// +page.svelte): ~7.5px per char at 1x scale, 16px line height, 14px
+// horizontal / 8px vertical padding, 40px minimum width. "Zoom to fill" and
+// the static renderers use this so a far-away annotation is never clipped
+// out of the fitted viewport.
+export function annotationBounds(ann: AnnotationLike): Box {
+  const scale = ann.scale ?? 1;
+  const lines = annotationLines(ann.text);
+  const width = Math.max(
+    ...lines.map((l) => l.length * 7.5 * scale + 14),
+    40,
+  );
+  const height = lines.length * ANNOTATION_LINE_HEIGHT * scale + 8;
+  return {
+    x: ann.x - 4,
+    y: ann.y - ANNOTATION_LINE_HEIGHT * scale,
+    width,
+    height,
+  };
+}
+
 // Identifies which edge or corner of a node is being dragged for resizing.
 export type ResizeHandle =
   | "top"

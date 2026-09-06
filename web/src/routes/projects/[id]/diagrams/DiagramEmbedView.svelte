@@ -2,8 +2,9 @@
 import { resolve } from "$app/paths";
 import DiagramViewport from "./DiagramViewport.svelte";
 import DiagramElements from "./DiagramElements.svelte";
-import { unionBox } from "./geometry";
+import { annotationBounds, unionBox } from "./geometry";
 import type {
+  DiagramStaticAnnotation,
   DiagramStaticBox,
   DiagramStaticComponent,
   DiagramStaticConnection,
@@ -13,6 +14,7 @@ let {
   components = [],
   connections = [],
   boxes = {},
+  annotations = [],
   projectId = null,
   diagramPath = null,
   selected = new Set<number>(),
@@ -21,6 +23,7 @@ let {
   components: DiagramStaticComponent[];
   connections: DiagramStaticConnection[];
   boxes: Record<number, DiagramStaticBox>;
+  annotations?: DiagramStaticAnnotation[];
   projectId?: string | null;
   diagramPath?: string | null;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
@@ -33,8 +36,9 @@ let {
 
 let bounds = $derived.by(() => {
   const placed = Object.values(boxes);
-  if (placed.length === 0) return null;
-  return unionBox(placed);
+  const all = [...placed, ...annotations.map(annotationBounds)];
+  if (all.length === 0) return null;
+  return unionBox(all);
 });
 
 let fullDiagramUrl = $derived.by(() => {
@@ -52,6 +56,7 @@ let fullDiagramUrl = $derived.by(() => {
       {components}
       {connections}
       {boxes}
+      {annotations}
       markerId="embed-arrow"
       {selected}
       {onnodehover}

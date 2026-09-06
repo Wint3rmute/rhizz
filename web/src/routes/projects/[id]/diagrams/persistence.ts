@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 import {
+  type Annotation,
   type ConnectionLayout,
   type NodeLayout,
   parse_views,
@@ -69,15 +70,17 @@ export function sanitizeStoredRecord(
 export const DIAGRAM_LAYOUT_DIR = "diagrams";
 
 // The full persisted content of a single diagram: which components are
-// currently placed on its canvas, every component's last-known box, and connection starting points.
+// currently placed on its canvas, every component's last-known box, connection
+// starting points, and free-standing text annotations.
 export interface DiagramLayout {
   checked: Record<string, StoredBox>;
   savedLayout: Record<string, StoredBox>;
   connections?: Record<string, StoredConnection>;
+  annotations?: Annotation[];
 }
 
 export function emptyDiagramLayout(): DiagramLayout {
-  return { checked: {}, savedLayout: {}, connections: {} };
+  return { checked: {}, savedLayout: {}, connections: {}, annotations: [] };
 }
 
 /**
@@ -215,6 +218,7 @@ export function layoutToHcl(
     },
     nodes,
     connections,
+    annotations: (layout.annotations ?? []).map((a) => ({ ...a })),
   };
 
   return serialize_views([viewDef]);
@@ -227,6 +231,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
   const savedLayout: Record<string, StoredBox> = {};
   const connections: Record<string, StoredConnection> = {};
+  const annotations: Annotation[] = [];
 
   for (const view of views) {
     for (const node of view.nodes ?? []) {
@@ -260,9 +265,17 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
         connections[conn.connection] = entry;
       }
     }
+    for (const ann of view.annotations ?? []) {
+      // Normalize: scale 1 (the serde default for a missing scale) means the
+      // annotation is at the default 100%; drop it so it round-trips as
+      // absent, matching how layoutToHcl omits the default.
+      const normalized = { ...ann };
+      if (normalized.scale === 1) delete normalized.scale;
+      annotations.push(normalized);
+    }
   }
 
-  return { checked, savedLayout, connections };
+  return { checked, savedLayout, connections, annotations };
 }
 
 /**
@@ -310,5 +323,24 @@ export async function writeDiagramLayoutFile(
 
   const viewName = viewNameFromPath(path);
   const hclContent = layoutToHcl(layout, viewName, systemName);
+  const annotationBlocks = (hclContent.match(/annotation \{/g) ?? []).length;
+  // Data-loss guard: if annotations exist in memory but the compiled wasm
+  // serializer emitted none, the wasm pkg (crates/rhizz-wasm/pkg, a gitignored
+  // build artifact) is stale and would silently erase annotations from disk.
+  // Abort the write loudly instead of overwriting the file.
+  const layoutAnnotationCount = layout.annotations?.length ?? 0;
+  if (layoutAnnotationCount > 0 && annotationBlocks === 0) {
+    throw new Error(
+      `[PERSIST] DATALOSS-GUARD: ${
+        String(layoutAnnotationCount)
+      } annotation(s) in memory ` +
+        `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
+        `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
+        `\`just build\`), then restart the dev server and hard-refresh the browser.`,
+    );
+  }
   await fs.writeFile(path, hclContent);
 }
+
+// Re-export so consumers/tests can parse canonical views HCL back.
+export { type Annotation, parse_views };

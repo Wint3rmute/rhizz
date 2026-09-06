@@ -509,6 +509,30 @@ pub struct ConnectionLayout {
     pub end_side: Option<ConnectionSide>,
 }
 
+/// A text annotation placed at an absolute position on a view canvas.
+///
+/// Annotations are view-level diagram metadata (like node/connection
+/// layouts): they are saved in `views.hcl` and never in the system model.
+/// Position is absolute in canvas units; anchors are explicitly not supported
+/// (the task deliberately dropped node anchoring).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Annotation {
+    /// Human-readable text. May contain `\n` for multi-line labels.
+    pub text: String,
+    /// X coordinate on canvas (absolute, in world units).
+    pub x: f64,
+    /// Y coordinate on canvas (absolute, in world units).
+    pub y: f64,
+    /// Font size multiplier; 1.0 = 100% (the default size).
+    #[serde(default = "default_annotation_scale")]
+    pub scale: f64,
+}
+
+/// Default annotation scale: 100%.
+const fn default_annotation_scale() -> f64 {
+    1.0
+}
+
 /// A view definition containing filter, output settings, and node layouts.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ViewDefinition {
@@ -532,6 +556,9 @@ pub struct ViewDefinition {
     /// Placed connection layouts for this view.
     #[serde(default)]
     pub connections: Vec<ConnectionLayout>,
+    /// Text annotations placed on this view's canvas.
+    #[serde(default)]
+    pub annotations: Vec<Annotation>,
 }
 
 impl ViewDefinition {
@@ -561,6 +588,7 @@ impl ViewDefinition {
             },
             nodes: Vec::new(),
             connections: Vec::new(),
+            annotations: Vec::new(),
         }
     }
 }

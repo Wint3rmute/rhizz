@@ -23,6 +23,7 @@ interface Props {
   onresetview: () => void;
   onaddsystem?: () => void;
   onaddcomponent?: () => void;
+  onaddannotation?: () => void;
 }
 
 let {
@@ -37,6 +38,7 @@ let {
   onresetview,
   onaddsystem,
   onaddcomponent,
+  onaddannotation,
 }: Props = $props();
 </script>
 
@@ -62,7 +64,7 @@ let {
       {/each}
     </select>
   </div>
-  {#if onaddsystem || onaddcomponent}
+  {#if onaddsystem || onaddcomponent || onaddannotation}
       {#if onaddsystem}
         <button
           onclick={onaddsystem}
@@ -79,6 +81,15 @@ let {
           title="Add a new component to the model"
         >
           + Component
+        </button>
+      {/if}
+      {#if onaddannotation}
+        <button
+          onclick={onaddannotation}
+          class="btn btn-ghost btn-sm"
+          title="Add a text annotation to the canvas"
+        >
+          + Note
         </button>
       {/if}
   {/if}

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, within } from "storybook/test";
 import DiagramStaticView from "./DiagramStaticView.svelte";
 import type {
   DiagramStaticBox,
@@ -105,5 +106,56 @@ export const Empty: Story = {
     components: pipelineComponents,
     connections: pipelineConnections,
     boxes: {},
+  },
+};
+
+// The pipeline with free-standing view annotations rendered at absolute
+// canvas positions — including a multi-line annotation (newline in text).
+// SVG collapses "\n" inside <text>, so each line must be its own <tspan>.
+export const WithAnnotations: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    annotations: [
+      { text: "Ingest path", x: 10, y: 10 },
+      { text: "Processed here\n(2 workers)", x: 230, y: 140 },
+      { text: "Note on queue", x: 200, y: 160 },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The multi-line annotation renders one <tspan> per line.
+    const firstLine = await canvas.findByText("Processed here");
+    const secondLine = await canvas.findByText("(2 workers)");
+    await expect(firstLine.tagName.toLowerCase()).toBe("tspan");
+    await expect(secondLine.tagName.toLowerCase()).toBe("tspan");
+    await expect(firstLine.parentElement).toBe(secondLine.parentElement);
+  },
+};
+
+// The pipeline with an annotation placed far outside the node cluster's
+// bounding box and a scaled one — the auto-fit viewBox must extend to
+// include them, else the note would be clipped out of the Explore viewport.
+export const AnnotationsExtendTheFittedViewport: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    annotations: [
+      { text: "Distant note", x: 1200, y: -300, scale: 1.5 },
+      { text: "Below the cluster", x: 100, y: 900 },
+    ],
+  },
+};
+
+// Only annotations, no placed components — the viewBox must still fit them
+// (previously fell back to the fixed "0 0 100 100" default).
+export const AnnotationsOnly: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: {},
+    annotations: [{ text: "Just a note", x: 0, y: 0 }],
   },
 };

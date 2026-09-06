@@ -22,6 +22,14 @@ export interface ConnectionLayout {
   end_side?: string;
 }
 
+export interface Annotation {
+  text: string;
+  x: number;
+  y: number;
+  /** Font size multiplier; 1 = 100% (default). */
+  scale?: number;
+}
+
 export interface ViewFilterDefinition {
   include_tags?: string[];
   exclude_tags?: string[];
@@ -38,6 +46,7 @@ export interface ViewDefinition {
   filter?: ViewFilterDefinition;
   nodes?: NodeLayout[];
   connections?: ConnectionLayout[];
+  annotations?: Annotation[];
 }
 
 export function compile_system(
