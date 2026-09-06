@@ -413,11 +413,11 @@ $effect(() => {
 .hcl-string {
   color: #008200;
 }
-/* Dark-theme placeholders: light values until reviewed in dark mode. */
+/* Dark-theme colors. */
 :global(html[data-theme="dark"]) .hcl-keyword {
-  color: #9d00ec;
+  color: #b294bb;
 }
 :global(html[data-theme="dark"]) .hcl-string {
-  color: #008200;
+  color: #b5bd68;
 }
 </style>
