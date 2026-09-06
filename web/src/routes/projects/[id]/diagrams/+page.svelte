@@ -389,8 +389,12 @@ let diagramEditStamp = 0;
 let loadStartStamp = 0;
 
 // Called by every user-diagram mutation path so the load race guard works.
-function noteDiagramEdited(): void {
+// `reason` is purely diagnostic (temporary [PERSIST] tracing).
+function noteDiagramEdited(reason: string): void {
   diagramEditStamp += 1;
+  console.log(
+    `[PERSIST] edit      #${diagramEditStamp} ${reason} annotationsInMemory=${annotations.length}`,
+  );
 }
 
 $effect(() => {
@@ -399,6 +403,10 @@ $effect(() => {
   loadedDiagramPath = path;
   diagramLayoutLoaded = false;
   loadStartStamp = diagramEditStamp;
+  console.log(
+    `[PERSIST] load       START path=${path} stampAtStart=${loadStartStamp} ` +
+      `annotationsInMemory=${annotations.length}`,
+  );
 
   if (path === null) {
     checked = {};
@@ -412,12 +420,24 @@ $effect(() => {
     // A stale load (e.g. rapid switching between diagrams) could resolve
     // after a newer one already changed the selection — guard against
     // overwriting the newer selection's state with the older one.
-    if (loadedDiagramPath !== path) return;
+    if (loadedDiagramPath !== path) {
+      console.log(
+        `[PERSIST] load       DISCARDED stale resolve (expects ${path}, now ${loadedDiagramPath})`,
+      );
+      return;
+    }
     // If the user edited the diagram while this read was in flight, don't
     // clobber their changes with the (possibly empty) file contents — but
     // still mark the diagram as loaded so the save effect is armed and can
     // persist the user's edits.
     const editedDuringLoad = diagramEditStamp !== loadStartStamp;
+    const fileAnnCount = layout.annotations?.length ?? 0;
+    console.log(
+      `[PERSIST] load       RESOLVED path=${path} editedDuringLoad=${editedDuringLoad} ` +
+        `stampNow=${diagramEditStamp} fileAnnotations=${fileAnnCount} ` +
+        `fileTexts=${JSON.stringify((layout.annotations ?? []).map((a) => a.text))} ` +
+        `apply=${!editedDuringLoad}`,
+    );
     if (!editedDuringLoad) {
       checked = layout.checked;
       savedLayout = layout.savedLayout;
@@ -452,7 +472,17 @@ $effect(() => {
     annotations: $state.snapshot(annotations),
   };
   const path = fullDiagramPath;
-  if (!diagramLayoutLoaded || path === null) return;
+  const annCount = snapshot.annotations?.length ?? 0;
+  console.log(
+    `[PERSIST] save       FIRED path=${path} loaded=${diagramLayoutLoaded} ` +
+      `checked=${Object.keys(snapshot.checked).length} ` +
+      `annotations=${annCount} ` +
+      `texts=${JSON.stringify((snapshot.annotations ?? []).map((a) => a.text))}`,
+  );
+  if (!diagramLayoutLoaded || path === null) {
+    console.log(`[PERSIST] save       SKIPPED (loaded=${diagramLayoutLoaded} path=${path})`);
+    return;
+  }
   void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
 });
 
@@ -551,7 +581,7 @@ async function handleDeleteDiagram(path: string): Promise<void> {
 // keeps the remembered layout up to date, instead of relying on each call
 // site to remember to mirror the write itself.
 function setNodeBox(index: number, box: Partial<StoredBox>) {
-  noteDiagramEdited();
+  noteDiagramEdited("node box");
   const key = getComponentKey(index);
   const checkedPrev = checked[key];
   const savedPrev = savedLayout[key];
@@ -731,7 +761,7 @@ function selectAnnotation(index: number) {
 }
 
 function addAnnotationHandler(): void {
-  noteDiagramEdited();
+  noteDiagramEdited("annotation add");
   // Place at the canvas center (world coords) if we can, else 0,0.
   const x = editor_state.view.x + canvas_width / 2 / editor_state.view.zoom;
   const y = editor_state.view.y + canvas_height / 2 / editor_state.view.zoom;
@@ -743,7 +773,7 @@ function addAnnotationHandler(): void {
 
 function deleteSelectedAnnotations(): void {
   if (selectedAnnotations.size === 0) return;
-  noteDiagramEdited();
+  noteDiagramEdited("annotation delete");
   const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
   for (const idx of toDelete) annotations.splice(idx, 1);
   selectedAnnotations.clear();
@@ -1635,7 +1665,7 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
 // drag-start snapshot — recomputed from the snapshot each event (like
 // applyGroupDelta), never accumulated, so there is no drift or flicker.
 function applyAnnotationDelta(deltaX: number, deltaY: number): void {
-  noteDiagramEdited();
+  noteDiagramEdited("annotation drag");
   const current = interaction;
   if (current.type !== "dragging") return;
   const starts = current.annotationStartPositions;
@@ -1794,7 +1824,7 @@ function applyGroupDelta(
   deltaX: number,
   deltaY: number,
 ) {
-  noteDiagramEdited();
+  noteDiagramEdited("node group drag");
   for (const [indexStr, start] of Object.entries(startPositions)) {
     const index = Number(indexStr);
     const box = nodeBox(index);
@@ -3345,7 +3375,7 @@ $effect(() => {
           onkeydown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              noteDiagramEdited();
+              noteDiagramEdited("annotation text edit");
               editingAnnotation = null;
             }
             if (e.key === "Escape") {
@@ -3353,7 +3383,7 @@ $effect(() => {
             }
           }}
           onblur={() => {
-            noteDiagramEdited();
+            noteDiagramEdited("annotation text edit (blur)");
             editingAnnotation = null;
           }}
           class="absolute z-30 input input-sm input-bordered w-64"
