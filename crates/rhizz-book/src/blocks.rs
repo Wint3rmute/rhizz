@@ -22,11 +22,11 @@ pub enum Segment {
     },
     /// A rhizz-project embed directive. `attrs` is the raw attribute string
     /// after the `rhizz-project` tag (parsed by `project::parse_project_attrs`);
-    /// `body` holds the optional caption lines.
+    /// `body` holds the fence body lines, which are currently ignored.
     ProjectBlock {
         /// Raw attribute string (e.g. `src="projects/demo" height="600"`).
         attrs: String,
-        /// Caption lines between the fences (may be empty).
+        /// Fence body lines (currently ignored).
         body: Vec<String>,
     },
 }

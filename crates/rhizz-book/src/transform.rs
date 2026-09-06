@@ -86,12 +86,7 @@ pub fn transform_chapter(
                                     height: block_embed_height(body.len()),
                                     open: None,
                                 };
-                                out.push(render_project_html(
-                                    example_base_url,
-                                    &attrs,
-                                    None,
-                                    payload,
-                                ));
+                                out.push(render_project_html(example_base_url, &attrs, payload));
                             }
                             None => out.push(tool_error_panel("no block payload recorded")),
                         }
@@ -100,22 +95,15 @@ pub fn transform_chapter(
                 }
                 out.push(String::new());
             }
-            Segment::ProjectBlock { attrs, body } => {
+            Segment::ProjectBlock { attrs, .. } => {
                 // Attribute errors abort the build in the pipeline's loading
                 // pass, so a parse failure here is unreachable in practice.
                 match parse_project_attrs(attrs) {
                     Ok(project_attrs) => match project_payloads.get(&project_attrs.src) {
                         Some(payload) => {
-                            let caption = body.join("\n");
-                            let caption = if caption.is_empty() {
-                                None
-                            } else {
-                                Some(caption)
-                            };
                             out.push(render_project_html(
                                 example_base_url,
                                 &project_attrs,
-                                caption.as_deref(),
                                 payload,
                             ));
                         }
@@ -308,7 +296,7 @@ mod tests {
         assert!(new_content.contains("<div class=\"rhizz-project\">"));
         assert!(new_content.contains("https://example.invalid/book-example#p=PAYLOAD"));
         assert!(new_content.contains("height=\"600\""));
-        assert!(new_content.contains("<p class=\"rhizz-project-caption\">A caption</p>"));
+        assert!(!new_content.contains("rhizz-project-caption"));
     }
 
     #[test]
