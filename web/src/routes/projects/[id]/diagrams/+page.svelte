@@ -54,7 +54,10 @@ import {
   type LayoutNode,
 } from "./forceLayout";
 import {
+  ANNOTATION_FONT_SIZE,
+  ANNOTATION_LINE_HEIGHT,
   annotationBounds,
+  annotationLines,
   boxContains,
   clampWithin,
   computeDirectionalHandles,
@@ -3219,7 +3222,8 @@ $effect(() => {
           {@const isAnnSelected = interaction.type === "marquee"
             ? marqueeAnnotationCandidates.has(i)
             : selectedAnnotations.has(i)}
-          {@const annFontSize = 12 * (ann.scale ?? 1)}
+          {@const annFontSize = ANNOTATION_FONT_SIZE * (ann.scale ?? 1)}
+          {@const annLineStep = ANNOTATION_LINE_HEIGHT * (ann.scale ?? 1)}
           {@const annHit = annotationHitBox(ann)}
           {@const annX = annHit.x}
           {@const annY = annHit.y}
@@ -3282,7 +3286,11 @@ $effect(() => {
                 text-anchor="start"
                 style="user-select: none"
               >
-                {ann.text}
+                {#each annotationLines(ann.text) as line, li (li)}
+                  <tspan x={ann.x} dy={li === 0 ? 0 : annLineStep}>
+                    {line || '\u00a0'}
+                  </tspan>
+                {/each}
               </text>
             {:else}
               <text
@@ -3293,9 +3301,13 @@ $effect(() => {
                   : "var(--color-base-content)"}
                 font-size={annFontSize}
                 text-anchor="start"
-                style="pointer-events: none; user-select: none; white-space: pre"
+                style="pointer-events: none; user-select: none"
               >
-                {ann.text}
+                {#each annotationLines(ann.text) as line, li (li)}
+                  <tspan x={ann.x} dy={li === 0 ? 0 : annLineStep}>
+                    {line || '\u00a0'}
+                  </tspan>
+                {/each}
               </text>
             {/if}
           </g>
@@ -3337,11 +3349,13 @@ $effect(() => {
 
       {#if editingAnnotationObj}
         <!-- Inline text editor for the annotation being edited. Positioned in
-             screen space (world coords x zoom + view origin). -->
-        <input
+             screen space (world coords x zoom + view origin). Multiline:
+             plain Enter commits (matching the pre-multiline behavior),
+             Alt+Enter (or Shift/Ctrl+Enter) inserts a newline. -->
+        <textarea
           bind:value={editingAnnotationObj.text}
           onkeydown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
               e.preventDefault();
               noteDiagramEdited();
               editingAnnotation = null;
@@ -3354,10 +3368,13 @@ $effect(() => {
             noteDiagramEdited();
             editingAnnotation = null;
           }}
-          class="absolute z-30 input input-sm input-bordered w-64"
+          class="absolute z-30 textarea textarea-sm textarea-bordered w-64"
+          rows={Math.max(2, annotationLines(editingAnnotationObj.text).length)}
+          placeholder="Alt+Enter for a new line"
+          title="Enter commits, Alt+Enter inserts a newline"
           style="left:{(editingAnnotationObj.x - editor_state.view.x) * editor_state.view.zoom}px; top:{(editingAnnotationObj.y - editor_state.view.y) * editor_state.view.zoom}px"
           data-testid="annotation-editor"
-        />
+        ></textarea>
       {/if}
 
       {#if !model && output.error_count() > 0}

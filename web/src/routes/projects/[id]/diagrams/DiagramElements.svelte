@@ -1,5 +1,8 @@
 <script lang="ts">
 import {
+  ANNOTATION_FONT_SIZE,
+  ANNOTATION_LINE_HEIGHT,
+  annotationLines,
   type Box,
   computeRenderOrder,
   computeVisibleConnections,
@@ -268,14 +271,19 @@ let visibleConnections = $derived(
 {/each}
 
 {#each annotations as ann (ann.text + ann.x + ann.y)}
+  {@const annScale = ann.scale ?? 1}
   <text
   x={ann.x}
   y={ann.y}
   fill="var(--color-base-content)"
-  font-size={12 * (ann.scale ?? 1)}
+  font-size={ANNOTATION_FONT_SIZE * annScale}
   text-anchor="start"
-  style="pointer-events: none; user-select: none; white-space: pre"
+  style="pointer-events: none; user-select: none"
 >
-    {ann.text}
+    {#each annotationLines(ann.text) as line, li (li)}
+      <tspan x={ann.x} dy={li === 0 ? 0 : ANNOTATION_LINE_HEIGHT * annScale}>
+        {line || '\u00a0'}
+      </tspan>
+    {/each}
   </text>
 {/each}
