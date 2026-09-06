@@ -19,7 +19,7 @@ format:
     {{run}} deno fmt web
 
 lint:
-    {{run}} sh -lc 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && deno task sync && deno task eslint && deno task check-only'
+    {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && deno task sync && deno task eslint && deno task check-only'
 
 test:
     {{run}} cargo test --quiet --all
