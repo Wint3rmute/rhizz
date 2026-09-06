@@ -1,6 +1,7 @@
 <script lang="ts">
 import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
 import { resolveIcon } from "../../iconHelper";
+import { getTheme, toggleTheme } from "../../ThemeState.svelte";
 import {
   compile_system,
   parse_views,
@@ -28,11 +29,12 @@ function matchOpen(candidates: string[], target: string | null): string | null {
   if (candidates.includes(target)) return target;
   return candidates.find((path) => path.split("/").pop() === target) ?? null;
 }
-const infoIcon = resolveIcon("circle-info");
 const codeIcon = resolveIcon("code");
 const diagramIcon = resolveIcon("diagram-project");
 const clipboardIcon = resolveIcon("clipboard");
 const checkIcon = resolveIcon("check");
+const sunIcon = resolveIcon("sun");
+const moonIcon = resolveIcon("moon");
 
 // Sources mirror `readProjectSources`: every `.hcl` file except diagram
 // layouts (those live under `diagrams/` and are parsed as views instead).
@@ -281,24 +283,37 @@ $effect(() => {
         </button>
       {/each}
     </div>
-    {#if infoIcon}
-      <div
-        class="tooltip tooltip-left flex items-center ml-auto shrink-0"
-        data-tip="Rhizz book example — rendered locally in your browser."
-      >
+    <button
+      class="btn btn-ghost btn-sm btn-square shrink-0 ml-auto"
+      title={getTheme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      aria-label={getTheme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      type="button"
+      onclick={() => {
+        toggleTheme();
+      }}
+    >
+      {#if getTheme() === "dark" && moonIcon}
         <svg
           width="16"
           height="16"
-          viewBox="0 0 {infoIcon.width} {infoIcon.height}"
+          viewBox="0 0 {moonIcon.width} {moonIcon.height}"
           fill="currentColor"
-          class="text-base-content/50"
-          role="img"
-          aria-label="About this embed"
+          aria-hidden="true"
         >
-          <path d={infoIcon.svgPath} />
+          <path d={moonIcon.svgPath} />
         </svg>
-      </div>
-    {/if}
+      {:else if sunIcon}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 {sunIcon.width} {sunIcon.height}"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d={sunIcon.svgPath} />
+        </svg>
+      {/if}
+    </button>
   </div>
   {/if}
 
