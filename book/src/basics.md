@@ -176,6 +176,5 @@ Static code blocks show one angle at a time. The project below is embedded
 live: browse its diagram, read its source files, and inspect the compiler's
 verdict — all without leaving the book.
 
-```rhizz-project src="projects/demo" open="system.hcl"
-A minimal system: two components, one connection.
+```rhizz-project src="projects/demo" open="diagrams/main.hcl"
 ```

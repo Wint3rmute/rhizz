@@ -331,14 +331,14 @@
       "files": [
         {
           "path": "diagrams/main.hcl",
-          "sha256": "8bd9e83b3d146f1cd8d0bfe076a4a2d7a06a2df0c3794df805e872b25a7e65c2"
+          "sha256": "f97fb7395c16a583159cef104ec7ddf83d28d1e92600a055822ffe57d335a842"
         },
         {
           "path": "system.hcl",
           "sha256": "f8e41a5ad0d83ec1c6eb6f65071058372b45da004ccd40740fc1be38ecd2a7f0"
         }
       ],
-      "input_sha256": "a556ad1f3f74568f2530c5a15428edb982caca030b654223cd5f2d33c7ecc7e8",
+      "input_sha256": "3851ef8c68cba7bdfcf7da9e5a6c5a483159fa7eabb56351d854d41504250da5",
       "output": {
         "errors": [],
         "score": {
