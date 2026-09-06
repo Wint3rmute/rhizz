@@ -2033,6 +2033,7 @@ function onSvgMouseUp() {
     clearSelection();
     if (box && (box.width > 2 || box.height > 2)) {
       for (const index of marqueeCandidates) select(index);
+      for (const i of marqueeAnnotationCandidates) selectedAnnotations.add(i);
     }
   }
   interaction = { type: "idle" };
@@ -2219,6 +2220,35 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
     const box2 = nodeBox(index);
     if (box2 && boxContains(box, box2)) candidates.add(index);
   }
+  return candidates;
+});
+
+// Hit-box of an annotation, matching the geometry used for rendering and
+// click hit-testing exactly (so marquee selection, the highlight state and
+// the visible box all agree).
+function annotationHitBox(
+  ann: Annotation,
+): { x: number; y: number; width: number; height: number } {
+  const scale = ann.scale ?? 1;
+  const lines = ann.text.split("\n");
+  const width = Math.max(
+    ...lines.map((l) => l.length * 7.5 * scale + 14),
+    40,
+  );
+  const height = lines.length * 16 * scale + 8;
+  return { x: ann.x - 4, y: ann.y - 16 * scale, width, height };
+}
+
+// Annotations caught by the current marquee box (live preview), parallel to
+// marqueeCandidates for nodes.
+let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
+  if (!marqueeBox) return new Set();
+  const box = marqueeBox;
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const candidates = new Set<number>();
+  annotations.forEach((ann, i) => {
+    if (boxContains(box, annotationHitBox(ann))) candidates.add(i);
+  });
   return candidates;
 });
 
@@ -3188,13 +3218,15 @@ $effect(() => {
              is pointer-events: none; an invisible rect behind it is the hit
              target (SVG <g> has no geometry of its own). -->
         {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}-${ann.scale}`)}
-          {@const isAnnSelected = selectedAnnotations.has(i)}
+          {@const isAnnSelected = interaction.type === "marquee"
+            ? marqueeAnnotationCandidates.has(i)
+            : selectedAnnotations.has(i)}
           {@const annFontSize = 12 * (ann.scale ?? 1)}
-          {@const annLines = ann.text.split("\n")}
-          {@const annWidth = Math.max(...annLines.map((l) => l.length * 7.5 * (ann.scale ?? 1) + 14), 40)}
-          {@const annHeight = annLines.length * 16 * (ann.scale ?? 1) + 8}
-          {@const annX = ann.x - 4}
-          {@const annY = ann.y - 16 * (ann.scale ?? 1)}
+          {@const annHit = annotationHitBox(ann)}
+          {@const annX = annHit.x}
+          {@const annY = annHit.y}
+          {@const annWidth = annHit.width}
+          {@const annHeight = annHit.height}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <g
             class="cursor-grab"
