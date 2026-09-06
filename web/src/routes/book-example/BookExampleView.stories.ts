@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { userEvent, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 import BookExampleView from "./BookExampleView.svelte";
 import { DEMO_FILES } from "./demo";
+import type { BookPayloadFile } from "./payload";
 
 const meta = {
   title: "Book/BookExampleView",
@@ -39,31 +40,43 @@ export const CodeTab: Story = {
   },
 };
 
-// The verdict footer reports a clean compile at the bottom of the embed,
-// with the book-style completion stats underneath.
-// (Alert text runs together across <br/> elements, so assertions use regex.)
-export const VerdictFooter: Story = {
+// A clean project shows only the completion stats at the bottom — no
+// verdict bar, no outline.
+export const CleanProject: Story = {
   args: {
     files: DEMO_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await canvas.findByText(/No errors, no warnings/);
     await canvas.findByText("Components");
     await canvas.findByText(/100\.0%/);
+    await expect(canvas.queryByText(/No errors/)).toBeNull();
+    await expect(canvas.queryByText("Diagnostics")).toBeNull();
   },
 };
 
-// Clicking the footer expands the full diagnostics outline.
-export const VerdictExpanded: Story = {
+// Dropping the hub description triggers W004, shown directly at the bottom
+// with no click needed. (Alert text runs together across <br/> elements,
+// so the assertion uses a regex.)
+const warningFiles: BookPayloadFile[] = DEMO_FILES.map((file) =>
+  file.path === "system.hcl"
+    ? {
+      path: file.path,
+      content: file.content.replace(
+        '  description = "Reading collector"\n',
+        "",
+      ),
+    }
+    : file
+);
+
+export const WarningsShownDirectly: Story = {
   args: {
-    files: DEMO_FILES,
+    files: warningFiles,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      await canvas.findByText(/No errors, no warnings/),
-    );
-    await canvas.findByText(/Well Done!/);
+    await canvas.findByText("Diagnostics");
+    await canvas.findByText(/W004/);
   },
 };

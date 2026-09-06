@@ -20,7 +20,6 @@ type Tab = "diagram" | "code";
 let { files }: { files: BookPayloadFile[] } = $props();
 
 let tab = $state<Tab>("diagram");
-let verdictOpen = $state(false);
 const infoIcon = resolveIcon("circle-info");
 
 // Sources mirror `readProjectSources`: every `.hcl` file except diagram
@@ -50,8 +49,6 @@ let connections = $derived(model?.connections() ?? []);
 let systems = $derived(model?.systems() ?? []);
 let diagnostics = $derived(output?.diagnostics() ?? []);
 let score = $derived(model?.score());
-let errorCount = $derived(output?.error_count() ?? 0);
-let warningCount = $derived(output?.warning_count() ?? 0);
 
 interface StatRow {
   label: string;
@@ -81,39 +78,6 @@ let stats = $derived.by((): { rows: StatRow[]; overall: number } | null => {
     });
   }
   return { rows, overall: report.overall_percentage };
-});
-
-function plural(count: number, word: string): string {
-  return `${String(count)} ${word}${count === 1 ? "" : "s"}`;
-}
-
-// Book-panel-style verdict summary, pinned to the bottom of the embed.
-let verdict = $derived.by(() => {
-  if (compileCrashed) {
-    return {
-      kind: "error" as const,
-      text: "The project failed to compile in the browser.",
-    };
-  }
-  if (errorCount > 0) {
-    return {
-      kind: "error" as const,
-      text: `✗ ${plural(errorCount, "error")}, ${
-        plural(warningCount, "warning")
-      } — no score`,
-    };
-  }
-  if (warningCount > 0) {
-    const percent = score?.overall_percentage;
-    const tail = percent === undefined
-      ? "no completion score produced"
-      : `model completes at ${percent.toFixed(1)}%`;
-    return {
-      kind: "warn" as const,
-      text: `⚠ ${plural(warningCount, "warning")} — ${tail}`,
-    };
-  }
-  return { kind: "ok" as const, text: "✓ No errors, no warnings" };
 });
 
 interface DiagramFile {
@@ -278,33 +242,21 @@ let codeContent = $derived(
     {/if}
   </div>
 
-  {#if verdictOpen}
-    <div class="max-h-48 overflow-auto px-3">
-      {#if compileCrashed}
-        <div role="alert" class="alert alert-error mb-2">
-          The project failed to compile in the browser.
-        </div>
-      {:else}
-        <CompilationDiagnosticsOutline {diagnostics} />
-      {/if}
+  {#if compileCrashed}
+    <div class="px-3 pb-2">
+      <div role="alert" class="alert alert-error">
+        The project failed to compile in the browser.
+      </div>
+    </div>
+  {:else if diagnostics.length > 0}
+    <div class="max-h-48 overflow-auto px-3 pb-2">
+      <CompilationDiagnosticsOutline {diagnostics} />
     </div>
   {/if}
 
-  <div class="p-3 pt-0">
-    <button
-      class="alert w-full py-2 text-sm"
-      class:alert-error={verdict.kind === "error"}
-      class:alert-warning={verdict.kind === "warn"}
-      class:alert-success={verdict.kind === "ok"}
-      onclick={() => {
-        verdictOpen = !verdictOpen;
-      }}
-      aria-expanded={verdictOpen}
-    >
-      <span>{verdict.text}</span>
-    </button>
-    {#if stats}
-      <ul class="flex flex-wrap gap-x-5 gap-y-1 px-1 pt-2 text-sm">
+  {#if stats}
+    <div class="px-3 pb-3">
+      <ul class="flex flex-wrap gap-x-5 gap-y-1 px-1 text-sm">
         {#each stats.rows as row (row.label)}
           <li>
             <span class="opacity-70">{row.label}</span>
@@ -316,6 +268,6 @@ let codeContent = $derived(
           <b class="ml-1 tabular-nums">{stats.overall.toFixed(1)}%</b>
         </li>
       </ul>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
