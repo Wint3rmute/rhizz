@@ -59,18 +59,17 @@ export const CodeTab: Story = {
   },
 };
 
-// A clean project shows only the completion stats at the bottom — no
-// verdict bar, no outline.
+// A clean project shows the classic verdict panel: head, no items,
+// completion stats.
 export const CleanProject: Story = {
   args: {
     files: DEMO_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await canvas.findByText(/No errors, no warnings/);
     await canvas.findByText("Components");
     await canvas.findByText(/100\.0%/);
-    await expect(canvas.queryByText(/No errors/)).toBeNull();
-    await expect(canvas.queryByText("Diagnostics")).toBeNull();
   },
 };
 
@@ -95,7 +94,7 @@ export const WarningsShownDirectly: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await canvas.findByText("Diagnostics");
+    await canvas.findByText(/1 warning/);
     await canvas.findByText(/W004/);
   },
 };
