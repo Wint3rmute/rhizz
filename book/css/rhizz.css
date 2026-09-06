@@ -70,8 +70,8 @@ html:not(.js) {
 /* ── panel chrome ─────────────────────────────────────────────────── */
 
 .rhizz-diag {
-  margin: 0.9rem 0 1.4rem;
-  border: 1px solid;
+  /*margin: 0.9rem 0 1.4rem;*/
+  border: none;
   border-radius: 6px;
   font-size: 0.9em;
   overflow: hidden;
@@ -194,6 +194,7 @@ html:not(.js) {
 .rhizz-project iframe {
   display: block;
   background: var(--quote-bg, #f4f6f7);
+  border: none !important;
 }
 
 .rhizz-project-caption {
