@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import BookExampleView from "./BookExampleView.svelte";
 import { DEMO_FILES } from "./demo";
 import type { BookPayloadFile } from "./payload";
@@ -16,6 +16,19 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+// Highlighting splits code across spans, and Testing Library only matches
+// direct text nodes — so code assertions poll the <pre> element instead.
+async function findCodeWith(
+  canvasElement: HTMLElement,
+  snippet: string,
+): Promise<void> {
+  await waitFor(() => {
+    if (!canvasElement.querySelector("pre")?.textContent.includes(snippet)) {
+      throw new Error(`code containing ${snippet} not shown yet`);
+    }
+  });
+}
+
 // The fallback demo project: diagram tab with two placed nodes.
 export const DiagramTab: Story = {
   args: {
@@ -28,7 +41,7 @@ export const DiagramTab: Story = {
   },
 };
 
-// Clicking a file tab shows its raw HCL.
+// Clicking a file tab shows its highlighted HCL.
 export const CodeTab: Story = {
   args: {
     files: DEMO_FILES,
@@ -38,7 +51,11 @@ export const CodeTab: Story = {
     await userEvent.click(
       await canvas.findByRole("tab", { name: "system.hcl" }),
     );
-    await canvas.findByText(/protocol "temp-bus"/);
+    await findCodeWith(canvasElement, 'protocol "temp-bus"');
+    await expect(
+      canvasElement.querySelector(".hcl-keyword"),
+    ).not.toBeNull();
+    await expect(canvasElement.querySelector(".hcl-string")).not.toBeNull();
   },
 };
 
@@ -91,7 +108,7 @@ export const OpenCodeFile: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await canvas.findByText(/protocol "temp-bus"/);
+    await findCodeWith(canvasElement, 'protocol "temp-bus"');
     await expect(canvas.queryByText("sensor")).toBeNull();
   },
 };
@@ -132,7 +149,7 @@ export const ToggleDiagramCode: Story = {
     await userEvent.click(
       await canvas.findByRole("button", { name: "Show code" }),
     );
-    await canvas.findByText(/view "main"/);
+    await findCodeWith(canvasElement, 'view "main"');
     await expect(canvas.queryByText("sensor")).toBeNull();
     await userEvent.click(
       await canvas.findByRole("button", { name: "Show diagram" }),
@@ -150,7 +167,7 @@ export const ToggleDisabledForSource: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await canvas.findByText(/protocol "temp-bus"/);
+    await findCodeWith(canvasElement, 'protocol "temp-bus"');
     const toggle = await canvas.findByRole("button", {
       name: "Diagram view unavailable",
     });
