@@ -26,11 +26,21 @@ use std::path::{Path, PathBuf};
 
 /// URL-hash payloads for every referenced project, keyed by fence `src`.
 pub type ProjectPayloads = HashMap<String, String>;
+/// Fallback `/book-example` host, used when `book.toml` sets no
 /// `[preprocessor.rhizz] book-example-base-url`.
 pub const DEFAULT_EXAMPLE_BASE_URL: &str = "https://rhizz.fly.dev";
 
-/// iframe height (px) when the fence sets no `height`.
+/// iframe height (px) for `rhizz-project` embeds without an explicit height.
 pub const DEFAULT_PROJECT_HEIGHT: u32 = 500;
+
+/// iframe height (px) for a single-file rhizz block embed: scales with
+/// the block length so short snippets don't swim in whitespace (roughly one
+/// code line plus room for the diagnostics and stats rows).
+#[must_use]
+pub fn block_embed_height(lines: usize) -> u32 {
+    let px = 200u32.saturating_add(u32::try_from(lines).unwrap_or(u32::MAX).saturating_mul(20));
+    px.clamp(280, 750)
+}
 
 /// Payload format version; must match `BOOK_PAYLOAD_VERSION` in
 /// `web/src/routes/book-example/payload.ts`.
@@ -350,8 +360,8 @@ pub fn render_project_html(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_PROJECT_HEIGHT, compile_project, encode_payload, load_project, parse_project_attrs,
-        render_project_html,
+        DEFAULT_PROJECT_HEIGHT, block_embed_height, compile_project, encode_payload, load_project,
+        parse_project_attrs, render_project_html,
     };
     use crate::project::ProjectAttrs;
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -516,6 +526,14 @@ mod tests {
         assert!(html.contains("loading=\"lazy\""));
         assert!(html.contains("allow=\"clipboard-write\""));
         assert!(html.contains("Caption &lt;with&gt; &quot;quotes&quot;"));
+    }
+
+    #[test]
+    fn block_embed_height_scales_with_lines_and_clamps() {
+        assert_eq!(block_embed_height(0), 280);
+        assert_eq!(block_embed_height(3), 280); // 200 + 3*20 = 260 -> floor
+        assert_eq!(block_embed_height(10), 400);
+        assert_eq!(block_embed_height(100), 750); // capped
     }
 
     #[test]
