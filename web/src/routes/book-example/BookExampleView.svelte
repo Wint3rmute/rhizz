@@ -118,6 +118,10 @@ function isDiagram(path: string | null): boolean {
     diagramFiles.some((file) => file.path === path);
 }
 
+// A lone file needs no navigation: hide the top bar and show its source,
+// like a plain ```rhizz block with a verdict underneath.
+let singleFile = $derived(files.length === 1);
+
 let selectedFile = $state<string | null>(null);
 let diagramView = $state(true);
 $effect(() => {
@@ -154,8 +158,10 @@ let selectedViews = $derived.by((): ViewDefinition[] => {
 });
 
 // Diagram files render as diagrams unless toggled to code; anything else
-// always renders as code.
-let showDiagram = $derived(diagramView && isDiagram(selectedFile));
+// always renders as code. A lone file always shows its source.
+let showDiagram = $derived(
+  !singleFile && diagramView && isDiagram(selectedFile),
+);
 
 let keyToIndex = $derived(buildKeyToIndexMap(components, systems));
 let boxes = $derived(
@@ -209,9 +215,10 @@ let toggleLabel = $derived(
 </script>
 
 <div class="flex flex-col w-full h-full bg-base-100 text-base-content">
-  <!-- Top bar: one tab per file (full paths) + view toggle + info. The
+  {#if !singleFile}
+    <!-- Top bar: one tab per file (full paths) + view toggle + info. The
        toggle is always rendered so the bar never shifts. -->
-  <div class="flex items-center gap-2 px-3 pt-2">
+    <div class="flex items-center gap-2 px-3 pt-2">
     <button
       class="btn btn-ghost btn-sm btn-square shrink-0"
       class:opacity-40={!isDiagram(selectedFile)}
@@ -252,7 +259,7 @@ let toggleLabel = $derived(
     {#if infoIcon}
       <div
         class="tooltip tooltip-left flex items-center ml-auto shrink-0"
-        data-tip="Rhizz book example — rendered locally in your browser, nothing is saved."
+        data-tip="Rhizz book example — rendered locally in your browser."
       >
         <svg
           width="16"
@@ -268,6 +275,7 @@ let toggleLabel = $derived(
       </div>
     {/if}
   </div>
+  {/if}
 
   <div class="flex-1 min-h-0 p-3">
     {#if showDiagram}
