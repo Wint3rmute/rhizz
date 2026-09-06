@@ -77,10 +77,3 @@ html:not(.js) {
   background: var(--quote-bg, #f4f6f7);
   border: none !important;
 }
-
-.rhizz-project-caption {
-  margin: 0.4rem 0 0;
-  font-size: 0.9em;
-  opacity: 0.75;
-  text-align: center;
-}

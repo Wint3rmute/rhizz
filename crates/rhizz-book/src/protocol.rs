@@ -738,8 +738,7 @@ mod tests {
         .expect("project pipeline should succeed when accepting");
         assert!(json_out.contains("rhizz-project"));
         assert!(json_out.contains("https://example.invalid/book-example#p="));
-        assert!(json_out.contains("rhizz-project-caption"));
-        assert!(json_out.contains("Caption"));
+        assert!(!json_out.contains("rhizz-project-caption"));
         assert!(lock_path.exists(), "lock should be written on first run");
 
         // The lock carries one project trace with two files.

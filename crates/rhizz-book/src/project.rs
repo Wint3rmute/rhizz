@@ -1,8 +1,8 @@
 //! `rhizz-project` embed directives: whole example projects in the book.
 //!
 //! An author embeds a project with a fenced block tagged
-//! `rhizz-project src="projects/demo"` (plus an optional `height` and an
-//! optional caption body), pointing at a directory under `<book>/src/`.
+//! `rhizz-project src="projects/demo"` (plus optional `height` and `open`
+//! attributes), pointing at a directory under `<book>/src/`.
 //!
 //! The preprocessor loads every `.hcl` file under `<book>/src/<src>/`,
 //! compiles the model sources for `book.lock` verification, and renders an
@@ -325,14 +325,9 @@ fn url_encode(value: &str) -> String {
 }
 
 /// Render the embed HTML for one project reference: an `<iframe>` into the
-/// deployed `/book-example` route plus the optional caption.
+/// deployed `/book-example` route.
 #[must_use]
-pub fn render_project_html(
-    base_url: &str,
-    attrs: &ProjectAttrs,
-    caption: Option<&str>,
-    payload: &str,
-) -> String {
+pub fn render_project_html(base_url: &str, attrs: &ProjectAttrs, payload: &str) -> String {
     let base = base_url.trim_end_matches('/');
     let query = attrs
         .open
@@ -346,13 +341,6 @@ pub fn render_project_html(
         attrs.height,
         crate::render::esc(&attrs.src)
     );
-    if let Some(caption) = caption {
-        let _ = write!(
-            out,
-            "<p class=\"rhizz-project-caption\">{}</p>",
-            crate::render::esc(caption)
-        );
-    }
     out.push_str("</div>");
     out
 }
@@ -508,25 +496,20 @@ mod tests {
     }
 
     #[test]
-    fn render_embeds_url_height_and_escaped_caption() {
+    fn render_embeds_url_and_height() {
         let attrs = ProjectAttrs {
             src: "projects/demo".to_owned(),
             height: 600,
             open: None,
         };
-        let html = render_project_html(
-            "https://rhizz.fly.dev/",
-            &attrs,
-            Some("Caption <with> \"quotes\""),
-            "PAYLOAD",
-        );
+        let html = render_project_html("https://rhizz.fly.dev/", &attrs, "PAYLOAD");
         assert!(html.contains("<div class=\"rhizz-project\">"));
         assert!(html.contains("<iframe class=\"rhizz-example\""));
         assert!(html.contains("src=\"https://rhizz.fly.dev/book-example#p=PAYLOAD\""));
         assert!(html.contains("height=\"600\""));
         assert!(html.contains("loading=\"lazy\""));
         assert!(html.contains("allow=\"clipboard-write\""));
-        assert!(html.contains("Caption &lt;with&gt; &quot;quotes&quot;"));
+        assert!(!html.contains("rhizz-project-caption"));
     }
 
     #[test]
@@ -544,7 +527,7 @@ mod tests {
             height: DEFAULT_PROJECT_HEIGHT,
             open: Some("diagrams/main.hcl".to_owned()),
         };
-        let html = render_project_html("https://rhizz.fly.dev", &attrs, None, "PAYLOAD");
+        let html = render_project_html("https://rhizz.fly.dev", &attrs, "PAYLOAD");
         assert!(html.contains(
             "src=\"https://rhizz.fly.dev/book-example?open=diagrams%2Fmain.hcl#p=PAYLOAD\""
         ));
@@ -554,7 +537,7 @@ mod tests {
             height: DEFAULT_PROJECT_HEIGHT,
             open: None,
         };
-        let html = render_project_html("https://rhizz.fly.dev", &plain, None, "PAYLOAD");
+        let html = render_project_html("https://rhizz.fly.dev", &plain, "PAYLOAD");
         assert!(html.contains("src=\"https://rhizz.fly.dev/book-example#p=PAYLOAD\""));
     }
 
@@ -565,7 +548,7 @@ mod tests {
             height: DEFAULT_PROJECT_HEIGHT,
             open: Some("a b+c~d.hcl".to_owned()),
         };
-        let html = render_project_html("https://example.invalid", &attrs, None, "P");
+        let html = render_project_html("https://example.invalid", &attrs, "P");
         assert!(html.contains("?open=a%20b%2Bc~d.hcl#p=P"));
     }
 }
