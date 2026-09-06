@@ -43,6 +43,9 @@ pub struct ProjectAttrs {
     pub src: String,
     /// iframe height in px.
     pub height: u32,
+    /// File opened by default in the embed (e.g. `system.hcl` for the code
+    /// tab, `diagrams/main.hcl` for a diagram). Must match a project file.
+    pub open: Option<String>,
 }
 
 /// Split an attribute string into whitespace-separated `key="value"` tokens,
@@ -73,7 +76,7 @@ fn split_attr_tokens(raw: &str) -> Result<Vec<String>> {
 }
 
 /// Parse the attribute string of a `rhizz-project` fence (`src` is required,
-/// `height` is optional).
+/// `height` and `open` are optional).
 ///
 /// # Errors
 ///
@@ -82,6 +85,7 @@ fn split_attr_tokens(raw: &str) -> Result<Vec<String>> {
 pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
     let mut src: Option<String> = None;
     let mut height = DEFAULT_PROJECT_HEIGHT;
+    let mut open: Option<String> = None;
     for token in split_attr_tokens(raw)? {
         let Some((key, quoted)) = token.split_once('=') else {
             bail!("malformed rhizz-project attribute {token:?}: expected key=\"value\"");
@@ -100,7 +104,13 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
                     bail!("invalid height \"0\": expected a positive pixel count");
                 }
             }
-            _ => bail!("unknown rhizz-project attribute {key:?} (expected src, height)"),
+            "open" => {
+                if value.is_empty() {
+                    bail!("invalid open \"\": expected a project file path");
+                }
+                open = Some(value.to_owned());
+            }
+            _ => bail!("unknown rhizz-project attribute {key:?} (expected src, height, open)"),
         }
     }
     let Some(src) = src else {
@@ -109,7 +119,7 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
     if src.is_empty() {
         bail!("rhizz-project src must not be empty");
     }
-    Ok(ProjectAttrs { src, height })
+    Ok(ProjectAttrs { src, height, open })
 }
 
 /// One `.hcl` file of a book project.
@@ -287,6 +297,23 @@ pub fn encode_payload(files: &[ProjectFile]) -> Result<String> {
     Ok(URL_SAFE_NO_PAD.encode(compressed))
 }
 
+/// Percent-encode a query value: everything but unreserved characters
+/// (`A-Z a-z 0-9 - _ . ~`) becomes `%XX` (non-ASCII per UTF-8 byte).
+fn url_encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut buf = [0; 4];
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '~') {
+            out.push(ch);
+        } else {
+            for byte in ch.encode_utf8(&mut buf).bytes() {
+                let _ = write!(out, "%{byte:02X}");
+            }
+        }
+    }
+    out
+}
+
 /// Render the embed HTML for one project reference: an `<iframe>` into the
 /// deployed `/book-example` route plus the optional caption.
 #[must_use]
@@ -297,7 +324,11 @@ pub fn render_project_html(
     payload: &str,
 ) -> String {
     let base = base_url.trim_end_matches('/');
-    let url = format!("{base}/book-example#p={payload}");
+    let query = attrs
+        .open
+        .as_deref()
+        .map_or_else(String::new, |open| format!("?open={}", url_encode(open)));
+    let url = format!("{base}/book-example{query}#p={payload}");
     let mut out = String::from("<div class=\"rhizz-project\">");
     let _ = write!(
         out,
@@ -352,10 +383,11 @@ mod tests {
 
     #[test]
     fn attrs_parse_full_form() {
-        let attrs =
-            parse_project_attrs("src=\"projects/demo\" height=\"600\"").expect("valid attrs");
+        let attrs = parse_project_attrs("src=\"projects/demo\" height=\"600\" open=\"system.hcl\"")
+            .expect("valid attrs");
         assert_eq!(attrs.src, "projects/demo");
         assert_eq!(attrs.height, 600);
+        assert_eq!(attrs.open.as_deref(), Some("system.hcl"));
     }
 
     #[test]
@@ -363,6 +395,7 @@ mod tests {
         let attrs = parse_project_attrs("src=projects/demo").expect("bare value");
         assert_eq!(attrs.src, "projects/demo");
         assert_eq!(attrs.height, DEFAULT_PROJECT_HEIGHT);
+        assert_eq!(attrs.open, None);
     }
 
     #[test]
@@ -374,6 +407,7 @@ mod tests {
         assert!(parse_project_attrs("src=\"a\" foo=\"bar\"").is_err());
         assert!(parse_project_attrs("src").is_err());
         assert!(parse_project_attrs("src=\"a").is_err());
+        assert!(parse_project_attrs("src=\"a\" open=\"\"").is_err());
     }
 
     #[test]
@@ -468,6 +502,7 @@ mod tests {
         let attrs = ProjectAttrs {
             src: "projects/demo".to_owned(),
             height: 600,
+            open: None,
         };
         let html = render_project_html(
             "https://rhizz.fly.dev/",
@@ -483,13 +518,34 @@ mod tests {
     }
 
     #[test]
-    fn render_omits_caption_paragraph_when_empty() {
+    fn render_appends_open_query_when_set() {
         let attrs = ProjectAttrs {
             src: "projects/demo".to_owned(),
             height: DEFAULT_PROJECT_HEIGHT,
+            open: Some("diagrams/main.hcl".to_owned()),
         };
         let html = render_project_html("https://rhizz.fly.dev", &attrs, None, "PAYLOAD");
-        assert!(!html.contains("rhizz-project-caption"));
-        assert!(html.contains("height=\"500\""));
+        assert!(html.contains(
+            "src=\"https://rhizz.fly.dev/book-example?open=diagrams%2Fmain.hcl#p=PAYLOAD\""
+        ));
+        // Without `open` there is no query string at all.
+        let plain = ProjectAttrs {
+            src: "projects/demo".to_owned(),
+            height: DEFAULT_PROJECT_HEIGHT,
+            open: None,
+        };
+        let html = render_project_html("https://rhizz.fly.dev", &plain, None, "PAYLOAD");
+        assert!(html.contains("src=\"https://rhizz.fly.dev/book-example#p=PAYLOAD\""));
+    }
+
+    #[test]
+    fn url_encode_leaves_unreserved_chars_alone() {
+        let attrs = ProjectAttrs {
+            src: "projects/demo".to_owned(),
+            height: DEFAULT_PROJECT_HEIGHT,
+            open: Some("a b+c~d.hcl".to_owned()),
+        };
+        let html = render_project_html("https://example.invalid", &attrs, None, "P");
+        assert!(html.contains("?open=a%20b%2Bc~d.hcl#p=P"));
     }
 }

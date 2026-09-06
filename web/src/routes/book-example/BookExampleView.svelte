@@ -17,9 +17,17 @@ import type { BookPayloadFile } from "./payload";
 
 type Tab = "diagram" | "code";
 
-let { files }: { files: BookPayloadFile[] } = $props();
+let { files, open = null }: { files: BookPayloadFile[]; open?: string | null } =
+  $props();
 
-let tab = $state<Tab>("diagram");
+// Resolve the `?open=` target: exact path first, then a bare filename
+// (e.g. `main.hcl` matches `diagrams/main.hcl`). A file that is both a
+// diagram and a source opens as a diagram.
+function matchOpen(candidates: string[], target: string | null): string | null {
+  if (target === null) return null;
+  if (candidates.includes(target)) return target;
+  return candidates.find((path) => path.split("/").pop() === target) ?? null;
+}
 const infoIcon = resolveIcon("circle-info");
 
 // Sources mirror `readProjectSources`: every `.hcl` file except diagram
@@ -101,7 +109,35 @@ let diagramFiles = $derived.by((): DiagramFile[] => {
   }
   return out;
 });
+let openDiagram = $derived(
+  matchOpen(
+    diagramFiles.map((file) => file.path),
+    open,
+  ),
+);
+let openCode = $derived(
+  matchOpen(
+    files.map((file) => file.path),
+    open,
+  ),
+);
+let tab = $state<Tab>("diagram");
 let selectedDiagram = $state<string | null>(null);
+
+// `open` selects the initial view only: apply once files are present, then
+// never again so later tab navigation is undisturbed.
+let openConsumed = $state(false);
+$effect(() => {
+  if (openConsumed || files.length === 0) return;
+  openConsumed = true;
+  if (openDiagram !== null) {
+    tab = "diagram";
+    selectedDiagram = openDiagram;
+  } else if (openCode !== null) {
+    tab = "code";
+    selectedCodeFile = openCode;
+  }
+});
 $effect(() => {
   if (
     selectedDiagram === null ||
