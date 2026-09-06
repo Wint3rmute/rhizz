@@ -13,6 +13,9 @@ station.
   same project, each with their own component tree
 - **Visual attributes** — the `gps` component sets `color`, `border`, and `font`
   to demonstrate how diagrams can be styled
+- **Annotations** — free-standing text notes on the main diagram, including one
+  with a non-default `scale` (font-size multiplier), showing how diagram editor
+  annotations are persisted as `annotation` blocks
 - **In-progress modeling** — the `ground-station-pc` component is non-leaf with
   no children and no description, triggering W001 and W004 warnings while still
   compiling cleanly
@@ -27,3 +30,4 @@ station.
 | ----------- | ------------------------------------------------------------------------ |
 | `system.hcl`  | Complete system model: project metadata, protocols, and both systems (`quadcopter`, `ground-control`) |
 | `views.hcl`   | Four view definitions with different filters                            |
+| `diagrams/main.hcl` | The main diagram's canvas layout, including free-standing annotation notes |
