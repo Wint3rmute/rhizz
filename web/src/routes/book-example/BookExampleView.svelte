@@ -195,21 +195,6 @@ let toggleLabel = $derived(
   <!-- Top bar: one tab per file (full paths) + view toggle + info. The
        toggle is always rendered so the bar never shifts. -->
   <div class="flex items-center gap-2 px-3 pt-2">
-    <div role="tablist" class="tabs tabs-box flex-nowrap overflow-x-auto">
-      {#each files as file (file.path)}
-        <button
-          role="tab"
-          class="tab whitespace-nowrap"
-          class:tab-active={file.path === selectedFile}
-          onclick={() => {
-            selectedFile = file.path;
-            diagramView = true;
-          }}
-        >
-          {file.path}
-        </button>
-      {/each}
-    </div>
     <button
       class="btn btn-ghost btn-sm btn-square shrink-0"
       class:opacity-40={!isDiagram(selectedFile)}
@@ -232,6 +217,21 @@ let toggleLabel = $derived(
         </svg>
       {/if}
     </button>
+    <div role="tablist" class="tabs tabs-box flex-nowrap overflow-x-auto">
+      {#each files as file (file.path)}
+        <button
+          role="tab"
+          class="tab whitespace-nowrap"
+          class:tab-active={file.path === selectedFile}
+          onclick={() => {
+            selectedFile = file.path;
+            diagramView = true;
+          }}
+        >
+          {file.path}
+        </button>
+      {/each}
+    </div>
     {#if infoIcon}
       <div
         class="tooltip tooltip-left flex items-center ml-auto shrink-0"
