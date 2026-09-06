@@ -347,6 +347,19 @@ export async function writeDiagramLayoutFile(
   const viewName = viewNameFromPath(path);
   const hclContent = layoutToHcl(layout, viewName, systemName);
   const annotationBlocks = (hclContent.match(/annotation \{/g) ?? []).length;
+  // Data-loss guard: if annotations exist in memory but the compiled wasm
+  // serializer emitted none, the wasm pkg (crates/rhizz-wasm/pkg, a gitignored
+  // build artifact) is stale and would silently erase annotations from disk.
+  // Abort the write loudly instead of overwriting the file.
+  const layoutAnnotationCount = layout.annotations?.length ?? 0;
+  if (layoutAnnotationCount > 0 && annotationBlocks === 0) {
+    throw new Error(
+      `[PERSIST] DATALOSS-GUARD: ${String(layoutAnnotationCount)} annotation(s) in memory ` +
+        `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
+        `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
+        `\`just build\`), then restart the dev server and hard-refresh the browser.`,
+    );
+  }
   console.log(
     `[PERSIST] write      END ${path}: ${String(hclContent.length)} bytes ` +
       `annotationBlocks=${String(annotationBlocks)}`,
