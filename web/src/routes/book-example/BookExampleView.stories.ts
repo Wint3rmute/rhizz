@@ -153,6 +153,25 @@ export const CopyCode: Story = {
   },
 };
 
+// A lone file hides the top bar entirely: just code plus diagnostics,
+// like a plain ```rhizz block.
+const singleFile: BookPayloadFile[] = DEMO_FILES.filter((file) =>
+  file.path === "system.hcl"
+);
+
+export const SingleFile: Story = {
+  args: {
+    files: singleFile,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await findCodeWith(canvasElement, 'protocol "temp-bus"');
+    await expect(canvas.queryByRole("tablist")).toBeNull();
+    await expect(canvas.queryByRole("tab")).toBeNull();
+    await canvas.findByText("Components");
+  },
+};
+
 // A bare filename also resolves (?open=main.hcl finds diagrams/main.hcl).
 export const OpenBareFilename: Story = {
   args: {
