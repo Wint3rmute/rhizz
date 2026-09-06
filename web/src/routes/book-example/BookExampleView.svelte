@@ -1,5 +1,6 @@
 <script lang="ts">
 import CompilationDiagnosticsOutline from "../../components/CompilationDiagnosticsOutline.svelte";
+import { resolveIcon } from "../../iconHelper";
 import {
   compile_system,
   parse_views,
@@ -14,11 +15,13 @@ import {
 import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
 import type { BookPayloadFile } from "./payload";
 
-type Tab = "diagram" | "code" | "diagnostics";
+type Tab = "diagram" | "code";
 
 let { files }: { files: BookPayloadFile[] } = $props();
 
 let tab = $state<Tab>("diagram");
+let verdictOpen = $state(false);
+const infoIcon = resolveIcon("circle-info");
 
 // Sources mirror `readProjectSources`: every `.hcl` file except diagram
 // layouts (those live under `diagrams/` and are parsed as views instead).
@@ -49,6 +52,39 @@ let diagnostics = $derived(output?.diagnostics() ?? []);
 let score = $derived(model?.score());
 let errorCount = $derived(output?.error_count() ?? 0);
 let warningCount = $derived(output?.warning_count() ?? 0);
+
+function plural(count: number, word: string): string {
+  return `${String(count)} ${word}${count === 1 ? "" : "s"}`;
+}
+
+// Book-panel-style verdict summary, pinned to the bottom of the embed.
+let verdict = $derived.by(() => {
+  if (compileCrashed) {
+    return {
+      kind: "error" as const,
+      text: "The project failed to compile in the browser.",
+    };
+  }
+  if (errorCount > 0) {
+    return {
+      kind: "error" as const,
+      text: `✗ ${plural(errorCount, "error")}, ${
+        plural(warningCount, "warning")
+      } — no score`,
+    };
+  }
+  if (warningCount > 0) {
+    const percent = score?.overall_percentage;
+    const tail = percent === undefined
+      ? "no completion score produced"
+      : `model completes at ${percent.toFixed(1)}%`;
+    return {
+      kind: "warn" as const,
+      text: `⚠ ${plural(warningCount, "warning")} — ${tail}`,
+    };
+  }
+  return { kind: "ok" as const, text: "✓ No errors, no warnings" };
+});
 
 interface DiagramFile {
   path: string;
@@ -122,6 +158,7 @@ let codeContent = $derived(
 </script>
 
 <div class="flex flex-col w-full h-full bg-base-100 text-base-content">
+  <!-- Top bar: tabs + score + info only, so its height never shifts. -->
   <div class="flex items-center gap-2 px-3 pt-2">
     <div role="tablist" class="tabs tabs-box">
       <button
@@ -144,23 +181,35 @@ let codeContent = $derived(
       >
         Code
       </button>
-      <button
-        role="tab"
-        class="tab"
-        class:tab-active={tab === "diagnostics"}
-        onclick={() => {
-          tab = "diagnostics";
-        }}
-      >
-        Errors / Warnings
-        {#if errorCount + warningCount > 0}
-          <span class="badge badge-sm ml-1" class:badge-error={errorCount > 0} class:badge-warning={errorCount === 0}>
-            {errorCount + warningCount}
-          </span>
-        {/if}
-      </button>
     </div>
-    {#if tab === "diagram" && diagramFiles.length > 1}
+    {#if score !== undefined}
+      <span class="ml-auto text-sm text-base-content/60">
+        Completeness {score.overall_percentage.toFixed(1)}%
+      </span>
+    {/if}
+    {#if infoIcon}
+      <div
+        class="tooltip tooltip-left flex items-center"
+        data-tip="Rhizz book example — rendered locally in your browser, nothing is saved."
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 {infoIcon.width} {infoIcon.height}"
+          fill="currentColor"
+          class="text-base-content/50"
+          role="img"
+          aria-label="About this embed"
+        >
+          <path d={infoIcon.svgPath} />
+        </svg>
+      </div>
+    {/if}
+  </div>
+
+  <!-- File selectors live on their own row so the top bar never moves. -->
+  {#if tab === "diagram" && diagramFiles.length > 1}
+    <div class="px-3 pt-2">
       <select
         class="select select-sm select-bordered"
         aria-label="Select diagram"
@@ -170,8 +219,10 @@ let codeContent = $derived(
           <option value={file.path}>{file.path}</option>
         {/each}
       </select>
-    {/if}
-    {#if tab === "code" && files.length > 1}
+    </div>
+  {/if}
+  {#if tab === "code" && files.length > 1}
+    <div class="px-3 pt-2">
       <select
         class="select select-sm select-bordered"
         aria-label="Select file"
@@ -181,20 +232,14 @@ let codeContent = $derived(
           <option value={file.path}>{file.path}</option>
         {/each}
       </select>
-    {/if}
-    {#if score !== undefined}
-      <span class="ml-auto text-sm text-base-content/60">
-        Completeness {score.overall_percentage.toFixed(1)}%
-      </span>
-    {/if}
-  </div>
+    </div>
+  {/if}
 
   <div class="flex-1 min-h-0 p-3">
     {#if tab === "diagram"}
       {#if compileCrashed}
         <div role="alert" class="alert alert-error">
-          The project failed to compile in the browser. See the Errors /
-          Warnings tab.
+          The project failed to compile in the browser — details below.
         </div>
       {:else if Object.keys(boxes).length === 0}
         <div class="flex h-full items-center justify-center text-sm text-base-content/60">
@@ -203,18 +248,35 @@ let codeContent = $derived(
       {:else}
         <DiagramStaticView {components} {connections} {boxes} {annotations} />
       {/if}
-    {:else if tab === "code"}
-      <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm">{codeContent}</pre>
     {:else}
-      <div class="h-full overflow-auto">
-        {#if compileCrashed}
-          <div role="alert" class="alert alert-error mb-3">
-            The project failed to compile in the browser.
-          </div>
-        {:else}
-          <CompilationDiagnosticsOutline {diagnostics} />
-        {/if}
-      </div>
+      <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm">{codeContent}</pre>
     {/if}
+  </div>
+
+  {#if verdictOpen}
+    <div class="max-h-48 overflow-auto px-3">
+      {#if compileCrashed}
+        <div role="alert" class="alert alert-error mb-2">
+          The project failed to compile in the browser.
+        </div>
+      {:else}
+        <CompilationDiagnosticsOutline {diagnostics} />
+      {/if}
+    </div>
+  {/if}
+
+  <div class="p-3 pt-0">
+    <button
+      class="alert w-full py-2 text-sm"
+      class:alert-error={verdict.kind === "error"}
+      class:alert-warning={verdict.kind === "warn"}
+      class:alert-success={verdict.kind === "ok"}
+      onclick={() => {
+        verdictOpen = !verdictOpen;
+      }}
+      aria-expanded={verdictOpen}
+    >
+      <span>{verdict.text}</span>
+    </button>
   </div>
 </div>

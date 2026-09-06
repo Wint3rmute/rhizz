@@ -39,15 +39,28 @@ export const CodeTab: Story = {
   },
 };
 
-// The clean demo project reports no diagnostics.
-export const DiagnosticsTab: Story = {
+// The verdict footer reports a clean compile at the bottom of the embed.
+// (The alert's full text runs together across <br/> elements, so the
+// assertion uses a regex.)
+export const VerdictFooter: Story = {
+  args: {
+    files: DEMO_FILES,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText(/No errors, no warnings/);
+  },
+};
+
+// Clicking the footer expands the full diagnostics outline.
+export const VerdictExpanded: Story = {
   args: {
     files: DEMO_FILES,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
-      await canvas.findByRole("tab", { name: /Errors \/ Warnings/ }),
+      await canvas.findByText(/No errors, no warnings/),
     );
     await canvas.findByText(/Well Done!/);
   },
