@@ -45,9 +45,11 @@ book:
 
 # Regenerates book/book.lock from the current compiler output.
 # Review the per-block diff it prints before committing.
+# NOTE: no `sh -lc` wrapper here (unlike the web recipes below) — a login
+# shell resets PATH and loses the nix dev shell, where mdbook lives.
 book-accept:
     {{run}} cargo build --quiet --bin rhizz-book
-    {{run}} sh -lc 'BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book'
+    {{run}} env BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev:

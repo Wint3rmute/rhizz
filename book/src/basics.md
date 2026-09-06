@@ -169,3 +169,12 @@ won't shine for such a trivial example.
 In the upcoming chapters, you'll see how Rhizz can model complex, nested and
 multi-dimentional systems, which cannot be grasped without looking at them from
 multiple different angles.
+
+## A live project
+
+Static code blocks show one angle at a time. The project below is embedded
+live: browse its diagram, read its source files, and inspect the compiler's
+verdict — all without leaving the book.
+
+```rhizz-project src="projects/demo" open="diagrams/main.hcl"
+```

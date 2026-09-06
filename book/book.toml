@@ -7,11 +7,15 @@ language = "en"
 build-dir = "target-mdbook"
 
 [output.html]
-# theme/highlight.js overrides mdBook's default highlight.js bundle with the
-# HCL/Terraform grammar; ```hcl blocks are emitted by the rhizz preprocessor.
+# Code highlighting uses mdBook's stock highlight.js bundle.
 additional-css = ["css/rhizz.css"]
+# Auto-sizes rhizz-project iframes to their content (see js/rhizz-embed.js).
+additional-js = ["js/rhizz-embed.js"]
 
 [preprocessor.rhizz]
 # cargo walks up from book/ to the workspace root, so no wrapper is needed.
 command = "cargo run --release --quiet --bin rhizz-book"
 renderer = ["html"]
+# Host serving the /book-example route that rhizz-project embeds iframe into.
+# book-example-base-url = "https://rhizz.fly.dev"
+book-example-base-url  = "http://localhost:5173"

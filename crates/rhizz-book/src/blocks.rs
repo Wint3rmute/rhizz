@@ -7,7 +7,8 @@
 
 use sha2::{Digest, Sha256};
 
-/// One segment of a markdown chapter: either plain text or a `` ```rhizz `` block.
+/// One segment of a markdown chapter: plain text, a `` ```rhizz `` block, or
+/// a `` ```rhizz-project `` embed directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Segment {
     /// Plain markdown lines.
@@ -17,6 +18,15 @@ pub enum Segment {
         /// Attributes parsed from the info string (e.g. `ignore`).
         attrs: Vec<String>,
         /// Body lines between the fences (the closing fence is never included).
+        body: Vec<String>,
+    },
+    /// A rhizz-project embed directive. `attrs` is the raw attribute string
+    /// after the `rhizz-project` tag (parsed by `project::parse_project_attrs`);
+    /// `body` holds the fence body lines, which are currently ignored.
+    ProjectBlock {
+        /// Raw attribute string (e.g. `src="projects/demo" height="600"`).
+        attrs: String,
+        /// Fence body lines (currently ignored).
         body: Vec<String>,
     },
 }
@@ -29,6 +39,25 @@ pub fn split_lines(content: &str) -> Vec<String> {
         lines.pop();
     }
     lines
+}
+
+/// Detect an opening `` ```rhizz-project `` fence; returns the raw attribute
+/// string that follows the tag (e.g. `src="projects/demo"`).
+///
+/// Must be checked before [`fence_open_attrs`]: every project fence also
+/// matches the plain `rhizz` prefix.
+#[must_use]
+pub fn fence_project_attrs(line: &str) -> Option<&str> {
+    let line = line.trim_start_matches([' ', '\t']);
+    let rest = line.strip_prefix("```")?;
+    let rest = rest.trim_start_matches([' ', '\t']);
+    let rest = rest.strip_prefix("rhizz-project")?;
+    // Require a boundary after the tag so `rhizz-projects` (or similar)
+    // does not match.
+    match rest.chars().next() {
+        None | Some(' ' | '\t') => Some(rest.trim_start_matches([' ', '\t'])),
+        _ => None,
+    }
 }
 
 /// Detect an opening `` ```rhizz `` fence; returns the attribute suffix that
@@ -63,6 +92,26 @@ pub fn parse_attrs(raw: &str) -> Vec<String> {
         .collect()
 }
 
+/// Collect fence body lines starting after the opening fence at `index`;
+/// returns the body and the index to continue scanning from (past the
+/// closing fence, or the end when unterminated).
+fn collect_body(lines: &[String], index: usize) -> (Vec<String>, usize) {
+    let mut body = Vec::new();
+    let mut index = index.saturating_add(1);
+    while let Some(body_line) = lines.get(index) {
+        if is_fence_close(body_line) {
+            break;
+        }
+        body.push(body_line.clone());
+        index = index.saturating_add(1);
+    }
+    // Skip the closing fence when one was found.
+    if lines.get(index).is_some() {
+        index = index.saturating_add(1);
+    }
+    (body, index)
+}
+
 /// Split chapter lines into text and block segments, preserving order.
 #[must_use]
 pub fn parse_blocks(lines: &[String]) -> Vec<Segment> {
@@ -71,25 +120,26 @@ pub fn parse_blocks(lines: &[String]) -> Vec<Segment> {
 
     let mut index = 0;
     while let Some(line) = lines.get(index) {
-        if let Some(attrs_raw) = fence_open_attrs(line) {
+        if let Some(attrs_raw) = fence_project_attrs(line) {
             if !text.is_empty() {
                 segments.push(Segment::Text(std::mem::take(&mut text)));
             }
-            let attrs = parse_attrs(attrs_raw);
-            let mut body = Vec::new();
-            index = index.saturating_add(1);
-            while let Some(body_line) = lines.get(index) {
-                if is_fence_close(body_line) {
-                    break;
-                }
-                body.push(body_line.clone());
-                index = index.saturating_add(1);
+            let (body, next) = collect_body(lines, index);
+            index = next;
+            segments.push(Segment::ProjectBlock {
+                attrs: attrs_raw.to_owned(),
+                body,
+            });
+        } else if let Some(attrs_raw) = fence_open_attrs(line) {
+            if !text.is_empty() {
+                segments.push(Segment::Text(std::mem::take(&mut text)));
             }
-            // Skip the closing fence when one was found.
-            if lines.get(index).is_some() {
-                index = index.saturating_add(1);
-            }
-            segments.push(Segment::Block { attrs, body });
+            let (body, next) = collect_body(lines, index);
+            index = next;
+            segments.push(Segment::Block {
+                attrs: parse_attrs(attrs_raw),
+                body,
+            });
         } else {
             text.push(line.clone());
             index = index.saturating_add(1);
@@ -111,8 +161,8 @@ pub fn body_hash(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        Segment, body_hash, fence_open_attrs, is_fence_close, parse_attrs, parse_blocks,
-        split_lines,
+        Segment, body_hash, fence_open_attrs, fence_project_attrs, is_fence_close, parse_attrs,
+        parse_blocks, split_lines,
     };
 
     #[test]
@@ -192,6 +242,47 @@ mod tests {
         } else {
             panic!("expected second segment to be a block");
         }
+    }
+
+    #[test]
+    fn project_fence_open_matches_tag_with_attrs() {
+        assert_eq!(
+            fence_project_attrs("```rhizz-project src=\"projects/demo\""),
+            Some("src=\"projects/demo\"")
+        );
+        assert_eq!(fence_project_attrs("  ```rhizz-project"), Some(""));
+        assert_eq!(fence_project_attrs("```rhizz"), None);
+        assert_eq!(fence_project_attrs("```rhizz,ignore"), None);
+        // A longer tag sharing the prefix must not match.
+        assert_eq!(fence_project_attrs("```rhizz-projects"), None);
+    }
+
+    #[test]
+    fn parse_blocks_takes_project_fence_before_plain_rhizz() {
+        let content = "```rhizz-project src=\"projects/demo\"\nCaption here\n```\n";
+        let segments = parse_blocks(&split_lines(content));
+        assert_eq!(segments.len(), 1);
+        assert_eq!(
+            segments[0],
+            Segment::ProjectBlock {
+                attrs: "src=\"projects/demo\"".to_owned(),
+                body: vec!["Caption here".to_owned()],
+            }
+        );
+    }
+
+    #[test]
+    fn parse_blocks_project_fence_may_have_empty_body() {
+        let content = "```rhizz-project src=\"projects/demo\"\n```\n";
+        let segments = parse_blocks(&split_lines(content));
+        assert_eq!(segments.len(), 1);
+        assert_eq!(
+            segments[0],
+            Segment::ProjectBlock {
+                attrs: "src=\"projects/demo\"".to_owned(),
+                body: Vec::new(),
+            }
+        );
     }
 
     #[test]
