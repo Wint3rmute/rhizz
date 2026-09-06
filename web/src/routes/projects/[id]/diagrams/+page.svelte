@@ -54,6 +54,7 @@ import {
   type LayoutNode,
 } from "./forceLayout";
 import {
+  annotationBounds,
   boxContains,
   clampWithin,
   computeDirectionalHandles,
@@ -2255,18 +2256,12 @@ let marqueeCandidates: Set<number> = $derived.by(() => {
 
 // Hit-box of an annotation, matching the geometry used for rendering and
 // click hit-testing exactly (so marquee selection, the highlight state and
-// the visible box all agree).
+// the visible box all agree). Delegates to the shared annotationBounds so
+// "zoom to fill" and the static renderers can't drift from hit-testing.
 function annotationHitBox(
   ann: Annotation,
 ): { x: number; y: number; width: number; height: number } {
-  const scale = ann.scale ?? 1;
-  const lines = ann.text.split("\n");
-  const width = Math.max(
-    ...lines.map((l) => l.length * 7.5 * scale + 14),
-    40,
-  );
-  const height = lines.length * 16 * scale + 8;
-  return { x: ann.x - 4, y: ann.y - 16 * scale, width, height };
+  return annotationBounds(ann);
 }
 
 // Annotations caught by the current marquee box (live preview), parallel to
@@ -2287,15 +2282,18 @@ let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
 // "Zoom to Fill" is used.
 const ZOOM_TO_FILL_FRACTION = 0.8;
 
-// Zooms and pans so every currently-placed node's combined bounding box
-// fills ZOOM_TO_FILL_FRACTION of the viewport, centered. No-op if nothing
-// is placed on canvas.
+// Zooms and pans so every currently-placed node's AND annotation's combined
+// bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
+// annotations far from the node cluster are never panned out of view.
+// No-op if nothing is placed on canvas.
 function zoomToFill() {
-  const boxes = renderOrder
+  const nodeBoxes = renderOrder
     .map((index) => nodeBox(index))
     .filter(
       (box): box is NonNullable<ReturnType<typeof nodeBox>> => box !== null,
     );
+  const annotationBoxes = annotations.map(annotationBounds);
+  const boxes = [...nodeBoxes, ...annotationBoxes];
   if (boxes.length === 0) return;
   const bounds = unionBox(boxes);
 
