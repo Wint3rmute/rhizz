@@ -291,20 +291,37 @@ export async function readDiagramLayoutFile(
     raw = await fs.readFile(path);
   } catch (error) {
     if (error instanceof VfsError && error.code === "ENOENT") {
+      console.log(`[PERSIST] read       ${path}: ENOENT -> empty layout (no file yet)`);
       return emptyDiagramLayout();
     }
     throw error;
   }
 
+  console.log(
+    `[PERSIST] read       ${path}: ${String(raw.length)} bytes ` +
+      `hasAnnotationBlock=${String(raw.includes("annotation {"))}`,
+  );
+
   try {
     const views = parse_views(raw);
     if (Array.isArray(views) && views.length > 0) {
-      return viewsToLayout(views);
+      const layout = viewsToLayout(views);
+      const parsedAnnotations = layout.annotations ?? [];
+      console.log(
+        `[PERSIST] parse      ${path}: ok views=${String(views.length)} ` +
+          `annotations=${String(parsedAnnotations.length)} ` +
+          `texts=${JSON.stringify(parsedAnnotations.map((a) => a.text))}`,
+      );
+      return layout;
     }
-  } catch {
-    // Malformed HCL content
+  } catch (err) {
+    console.error(
+      `[PERSIST] parse      ${path}: FAILED — falling back to EMPTY layout!`,
+      err,
+    );
   }
 
+  console.log(`[PERSIST] parse      ${path}: no usable views -> empty layout`);
   return emptyDiagramLayout();
 }
 
@@ -317,12 +334,23 @@ export async function writeDiagramLayoutFile(
   layout: DiagramLayout,
   systemName = "",
 ): Promise<void> {
+  console.log(
+    `[PERSIST] write      START ${path}: ` +
+      `checked=${String(Object.keys(layout.checked).length)} ` +
+      `annotations=${String(layout.annotations?.length ?? 0)} ` +
+      `texts=${JSON.stringify((layout.annotations ?? []).map((a) => a.text))}`,
+  );
   const lastSlash = path.lastIndexOf("/");
   const dir = lastSlash !== -1 ? path.slice(0, lastSlash) : DIAGRAM_LAYOUT_DIR;
   await fs.mkdir(dir, { recursive: true });
 
   const viewName = viewNameFromPath(path);
   const hclContent = layoutToHcl(layout, viewName, systemName);
+  const annotationBlocks = (hclContent.match(/annotation \{/g) ?? []).length;
+  console.log(
+    `[PERSIST] write      END ${path}: ${String(hclContent.length)} bytes ` +
+      `annotationBlocks=${String(annotationBlocks)}`,
+  );
   await fs.writeFile(path, hclContent);
 }
 
