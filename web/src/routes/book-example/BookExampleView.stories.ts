@@ -218,3 +218,25 @@ export const ToggleDisabledForSource: Story = {
     await expect(toggle.getAttribute("disabled")).not.toBeNull();
   },
 };
+
+// The top-right theme switcher flips the applied theme and swaps its
+// icon. Note: assertions stay on the button itself — the storybook runner
+// forces its own data-theme on the document, so document-level assertions
+// would measure the harness, not the component.
+export const ThemeSwitcher: Story = {
+  args: {
+    files: DEMO_FILES,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = await canvas.findByRole("button", {
+      name: /Switch to (light|dark) theme/,
+    });
+    const before = toggle.getAttribute("aria-label");
+    await userEvent.click(toggle);
+    const flipped = before === "Switch to dark theme"
+      ? "Switch to light theme"
+      : "Switch to dark theme";
+    await canvas.findByRole("button", { name: flipped });
+  },
+};
