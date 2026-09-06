@@ -291,7 +291,9 @@ export async function readDiagramLayoutFile(
     raw = await fs.readFile(path);
   } catch (error) {
     if (error instanceof VfsError && error.code === "ENOENT") {
-      console.log(`[PERSIST] read       ${path}: ENOENT -> empty layout (no file yet)`);
+      console.log(
+        `[PERSIST] read       ${path}: ENOENT -> empty layout (no file yet)`,
+      );
       return emptyDiagramLayout();
     }
     throw error;
@@ -354,7 +356,9 @@ export async function writeDiagramLayoutFile(
   const layoutAnnotationCount = layout.annotations?.length ?? 0;
   if (layoutAnnotationCount > 0 && annotationBlocks === 0) {
     throw new Error(
-      `[PERSIST] DATALOSS-GUARD: ${String(layoutAnnotationCount)} annotation(s) in memory ` +
+      `[PERSIST] DATALOSS-GUARD: ${
+        String(layoutAnnotationCount)
+      } annotation(s) in memory ` +
         `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
         `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
         `\`just build\`), then restart the dev server and hard-refresh the browser.`,

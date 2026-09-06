@@ -327,7 +327,10 @@ fn annotations_round_trip_through_wasm_boundary() {
     };
     let js = serde_wasm_bindgen::to_value(&vec![view]).expect("to_value should succeed");
     let hcl = rhizz_wasm::serialize_views(js).expect("serialize_views should succeed");
-    assert!(hcl.contains("annotation {"), "annotation block must be serialized: {hcl}");
+    assert!(
+        hcl.contains("annotation {"),
+        "annotation block must be serialized: {hcl}"
+    );
     assert!(hcl.contains("New note"));
     assert!(hcl.contains("scale = 1.5"));
 
@@ -337,5 +340,6 @@ fn annotations_round_trip_through_wasm_boundary() {
     assert_eq!(reparsed.len(), 1);
     assert_eq!(reparsed[0].annotations.len(), 1);
     assert_eq!(reparsed[0].annotations[0].text, "New note");
-    assert_eq!(reparsed[0].annotations[0].x, 12.5);
+    assert!((reparsed[0].annotations[0].x - 12.5).abs() < 1e-9);
+    assert!((reparsed[0].annotations[0].scale - 1.5).abs() < 1e-9);
 }
