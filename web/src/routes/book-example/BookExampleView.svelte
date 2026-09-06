@@ -53,6 +53,36 @@ let score = $derived(model?.score());
 let errorCount = $derived(output?.error_count() ?? 0);
 let warningCount = $derived(output?.warning_count() ?? 0);
 
+interface StatRow {
+  label: string;
+  complete: number;
+  total: number;
+}
+
+// Book-panel-style completion stats (rhizz-stats): per-category
+// complete/total plus the overall percentage. Absent when compilation
+// produced no model — mirroring the book, which omits the score then.
+let stats = $derived.by((): { rows: StatRow[]; overall: number } | null => {
+  const report = score;
+  if (report === undefined) return null;
+  const rows: StatRow[] = [];
+  for (
+    const [label, cat] of [
+      ["Components", report.components],
+      ["Ports", report.ports],
+      ["Connections", report.connections],
+      ["Messages", report.messages],
+    ] as const
+  ) {
+    rows.push({
+      label,
+      complete: cat.complete,
+      total: cat.complete + cat.partial + cat.incomplete,
+    });
+  }
+  return { rows, overall: report.overall_percentage };
+});
+
 function plural(count: number, word: string): string {
   return `${String(count)} ${word}${count === 1 ? "" : "s"}`;
 }
@@ -182,14 +212,9 @@ let codeContent = $derived(
         Code
       </button>
     </div>
-    {#if score !== undefined}
-      <span class="ml-auto text-sm text-base-content/60">
-        Completeness {score.overall_percentage.toFixed(1)}%
-      </span>
-    {/if}
     {#if infoIcon}
       <div
-        class="tooltip tooltip-left flex items-center"
+        class="tooltip tooltip-left flex items-center ml-auto"
         data-tip="Rhizz book example — rendered locally in your browser, nothing is saved."
       >
         <svg
@@ -278,5 +303,19 @@ let codeContent = $derived(
     >
       <span>{verdict.text}</span>
     </button>
+    {#if stats}
+      <ul class="flex flex-wrap gap-x-5 gap-y-1 px-1 pt-2 text-sm">
+        {#each stats.rows as row (row.label)}
+          <li>
+            <span class="opacity-70">{row.label}</span>
+            <b class="ml-1 tabular-nums">{row.complete}/{row.total}</b>
+          </li>
+        {/each}
+        <li>
+          <span class="opacity-70">Overall</span>
+          <b class="ml-1 tabular-nums">{stats.overall.toFixed(1)}%</b>
+        </li>
+      </ul>
+    {/if}
   </div>
 </div>

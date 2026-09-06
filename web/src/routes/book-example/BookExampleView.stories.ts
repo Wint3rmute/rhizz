@@ -39,9 +39,9 @@ export const CodeTab: Story = {
   },
 };
 
-// The verdict footer reports a clean compile at the bottom of the embed.
-// (The alert's full text runs together across <br/> elements, so the
-// assertion uses a regex.)
+// The verdict footer reports a clean compile at the bottom of the embed,
+// with the book-style completion stats underneath.
+// (Alert text runs together across <br/> elements, so assertions use regex.)
 export const VerdictFooter: Story = {
   args: {
     files: DEMO_FILES,
@@ -49,6 +49,8 @@ export const VerdictFooter: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByText(/No errors, no warnings/);
+    await canvas.findByText("Components");
+    await canvas.findByText(/100\.0%/);
   },
 };
 
