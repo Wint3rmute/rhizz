@@ -185,6 +185,24 @@ html:not(.js) {
   color: var(--rhizz-neutral-fg);
 }
 
+/* ── interactive project embeds (rhizz-project) ─────────────────────── */
+
+.rhizz-project {
+  margin: 0.9rem 0 1.4rem;
+}
+
+.rhizz-project iframe {
+  display: block;
+  background: var(--quote-bg, #f4f6f7);
+}
+
+.rhizz-project-caption {
+  margin: 0.4rem 0 0;
+  font-size: 0.9em;
+  opacity: 0.75;
+  text-align: center;
+}
+
 /* ── completion score row ──────────────────────────────────────────── */
 
 .rhizz-stats {

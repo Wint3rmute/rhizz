@@ -325,5 +325,50 @@
     }
   ],
   "format": 1,
+  "projects": [
+    {
+      "chapter": "basics.md",
+      "files": [
+        {
+          "path": "diagrams/main.hcl",
+          "sha256": "8bd9e83b3d146f1cd8d0bfe076a4a2d7a06a2df0c3794df805e872b25a7e65c2"
+        },
+        {
+          "path": "system.hcl",
+          "sha256": "f8e41a5ad0d83ec1c6eb6f65071058372b45da004ccd40740fc1be38ecd2a7f0"
+        }
+      ],
+      "input_sha256": "a556ad1f3f74568f2530c5a15428edb982caca030b654223cd5f2d33c7ecc7e8",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 4,
+            "total": 4
+          },
+          "connections": {
+            "complete": 1,
+            "total": 1
+          },
+          "messages": {
+            "complete": 1,
+            "total": 1
+          },
+          "overall": {
+            "complete": 10,
+            "percent": 100.0,
+            "total": 10
+          },
+          "ports": {
+            "complete": 4,
+            "total": 4
+          },
+          "system": "book-demo"
+        },
+        "warnings": []
+      },
+      "src": "projects/demo"
+    }
+  ],
   "rhizz_version": "rhizz 0.1.0"
 }

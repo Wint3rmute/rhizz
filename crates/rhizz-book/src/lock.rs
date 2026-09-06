@@ -33,6 +33,31 @@ pub struct LockEntry {
     pub output: NormalizedOutput,
 }
 
+/// One traced `` ```rhizz-project `` embed. Field order is alphabetical for
+/// stable, readable lock diffs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectLockEntry {
+    /// Chapter path the fence lives in (`path`, else `source_path`, else `name`).
+    pub chapter: String,
+    /// Locked files (path + content hash each; contents live in `book/src/`).
+    pub files: Vec<ProjectFileEntry>,
+    /// SHA-256 hex digest over the whole file set — the input key.
+    pub input_sha256: String,
+    /// Normalized compiler verdict for the project sources.
+    pub output: NormalizedOutput,
+    /// Project directory as written in the fence (relative to `book/src/`).
+    pub src: String,
+}
+
+/// One locked file of a book project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectFileEntry {
+    /// POSIX-style path relative to the project dir.
+    pub path: String,
+    /// SHA-256 hex digest of the file content.
+    pub sha256: String,
+}
+
 /// The whole lock payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LockPayload {
@@ -40,6 +65,10 @@ pub struct LockPayload {
     pub entries: Vec<LockEntry>,
     /// Lock format version; bumped when the entry schema changes.
     pub format: u64,
+    /// Per-project traces, sorted by (chapter, src). Absent (defaulting to
+    /// empty) in locks written before project embeds existed.
+    #[serde(default)]
+    pub projects: Vec<ProjectLockEntry>,
     /// Compiler version that produced the entries (metadata only).
     pub rhizz_version: String,
 }
@@ -145,6 +174,31 @@ pub enum Diff {
         /// Verdict the compiler produced now.
         new: Box<NormalizedOutput>,
     },
+    /// A project embed exists now that the lock does not know.
+    NewProject {
+        /// Chapter path the fence lives in.
+        chapter: String,
+        /// Project directory as written in the fence.
+        src: String,
+    },
+    /// A locked project embed no longer exists in the book.
+    RemovedProject {
+        /// Chapter path the fence lived in.
+        chapter: String,
+        /// Project directory as written in the fence.
+        src: String,
+    },
+    /// The same project compiled to a different verdict than the lock stores.
+    ProjectOutputChanged {
+        /// Chapter path the fence lives in.
+        chapter: String,
+        /// Project directory as written in the fence.
+        src: String,
+        /// Verdict recorded in the lock.
+        old: Box<NormalizedOutput>,
+        /// Verdict the compiler produced now.
+        new: Box<NormalizedOutput>,
+    },
     /// The lock file predates the current schema.
     FormatMismatch {
         /// Format version found in the lock.
@@ -216,6 +270,31 @@ pub fn format_diff(diff: &Diff, color: bool) -> String {
         Diff::FormatMismatch { found } => format!(
             "  - book.lock uses lock format {found}, expected {LOCK_FORMAT} (regenerate with BOOKLOCK_ACCEPT_CHANGES=1)"
         ),
+        Diff::NewProject { chapter, src } => {
+            format!("  - new project '{src}' in '{chapter}' is not present in book.lock")
+        }
+        Diff::RemovedProject { chapter, src } => format!(
+            "  - project '{src}' in '{chapter}' was removed from the book but is still present in book.lock"
+        ),
+        Diff::ProjectOutputChanged {
+            chapter,
+            src,
+            old,
+            new,
+        } => {
+            let header = format!("  - output changed for project '{src}' in '{chapter}':");
+            let body = verdict_diff(old, new)
+                .lines()
+                .map(|line| format!("    {line}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let body = if color {
+                colorize_unified_diff(&body)
+            } else {
+                body
+            };
+            format!("{header}\n{body}")
+        }
         Diff::OutputChanged {
             chapter,
             hash,
@@ -241,7 +320,7 @@ pub fn format_diff(diff: &Diff, color: bool) -> String {
     }
 }
 
-/// Compare the current block traces against the existing lock.
+/// Compare the current block and project traces against the existing lock.
 ///
 /// Returns (diffs, notes): diffs abort the build (unless accepting changes);
 /// notes are informational metadata drift (version changed, outputs match).
@@ -249,6 +328,7 @@ pub fn format_diff(diff: &Diff, color: bool) -> String {
 pub fn compare_lock(
     lock: &LockPayload,
     blocks: &[LockEntry],
+    projects: &[ProjectLockEntry],
     current_version: &str,
 ) -> (Vec<Diff>, Vec<String>) {
     let mut diffs = Vec::new();
@@ -294,6 +374,41 @@ pub fn compare_lock(
         }
     }
 
+    let locked_projects: HashSet<(&str, &str, &str)> =
+        lock.projects.iter().map(project_key).collect();
+    for project in projects {
+        if !locked_projects.contains(&project_key(project)) {
+            diffs.push(Diff::NewProject {
+                chapter: project.chapter.clone(),
+                src: project.src.clone(),
+            });
+            continue;
+        }
+        if let Some(previous) = lock
+            .projects
+            .iter()
+            .find(|entry| project_key(entry) == project_key(project))
+            && previous.output != project.output
+        {
+            diffs.push(Diff::ProjectOutputChanged {
+                chapter: project.chapter.clone(),
+                src: project.src.clone(),
+                old: Box::new(previous.output.clone()),
+                new: Box::new(project.output.clone()),
+            });
+        }
+    }
+
+    let current_projects: HashSet<(&str, &str, &str)> = projects.iter().map(project_key).collect();
+    for entry in &lock.projects {
+        if !current_projects.contains(&project_key(entry)) {
+            diffs.push(Diff::RemovedProject {
+                chapter: entry.chapter.clone(),
+                src: entry.src.clone(),
+            });
+        }
+    }
+
     if lock.rhizz_version != current_version {
         notes.push(format!(
             "book.lock was generated with '{}', the current compiler reports '{}' (outputs still match)",
@@ -309,6 +424,19 @@ const fn entry_key(entry: &LockEntry) -> (&str, &str) {
     (entry.chapter.as_str(), entry.input_sha256.as_str())
 }
 
+/// The lock identity of a project trace: (chapter, src, input hash). The
+/// input hash is part of the key so changed sources surface as a
+/// removed/new pair even when the compiler verdict is unchanged (the
+/// rendered iframe payload still changed); an identical key with a different
+/// verdict means the compiler itself changed its output.
+const fn project_key(entry: &ProjectLockEntry) -> (&str, &str, &str) {
+    (
+        entry.chapter.as_str(),
+        entry.src.as_str(),
+        entry.input_sha256.as_str(),
+    )
+}
+
 /// Sort lock entries by (chapter, input hash) for a stable file.
 #[must_use]
 pub fn sorted_entries(mut entries: Vec<LockEntry>) -> Vec<LockEntry> {
@@ -320,11 +448,23 @@ pub fn sorted_entries(mut entries: Vec<LockEntry>) -> Vec<LockEntry> {
     entries
 }
 
+/// Sort project lock entries by (chapter, src) for a stable file.
+#[must_use]
+pub fn sorted_projects(mut projects: Vec<ProjectLockEntry>) -> Vec<ProjectLockEntry> {
+    projects.sort_by(|left, right| {
+        left.chapter
+            .cmp(&right.chapter)
+            .then_with(|| left.src.cmp(&right.src))
+    });
+    projects
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Diff, LOCK_FORMAT, LockEntry, LockPayload, accept_flag, colorize_unified_diff,
-        compare_lock, format_diff, lock_path, short_sha, sorted_entries,
+        Diff, LOCK_FORMAT, LockEntry, LockPayload, ProjectFileEntry, ProjectLockEntry, accept_flag,
+        colorize_unified_diff, compare_lock, format_diff, lock_path, short_sha, sorted_entries,
+        sorted_projects,
     };
     use crate::normalize::{NormDiagnostic, NormalizedOutput};
     use std::path::Path;
@@ -350,7 +490,21 @@ mod tests {
         LockPayload {
             entries,
             format: LOCK_FORMAT,
+            projects: Vec::new(),
             rhizz_version: version.to_owned(),
+        }
+    }
+
+    fn project(chapter: &str, src: &str, output: NormalizedOutput) -> ProjectLockEntry {
+        ProjectLockEntry {
+            chapter: chapter.to_owned(),
+            files: vec![ProjectFileEntry {
+                path: "system.hcl".to_owned(),
+                sha256: "abc".to_owned(),
+            }],
+            input_sha256: "def".to_owned(),
+            output,
+            src: src.to_owned(),
         }
     }
 
@@ -392,7 +546,7 @@ mod tests {
     fn matching_lock_has_no_diffs() {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let lock = payload(blocks.clone(), "rhizz 0.1.0");
-        let (diffs, notes) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
+        let (diffs, notes) = compare_lock(&lock, &blocks, &[], "rhizz 0.1.0");
         assert!(diffs.is_empty());
         assert!(notes.is_empty());
     }
@@ -401,7 +555,7 @@ mod tests {
     fn new_block_detected() {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let lock = payload(vec![], "rhizz 0.1.0");
-        let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
+        let (diffs, _) = compare_lock(&lock, &blocks, &[], "rhizz 0.1.0");
         assert_eq!(
             diffs,
             vec![Diff::NewBlock {
@@ -415,7 +569,7 @@ mod tests {
     #[test]
     fn removed_block_detected() {
         let lock = payload(vec![entry("a.md", "1", output(vec![]))], "rhizz 0.1.0");
-        let (diffs, _) = compare_lock(&lock, &[], "rhizz 0.1.0");
+        let (diffs, _) = compare_lock(&lock, &[], &[], "rhizz 0.1.0");
         assert_eq!(
             diffs,
             vec![Diff::RemovedBlock {
@@ -447,7 +601,7 @@ mod tests {
             }]),
         )];
         let lock = payload(locked, "rhizz 0.1.0");
-        let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
+        let (diffs, _) = compare_lock(&lock, &blocks, &[], "rhizz 0.1.0");
         assert_eq!(diffs.len(), 1);
         let Diff::OutputChanged {
             chapter,
@@ -503,7 +657,7 @@ mod tests {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let mut lock = payload(blocks.clone(), "rhizz 0.1.0");
         lock.format = 99;
-        let (diffs, _) = compare_lock(&lock, &blocks, "rhizz 0.1.0");
+        let (diffs, _) = compare_lock(&lock, &blocks, &[], "rhizz 0.1.0");
         assert_eq!(diffs, vec![Diff::FormatMismatch { found: 99 }]);
         assert!(format_diff(&diffs[0], false).contains("lock format 99"));
     }
@@ -512,7 +666,7 @@ mod tests {
     fn version_drift_is_a_note_not_a_diff() {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let lock = payload(blocks.clone(), "rhizz 0.1.0");
-        let (diffs, notes) = compare_lock(&lock, &blocks, "rhizz 0.2.0");
+        let (diffs, notes) = compare_lock(&lock, &blocks, &[], "rhizz 0.2.0");
         assert!(diffs.is_empty());
         assert_eq!(notes.len(), 1);
         assert!(notes[0].contains("0.1.0"));
@@ -609,5 +763,99 @@ mod tests {
         let text = serde_json::to_string_pretty(&payload).unwrap_or_default();
         let parsed: LockPayload = serde_json::from_str(&text).expect("lock json should parse");
         assert_eq!(parsed, payload);
+    }
+
+    #[test]
+    fn legacy_lock_without_projects_parses_to_empty() {
+        let text = r#"{"entries": [], "format": 1, "rhizz_version": "rhizz 0.1.0"}"#;
+        let parsed: LockPayload = serde_json::from_str(text).expect("legacy lock should parse");
+        assert!(parsed.projects.is_empty());
+    }
+
+    #[test]
+    fn projects_sorted_by_chapter_then_src() {
+        let projects = vec![
+            project("b.md", "projects/z", output(vec![])),
+            project("a.md", "projects/b", output(vec![])),
+            project("a.md", "projects/a", output(vec![])),
+        ];
+        let sorted = sorted_projects(projects);
+        let keys: Vec<(&str, &str)> = sorted
+            .iter()
+            .map(|entry| (entry.chapter.as_str(), entry.src.as_str()))
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                ("a.md", "projects/a"),
+                ("a.md", "projects/b"),
+                ("b.md", "projects/z"),
+            ]
+        );
+    }
+
+    #[test]
+    fn new_and_removed_projects_detected() {
+        let projects = vec![project("a.md", "projects/demo", output(vec![]))];
+        let lock = payload(vec![], "rhizz 0.1.0");
+        let (diffs, _) = compare_lock(&lock, &[], &projects, "rhizz 0.1.0");
+        assert_eq!(
+            diffs,
+            vec![Diff::NewProject {
+                chapter: "a.md".to_owned(),
+                src: "projects/demo".to_owned(),
+            }]
+        );
+        assert!(format_diff(&diffs[0], false).contains("new project 'projects/demo' in 'a.md'"));
+
+        let (diffs, _) = compare_lock(&payload(vec![], "rhizz 0.1.0"), &[], &[], "rhizz 0.1.0");
+        assert!(diffs.is_empty());
+        let mut lock = payload(vec![], "rhizz 0.1.0");
+        lock.projects = projects;
+        let (diffs, _) = compare_lock(&lock, &[], &[], "rhizz 0.1.0");
+        assert_eq!(
+            diffs,
+            vec![Diff::RemovedProject {
+                chapter: "a.md".to_owned(),
+                src: "projects/demo".to_owned(),
+            }]
+        );
+        assert!(format_diff(&diffs[0], false).contains("was removed from the book"));
+    }
+
+    #[test]
+    fn changed_project_output_detected() {
+        let current = vec![project(
+            "a.md",
+            "projects/demo",
+            output(vec![crate::normalize::NormDiagnostic {
+                code: "W001".to_owned(),
+                line: None,
+                message: "new".to_owned(),
+            }]),
+        )];
+        let mut lock = payload(vec![], "rhizz 0.1.0");
+        lock.projects = vec![project("a.md", "projects/demo", output(vec![]))];
+        let (diffs, _) = compare_lock(&lock, &[], &current, "rhizz 0.1.0");
+        assert_eq!(diffs.len(), 1);
+        let Diff::ProjectOutputChanged { chapter, src, .. } = &diffs[0] else {
+            panic!("expected ProjectOutputChanged");
+        };
+        assert_eq!(chapter, "a.md");
+        assert_eq!(src, "projects/demo");
+        assert!(
+            format_diff(&diffs[0], false)
+                .contains("output changed for project 'projects/demo' in 'a.md'")
+        );
+    }
+
+    #[test]
+    fn matching_projects_have_no_diffs() {
+        let projects = vec![project("a.md", "projects/demo", output(vec![]))];
+        let mut lock = payload(vec![], "rhizz 0.1.0");
+        lock.projects = projects.clone();
+        let (diffs, notes) = compare_lock(&lock, &[], &projects, "rhizz 0.1.0");
+        assert!(diffs.is_empty());
+        assert!(notes.is_empty());
     }
 }
