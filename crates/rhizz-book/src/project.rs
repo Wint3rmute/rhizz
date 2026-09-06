@@ -332,7 +332,7 @@ pub fn render_project_html(
     let mut out = String::from("<div class=\"rhizz-project\">");
     let _ = write!(
         out,
-        "<iframe src=\"{url}\" width=\"100%\" height=\"{}\" style=\"border: 1px solid #ccc; border-radius: 8px;\" allowfullscreen loading=\"lazy\" title=\"Rhizz book example: {}\"></iframe>",
+        "<iframe src=\"{url}\" width=\"100%\" height=\"{}\" style=\"border: 1px solid #ccc; border-radius: 8px;\" allowfullscreen allow=\"clipboard-write\" loading=\"lazy\" title=\"Rhizz book example: {}\"></iframe>",
         attrs.height,
         crate::render::esc(&attrs.src)
     );
@@ -514,6 +514,7 @@ mod tests {
         assert!(html.contains("src=\"https://rhizz.fly.dev/book-example#p=PAYLOAD\""));
         assert!(html.contains("height=\"600\""));
         assert!(html.contains("loading=\"lazy\""));
+        assert!(html.contains("allow=\"clipboard-write\""));
         assert!(html.contains("Caption &lt;with&gt; &quot;quotes&quot;"));
     }
 

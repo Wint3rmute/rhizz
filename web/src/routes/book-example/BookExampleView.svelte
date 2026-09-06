@@ -13,6 +13,7 @@ import {
   viewsToLayout,
 } from "../projects/[id]/diagrams/persistence";
 import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
+import { copyToClipboard } from "./clipboard";
 import { highlightHcl } from "./hclHighlight";
 import type { BookPayloadFile } from "./payload";
 
@@ -29,6 +30,8 @@ function matchOpen(candidates: string[], target: string | null): string | null {
 const infoIcon = resolveIcon("circle-info");
 const codeIcon = resolveIcon("code");
 const diagramIcon = resolveIcon("diagram-project");
+const clipboardIcon = resolveIcon("clipboard");
+const checkIcon = resolveIcon("check");
 
 // Sources mirror `readProjectSources`: every `.hcl` file except diagram
 // layouts (those live under `diagrams/` and are parsed as views instead).
@@ -179,6 +182,18 @@ let codeContent = $derived(
 );
 let highlightedCode = $derived(highlightHcl(codeContent));
 
+let copied = $state(false);
+let copyTimer: number | undefined = undefined;
+async function copyCode(): Promise<void> {
+  if (await copyToClipboard(codeContent)) {
+    copied = true;
+    window.clearTimeout(copyTimer);
+    copyTimer = window.setTimeout(() => {
+      copied = false;
+    }, 1500);
+  }
+}
+
 // The toggle offers the *other* view of a diagram file; for anything else
 // it renders grayed out so the bar never shifts.
 let toggleIcon = $derived(
@@ -268,7 +283,40 @@ let toggleLabel = $derived(
         <DiagramStaticView {components} {connections} {boxes} {annotations} />
       {/if}
     {:else}
-      <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm"><code>{#each highlightedCode as token, i (i)}{#if token.cls === "plain"}{token.text}{:else}<span class="hcl-{token.cls}">{token.text}</span>{/if}{/each}</code></pre>
+      <div class="relative w-full h-full">
+        <pre class="w-full h-full overflow-auto rounded-lg bg-base-200 p-4 text-sm"><code>{#each highlightedCode as token, i (i)}{#if token.cls === "plain"}{token.text}{:else}<span class="hcl-{token.cls}">{token.text}</span>{/if}{/each}</code></pre>
+        <button
+          class="btn btn-ghost btn-xs btn-square absolute right-2 top-2 bg-base-200/80"
+          title="Copy code"
+          aria-label={copied ? "Copied" : "Copy code"}
+          onclick={() => {
+            void copyCode();
+          }}
+        >
+          {#if copied && checkIcon}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 {checkIcon.width} {checkIcon.height}"
+              fill="currentColor"
+              class="text-success"
+              aria-hidden="true"
+            >
+              <path d={checkIcon.svgPath} />
+            </svg>
+          {:else if clipboardIcon}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 {clipboardIcon.width} {clipboardIcon.height}"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d={clipboardIcon.svgPath} />
+            </svg>
+          {/if}
+        </button>
+      </div>
     {/if}
   </div>
 
