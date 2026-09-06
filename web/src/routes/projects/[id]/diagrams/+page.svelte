@@ -436,7 +436,9 @@ $effect(() => {
     console.log(
       `[PERSIST] load       RESOLVED path=${path} editedDuringLoad=${editedDuringLoad} ` +
         `stampNow=${diagramEditStamp} fileAnnotations=${fileAnnCount} ` +
-        `fileTexts=${JSON.stringify((layout.annotations ?? []).map((a) => a.text))} ` +
+        `fileTexts=${
+          JSON.stringify((layout.annotations ?? []).map((a) => a.text))
+        } ` +
         `apply=${!editedDuringLoad}`,
     );
     if (!editedDuringLoad) {
@@ -478,10 +480,14 @@ $effect(() => {
     `[PERSIST] save       FIRED path=${path} loaded=${diagramLayoutLoaded} ` +
       `checked=${Object.keys(snapshot.checked).length} ` +
       `annotations=${annCount} ` +
-      `texts=${JSON.stringify((snapshot.annotations ?? []).map((a) => a.text))}`,
+      `texts=${
+        JSON.stringify((snapshot.annotations ?? []).map((a) => a.text))
+      }`,
   );
   if (!diagramLayoutLoaded || path === null) {
-    console.log(`[PERSIST] save       SKIPPED (loaded=${diagramLayoutLoaded} path=${path})`);
+    console.log(
+      `[PERSIST] save       SKIPPED (loaded=${diagramLayoutLoaded} path=${path})`,
+    );
     return;
   }
   void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
