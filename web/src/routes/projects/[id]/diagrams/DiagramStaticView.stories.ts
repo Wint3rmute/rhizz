@@ -122,3 +122,29 @@ export const WithAnnotations: Story = {
     ],
   },
 };
+
+// The pipeline with an annotation placed far outside the node cluster's
+// bounding box and a scaled one — the auto-fit viewBox must extend to
+// include them, else the note would be clipped out of the Explore viewport.
+export const AnnotationsExtendTheFittedViewport: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    annotations: [
+      { text: "Distant note", x: 1200, y: -300, scale: 1.5 },
+      { text: "Below the cluster", x: 100, y: 900 },
+    ],
+  },
+};
+
+// Only annotations, no placed components — the viewBox must still fit them
+// (previously fell back to the fixed "0 0 100 100" default).
+export const AnnotationsOnly: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: {},
+    annotations: [{ text: "Just a note", x: 0, y: 0 }],
+  },
+};

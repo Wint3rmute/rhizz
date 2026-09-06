@@ -75,6 +75,23 @@ export const Mobile: Story = {
   },
 };
 
+// Annotations far outside the node cluster: the zoom-to-fill bounds must
+// extend to cover them (and they must actually be rendered), mirroring
+// DiagramStaticView's fitted viewport behavior in the interactive embed.
+export const WithDistantAnnotations: Story = {
+  args: {
+    components: sampleComponents,
+    connections: sampleConnections,
+    boxes: sampleBoxes,
+    annotations: [
+      { text: "far above", x: 300, y: -400, scale: 2 },
+      { text: "far below", x: 300, y: 700 },
+    ],
+    projectId: "demo-project",
+    diagramPath: "overview.hcl",
+  },
+};
+
 // The embed view forwards an optional onnodehover callback to the rendered
 // nodes (used by the embed page to show the component docs popup). This story
 // verifies the callback fires with the hovered component index. The callback

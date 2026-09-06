@@ -137,9 +137,9 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
     <div class="flex-1 flex items-center justify-center text-sm text-base-content/60">
       Loading diagram…
     </div>
-  {:else if Object.keys(boxes).length === 0}
+  {:else if Object.keys(boxes).length === 0 && (layout.annotations ?? []).length === 0}
     <div class="flex-1 flex items-center justify-center text-sm text-base-content/60 p-4 text-center">
-      Diagram "{normalizedDiagramPath}" has no placed components.
+      Diagram "{normalizedDiagramPath}" has no placed components or annotations.
     </div>
   {:else}
     <div
@@ -150,6 +150,7 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
         components={components}
         connections={connections}
         boxes={boxes}
+        annotations={layout.annotations ?? []}
         projectId={projectId}
         diagramPath={normalizedDiagramPath}
         onnodehover={(index, event) => handleNodeHover(index, event)}

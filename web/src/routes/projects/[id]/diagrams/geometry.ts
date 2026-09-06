@@ -19,6 +19,32 @@ export interface Box {
 export type ConnectionOrientation = "horizontal" | "vertical";
 export type ConnectionSide = "top" | "bottom" | "left" | "right";
 
+// A view annotation as stored in persisted layouts (the structural subset
+// both rhizz-wasm's Annotation and DiagramStaticAnnotation share).
+export interface AnnotationLike {
+  text: string;
+  x: number;
+  y: number;
+  scale?: number;
+}
+
+// Extent box of a view annotation's text, using the same geometry constants
+// as the interactive canvas's hit-testing (see annotationHitBox in
+// +page.svelte): ~7.5px per char at 1x scale, 16px line height, 14px
+// horizontal / 8px vertical padding, 40px minimum width. "Zoom to fill" and
+// the static renderers use this so a far-away annotation is never clipped
+// out of the fitted viewport.
+export function annotationBounds(ann: AnnotationLike): Box {
+  const scale = ann.scale ?? 1;
+  const lines = ann.text.split("\n");
+  const width = Math.max(
+    ...lines.map((l) => l.length * 7.5 * scale + 14),
+    40,
+  );
+  const height = lines.length * 16 * scale + 8;
+  return { x: ann.x - 4, y: ann.y - 16 * scale, width, height };
+}
+
 // Identifies which edge or corner of a node is being dragged for resizing.
 export type ResizeHandle =
   | "top"

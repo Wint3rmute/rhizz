@@ -5,7 +5,7 @@
 // canvas heavy to mount standalone: no drag/resize/marquee/pan/zoom
 // interaction, no undo history, no auto-layout, and critically, no
 // dependency on rhizz_wasm_wrapper/"rhizz" at all.
-import { unionBox } from "./geometry";
+import { annotationBounds, unionBox } from "./geometry";
 import DiagramElements from "./DiagramElements.svelte";
 import type {
   DiagramStaticAnnotation,
@@ -46,14 +46,16 @@ let {
     | undefined;
 } = $props();
 
-// Auto-fits the viewBox to whatever's actually placed, rather than
-// requiring a caller-managed pan/zoom state (there's no interaction here
-// to drive one) — makes this genuinely a one-prop-in, rendered-diagram-out
+// Auto-fits the viewBox to whatever's actually placed — including
+// annotations at far-away absolute positions — rather than requiring a
+// caller-managed pan/zoom state (there's no interaction here to drive
+// one) — makes this genuinely a one-prop-in, rendered-diagram-out
 // component, ideal for a Storybook thumbnail.
 let viewBox = $derived.by(() => {
   const placed = Object.values(boxes);
-  if (placed.length === 0) return "0 0 100 100";
-  const bounds = unionBox(placed);
+  const all = [...placed, ...annotations.map(annotationBounds)];
+  if (all.length === 0) return "0 0 100 100";
+  const bounds = unionBox(all);
   return `${bounds.x - padding} ${bounds.y - padding} ${
     bounds.width + padding * 2
   } ${bounds.height + padding * 2}`;
