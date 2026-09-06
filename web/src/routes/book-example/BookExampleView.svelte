@@ -267,7 +267,7 @@ $effect(() => {
   class="flex flex-col w-full bg-base-100 text-base-content"
 >
   {#if !singleFile}
-    <div class="flex items-center gap-2 px-3 pt-2">
+    <div class="flex items-center gap-2">
     <div
       class="tooltip tooltip-right shrink-0"
       data-tip="Toggle between diagram render and underlying code"
