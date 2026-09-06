@@ -1,36 +1,19 @@
 /*
- * Results panels emitted by the rhizz mdbook preprocessor.
+ * Styles for rhizz mdbook output.
+ *
+ * Compiled ```rhizz blocks and ```rhizz-project fences render as live
+ * iframes (see js/rhizz-embed.js); what remains here is the embed chrome
+ * plus the panels for non-compiled content (```rhizz,ignore notices and
+ * tool-error fallbacks).
  *
  * Theme-aware: mdbook applies the active theme as a class on <html>
- * (.light / .coal / .navy / .ayu / .rust; html:not(.js) defaults to light)
- * and exposes CSS variables such as --bg, --fg, --quote-bg,
- * --table-border-color, --theme-popup-bg. We define our own --rhizz-*
- * status colors: light defaults in :root, dark-theme overrides under
- * .coal/.navy/.ayu. Neutral chrome (code labels, stats divider) reuses
- * mdbook's variables so it blends with whichever theme is active.
+ * (.light / .coal / .navy / .ayu / .rust; html:not(.js) defaults to light).
+ * Neutral colors below follow the active theme; light defaults in :root,
+ * dark-theme overrides under .coal/.navy/.ayu.
  */
 
 :root,
 html:not(.js) {
-  /* status palette (light themes: dark text on light tints) */
-  --rhizz-ok-bg: #f1f8f1;
-  --rhizz-ok-border: #2e7d32;
-  --rhizz-ok-head-bg: #2e7d32;
-  --rhizz-ok-head-fg: #ffffff;
-  --rhizz-ok-fg: #1b5e20;
-
-  --rhizz-warn-bg: #fffbe9;
-  --rhizz-warn-border: #e6a700;
-  --rhizz-warn-head-bg: #e6a700;
-  --rhizz-warn-head-fg: #3a2a00;
-  --rhizz-warn-fg: #7a4f01;
-
-  --rhizz-error-bg: #fdf1f1;
-  --rhizz-error-border: #c62828;
-  --rhizz-error-head-bg: #c62828;
-  --rhizz-error-head-fg: #ffffff;
-  --rhizz-error-fg: #7f0000;
-
   --rhizz-neutral-bg: #f4f6f7;
   --rhizz-neutral-border: #90a4ae;
   --rhizz-neutral-head-bg: #cfd8dc;
@@ -38,28 +21,10 @@ html:not(.js) {
   --rhizz-neutral-fg: #455a64;
 }
 
-/* dark themes: light-on-dark status colors */
+/* dark themes */
 .coal,
 .navy,
 .ayu {
-  --rhizz-ok-bg: #16281b;
-  --rhizz-ok-border: #66bb6a;
-  --rhizz-ok-head-bg: #66bb6a;
-  --rhizz-ok-head-fg: #0b2210;
-  --rhizz-ok-fg: #81c784;
-
-  --rhizz-warn-bg: #2b2408;
-  --rhizz-warn-border: #f0b72f;
-  --rhizz-warn-head-bg: #f0b72f;
-  --rhizz-warn-head-fg: #2b2408;
-  --rhizz-warn-fg: #ffd54f;
-
-  --rhizz-error-bg: #2b1314;
-  --rhizz-error-border: #ef5350;
-  --rhizz-error-head-bg: #ef5350;
-  --rhizz-error-head-fg: #2b1314;
-  --rhizz-error-fg: #ff8a80;
-
   --rhizz-neutral-bg: #1f2124;
   --rhizz-neutral-border: #43484d;
   --rhizz-neutral-head-bg: #2b2f33;
@@ -80,90 +45,6 @@ html:not(.js) {
 .rhizz-head {
   padding: 0.45rem 0.8rem;
   font-weight: 600;
-}
-
-.rhizz-diagnostics {
-  list-style: none;
-  margin: 0;
-  padding: 0.4rem 0.8rem 0.6rem 2rem;
-}
-
-.rhizz-diagnostics li {
-  padding: 0.1rem 0;
-  font-size: 0.95em;
-}
-
-.rhizz-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-weight: 700;
-}
-
-.rhizz-loc {
-  opacity: 0.7;
-  font-size: 0.9em;
-}
-
-/* ── status cards ──────────────────────────────────────────────────── */
-
-/* success (no errors, no warnings) */
-.rhizz-ok {
-  border-color: var(--rhizz-ok-border);
-  background: var(--rhizz-ok-bg);
-}
-
-.rhizz-ok .rhizz-head {
-  background: var(--rhizz-ok-head-bg);
-  color: var(--rhizz-ok-head-fg);
-}
-
-.rhizz-ok .rhizz-stats {
-  border-top-color: var(--rhizz-ok-border);
-}
-
-/* warnings only */
-.rhizz-warn {
-  border-color: var(--rhizz-warn-border);
-  background: var(--rhizz-warn-bg);
-}
-
-.rhizz-warn .rhizz-head {
-  background: var(--rhizz-warn-head-bg);
-  color: var(--rhizz-warn-head-fg);
-}
-
-.rhizz-warnings li {
-  color: var(--rhizz-warn-fg);
-}
-
-.rhizz-warnings li::before {
-  content: "⚠️ ";
-  color: var(--rhizz-warn-border);
-  font-weight: 700;
-}
-
-.rhizz-warn .rhizz-stats {
-  border-top-color: var(--rhizz-warn-border);
-}
-
-/* errors (with or without additional warnings) */
-.rhizz-error {
-  border-color: var(--rhizz-error-border);
-  background: var(--rhizz-error-bg);
-}
-
-.rhizz-error .rhizz-head {
-  background: var(--rhizz-error-head-bg);
-  color: var(--rhizz-error-head-fg);
-}
-
-.rhizz-errors li {
-  color: var(--rhizz-error-fg);
-}
-
-.rhizz-errors li::before {
-  content: "❌ ";
-  color: var(--rhizz-error-border);
-  font-weight: 700;
 }
 
 /* not-compiled / tool-error panels */
@@ -202,24 +83,4 @@ html:not(.js) {
   font-size: 0.9em;
   opacity: 0.75;
   text-align: center;
-}
-
-/* ── completion score row ──────────────────────────────────────────── */
-
-.rhizz-stats {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 1.4rem;
-  margin: 0;
-  padding: 0.5rem 0.8rem;
-  border-top: 1px dashed var(--table-border-color, rgba(0, 0, 0, 0.15));
-}
-
-.rhizz-stat span {
-  opacity: 0.7;
-}
-
-.rhizz-stat b {
-  margin-left: 0.3em;
 }
