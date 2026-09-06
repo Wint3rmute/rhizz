@@ -131,15 +131,15 @@ fn walk_mut(items: &mut [Value], rewrite: &mut impl FnMut(&str, &str) -> String)
     }
 }
 
-/// Compile each distinct body once and log one line per body, naming the
-/// owning chapter when the body is used by exactly one chapter and the share
-/// count otherwise.
-#[must_use]
-fn compile_distinct_bodies(
+/// Compile and encode each distinct body once, logging one line per body
+/// (naming the owning chapter when the body is unique, else the share
+/// count). Returns verdicts and URL-hash payloads keyed by body digest.
+fn compile_and_encode_bodies(
     bodies: &HashMap<String, String>,
     used_by: &HashMap<String, Vec<String>>,
-) -> CompileResults {
+) -> Result<(CompileResults, HashMap<String, String>)> {
     let mut results: CompileResults = HashMap::with_capacity(bodies.len());
+    let mut payloads: HashMap<String, String> = HashMap::with_capacity(bodies.len());
     for (hash, body) in bodies {
         let verdict = compile_body(body);
         let chapters = used_by.get(hash).map_or(&[][..], Vec::as_slice);
@@ -159,9 +159,17 @@ fn compile_distinct_bodies(
                 "compiled rhizz block (shared body)"
             ),
         }
+        let file = ProjectFile {
+            path: BLOCK_FILENAME.to_owned(),
+            content: body.clone(),
+            sha256: hash.clone(),
+        };
+        let payload = encode_payload(std::slice::from_ref(&file))
+            .with_context(|| format!("cannot encode rhizz block {}", short_sha(hash)))?;
+        payloads.insert(hash.clone(), payload);
         results.insert(hash.clone(), verdict);
     }
-    results
+    Ok((results, payloads))
 }
 
 /// One loaded, compiled and encoded book project, ready to render and trace.
@@ -341,27 +349,14 @@ pub fn process_book(
 ) -> Result<String> {
     let (bodies, used_by) = collect_block_bodies(book);
 
-    // Compile each distinct body once, attributing the log line to its
-    // chapter when the body is unique, otherwise noting the share count.
+    // Compile and encode each distinct body once, attributing the log line
+    // to its chapter when the body is unique, otherwise noting the share
+    // count.
     tracing::info!(
         distinct_blocks = bodies.len(),
         "compiling distinct rhizz blocks"
     );
-    let results = compile_distinct_bodies(&bodies, &used_by);
-
-    // Encode every distinct block body as a single-file URL-hash payload
-    // for the live embeds.
-    let mut block_payloads: HashMap<String, String> = HashMap::with_capacity(bodies.len());
-    for (hash, body) in &bodies {
-        let file = ProjectFile {
-            path: BLOCK_FILENAME.to_owned(),
-            content: body.clone(),
-            sha256: hash.clone(),
-        };
-        let payload = encode_payload(std::slice::from_ref(&file))
-            .with_context(|| format!("cannot encode rhizz block {}", short_sha(hash)))?;
-        block_payloads.insert(hash.clone(), payload);
-    }
+    let (results, block_payloads) = compile_and_encode_bodies(&bodies, &used_by)?;
 
     // Load every referenced book project once (project `src` attributes
     // resolve under `<book root>/src/`). Any failure aborts the build: a
