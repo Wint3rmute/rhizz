@@ -119,6 +119,19 @@ async function findCodeWith(
   });
 }
 
+// The synchronous queryByText().toBeNull() has no retry budget, so a slow
+// frame can fail it spuriously under load — poll instead.
+async function expectGone(
+  query: () => Element | null,
+  text: string,
+): Promise<void> {
+  await waitFor(() => {
+    if (query() !== null) {
+      throw new Error(`expected "${text}" to be gone`);
+    }
+  });
+}
+
 // The fallback demo project: diagram tab with two placed nodes.
 export const DiagramTab: Story = {
   args: {
@@ -198,7 +211,7 @@ export const OpenCodeFile: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await findCodeWith(canvasElement, 'protocol "temp-bus"');
-    await expect(canvas.queryByText("sensor")).toBeNull();
+    await expectGone(() => canvas.queryByText("sensor"), "sensor");
   },
 };
 
@@ -285,7 +298,7 @@ export const ToggleDiagramCode: Story = {
       await canvas.findByRole("button", { name: "Show code" }),
     );
     await findCodeWith(canvasElement, 'view "main"');
-    await expect(canvas.queryByText("sensor")).toBeNull();
+    await expectGone(() => canvas.queryByText("sensor"), "sensor");
     await userEvent.click(
       await canvas.findByRole("button", { name: "Show diagram" }),
     );
