@@ -75,9 +75,6 @@ $effect(() => {
      navbar so the iframe shows only the example. -->
 <div
   class="fixed inset-0 z-40 w-screen h-screen bg-base-100 flex flex-col overflow-hidden">
-  <div class="px-3 pt-2 text-xs text-base-content/50">
-    Rhizz book example — rendered locally in your browser, nothing is saved.
-  </div>
   {#if payloadError}
     <div class="flex-1 flex items-center justify-center p-6">
       <div role="alert" class="alert alert-error max-w-lg">
@@ -85,9 +82,7 @@ $effect(() => {
       </div>
     </div>
   {:else if files}
-    <div class="flex-1 min-h-0">
-      <BookExampleView {files} />
-    </div>
+    <BookExampleView {files} />
   {:else}
     <div class="flex-1 flex items-center justify-center text-sm text-base-content/60">
       Loading example…
