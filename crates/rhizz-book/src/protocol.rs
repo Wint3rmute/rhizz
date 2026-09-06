@@ -230,6 +230,21 @@ fn build_book_projects(
                 attrs.src
             );
         };
+        if let Some(open) = &attrs.open
+            && !entry.project.files.iter().any(|file| file.path == *open)
+        {
+            let known: Vec<&str> = entry
+                .project
+                .files
+                .iter()
+                .map(|file| file.path.as_str())
+                .collect();
+            bail!(
+                "rhizz-project open={open:?} in '{chapter}' matches no file in '{}' (expected one of: {})",
+                attrs.src,
+                known.join(", ")
+            );
+        }
         traces.push(ProjectLockEntry {
             chapter: chapter.clone(),
             files: entry
@@ -750,6 +765,57 @@ mod tests {
         assert!(
             message.contains("projects/nope"),
             "unexpected error: {message}"
+        );
+    }
+
+    #[test]
+    fn process_book_rejects_open_pointing_outside_the_project() {
+        let dir = TempDir::new().expect("tempdir");
+        write_demo_project(dir.path());
+        let lock_path = PathBuf::from(dir.path()).join("book.lock");
+        let mut err = Cursor::new(Vec::new());
+        let mut book = project_book(
+            "# Demo\n\n```rhizz-project src=\"projects/demo\" open=\"nope.hcl\"\n```\n",
+        );
+        let message = process_book(
+            &mut book,
+            &lock_path,
+            "rhizz 0.1.0",
+            true,
+            false,
+            &mut err,
+            "https://example.invalid",
+        )
+        .expect_err("unknown open target must fail")
+        .to_string();
+        assert!(
+            message.contains("matches no file"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[test]
+    fn process_book_embeds_open_target_in_iframe_url() {
+        let dir = TempDir::new().expect("tempdir");
+        write_demo_project(dir.path());
+        let lock_path = PathBuf::from(dir.path()).join("book.lock");
+        let mut err = Cursor::new(Vec::new());
+        let mut book = project_book(
+            "# Demo\n\n```rhizz-project src=\"projects/demo\" open=\"diagrams/main.hcl\"\n```\n",
+        );
+        let json_out = process_book(
+            &mut book,
+            &lock_path,
+            "rhizz 0.1.0",
+            true,
+            false,
+            &mut err,
+            "https://example.invalid",
+        )
+        .expect("open target should embed");
+        assert!(
+            json_out.contains("book-example?open=diagrams%2Fmain.hcl#p="),
+            "iframe URL should carry the open target"
         );
     }
 

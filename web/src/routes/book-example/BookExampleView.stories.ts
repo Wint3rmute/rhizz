@@ -80,3 +80,41 @@ export const WarningsShownDirectly: Story = {
     await canvas.findByText(/W004/);
   },
 };
+
+// ?open=system.hcl lands directly on the code tab.
+export const OpenCodeFile: Story = {
+  args: {
+    files: DEMO_FILES,
+    open: "system.hcl",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText(/protocol "temp-bus"/);
+    await expect(canvas.queryByText("sensor")).toBeNull();
+  },
+};
+
+// ?open=diagrams/main.hcl lands on that diagram (and not on the code).
+export const OpenDiagram: Story = {
+  args: {
+    files: DEMO_FILES,
+    open: "diagrams/main.hcl",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("sensor");
+    await expect(canvas.queryByText(/protocol "temp-bus"/)).toBeNull();
+  },
+};
+
+// A bare filename also resolves (?open=main.hcl finds diagrams/main.hcl).
+export const OpenBareFilename: Story = {
+  args: {
+    files: DEMO_FILES,
+    open: "main.hcl",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("sensor");
+  },
+};
