@@ -92,6 +92,26 @@ pub fn parse_attrs(raw: &str) -> Vec<String> {
         .collect()
 }
 
+/// Collect fence body lines starting after the opening fence at `index`;
+/// returns the body and the index to continue scanning from (past the
+/// closing fence, or the end when unterminated).
+fn collect_body(lines: &[String], index: usize) -> (Vec<String>, usize) {
+    let mut body = Vec::new();
+    let mut index = index.saturating_add(1);
+    while let Some(body_line) = lines.get(index) {
+        if is_fence_close(body_line) {
+            break;
+        }
+        body.push(body_line.clone());
+        index = index.saturating_add(1);
+    }
+    // Skip the closing fence when one was found.
+    if lines.get(index).is_some() {
+        index = index.saturating_add(1);
+    }
+    (body, index)
+}
+
 /// Split chapter lines into text and block segments, preserving order.
 #[must_use]
 pub fn parse_blocks(lines: &[String]) -> Vec<Segment> {
@@ -104,18 +124,8 @@ pub fn parse_blocks(lines: &[String]) -> Vec<Segment> {
             if !text.is_empty() {
                 segments.push(Segment::Text(std::mem::take(&mut text)));
             }
-            let mut body = Vec::new();
-            index = index.saturating_add(1);
-            while let Some(body_line) = lines.get(index) {
-                if is_fence_close(body_line) {
-                    break;
-                }
-                body.push(body_line.clone());
-                index = index.saturating_add(1);
-            }
-            if lines.get(index).is_some() {
-                index = index.saturating_add(1);
-            }
+            let (body, next) = collect_body(lines, index);
+            index = next;
             segments.push(Segment::ProjectBlock {
                 attrs: attrs_raw.to_owned(),
                 body,
@@ -124,21 +134,12 @@ pub fn parse_blocks(lines: &[String]) -> Vec<Segment> {
             if !text.is_empty() {
                 segments.push(Segment::Text(std::mem::take(&mut text)));
             }
-            let attrs = parse_attrs(attrs_raw);
-            let mut body = Vec::new();
-            index = index.saturating_add(1);
-            while let Some(body_line) = lines.get(index) {
-                if is_fence_close(body_line) {
-                    break;
-                }
-                body.push(body_line.clone());
-                index = index.saturating_add(1);
-            }
-            // Skip the closing fence when one was found.
-            if lines.get(index).is_some() {
-                index = index.saturating_add(1);
-            }
-            segments.push(Segment::Block { attrs, body });
+            let (body, next) = collect_body(lines, index);
+            index = next;
+            segments.push(Segment::Block {
+                attrs: parse_attrs(attrs_raw),
+                body,
+            });
         } else {
             text.push(line.clone());
             index = index.saturating_add(1);
