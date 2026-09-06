@@ -15,3 +15,5 @@ additional-css = ["css/rhizz.css"]
 # cargo walks up from book/ to the workspace root, so no wrapper is needed.
 command = "cargo run --release --quiet --bin rhizz-book"
 renderer = ["html"]
+# Host serving the /book-example route that rhizz-project embeds iframe into.
+book-example-base-url = "https://rhizz.fly.dev"

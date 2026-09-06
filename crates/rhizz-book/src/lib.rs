@@ -14,6 +14,7 @@ pub mod blocks;
 pub mod compile;
 pub mod lock;
 pub mod normalize;
+pub mod project;
 pub mod protocol;
 pub mod render;
 pub mod transform;

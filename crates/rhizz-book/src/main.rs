@@ -10,6 +10,7 @@
 #![deny(warnings)]
 
 use rhizz_book::lock::{accept_changes_enabled, lock_path};
+use rhizz_book::project::DEFAULT_EXAMPLE_BASE_URL;
 use rhizz_book::protocol::{
     is_supports_probe, parse_input, probe_renderer, process_book, read_stdin, version_string,
 };
@@ -56,6 +57,13 @@ fn run() -> anyhow::Result<ExitCode> {
         .and_then(Value::as_str)
         .unwrap_or_default();
     let lock_path = lock_path(Path::new(root));
+    let example_base_url = context
+        .get("config")
+        .and_then(|config| config.get("preprocessor"))
+        .and_then(|preprocessor| preprocessor.get("rhizz"))
+        .and_then(|rhizz| rhizz.get("book-example-base-url"))
+        .and_then(Value::as_str)
+        .unwrap_or(DEFAULT_EXAMPLE_BASE_URL);
 
     let json = process_book(
         &mut book,
@@ -64,6 +72,7 @@ fn run() -> anyhow::Result<ExitCode> {
         accept_changes_enabled(),
         color_enabled(),
         &mut io::stderr(),
+        example_base_url,
     )?;
     print!("{json}");
 
