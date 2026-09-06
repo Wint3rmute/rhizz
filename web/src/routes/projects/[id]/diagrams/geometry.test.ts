@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   annotationBounds,
+  annotationLines,
   type Box,
   boxBoundaryPoint,
   boxCenter,
@@ -727,6 +728,20 @@ describe("computeLcaConnection", () => {
       "in",
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("annotationLines", () => {
+  it("returns a single line when there is no newline", () => {
+    expect(annotationLines("note")).toEqual(["note"]);
+  });
+
+  it("splits on newlines, keeping empty lines", () => {
+    expect(annotationLines("a\n\nb")).toEqual(["a", "", "b"]);
+  });
+
+  it("keeps a trailing newline as an empty final line", () => {
+    expect(annotationLines("a\n")).toEqual(["a", ""]);
   });
 });
 

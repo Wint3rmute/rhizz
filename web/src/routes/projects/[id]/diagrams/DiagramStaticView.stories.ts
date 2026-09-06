@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, within } from "storybook/test";
 import DiagramStaticView from "./DiagramStaticView.svelte";
 import type {
   DiagramStaticBox,
@@ -110,6 +111,7 @@ export const Empty: Story = {
 
 // The pipeline with free-standing view annotations rendered at absolute
 // canvas positions — including a multi-line annotation (newline in text).
+// SVG collapses "\n" inside <text>, so each line must be its own <tspan>.
 export const WithAnnotations: Story = {
   args: {
     components: pipelineComponents,
@@ -120,6 +122,15 @@ export const WithAnnotations: Story = {
       { text: "Processed here\n(2 workers)", x: 230, y: 140 },
       { text: "Note on queue", x: 200, y: 160 },
     ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The multi-line annotation renders one <tspan> per line.
+    const firstLine = await canvas.findByText("Processed here");
+    const secondLine = await canvas.findByText("(2 workers)");
+    await expect(firstLine.tagName.toLowerCase()).toBe("tspan");
+    await expect(secondLine.tagName.toLowerCase()).toBe("tspan");
+    await expect(firstLine.parentElement).toBe(secondLine.parentElement);
   },
 };
 

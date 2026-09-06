@@ -28,6 +28,19 @@ export interface AnnotationLike {
   scale?: number;
 }
 
+// Base font size (px at 1x scale) and line step for view annotation text.
+// Shared by annotationBounds below and every SVG renderer so metrics,
+// hit-testing and the visible text can never drift apart.
+export const ANNOTATION_FONT_SIZE = 12;
+export const ANNOTATION_LINE_HEIGHT = 16;
+
+// Split annotation text into renderable lines. SVG <text> collapses "\n",
+// so renderers must emit one <tspan> per line returned here. Empty lines
+// (including a trailing newline) are kept so vertical rhythm is preserved.
+export function annotationLines(text: string): string[] {
+  return text.split("\n");
+}
+
 // Extent box of a view annotation's text, using the same geometry constants
 // as the interactive canvas's hit-testing (see annotationHitBox in
 // +page.svelte): ~7.5px per char at 1x scale, 16px line height, 14px
@@ -36,13 +49,18 @@ export interface AnnotationLike {
 // out of the fitted viewport.
 export function annotationBounds(ann: AnnotationLike): Box {
   const scale = ann.scale ?? 1;
-  const lines = ann.text.split("\n");
+  const lines = annotationLines(ann.text);
   const width = Math.max(
     ...lines.map((l) => l.length * 7.5 * scale + 14),
     40,
   );
-  const height = lines.length * 16 * scale + 8;
-  return { x: ann.x - 4, y: ann.y - 16 * scale, width, height };
+  const height = lines.length * ANNOTATION_LINE_HEIGHT * scale + 8;
+  return {
+    x: ann.x - 4,
+    y: ann.y - ANNOTATION_LINE_HEIGHT * scale,
+    width,
+    height,
+  };
 }
 
 // Identifies which edge or corner of a node is being dragged for resizing.
