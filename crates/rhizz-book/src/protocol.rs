@@ -7,14 +7,15 @@
 //! root and `context.root` holds that root, which is where `book.lock` lives.
 
 use crate::blocks::{Segment, body_hash, parse_blocks, split_lines};
+use crate::compile::BLOCK_FILENAME;
 use crate::compile::{Verdict, compile_body};
 use crate::lock::{
     LOCK_FORMAT, LockPayload, ProjectFileEntry, ProjectLockEntry, accept_changes_enabled,
-    compare_lock, format_diff, read_lock, sorted_entries, sorted_projects, write_lock,
+    compare_lock, format_diff, read_lock, short_sha, sorted_entries, sorted_projects, write_lock,
 };
 use crate::project::{
-    LoadedProject, ProjectAttrs, ProjectPayloads, compile_project, encode_payload, load_project,
-    parse_project_attrs,
+    LoadedProject, ProjectAttrs, ProjectFile, ProjectPayloads, compile_project, encode_payload,
+    load_project, parse_project_attrs,
 };
 use crate::transform::{CompileResults, transform_chapter};
 use anyhow::{Context, Result, bail};
@@ -348,6 +349,20 @@ pub fn process_book(
     );
     let results = compile_distinct_bodies(&bodies, &used_by);
 
+    // Encode every distinct block body as a single-file URL-hash payload
+    // for the live embeds.
+    let mut block_payloads: HashMap<String, String> = HashMap::with_capacity(bodies.len());
+    for (hash, body) in &bodies {
+        let file = ProjectFile {
+            path: BLOCK_FILENAME.to_owned(),
+            content: body.clone(),
+            sha256: hash.clone(),
+        };
+        let payload = encode_payload(std::slice::from_ref(&file))
+            .with_context(|| format!("cannot encode rhizz block {}", short_sha(hash)))?;
+        block_payloads.insert(hash.clone(), payload);
+    }
+
     // Load every referenced book project once (project `src` attributes
     // resolve under `<book root>/src/`). Any failure aborts the build: a
     // broken fence must never render a silently broken embed.
@@ -363,8 +378,14 @@ pub fn process_book(
     // Transform every chapter, collecting the input→output traces.
     let mut traces = Vec::new();
     map_chapters(book, &mut |path, content| {
-        let (new_content, chapter_traces) =
-            transform_chapter(path, content, &results, &payloads, example_base_url);
+        let (new_content, chapter_traces) = transform_chapter(
+            path,
+            content,
+            &results,
+            &block_payloads,
+            &payloads,
+            example_base_url,
+        );
         traces.extend(chapter_traces);
         new_content
     });
@@ -568,8 +589,9 @@ mod tests {
             "https://example.invalid",
         )
         .expect("pipeline should succeed when accepting changes");
-        assert!(json_out.contains("rhizz-diag"));
-        assert!(json_out.contains("```hcl"));
+        assert!(json_out.contains("rhizz-project"));
+        assert!(json_out.contains("book-example#p="));
+        assert!(!json_out.contains("```hcl"));
         assert!(lock_path.exists(), "lock should be written on first run");
 
         // Second run without accepting: lock matches -> no diff, same output.
