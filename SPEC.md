@@ -377,8 +377,8 @@ Top-level block (not nested inside a system). Defines a visual perspective
 on a system: which components are placed on the canvas and where.
 Each file under `diagrams/` holds exactly one `view` block whose label
 matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
-Every `node` path is resolved against the view's system (see §3);
-dangling paths are errors.
+Every `node` path is resolved against the model (see §3); dangling paths emit
+a warning (W016).
 
 ```hcl
 view "overview" {

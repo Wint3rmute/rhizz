@@ -491,6 +491,25 @@ mod tests {
     }
 
     #[test]
+    fn compile_project_reports_w016_for_unknown_node() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let proj = dir.path().join("demo");
+        write_project(&proj);
+        std::fs::write(
+            proj.join("diagrams/main.hcl"),
+            "view \"main\" {\n  system = \"demo\"\n\n  node \"demo/ghost\" {\n    x = 1\n    y = 2\n  }\n}\n",
+        )
+        .expect("write diagram with bad node");
+        let loaded = load_project(dir.path(), "demo").expect("load");
+        let verdict = compile_project(&loaded.files);
+        assert!(
+            verdict.warnings.iter().any(|d| d.code == "W016"),
+            "expected W016 for an unknown node path, got: {:?}",
+            verdict.warnings
+        );
+    }
+
+    #[test]
     fn encode_is_url_safe_and_round_trips() {
         let dir = tempfile::TempDir::new().expect("tempdir");
         let proj = dir.path().join("demo");

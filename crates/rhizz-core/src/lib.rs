@@ -654,6 +654,35 @@ system "sys2" {
     }
 
     #[test]
+    fn diagram_file_with_unknown_node_emits_w016() {
+        let model = "component \"cpu\" { leaf = true }\n\
+component \"computer\" {\n  instance \"cpu\" { source = \"cpu\" }\n}\n\
+system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n}";
+        let diagram = "view \"overview\" {\n  system = \"computer-setup\"\n\n  node \"computer-setup/ghost\" {\n    x = 1\n    y = 2\n  }\n}";
+        let sources = vec![
+            model_source(model),
+            view_source("diagrams/overview.hcl", diagram),
+        ];
+        let result = compile(&sources);
+        assert!(
+            result.model.is_some(),
+            "model must survive view warnings: {:?}",
+            codes(&result)
+        );
+        let w016: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W016)
+            .collect();
+        assert_eq!(w016.len(), 1, "expected one W016, got {:?}", codes(&result));
+        assert!(
+            w016[0].message.contains("computer-setup/ghost"),
+            "W016 must name the bad path: {}",
+            w016[0].message
+        );
+    }
+
+    #[test]
     fn phase_two_is_skipped_when_phase_one_has_errors() {
         let sources = vec![
             model_source("project { name = \"a\" }"),

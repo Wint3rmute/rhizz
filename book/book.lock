@@ -455,7 +455,12 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W016",
+            "message": "diagrams/overview.hcl: view 'overview' node 'computer-setup/not-a-computer' does not reference a known component"
+          }
+        ]
       },
       "src": "views-intro/2_example_error"
     }

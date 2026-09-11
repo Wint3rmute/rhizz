@@ -25,20 +25,25 @@ merging all `view` blocks into a single structure.
   `serialize_resolved_views` are gone. Views are parsed only through
   `serialize.rs::parse_views`.
 - **`rhizz-book::compile_project`** no longer excludes `diagrams/`; book
-  verdicts now include per-file view diagnostics. `book.lock` unchanged (no
-  book project trips the new checks; node-path validation is a later task).
+  verdicts now include per-file view diagnostics.
+- **`node` path verification (`W016`)**: every `node` path in a view is
+  resolved against the model's structurally-stable component keys
+  (system-scoped paths and top-level definition labels); unmatched paths emit
+  the non-blocking `W016` (`SPEC/diagnostics/W016.md`). `book.lock` was
+  regenerated because `views-intro/2_example_error` now surfaces its stale
+  `computer-setup/not-a-computer` node.
 - **`rhizz fmt`** rewrites only `system.hcl` and ignores view files entirely
   (never reads, writes, or reformats them).
-- **Spec**: `SPEC/models.md` merge/resolved/view sections and
+- **Spec**: `SPEC/models.md` merge/resolved/view sections, `SPEC.md` §2.9 and
   `SPEC/architecture.md` code-range note updated to match.
 - **Examples migrated**: every `examples/*/views.hcl` split into
   `examples/*/diagrams/<label>.hcl` (duplicate `"main"` labels resolved by
   keeping the layout-bearing `diagrams/main.hcl`).
-- **Tests**: exact E016/E006 assertions in `validate.rs` and `lib.rs`, WASM
-  boundary test that view errors keep the model, and book tests for E006/E016.
-  Rust (243) and web unit (503) suites green; clippy/doc/eslint/svelte-check
-  clean; `just build` green. `just test`'s storybook browser leg still needs
-  Playwright Chromium (pre-existing local limitation).
+- **Tests**: exact E016/E006/W016 assertions in `validate.rs` and `lib.rs`, WASM
+  boundary test that view errors keep the model, and book tests for E006/E016/W016.
+  Rust and web unit (503) suites green; clippy/doc/eslint/svelte-check clean;
+  `just build` and `just book` green. `just test`'s storybook browser leg still
+  needs Playwright Chromium (pre-existing local limitation).
 
 
 ## Task <N> — Add a `rhizz fmt` command
