@@ -1,7 +1,7 @@
 use crate::model::{
     Component, ComponentId, ComponentKind, ComponentParent, Connection, ConnectionEndpoint,
     ConnectionId, Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port,
-    PortId, Project, ProtocolId, Scope, ScopeIndex, System, SystemId, View, ViewFilter,
+    PortId, Project, ProtocolId, Scope, ScopeIndex, System, SystemId,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
@@ -237,11 +237,6 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         if let Some(system) = r.model.system_mut(sw.sid) {
             system.connections = conn_ids;
         }
-    }
-
-    // ── Views ─────────────────────────────────────────────────────────────────
-    for lv in raw.views {
-        resolve_view(&mut r, lv);
     }
 
     // ── W012: orphan protocols (reusable definitions are intentionally allowed
@@ -1063,54 +1058,6 @@ fn process_fields(
     field_ids
 }
 
-// ── View resolution ───────────────────────────────────────────────────────────
-
-/// Resolve a raw view block, emitting E006 for undefined system references.
-fn resolve_view(r: &mut Resolver, lv: Labeled<crate::parse::RawView>) {
-    // E006 -- undefined system
-    let system = match &lv.inner.system {
-        None => {
-            r.push_error(
-                DiagnosticCode::E006,
-                format!("view '{}' does not specify a system", lv.label),
-            );
-            return;
-        }
-        Some(sys_label) => {
-            if let Some(sid) = r.system_label_index.get(sys_label) {
-                *sid
-            } else {
-                r.push_error(
-                    DiagnosticCode::E006,
-                    format!(
-                        "view '{}' references undefined system '{}'",
-                        lv.label, sys_label
-                    ),
-                );
-                return;
-            }
-        }
-    };
-
-    let filter = {
-        let f = lv.inner.filter.unwrap_or_default();
-        ViewFilter {
-            include_tags: f.include_tags,
-            exclude_tags: f.exclude_tags,
-            max_level: f.max_level,
-            components: f.components,
-            show_messages: f.show_messages.unwrap_or(false),
-        }
-    };
-    r.model.views.push(View {
-        label: lv.label,
-        description: lv.inner.description.unwrap_or_default(),
-        tags: lv.inner.tags,
-        system,
-        filter,
-    });
-}
-
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1262,13 +1209,6 @@ mod tests {
             w004_labels.iter().any(|m| m.contains("ground-station-pc")),
             "expected W004 for ground-station-pc, got: {w004_labels:?}"
         );
-
-        // 5 views should resolve (4 in views.hcl + 1 in diagrams/main.hcl)
-        assert_eq!(
-            model.views.len(),
-            6,
-            "expected 6 views (incl. diagrams/main.hcl)"
-        );
     }
 
     // ── social-media ───────────────────────────────────────────────────────
@@ -1328,8 +1268,6 @@ mod tests {
                     && d.message.contains("recommendation-engine")),
             "expected W001 for recommendation-engine"
         );
-
-        assert_eq!(model.views.len(), 3);
     }
 
     // ── software-house ─────────────────────────────────────────────────────
@@ -1402,12 +1340,6 @@ mod tests {
                 .any(|d| d.code == DiagnosticCode::W004 && d.message.contains("operations")),
             "expected W004 for operations"
         );
-
-        assert_eq!(
-            model.views.len(),
-            5,
-            "expected 5 views (incl. diagrams/main.hcl)"
-        );
     }
 
     // ── Error cases ────────────────────────────────────────────────────────
@@ -1450,28 +1382,6 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E001),
             "expected E001, got: {diags:?}"
-        );
-    }
-
-    #[test]
-    fn e006_undefined_system_in_view() {
-        let src = r#"
-            system "s" {
-              component "a" {
-                leaf = true
-              }
-            }
-            view "v" {
-              system = "nonexistent"
-            }
-        "#;
-        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let result = resolve(raw);
-        assert!(result.is_err());
-        let diags = result.unwrap_err();
-        assert!(
-            diags.iter().any(|d| d.code == DiagnosticCode::E006),
-            "expected E006, got: {diags:?}"
         );
     }
 

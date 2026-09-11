@@ -10,17 +10,16 @@
 //! 2. **Round-trip stability (Idempotency)**:
 //!    - `serialize_model(compile(serialize_model(model))) == serialize_model(model)`
 //!    - `serialize_views(parse_views(serialize_views(views))) == serialize_views(views)`
-//! 3. **Pure model & view separation**: Architectural entities are serialized into
-//!    system model files, while visual layout coordinates and views are serialized into
-//!    separate `views.hcl` files.
+//! 3. **Pure model & view separation**: architectural entities are serialized into
+//!    system model files, while view definitions and visual layout coordinates are
+//!    serialized into individual `diagrams/<label>.hcl` files (one view per file).
 
-use std::collections::HashSet;
 use std::fmt::Write as _;
 
 use crate::model::{
     Annotation, BorderStyle, Component, ComponentKind, ComponentParent, Connection,
     ConnectionEndpoint, ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout, Port,
-    Project, Protocol, System, View, ViewDefinition, ViewFilterDefinition,
+    Project, Protocol, System, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -605,7 +604,7 @@ fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
 
 // ── Views and Layout Serialization ────────────────────────────────────────────
 
-/// Serializes a slice of [`ViewDefinition`]s into canonical HCL formatted for `views.hcl`.
+/// Helper to serialize a single [`ViewDefinition`] into canonical HCL.
 #[must_use]
 pub fn serialize_views(views: &[ViewDefinition]) -> String {
     let mut out = String::new();
@@ -620,22 +619,6 @@ pub fn serialize_views(views: &[ViewDefinition]) -> String {
     }
 
     out
-}
-
-/// Helper to serialize resolved [`View`] models from a [`Model`] into HCL.
-#[must_use]
-pub fn serialize_resolved_views(views: &[View], model: &Model) -> String {
-    // Deduplicate by label: parse merges every `.hcl` in the project (including
-    // `diagrams/*.hcl`), so the same view may appear both in `views.hcl` and a
-    // diagram file. Emit each view exactly once to keep the output idempotent.
-    let mut seen: HashSet<&str> = HashSet::new();
-    let mut view_defs: Vec<ViewDefinition> = Vec::new();
-    for v in views {
-        if seen.insert(v.label.as_str()) {
-            view_defs.push(ViewDefinition::from_resolved(v, model));
-        }
-    }
-    serialize_views(&view_defs)
 }
 
 fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
@@ -1461,28 +1444,43 @@ system "apollo" {
         let examples_dir = workspace_dir.join("examples");
 
         for example_name in ["drone", "social-media", "software-house", "web-app"] {
-            let views_path = examples_dir.join(example_name).join("views.hcl");
-            if !views_path.exists() {
+            let diagrams_dir = examples_dir.join(example_name).join("diagrams");
+            if !diagrams_dir.exists() {
                 continue;
             }
+            let mut diagram_paths: Vec<std::path::PathBuf> = fs::read_dir(&diagrams_dir)
+                .expect("should read diagrams dir")
+                .filter_map(std::result::Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "hcl"))
+                .collect();
+            diagram_paths.sort();
 
-            let content = fs::read_to_string(&views_path).expect("should read views.hcl");
-            let mut parsed1 = parse_views(&content)
-                .unwrap_or_else(|e| panic!("failed parsing {example_name}: {e}"));
-            parsed1.sort_by(|a, b| a.label.cmp(&b.label));
-
-            let serialized1 = serialize_views(&parsed1);
-            let mut parsed2 = parse_views(&serialized1)
-                .unwrap_or_else(|e| panic!("failed parsing re-serialized {example_name}: {e}"));
-            parsed2.sort_by(|a, b| a.label.cmp(&b.label));
-
-            assert_eq!(parsed1, parsed2, "views mismatch for {example_name}");
-
-            let serialized2 = serialize_views(&parsed2);
-            assert_eq!(
-                serialized1, serialized2,
-                "views serialization idempotency failed for {example_name}"
-            );
+            for diagram_path in diagram_paths {
+                let content = fs::read_to_string(&diagram_path).expect("should read diagram");
+                let parsed1 = parse_views(&content)
+                    .unwrap_or_else(|e| panic!("failed parsing {}: {e}", diagram_path.display()));
+                let serialized1 = serialize_views(&parsed1);
+                let parsed2 = parse_views(&serialized1).unwrap_or_else(|e| {
+                    panic!(
+                        "failed parsing re-serialized {}: {e}",
+                        diagram_path.display()
+                    )
+                });
+                assert_eq!(
+                    parsed1,
+                    parsed2,
+                    "views mismatch for {}",
+                    diagram_path.display()
+                );
+                let serialized2 = serialize_views(&parsed2);
+                assert_eq!(
+                    serialized1,
+                    serialized2,
+                    "views serialization idempotency failed for {}",
+                    diagram_path.display()
+                );
+            }
         }
     }
 
@@ -1732,38 +1730,6 @@ system "main" {
             res2.diagnostics.iter().all(|d| !d.is_error()),
             "recompile errors: {:?}\nserialized:\n{serialized}",
             res2.diagnostics
-        );
-    }
-
-    #[test]
-    fn serialize_resolved_views_dedups_duplicate_labels() {
-        // A project may define the same view in views.hcl and in a
-        // diagrams/*.hcl file; parsing merges both, so the resolved view list
-        // contains duplicates. The serializer must emit each view once.
-        let hcl = r#"project {
-  name = "dup"
-}
-system "s" {
-  description = "d"
-}
-view "main" {
-  system = "s"
-}
-"#;
-        let res = crate::compile(&[Source {
-            filename: "system.hcl".to_string(),
-            content: hcl.to_string(),
-        }]);
-        let model = res.model.expect("should resolve");
-        // Simulate the duplicate: a second view with the same label.
-        let mut views = model.views.clone();
-        let dup = views[0].clone();
-        views.push(dup);
-        let out = serialize_resolved_views(&views, &model);
-        assert_eq!(
-            out.matches("view \"main\"").count(),
-            1,
-            "duplicate view must be emitted once: {out}"
         );
     }
 

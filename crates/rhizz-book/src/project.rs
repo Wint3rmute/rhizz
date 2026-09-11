@@ -253,13 +253,16 @@ pub fn load_project(src_root: &Path, src: &str) -> Result<LoadedProject> {
     })
 }
 
-/// Compile a loaded project's model sources (every `.hcl` file except diagram
-/// layouts — mirroring `readProjectSources` on the web side).
+/// Compile a loaded project.
+///
+/// Compiles the system model sources plus every `diagrams/*.hcl` view file,
+/// validated per-file against the resolved model. Mirrors
+/// `rhizz-core::compile` (and thus the web workbench), so book verdicts match
+/// what users see in the app.
 #[must_use]
 pub fn compile_project(files: &[ProjectFile]) -> Verdict {
     let sources: Vec<Source> = files
         .iter()
-        .filter(|file| !file.path.starts_with("diagrams/"))
         .map(|file| Source {
             filename: file.path.clone(),
             content: file.content.clone(),
@@ -444,6 +447,45 @@ mod tests {
         assert!(
             verdict.errors.is_empty(),
             "unexpected errors: {:?}",
+            verdict.errors
+        );
+    }
+
+    #[test]
+    fn compile_project_reports_diagram_errors() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let proj = dir.path().join("demo");
+        write_project(&proj);
+        // Point the diagram at a system that does not exist.
+        std::fs::write(
+            proj.join("diagrams/main.hcl"),
+            "view \"main\" {\n  system = \"ghost\"\n}\n",
+        )
+        .expect("write bad main.hcl");
+        let loaded = load_project(dir.path(), "demo").expect("load");
+        let verdict = compile_project(&loaded.files);
+        assert!(
+            verdict.errors.iter().any(|d| d.code == "E006"),
+            "expected E006 for an unknown view system, got: {:?}",
+            verdict.errors
+        );
+    }
+
+    #[test]
+    fn compile_project_reports_e016_for_multi_view_diagram() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let proj = dir.path().join("demo");
+        write_project(&proj);
+        std::fs::write(
+            proj.join("diagrams/main.hcl"),
+            "view \"a\" { system = \"demo\" }\nview \"b\" { system = \"demo\" }\n",
+        )
+        .expect("write multi-view main.hcl");
+        let loaded = load_project(dir.path(), "demo").expect("load");
+        let verdict = compile_project(&loaded.files);
+        assert!(
+            verdict.errors.iter().any(|d| d.code == "E016"),
+            "expected E016 for a multi-view diagram, got: {:?}",
             verdict.errors
         );
     }

@@ -12,7 +12,7 @@ use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use walkdir::WalkDir;
 
-use rhizz_core::{Diagnostic, DiagnosticCode, Source, serialize_model, serialize_resolved_views};
+use rhizz_core::{Diagnostic, DiagnosticCode, Source, is_view_source, serialize_model};
 
 // ── CLI argument types ───────────────────────────────────────────────────────
 
@@ -444,13 +444,15 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
 
 // ── fmt ───────────────────────────────────────────────────────────────────────
 
-/// Canonically format the model in `project_dir` (or, with `--check`, verify
-/// it without writing).
+/// Canonically format the system model in `project_dir` (or, with `--check`,
+/// verify it without writing).
 ///
-/// Loads every `.hcl` file, compiles, and rewrites the merged canonical
-/// `system.hcl` + `views.hcl` in place (atomic, will not clobber on compile
-/// errors). Returns an exit code: 0 formatted/already-correct, 1 if `--check`
-/// found unformatted files (or a hard error occurred).
+/// Loads the project's `.hcl` files, compiles the system model, and rewrites
+/// the canonical `system.hcl` in place (atomic, will not clobber on compile
+/// errors). View files (`diagrams/*.hcl` and legacy `views.hcl`) are ignored:
+/// `rhizz fmt` neither reads, writes, nor reformats them. Returns an exit code:
+/// 0 formatted/already-correct, 1 if `--check` found the file unformatted (or a
+/// hard error occurred).
 fn run_fmt(cli: &Cli, path: &Path, _color: bool) -> i32 {
     let check = matches!(cli.command, Some(Command::Fmt { check: true, .. }));
     let Some(out) = format_project(path) else {
@@ -459,11 +461,9 @@ fn run_fmt(cli: &Cli, path: &Path, _color: bool) -> i32 {
     };
 
     let model_path = path.join("system.hcl");
-    let views_path = path.join("views.hcl");
     let needs_model = read_if_absent(&model_path).is_none_or(|cur| cur != out.system);
-    let needs_views = read_if_absent(&views_path).is_none_or(|cur| cur != out.views);
 
-    if !needs_model && !needs_views {
+    if !needs_model {
         if check {
             // Already formatted.
             return 0;
@@ -475,64 +475,42 @@ fn run_fmt(cli: &Cli, path: &Path, _color: bool) -> i32 {
     if check {
         // Print a human-readable diff of the changes that would be made.
         eprintln!("rhizz fmt: files would be reformatted:");
-        if needs_model {
-            let cur = read_if_absent(&model_path).unwrap_or_default();
-            eprintln!("{}", unified_diff("system.hcl", &cur, &out.system));
-        }
-        if needs_views {
-            let cur = read_if_absent(&views_path).unwrap_or_default();
-            eprintln!("{}", unified_diff("views.hcl", &cur, &out.views));
-        }
+        let cur = read_if_absent(&model_path).unwrap_or_default();
+        eprintln!("{}", unified_diff("system.hcl", &cur, &out.system));
         return 1;
     }
 
     // Write atomically.
-    let mut files = Vec::new();
-    if needs_model {
-        if atomic_write(&model_path, &out.system).is_err() {
-            eprintln!("rhizz fmt: cannot write {}", model_path.display());
-            return 1;
-        }
-        files.push("system.hcl".to_owned());
-    }
-    if needs_views {
-        if atomic_write(&views_path, &out.views).is_err() {
-            eprintln!("rhizz fmt: cannot write {}", views_path.display());
-            return 1;
-        }
-        files.push("views.hcl".to_owned());
+    if atomic_write(&model_path, &out.system).is_err() {
+        eprintln!("rhizz fmt: cannot write {}", model_path.display());
+        return 1;
     }
 
-    match files.len() {
-        1 => println!(
-            "rhizz fmt: 1 file reformatted ({})",
-            files.first().map_or("", String::as_str)
-        ),
-        n => println!("rhizz fmt: {n} files reformatted ({})", files.join(", ")),
-    }
+    println!("rhizz fmt: 1 file reformatted (system.hcl)");
     0
 }
 
-/// Canonical output of a project: `system.hcl` + `views.hcl` bodies.
+/// Canonical output of a project's system model.
 struct FormattedProject {
-    /// Canonical merged model HCL.
+    /// Canonical system model HCL.
     system: String,
-    /// Canonical views HCL.
-    views: String,
 }
 
-/// Compile a project and produce its canonical (formatted) projections.
+/// Compile a project's system model and produce its canonical (formatted)
+/// projection. View files are excluded from compilation entirely.
 fn format_project(path: &Path) -> Option<FormattedProject> {
-    let sources = load_sources(path).ok()?;
+    let sources: Vec<Source> = load_sources(path)
+        .ok()?
+        .into_iter()
+        .filter(|source| !is_view_source(&source.filename))
+        .collect();
     let result = rhizz_core::compile(&sources);
     if result.diagnostics.iter().any(Diagnostic::is_error) || result.model.is_none() {
         return None;
     }
     let model = result.model?;
-    let views = serialize_resolved_views(&model.views, &model);
     Some(FormattedProject {
         system: serialize_model(&model),
-        views,
     })
 }
 
@@ -943,19 +921,33 @@ mod tests {
     }
 
     #[test]
-    fn fmt_creates_views_hcl() {
+    fn fmt_ignores_view_files() {
         let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join("diagrams")).expect("mkdir diagrams");
+        // A diagram file holding two views would fail compilation, but `fmt`
+        // must ignore view files entirely.
+        let diagram = "view \"a\" { system = \"s\" }\nview \"b\" { system = \"s\" }\n";
+        std::fs::write(dir.path().join("diagrams/overview.hcl"), diagram).expect("write diagram");
         std::fs::write(
             dir.path().join("system.hcl"),
-            "project { name = \"x\" }\nsystem \"s\" { description = \"d\" }\nview \"v\" { system = \"s\" }\n",
+            "system \"s\" { description = \"d\" }\n",
         )
-        .expect("write hcl with view");
+        .expect("write system");
+
         let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
-        let code = run(&cli);
-        assert_eq!(code, 0);
+        assert_eq!(
+            run(&cli),
+            0,
+            "fmt must succeed despite an invalid view file"
+        );
         assert!(
-            dir.path().join("views.hcl").exists(),
-            "views.hcl should be generated"
+            !dir.path().join("views.hcl").exists(),
+            "fmt must not create views.hcl"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("diagrams/overview.hcl")).unwrap(),
+            diagram,
+            "fmt must not touch diagram files"
         );
     }
 
