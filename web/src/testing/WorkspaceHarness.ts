@@ -216,13 +216,31 @@ export class WorkspaceHarness {
     const content = await this.fs.readFile(primary);
     const doc = new DocumentStore();
     if (content.trim()) doc.loadFromHcl(content);
-    return this.componentKeys.filter((key) => doc.findComponent(key) !== null);
+    // Only visual *owners* are safe to mutate in isolation. An instance's
+    // visuals are cloned from the definition it `source`s, so editing an
+    // instance (or a definition that is instantiated) rewrites a shared
+    // definition and changes every component in that group. Owners are the
+    // components that carry their own visuals (no `source`).
+    return this.componentKeys.filter((key, index) => {
+      if (this.#components[index]?.source) return false;
+      return doc.findComponent(key) !== null;
+    });
   }
 
+  /**
+   * Visual-owner snapshots, keyed by the component that owns them.
+   *
+   * An instance's visuals are cloned from the top-level definition it
+   * `source`s, so the definition — not the instance — is the owner. Sourced
+   * instances are therefore omitted: editing their definition changes the
+   * whole group at once, and the owner entry already captures that state.
+   */
   componentVisuals(): Record<string, ComponentVisualSnapshot> {
     const visuals: Record<string, ComponentVisualSnapshot> = {};
     this.#components.forEach((component, index) => {
-      visuals[componentKey(index, this.#components, this.#systems)] = {
+      if (component.source) return;
+      const key = componentKey(index, this.#components, this.#systems);
+      visuals[key] = {
         color: component.color,
         border: component.border,
         font: component.font,
