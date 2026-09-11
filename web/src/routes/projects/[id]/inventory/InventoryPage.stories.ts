@@ -100,7 +100,6 @@ const DEFINITION_DIAGRAMS: Record<string, DiagramLayout> = {
     checked: {
       "demo-system/battery": { x: 60, y: 60, width: 160, height: 100 },
     },
-    savedLayout: {},
   },
   "controller.hcl": {
     checked: {
@@ -113,7 +112,6 @@ const DEFINITION_DIAGRAMS: Record<string, DiagramLayout> = {
       },
       "demo-system/controller/mcu": { x: 80, y: 110, width: 170, height: 100 },
     },
-    savedLayout: {},
   },
 };
 

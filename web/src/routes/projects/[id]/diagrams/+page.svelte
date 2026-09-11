@@ -424,7 +424,9 @@ $effect(() => {
     const editedDuringLoad = diagramEditStamp !== loadStartStamp;
     if (!editedDuringLoad) {
       checked = layout.checked;
-      savedLayout = layout.savedLayout;
+      // `DiagramLayout` no longer persists the editor's remembered layout;
+      // seed the page-local memory from the placed nodes.
+      savedLayout = { ...layout.checked };
       savedConnections = layout.connections ?? {};
       annotations = layout.annotations ?? [];
     }
@@ -451,7 +453,6 @@ $effect(() => {
   // into them.
   const snapshot: DiagramLayout = {
     checked: $state.snapshot(checked),
-    savedLayout: $state.snapshot(savedLayout),
     connections: $state.snapshot(savedConnections),
     annotations: $state.snapshot(annotations),
   };

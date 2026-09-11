@@ -1,9 +1,10 @@
-// Schema + validation for the diagram data persisted into the active
+// Schema + projection for the diagram data persisted into the active
 // project's VFS (web/src/routes/projects/[id]/diagrams/+page.svelte's
-// `checked`/`savedLayout`).
+// `checked`).
 // Converts views to/from canonical HCL using rhizz-core's `serialize_views`
-// and `parse_views` (backed by hcl-rs).
-import { z } from "zod";
+// and `parse_views` (backed by hcl-rs). rhizz-core owns parsing and view
+// validation, so this module only projects `ViewDefinition` to/from the
+// canvas shape.
 import { type ProjectFs, VfsError } from "../../../../vfs/fs";
 import {
   type Annotation,
@@ -13,74 +14,63 @@ import {
   serialize_views,
   type ViewDefinition,
 } from "../../../../rhizz_wasm_wrapper";
-import type { Box } from "./geometry";
+import type { Box, ConnectionSide, TextAlign } from "./geometry";
 
-// Where a node's label is positioned within its box.
-export const TextAlignSchema = z.enum(["center", "top-center", "top-left"]);
-export type TextAlign = z.infer<typeof TextAlignSchema>;
+// Re-export the canvas's alignment/side unions so persistence consumers share
+// one definition (`geometry.ts` remains the source of truth).
+export type { ConnectionSide, TextAlign } from "./geometry";
 
-export const ConnectionSideSchema = z.enum(["top", "bottom", "left", "right"]);
-export type ConnectionSide = z.infer<typeof ConnectionSideSchema>;
+export interface StoredConnection {
+  startSide?: ConnectionSide | undefined;
+  endSide?: ConnectionSide | undefined;
+}
 
-export const StoredConnectionSchema = z.object({
-  startSide: ConnectionSideSchema.optional(),
-  endSide: ConnectionSideSchema.optional(),
-});
-export type StoredConnection = z.infer<typeof StoredConnectionSchema>;
+// Position + size + style of a node, as stored in `checked`.
+export interface StoredBox {
+  x: number;
+  y: number;
+  width?: number | undefined;
+  height?: number | undefined;
+  textAlign?: TextAlign | undefined;
+}
 
-// Position + size + style of a node, as stored in checked/savedLayout.
-export const StoredBoxSchema = z.object({
-  x: z.number(),
-  y: z.number(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  textAlign: TextAlignSchema.optional(),
-});
+const TEXT_ALIGNS: readonly TextAlign[] = ["center", "top-center", "top-left"];
+const CONNECTION_SIDES: readonly ConnectionSide[] = [
+  "top",
+  "bottom",
+  "left",
+  "right",
+];
 
-export type StoredBox = z.infer<typeof StoredBoxSchema>;
+/** Narrows a raw HCL `text_align` string to the canvas's alignment union. */
+function asTextAlign(value: string | undefined): TextAlign | undefined {
+  if (value === undefined) return undefined;
+  return TEXT_ALIGNS.find((align) => align === value);
+}
 
-// Validates a raw record against StoredBoxSchema, dropping malformed entries.
-export function sanitizeStoredRecord(
-  record: Record<string, unknown>,
-): Record<string, StoredBox> {
-  const sanitized: Record<string, StoredBox> = {};
-  let droppedKeys: string[] | null = null;
-
-  for (const [key, value] of Object.entries(record)) {
-    const result = StoredBoxSchema.safeParse(value);
-    if (result.success) {
-      sanitized[key] = result.data;
-    } else {
-      (droppedKeys ??= []).push(key);
-    }
-  }
-
-  if (droppedKeys) {
-    console.warn(
-      `Dropped ${String(droppedKeys.length)} malformed diagram layout entr${
-        droppedKeys.length === 1 ? "y" : "ies"
-      }: ${droppedKeys.join(", ")}`,
-    );
-  }
-
-  return sanitized;
+/** Narrows a raw HCL connection-side string to the canvas's side union. */
+function asConnectionSide(
+  value: string | undefined,
+): ConnectionSide | undefined {
+  if (value === undefined) return undefined;
+  return CONNECTION_SIDES.find((side) => side === value);
 }
 
 // Conventional location for diagram layout data inside a project's VFS.
 export const DIAGRAM_LAYOUT_DIR = "diagrams";
 
-// The full persisted content of a single diagram: which components are
-// currently placed on its canvas, every component's last-known box, connection
-// starting points, and free-standing text annotations.
+// The persisted content of a single diagram: which components are placed on
+// its canvas, connection routing overrides, and free-standing text
+// annotations. The editor's "remembered layout" for unchecked nodes is
+// transient UI state and is deliberately not persisted (see `+page.svelte`).
 export interface DiagramLayout {
   checked: Record<string, StoredBox>;
-  savedLayout: Record<string, StoredBox>;
   connections?: Record<string, StoredConnection>;
   annotations?: Annotation[];
 }
 
 export function emptyDiagramLayout(): DiagramLayout {
-  return { checked: {}, savedLayout: {}, connections: {}, annotations: [] };
+  return { checked: {}, connections: {}, annotations: [] };
 }
 
 /**
@@ -229,39 +219,26 @@ export function layoutToHcl(
  */
 export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
-  const savedLayout: Record<string, StoredBox> = {};
   const connections: Record<string, StoredConnection> = {};
   const annotations: Annotation[] = [];
 
   for (const view of views) {
     for (const node of view.nodes ?? []) {
-      const parsedBox = StoredBoxSchema.safeParse({
-        x: node.x,
-        y: node.y,
-        width: node.width,
-        height: node.height,
-        textAlign: node.text_align,
-      });
-      if (parsedBox.success) {
-        checked[node.component] = parsedBox.data;
-        savedLayout[node.component] = parsedBox.data;
-      }
+      // `parse_views` returns typed values, so no re-validation is needed.
+      const box: StoredBox = { x: node.x, y: node.y };
+      if (node.width !== undefined) box.width = node.width;
+      if (node.height !== undefined) box.height = node.height;
+      const textAlign = asTextAlign(node.text_align);
+      if (textAlign !== undefined) box.textAlign = textAlign;
+      checked[node.component] = box;
     }
     for (const conn of view.connections ?? []) {
       const entry: StoredConnection = {};
-      if (conn.start_side) {
-        const parsedStart = ConnectionSideSchema.safeParse(conn.start_side);
-        if (parsedStart.success) {
-          entry.startSide = parsedStart.data;
-        }
-      }
-      if (conn.end_side) {
-        const parsedEnd = ConnectionSideSchema.safeParse(conn.end_side);
-        if (parsedEnd.success) {
-          entry.endSide = parsedEnd.data;
-        }
-      }
-      if (entry.startSide || entry.endSide) {
+      const startSide = asConnectionSide(conn.start_side);
+      const endSide = asConnectionSide(conn.end_side);
+      if (startSide !== undefined) entry.startSide = startSide;
+      if (endSide !== undefined) entry.endSide = endSide;
+      if (entry.startSide !== undefined || entry.endSide !== undefined) {
         connections[conn.connection] = entry;
       }
     }
@@ -275,7 +252,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
     }
   }
 
-  return { checked, savedLayout, connections, annotations };
+  return { checked, connections, annotations };
 }
 
 /**
