@@ -57,7 +57,7 @@ pub fn score(model: &Model) -> ScoreReport;
   snapshots of the model simultaneously (e.g. the GUI keeping the last valid
   model while the current edit contains errors).
 - **Stable error codes** — `Diagnostic.code` strings (`E001`–`E016`,
-  `W001`–`W012`) are part of the public API. Changing or renumbering them is a
+  `W001`–`W016`) are part of the public API. Changing or renumbering them is a
   breaking change.
 
 ---

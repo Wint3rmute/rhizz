@@ -378,8 +378,8 @@ struct Field {
    `system` that resolves to a real system (E006).
    Layout (`node` / connection / annotation blocks in `diagrams/*.hcl`) is
    validated in a later pass against the already-resolved `Model`: every
-   `node` component path must resolve to a real component in the view's
-   system, otherwise emit a view error.
+   `node` component path must resolve to a known component (W016), otherwise
+   emit a warning.
 9. Validation checks:
    - Unconnected port verification (applies to **placed instances only**;
      a definition's ports are part of its contract and cannot be connected):
@@ -422,8 +422,8 @@ validated against the already-resolved `Model`:
 - Exactly one `view` block per file, label matching the filename stem (E016).
 - `system` must resolve to a real system (E006).
 - Visual layout (`node` positions, connection sides, annotations) references
-  components as plain path strings; validating those paths against the resolved
-  `Model` is a later phase.
+  components as plain path strings. Every `node` path is validated against the
+  resolved `Model`; a path that matches no component key emits **W016**.
 
 ```rust
 #[derive(Debug, Default)]

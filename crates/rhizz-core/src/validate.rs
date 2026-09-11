@@ -1,7 +1,7 @@
 //! Validation pass -- warning pass over the resolved Model.
 
 use crate::model::{
-    ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model, ViewDefinition,
+    ComponentId, ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model, ViewDefinition,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -259,21 +259,20 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
 /// `file` and embedded in the message, because downstream consumers (the
 /// book/lock) drop the `file` field.
 ///
-/// Initial checks:
+/// Checks:
 /// - **E016** — the file must contain exactly one `view` block.
 /// - **E016** — the view label must match the filename stem
 ///   (`diagrams/overview.hcl` -> `view "overview"`).
 /// - **E006** — the view's `system` must name a defined system.
-///
-/// `node`-path validation is intentionally not implemented yet; this helper is
-/// its intended home (the full `views` slice is available).
+/// - **W016** — every `node` path must resolve to a known component (the
+///   structurally-stable keys the diagram editor persists).
 #[must_use]
 pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let file = PathBuf::from(filename);
 
     if views.len() != 1 {
-        diagnostics.push(view_error(
+        diagnostics.push(view_diagnostic(
             DiagnosticCode::E016,
             &file,
             format!(
@@ -293,7 +292,7 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
     if view.label != stem {
-        diagnostics.push(view_error(
+        diagnostics.push(view_diagnostic(
             DiagnosticCode::E016,
             &file,
             format!(
@@ -303,8 +302,8 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
         ));
     }
 
-    if view.system.is_empty() {
-        diagnostics.push(view_error(
+    let system_known = if view.system.is_empty() {
+        diagnostics.push(view_diagnostic(
             DiagnosticCode::E006,
             &file,
             format!(
@@ -312,12 +311,13 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
                 view.label
             ),
         ));
+        false
     } else if !model
         .systems
         .iter()
         .any(|system| system.label == view.system)
     {
-        diagnostics.push(view_error(
+        diagnostics.push(view_diagnostic(
             DiagnosticCode::E006,
             &file,
             format!(
@@ -325,13 +325,92 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
                 view.label, view.system
             ),
         ));
+        false
+    } else {
+        true
+    };
+
+    if system_known {
+        validate_view_nodes(model, view, &file, filename, &mut diagnostics);
     }
 
     diagnostics
 }
 
+/// Emit **W016** for `node` blocks whose component path does not resolve to a
+/// real component.
+fn validate_view_nodes(
+    model: &Model,
+    view: &ViewDefinition,
+    file: &Path,
+    filename: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let keys = component_keys(model);
+    let mut reported: HashSet<&str> = HashSet::new();
+    for node in &view.nodes {
+        if keys.contains(&node.component) {
+            continue;
+        }
+        if !reported.insert(node.component.as_str()) {
+            continue;
+        }
+        diagnostics.push(view_diagnostic(
+            DiagnosticCode::W016,
+            file,
+            format!(
+                "{filename}: view '{}' node '{}' does not reference a known component",
+                view.label, node.component
+            ),
+        ));
+    }
+}
+
+/// The set of structurally-stable component keys used by diagram views:
+/// system-scoped label paths (`quadcopter/flight-controller/imu`) and
+/// top-level definition labels (`barometer`).
+fn component_keys(model: &Model) -> HashSet<String> {
+    let mut cache: HashMap<ComponentId, String> = HashMap::new();
+    (0..model.components.len())
+        .map(|index| component_key(model, ComponentId(index), &mut cache))
+        .collect()
+}
+
+/// Compute one component's view key, memoized through `cache`.
+fn component_key(
+    model: &Model,
+    id: ComponentId,
+    cache: &mut HashMap<ComponentId, String>,
+) -> String {
+    if let Some(key) = cache.get(&id) {
+        return key.clone();
+    }
+    let Some(component) = model.components.get(id.0) else {
+        return String::new();
+    };
+    let key = match component.parent {
+        Some(ComponentParent::Component(parent)) => {
+            format!(
+                "{}/{}",
+                component_key(model, parent, cache),
+                component.label
+            )
+        }
+        Some(ComponentParent::System(system)) => {
+            let system_label = model
+                .systems
+                .get(system.0)
+                .map_or("", |system| system.label.as_str());
+            format!("{system_label}/{}", component.label)
+        }
+        None => component.label.clone(),
+    };
+    cache.insert(id, key.clone());
+    key
+}
+
 /// Build a view validation diagnostic carrying the offending `file`.
-fn view_error(code: DiagnosticCode, file: &Path, message: String) -> Diagnostic {
+fn view_diagnostic(code: DiagnosticCode, file: &Path, message: String) -> Diagnostic {
     Diagnostic {
         code,
         file: Some(file.to_path_buf()),
@@ -921,6 +1000,129 @@ mod tests {
         assert_eq!(
             diags[0].file.as_deref(),
             Some(Path::new("diagrams/overview.hcl"))
+        );
+    }
+
+    // ── validate_view: node paths (W016) ─────────────────────────────────
+
+    fn model_with_components() -> Model {
+        let src = r#"
+component "cpu" { leaf = true }
+component "computer" {
+  instance "cpu" { source = "cpu" }
+}
+system "computer-setup" {
+  instance "computer" { source = "computer" }
+}
+system "other" {
+  instance "monitor" { source = "cpu" }
+}
+"#;
+        let raw = crate::parse::parse_file(src, Path::new("system.hcl")).expect("parse");
+        resolve(raw).expect("resolve").0
+    }
+
+    fn view_with_nodes(label: &str, system: &str, nodes: &[&str]) -> ViewDefinition {
+        ViewDefinition {
+            label: label.to_owned(),
+            system: system.to_owned(),
+            nodes: nodes
+                .iter()
+                .map(|component| crate::model::NodeLayout {
+                    component: (*component).to_owned(),
+                    x: 0.0,
+                    y: 0.0,
+                    width: None,
+                    height: None,
+                    text_align: None,
+                })
+                .collect(),
+            ..ViewDefinition::default()
+        }
+    }
+
+    fn w016_paths(diagnostics: &[Diagnostic]) -> Vec<&str> {
+        diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W016)
+            .map(|d| d.message.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn validate_view_known_node_emits_nothing() {
+        let model = model_with_components();
+        let view = view_with_nodes(
+            "overview",
+            "computer-setup",
+            &[
+                "computer-setup/computer",
+                "computer-setup/computer/cpu",
+                "computer/cpu",
+                "cpu",
+            ],
+        );
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+    }
+
+    #[test]
+    fn validate_view_unknown_node_emits_w016() {
+        let model = model_with_components();
+        let view = view_with_nodes(
+            "overview",
+            "computer-setup",
+            &["computer-setup/not-a-computer"],
+        );
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
+        assert_eq!(diags[0].code, DiagnosticCode::W016);
+        assert!(
+            diags[0].message.contains("computer-setup/not-a-computer"),
+            "message must name the bad path: {}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn validate_view_node_in_other_system_resolves() {
+        // Live example: drone's `main` view targets `ground-control` but also
+        // places nodes from `quadcopter`. A node is valid if it names any real
+        // component key, not only one inside the view's own system.
+        let model = model_with_components();
+        let view = view_with_nodes("overview", "computer-setup", &["other/monitor"]);
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+    }
+
+    #[test]
+    fn validate_view_repeated_unknown_node_emits_one_w016() {
+        let model = model_with_components();
+        let view = view_with_nodes(
+            "overview",
+            "computer-setup",
+            &["computer-setup/ghost", "computer-setup/ghost"],
+        );
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert_eq!(
+            w016_paths(&diags).len(),
+            1,
+            "expected one W016, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn validate_view_nodes_skipped_when_system_unknown() {
+        let model = model_with_components();
+        let view = view_with_nodes("overview", "nope", &["computer-setup/ghost"]);
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E006),
+            "expected E006, got {diags:?}"
+        );
+        assert!(
+            w016_paths(&diags).is_empty(),
+            "node checks must be skipped when the system is unknown, got {diags:?}"
         );
     }
 }
