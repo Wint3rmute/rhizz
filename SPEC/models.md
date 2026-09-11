@@ -189,6 +189,8 @@ Straightforward: accumulate `RawFile`s (the single `system.hcl` model file and a
 
 While canonical projects maintain a single `system.hcl` architecture model file alongside view definitions, `rhizz-core`'s compiler accepts multiple `Source` inputs and merges their raw representations before resolution, keeping the core parser decoupled from physical file storage conventions.
 
+View files: each file under `diagrams/` must contain exactly one `view` block, whose label matches the filename (`diagrams/overview.hcl` -> `view "overview"`). Parsers merge tolerantly across files, but canonical projects emit one view per diagram file. `views.hcl` is legacy: still parsed if present, never written by `rhizz fmt`.
+
 No deduplication logic — duplicate detection happens during
 resolution/validation.
 
@@ -362,6 +364,10 @@ struct Field {
    - Resolve target components and optional ports (E011 for missing component, E010 for missing port).
 7. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
 8. Resolve views — look up `system` label → `SystemId` (E006 if missing).
+   Layout (`node` / connection / annotation blocks in `diagrams/*.hcl`) is
+   validated in a second pass against the already-resolved `Model`: every
+   `node` component path must resolve to a real component in the view's
+   system, otherwise emit a view error.
 9. Validation checks:
    - Unconnected port verification (applies to **placed instances only**;
      a definition's ports are part of its contract and cannot be connected):
@@ -399,6 +405,12 @@ struct ScopeIndex {
 
 Views don't need their own arena — they're lightweight config referencing into
 the `Model`:
+
+> **Note:** the resolved `View` below carries only identity + filter.
+> Visual layout (`node` positions, connection sides, annotations) lives in
+> `ViewDefinition` (see `serialize.rs`), with component references as plain
+> path strings validated against the resolved `Model` in a second pass
+> (phase 1: model, phase 2: views).
 
 ```rust
 #[derive(Debug)]
