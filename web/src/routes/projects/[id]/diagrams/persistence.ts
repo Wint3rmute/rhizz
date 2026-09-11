@@ -74,68 +74,6 @@ export function emptyDiagramLayout(): DiagramLayout {
 }
 
 /**
- * Minimal structural interface for components needed to resolve hierarchical keys.
- */
-export interface ComponentHierarchyItem {
-  label: string;
-  parent_component_index?: number | undefined;
-  parent_system_index?: number | undefined;
-}
-
-/**
- * Minimal structural interface for systems needed to resolve hierarchical keys.
- */
-export interface SystemHierarchyItem {
-  label: string;
-}
-
-/**
- * Builds a structurally-stable persistence key for a component: the path
- * of labels from its root system down to it, e.g. "drone/controller/mcu".
- *
- * Falls back to a `#<index>`-prefixed key if the chain can't be resolved.
- */
-export function componentKey(
-  index: number,
-  components: ComponentHierarchyItem[],
-  systems: SystemHierarchyItem[],
-): string {
-  const parts: string[] = [];
-  let current: number | undefined = index;
-
-  while (current !== undefined) {
-    const component: ComponentHierarchyItem | undefined = components[current];
-    if (!component) return `#${String(index)}`;
-    parts.unshift(component.label);
-    if (component.parent_component_index !== undefined) {
-      current = component.parent_component_index;
-      continue;
-    }
-    const system = component.parent_system_index !== undefined
-      ? systems[component.parent_system_index]
-      : undefined;
-    if (system) parts.unshift(system.label);
-    current = undefined;
-  }
-
-  return parts.join("/");
-}
-
-/**
- * Builds a reverse lookup Map from component persistence keys to arena indices.
- */
-export function buildKeyToIndexMap(
-  components: ComponentHierarchyItem[],
-  systems: SystemHierarchyItem[],
-): Map<string, number> {
-  const map = new Map<string, number>();
-  components.forEach((_, index) => {
-    map.set(componentKey(index, components, systems), index);
-  });
-  return map;
-}
-
-/**
  * Maps layout checked records to placed node bounding boxes keyed by arena index.
  */
 export function mapLayoutToBoxes(

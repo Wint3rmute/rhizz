@@ -7,7 +7,6 @@ import { openProjectFs } from "../../../../../../vfs/fs";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import type { DiagramStaticBox } from "../../types";
 import {
-  buildKeyToIndexMap,
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
@@ -92,7 +91,9 @@ let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
 let keyToIndex = $derived.by(() => {
-  return buildKeyToIndexMap(components, systems);
+  const map = new SvelteMap<string, number>();
+  (model?.component_keys() ?? []).forEach((key, index) => map.set(key, index));
+  return map;
 });
 
 let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {

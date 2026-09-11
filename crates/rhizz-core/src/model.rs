@@ -210,6 +210,47 @@ impl Model {
     pub fn field(&self, id: FieldId) -> Option<&Field> {
         self.fields.get(id.0)
     }
+
+    /// Structurally-stable diagram keys for every component, index-aligned
+    /// with [`Model::components`].
+    ///
+    /// A component's key is the `/`-joined path of labels from its root:
+    /// `quadcopter/flight-controller/imu` for a placed instance, or just the
+    /// label for a top-level definition (`barometer`). This is the shape the
+    /// diagram editor persists, and the key space the view validator checks
+    /// (W016).
+    #[must_use]
+    pub fn component_keys(&self) -> Vec<String> {
+        let mut cache: HashMap<ComponentId, String> = HashMap::new();
+        (0..self.components.len())
+            .map(|index| self.component_key(ComponentId(index), &mut cache))
+            .collect()
+    }
+
+    /// Compute one component's diagram key, memoized through `cache`.
+    fn component_key(&self, id: ComponentId, cache: &mut HashMap<ComponentId, String>) -> String {
+        if let Some(key) = cache.get(&id) {
+            return key.clone();
+        }
+        let Some(component) = self.components.get(id.0) else {
+            return String::new();
+        };
+        let key = match component.parent {
+            Some(ComponentParent::Component(parent)) => {
+                format!("{}/{}", self.component_key(parent, cache), component.label)
+            }
+            Some(ComponentParent::System(system)) => {
+                let system_label = self
+                    .systems
+                    .get(system.0)
+                    .map_or("", |system| system.label.as_str());
+                format!("{system_label}/{}", component.label)
+            }
+            None => component.label.clone(),
+        };
+        cache.insert(id, key.clone());
+        key
+    }
 }
 
 /// Optional project-level metadata (name, version, authors).

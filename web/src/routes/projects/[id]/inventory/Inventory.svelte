@@ -234,48 +234,13 @@ $effect(() => {
 });
 
 // ── Preview rendering ───────────────────────────────────────────────────────
-// Map layout component keys ("system/definition/…") to indices into the
-// component arena (same convention as the Explore page).
-const parentOf = $derived.by(() => {
-  const map = new SvelteMap<number, number>();
-  comps.forEach((c: RawComponent, index: number) => {
-    if (c.parent?.Component !== undefined) map.set(index, c.parent.Component);
-  });
-  return map;
-});
-const rootSystemOf = $derived.by(() => {
-  const map = new SvelteMap<number, string>();
-  for (const sys of raw?.systems ?? []) {
-    const walk = (cid: number) => {
-      if (map.has(cid)) return;
-      map.set(cid, sys.label);
-      const c = comps[cid];
-      for (const child of c?.children ?? []) walk(child);
-    };
-    for (const cid of sys.components ?? []) walk(cid);
-  }
-  return map;
-});
-
-function componentKey(index: number): string {
-  const segs: string[] = [];
-  let current: number | undefined = index;
-  while (current !== undefined) {
-    const c = comps[current];
-    if (!c) return `#${index}`;
-    segs.unshift(c.label);
-    current = parentOf.get(current);
-  }
-  const root = rootSystemOf.get(index);
-  if (root) segs.unshift(root);
-  return segs.join("/");
-}
+// Map layout component keys to indices via rhizz-core's canonical keys
+// (`Model::component_keys`), index-aligned with `comps`/`model.components()`.
+let componentKeys = $derived(model ? model.component_keys() : []);
 
 let keyToIndex = $derived.by(() => {
   const map = new SvelteMap<string, number>();
-  comps.forEach((_: RawComponent, index: number) => {
-    map.set(componentKey(index), index);
-  });
+  componentKeys.forEach((key, index) => map.set(key, index));
   return map;
 });
 

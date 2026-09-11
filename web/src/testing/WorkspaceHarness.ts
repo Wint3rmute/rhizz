@@ -1,4 +1,4 @@
-import init, { type ComponentJS, type SystemJS } from "rhizz";
+import init, { type ComponentJS } from "rhizz";
 import { type ComponentData, DocumentStore } from "../DocumentStore.svelte";
 import {
   compile_system,
@@ -6,7 +6,6 @@ import {
   get_example_projects,
   serialize_model,
 } from "../rhizz_wasm_wrapper";
-import { componentKey } from "../routes/projects/[id]/diagrams/persistence";
 import { readProjectSources, type Source } from "../vfs/compile";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
 import { InMemoryProjectStore } from "../vfs/inMemoryStore";
@@ -62,7 +61,7 @@ export class WorkspaceHarness {
   readonly fs: ProjectFs;
   #sources: Source[] = [];
   #components: ComponentJS[] = [];
-  #systems: SystemJS[] = [];
+  #componentKeys: string[] = [];
   #canonicalHcl = "";
   #selectedKey: string | null = null;
   #activeDiagram = "main";
@@ -107,9 +106,7 @@ export class WorkspaceHarness {
   }
 
   get componentKeys(): string[] {
-    return this.#components.map((_, index) =>
-      componentKey(index, this.#components, this.#systems)
-    );
+    return this.#componentKeys;
   }
 
   get selectedComponentKey(): string | null {
@@ -239,7 +236,7 @@ export class WorkspaceHarness {
     const visuals: Record<string, ComponentVisualSnapshot> = {};
     this.#components.forEach((component, index) => {
       if (component.source) return;
-      const key = componentKey(index, this.#components, this.#systems);
+      const key = this.#componentKeys[index] ?? `#${String(index)}`;
       visuals[key] = {
         color: component.color,
         border: component.border,
@@ -268,7 +265,7 @@ export class WorkspaceHarness {
     this.#sources = await readProjectSources(this.fs);
     if (this.#sources.length === 0) {
       this.#components = [];
-      this.#systems = [];
+      this.#componentKeys = [];
       this.#canonicalHcl = "";
       return;
     }
@@ -283,7 +280,7 @@ export class WorkspaceHarness {
       throw new Error(`Workspace failed to compile: ${errors}`);
     }
     this.#components = model.components();
-    this.#systems = model.systems();
+    this.#componentKeys = model.component_keys();
     this.#canonicalHcl = serialize_model(model);
   }
 
@@ -301,13 +298,9 @@ export class WorkspaceHarness {
         .join(", ");
       throw new Error(`Canonical model failed to round-trip: ${errors}`);
     }
-    const components = model.components();
-    const systems = model.systems();
     return {
       canonicalHcl: serialize_model(model),
-      componentKeys: components.map((_, index) =>
-        componentKey(index, components, systems)
-      ).toSorted(),
+      componentKeys: model.component_keys().toSorted(),
     };
   }
 
