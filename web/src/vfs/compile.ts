@@ -18,6 +18,11 @@ export interface Source {
 // `Source[]` shape the compiler accepts, using each file's path as its
 // `filename` — so compiler diagnostics point at a real, human-meaningful
 // path instead of a synthetic placeholder.
+//
+// Diagram layouts under `diagrams/` are included: `rhizz-core::compile`
+// classifies them by path and validates each one independently (E016/E006/
+// W016), exactly like the CLI and book preprocessor. View errors never clear
+// the resolved model, so the model and canvas keep working.
 export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
   const entries = await fs.readdir(".", { recursive: true });
   const hclPaths = entries
@@ -25,7 +30,6 @@ export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
       (entry) =>
         entry.isFile() &&
         entry.name.endsWith(".hcl") &&
-        !entry.path.startsWith("diagrams/") &&
         !entry.path.startsWith(".git/"),
     )
     .map((entry) => entry.path);

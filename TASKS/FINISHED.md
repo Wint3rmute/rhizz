@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Compile `diagrams/*.hcl` in the web workbench
+
+Step 1 of the Rust-owned view model plan: the browser now compiles the same
+files as the CLI and book preprocessor, so view diagnostics are real in the app
+instead of being silently skipped.
+
+- **`readProjectSources` includes `diagrams/*.hcl`** (`web/src/vfs/compile.ts`)
+  and `BookExampleView`'s source filter matches. `rhizz-core::compile`
+  classifies each file by path and validates it independently (E016 one view
+  per file, E006 unknown `system`, W016 unknown `node`). Because view errors
+  never clear the resolved model, the model and canvas keep working.
+- **Surfaced where compile output already lives**: the Overview/Editor
+  `CompilationDiagnosticsOutline` and the book-example `VerdictPanel` now show
+  E016/E006/W016; the diagrams page keeps its error banner (W016 stays
+  non-blocking). The rendering path (`parse_views` via `persistence.ts` /
+  book-example) is untouched.
+- **Tests**: `compile.test.ts` inverted to assert diagrams are included;
+  `rhizz_wasm_wrapper.test.ts` asserts E016 + E006 + W016 surface through
+  `compile_system` while `model()` stays defined. New `ViewNodeWarning`
+  Storybook story shows W016 in the book verdict panel.
+- Web unit suite 504 green; `just lint` (eslint + svelte-check) and
+  `just build` (incl. Storybook) green. `just test`'s storybook browser leg
+  still needs Playwright Chromium (pre-existing local limitation).
+
+
 ## Task — One view per file: per-file view validation (E016)
 
 Reworked the compiler to enforce the spec's one-view-per-file rule instead of
