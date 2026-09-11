@@ -1,4 +1,5 @@
 <script lang="ts">
+import { SvelteMap } from "svelte/reactivity";
 import { resolveIcon } from "../../iconHelper";
 import { getTheme, toggleTheme } from "../../ThemeState.svelte";
 import {
@@ -8,7 +9,6 @@ import {
 } from "../../rhizz_wasm_wrapper";
 import DiagramStaticView from "../projects/[id]/diagrams/DiagramStaticView.svelte";
 import {
-  buildKeyToIndexMap,
   mapLayoutToBoxes,
   viewsToLayout,
 } from "../projects/[id]/diagrams/persistence";
@@ -190,7 +190,11 @@ let showDiagram = $derived(
   !singleFile && diagramView && isDiagram(selectedFile),
 );
 
-let keyToIndex = $derived(buildKeyToIndexMap(components, systems));
+let keyToIndex = $derived.by(() => {
+  const map = new SvelteMap<string, number>();
+  (model?.component_keys() ?? []).forEach((key, index) => map.set(key, index));
+  return map;
+});
 let boxes = $derived(
   mapLayoutToBoxes(viewsToLayout(selectedViews).checked, keyToIndex),
 );

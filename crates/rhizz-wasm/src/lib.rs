@@ -615,6 +615,13 @@ impl ModelJS {
             .collect()
     }
 
+    /// Structurally-stable diagram keys for every component, index-aligned
+    /// with [`ModelJS::components`].
+    #[must_use]
+    pub fn component_keys(&self) -> Vec<String> {
+        self.inner.component_keys()
+    }
+
     /// Returns all connections as typed wrappers.
     #[must_use]
     pub fn connections(&self) -> Vec<ConnectionJS> {

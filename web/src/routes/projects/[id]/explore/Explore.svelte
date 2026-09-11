@@ -203,35 +203,13 @@ let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
-function componentKey(index: number): string {
-  const allComponents: ComponentJS[] = components;
-  const allSystems: SystemJS[] = systems;
-  const parts: string[] = [];
-  let current: number | undefined = index;
-
-  while (current !== undefined) {
-    const component: ComponentJS | undefined = allComponents[current];
-    if (!component) return `#${index}`;
-    parts.unshift(component.label);
-    if (component.parent_component_index !== undefined) {
-      current = component.parent_component_index;
-      continue;
-    }
-    const system = component.parent_system_index !== undefined
-      ? allSystems[component.parent_system_index]
-      : undefined;
-    if (system) parts.unshift(system.label);
-    current = undefined;
-  }
-
-  return parts.join("/");
-}
+// Structurally-stable component keys, computed by rhizz-core
+// (`Model::component_keys`) and index-aligned with `components`.
+let componentKeys = $derived(model ? model.component_keys() : []);
 
 let keyToIndex = $derived.by(() => {
   const map = new SvelteMap<string, number>();
-  components.forEach((_: unknown, index: number) => {
-    map.set(componentKey(index), index);
-  });
+  componentKeys.forEach((key, index) => map.set(key, index));
   return map;
 });
 
@@ -241,7 +219,7 @@ let componentDiagrams = $derived.by(() => {
     const diagram = findComponentDiagram(
       diagramEntries,
       component.label,
-      componentKey(index),
+      componentKeys[index] ?? `#${String(index)}`,
     );
     if (diagram) map.set(index, diagram);
   });

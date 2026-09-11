@@ -6,7 +6,7 @@ import {
   reset_view,
 } from "../../../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
-import { SvelteSet } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import {
@@ -31,8 +31,6 @@ import {
 
 import {
   type Annotation,
-  buildKeyToIndexMap,
-  componentKey,
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
@@ -173,23 +171,26 @@ let compileErrors = $derived.by(() => {
 });
 let firstError = $derived(compileErrors[0] ?? null);
 
-// Builds a structurally-stable persistence key for a component: the path
-// of labels from its root system down to it, e.g.
-// "home-monitor/controller/mcu". Unlike the component's arena index (its
-// position in model.components(), which shifts whenever components are
-// reordered or inserted earlier in the HCL source), this key only changes
-// if the component itself (or an ancestor) is renamed or reparented.
+// Structurally-stable persistence keys for every component, index-aligned
+// with `components` and computed by rhizz-core (`Model::component_keys`), so
+// the editor and the compiler's view validation (W016) agree by construction.
+// Unlike a component's arena index, a key only changes if the component (or an
+// ancestor) is renamed or reparented.
+let componentKeys = $derived(model ? model.component_keys() : []);
+
 function getComponentKey(index: number): string {
-  return componentKey(index, components, systems);
+  return componentKeys[index] ?? `#${String(index)}`;
 }
 
 // Reverse lookup from a persistence key back to the component's current
-// arena index, rebuilt whenever `components`/`systems` change. Entries in
+// arena index, rebuilt whenever the model changes. Entries in
 // `checked`/`savedLayout` whose key isn't found here belong to a component
 // that no longer exists (renamed, removed, or reparented) and are simply
 // not rendered.
 let keyToIndex = $derived.by(() => {
-  return buildKeyToIndexMap(components, systems);
+  const map = new SvelteMap<string, number>();
+  componentKeys.forEach((key, index) => map.set(key, index));
+  return map;
 });
 
 // The set of arena indices currently placed on the canvas, derived from
@@ -264,11 +265,11 @@ const EDGE_HANDLE_THICKNESS = 6;
 const DEFAULT_TEXT_ALIGN: TextAlign = "center";
 
 // Which components are currently placed on the canvas, keyed by
-// componentKey() (a structurally-stable path of labels — see above), not
-// by arena index: component labels are only unique within a parent scope
-// (SPEC.md §2.3), so a bare label can't be used as a key once components
-// are nested, but arena indices shift whenever components are reordered
-// or inserted earlier in the HCL source, silently reattaching persisted
+// `Model::component_keys()` (a structurally-stable path of labels — see
+// above), not by arena index: component labels are only unique within a
+// parent scope (SPEC.md §2.3), so a bare label can't be used as a key once
+// components are nested, but arena indices shift whenever components are
+// reordered or inserted earlier in the HCL source, silently reattaching persisted
 // positions to the wrong component (see TASKS.md Task 39). If a component
 // is unchecked, it's not present here — but its last-known box is kept in
 // savedLayout below, so re-checking it later restores it to where it was

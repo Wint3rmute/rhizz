@@ -5,8 +5,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
-  buildKeyToIndexMap,
-  componentKey,
   DIAGRAM_LAYOUT_DIR,
   emptyDiagramLayout,
   layoutToHcl,
@@ -224,33 +222,13 @@ describe("HCL View conversion and persistence", () => {
   });
 });
 
-describe("componentKey and model mapping helpers", () => {
-  const systems = [{ label: "drone" }];
-  const components = [
-    { label: "fc", parent_system_index: 0 },
-    { label: "mcu", parent_component_index: 0 },
-    { label: "imu", parent_component_index: 0 },
-  ];
-
-  it("builds hierarchical path keys for components", () => {
-    expect(componentKey(0, components, systems)).toBe("drone/fc");
-    expect(componentKey(1, components, systems)).toBe("drone/fc/mcu");
-    expect(componentKey(2, components, systems)).toBe("drone/fc/imu");
-  });
-
-  it("falls back to #<index> when component index is out of bounds", () => {
-    expect(componentKey(99, components, systems)).toBe("#99");
-  });
-
-  it("builds reverse lookup map from keys to indices", () => {
-    const map = buildKeyToIndexMap(components, systems);
-    expect(map.get("drone/fc")).toBe(0);
-    expect(map.get("drone/fc/mcu")).toBe(1);
-    expect(map.get("drone/fc/imu")).toBe(2);
-  });
+describe("mapLayoutToBoxes", () => {
+  const keyToIndex = new Map<string, number>([
+    ["drone/fc", 0],
+    ["drone/fc/mcu", 1],
+  ]);
 
   it("maps layout checked records to placed node boxes", () => {
-    const keyToIndex = buildKeyToIndexMap(components, systems);
     const checked = {
       "drone/fc": {
         x: 50,

@@ -1,7 +1,7 @@
 //! Validation pass -- warning pass over the resolved Model.
 
 use crate::model::{
-    ComponentId, ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model, ViewDefinition,
+    ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model, ViewDefinition,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -346,7 +346,7 @@ fn validate_view_nodes(
     filename: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let keys = component_keys(model);
+    let keys = model.component_keys();
     let mut reported: HashSet<&str> = HashSet::new();
     for node in &view.nodes {
         if keys.contains(&node.component) {
@@ -364,49 +364,6 @@ fn validate_view_nodes(
             ),
         ));
     }
-}
-
-/// The set of structurally-stable component keys used by diagram views:
-/// system-scoped label paths (`quadcopter/flight-controller/imu`) and
-/// top-level definition labels (`barometer`).
-fn component_keys(model: &Model) -> HashSet<String> {
-    let mut cache: HashMap<ComponentId, String> = HashMap::new();
-    (0..model.components.len())
-        .map(|index| component_key(model, ComponentId(index), &mut cache))
-        .collect()
-}
-
-/// Compute one component's view key, memoized through `cache`.
-fn component_key(
-    model: &Model,
-    id: ComponentId,
-    cache: &mut HashMap<ComponentId, String>,
-) -> String {
-    if let Some(key) = cache.get(&id) {
-        return key.clone();
-    }
-    let Some(component) = model.components.get(id.0) else {
-        return String::new();
-    };
-    let key = match component.parent {
-        Some(ComponentParent::Component(parent)) => {
-            format!(
-                "{}/{}",
-                component_key(model, parent, cache),
-                component.label
-            )
-        }
-        Some(ComponentParent::System(system)) => {
-            let system_label = model
-                .systems
-                .get(system.0)
-                .map_or("", |system| system.label.as_str());
-            format!("{system_label}/{}", component.label)
-        }
-        None => component.label.clone(),
-    };
-    cache.insert(id, key.clone());
-    key
 }
 
 /// Build a view validation diagnostic carrying the offending `file`.
@@ -1020,6 +977,24 @@ system "other" {
 "#;
         let raw = crate::parse::parse_file(src, Path::new("system.hcl")).expect("parse");
         resolve(raw).expect("resolve").0
+    }
+
+    #[test]
+    fn model_component_keys_match_diagram_paths() {
+        let model = model_with_components();
+        let mut keys = model.component_keys();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                "computer",
+                "computer-setup/computer",
+                "computer-setup/computer/cpu",
+                "computer/cpu",
+                "cpu",
+                "other/monitor",
+            ]
+        );
     }
 
     fn view_with_nodes(label: &str, system: &str, nodes: &[&str]) -> ViewDefinition {
