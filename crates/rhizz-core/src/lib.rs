@@ -22,10 +22,10 @@ pub use model::{
     Annotation, Component, ComponentId, ComponentKind, ComponentParent, Connection,
     ConnectionEndpoint, ConnectionId, ConnectionLayout, ConnectionSide, Field, FieldId, Message,
     MessageId, Model, NodeLayout, Port, PortId, Project, Protocol, ProtocolId, System, SystemId,
-    View, ViewDefinition, ViewFilter, ViewFilterDefinition,
+    ViewDefinition, ViewFilterDefinition,
 };
 pub use score::{CategoryScore, ScoreReport, score};
-pub use serialize::{parse_views, serialize_model, serialize_resolved_views, serialize_views};
+pub use serialize::{parse_views, serialize_model, serialize_views};
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -52,13 +52,73 @@ pub struct CompileResult {
 
 // ── compile ───────────────────────────────────────────────────────────────────
 
+/// Returns `true` when `filename` names a view/diagram source file.
+///
+/// View files live under a `diagrams/` directory or are a legacy root-level
+/// `views.hcl`. They are validated one-file-at-a-time in phase 2 rather than
+/// being merged into the system model.
+#[must_use]
+pub fn is_view_source(filename: &str) -> bool {
+    let path = Path::new(filename);
+    let under_diagrams = path
+        .components()
+        .any(|component| component.as_os_str() == "diagrams");
+    let named_views = path.file_name().is_some_and(|name| name == "views.hcl");
+    under_diagrams || named_views
+}
+
 /// Parse, merge, resolve, and validate all `sources`.
 ///
+/// Compilation happens in two phases:
+/// 1. The system model sources (`system.hcl`/`main.hcl`, i.e. anything that is
+///    not a view file) are parsed, merged, resolved and validated exactly as
+///    before. When this phase produces hard errors, phase 2 is skipped.
+/// 2. Each view file (`diagrams/*.hcl` or a root-level `views.hcl`) is parsed
+///    and validated independently against the resolved model. View errors are
+///    appended to the result but never clear the model, so one bad view file
+///    cannot hide the others or the model itself.
+///
 /// Returns a [`CompileResult`] with the optional model and all diagnostics.
-/// If any parse errors occur, `model` is `None` and `diagnostics` contains
-/// the error.  If resolution produces hard errors, `model` is also `None`.
 #[instrument(skip(sources), fields(source_count = sources.len()))]
 pub fn compile(sources: &[Source]) -> CompileResult {
+    let (view_sources, model_sources): (Vec<&Source>, Vec<&Source>) = sources
+        .iter()
+        .partition(|source| is_view_source(&source.filename));
+
+    let mut result = compile_model_sources(&model_sources);
+
+    let phase_one_ok =
+        result.model.is_some() && !result.diagnostics.iter().any(Diagnostic::is_error);
+    if !phase_one_ok {
+        return result;
+    }
+
+    let Some(model) = result.model.as_ref() else {
+        return result;
+    };
+
+    for source in view_sources {
+        match serialize::parse_views(&source.content) {
+            Ok(views) => {
+                result
+                    .diagnostics
+                    .extend(validate::validate_view(model, &views, &source.filename));
+            }
+            Err(e) => result.diagnostics.push(Diagnostic {
+                code: DiagnosticCode::E000,
+                file: Some(PathBuf::from(&source.filename)),
+                line: None,
+                message: format!("{}: {e}", source.filename),
+            }),
+        }
+    }
+
+    result
+}
+
+/// Phase 1 of [`compile`]: parse, merge, resolve and validate only the system
+/// model sources. View blocks no longer take part in the merge.
+fn compile_model_sources(sources: &[&Source]) -> CompileResult {
     let mut merged = parse::RawFile::default();
     let mut system_files = Vec::new();
     let mut pre_diagnostics = Vec::new();
@@ -150,7 +210,7 @@ fn validate_single_system_model(
     }
 }
 
-fn default_project_name(sources: &[Source]) -> Option<String> {
+fn default_project_name(sources: &[&Source]) -> Option<String> {
     let paths: Vec<&Path> = sources
         .iter()
         .map(|source| Path::new(&source.filename))
@@ -373,7 +433,7 @@ system "main" {
                 .to_string(),
             },
             Source {
-                filename: "views.hcl".to_string(),
+                filename: "diagrams/overview.hcl".to_string(),
                 content: r#"
 view "overview" {
   system = "main"
@@ -391,6 +451,13 @@ view "overview" {
                 .iter()
                 .any(|d| d.code == DiagnosticCode::E000),
             "no E000 multi-system error should be emitted for single system file"
+        );
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E016),
+            "the diagram file is valid, so no E016 should be emitted"
         );
     }
 
@@ -432,6 +499,187 @@ system "sys2" {
         assert!(
             msg.contains("system1.hcl") && msg.contains("system2.hcl"),
             "error message should list the conflicting files: {msg}"
+        );
+    }
+
+    // ── source classification ────────────────────────────────────────────
+
+    #[test]
+    fn is_view_source_classifies_diagrams_and_legacy_views() {
+        assert!(is_view_source("diagrams/overview.hcl"));
+        assert!(is_view_source("examples/drone/diagrams/main.hcl"));
+        assert!(is_view_source("views.hcl"));
+        assert!(is_view_source("examples/drone/views.hcl"));
+        assert!(is_view_source("diagrams/views.hcl"));
+        assert!(!is_view_source("system.hcl"));
+        assert!(!is_view_source("examples/drone/system.hcl"));
+        assert!(!is_view_source("diagrams.hcl"));
+    }
+
+    // ── phase 2: per-file view validation ────────────────────────────────
+
+    fn model_source(content: &str) -> Source {
+        Source {
+            filename: "system.hcl".to_string(),
+            content: content.to_string(),
+        }
+    }
+
+    fn view_source(filename: &str, content: &str) -> Source {
+        Source {
+            filename: filename.to_string(),
+            content: content.to_string(),
+        }
+    }
+
+    fn codes(result: &CompileResult) -> Vec<&'static str> {
+        result.diagnostics.iter().map(|d| d.code.code).collect()
+    }
+
+    const SINGLE_SYSTEM: &str = "system \"s\" { description = \"d\" }";
+
+    #[test]
+    fn diagram_file_with_zero_views_emits_e016() {
+        let sources = vec![
+            model_source(SINGLE_SYSTEM),
+            view_source("diagrams/overview.hcl", "project { name = \"x\" }"),
+        ];
+        let result = compile(&sources);
+        assert!(result.model.is_some(), "model must survive view errors");
+        let e016: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E016)
+            .collect();
+        assert_eq!(e016.len(), 1, "expected one E016, got {:?}", codes(&result));
+        assert!(
+            e016[0].message.contains("diagrams/overview.hcl"),
+            "E016 must name the file: {}",
+            e016[0].message
+        );
+    }
+
+    #[test]
+    fn diagram_file_with_two_views_emits_e016() {
+        let content = "view \"a\" { system = \"s\" }\nview \"b\" { system = \"s\" }";
+        let sources = vec![
+            model_source(SINGLE_SYSTEM),
+            view_source("diagrams/combined.hcl", content),
+        ];
+        let result = compile(&sources);
+        assert_eq!(
+            result
+                .diagnostics
+                .iter()
+                .filter(|d| d.code == DiagnosticCode::E016)
+                .count(),
+            1,
+            "expected one E016, got {:?}",
+            codes(&result)
+        );
+    }
+
+    #[test]
+    fn diagram_file_label_mismatch_emits_e016() {
+        let sources = vec![
+            model_source(SINGLE_SYSTEM),
+            view_source("diagrams/overview.hcl", "view \"other\" { system = \"s\" }"),
+        ];
+        let result = compile(&sources);
+        let e016: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E016)
+            .collect();
+        assert_eq!(e016.len(), 1, "expected one E016, got {:?}", codes(&result));
+        assert!(e016[0].message.contains("overview"));
+    }
+
+    #[test]
+    fn legacy_root_views_hcl_emits_e016() {
+        let content = "view \"a\" { system = \"s\" }\nview \"b\" { system = \"s\" }";
+        let sources = vec![
+            model_source(SINGLE_SYSTEM),
+            view_source("views.hcl", content),
+        ];
+        let result = compile(&sources);
+        let e016: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E016)
+            .collect();
+        assert_eq!(e016.len(), 1, "expected one E016, got {:?}", codes(&result));
+        assert!(e016[0].message.contains("views.hcl"));
+    }
+
+    #[test]
+    fn per_file_isolation_keeps_valid_and_invalid_diagrams_independent() {
+        let sources = vec![
+            model_source(SINGLE_SYSTEM),
+            view_source(
+                "diagrams/overview.hcl",
+                "view \"overview\" { system = \"s\" }",
+            ),
+            view_source(
+                "diagrams/broken.hcl",
+                "view \"broken\" { system = \"nope\" }",
+            ),
+        ];
+        let result = compile(&sources);
+        assert!(result.model.is_some(), "model must survive view errors");
+        let e006: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E006)
+            .collect();
+        assert_eq!(e006.len(), 1, "expected one E006, got {:?}", codes(&result));
+        assert!(e006[0].message.contains("diagrams/broken.hcl"));
+    }
+
+    #[test]
+    fn valid_diagram_file_emits_no_view_diagnostics() {
+        let sources = vec![
+            model_source(SINGLE_SYSTEM),
+            view_source(
+                "diagrams/overview.hcl",
+                "view \"overview\" { system = \"s\" }",
+            ),
+        ];
+        let result = compile(&sources);
+        assert!(
+            result.diagnostics.iter().all(|d| !d.is_error()),
+            "unexpected errors: {:?}",
+            codes(&result)
+        );
+    }
+
+    #[test]
+    fn phase_two_is_skipped_when_phase_one_has_errors() {
+        let sources = vec![
+            model_source("project { name = \"a\" }"),
+            Source {
+                filename: "other.hcl".to_string(),
+                content: "project { name = \"b\" }".to_string(),
+            },
+            view_source("diagrams/overview.hcl", "view \"other\" { system = \"s\" }"),
+        ];
+        let result = compile(&sources);
+        assert!(result.model.is_none());
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E010),
+            "expected E010, got {:?}",
+            codes(&result)
+        );
+        assert!(
+            !result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E016),
+            "phase 2 must be skipped when phase 1 fails: {:?}",
+            codes(&result)
         );
     }
 }

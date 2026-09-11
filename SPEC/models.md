@@ -27,15 +27,15 @@ with a thin conversion layer.
 
 ```rust
 /// Top-level file content — the result of parsing one .hcl file.
-/// `RawFile`s from the system model file (`system.hcl`) and any view definition
-/// files are merged into a unified raw representation before resolution.
+/// `RawFile`s from the system model sources (`system.hcl`/`main.hcl`) are
+/// merged into a unified raw representation before resolution. View files are
+/// *not* merged: each `diagrams/*.hcl` file is parsed and validated on its own.
 #[derive(Debug, Default)]
 struct RawFile {
     project: Option<RawProject>,
     systems: Vec<Labeled<RawSystem>>,
     components: Vec<Labeled<RawComponent>>,  // top-level (reusable) components
     protocols: Vec<Labeled<RawProtocol>>,    // top-level (reusable) protocols
-    views: Vec<Labeled<RawView>>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,7 +138,6 @@ fn parse_file(src: &str) -> Result<RawFile> {
             "project"   => file.project = Some(parse_project(block)?),
             "system"    => file.systems.push(parse_labeled_system(block)?),
             "component" => file.components.push(parse_labeled_component(block)?),
-            "view"      => file.views.push(parse_labeled_view(block)?),
             other       => return Err(/* unknown top-level block */),
         }
     }
@@ -182,14 +181,25 @@ pub fn compile(sources: &[Source]) -> CompileResult
 
 ## Merge
 
-Straightforward: accumulate `RawFile`s (the single `system.hcl` model file and any view definition files) into a unified `RawFile`.
+The system model sources (`system.hcl`/`main.hcl` — everything that is not a
+view file) are accumulated into a single `RawFile`:
 
 - `project`: at most one across all files (error E010 if >1).
-- `systems`, `components`, `views`: concatenate vecs.
+- `systems`, `components`, `protocols`: concatenate vecs.
 
-While canonical projects maintain a single `system.hcl` architecture model file alongside view definitions, `rhizz-core`'s compiler accepts multiple `Source` inputs and merges their raw representations before resolution, keeping the core parser decoupled from physical file storage conventions.
+While canonical projects maintain a single `system.hcl` architecture model file
+alongside view definitions, `rhizz-core`'s compiler accepts multiple `Source`
+inputs and merges their raw representations before resolution, keeping the core
+parser decoupled from physical file storage conventions.
 
-View files: each file under `diagrams/` must contain exactly one `view` block, whose label matches the filename (`diagrams/overview.hcl` -> `view "overview"`). Parsers merge tolerantly across files, but canonical projects emit one view per diagram file. `views.hcl` is legacy: still parsed if present, never written by `rhizz fmt`.
+View files are **not** merged. Each file under `diagrams/` (and any legacy
+root-level `views.hcl`) is validated independently against the resolved model:
+it must contain exactly one `view` block whose label matches the filename stem
+(`diagrams/overview.hcl` -> `view "overview"`), otherwise emit E016; its
+`system` must name a defined system, otherwise emit E006. A root-level
+`views.hcl` therefore cannot pass validation as-is and must be split into one
+file per view under `diagrams/`. `views.hcl` is legacy: still parsed if present,
+never written by `rhizz fmt`.
 
 No deduplication logic — duplicate detection happens during
 resolution/validation.
@@ -241,7 +251,6 @@ struct Model {
     connections: Vec<Connection>, // indexed by ConnectionId
     messages: Vec<Message>,       // indexed by MessageId
     fields: Vec<Field>,           // indexed by FieldId
-    views: Vec<View>,
 }
 
 #[derive(Debug)]
@@ -363,9 +372,12 @@ struct Field {
    - Validate **Lowest Common Ancestor (LCA)**: ensure declaring scope is an ancestor (or LCA) of both `from` and `to` target components.
    - Resolve target components and optional ports (E011 for missing component, E010 for missing port).
 7. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
-8. Resolve views — look up `system` label → `SystemId` (E006 if missing).
+8. Resolve views — **not** part of the model resolution pass. After the model
+   is resolved, each `diagrams/*.hcl` file is parsed and validated independently:
+   exactly one `view` block with a label matching the filename (E016), and a
+   `system` that resolves to a real system (E006).
    Layout (`node` / connection / annotation blocks in `diagrams/*.hcl`) is
-   validated in a second pass against the already-resolved `Model`: every
+   validated in a later pass against the already-resolved `Model`: every
    `node` component path must resolve to a real component in the view's
    system, otherwise emit a view error.
 9. Validation checks:
@@ -403,32 +415,36 @@ struct ScopeIndex {
 
 ## View models
 
-Views don't need their own arena — they're lightweight config referencing into
-the `Model`:
+Views are **not** part of the resolved `Model`. Each `diagrams/*.hcl` file is
+parsed on its own into `ViewDefinition` values (see `serialize.rs`) and
+validated against the already-resolved `Model`:
 
-> **Note:** the resolved `View` below carries only identity + filter.
-> Visual layout (`node` positions, connection sides, annotations) lives in
-> `ViewDefinition` (see `serialize.rs`), with component references as plain
-> path strings validated against the resolved `Model` in a second pass
-> (phase 1: model, phase 2: views).
+- Exactly one `view` block per file, label matching the filename stem (E016).
+- `system` must resolve to a real system (E006).
+- Visual layout (`node` positions, connection sides, annotations) references
+  components as plain path strings; validating those paths against the resolved
+  `Model` is a later phase.
 
 ```rust
-#[derive(Debug)]
-struct View {
+#[derive(Debug, Default)]
+struct ViewDefinition {
     label: String,
     description: String,
     tags: Vec<String>,
-    system: SystemId,
-    filter: ViewFilter,
+    system: String,                 // system label
+    filter: ViewFilterDefinition,
+    nodes: Vec<NodeLayout>,
+    connections: Vec<ConnectionLayout>,
+    annotations: Vec<Annotation>,
 }
 
-#[derive(Debug)]
-struct ViewFilter {
+#[derive(Debug, Default)]
+struct ViewFilterDefinition {
     include_tags: Vec<String>,
     exclude_tags: Vec<String>,
     max_level: Option<i32>,
-    components: Vec<String>,   // whitelist by label, empty = all
-    show_messages: bool,
+    components: Vec<String>,        // whitelist by label, empty = all
+    show_messages: Option<bool>,
 }
 ```
 

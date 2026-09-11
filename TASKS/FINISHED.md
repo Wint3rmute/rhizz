@@ -4,6 +4,43 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — One view per file: per-file view validation (E016)
+
+Reworked the compiler to enforce the spec's one-view-per-file rule instead of
+merging all `view` blocks into a single structure.
+
+- **New blocking `E016`** (`SPEC/diagnostics/E016.md`): a file under
+  `diagrams/` (or a legacy root-level `views.hcl`) must contain exactly one
+  `view` block whose label matches the filename stem
+  (`diagrams/overview.hcl` -> `view "overview"`). Diagnostics carry the file
+  and name the path in the message.
+- **Two-phase `rhizz_core::compile()`**: phase 1 parses/merges/resolves/validates
+  the system model sources; if it errors, phase 2 is skipped. Phase 2 parses each
+  view file independently with `parse_views` and validates it via the new
+  `validate_view(&Model, &[ViewDefinition], filename)` helper (E016 + reused
+  E006 for unknown/missing `system`). View errors are appended but never clear
+  the resolved model, so one bad view file cannot hide the others.
+- **Removed view merging**: `RawFile.views`, `parse_view`, `resolve_view`,
+  `Model.views`, `View`/`ViewFilter`, `ViewDefinition::from_resolved` and
+  `serialize_resolved_views` are gone. Views are parsed only through
+  `serialize.rs::parse_views`.
+- **`rhizz-book::compile_project`** no longer excludes `diagrams/`; book
+  verdicts now include per-file view diagnostics. `book.lock` unchanged (no
+  book project trips the new checks; node-path validation is a later task).
+- **`rhizz fmt`** rewrites only `system.hcl` and ignores view files entirely
+  (never reads, writes, or reformats them).
+- **Spec**: `SPEC/models.md` merge/resolved/view sections and
+  `SPEC/architecture.md` code-range note updated to match.
+- **Examples migrated**: every `examples/*/views.hcl` split into
+  `examples/*/diagrams/<label>.hcl` (duplicate `"main"` labels resolved by
+  keeping the layout-bearing `diagrams/main.hcl`).
+- **Tests**: exact E016/E006 assertions in `validate.rs` and `lib.rs`, WASM
+  boundary test that view errors keep the model, and book tests for E006/E016.
+  Rust (243) and web unit (503) suites green; clippy/doc/eslint/svelte-check
+  clean; `just build` green. `just test`'s storybook browser leg still needs
+  Playwright Chromium (pre-existing local limitation).
+
+
 ## Task <N> — Add a `rhizz fmt` command
 
 Added a canonical `rhizz fmt` command to the CLI (merged on main as

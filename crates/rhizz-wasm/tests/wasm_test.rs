@@ -159,6 +159,35 @@ fn model_is_none_on_error() {
 }
 
 #[wasm_bindgen_test]
+fn diagram_view_errors_do_not_clear_the_model() {
+    let sources = vec![
+        rhizz_core::Source {
+            filename: "system.hcl".to_string(),
+            content: r#"system "s" { description = "d" }"#.to_string(),
+        },
+        rhizz_core::Source {
+            filename: "diagrams/overview.hcl".to_string(),
+            content: r#"view "a" { system = "s" }
+view "b" { system = "s" }"#
+                .to_string(),
+        },
+    ];
+
+    let result = rhizz_wasm::CompileResultJS::compile(sources_to_js(&sources))
+        .expect("compile should not return a JsError");
+
+    assert_eq!(result.error_count(), 1, "expected one E016 error");
+    assert!(
+        result.diagnostics().iter().any(|d| d.code() == "E016"),
+        "expected E016 through the WASM boundary"
+    );
+    assert!(
+        result.model().is_some(),
+        "view errors must not clear the resolved model"
+    );
+}
+
+#[wasm_bindgen_test]
 fn protocols_and_ports_return_typed_wrappers() {
     let sources = vec![rhizz_core::Source {
         filename: "main.hcl".to_string(),

@@ -1,7 +1,10 @@
 //! Validation pass -- warning pass over the resolved Model.
 
-use crate::model::{ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model};
+use crate::model::{
+    ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model, ViewDefinition,
+};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use tracing::instrument;
 
 /// Run the warning pass over a fully resolved [`Model`].
@@ -245,6 +248,96 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     }
 
     warnings
+}
+
+// ── View validation ───────────────────────────────────────────────────────────
+
+/// Validate one view/diagram file against the resolved [`Model`].
+///
+/// `filename` is the file the views were parsed from (e.g.
+/// `diagrams/overview.hcl`). It is used both as the diagnostic's structured
+/// `file` and embedded in the message, because downstream consumers (the
+/// book/lock) drop the `file` field.
+///
+/// Initial checks:
+/// - **E016** — the file must contain exactly one `view` block.
+/// - **E016** — the view label must match the filename stem
+///   (`diagrams/overview.hcl` -> `view "overview"`).
+/// - **E006** — the view's `system` must name a defined system.
+///
+/// `node`-path validation is intentionally not implemented yet; this helper is
+/// its intended home (the full `views` slice is available).
+#[must_use]
+pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let file = PathBuf::from(filename);
+
+    if views.len() != 1 {
+        diagnostics.push(view_error(
+            DiagnosticCode::E016,
+            &file,
+            format!(
+                "{filename}: must contain exactly one `view` block, found {}",
+                views.len()
+            ),
+        ));
+        return diagnostics;
+    }
+
+    let Some(view) = views.first() else {
+        return diagnostics;
+    };
+
+    let stem = Path::new(filename)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if view.label != stem {
+        diagnostics.push(view_error(
+            DiagnosticCode::E016,
+            &file,
+            format!(
+                "{filename}: view label '{}' does not match filename stem '{stem}'",
+                view.label
+            ),
+        ));
+    }
+
+    if view.system.is_empty() {
+        diagnostics.push(view_error(
+            DiagnosticCode::E006,
+            &file,
+            format!(
+                "{filename}: view '{}' does not specify a system",
+                view.label
+            ),
+        ));
+    } else if !model
+        .systems
+        .iter()
+        .any(|system| system.label == view.system)
+    {
+        diagnostics.push(view_error(
+            DiagnosticCode::E006,
+            &file,
+            format!(
+                "{filename}: view '{}' references undefined system '{}'",
+                view.label, view.system
+            ),
+        ));
+    }
+
+    diagnostics
+}
+
+/// Build a view validation diagnostic carrying the offending `file`.
+fn view_error(code: DiagnosticCode, file: &Path, message: String) -> Diagnostic {
+    Diagnostic {
+        code,
+        file: Some(file.to_path_buf()),
+        line: None,
+        message,
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -742,6 +835,92 @@ mod tests {
             2,
             "expected two W003, got: {:?}",
             warning_codes(&warnings)
+        );
+    }
+
+    // ── validate_view ────────────────────────────────────────────────────
+
+    fn model_with_system(label: &str) -> Model {
+        let src = format!(r#"system "{label}" {{ description = "d" }}"#);
+        let raw = crate::parse::parse_file(&src, Path::new("system.hcl")).expect("parse");
+        resolve(raw).expect("resolve").0
+    }
+
+    fn view(label: &str, system: &str) -> ViewDefinition {
+        ViewDefinition {
+            label: label.to_owned(),
+            system: system.to_owned(),
+            ..ViewDefinition::default()
+        }
+    }
+
+    #[test]
+    fn validate_view_zero_views_emits_e016() {
+        let model = model_with_system("s");
+        let diags = validate_view(&model, &[], "diagrams/overview.hcl");
+        assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
+        assert_eq!(diags[0].code, DiagnosticCode::E016);
+        assert!(
+            diags[0].message.contains("diagrams/overview.hcl"),
+            "message must name the file: {}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn validate_view_multiple_views_emits_e016() {
+        let model = model_with_system("s");
+        let views = vec![view("a", "s"), view("b", "s")];
+        let diags = validate_view(&model, &views, "diagrams/combined.hcl");
+        assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
+        assert_eq!(diags[0].code, DiagnosticCode::E016);
+        assert!(diags[0].message.contains("diagrams/combined.hcl"));
+    }
+
+    #[test]
+    fn validate_view_label_mismatch_emits_e016() {
+        let model = model_with_system("s");
+        let views = vec![view("other", "s")];
+        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
+        assert_eq!(diags[0].code, DiagnosticCode::E016);
+        assert!(diags[0].message.contains("overview"));
+    }
+
+    #[test]
+    fn validate_view_unknown_system_emits_e006() {
+        let model = model_with_system("s");
+        let views = vec![view("overview", "nope")];
+        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
+        assert_eq!(diags[0].code, DiagnosticCode::E006);
+        assert!(diags[0].message.contains("nope"));
+    }
+
+    #[test]
+    fn validate_view_missing_system_emits_e006() {
+        let model = model_with_system("s");
+        let views = vec![view("overview", "")];
+        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
+        assert_eq!(diags[0].code, DiagnosticCode::E006);
+    }
+
+    #[test]
+    fn validate_view_valid_file_emits_nothing() {
+        let model = model_with_system("s");
+        let views = vec![view("overview", "s")];
+        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+    }
+
+    #[test]
+    fn validate_view_diagnostic_carries_file() {
+        let model = model_with_system("s");
+        let diags = validate_view(&model, &[], "diagrams/overview.hcl");
+        assert_eq!(
+            diags[0].file.as_deref(),
+            Some(Path::new("diagrams/overview.hcl"))
         );
     }
 }

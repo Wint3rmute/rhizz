@@ -39,8 +39,6 @@ pub struct RawFile {
     pub components: Vec<Labeled<RawComponent>>,
     /// All parsed top-level protocol blocks.
     pub protocols: Vec<Labeled<RawProtocol>>,
-    /// All parsed view blocks.
-    pub views: Vec<Labeled<RawView>>,
     /// Non-fatal diagnostics collected while parsing (e.g. W015 for unexpected
     /// block types). Errors are returned via `Result`; warnings land here.
     pub diagnostics: Vec<Diagnostic>,
@@ -308,62 +306,6 @@ struct FieldAttrs {
     required: Option<bool>,
 }
 
-/// Serde helper for deserializing view attributes.
-#[derive(Deserialize, Default)]
-struct ViewAttrs {
-    /// Optional description.
-    description: Option<String>,
-    /// Optional tags list.
-    tags: Option<Vec<String>>,
-    /// Target system label.
-    system: Option<String>,
-}
-
-/// Serde helper for deserializing filter sub-block attributes.
-#[derive(Deserialize, Default)]
-struct FilterAttrs {
-    /// Tag whitelist.
-    include_tags: Option<Vec<String>>,
-    /// Tag blacklist.
-    exclude_tags: Option<Vec<String>>,
-    /// Maximum abstraction level.
-    max_level: Option<i32>,
-    /// Component label whitelist.
-    components: Option<Vec<String>>,
-    /// Whether to show messages on edges.
-    show_messages: Option<bool>,
-}
-
-// ── Raw view types ────────────────────────────────────────────────────────────
-
-/// Raw view block before resolution.
-#[derive(Debug, Clone, Default)]
-pub struct RawView {
-    /// Optional description text.
-    pub description: Option<String>,
-    /// Filtering tags.
-    pub tags: Vec<String>,
-    /// Target system label.
-    pub system: Option<String>,
-    /// Optional filter sub-block.
-    pub filter: Option<RawViewFilter>,
-}
-
-/// Raw filter sub-block of a view.
-#[derive(Debug, Clone, Default)]
-pub struct RawViewFilter {
-    /// Tag whitelist (empty = match all).
-    pub include_tags: Vec<String>,
-    /// Tag blacklist.
-    pub exclude_tags: Vec<String>,
-    /// Maximum abstraction level.
-    pub max_level: Option<i32>,
-    /// Component label whitelist (empty = all).
-    pub components: Vec<String>,
-    /// Whether to show messages on edges.
-    pub show_messages: Option<bool>,
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Extract the first label from a block (e.g. `system "label" { … }`).
@@ -584,30 +526,6 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<R
     })
 }
 
-/// Parse a `view` block body into a [`RawView`].
-fn parse_view(body: &hcl::Body) -> Result<RawView> {
-    let a: ViewAttrs = attrs(body)?;
-    let mut filter = None;
-    for block in body.blocks() {
-        if block.identifier() == "filter" {
-            let fa: FilterAttrs = attrs(block.body())?;
-            filter = Some(RawViewFilter {
-                include_tags: fa.include_tags.unwrap_or_default(),
-                exclude_tags: fa.exclude_tags.unwrap_or_default(),
-                max_level: fa.max_level,
-                components: fa.components.unwrap_or_default(),
-                show_messages: fa.show_messages,
-            });
-        }
-    }
-    Ok(RawView {
-        description: a.description,
-        tags: a.tags.unwrap_or_default(),
-        system: a.system,
-        filter,
-    })
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Parse a single `.hcl` source string into a `RawFile`.
@@ -652,12 +570,6 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
                     .with_context(|| format!("in protocol '{label}'"))?;
                 file.protocols.push(Labeled { label, inner });
             }
-            "view" => {
-                let label = first_label(block)?;
-                let inner =
-                    parse_view(block.body()).with_context(|| format!("in view '{label}'"))?;
-                file.views.push(Labeled { label, inner });
-            }
             other => {
                 bail!("unknown top-level block '{}' in {}", other, path.display());
             }
@@ -683,7 +595,6 @@ pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result
     dst.systems.extend(src.systems);
     dst.components.extend(src.components);
     dst.protocols.extend(src.protocols);
-    dst.views.extend(src.views);
     dst.diagnostics.extend(src.diagnostics);
     Ok(())
 }
@@ -697,7 +608,11 @@ pub(crate) fn parse_dir(dir: &std::path::Path) -> anyhow::Result<RawFile> {
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
         .filter_map(std::result::Result::ok)
-        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
+        .filter(|e| {
+            e.file_type().is_file()
+                && e.path().extension().is_some_and(|ext| ext == "hcl")
+                && !crate::is_view_source(&e.path().to_string_lossy())
+        })
         .map(|e| e.path().to_path_buf())
         .collect();
     hcl_files.sort();
@@ -809,19 +724,6 @@ mod tests {
             .collect();
         assert!(conn_labels.contains(&"motor-control"));
         assert!(conn_labels.contains(&"rc-link"));
-
-        // Views
-        assert_eq!(
-            raw.views.len(),
-            6,
-            "expected 6 views (incl. diagrams/main.hcl)"
-        );
-        let ov = raw
-            .views
-            .iter()
-            .find(|v| v.label == "drone-overview")
-            .unwrap();
-        assert!(ov.inner.filter.is_some());
     }
 
     #[test]
@@ -919,8 +821,6 @@ mod tests {
             .collect();
         assert!(conn_labels.contains(&"client-api"));
         assert!(conn_labels.contains(&"push-notify"));
-
-        assert_eq!(raw.views.len(), 3);
     }
 
     // ── software-house ─────────────────────────────────────────────────────
@@ -995,12 +895,6 @@ mod tests {
             .find(|p| p.label == "sprint-out")
             .expect("sprint-out port missing");
         assert_eq!(sprint_port.label, "sprint-out");
-
-        assert_eq!(
-            raw.views.len(),
-            5,
-            "expected 5 views (incl. diagrams/main.hcl)"
-        );
     }
 
     // ── E010 detection ─────────────────────────────────────────────────────
@@ -1187,7 +1081,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_mixed_system_component_view_blocks() {
+    fn parse_mixed_system_component_blocks() {
         let src = r#"
             component "shared-comp" {
                 description = "top-level component"
@@ -1196,10 +1090,6 @@ mod tests {
 
             system "sys-a" {
                 instance "shared-comp" { source = "shared-comp" }
-            }
-
-            view "v1" {
-                system = "sys-a"
             }
         "#;
         let path = PathBuf::from("test.hcl");
@@ -1217,9 +1107,6 @@ mod tests {
         );
         assert_eq!(comp.inner.ports.len(), 1);
         assert_eq!(comp.inner.ports[0].label, "p1");
-
-        assert_eq!(raw.views.len(), 1);
-        assert_eq!(raw.views[0].label, "v1");
     }
 
     #[test]

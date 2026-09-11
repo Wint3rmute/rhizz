@@ -131,8 +131,6 @@ pub struct Model {
     pub messages: Vec<Message>,
     /// All fields, indexed by [`FieldId`].
     pub fields: Vec<Field>,
-    /// Resolved view definitions.
-    pub views: Vec<View>,
 }
 
 impl Default for Model {
@@ -151,7 +149,6 @@ impl Default for Model {
             connections: vec![],
             messages: vec![],
             fields: vec![],
-            views: vec![],
         }
     }
 }
@@ -380,36 +377,6 @@ pub struct Field {
 
 // ── View models ───────────────────────────────────────────────────────────────
 
-/// A resolved view definition (filtered perspective rendered as DOT).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct View {
-    /// Unique view identifier.
-    pub label: String,
-    /// Human-readable description.
-    pub description: String,
-    /// Filtering tags.
-    pub tags: Vec<String>,
-    /// The system this view visualises.
-    pub system: SystemId,
-    /// Filter predicates controlling what appears in the view.
-    pub filter: ViewFilter,
-}
-
-/// Filter predicates for a view.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ViewFilter {
-    /// Only include entities with at least one of these tags (empty = all).
-    pub include_tags: Vec<String>,
-    /// Exclude entities with any of these tags.
-    pub exclude_tags: Vec<String>,
-    /// Maximum abstraction level to display.
-    pub max_level: Option<i32>,
-    /// Whitelist of component labels (empty = all).
-    pub components: Vec<String>,
-    /// Whether to list messages on connection edges.
-    pub show_messages: bool,
-}
-
 // ── View definitions and layout models ────────────────────────────────────────
 
 /// Node layout metadata for visual diagrams.
@@ -559,38 +526,6 @@ pub struct ViewDefinition {
     /// Text annotations placed on this view's canvas.
     #[serde(default)]
     pub annotations: Vec<Annotation>,
-}
-
-impl ViewDefinition {
-    /// Constructs a `ViewDefinition` from a resolved `View` and its parent `Model`.
-    #[must_use]
-    pub fn from_resolved(view: &View, model: &Model) -> Self {
-        let system_label = model
-            .systems
-            .get(view.system.0)
-            .map(|s| s.label.clone())
-            .unwrap_or_default();
-        Self {
-            label: view.label.clone(),
-            description: view.description.clone(),
-            tags: view.tags.clone(),
-            system: system_label,
-            filter: ViewFilterDefinition {
-                include_tags: view.filter.include_tags.clone(),
-                exclude_tags: view.filter.exclude_tags.clone(),
-                max_level: view.filter.max_level,
-                components: view.filter.components.clone(),
-                show_messages: if view.filter.show_messages {
-                    Some(true)
-                } else {
-                    None
-                },
-            },
-            nodes: Vec::new(),
-            connections: Vec::new(),
-            annotations: Vec::new(),
-        }
-    }
 }
 
 /// Filter settings for a view definition.
