@@ -38,7 +38,7 @@ describe("readProjectSources", () => {
     ]);
   });
 
-  it("excludes .hcl files inside diagrams/ directory from compilation sources", async () => {
+  it("includes .hcl files inside diagrams/ in the compilation sources", async () => {
     await fs.mkdir("diagrams", { recursive: true });
     await fs.writeFile(
       "diagrams/overview.hcl",
@@ -47,7 +47,13 @@ describe("readProjectSources", () => {
     await fs.writeFile("main.hcl", "# empty project without system main");
 
     const sources = await readProjectSources(fs);
-    expect(sources).toEqual([
+    expect(
+      sources.toSorted((a, b) => a.filename.localeCompare(b.filename)),
+    ).toEqual([
+      {
+        filename: "diagrams/overview.hcl",
+        content: 'view "overview" { system = "main" }',
+      },
       { filename: "main.hcl", content: "# empty project without system main" },
     ]);
   });
@@ -93,11 +99,12 @@ describe("readProjectSources", () => {
     const compEntries = await projFs.readdir("components");
     expect(compEntries.map((e) => e.name)).toContain("mcu.hcl");
 
-    // Check compilation sources: must include project.hcl & components/mcu.hcl, NOT diagram files
+    // Compilation sources include model files and diagram layouts alike,
+    // matching rhizz-core's own file discovery.
     const sources = await readProjectSources(projFs);
     const filenames = sources.map((s) => s.filename);
     expect(filenames).toContain("project.hcl");
     expect(filenames).toContain("components/mcu.hcl");
-    expect(filenames).not.toContain("diagrams/main.hcl");
+    expect(filenames).toContain("diagrams/main.hcl");
   });
 });

@@ -202,6 +202,35 @@ export const WarningsShownDirectly: Story = {
   },
 };
 
+// Diagram files are compiled (not just rendered), so a stale `node` path in a
+// view routes through rhizz-core's view validation and surfaces W016 in the
+// same verdict panel — without blocking the model.
+const viewWarningFiles: BookPayloadFile[] = [
+  ...SAMPLE_FILES,
+  {
+    path: "diagrams/overview.hcl",
+    content: `view "overview" {
+  system = "demo"
+
+  node "demo/not-a-component" {
+    x = 10
+    y = 20
+  }
+}
+`,
+  },
+];
+
+export const ViewNodeWarning: Story = {
+  args: {
+    files: viewWarningFiles,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText(/W016/);
+  },
+};
+
 // ?open=system.hcl lands directly on the code tab.
 export const OpenCodeFile: Story = {
   args: {

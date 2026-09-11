@@ -13,50 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Compile `diagrams/*.hcl` in the web workbench
-
-Background: the web reads project sources through
-`web/src/vfs/compile.ts::readProjectSources`, which deliberately excludes
-`diagrams/`. As a result the browser never runs `rhizz-core::validate_view`, so
-view diagnostics — E016 (one view per file, label matches filename), E006
-(unknown view `system`) and W016 (unknown `node` path) — appear in `rhizz` and
-mdBook but never in the app. Now that view errors no longer clear the resolved
-model (the two-phase `compile()`), the browser can safely compile the same
-files the CLI does.
-
-This is step 1 of the "Rust-owned view model" plan. Later steps (separate
-tasks): move `componentKey` into Rust and expose it; collapse `DiagramLayout`
-into a derived projection of `ViewDefinition` (with `savedLayout` becoming
-page-local); delete the TS zod validation layer.
-
-Requirements:
-
-1. Include `diagrams/*.hcl` in the web compile: stop filtering `diagrams/` in
-   `readProjectSources`, and drop the equivalent filter in
-   `web/src/routes/book-example/BookExampleView.svelte`, so both web compile
-   paths match `rhizz` / `rhizz-book`.
-2. Surface the returned diagnostics where the web already shows compile output
-   (Diagnostics pane / diagrams page). W016 must stay non-blocking: the
-   resolved model and the diagram canvas still work when a view has a bad node.
-3. Keep the existing view-parsing path used for rendering (`parse_views` via
-   `persistence.ts` / `book-example`) unchanged.
-
-Fallout to update: `web/src/vfs/compile.test.ts` (asserts diagrams are
-excluded), `WorkspaceHarness` (uses `readProjectSources`; `blockingErrorCodes`
-filters E-codes so W016 is fine, but confirm the simulation fixtures stay
-green), and `DocumentStore` / wrapper tests that feed `diagrams/main.hcl`
-through `compile`.
-
-Definition of done:
-
-- The web compiles `diagrams/*.hcl`; a project with a bad view file surfaces
-  E016/E006/W016 from `rhizz-core` (assert the exact codes in a web test), with
-  the model and canvas still available.
-- No behaviour regression: diagrams still render; `just test`, `just lint`,
-  `just build` green; `just format` applied.
-
----
-
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,

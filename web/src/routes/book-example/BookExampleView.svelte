@@ -39,14 +39,12 @@ const checkIcon = resolveIcon("check");
 const sunIcon = resolveIcon("sun");
 const moonIcon = resolveIcon("moon");
 
-// Sources mirror `readProjectSources`: every `.hcl` file except diagram
-// layouts (those live under `diagrams/` and are parsed as views instead).
+// Every `.hcl` file — model sources and `diagrams/*.hcl` view layouts — so
+// the browser verdict matches `rhizz` and the book preprocessor
+// (`rhizz-core::compile` validates each diagram file independently).
 let sources = $derived(
   files
-    .filter(
-      (file) =>
-        file.path.endsWith(".hcl") && !file.path.startsWith("diagrams/"),
-    )
+    .filter((file) => file.path.endsWith(".hcl"))
     .map((file) => ({ filename: file.path, content: file.content })),
 );
 

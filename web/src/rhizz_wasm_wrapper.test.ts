@@ -103,6 +103,53 @@ system "quad" {
     expect(views2).toEqual(views);
   });
 
+  it("surfaces view diagnostics while keeping the resolved model", () => {
+    const systemHcl = `component "cpu" { leaf = true }
+component "computer" {
+  instance "cpu" { source = "cpu" }
+}
+system "computer-setup" {
+  instance "computer" { source = "computer" }
+}
+`;
+
+    const result = compile_system([
+      { filename: "system.hcl", content: systemHcl },
+      // Zero view blocks -> E016.
+      { filename: "diagrams/empty.hcl", content: 'project { name = "x" }' },
+      // Two view blocks -> E016.
+      {
+        filename: "diagrams/combined.hcl",
+        content: 'view "combined" { system = "computer-setup" }\n' +
+          'view "other" { system = "computer-setup" }\n',
+      },
+      // Unknown view system -> E006.
+      {
+        filename: "diagrams/broken.hcl",
+        content: 'view "broken" { system = "nope" }\n',
+      },
+      // Unknown node path -> W016 (non-blocking).
+      {
+        filename: "diagrams/overview.hcl",
+        content: 'view "overview" {\n' +
+          '  system = "computer-setup"\n' +
+          '  node "computer-setup/ghost" {\n' +
+          "    x = 1\n" +
+          "    y = 2\n" +
+          "  }\n" +
+          "}\n",
+      },
+    ]);
+
+    const codes = result.diagnostics().map((d) => d.code);
+    expect(codes).toContain("E016");
+    expect(codes).toContain("E006");
+    expect(codes).toContain("W016");
+
+    // View diagnostics must never clear the resolved model.
+    expect(result.model()).toBeDefined();
+  });
+
   it("extracts connections from compiled model for diagram rendering", () => {
     const sources = [
       {
