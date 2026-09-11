@@ -15,13 +15,12 @@ language for defining system architectures at various levels of abstraction.
 
 A project consists of a single system model file (`system.hcl` or `main.hcl`)
 containing the system architecture model (including optional `project`
-metadata), and optional view definition files (`views.hcl` or as many view files
-as the user creates):
+metadata), and optional view definition files (all files in `diagrams/*.hcl`, one view per file):
 
 ```
 project/
 ├── system.hcl           # single system architecture model (optional project {} + systems/components)
-└── views.hcl            # view definitions and visual layout metadata (or multiple view files)
+└── diagrams/*.hcl            # view definitions and visual layout metadata
 ```
 
 All architecture entities (`project`, `system`, `component`, `protocol`, `port`,
@@ -30,9 +29,8 @@ single-file model structure enables bidirectional translation: visual editing in
 the UI deterministically serializes the complete model back to HCL without
 cross-file resolution ambiguity.
 
-View configurations, filters, and visual layout positions remain separated in
-`views.hcl` (and any additional view definition files).
--
+View configurations remain separated in `diagrams/*.hcl`.
+
 ---
 
 ## 2. HCL Schema
@@ -375,28 +373,44 @@ field "altitude" {
 
 ### 2.9 `view` Block
 
-Top-level block (not nested inside a system). Defines a filtered perspective
-rendered as a Graphviz diagram.
+Top-level block (not nested inside a system). Defines a visual perspective
+on a system: which components are placed on the canvas and where.
+Each file under `diagrams/` holds exactly one `view` block whose label
+matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
+Every `node` path is resolved against the view's system (see §3);
+dangling paths are errors.
 
 ```hcl
-view "power-distribution" {
-  description = "Power delivery paths across the drone"
-  tags        = ["power", "review"]
-  level       = 0
+view "overview" {
+  system = "mini-drone"
 
-  system = "consumer-drone"
+  node "mini-drone/flight-controller" {
+    x      = 20
+    y      = 50
+    width  = 100
+    height = 50
+  }
 
-  filter {
-    include_tags   = ["power"]
-    exclude_tags   = ["debug"]
-    max_level      = 2
-    components     = []          # empty = all (whitelist, optional)
-    show_messages  = false
+  node "mini-drone/battery" {
+    x      = 20
+    y      = 150
+    width  = 100
+    height = 50
   }
 }
 ```
 
-**`filter` sub-block:**
+**`node` sub-block (one per placed component):**
+
+| Attribute    | Type   | Required | Default | Description                               |
+| ------------ | ------ | -------- | ------- | ----------------------------------------- |
+| `x`          | number | yes      | —       | X coordinate on canvas                    |
+| `y`          | number | yes      | —       | Y coordinate on canvas                    |
+| `width`      | number | no       | —       | Box width in world units                  |
+| `height`     | number | no       | —       | Box height in world units                 |
+| `text_align` | string | no       | —       | Label placement (`center`, `top-center`)  |
+
+Optional `filter` sub-block (selection predicate):
 
 | Attribute       | Type         | Required | Default          | Description                                                               |
 | --------------- | ------------ | -------- | ---------------- | ------------------------------------------------------------------------- |
@@ -599,7 +613,7 @@ rhizz <command> [options] [path]
 $ rhizz build ./drone-project/
 
   Parsing 2 files...
-  ✓ Parsed: system.hcl, views.hcl
+  ✓ Parsed: system.hcl, diagrams/overview.hcl
 
   Validation:
   ✗ E002  system.hcl:14  connection "uart-link" references undefined component "gps-module"
@@ -629,9 +643,7 @@ $ rhizz build ./drone-project/   # after fix
   Overall:      20/37           54.1%
 
   Views:
-  ✓ out/full-system.dot
-  ✓ out/power-only.dot
-  ✓ out/fc-internals.dot
+  ✓ out/overview.dot
 
   Done.
 ```
@@ -640,7 +652,7 @@ $ rhizz build ./drone-project/   # after fix
 
 ## 8. Full Example
 
-A minimal but complete drone project defined in `system.hcl` and `views.hcl`:
+A minimal but complete drone project defined in `system.hcl` and `diagrams/overview.hcl`:
 
 ### `system.hcl`
 
@@ -846,35 +858,23 @@ system "mini-drone" {
 }
 ```
 
-### `views.hcl`
+### `diagrams/overview.hcl`
 
 ```hcl
-view "full-system" {
-  description = "Complete system overview"
-  system      = "mini-drone"
-
-  filter {
-    max_level = 1
+view "overview" {
+  system = "mini-drone"
+  node "mini-drone/flight-controller" {
+    x          = 20
+    y          = 50
+    width      = 100
+    height     = 50
   }
-}
 
-view "power-only" {
-  description = "Power distribution paths"
-  system      = "mini-drone"
-
-  filter {
-    include_tags  = ["power"]
-    show_messages = false
-  }
-}
-
-view "fc-internals" {
-  description = "Flight controller internal architecture"
-  system      = "mini-drone"
-
-  filter {
-    components = ["flight-controller"]
-    max_level  = 3
+  node "mini-drone/battery" {
+    x          = 20
+    y          = 150
+    width      = 100
+    height     = 50
   }
 }
 ```
