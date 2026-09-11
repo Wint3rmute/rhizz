@@ -50,7 +50,6 @@ const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.hcl"];
 // are only to keep the object total under noUncheckedIndexedAccess.
 const EMPTY_LAYOUT: DiagramLayout = {
   checked: {},
-  savedLayout: {},
   connections: {},
 };
 
@@ -185,23 +184,6 @@ const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
       },
       "demo-system/sensor": { x: 550, y: 90, width: 160, height: 90 },
     },
-    savedLayout: {
-      "demo-system/battery": { x: 40, y: 80, width: 150, height: 90 },
-      "demo-system/controller": {
-        x: 250,
-        y: 40,
-        width: 230,
-        height: 190,
-        textAlign: "top-left",
-      },
-      "demo-system/controller/mcu": {
-        x: 280,
-        y: 100,
-        width: 170,
-        height: 90,
-      },
-      "demo-system/sensor": { x: 550, y: 90, width: 160, height: 90 },
-    },
   },
   "controller.hcl": {
     checked: {
@@ -219,7 +201,6 @@ const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
         height: 90,
       },
     },
-    savedLayout: {},
   },
 };
 

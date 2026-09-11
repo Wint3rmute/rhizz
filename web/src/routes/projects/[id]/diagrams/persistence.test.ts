@@ -1,7 +1,7 @@
 import init from "rhizz";
 import * as nodeFs from "node:fs/promises";
 import * as path from "node:path";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
@@ -13,8 +13,6 @@ import {
   mapLayoutToBoxes,
   parse_views,
   readDiagramLayoutFile,
-  sanitizeStoredRecord,
-  StoredBoxSchema,
   viewsToLayout,
   writeDiagramLayoutFile,
 } from "./persistence";
@@ -36,94 +34,6 @@ beforeAll(async () => {
   await init({ module_or_path: buffer });
 });
 
-describe("StoredBoxSchema", () => {
-  it("accepts a fully-populated valid entry", () => {
-    const result = StoredBoxSchema.safeParse({
-      x: 10,
-      y: 20,
-      width: 100,
-      height: 50,
-      textAlign: "top-left",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts an entry with only the required x/y fields", () => {
-    const result = StoredBoxSchema.safeParse({ x: 10, y: 20 });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects a non-numeric x", () => {
-    const result = StoredBoxSchema.safeParse({ x: "10", y: 20 });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a missing y", () => {
-    const result = StoredBoxSchema.safeParse({ x: 10 });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects an invalid textAlign value", () => {
-    const result = StoredBoxSchema.safeParse({
-      x: 10,
-      y: 20,
-      textAlign: "bottom-right",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a completely malformed entry", () => {
-    expect(StoredBoxSchema.safeParse(null).success).toBe(false);
-    expect(StoredBoxSchema.safeParse("garbage").success).toBe(false);
-    expect(StoredBoxSchema.safeParse([1, 2, 3]).success).toBe(false);
-  });
-});
-
-describe("sanitizeStoredRecord", () => {
-  it("passes valid entries through unchanged", () => {
-    const record = {
-      a: { x: 1, y: 2 },
-      b: { x: 3, y: 4, width: 100, height: 50, textAlign: "center" },
-    };
-    expect(sanitizeStoredRecord(record)).toEqual(record);
-  });
-
-  it("drops a malformed entry without affecting valid siblings", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const record = {
-      good: { x: 1, y: 2 },
-      bad: { x: "not a number", y: 2 },
-    };
-    expect(sanitizeStoredRecord(record)).toEqual({ good: { x: 1, y: 2 } });
-    warnSpy.mockRestore();
-  });
-
-  it("drops multiple malformed entries independently", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const record = {
-      good1: { x: 1, y: 2 },
-      bad1: { x: null, y: 2 },
-      good2: { x: 5, y: 6 },
-      bad2: "garbage",
-    };
-    expect(sanitizeStoredRecord(record)).toEqual({
-      good1: { x: 1, y: 2 },
-      good2: { x: 5, y: 6 },
-    });
-    warnSpy.mockRestore();
-  });
-
-  it("returns an empty record when every entry is malformed", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    expect(sanitizeStoredRecord({ bad: {} })).toEqual({});
-    warnSpy.mockRestore();
-  });
-
-  it("returns an empty record for an empty input", () => {
-    expect(sanitizeStoredRecord({})).toEqual({});
-  });
-});
-
 describe("HCL View conversion and persistence", () => {
   it("serializes DiagramLayout to clean HCL view block", () => {
     const layout = {
@@ -137,7 +47,6 @@ describe("HCL View conversion and persistence", () => {
           textAlign: "top-left" as const,
         },
       },
-      savedLayout: {},
     };
 
     const hcl = layoutToHcl(layout, "overview", "home");
@@ -193,7 +102,6 @@ describe("HCL View conversion and persistence", () => {
   it("round-trips annotations through layoutToHcl and viewsToLayout", () => {
     const layout = {
       checked: {},
-      savedLayout: {},
       annotations: [
         { text: "First line\nSecond line", x: 12.5, y: -3, scale: 1.5 },
         { text: "Standalone note", x: 0, y: 100 },
@@ -255,15 +163,6 @@ describe("HCL View conversion and persistence", () => {
           textAlign: "top-left" as const,
         },
       },
-      savedLayout: {
-        "sys/a": {
-          x: 10,
-          y: 20,
-          width: 100,
-          height: 50,
-          textAlign: "top-left" as const,
-        },
-      },
       annotations: [
         { text: "Persisted note", x: 30, y: 40, scale: 1.5 },
       ],
@@ -285,10 +184,6 @@ describe("HCL View conversion and persistence", () => {
     const fs = await projectFs();
     const layout = {
       checked: {
-        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
-        "sys/b": { x: 200, y: 20, width: 100, height: 50 },
-      },
-      savedLayout: {
         "sys/a": { x: 10, y: 20, width: 100, height: 50 },
         "sys/b": { x: 200, y: 20, width: 100, height: 50 },
       },
