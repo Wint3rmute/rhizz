@@ -3,6 +3,7 @@
 [Introduction](intro.md)
 
 - [Basics of Rhizz Syntax](basics.md)
+- [Introduction to Views](views-intro.md)
 - [Connections & Ports](connections_ports.md)
 - [Warnings, not errors](sketch.md)
 - [Compilation errors](wiring-bug.md)

@@ -98,7 +98,7 @@ architects to become more and more detached from the reality of the system,
 unaware of the growing gap between the model and the real world.
 See: [Ivory Tower Architect](https://blog.alexewerlof.com/p/ivory-tower-architect).
 Rhizz aims to let engineers of different specializations and different positions
-in the organization contribute to the system model. The permissive/gradual
+in the organization contribute to the system model. The gradual
 compiler provides an easy learning curve. Each small piece of information added
 to the model improves the coherence validation capabilites of the compiler.
 Information no longer flows in one direction. Instead, constraints and details
