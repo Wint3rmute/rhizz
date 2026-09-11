@@ -367,7 +367,97 @@
         },
         "warnings": []
       },
-      "src": "projects/demo"
+      "src": "basics/demo"
+    },
+    {
+      "chapter": "views-intro.md",
+      "files": [
+        {
+          "path": "diagrams/overview.hcl",
+          "sha256": "fb4908570795095ce5e3d93b1f450c728467dfa52a03bc789dde49350ff8d3e7"
+        },
+        {
+          "path": "diagrams/pc-build.hcl",
+          "sha256": "296f54542669615288b3e3247c29a2549878f09f293bf041331bd360f2589dcf"
+        },
+        {
+          "path": "system.hcl",
+          "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
+        }
+      ],
+      "input_sha256": "503a37c583d840acf37a980c10352d16e3c1f2ccc125ef2b70d21d81891aec89",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 10,
+            "total": 10
+          },
+          "connections": {
+            "complete": 0,
+            "total": 3
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 10,
+            "percent": 76.9,
+            "total": 13
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": []
+      },
+      "src": "views-intro/1_example_simple"
+    },
+    {
+      "chapter": "views-intro.md",
+      "files": [
+        {
+          "path": "diagrams/overview.hcl",
+          "sha256": "fd14f276fbdb6faa4d72532432cadfdedb42c471a11ab65fd13c2d9a0766a55b"
+        },
+        {
+          "path": "system.hcl",
+          "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
+        }
+      ],
+      "input_sha256": "c951413629a9bd60cffef0fcaf9bab934e3282f653d8c89a193eef5767fe260f",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 10,
+            "total": 10
+          },
+          "connections": {
+            "complete": 0,
+            "total": 3
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 10,
+            "percent": 76.9,
+            "total": 13
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": []
+      },
+      "src": "views-intro/2_example_error"
     }
   ],
   "rhizz_version": "rhizz 0.1.0"

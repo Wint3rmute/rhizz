@@ -8,8 +8,8 @@ system "nothing" {
 }
 ```
 
-While this is not a very good model, we can use it to describe the
-very basics of the language we'll be working with.
+While this does not really model any useful system, we can use it to describe
+the basics of the tool we'll be working with.
 
 ## HCL syntax
 
@@ -21,12 +21,11 @@ systems, so it was a natural fit.
 
 ## Rhizz Compiler Output
 
-While not strictly related to the Rhizz syntax, the output of the compiler will
-be frequently mentioned in this book. All code blocks in this book containing
-Rhizz code are run through the Rhizz compiler, which emits the compilation
-results - completion metrics for the system model. You can see them in the green
-box in the example above. This way of displaying the results of examples will be
-used across this whole book.
+Output of the compiler will be frequently mentioned in this book. All code
+blocks in this book containing Rhizz code are run through the Rhizz compiler,
+which emits the compilation results - completion metrics for the system model.
+You can see them in the green box in the example above. This way of displaying
+the results of examples will be used across this whole book.
 
 ## Systems
 
@@ -41,21 +40,23 @@ system "also-nothing" {
 ```
 
 A `system` is **one possible realisation** of whatever it is you're building.
-Think about a following example: you're building a plane. Already getting
-ambitious! But you can't just build a plane, you also have to build surrounding
-infrastructure for it:
+Think about a following example: you're building a plane. But you can't build
+**just** a plane, such system is always surrounded by the instrastructure
+related to its manufacturing and utilization:
 
 1. Your plane probably needs an end-to-end testing harness.
 2. Components of your plane need their own dedicated harnesses.
+    - e.g. a dedicated harness for the engine.
 3. You could picture the same plane in various usage contexts.
 4. You want to re-use components and have Rhizz validate all defined configurations.
 
-That's precisely what systems are for! You can build separate systems for:
+That's precisely what systems are for! You can define separate systems for
+different use-cases:
 
-- `plane-in-hangar`
-- `plane-in-air`
-- `engine-testing-harness`
-- `hydraulics-testing-harness`
+- `system plane-in-hangar`
+- `system plane-in-air`
+- `system engine-testing-harness`
+- `system hydraulics-testing-harness`
 
 Those systems will re-use various parts of your overall model. When you have to
 change your design, Rhizz will give you hollistic feedback, not only about the
@@ -109,7 +110,7 @@ later, you can ignore this fact for now.
 
 ## Connections
 
-The warning *"component 'SOME_NAME' is not referenced by any connection"* keeps on
+The warning *"component 'NAME' is not referenced by any connection"* keeps on
 appearing, let's fix it by building a bike with:
 
 - A bicycle frame
@@ -170,11 +171,11 @@ In the upcoming chapters, you'll see how Rhizz can model complex, nested and
 multi-dimentional systems, which cannot be grasped without looking at them from
 multiple different angles.
 
-## A live project
+## Full projects
 
-Static code blocks show one angle at a time. The project below is embedded
-live: browse its diagram, read its source files, and inspect the compiler's
-verdict — all without leaving the book.
+All examples in this book are **actual Rhizz projects**.
+So far we've been only working with single-file examples,
+here you can see a project with a system model and a view.
 
-```rhizz-project src="projects/demo" open="diagrams/main.hcl"
+```rhizz-project src="basics/demo" open="diagrams/main.hcl"
 ```
