@@ -410,7 +410,8 @@ view "overview" {
 | `height`     | number | no       | —       | Box height in world units                 |
 | `text_align` | string | no       | —       | Label placement (`center`, `top-center`)  |
 
-Optional `filter` sub-block (selection predicate):
+Optional `filter` sub-block (selection predicate) — **not implemented yet**:
+parsed and round-tripped, but no renderer applies it. See §9.
 
 | Attribute       | Type         | Required | Default          | Description                                                               |
 | --------------- | ------------ | -------- | ---------------- | ------------------------------------------------------------------------- |
@@ -866,6 +867,8 @@ view "overview" {
 - Per-message direction on bidirectional ports
 - Type-checked fields with a schema language
 - Diffing / changelog between model versions
+- View `filter` predicates (`include_tags`, `exclude_tags`, `max_level`,
+  `components`, `show_messages`) — parsed but not applied by any renderer yet
 
 ---
 
