@@ -7,7 +7,7 @@ Two model layers:
 1. **Raw (deserialization) models** — `serde::Deserialize` structs mirroring HCL
    structure. Used for parsing only.
 2. **Resolved models** — validated, cross-referenced IR used by all downstream
-   passes (validation, scoring, view generation).
+   passes (validation, scoring).
 
 Parsing pipeline: `.hcl` files (`system.hcl` + view files) → `hcl::from_str` → raw models → merge → resolve → resolved models.
 

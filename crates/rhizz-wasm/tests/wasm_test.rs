@@ -308,11 +308,6 @@ fn views_serialization_and_parsing_via_wasm() {
     max_level = 1
   }
 
-  output {
-    filename = "main.dot"
-    rankdir  = "TB"
-  }
-
   node "server" {
     x          = 150
     y          = 220

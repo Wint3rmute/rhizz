@@ -62,25 +62,6 @@ pub fn score(model: &Model) -> ScoreReport;
 
 ---
 
-## `rhizz-dot`
-
-Pure library crate. No I/O and no terminal dependencies. Depends on `rhizz-core`
-for the `Model` and `View` types.
-
-### Public API
-
-```rust
-/// Render a single view to a DOT-format string.
-/// The caller is responsible for writing it to disk or forwarding it elsewhere.
-pub fn render_view(model: &Model, view: &View) -> String;
-```
-
-All view filter logic — tag inclusion/exclusion, level capping, component
-whitelist, `show_messages`, and connection direction inference from port roles —
-is implemented here. No frontend re-implements filtering.
-
----
-
 ## Frontend Contract
 
 A frontend is any crate that consumes `rhizz-core` to expose the model to a user
@@ -96,19 +77,17 @@ or automated process.
    form (coloured terminal lines, inline editor annotations, notifications,
    etc.).
 4. **Do not duplicate logic** — if behaviour needed by a frontend is missing
-   from `rhizz-core` or `rhizz-dot`, add it there instead of implementing it in
+   from `rhizz-core`, add it there instead of implementing it in
    the frontend.
 
 **CLI-specific notes** (`rhizz-cli`):
 
 - Discovers `.hcl` files via `walkdir`, reads them, calls `compile`, then
   formats and prints diagnostics.
-- Calls `rhizz-dot::render_view` for each view and writes the resulting string
-  to the configured output directory.
 - Exit code 0 when no errors; non-zero otherwise. With `--strict`, warnings also
   produce a non-zero exit.
 - All model logic is delegated; `rhizz-cli` contains no parsing, validation,
-  scoring, or rendering logic of its own.
+  or scoring logic of its own.
 
 See [gui.md](gui.md) for GUI-frontend-specific notes.
 

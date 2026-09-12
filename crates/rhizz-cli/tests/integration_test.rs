@@ -25,13 +25,10 @@ fn parse_args(args: &[&str]) -> Cli {
 }
 
 #[test]
-fn build_drone_exits_0_and_generates_dot() {
-    let out_dir = tempfile::tempdir().expect("tempdir");
+fn build_drone_exits_0() {
     let cli = parse_args(&[
         "build",
         example_dir("drone").to_str().unwrap(),
-        "--output-dir",
-        out_dir.path().to_str().unwrap(),
         "--no-color",
     ]);
     let code = run(&cli);
@@ -40,12 +37,9 @@ fn build_drone_exits_0_and_generates_dot() {
 
 #[test]
 fn build_social_media_exits_0() {
-    let out_dir = tempfile::tempdir().expect("tempdir");
     let cli = parse_args(&[
         "build",
         example_dir("social-media").to_str().unwrap(),
-        "--output-dir",
-        out_dir.path().to_str().unwrap(),
         "--no-color",
     ]);
     let code = run(&cli);
@@ -54,12 +48,9 @@ fn build_social_media_exits_0() {
 
 #[test]
 fn build_software_house_exits_0() {
-    let out_dir = tempfile::tempdir().expect("tempdir");
     let cli = parse_args(&[
         "build",
         example_dir("software-house").to_str().unwrap(),
-        "--output-dir",
-        out_dir.path().to_str().unwrap(),
         "--no-color",
     ]);
     let code = run(&cli);
@@ -112,7 +103,7 @@ fn copy_hcl_files(src: &std::path::Path, dst: &std::path::Path) {
     }
 }
 
-/// Spawn `rhizz watch <dir> --no-color --output-dir <out>`, modify an `.hcl`
+/// Spawn `rhizz watch <dir> --no-color`, modify an `.hcl`
 /// file after the initial build, assert that the build output is printed a
 /// second time (proving the watcher re-triggered the pipeline), then kill the
 /// process.
@@ -121,18 +112,11 @@ fn watch_reruns_build_on_hcl_change() {
     use std::time::Duration;
 
     let tmp_project = tempfile::tempdir().expect("tempdir project");
-    let tmp_out = tempfile::tempdir().expect("tempdir out");
 
     copy_hcl_files(&example_dir("drone"), tmp_project.path());
 
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_rhizz"))
-        .args([
-            "watch",
-            tmp_project.path().to_str().unwrap(),
-            "--no-color",
-            "--output-dir",
-            tmp_out.path().to_str().unwrap(),
-        ])
+        .args(["watch", tmp_project.path().to_str().unwrap(), "--no-color"])
         .stderr(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .spawn()

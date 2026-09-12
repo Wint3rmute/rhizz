@@ -10,12 +10,12 @@ standard `tracing_subscriber` [EnvFilter] syntax.
 
 ```
 RUST_LOG=debug rhizz build .
-RUST_LOG=rhizz_core=trace,warn rhizz-gui .
+RUST_LOG=rhizz_core=trace,warn rhizz build .
 ```
 
 When `RUST_LOG` is not set, both binaries default to **`warn`**, which means
 only warnings and errors are emitted. All output goes to **stderr** so it does
-not interfere with JSON output (`--json`) or piped DOT content.
+not interfere with JSON output (`--json`).
 
 ## Levels used
 
@@ -38,9 +38,9 @@ The `#[instrument]` attribute is applied to all major public entry points:
 - `rhizz_core::validate::validate` — warning validation pass
 - `rhizz_core::score::score` — completion scoring
 
-Library crates (`rhizz-core`, `rhizz-dot`, `rhizz-mermaid`) depend only on the
+Library crates (`rhizz-core`) depend only on the
 `tracing` facade and do **not** install a subscriber. It is the responsibility
-of the binary (`rhizz`, `rhizz-gui`) to set up the subscriber at startup, which
+of the binary (`rhizz`) to set up the subscriber at startup, which
 keeps the library API completely independent of any particular logging backend.
 
 ## Integration with other subscribers

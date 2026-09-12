@@ -20,23 +20,20 @@ rhizz <command> [options] [path]
 | ------- | --------------------------------------------------------------------------- | ------------------------------- |
 | `check` | Parse project `.hcl` files (`system.hcl`, view files), validate, print errors/warnings. | `0` if no errors, `1` otherwise |
 | `score` | Run `check`, then print the completion report.                              | `0` if no errors, `1` otherwise |
-| `views` | Run `check`, then generate `.dot` files for all (or selected) views.        | `0` if no errors, `1` otherwise |
-| `build` | Run `check` + `score` + `views` in sequence. Default when no command given. | `0` if no errors, `1` otherwise |
+| `build` | Run `check` + `score` in sequence. Default when no command given.           | `0` if no errors, `1` otherwise |
 
 Each command is a superset of the previous — `build` does everything. Early
-abort on errors: if `check` finds errors, `score` and `views` are skipped.
+abort on errors: if `check` finds errors, `score` is skipped.
 
 ---
 
 ## Global Options
 
-| Flag           | Short | Type     | Default  | Description                                                   |
-| -------------- | ----- | -------- | -------- | ------------------------------------------------------------- |
-| `--output-dir` | `-o`  | `path`   | `./out/` | Directory for generated `.dot` files                          |
-| `--strict`     |       | flag     | `false`  | Treat warnings as errors (exit `1` on any warning)            |
-| `--json`       |       | flag     | `false`  | Machine-readable JSON output (for CI/CD)                      |
-| `--view`       |       | `string` | all      | Only generate the named view (applies to `views` and `build`) |
-| `--no-color`   |       | flag     | `false`  | Disable ANSI color codes in output                            |
+| Flag       | Short | Type   | Default | Description                                |
+| ---------- | ----- | ------ | ------- | ------------------------------------------ |
+| `--strict`   |       | flag   | `false` | Treat warnings as errors (exit `1` on any warning) |
+| `--json`     |       | flag   | `false` | Machine-readable JSON output (for CI/CD)   |
+| `--no-color` |       | flag   | `false` | Disable ANSI color codes in output         |
 
 ### `--json` output shape
 
@@ -59,11 +56,7 @@ remains human-readable for fatal parse errors.
     "connections": { "complete": 3, "total": 7 },
     "messages": { "complete": 5, "total": 10 },
     "overall": { "complete": 20, "total": 37, "percent": 54.1 }
-  },
-  // present only if views were generated:
-  "views": [
-    { "name": "power-only", "file": "out/power.dot" }
-  ]
+  }
 }
 ```
 
@@ -75,7 +68,7 @@ Use `clap` with derive API. Sketch:
 
 ```rust
 #[derive(Parser)]
-#[command(name = "rhizz", version, about = "MBSE model checker and view generator")]
+#[command(name = "rhizz", version, about = "MBSE model checker")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -84,10 +77,6 @@ struct Cli {
     #[arg(default_value = ".")]
     path: PathBuf,
 
-    /// Output directory for generated .dot files
-    #[arg(short, long, default_value = "./out/")]
-    output_dir: PathBuf,
-
     /// Treat warnings as errors
     #[arg(long)]
     strict: bool,
@@ -95,10 +84,6 @@ struct Cli {
     /// JSON output for CI/CD
     #[arg(long)]
     json: bool,
-
-    /// Only generate a specific view
-    #[arg(long)]
-    view: Option<String>,
 
     /// Disable colored output
     #[arg(long)]
@@ -109,7 +94,6 @@ struct Cli {
 enum Command {
     Check,
     Score,
-    Views,
     Build,
 }
 ```
@@ -128,8 +112,7 @@ Each command maps to a sequence of pipeline stages:
 ```
 check → parse_all → merge → resolve (with validation)
 score → check + compute_scores + print_report
-views → check + render_views + write_dot_files
-build → check + score + views
+build → check + score
 ```
 
 The resolved `Model` (see [models.md](models.md#resolved-models)) is the input
