@@ -1,52 +1,51 @@
 view "mission-overview" {
-  description = "Complete Apollo 11 trans-lunar architecture overview"
   system      = "apollo-11"
 
   node "apollo-11/cm" {
-    x          = -500
-    y          = -980
-    width      = 880
-    height     = 510
-    text_align = "top-center"
+    x          = -450
+    y          = -1000
+    width      = 100
+    height     = 100
+    text_align = "center"
   }
 
   node "apollo-11/lm-ascent" {
     x          = -500
-    y          = -120
-    width      = 650
-    height     = 400
-    text_align = "top-center"
+    y          = -800
+    width      = 200
+    height     = 100
+    text_align = "center"
   }
 
   node "apollo-11/lm-descent" {
     x          = -500
-    y          = 320
-    width      = 650
-    height     = 260
-    text_align = "top-center"
+    y          = -700
+    width      = 200
+    height     = 100
+    text_align = "center"
   }
 
   node "apollo-11/mcc" {
-    x          = -760
-    y          = -190
-    width      = 120
-    height     = 60
+    x          = -700
+    y          = -800
+    width      = 100
+    height     = 100
     text_align = "center"
   }
 
   node "apollo-11/saturn-v" {
-    x          = -500
-    y          = 600
-    width      = 880
-    height     = 250
-    text_align = "top-center"
+    x          = -600
+    y          = -600
+    width      = 400
+    height     = 100
+    text_align = "center"
   }
 
   node "apollo-11/sm" {
-    x          = -500
-    y          = -450
-    width      = 720
-    height     = 310
-    text_align = "top-center"
+    x          = -480
+    y          = -900
+    width      = 160
+    height     = 100
+    text_align = "center"
   }
 }
