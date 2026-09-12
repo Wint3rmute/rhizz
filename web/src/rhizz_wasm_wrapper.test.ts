@@ -70,11 +70,6 @@ system "quad" {
     max_level = 2
   }
 
-  output {
-    filename = "main.dot"
-    rankdir  = "LR"
-  }
-
   node "fc" {
     x          = 120
     y          = 240

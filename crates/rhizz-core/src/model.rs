@@ -541,7 +541,7 @@ const fn default_annotation_scale() -> f64 {
     1.0
 }
 
-/// A view definition containing filter, output settings, and node layouts.
+/// A view definition containing filter and layout metadata (nodes, connections, annotations).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ViewDefinition {
     /// Unique view identifier.

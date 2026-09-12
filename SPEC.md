@@ -520,58 +520,24 @@ Overall:      20/37           54.1%
 
 ---
 
-## 6. View Generation (Graphviz)
+## 6. View Rendering (Web Application)
 
-> **Impl:** the `View`, `ViewFilter`, and `ViewOutput` structs are defined in
-> [view models](SPEC/models.md#view-models). The renderer reads from the
-> resolved `Model` and applies filter predicates against tags, levels, and
-> component whitelist. DOT string generation is provided by the shared
-> `rhizz-dot` crate (see Section 12) so that any frontend can produce `.dot`
-> output without re-implementing the logic.
+> **Impl:** the `ViewDefinition`, `ViewFilterDefinition`, and `NodeLayout`
+> structs are defined in [view models](SPEC/models.md#view-models). Views are
+> parsed from `diagrams/*.hcl` and validated against the resolved `Model`
+> (E016/E006/W016); all visual rendering is owned by the web application.
 
 Connection direction is inferred from the `role` values of the connected ports:
 
-| `from` role         | `to` role                | Inferred direction             | DOT representation        |
-| ------------------- | ------------------------ | ------------------------------ | ------------------------- |
-| `provider`          | `consumer`               | unidirectional (`from` → `to`) | directed arrow            |
-| `consumer`          | `provider`               | unidirectional (`to` → `from`) | directed arrow (reversed) |
-| `peer`              | `peer`                   | bidirectional                  | undirected line           |
-| either side untyped | —                        | unknown                        | dashed line               |
-| `provider`          | `provider`               | ambiguous → W009               | dashed line               |
-| `consumer`          | `consumer`               | ambiguous → W009               | dashed line               |
-| `peer`              | `provider` or `consumer` | ambiguous → W009               | dashed line               |
-
-The view renderer applies the filter, then produces a DOT file:
-
-| Model Entity         | Graphviz Representation                                                 |
-| -------------------- | ----------------------------------------------------------------------- |
-| Component (leaf)     | Box node, solid border                                                  |
-| Component (non-leaf) | `subgraph cluster_*` containing children                                |
-| Connection           | Edge with direction inferred from port roles (see table above)          |
-| Message              | Items in edge label (from connected protocol(s), if `show_messages = true`) |
-| Encapsulation        | Dashed edge between connections, or annotation on label                 |
-
-Example generated DOT fragment:
-
-```dot
-digraph "power-distribution" {
-    rankdir=LR;
-    node [shape=box, style=filled, fillcolor="#e8f4f8"];
-
-    subgraph cluster_flight_controller {
-        label="flight-controller";
-        style=dashed;
-        mcu [label="mcu\n[STM32H7]"];
-        imu [label="imu\n[6-axis IMU]"];
-    }
-
-    battery    [label="battery\n[LiPo 4S]"];
-    esc        [label="esc\n[ESC array]"];
-
-    battery -> esc               [label="power-main"];
-    esc -> flight_controller     [label="power-bec"];
-}
-```
+| `from` role         | `to` role                | Inferred direction             |
+| ------------------- | ------------------------ | ------------------------------ |
+| `provider`          | `consumer`               | unidirectional (`from` → `to`) |
+| `consumer`          | `provider`               | unidirectional (`to` → `from`) |
+| `peer`              | `peer`                   | bidirectional                  |
+| either side untyped | —                        | unknown                        |
+| `provider`          | `provider`               | ambiguous → W009               |
+| `consumer`          | `consumer`               | ambiguous → W009               |
+| `peer`              | `provider` or `consumer` | ambiguous → W009               |
 
 ---
 
@@ -581,10 +547,9 @@ digraph "power-distribution" {
 > schema, pipeline stages, and error formatting.
 
 The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend over
-`rhizz-core`. It is responsible for file discovery, output formatting, exit
-codes, and writing generated `.dot` files to disk. All model compilation,
-validation, scoring, and view rendering logic lives in `rhizz-core` and
-`rhizz-dot` — `rhizz-cli` contains no model logic of its own.
+`rhizz-core`. It is responsible for file discovery, output formatting, and exit
+codes. All model compilation,
+validation, and scoring logic lives in `rhizz-core` — `rhizz-cli` contains no model logic of its own.
 
 ```
 rhizz <command> [options] [path]
@@ -594,18 +559,15 @@ rhizz <command> [options] [path]
 | -------------------- | ---------------------------------------------------------------------- |
 | `rhizz check <path>` | Parse, validate, and report errors/warnings. Exit code 0 if no errors. |
 | `rhizz score <path>` | Run `check`, then print the completion report.                         |
-| `rhizz views <path>` | Run `check`, then generate all defined views as `.dot` files.          |
-| `rhizz build <path>` | Run all of the above in sequence (default command).                    |
+| `rhizz build <path>` | Run `check` + `score` in sequence (default command).                   |
 
 ### Options
 
-| Flag                 | Description                                              |
-| -------------------- | -------------------------------------------------------- |
-| `--output-dir`, `-o` | Directory for generated `.dot` files (default: `./out/`) |
-| `--strict`           | Treat warnings as errors                                 |
-| `--json`             | Output report in JSON format (for CI/CD integration)     |
-| `--view <name>`      | Only generate a specific view (with `views`/`build`)     |
-| `--no-color`         | Disable colored terminal output                          |
+| Flag       | Description                           |
+| ---------- | ------------------------------------- |
+| `--strict`   | Treat warnings as errors              |
+| `--json`     | Output report in JSON format (for CI/CD integration) |
+| `--no-color` | Disable colored terminal output       |
 
 ### Example Session
 
@@ -641,9 +603,6 @@ $ rhizz build ./drone-project/   # after fix
   Messages:     5/10 complete  (50.0%)
   ───────────────────────────────────
   Overall:      20/37           54.1%
-
-  Views:
-  ✓ out/overview.dot
 
   Done.
 ```
@@ -897,7 +856,6 @@ view "overview" {
 | Views are top-level blocks                                      | A view can reference any system; decoupled from the model itself                                                                                                                                                        |
 | `encapsulates` is a name-based reference                        | Captures protocol layering (HTTP → TCP → Ethernet) without deep nesting                                                                                                                                                 |
 | Multiple frontends share one compiler core                      | Keeps all model semantics in one tested place; frontends own only I/O and presentation                                                                                                                                  |
-| DOT rendering in `rhizz-dot`                                    | Pure text transform useful to every frontend; extracted so neither CLI nor GUI re-implements it                                                                                                                         |
 
 **Out of scope for v1, currently non-goals. Candidates for v2:**
 

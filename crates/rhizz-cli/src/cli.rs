@@ -16,13 +16,9 @@ use rhizz_core::{Diagnostic, DiagnosticCode, Source, is_view_source, serialize_m
 
 // ── CLI argument types ───────────────────────────────────────────────────────
 
-/// MBSE model checker and view generator.
+/// MBSE model checker.
 #[derive(Parser, Debug)]
-#[command(
-    name = "rhizz",
-    version,
-    about = "MBSE model checker and view generator"
-)]
+#[command(name = "rhizz", version, about = "MBSE model checker")]
 pub struct Cli {
     /// Subcommand to run (defaults to `build`).
     #[command(subcommand)]
@@ -32,10 +28,6 @@ pub struct Cli {
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// Output directory for generated .dot files.
-    #[arg(short, long, default_value = "./out/", global = true)]
-    pub output_dir: PathBuf,
-
     /// Treat warnings as errors.
     #[arg(long, global = true)]
     pub strict: bool,
@@ -43,10 +35,6 @@ pub struct Cli {
     /// JSON output for CI/CD.
     #[arg(long, global = true)]
     pub json: bool,
-
-    /// Only generate a specific view.
-    #[arg(long, global = true)]
-    pub view: Option<String>,
 
     /// Disable colored output.
     #[arg(long, global = true)]
@@ -68,13 +56,7 @@ pub enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
-    /// Run check, then generate .dot files for all (or selected) views.
-    Views {
-        /// Path to project directory containing .hcl files.
-        #[arg(default_value = ".")]
-        path: PathBuf,
-    },
-    /// Run check + score + views in sequence (default).
+    /// Run check + score in sequence (default).
     Build {
         /// Path to project directory containing .hcl files.
         #[arg(default_value = ".")]
@@ -91,7 +73,7 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// Run check + score + views, then watch for .hcl changes and re-run.
+    /// Run check + score, then watch for .hcl changes and re-run.
     Watch {
         /// Path to project directory containing .hcl files.
         #[arg(default_value = ".")]
@@ -106,9 +88,7 @@ enum CommandKind {
     Check,
     /// Run check, then print the completion report.
     Score,
-    /// Run check, then generate .dot files for all (or selected) views.
-    Views,
-    /// Run check + score + views in sequence (default).
+    /// Run check + score in sequence (default).
     Build,
     /// Canonically format the model .hcl files (or verify with --check).
     Fmt,
@@ -122,7 +102,6 @@ impl Cli {
         match &self.command {
             Some(Command::Check { path }) => (CommandKind::Check, path),
             Some(Command::Score { path }) => (CommandKind::Score, path),
-            Some(Command::Views { path }) => (CommandKind::Views, path),
             Some(Command::Build { path }) => (CommandKind::Build, path),
             Some(Command::Fmt { path, .. }) => (CommandKind::Fmt, path),
             Some(Command::Watch { path }) => (CommandKind::Watch, path),
@@ -228,7 +207,7 @@ fn print_json<T: serde::Serialize>(value: &T) {
     match serde_json::to_string_pretty(value) {
         Ok(s) => println!("{s}"),
         Err(e) => println!(
-            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"score\": null, \"views\": null}}"
+            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"score\": null}}"
         ),
     }
 }
@@ -298,15 +277,6 @@ struct JsonScore {
     overall: JsonOverallScore,
 }
 
-/// JSON representation of a generated view.
-#[derive(serde::Serialize)]
-struct JsonView {
-    /// View name.
-    name: String,
-    /// Output file path.
-    file: String,
-}
-
 /// Top-level JSON output object.
 #[derive(serde::Serialize)]
 struct JsonOutput {
@@ -317,9 +287,6 @@ struct JsonOutput {
     /// Score report (present only if check passed).
     #[serde(skip_serializing_if = "Option::is_none")]
     score: Option<JsonScore>,
-    /// Generated views (present only if views were generated).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    views: Option<Vec<JsonView>>,
 }
 
 /// Convert a [`Diagnostic`] to its JSON representation.
@@ -354,7 +321,6 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     }],
                     warnings: vec![],
                     score: None,
-                    views: None,
                 };
                 print_json(&out);
             } else {
@@ -416,7 +382,6 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                     percent: (r.overall_percentage() * 10.0).round() / 10.0,
                 },
             }),
-            views: None,
         };
         print_json(&json_out);
     } else {
@@ -776,12 +741,9 @@ mod tests {
 
     #[test]
     fn run_build_drone_exit_0() {
-        let out_dir = tempfile::tempdir().expect("tempdir");
         let cli = parse_args(&[
             "build",
             example_dir("drone").to_str().unwrap(),
-            "--output-dir",
-            out_dir.path().to_str().unwrap(),
             "--no-color",
         ]);
         let code = run(&cli);
@@ -790,12 +752,9 @@ mod tests {
 
     #[test]
     fn run_build_social_media_exit_0() {
-        let out_dir = tempfile::tempdir().expect("tempdir");
         let cli = parse_args(&[
             "build",
             example_dir("social-media").to_str().unwrap(),
-            "--output-dir",
-            out_dir.path().to_str().unwrap(),
             "--no-color",
         ]);
         let code = run(&cli);
@@ -804,12 +763,9 @@ mod tests {
 
     #[test]
     fn run_build_software_house_exit_0() {
-        let out_dir = tempfile::tempdir().expect("tempdir");
         let cli = parse_args(&[
             "build",
             example_dir("software-house").to_str().unwrap(),
-            "--output-dir",
-            out_dir.path().to_str().unwrap(),
             "--no-color",
         ]);
         let code = run(&cli);

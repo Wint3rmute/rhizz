@@ -26,8 +26,8 @@ Messages:    5/10 complete  (50.0%)
 Overall:     16/29           55.2%
 ```
 
-**Definable views** — `view` blocks render filtered Graphviz diagrams from the
-same model. Show only power paths, zoom into one subsystem, or hide low-level
+**Definable views** — `view` blocks define filtered perspectives on the
+same model, rendered by the web application. Show only power paths, zoom into one subsystem, or hide low-level
 wiring for a stakeholder review — all without touching the model itself:
 
 ```hcl
@@ -42,8 +42,7 @@ view "power-paths" {
 ```
 rhizz check [path]   # parse and validate
 rhizz score [path]   # print completion report
-rhizz views [path]   # generate .dot diagrams
-rhizz build [path]   # all of the above (default)
+rhizz build [path]   # check + score (default)
 ```
 
 See `SPEC.md`, `SPEC/`, and `examples/` for the full specification and worked
