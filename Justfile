@@ -25,6 +25,14 @@ test:
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
 
+# Runs the Storybook browser tests (Playwright/Chromium). The browsers come
+# from the dev shell's `pkgs.playwright-driver.browsers` via
+# PLAYWRIGHT_BROWSERS_PATH (see flake.nix) — no download into
+# ~/.cache/ms-playwright. `just test` already includes these; this recipe is
+# for running them on their own.
+web-browser-test:
+    {{run}} sh -lc 'cd web && deno run test --project=storybook'
+
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
 build:
