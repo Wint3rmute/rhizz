@@ -7,14 +7,20 @@ import {
 import type { DiagramLayout } from "./routes/projects/[id]/diagrams/persistence";
 import { get_example_projects } from "./rhizz_wasm_wrapper";
 
-// Retrieves the single-file example from the embedded WASM examples (single source of truth).
+// Retrieves the single-file example's *system model* from the embedded WASM
+// examples (single source of truth).
+//
+// The embedded file list is sorted by path, so `files[0]` is a
+// `diagrams/*.hcl` view — pick the model file explicitly.
 export function getExampleSystemHcl(): string {
   try {
     const examples = get_example_projects();
     const single = examples.find((e) => e.id === "single-file");
-    const first = single?.files[0];
-    if (first) {
-      return first.content;
+    const systemFile = single?.files.find(
+      (file) => file.path === "system.hcl" || file.path === "main.hcl",
+    );
+    if (systemFile) {
+      return systemFile.content;
     }
   } catch {
     // Fallback if called before WASM initialization
