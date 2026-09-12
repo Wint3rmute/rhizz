@@ -31,12 +31,22 @@
               # cargo-llvm-cov (NixOS equivalent of rustup's
               # llvm-tools-preview component).
               pkgs.llvmPackages_21.llvm
+              # Playwright browsers for the web browser-mode tests
+              # (`deno run test --project=storybook`). Nixpkgs'
+              # playwright-driver version must match the `playwright` version
+              # resolved under web/ (currently 1.61.1), because Playwright
+              # looks up browsers by revision directory name (chromium-1228).
+              # `just web-browser-test` runs them; see the Justfile.
+              pkgs.playwright-driver.browsers
             ];
 
-            # Point cargo-llvm-cov at the Nix-managed LLVM tools.
+            # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
+            # at the Nix-provided browsers instead of ~/.cache/ms-playwright.
             shellHook = ''
               export LLVM_COV="${pkgs.llvmPackages_21.llvm}/bin/llvm-cov"
               export LLVM_PROFDATA="${pkgs.llvmPackages_21.llvm}/bin/llvm-profdata"
+              export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
+              export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
             '';
 
             # LLMs often want to use a Python environment with some popular
