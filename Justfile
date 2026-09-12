@@ -22,7 +22,7 @@ format:
 lint:
     {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && deno task sync && deno task eslint && deno task check-only'
 
-test:
+test: wasm
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
 

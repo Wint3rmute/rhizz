@@ -32,11 +32,11 @@
               # llvm-tools-preview component).
               pkgs.llvmPackages_21.llvm
               # Playwright browsers for the web browser-mode tests
-              # (`deno run test --project=storybook`). Nixpkgs'
-              # playwright-driver version must match the `playwright` version
-              # resolved under web/ (currently 1.61.1), because Playwright
-              # looks up browsers by revision directory name (chromium-1228).
-              # `just web-browser-test` runs them; see the Justfile.
+              # (`deno run test --project=storybook`, also covered by
+              # `just test`). Nixpkgs' playwright-driver version must match the
+              # `playwright` version resolved under web/ (currently 1.61.1),
+              # because Playwright looks up browsers by revision directory
+              # name (chromium-1228).
               pkgs.playwright-driver.browsers
             ];
 
