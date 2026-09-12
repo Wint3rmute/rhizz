@@ -153,16 +153,6 @@ system "demo-system" {
     to          = "sensor/spi"
   }
 }
-
-view "overview" {
-  description = "Overview showing sibling and cross-level connections"
-  system      = "demo-system"
-
-  filter {
-    max_level     = 2
-    show_messages = true
-  }
-}
 `;
 
 const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
