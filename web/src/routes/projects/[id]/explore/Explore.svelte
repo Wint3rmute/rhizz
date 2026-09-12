@@ -85,18 +85,38 @@ $effect(() => {
   let cancelled = false;
   const fs = openProjectFs(projectStore, id);
   fs.readdir(DIAGRAM_LAYOUT_DIR)
-    .then((entries) => {
-      if (cancelled) return;
+    .then(async (entries) => {
       const files = entries.filter(
         (entry) => entry.isFile() && entry.name.endsWith(".hcl"),
       );
-      diagramEntries = files;
+      // Only layouts with at least one placed node are viewable here. A
+      // `view` file carrying just a `filter` block (see the worked examples)
+      // has no canvas content — filters are applied by other renderers, not
+      // this viewer — so it would open as a blank diagram. It stays available
+      // in the Diagrams editor.
+      const renderable = (
+        await Promise.all(
+          files.map(async (file) => ({
+            file,
+            layout: await readDiagramLayoutFile(
+              fs,
+              `${DIAGRAM_LAYOUT_DIR}/${file.path}`,
+            ),
+          })),
+        )
+      )
+        .filter(({ layout }) => Object.keys(layout.checked).length > 0)
+        .map(({ file }) => file);
+      if (cancelled) return;
+      diagramEntries = renderable;
 
       const urlParam = page.url.searchParams.get("diagram");
-      const matchingParam = urlParam && files.some((e) => e.path === urlParam)
+      const matchingParam = urlParam && renderable.some((e) =>
+          e.path === urlParam
+        )
         ? urlParam
         : null;
-      const first = files[0]?.path ?? null;
+      const first = renderable[0]?.path ?? null;
       selectedDiagramPath = matchingParam ?? first;
       if (!matchingParam && first) navigateToDiagram(first, true);
     })

@@ -459,6 +459,16 @@ export const SoftwareHouse: Story = {
     projectId: SOFTWARE_HOUSE_PROJECT_ID,
   },
   loaders: [seedSoftwareHouseProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The project has one layout-bearing diagram (`main.hcl`) plus three
+    // filter-only views. Explore must open the layout (not a filter-only
+    // view, which has no nodes) and render its components.
+    await canvas.findByRole("link", {
+      name: /engineering, no detailed view/i,
+    });
+    await expect(canvas.queryByText(/engineering-teams\.hcl/)).toBeNull();
+  },
 };
 
 export const HoverDocPopup: Story = {
