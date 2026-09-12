@@ -7,6 +7,7 @@ has_nix := if shell('command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -
 }
 
 alias b := build
+alias w := wasm
 alias t := test
 alias d := dev
 alias s := storybook
@@ -25,10 +26,12 @@ test:
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
 
+wasm:
+    {{run}} wasm-pack build crates/rhizz-wasm --target web --release
+
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
-build:
-    {{run}} wasm-pack build crates/rhizz-wasm --target web --release
+build: wasm
     {{run}} sh -lc 'cd web && npx vite build'
     {{run}} sh -lc 'cd web && dx storybook build'
     {{run}} cargo build --release --all-targets
@@ -50,7 +53,7 @@ book-accept:
     {{run}} env BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
-dev:
+dev: wasm
     {{run}} sh -lc 'cd web && deno run dev'
 
 # Starts a storybook server. If you're an AI, never use this. It will just hang forever.
