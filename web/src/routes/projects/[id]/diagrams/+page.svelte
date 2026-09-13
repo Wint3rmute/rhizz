@@ -9,6 +9,7 @@ import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
+import { toastState } from "../../../../ToastState.svelte";
 import {
   projectStore,
   setCurrentDiagnostics,
@@ -363,11 +364,43 @@ $effect(() => {
         // empty file list. Without this, checking a component onto the
         // canvas before ever creating a diagram would silently never be
         // persisted (fullDiagramPath stays null).
+        //
+        // The first view is linked to a system by default: prefer the
+        // first system, creating a "main" system when the model has none
+        // yet (e.g. projects created before the empty-project seed gained
+        // one), so a new user never starts with a dangling view. Systems
+        // come from a fresh full-project compile (never stale deriveds,
+        // never just the primary file), and a failing model is left
+        // untouched — the view seeds unlinked instead.
+        let systemName = "";
+        const projectSources = await readProjectSources(fs);
+        const baselineModel = compile_system(projectSources).model();
+        if (baselineModel) {
+          const existing = baselineModel.systems();
+          if (existing.length === 0) {
+            const { path: targetPath, content: mainContent } =
+              await readMainContent();
+            const ensured = await applyModelMutation(
+              fs,
+              targetPath,
+              mainContent,
+              {
+                kind: "add_system",
+                label: "main",
+                description: "Main system",
+              },
+            );
+            if (ensured.applied) {
+              sources = await readProjectSources(fs);
+            }
+          }
+          systemName = existing[0]?.label || "main";
+        }
         await writeDiagramLayoutFile(
           fs,
           `${DIAGRAM_LAYOUT_DIR}/main.hcl`,
           emptyDiagramLayout(),
-          systems[0]?.label || "",
+          systemName,
         );
         await refreshDiagramEntries();
       }
@@ -460,7 +493,7 @@ $effect(() => {
   };
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
-  void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "");
+  void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "main");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -491,7 +524,7 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
       fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
       emptyDiagramLayout(),
-      systems[0]?.label || "",
+      systems[0]?.label || "main",
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;
@@ -1253,8 +1286,9 @@ async function handleModalCreateComponent(data: {
 
   const { path: targetPath, content: mainContent } = await readMainContent();
 
-  // Container fallback (first system / fresh "main") lives in the
-  // dispatcher; the returned path is the created component's key.
+  // Container fallback (first system / fresh "main"), definition +
+  // instance creation, and instance-under-instance redirection all live in
+  // the dispatcher; the returned path is the created component's key.
   const result = await applyModelMutation(fs, targetPath, mainContent, {
     kind: "create_component",
     label: data.label,
@@ -1271,7 +1305,15 @@ async function handleModalCreateComponent(data: {
   sources = await readProjectSources(fs);
 
   const fullKey = result.path ?? data.label;
-  if (data.sourceLabel || parent) {
+  if (!data.sourceLabel) {
+    const slash = fullKey.lastIndexOf("/");
+    const placementParent = slash === -1 ? fullKey : fullKey.slice(0, slash);
+    toastState.show(
+      `Created definition "${data.label}" and placed it in ${placementParent}`,
+      "success",
+    );
+  }
+  {
     const worldX = data.position ? snap(data.position.x) : 100;
     const worldY = data.position ? snap(data.position.y) : 100;
 

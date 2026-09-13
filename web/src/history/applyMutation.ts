@@ -23,6 +23,7 @@ import {
   type RawModelPayload,
 } from "../DocumentStore.svelte";
 import { compile_system } from "../rhizz_wasm_wrapper";
+import { resolveInstanceStoreParent } from "./placement";
 
 // Minimal filesystem surface the dispatcher needs; `ProjectFs` satisfies it
 // structurally.
@@ -161,21 +162,25 @@ export async function applyModelMutation(
     case "create_component": {
       let parent = op.parentKey ?? "";
       if (!parent || !doc.findContainer(parent)) {
-        if (op.sourceLabel) {
-          // Instances need a real container; fall back to the first system.
-          if (doc.systems.length === 0) {
-            doc.addSystem(parent || "main");
-            parent = parent || "main";
-          } else {
-            const first = doc.systems[0];
-            parent = first ? first.label : "main";
-          }
+        // Both modes need a real container: fall back to the first system,
+        // creating a "main" system when the model has none yet.
+        if (doc.systems.length === 0) {
+          doc.addSystem("main", "Main system");
+          parent = "main";
         } else {
-          // New reusable definitions have no system parent.
-          parent = "";
+          const first = doc.systems[0];
+          parent = first ? first.label : "main";
         }
       }
+      // Children of an instance persist in that instance's definition
+      // body: instance blocks carry only `source` (E012), so nesting under
+      // the instance itself would be silently dropped on write.
+      const storeParent = resolveInstanceStoreParent(doc, parent);
       if (!op.sourceLabel) {
+        // New-definition mode: create a top-level reusable definition (no
+        // system parent, so it is available for instances from anywhere)
+        // and immediately place an instance of it — otherwise creation
+        // closes with nothing visibly changing on the canvas.
         doc.addComponentDefinition(op.label, {
           ...(op.leaf === undefined ? {} : { leaf: op.leaf }),
           ...(op.description === undefined
@@ -184,11 +189,11 @@ export async function applyModelMutation(
           ...(op.tags === undefined ? {} : { tags: op.tags }),
           ...(op.ports === undefined ? {} : { ports: op.ports }),
         });
-        path = op.label;
+        doc.addInstance(storeParent, op.label, op.label);
       } else {
-        doc.addInstance(parent, op.label, op.sourceLabel);
-        path = `${parent}/${op.label}`;
+        doc.addInstance(storeParent, op.label, op.sourceLabel);
       }
+      path = `${parent}/${op.label}`;
       applied = true;
       break;
     }

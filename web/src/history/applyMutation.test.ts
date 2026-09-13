@@ -165,6 +165,56 @@ describe("applyModelMutation", () => {
     expect(content).toContain('system "main"');
   });
 
+  it("create_component without sourceLabel creates a definition and places an instance", async () => {
+    const fs = memoryFs();
+    const result = await applyModelMutation(fs, "system.hcl", "", {
+      kind: "create_component",
+      label: "sensor",
+      leaf: true,
+    });
+    expect(result.applied).toBe(true);
+    // Fresh model: definition + "main" system + instance, path under main.
+    expect(result.path).toBe("main/sensor");
+    const content = fs.store.get("system.hcl") ?? "";
+    expect(content).toContain('component "sensor"');
+    expect(content).toContain('system "main"');
+    expect(content).toContain('instance "sensor"');
+  });
+
+  it("create_component under an instance persists in the definition body", async () => {
+    const fs = memoryFs();
+    let baseline = "";
+    for (
+      const op of [
+        { kind: "add_component_definition", label: "sensor" },
+        { kind: "add_system", label: "main" },
+        {
+          kind: "add_instance",
+          parentPath: "main",
+          label: "sensor",
+          source: "sensor",
+        },
+      ] as const
+    ) {
+      const seeded = await applyModelMutation(fs, "system.hcl", baseline, op);
+      if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
+      baseline = fs.store.get("system.hcl") ?? "";
+    }
+    const result = await applyModelMutation(fs, "system.hcl", baseline, {
+      kind: "create_component",
+      label: "imu",
+      parentKey: "main/sensor",
+      leaf: true,
+    });
+    expect(result.applied).toBe(true);
+    expect(result.path).toBe("main/sensor/imu");
+    const content = fs.store.get("system.hcl") ?? "";
+    // The child persists in the sensor definition body, so it still
+    // resolves after a write round-trip (instance blocks carry only
+    // `source`, E012).
+    expect(content).toContain('instance "imu"');
+  });
+
   it("delete_connection_by_label finds nested scopes", async () => {
     const fs = memoryFs();
     await seedDemo(fs);

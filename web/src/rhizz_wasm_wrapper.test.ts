@@ -9,6 +9,7 @@ import {
   serialize_model,
   serialize_views,
 } from "./rhizz_wasm_wrapper";
+import { EMPTY_PROJECT_HCL } from "./emptyProject";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -96,6 +97,18 @@ system "quad" {
 
     const views2 = parse_views(serialized);
     expect(views2).toEqual(views);
+  });
+
+  it("compiles the empty-project seed with its default view and no errors", () => {
+    const result = compile_system([
+      { filename: "main.hcl", content: EMPTY_PROJECT_HCL },
+      {
+        filename: "diagrams/main.hcl",
+        content: 'view "main" { system = "main" }\n',
+      },
+    ]);
+    expect(result.error_count()).toBe(0);
+    expect(result.model()).toBeDefined();
   });
 
   it("surfaces view diagnostics while keeping the resolved model", () => {

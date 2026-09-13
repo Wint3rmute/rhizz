@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { DocumentStore, subscribeToMutations } from "./DocumentStore.svelte";
+import { EMPTY_PROJECT_HCL } from "./emptyProject";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -21,6 +22,12 @@ describe("DocumentStore", () => {
     expect(doc.systemHcl).toContain(
       'project {\n  name    = "untitled"\n  version = "0.1.0"\n}',
     );
+  });
+
+  it("parses the empty-project seed into a single main system", () => {
+    const doc = new DocumentStore();
+    doc.loadFromHcl(EMPTY_PROJECT_HCL);
+    expect(doc.systems.map((s) => s.label)).toEqual(["main"]);
   });
 
   it("adds systems, definitions, and instances and derives valid systemHcl", () => {
