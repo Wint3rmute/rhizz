@@ -8,6 +8,9 @@ members = [
 ]
 resolver = "3"
 
+[workspace.package]
+license = "EUPL-1.2"
+
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
 [workspace.lints.clippy]

@@ -3,6 +3,7 @@ name = "rhizz-server"
 version = "0.1.0"
 edition = "2024"
 description = "Standalone HTTP server for the rhizz web editor"
+license.workspace = true
 
 [lints]
 workspace = true
