@@ -331,7 +331,7 @@
       "src": "basics/demo"
     },
     {
-      "chapter": "02_views-intro.md",
+      "chapter": "02_views_intro.md",
       "files": [
         {
           "path": "diagrams/overview.hcl",
@@ -378,7 +378,7 @@
       "src": "views-intro/1_example_simple"
     },
     {
-      "chapter": "02_views-intro.md",
+      "chapter": "02_views_intro.md",
       "files": [
         {
           "path": "diagrams/overview.hcl",

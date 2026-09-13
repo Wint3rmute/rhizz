@@ -3,7 +3,7 @@
 [Introduction](intro.md)
 
 - [Basics of Rhizz Syntax](01_basics.md)
-- [Introduction to Views](02_views-intro.md)
+- [Introduction to Views](02_views_intro.md)
 - [Connections & Ports](03_connections_ports.md)
 - [Warnings & Errors](04_warnings_errors.md)
 - [Documentation System](05_docs.md)
