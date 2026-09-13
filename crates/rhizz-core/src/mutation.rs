@@ -1000,7 +1000,6 @@ fn delete(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> 
     }]))
 }
 
-
 fn add_connection(
     raw: &mut RawFile,
     scope_path: &str,

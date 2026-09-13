@@ -78,7 +78,10 @@ or automated process.
    etc.).
 4. **Do not duplicate logic** — if behaviour needed by a frontend is missing
    from `rhizz-core`, add it there instead of implementing it in
-   the frontend.
+   the frontend. In particular, model writes must go through
+   `rhizz-core::mutate_to_hcl` (via the `apply_model_op` WASM binding):
+   frontends send a declarative op and persist the returned canonical HCL,
+   never hand-emit model HCL themselves.
 
 **CLI-specific notes** (`rhizz-cli`):
 
