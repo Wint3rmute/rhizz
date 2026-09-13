@@ -445,8 +445,7 @@ Markdown files under `docs/` document components (`docs/plane.md` ↔ `component
 
 ## 3. Reference Resolution
 
-> **Impl:** see [Scope lookup helper](SPEC/models.md#scope-lookup-helper) and
-> [Resolution pass](SPEC/models.md#resolution-pass) in models.md.
+> **Impl:** see [Resolution pass](SPEC/models.md#resolution-pass) in models.md.
 
 All references use **name-based or UNIX-style path notation**:
 
@@ -465,7 +464,7 @@ All references use **name-based or UNIX-style path notation**:
 ## 4. Validation Rules
 
 > **Impl:** validation operates on the
-> [resolved `Model`](SPEC/models.md#core-resolved-structs). Errors/warnings are
+> [resolved `Model`](SPEC/models.md#resolved-model). Errors/warnings are
 > collected as `Diagnostic` values during the
 > [resolution pass](SPEC/models.md#resolution-pass).
 
@@ -495,7 +494,7 @@ unit-level checks) vs. verifying a fully instantiated system:
 
 > **Impl:** scoring iterates over `Model.components`, `Model.ports`,
 > `Model.connections`, and `Model.messages`, see
-> [resolved models](SPEC/models.md#core-resolved-structs). The `leaf`,
+> [resolved models](SPEC/models.md#resolved-model). The `leaf`,
 > `children`, `ports`, `messages`, and `fields` fields on those structs provide
 > all inputs needed.
 
