@@ -146,7 +146,9 @@ export function encodeCall(action: ModelAction, fileVar: string): string {
   if (op === null) {
     return `// ${action.op} is not replayable through model ops (no-op in replay)`;
   }
-  return `await applyModelMutation(${fileVar}, "system.hcl", await ${fileVar}.readFile("system.hcl"), ${JSON.stringify(op)});`;
+  return `await applyModelMutation(${fileVar}, "system.hcl", await ${fileVar}.readFile("system.hcl"), ${
+    JSON.stringify(op)
+  });`;
 }
 
 function toMutationOp(action: ModelAction): unknown {
@@ -178,7 +180,11 @@ function toMutationOp(action: ModelAction): unknown {
         source: action.source,
       };
     case "rename_component":
-      return { kind: "rename_component", path: action.path, newLabel: action.newLabel };
+      return {
+        kind: "rename_component",
+        path: action.path,
+        newLabel: action.newLabel,
+      };
     case "delete_component":
       return { kind: "delete_component", path: action.path };
     case "reparent_component":
@@ -188,7 +194,11 @@ function toMutationOp(action: ModelAction): unknown {
         targetParentPath: action.targetParentPath,
       };
     case "update_component":
-      return { kind: "update_component", path: action.path, patch: action.patch };
+      return {
+        kind: "update_component",
+        path: action.path,
+        patch: action.patch,
+      };
     case "add_connection":
       return {
         kind: "add_connection",
@@ -246,7 +256,9 @@ export function asTestScript(
     ``,
     `describe("model editor replay", () => {`,
     `  it(${tsString(testName)}, async () => {`,
-    `    const files = new Map<string, string>([["system.hcl", ${tsTemplate(baseline)}]]);`,
+    `    const files = new Map<string, string>([["system.hcl", ${
+      tsTemplate(baseline)
+    }]]);`,
     `    const fs = {`,
     `      readFile: (filePath: string) =>`,
     `        Promise.resolve(files.get(filePath) ?? ""),`,

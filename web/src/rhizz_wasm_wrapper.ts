@@ -1,6 +1,6 @@
 import {
-  CompileResultJS,
   apply_model_op as wasm_apply_model_op,
+  CompileResultJS,
   get_example_projects as wasm_get_example_projects,
   type ModelJS,
   parse_views as wasm_parse_views,

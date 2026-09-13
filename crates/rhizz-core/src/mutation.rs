@@ -88,22 +88,14 @@ pub enum ModelOp {
     /// Rename a placed instance (definitions are never renamed in place).
     #[serde(rename = "rename_component")]
     #[serde(rename_all = "camelCase")]
-    Rename {
-        path: String,
-        new_label: String,
-    },
+    Rename { path: String, new_label: String },
     /// Patch attributes on a definition (instance paths redirect to their
     /// definition, mirroring the old TypeScript store).
     #[serde(rename = "update_component")]
-    Update {
-        path: String,
-        patch: PatchJson,
-    },
+    Update { path: String, patch: PatchJson },
     /// Delete a definition (bare label) or a placed instance.
     #[serde(rename = "delete_component")]
-    Delete {
-        path: String,
-    },
+    Delete { path: String },
     /// Add a connection inside a scope.
     #[serde(rename = "add_connection")]
     #[serde(rename_all = "camelCase")]
@@ -115,9 +107,7 @@ pub enum ModelOp {
     },
     /// Delete a connection by label, searching systems then definitions.
     #[serde(rename = "delete_connection_by_label")]
-    DeleteConnectionByLabel {
-        label: String,
-    },
+    DeleteConnectionByLabel { label: String },
 }
 
 /// Options for [`ModelOp::AddDefinition`] / definition-mode creates.
@@ -207,10 +197,7 @@ pub struct PatchJson {
 pub enum LoggedAction {
     /// A system block was added.
     #[serde(rename = "add_system")]
-    AddSystem {
-        label: String,
-        description: String,
-    },
+    AddSystem { label: String, description: String },
     /// A component definition was added.
     #[serde(rename = "add_component_definition")]
     #[serde(rename_all = "camelCase")]
@@ -240,15 +227,10 @@ pub enum LoggedAction {
     /// A placed instance was renamed.
     #[serde(rename = "rename_component")]
     #[serde(rename_all = "camelCase")]
-    RenameComponent {
-        path: String,
-        new_label: String,
-    },
+    RenameComponent { path: String, new_label: String },
     /// A definition or placed instance was deleted.
     #[serde(rename = "delete_component")]
-    DeleteComponent {
-        path: String,
-    },
+    DeleteComponent { path: String },
     /// A placed instance moved containers.
     #[serde(rename = "reparent_component")]
     #[serde(rename_all = "camelCase")]
@@ -259,10 +241,7 @@ pub enum LoggedAction {
     /// Definition attributes were patched (`path` is the definition the
     /// update landed on after instance→definition redirect).
     #[serde(rename = "update_component")]
-    UpdateComponent {
-        path: String,
-        patch: PatchJson,
-    },
+    UpdateComponent { path: String, patch: PatchJson },
     /// A connection was added.
     #[serde(rename = "add_connection")]
     #[serde(rename_all = "camelCase")]
@@ -275,10 +254,7 @@ pub enum LoggedAction {
     /// A connection was deleted.
     #[serde(rename = "delete_connection")]
     #[serde(rename_all = "camelCase")]
-    DeleteConnection {
-        scope_path: String,
-        label: String,
-    },
+    DeleteConnection { scope_path: String, label: String },
 }
 
 // ── Outcome types ─────────────────────────────────────────────────────────────
@@ -539,15 +515,18 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             description,
             tags,
             ports,
-        } => create_component(raw, &CreateParams {
-            label,
-            parent_key,
-            source_label,
-            leaf: *leaf,
-            description: description.clone(),
-            tags: tags.clone(),
-            ports: ports.clone(),
-        }),
+        } => create_component(
+            raw,
+            &CreateParams {
+                label,
+                parent_key,
+                source_label,
+                leaf: *leaf,
+                description: description.clone(),
+                tags: tags.clone(),
+                ports: ports.clone(),
+            },
+        ),
         ModelOp::Reparent {
             source_path,
             target_parent_path,
@@ -588,10 +567,10 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             })
         }
         ModelOp::DeleteConnectionByLabel { label } => {
-            if let Some(index) =
-                raw.systems.iter().position(|s| {
-                    s.inner.connections.iter().any(|c| c.label == *label)
-                })
+            if let Some(index) = raw
+                .systems
+                .iter()
+                .position(|s| s.inner.connections.iter().any(|c| c.label == *label))
             {
                 let system = raw
                     .systems
@@ -607,10 +586,10 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
                     }],
                 });
             }
-            if let Some(index) =
-                raw.components.iter().position(|c| {
-                    c.inner.connections.iter().any(|c| c.label == *label)
-                })
+            if let Some(index) = raw
+                .components
+                .iter()
+                .position(|c| c.inner.connections.iter().any(|c| c.label == *label))
             {
                 let definition = raw
                     .components
@@ -839,7 +818,10 @@ struct CreateParams<'a> {
 /// the web editor (`EMPTY_PROJECT_HCL` / the create fallback).
 const FALLBACK_SYSTEM_DESCRIPTION: &str = "Main system";
 
-fn create_component(raw: &mut RawFile, params: &CreateParams<'_>) -> Result<ApplyOutcome, MutationError> {
+fn create_component(
+    raw: &mut RawFile,
+    params: &CreateParams<'_>,
+) -> Result<ApplyOutcome, MutationError> {
     if params.label.is_empty() {
         return Err(MutationError::InvalidInput(
             "component label must not be empty".to_owned(),
@@ -868,16 +850,19 @@ fn create_component(raw: &mut RawFile, params: &CreateParams<'_>) -> Result<Appl
     if params.source_label.is_empty() {
         // New-definition mode also places an instance — otherwise creation
         // closes with nothing visibly changing on the canvas.
-        actions.extend(add_definition(raw, params.label, &DefinitionOptions {
-            leaf: params.leaf,
-            description: params.description.clone(),
-            tags: params.tags.clone(),
-            ports: params.ports.clone(),
-            ..Default::default()
-        })?);
-        let scope = resolve_scope(raw, &parent).map_err(|_| {
-            MutationError::InvalidInput(format!("unknown container '{parent}'"))
-        })?;
+        actions.extend(add_definition(
+            raw,
+            params.label,
+            &DefinitionOptions {
+                leaf: params.leaf,
+                description: params.description.clone(),
+                tags: params.tags.clone(),
+                ports: params.ports.clone(),
+                ..Default::default()
+            },
+        )?);
+        let scope = resolve_scope(raw, &parent)
+            .map_err(|_| MutationError::InvalidInput(format!("unknown container '{parent}'")))?;
         actions.extend(add_instance(raw, scope, params.label, params.label)?);
         let label = params.label;
         Ok(ApplyOutcome {
@@ -886,9 +871,8 @@ fn create_component(raw: &mut RawFile, params: &CreateParams<'_>) -> Result<Appl
             actions,
         })
     } else {
-        let scope = resolve_scope(raw, &parent).map_err(|_| {
-            MutationError::InvalidInput(format!("unknown container '{parent}'"))
-        })?;
+        let scope = resolve_scope(raw, &parent)
+            .map_err(|_| MutationError::InvalidInput(format!("unknown container '{parent}'")))?;
         actions.extend(add_instance(raw, scope, params.label, params.source_label)?);
         let label = params.label;
         Ok(ApplyOutcome {
@@ -904,10 +888,7 @@ fn reparent(
     source_path: &str,
     target_parent_path: &str,
 ) -> Result<ApplyOutcome, MutationError> {
-    let segments: Vec<&str> = source_path
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let segments: Vec<&str> = source_path.split('/').filter(|s| !s.is_empty()).collect();
     let Some((&leaf, parent_segments)) = segments.split_last() else {
         return Ok(idle());
     };
@@ -1164,13 +1145,10 @@ mod tests {
             .expect("ok")
             .hcl
             .expect("hcl");
-        let hcl = mutate(
-            &hcl,
-            r#"{"kind":"add_component_definition","label":"c"}"#,
-        )
-        .expect("ok")
-        .hcl
-        .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_component_definition","label":"c"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
         let hcl = mutate(
             &hcl,
             r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"c"}"#,
@@ -1276,13 +1254,10 @@ mod tests {
 
     #[test]
     fn reparent_guards_reject_cycles_and_collisions() {
-        let hcl = mutate(
-            "",
-            r#"{"kind":"add_component_definition","label":"sub"}"#,
-        )
-        .expect("ok")
-        .hcl
-        .expect("hcl");
+        let hcl = mutate("", r#"{"kind":"add_component_definition","label":"sub"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
         let hcl = mutate(
             &hcl,
             r#"{"kind":"add_component_definition","label":"leaf","options":{"leaf":true}}"#,
@@ -1378,13 +1353,10 @@ mod tests {
 
     #[test]
     fn delete_connection_by_label_searches_definitions() {
-        let hcl = mutate(
-            "",
-            r#"{"kind":"add_component_definition","label":"bus"}"#,
-        )
-        .expect("ok")
-        .hcl
-        .expect("hcl");
+        let hcl = mutate("", r#"{"kind":"add_component_definition","label":"bus"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
         let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
             .expect("ok")
             .hcl
@@ -1413,14 +1385,20 @@ mod tests {
         .expect("hcl");
         assert!(hcl.contains(r#"connection "link""#));
 
-        let deleted = mutate(&hcl, r#"{"kind":"delete_connection_by_label","label":"link"}"#)
-            .expect("ok");
+        let deleted = mutate(
+            &hcl,
+            r#"{"kind":"delete_connection_by_label","label":"link"}"#,
+        )
+        .expect("ok");
         assert!(deleted.applied);
         let hcl = deleted.hcl.expect("hcl");
         assert!(!hcl.contains(r#"connection "link""#));
 
-        let missing = mutate(&hcl, r#"{"kind":"delete_connection_by_label","label":"nope"}"#)
-            .expect("ok");
+        let missing = mutate(
+            &hcl,
+            r#"{"kind":"delete_connection_by_label","label":"nope"}"#,
+        )
+        .expect("ok");
         assert!(!missing.applied);
     }
 
