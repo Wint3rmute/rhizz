@@ -14,22 +14,21 @@ language for defining system architectures at various levels of abstraction.
 ## 1. Project Structure
 
 A project consists of a single system model file (`system.hcl` or `main.hcl`)
-containing the system architecture model (including optional `project`
-metadata), and optional view definition files (all files in `diagrams/*.hcl`, one view per file):
+containing the system architecture model. View definition files are located under `diagrams/*.hcl`. Documentation for components of the system
+is located under `docs/*.md`, each markdown file corresponding to a component (e.g. `component plane` -> `docs/plane.md`).
 
 ```
 project/
-├── system.hcl           # single system architecture model (optional project {} + systems/components)
-└── diagrams/*.hcl            # view definitions and visual layout metadata
+├── system.hcl      # system model
+├── docs/*.md       # component documentation
+└── diagrams/*.hcl  # system views
 ```
 
-All architecture entities (`project`, `system`, `component`, `protocol`, `port`,
+All system model entities (`project`, `system`, `component`, `protocol`, `port`,
 `connection`, `message`, `field`) are maintained in the system model file. This
 single-file model structure enables bidirectional translation: visual editing in
 the UI deterministically serializes the complete model back to HCL without
 cross-file resolution ambiguity.
-
-View configurations remain separated in `diagrams/*.hcl`.
 
 ---
 
@@ -66,10 +65,9 @@ testing setup.
 system "consumer-drone" {
   description = "Consumer quadcopter drone"
   tags        = ["product", "drone", "v1"]
-  level       = 0
 
-  component "flight-controller" { /* ... */ }
-  component "propulsion"        { /* ... */ }
+  instance "flight-controller" { /* ... */ }
+  instance "propulsion"        { /* ... */ }
 
   connection "fc-to-prop" { /* ... */ }
 }
@@ -80,18 +78,17 @@ system "consumer-drone" {
 | _label_       | string       | **yes**  | —       | Unique system identifier   |
 | `description` | string       | no       | `""`    | Human-readable description |
 | `tags`        | list(string) | no       | `[]`    | Filtering tags             |
-| `level`       | integer      | no       | `0`     | Abstraction level          |
 
-**Children:** `component`, `connection`
+**Children:** `instance`, `connection`
 
 ---
 
 ### 2.3 `component` Block
 
-Represents a physical or logical building block. Defined inside a `system`, inside
-another `component`, or at the top level. Components declare their external
-interface via `port` blocks; ports are allowed on both leaf and non-leaf
-components.
+Represents a reusable physical or logical building block. Defined on the top
+level, instantiated inside a system or parent component using the `instance`
+block. Components declare their external interface via `port` blocks; ports are
+allowed on both leaf and non-leaf components.
 
 ```hcl
 component "flight-controller" {
@@ -106,22 +103,39 @@ component "flight-controller" {
     /* ... */
   }
 
-  component "mcu" { /* ... */ }
-  component "imu" { /* ... */ }
+  instance "mcu" { /* ... */ }
+  instance "imu" { /* ... */ }
 
   connection "spi-bus" { /* ... */ }
 }
 ```
 
-#### Top-level components and `source`
+#### Attributes
 
-A `component` block may appear at the **top level** of any `.hcl` file
-(alongside `system`, `view`, and `project`). Top-level components are not part
-of any system by themselves — they serve as reusable definitions that can be
-pulled into a system or parent component via the `source` attribute.
+| Attribute     | Type         | Required | Default          | Description                                                                |
+| ------------- | ------------ | -------- | ---------------- | ---------------------------------------------------------------------------|
+| _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)          |
+| `description` | string       | no       | `""`             | Human-readable description                                                 |
+| `icon`        | string       | no       | `""`             | Optional FontAwesome icon name (e.g. `"microchip"`, `"server"`, `"wifi"`) |
+| `color`       | string       | no       | `""`             | Optional border color for diagram rendering (e.g. `"#ff0000"`, `"red"`) |
+| `border`      | string       | no       | `"solid"`        | Optional border style for diagrams: `"solid"`, `"dashed"`, or `"dotted"` |
+| `font`        | string       | no       | `"unstyled"`     | Optional single-word font style for diagram labels: `"bold"`, `"italic"`, `"underline"` |
+| `tags`        | list(string) | no       | `[]`             | Filtering tags                                                             |
+| `level`       | integer      | no       | parent level + 1 | Abstraction level                                                          |
+| `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `instance`s        |
+
+**Children:** `port` (any), `instance` (if not leaf), `connection` (if not
+leaf, between child instances)
+
+---
+
+### 2.4 `instance` Block
+
+`component` definitions can be pulled into a system or parent component via the
+`instance` block.
 
 ```hcl
-# components/flight-controller.hcl — a normal rhizz file
+# system.hcl - top-level component definition
 component "flight-controller" {
   description = "Main flight computer"
   tags        = ["electronics", "compute"]
@@ -139,29 +153,33 @@ Inside a system (or parent component), reference it by label:
 system "quadcopter" {
   # Instantiate the top-level component by label.
   # The label at the usage site ("fc") becomes the component's name in this system.
-  component "fc" {
+  instance "fc" {
     source = "flight-controller"
   }
 
   # Or keep the same name:
-  component "flight-controller" {
+  instance "flight-controller" {
     source = "flight-controller"
   }
 }
 ```
 
+| Attribute | Type   | Required | Default | Description                                              |
+| --------- | ------ | -------- | ------- | -------------------------------------------------------- |
+| _label_   | string | **yes**  | —       | Unique identifier within the parent scope                |
+| `source`  | string | **yes**  | —       | Label of the top-level `component` to instantiate        |
+
+**Children:** None — an `instance` block carries only `source`.
+
 **Rules:**
 
 - `source` is a **label reference** to a top-level `component`, not a file path.
-  Resolution happens during the resolution pass (after merge), using the same
-  label lookup mechanism as `view.system`.
-- When `source` is present, **no other attributes or child blocks** may appear
-  on the component (error E012). The label at the usage site is the only
-  locally-defined property.
+  Resolution happens during the resolution pass.
 - Nested `source` is supported: a top-level component may itself contain
   children with `source` references to other top-level components.
 - Circular `source` chains are detected and produce error E013.
 - `source` references an undefined top-level component → error E014.
+- No keys other than `source` are allowed in an `instance` block → error E012.
 - **Top-level components may not contain `connection` blocks that reference
   siblings outside their own tree.** Connections inside a top-level component
   wire its own children — they cannot reference components from the system that
@@ -174,31 +192,12 @@ system "quadcopter" {
 - Top-level components are **not** included in scoring or view rendering unless
   they are sourced into a system.
 
-#### Attributes
-
-| Attribute     | Type         | Required | Default          | Description                                                                |
-| ------------- | ------------ | -------- | ---------------- | ---------------------------------------------------------------------------|
-| _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)          |
-| `source`      | string       | no       | —                | Label of a top-level `component` to use as this component's body.          |
-| `description` | string       | no       | `""`             | Human-readable description                                                 |
-| `icon`        | string       | no       | `""`             | Optional FontAwesome icon name (e.g. `"microchip"`, `"server"`, `"wifi"`) |
-| `color`       | string       | no       | `""`             | Optional border color for diagram rendering (e.g. `"#ff0000"`, `"red"`) |
-| `border`      | string       | no       | `"solid"`        | Optional border style for diagrams: `"solid"`, `"dashed"`, or `"dotted"` |
-| `font`        | string       | no       | `"unstyled"`     | Optional single-word font style for diagram labels: `"bold"`, `"italic"`, `"underline"` |
-| `tags`        | list(string) | no       | `[]`             | Filtering tags                                                             |
-| `level`       | integer      | no       | parent level + 1 | Abstraction level                                                          |
-| `leaf`        | bool         | no       | `false`          | If `true`, component is atomic — may not contain child `component`s        |
-
-**Children:** `port` (any), `component` (if not leaf), `connection` (if not
-leaf, between child components)
-
 ---
 
-### 2.4 `protocol` Block
+### 2.5 `protocol` Block
 
-Top-level block (alongside `system`, `component`, `view`, and `project`).
-Defines a reusable protocol schema that can be referenced by multiple ports
-across components.
+Top-level block in the system model. Defines a protocol schema that can be
+referenced by multiple ports across components.
 
 ```hcl
 protocol "spi" {
@@ -225,13 +224,15 @@ protocol "spi" {
 
 ---
 
-### 2.5 `port` Block
+### 2.6 `port` Block
 
 Defined inside a `component`. Declares a typed connection point exposed by that
 component. A port binds to a protocol via its `protocol` attribute (referencing
 a top-level `protocol` block or specifying a freeform protocol name).
 
-Ports carry only port-specific realization metadata (`protocol`, `role`, `external`, `required`). All message and interface payload definitions belong strictly inside `protocol` blocks.
+Ports carry only port-specific realization metadata (`protocol`, `role`,
+`external`, `required`). All message and interface payload definitions belong
+strictly inside `protocol` blocks.
 
 ```hcl
 port "spi" {
@@ -258,9 +259,10 @@ port "spi" {
 
 ---
 
-### 2.6 `connection` Block
+### 2.7 `connection` Block
 
-Defined inside a `system` or `component`. Wires components and ports together across any hierarchy level.
+Defined inside a `system` or `component`. Wires components or ports together
+across any hierarchy level.
 
 #### Connection Placement Rule
 
@@ -319,7 +321,7 @@ the connected ports (see §6).
 
 ---
 
-### 2.7 `message` Block
+### 2.8 `message` Block
 
 Defined inside a `protocol` block. Represents a discrete unit of information
 exchanged over that protocol.
@@ -348,7 +350,7 @@ message "position-report" {
 
 ---
 
-### 2.8 `field` Block
+### 2.9 `field` Block
 
 Defined inside a `message`. Describes a single data element.
 
@@ -371,14 +373,14 @@ field "altitude" {
 
 ---
 
-### 2.9 `view` Block
+### 2.10 `view` Block
 
-Top-level block (not nested inside a system). Defines a visual perspective
-on a system: which components are placed on the canvas and where.
-Each file under `diagrams/` holds exactly one `view` block whose label
-matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
-Every `node` path is resolved against the model (see §3); dangling paths emit
-a warning (W016).
+Top-level block defined under `diagrams/*.hcl` files.
+Defines a visual perspective on a system: which components are placed on the
+canvas and where. Each file under `diagrams/` holds exactly one `view` block
+whose label matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
+Every `node` path is resolved against the model (see §3); dangling paths emit a
+warning (W016).
 
 ```hcl
 view "overview" {
@@ -673,7 +675,6 @@ protocol "power-dc" {
 system "mini-drone" {
   description = "Minimal quadcopter drone"
   tags        = ["product", "drone"]
-  level       = 0
 
   # ── Components ────────────────────────────
 

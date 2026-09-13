@@ -1,471 +1,112 @@
 # Core Data Models
 
-## Overview
+Two layers (see `crates/rhizz-core/src/{parse,model}.rs` as source of truth for
+field lists — they are not duplicated here):
 
-Two model layers:
+1. **Raw** — deserialization structs mirroring the HCL schema 1:1. All fields
+   `Option` or defaulted; block labels become `Labeled<T> { label, inner }`.
+   Used for parsing only.
+2. **Resolved** — validated, cross-referenced IR used by validation and scoring.
+   Arena-indexed (`ComponentId(usize)`-style newtypes, no lifetimes, no
+   `Rc`/`Arc`), fully populated with defaults applied.
 
-1. **Raw (deserialization) models** — `serde::Deserialize` structs mirroring HCL
-   structure. Used for parsing only.
-2. **Resolved models** — validated, cross-referenced IR used by all downstream
-   passes (validation, scoring).
-
-Parsing pipeline: `.hcl` files (`system.hcl` + view files) → `hcl::from_str` → raw models → merge → resolve → resolved models.
-
----
-
-## Raw Models
-
-These map 1:1 to the HCL schema. All fields `Option` or defaulted. Block labels
-become the key in a `BTreeMap` (or `Vec` of labeled items — see below).
-
-HCL body blocks with labels (e.g. `component "foo" { ... }`) don't deserialize
-directly into a `HashMap<String, T>` with the `hcl` crate. Use the `hcl::Body`
-type and walk blocks manually, **or** use `hcl-rs`'s labeled block support via
-`#[serde(rename = "component")]` on a wrapper. The pragmatic approach:
-deserialize into `hcl::Body`, then extract blocks by type into typed structs
-with a thin conversion layer.
+Pipeline: `.hcl` files → `hcl::from_str` → raw → merge → resolve → `Model`.
+View files (`diagrams/*.hcl`) are parsed and validated independently against the
+resolved `Model`, never merged into it.
 
 ```rust
-/// Top-level file content — the result of parsing one .hcl file.
-/// `RawFile`s from the system model sources (`system.hcl`/`main.hcl`) are
-/// merged into a unified raw representation before resolution. View files are
-/// *not* merged: each `diagrams/*.hcl` file is parsed and validated on its own.
-#[derive(Debug, Default)]
+/// Top-level file content. System-model `RawFile`s are merged before
+/// resolution; view files are not (one `view` per file, see below).
 struct RawFile {
     project: Option<RawProject>,
     systems: Vec<Labeled<RawSystem>>,
-    components: Vec<Labeled<RawComponent>>,  // top-level (reusable) components
-    protocols: Vec<Labeled<RawProtocol>>,    // top-level (reusable) protocols
-}
-
-#[derive(Debug, Clone)]
-struct Labeled<T> {
-    label: String,
-    inner: T,
+    components: Vec<Labeled<RawComponent>>,  // top-level reusable definitions
+    protocols: Vec<Labeled<RawProtocol>>,
 }
 ```
 
-### Block structs
+## Parsing rules
 
-```rust
-#[derive(Debug, Clone, Deserialize)]
-struct RawProject {
-    name: Option<String>,
-    version: Option<String>,
-    authors: Option<Vec<String>>,
-}
+- Top level accepts only `project | system | component | protocol`.
+- `system` / `component` bodies accept only `instance` / `port` / `connection`
+  children — any other nested block type is skipped with a W015 warning.
+- `instance` accepts only the required `source` attribute: missing `source` is a
+  parse error, anything extra (attribute or child block) is an E012 exclusivity
+  violation.
+- Raw preserves what the user wrote; defaults are applied during resolution.
 
-#[derive(Debug, Clone)]
-struct RawSystem {
-    description: Option<String>,
-    tags: Option<Vec<String>>,
-    level: Option<i32>,
-    components: Vec<Labeled<RawComponent>>,
-    connections: Vec<Labeled<RawConnection>>,
-}
+## Source resolution
 
-#[derive(Debug, Clone)]
-struct RawComponent {
-    source: Option<String>,          // label reference to a top-level component — mutually exclusive with all other fields
-    description: Option<String>,
-    tags: Option<Vec<String>>,
-    level: Option<i32>,
-    leaf: Option<bool>,
-    ports: Vec<Labeled<RawPort>>,
-    components: Vec<Labeled<RawComponent>>,  // recursive
-    connections: Vec<Labeled<RawConnection>>,
-}
+`instance.source` is a label reference to a top-level `component`, resolved
+after all files are merged (no I/O during resolution; `compile(&[Source])`
+signature unchanged):
 
-/// A reusable protocol schema defined at the top level.
-#[derive(Debug, Clone)]
-struct RawProtocol {
-    description: Option<String>,
-    tags: Option<Vec<String>>,
-    roles: Option<Vec<String>>,
-    messages: Vec<Labeled<RawMessage>>,
-}
-
-/// A port declared on a component. Binds to a protocol and declares port-specific metadata.
-#[derive(Debug, Clone)]
-struct RawPort {
-    description: Option<String>,
-    protocol: Option<String>,
-    role: Option<String>,   // "provider" | "consumer" | "peer"
-    external: Option<bool>, // true if intended to interface outside this component
-    required: Option<bool>, // true if mandatory when instantiated in a system
-    tags: Option<Vec<String>>,
-}
-
-/// A connection wiring components/ports together.
-/// `from` and `to` are UNIX-style path strings (e.g. `"comp"`, `"comp/port"`, `"../sibling/port"`, `"/system/comp/port"`).
-#[derive(Debug, Clone)]
-struct RawConnection {
-    description: Option<String>,
-    tags: Option<Vec<String>>,
-    level: Option<i32>,
-    from: String,
-    to: String,
-    encapsulates: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone)]
-struct RawMessage {
-    description: Option<String>,
-    tags: Option<Vec<String>>,
-    level: Option<i32>,
-    fields: Vec<Labeled<RawField>>,
-}
-
-#[derive(Debug, Clone)]
-struct RawField {
-    r#type: String,           // required
-    description: Option<String>,
-    unit: Option<String>,
-    required: Option<bool>,
-}
-```
-
-### HCL deserialization strategy
-
-`hcl::Body` is the entry point. Walk its blocks/attributes:
-
-```rust
-fn parse_file(src: &str) -> Result<RawFile> {
-    let body: hcl::Body = hcl::from_str(src)?;
-    let mut file = RawFile::default();
-    for block in body.blocks() {
-        match block.identifier() {
-            "project"   => file.project = Some(parse_project(block)?),
-            "system"    => file.systems.push(parse_labeled_system(block)?),
-            "component" => file.components.push(parse_labeled_component(block)?),
-            other       => return Err(/* unknown top-level block */),
-        }
-    }
-    Ok(file)
-}
-```
-
-Each `parse_*` function extracts attributes via `block.body().attributes()` and
-recurses into child blocks. Wrap this in a trait or macro if the boilerplate
-becomes excessive.
-
-### Source resolution (during the resolution pass)
-
-The `source` attribute on a component is a **label reference** to a top-level
-component. It is resolved during the resolution pass (not during parsing), after
-all files have been merged.
-
-When the resolver encounters a component with `source`:
-
-1. **Validate exclusivity** — if any other attribute (`description`, `tags`,
-   `level`, `leaf`) or child block (`port`, `component`, `connection`) is
-   present alongside `source`, emit E012.
-2. **Look up the label** — find the top-level component with the matching label
-   in `RawFile.components`. If not found, emit E014.
-3. **Detect cycles** — maintain an ancestor set of source labels currently being
-   expanded. If the label is already in the set, emit E013.
-4. **Clone the body** — copy the top-level component's attributes and children
-   into the sourced component slot. The label at the usage site replaces the
-   top-level label.
-5. **Recurse** — the cloned body may itself contain children with `source`,
-   which are resolved depth-first.
-
-This approach keeps `rhizz-core` free of I/O dependencies — no `FileLoader`
-trait needed. The `compile` signature remains unchanged:
-
-```rust
-pub fn compile(sources: &[Source]) -> CompileResult
-```
-
----
+1. Exclusivity (E012) — covered above.
+2. Lookup in the top-level definition map (E014 if missing).
+3. Cycle detection via an ancestor set of source labels (E013).
+4. Clone the definition body into the instance slot; the usage-site label wins.
+5. Recurse depth-first — cloned bodies may contain further `instance` children.
 
 ## Merge
 
-The system model sources (`system.hcl`/`main.hcl` — everything that is not a
-view file) are accumulated into a single `RawFile`:
+System-model sources are concatenated into one `RawFile`:
 
-- `project`: at most one across all files (error E010 if >1).
-- `systems`, `components`, `protocols`: concatenate vecs.
+- `project`: at most one (E010 if more).
+- `systems`, `components`, `protocols`: concatenated. No dedup — duplicates are
+  reported during resolution (E001).
 
-While canonical projects maintain a single `system.hcl` architecture model file
-alongside view definitions, `rhizz-core`'s compiler accepts multiple `Source`
-inputs and merges their raw representations before resolution, keeping the core
-parser decoupled from physical file storage conventions.
+## Resolved model
 
-View files are **not** merged. Each file under `diagrams/` (and any legacy
-root-level `views.hcl`) is validated independently against the resolved model:
-it must contain exactly one `view` block whose label matches the filename stem
-(`diagrams/overview.hcl` -> `view "overview"`), otherwise emit E016; its
-`system` must name a defined system, otherwise emit E006. A root-level
-`views.hcl` therefore cannot pass validation as-is and must be split into one
-file per view under `diagrams/`. `views.hcl` is legacy: still parsed if present,
-never written by `rhizz fmt`.
+`Model` holds `systems`, `definitions` (roots of reusable top-level
+components), and flat arenas for components / protocols / ports / connections /
+messages / fields. Key semantics:
 
-No deduplication logic — duplicate detection happens during
-resolution/validation.
+- `Component { kind: Definition | Instance, source: Option<String>, parent:
+  Option<ComponentParent> }` — definitions have no parent and are excluded from
+  scoring, view rendering, and connectivity warnings unless instantiated;
+  instances record the definition label they were cloned from (used by the
+  serializer to re-emit `instance` blocks).
+- `Port { protocol: String, protocol_id: Option<ProtocolId>, external, required,
+  owner }` — `protocol_id` links to a top-level protocol when the name matches.
+- `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId> },
+  encapsulates }` — `port: None` is a bare (untyped) reference; W007–W009 fire
+  on the typed/untyped and role combinations.
 
----
+## Resolution pass
 
-## Resolved Models
+`resolve(raw) -> Result<Model, Vec<Diagnostic>>`:
 
-Interned, cross-referenced. Use arena indices (`usize` newtyped) or
-`slotmap::SlotMap` keys for relationships. Avoid `Rc`/`Arc` — the model is built
-once and then read.
+1. Index top-level `protocol`s (E001); allocate messages/fields.
+2. Index top-level `component`s (E001).
+3. Register systems (E001).
+4. Expand each system's `instance`s depth-first (E012/E014/E013, clone body).
+5. Ports: allocate, validate `role` (E009), link `protocol_id`, default
+   `external = false`, `required = true`.
+6. Connections per scope: parse `from`/`to` paths relative to the declaring
+   scope; enforce LCA placement (E015); resolve endpoints (E011/E010).
+7. `encapsulates`: same-scope lookup (E003; E004 on cycles).
+8. Views (separate pass): one `view` per file with label matching the filename
+   (E016), `system` resolving to a real system (E006); every `node` path checked
+   against component keys (W016).
+9. Checks: unconnected ports on placed instances only (definitions never warn;
+   `external` + `required` logic → W010), protocol/role compatibility (W008/W009).
+10. Orphans: top-level component never named by an `instance.source` → W012.
 
-### Identity
-
-```rust
-/// Newtype indices for each entity kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ComponentId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct PortId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ProtocolId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ConnectionId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct MessageId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct FieldId(usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct SystemId(usize);
-```
-
-### Core resolved structs
-
-```rust
-#[derive(Debug)]
-struct Model {
-    project: Project,
-    systems: Vec<System>,         // indexed by SystemId
-    components: Vec<Component>,   // indexed by ComponentId
-    protocols: Vec<Protocol>,     // indexed by ProtocolId
-    ports: Vec<Port>,             // indexed by PortId
-    connections: Vec<Connection>, // indexed by ConnectionId
-    messages: Vec<Message>,       // indexed by MessageId
-    fields: Vec<Field>,           // indexed by FieldId
-}
-
-#[derive(Debug)]
-struct Protocol {
-    label: String,
-    description: String,
-    tags: Vec<String>,
-    roles: Vec<String>,
-    messages: Vec<MessageId>,
-}
-
-#[derive(Debug)]
-struct Project {
-    name: String,
-    version: String,
-    authors: Vec<String>,
-}
-
-#[derive(Debug)]
-struct System {
-    label: String,
-    description: String,
-    tags: Vec<String>,
-    level: i32,
-    components: Vec<ComponentId>,    // direct children
-    connections: Vec<ConnectionId>,  // direct children
-}
-
-#[derive(Debug)]
-enum ComponentParent {
-    System(SystemId),
-    Component(ComponentId),
-}
-
-#[derive(Debug)]
-struct Component {
-    label: String,
-    description: String,
-    tags: Vec<String>,
-    level: i32,
-    leaf: bool,
-    parent: ComponentParent,
-    children: Vec<ComponentId>,
-    ports: Vec<PortId>,
-    connections: Vec<ConnectionId>,
-}
-
-/// The role a port plays in a connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Port {
-    label: String,
-    description: String,
-    protocol: String,
-    protocol_id: Option<ProtocolId>, // Resolved reference to top-level protocol (if matching)
-    role: Option<String>,
-    external: bool,                  // Whether port is an external boundary interface
-    required: bool,                  // Whether port is required when instantiated in a system
-    tags: Vec<String>,
-    owner: ComponentId,
-}
-
-/// One endpoint of a connection — a component and an optional port on that component.
-#[derive(Debug)]
-struct ConnectionEndpoint {
-    component: ComponentId,
-    port: Option<PortId>,   // None when the reference was a bare component label
-}
-
-#[derive(Debug)]
-struct Connection {
-    label: String,
-    description: String,
-    tags: Vec<String>,
-    level: i32,
-    from: ConnectionEndpoint,
-    to: ConnectionEndpoint,
-    encapsulates: Vec<ConnectionId>,
-}
-
-#[derive(Debug)]
-struct Message {
-    label: String,
-    description: String,
-    tags: Vec<String>,
-    level: i32,
-    fields: Vec<FieldId>,
-}
-
-#[derive(Debug)]
-struct Field {
-    label: String,
-    field_type: String,
-    description: String,
-    unit: String,
-    required: bool,
-}
-```
-
-### Resolution pass
-
-`fn resolve(raw: RawFile) -> Result<Model, Vec<Diagnostic>>`
-
-1. Index top-level `protocol` blocks by label. Detect duplicate labels (E001).
-   - Walk messages and fields defined inside top-level protocols; allocate `MessageId` and `FieldId`.
-2. Index top-level `component` blocks by label. Detect duplicate labels (E001).
-3. Register all systems (allocate `SystemId`). Detect duplicate labels (E001).
-4. Walk each system's components depth-first:
-   - If a component has `source`, validate exclusivity (E012), look up the
-     top-level component (E014 if missing), check for cycles (E013), and clone
-     its body.
-   - Allocate `ComponentId`, set `parent`, resolve `level` (inherit
-     `parent.level + 1` if unset).
-5. Walk each component's `port` blocks:
-   - Allocate `PortId`, validate `role` string (E009), link to owner `ComponentId`.
-   - Resolve `protocol` string: if it matches a registered `protocol` block, link `protocol_id`.
-   - Set `external` (default `false`) and `required` (default `true`).
-6. Walk `connection` blocks in each scope:
-   - Parse `from` and `to` paths relative to the declaring scope.
-   - Validate **Lowest Common Ancestor (LCA)**: ensure declaring scope is an ancestor (or LCA) of both `from` and `to` target components.
-   - Resolve target components and optional ports (E011 for missing component, E010 for missing port).
-7. Resolve `encapsulates` — same-scope connection label lookup (E003; E004 for cycles).
-8. Resolve views — **not** part of the model resolution pass. After the model
-   is resolved, each `diagrams/*.hcl` file is parsed and validated independently:
-   exactly one `view` block with a label matching the filename (E016), and a
-   `system` that resolves to a real system (E006).
-   Layout (`node` / connection / annotation blocks in `diagrams/*.hcl`) is
-   validated in a later pass against the already-resolved `Model`: every
-   `node` component path must resolve to a known component (W016), otherwise
-   emit a warning.
-9. Validation checks:
-   - Unconnected port verification (applies to **placed instances only**;
-     a definition's ports are part of its contract and cannot be connected):
-     - In isolated components: unconnected `external = true` ports are permitted. Unconnected internal (`external = false`) ports emit W010.
-     - In instantiated systems: unconnected `external = true, required = true` ports emit W010.
-   - Protocol / role compatibility on typed connections (W008, W009).
-10. Detect orphan top-level components/protocols — any top-level component not referenced by `source` → W012.
-
-Collect errors/warnings as `Diagnostic` values. If any errors exist, return
-`Err`. Warnings are returned alongside the model.
-
-### Scope lookup helper
-
-```rust
-/// A scope is either a system or a component. Used for resolving
-/// sibling references in `from`, `to`, and `encapsulates`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Scope {
-    System(SystemId),
-    Component(ComponentId),
-}
-
-/// Built during resolution. Maps (scope, label) → entity id.
-struct ScopeIndex {
-    components:  HashMap<(Scope, String), ComponentId>,
-    connections: HashMap<(Scope, String), ConnectionId>,
-    /// Maps (component_id, port_label) → PortId for `comp/port` resolution.
-    ports:       HashMap<(ComponentId, String), PortId>,
-}
-```
-
----
+Errors (`E*`) abort; warnings (`W*`) travel with the model. Scopes for
+`from`/`to`/`encapsulates` resolution are `(System | Component, label)` pairs
+held in a transient index built during resolution.
 
 ## View models
 
-Views are **not** part of the resolved `Model`. Each `diagrams/*.hcl` file is
-parsed on its own into `ViewDefinition` values (see `serialize.rs`) and
-validated against the already-resolved `Model`:
+Views are not part of `Model`. Each `diagrams/*.hcl` file yields one
+`ViewDefinition` (see `serialize.rs`: label, system, filter, nodes, connection
+layouts, annotations) validated per step 8 above. `filter` is parsed and
+round-tripped but not applied by any renderer yet.
 
-- Exactly one `view` block per file, label matching the filename stem (E016).
-- `system` must resolve to a real system (E006).
-- Visual layout (`node` positions, connection sides, annotations) references
-  components as plain path strings. Every `node` path is validated against the
-  resolved `Model`; a path that matches no component key emits **W016**.
+## Design notes
 
-```rust
-#[derive(Debug, Default)]
-struct ViewDefinition {
-    label: String,
-    description: String,
-    tags: Vec<String>,
-    system: String,                 // system label
-    filter: ViewFilterDefinition,
-    nodes: Vec<NodeLayout>,
-    connections: Vec<ConnectionLayout>,
-    annotations: Vec<Annotation>,
-}
-
-#[derive(Debug, Default)]
-struct ViewFilterDefinition {
-    include_tags: Vec<String>,
-    exclude_tags: Vec<String>,
-    max_level: Option<i32>,
-    components: Vec<String>,        // whitelist by label, empty = all
-    show_messages: Option<bool>,
-}
-```
-
----
-
-## Design Notes
-
-- **No lifetimes in the model** — all data is owned. Avoids borrow complexity
-  for a model that's built once and lives for the program's duration.
-- **Arena-indexed rather than nested** — flattening the tree into indexed vecs
-  makes iteration, filtering, and scoring trivial. Parent/child relationships
-  are explicit via ids.
-- **`roles` as free-form strings** — defined at protocol level and validated
-  per port against the referenced protocol. The `from`/`to` strings in `RawConnection` are parsed into
-  `ConnectionEndpoint` (component id + optional port id) during the resolution
-  pass.
-- **`ConnectionEndpoint.port` is `Option<PortId>`** — `None` means a bare
-  (untyped) reference; `Some` means a fully resolved typed reference. Warnings
-  W007–W009 fire based on the combination.
-- **Defaults applied during resolution**, not during deserialization. The raw
-  layer preserves what the user wrote; the resolved layer is fully populated.
-- **`String` over `&str`** everywhere — the raw HCL source doesn't outlive
-  parsing, so borrowed slices aren't viable without an arena allocator for
-  source text.
+- Owned `String`s throughout — the HCL source doesn't outlive parsing.
+- Flattened arenas make iteration/filtering/scoring trivial; hierarchy is explicit
+  via ids rather than nesting.
+- `roles` and field `type`s are free-form strings, validated against the
+  referenced protocol where one exists.
