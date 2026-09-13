@@ -31,13 +31,15 @@ function memoryFs(files: Record<string, string> = {}) {
 
 async function seedDemo(fs: ReturnType<typeof memoryFs>): Promise<void> {
   let baseline = "";
-  for (const op of [
-    { kind: "add_component_definition", label: "compA" },
-    { kind: "add_component_definition", label: "compB" },
-    { kind: "add_system", label: "demo" },
-    { kind: "add_instance", parentPath: "demo", label: "a", source: "compA" },
-    { kind: "add_instance", parentPath: "demo", label: "b", source: "compB" },
-  ] as const) {
+  for (
+    const op of [
+      { kind: "add_component_definition", label: "compA" },
+      { kind: "add_component_definition", label: "compB" },
+      { kind: "add_system", label: "demo" },
+      { kind: "add_instance", parentPath: "demo", label: "a", source: "compA" },
+      { kind: "add_instance", parentPath: "demo", label: "b", source: "compB" },
+    ] as const
+  ) {
     const result = await applyModelMutation(fs, "system.hcl", baseline, op);
     if (!result.applied) throw new Error(`seed op failed: ${op.kind}`);
     const next = fs.store.get("system.hcl");
@@ -59,7 +61,11 @@ describe("applyModelMutation", () => {
       fs,
       "system.hcl",
       fs.store.get("system.hcl") ?? "",
-      { kind: "add_component_definition", label: "cpu", options: { leaf: true } },
+      {
+        kind: "add_component_definition",
+        label: "cpu",
+        options: { leaf: true },
+      },
     );
     expect(second.applied).toBe(true);
 
@@ -100,7 +106,9 @@ describe("applyModelMutation", () => {
         newLabel: "c",
       });
       expect(renamed.applied).toBe(true);
-      expect(fs.store.get("system.hcl")).toContain('instance "c" { source = "compA" }');
+      expect(fs.store.get("system.hcl")).toContain(
+        'instance "c" { source = "compA" }',
+      );
       expect(recorded).toContain("rename_component");
     } finally {
       unsubscribe();

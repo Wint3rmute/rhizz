@@ -17,8 +17,8 @@
 // mutations via `ModelJS`) re-targets these same ops behind this signature.
 
 import {
-  DocumentStore,
   type ComponentData,
+  DocumentStore,
   type PortData,
   type RawModelPayload,
 } from "../DocumentStore.svelte";
