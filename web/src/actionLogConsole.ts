@@ -28,7 +28,7 @@ export function attachConsoleMirror(
     for (const action of log.actions()) {
       if (seen.has(action)) continue;
       seen.add(action);
-      consoleFn(`${REPLAY_PREFIX} ${encodeCall(action, "project")}`);
+      consoleFn(`${REPLAY_PREFIX} ${encodeCall(action, "fs")}`);
     }
   };
   flush();
