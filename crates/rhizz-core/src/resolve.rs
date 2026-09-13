@@ -165,8 +165,6 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
         let sid = SystemId(r.model.systems.len());
         r.system_label_index.insert(ls.label.clone(), sid);
-        // Systems are implicitly level 0 (SPEC.md §2.2).
-        let system_level = 0;
 
         r.model.systems.push(System {
             label: ls.label.clone(),
@@ -199,7 +197,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
                 li,
                 Some(scope),
                 Some(ComponentParent::System(sid)),
-                system_level,
+                // Systems have no `level`; children default from an implicit
+                // root of 0.
+                0,
                 &definitions,
                 &mut ancestors,
             );
