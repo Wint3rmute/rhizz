@@ -7,6 +7,7 @@ import {
   compile_system,
   type NodeLayout,
   parse_views,
+  serialize_model,
   serialize_views,
   type ViewDefinition,
 } from "./rhizz_wasm_wrapper";
@@ -344,6 +345,19 @@ export class DocumentStore {
 
   model = $derived.by(() => {
     return this.compileResult.model();
+  });
+
+  // ── Canonical HCL (Rust-owned) ────────────────────────────────────────────
+  //
+  // `systemHcl` above is the TS draft encoder: it only needs to be valid
+  // enough to compile. The on-disk form must always be the Rust canonical
+  // form (`rhizz-core::serialize_model` via WASM), so all file writes go
+  // through here. `null` when the draft has blocking errors and there is no
+  // model to serialize — callers must refuse to overwrite the file then
+  // (cf. audit Finding 2).
+  canonicalHcl: string | null = $derived.by(() => {
+    const m = this.model;
+    return m ? serialize_model(m) : null;
   });
 
   diagnostics = $derived.by(() => {
