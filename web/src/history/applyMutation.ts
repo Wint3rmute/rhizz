@@ -177,10 +177,10 @@ export async function applyModelMutation(
       }
       if (!op.sourceLabel) {
         doc.addComponentDefinition(op.label, {
-          leaf: op.leaf,
-          description: op.description,
-          tags: op.tags,
-          ports: op.ports,
+          ...(op.leaf === undefined ? {} : { leaf: op.leaf }),
+          ...(op.description === undefined ? {} : { description: op.description }),
+          ...(op.tags === undefined ? {} : { tags: op.tags }),
+          ...(op.ports === undefined ? {} : { ports: op.ports }),
         });
         path = op.label;
       } else {
@@ -228,5 +228,6 @@ export async function applyModelMutation(
     return { applied: false };
   }
   await fs.writeFile(primaryPath, hcl);
+  if (path === undefined) return { applied: true };
   return { applied: true, path };
 }

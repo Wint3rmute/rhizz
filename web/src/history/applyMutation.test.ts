@@ -18,13 +18,16 @@ function memoryFs(files: Record<string, string> = {}) {
   const store = new Map(Object.entries(files));
   return {
     store,
-    async readFile(filePath: string): Promise<string> {
+    readFile(filePath: string): Promise<string> {
       const content = store.get(filePath);
-      if (content === undefined) throw new Error(`missing file: ${filePath}`);
-      return content;
+      if (content === undefined) {
+        return Promise.reject(new Error(`missing file: ${filePath}`));
+      }
+      return Promise.resolve(content);
     },
-    async writeFile(filePath: string, content: string): Promise<void> {
+    writeFile(filePath: string, content: string): Promise<void> {
       store.set(filePath, content);
+      return Promise.resolve();
     },
   };
 }

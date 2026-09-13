@@ -1129,7 +1129,7 @@ async function executeReparent(
   const result = await applyModelMutation(fs, targetPath, mainContent, {
     kind: "reparent_component",
     sourcePath: sourceKey,
-    targetParentPath,
+    targetParentPath: targetParentKey,
   });
 
   if (result.applied) {
@@ -1259,7 +1259,7 @@ async function handleModalCreateComponent(data: {
     kind: "create_component",
     label: data.label,
     parentKey: data.parentKey,
-    sourceLabel: data.sourceLabel,
+    ...(data.sourceLabel === undefined ? {} : { sourceLabel: data.sourceLabel }),
     leaf: data.leaf,
     description: data.description,
     tags: data.tags,
