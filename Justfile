@@ -52,6 +52,9 @@ book-accept:
     {{run}} cargo build --quiet --bin rhizz-book
     {{run}} env BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book
 
+book-serve:
+    {{run}} mdbook serve book
+
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
     {{run}} sh -lc 'cd web && deno run dev'
