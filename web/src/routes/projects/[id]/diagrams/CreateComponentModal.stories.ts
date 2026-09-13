@@ -51,6 +51,14 @@ type Story = StoryObj<typeof meta>;
 
 export const Open: Story = {
   args: {},
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // A single name field: the modal-level input, not a second one inside
+    // the embedded inspector.
+    await expect(canvas.getByLabelText(/Definition Name/)).toBeInTheDocument();
+    await expect(canvas.queryByText("Component Name")).toBeNull();
+  },
 };
 
 export const TextAlignSelection: Story = {

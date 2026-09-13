@@ -12,6 +12,8 @@ interface Props {
   onrename: (newLabel: string) => void;
   onsettextalign: (align: TextAlign) => void;
   ondelete?: () => void;
+  /** Hide the name field (the creation modal already has its own). */
+  showName?: boolean;
 }
 
 let {
@@ -22,6 +24,7 @@ let {
   onrename,
   onsettextalign,
   ondelete,
+  showName = true,
 }: Props = $props();
 
 let editLabel = $state("");
@@ -117,6 +120,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       title={componentKey}>
       {componentKey}
     </div>
+    {#if showName}
     <div class="form-control">
       <label class="label py-1" for="comp-name-input">
         <span
@@ -132,6 +136,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
         class="input input-sm input-bordered w-full font-medium"
       />
     </div>
+    {/if}
 
     <div class="form-control">
       <label class="label py-1" for="comp-desc-input">

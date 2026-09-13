@@ -60,11 +60,17 @@ system "demo" {
 
 async function ensureBrokenProject(): Promise<Project> {
   await init();
+  // Recreate from scratch every run: the diagrams page seeds a diagram
+  // file (and possibly the model) on load, so an existing project can't
+  // be trusted to still match the fixture below.
   const existing = await projectStore.listProjects();
-  const project = existing.find((candidate) =>
+  const stale = existing.find((candidate) =>
     candidate.id === BROKEN_PROJECT_ID
   );
-  return project ?? await createProjectWithMainFile(
+  if (stale !== undefined) {
+    await projectStore.deleteProject(stale.id);
+  }
+  return await createProjectWithMainFile(
     "Broken diagram story",
     INVALID_SYSTEM_HCL,
     BROKEN_PROJECT_ID,
@@ -73,11 +79,15 @@ async function ensureBrokenProject(): Promise<Project> {
 
 async function ensureLongErrorProject(): Promise<Project> {
   await init();
+  // Same hermetic-fixture reasoning as ensureBrokenProject above.
   const existing = await projectStore.listProjects();
-  const project = existing.find((candidate) =>
+  const stale = existing.find((candidate) =>
     candidate.id === LONG_ERROR_PROJECT_ID
   );
-  return project ?? await createProjectWithMainFile(
+  if (stale !== undefined) {
+    await projectStore.deleteProject(stale.id);
+  }
+  return await createProjectWithMainFile(
     "Long error diagram story",
     LONG_ERROR_HCL,
     LONG_ERROR_PROJECT_ID,

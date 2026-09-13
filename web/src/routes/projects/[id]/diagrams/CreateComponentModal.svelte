@@ -210,7 +210,7 @@ function handleCreate() {
       </div>
       <p class="text-xs text-base-content/50 mt-2">
         {mode === "new"
-          ? "Creates a new reusable component definition."
+          ? "Creates a new reusable component definition and places it in the current system."
           : "Places an instance of an existing definition inside the chosen system/container."}
       </p>
     </div>
@@ -390,6 +390,7 @@ function handleCreate() {
                 label: label || "untitled",
               }}
             {textAlign}
+            showName={false}
             onupdate={(patch) => {
                 Object.assign(compDetails, patch);
               }}

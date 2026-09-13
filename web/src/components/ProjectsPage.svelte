@@ -7,6 +7,7 @@ import {
   createProjectWithMainFile,
   projectStore,
 } from "../ProjectState.svelte";
+import { EMPTY_PROJECT_HCL } from "../emptyProject";
 import { seedExampleProjectDiagrams } from "../example_system";
 import {
   type ExampleProject,
@@ -65,10 +66,7 @@ async function openProject(project: Project) {
 async function createEmpty() {
   const name = prompt("Project name?", "Untitled project");
   if (!name) return;
-  const project = await createProjectWithMainFile(
-    name,
-    "# Your input goes here",
-  );
+  const project = await createProjectWithMainFile(name, EMPTY_PROJECT_HCL);
   await refresh();
   await openProject(project);
 }
