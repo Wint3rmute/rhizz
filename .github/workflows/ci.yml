@@ -41,6 +41,9 @@ jobs:
       # Swatinem/rust-cache persists workspace target/, which lives outside
       # /nix/store and is therefore not covered by the Nix cache.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust"
+          cmd-format: nix develop -c {0}
 
       - run: nix develop --command cargo fmt --all -- --check
       - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
@@ -80,6 +83,9 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "book"
+          cmd-format: nix develop -c {0}
 
       - run: nix develop --command just book
       - run: |
@@ -212,6 +218,9 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "docs"
+          cmd-format: nix develop -c {0}
 
       - run: nix develop --command cargo doc --no-deps --all
 
