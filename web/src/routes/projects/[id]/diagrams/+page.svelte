@@ -1120,36 +1120,21 @@ async function readMainContent(): Promise<{ path: string; content: string }> {
   }
 }
 
-// Writes the Rust-canonical HCL (audit Finding 1). Refuses when the draft has
-// blocking errors and there is no model — overwriting then would persist a
-// near-empty model over the user's content (Finding 2 hazard).
-async function writeDocHcl(
-  targetPath: string,
-  doc: DocumentStore,
-): Promise<void> {
-  const hcl = doc.canonicalHcl;
-  if (hcl === null) {
-    console.warn("Refusing model write: draft has blocking errors");
-    return;
-  }
-  await fs.writeFile(targetPath, hcl);
-}
-
 async function executeReparent(
   sourceKey: string,
   targetParentKey: string,
 ): Promise<void> {
   const { path: targetPath, content: mainContent } = await readMainContent();
 
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "reparent_component",
+    sourcePath: sourceKey,
+    targetParentPath,
+  });
 
-  if (doc.reparentComponent(sourceKey, targetParentKey)) {
+  if (result.applied) {
     const label = sourceKey.split("/").at(-1);
     const newKey = label ? `${targetParentKey}/${label}` : null;
-    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
     if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
   }
@@ -1162,13 +1147,13 @@ async function handleAddSystem(): Promise<void> {
 
   const { path: targetPath, content: mainContent } = await readMainContent();
 
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "add_system",
+    label: name,
+  });
+  if (result.applied) {
+    sources = await readProjectSources(fs);
   }
-  doc.addSystem(name);
-  await writeDocHcl(targetPath, doc);
-  sources = await readProjectSources(fs);
 }
 
 let availableParents = $derived.by(() => {
@@ -1268,48 +1253,22 @@ async function handleModalCreateComponent(data: {
 
   const { path: targetPath, content: mainContent } = await readMainContent();
 
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
-
-  let parent = data.parentKey;
-  if (!parent || !doc.findContainer(parent)) {
-    if (data.sourceLabel) {
-      // Instances need a real container; fall back to the first system.
-      if (doc.systems.length === 0) {
-        doc.addSystem(parent || "main");
-        parent = parent || "main";
-      } else {
-        parent = doc.systems[0]?.label ?? "main";
-      }
-    } else {
-      // New reusable definitions have no system parent.
-      parent = "";
-    }
-  }
-
-  // New-definition mode: create a top-level reusable definition (no system
-  // parent); it becomes available for instances from anywhere.
-  if (!data.sourceLabel) {
-    doc.addComponentDefinition(data.label, {
-      leaf: data.leaf,
-      description: data.description,
-      tags: data.tags,
-      ports: data.ports,
-    });
-  } else {
-    // Reuse mode: create an `instance` of the chosen definition inside the
-    // selected parent system/container.
-    doc.addInstance(parent, data.label, data.sourceLabel);
-  }
-
-  await writeDocHcl(targetPath, doc);
+  // Container fallback (first system / fresh "main") lives in the
+  // dispatcher; the returned path is the created component's key.
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "create_component",
+    label: data.label,
+    parentKey: data.parentKey,
+    sourceLabel: data.sourceLabel,
+    leaf: data.leaf,
+    description: data.description,
+    tags: data.tags,
+    ports: data.ports,
+  });
+  if (!result.applied) return;
   sources = await readProjectSources(fs);
 
-  const fullKey = data.sourceLabel || parent
-    ? `${parent}/${data.label}`
-    : data.label;
+  const fullKey = result.path ?? data.label;
   if (data.sourceLabel || parent) {
     const worldX = data.position ? snap(data.position.x) : 100;
     const worldY = data.position ? snap(data.position.y) : 100;
@@ -1378,12 +1337,12 @@ async function handleUpdateSelectedComponent(
 ): Promise<void> {
   if (!selectedKey) return;
   const { path: targetPath, content: mainContent } = await readMainContent();
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
-  if (doc.updateComponent(selectedKey, patch)) {
-    await writeDocHcl(targetPath, doc);
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "update_component",
+    path: selectedKey,
+    patch,
+  });
+  if (result.applied) {
     sources = await readProjectSources(fs);
   }
 }
@@ -1425,13 +1384,12 @@ async function handleDeleteSelectedComponent(): Promise<void> {
   if (!selectedKey) return;
   const keyToDelete = selectedKey;
   const { path: targetPath, content: mainContent } = await readMainContent();
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "delete_component",
+    path: keyToDelete,
+  });
 
-  if (doc.deleteComponent(keyToDelete)) {
-    await writeDocHcl(targetPath, doc);
+  if (result.applied) {
     sources = await readProjectSources(fs);
 
     delete checked[keyToDelete];
@@ -1524,23 +1482,19 @@ async function handleCreateConnection(
   if (!connLabel) return;
 
   const { path: targetPath, content: mainContent } = await readMainContent();
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
-
-  const added = doc.addConnection(lca.lcaScopePath, {
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "add_connection",
+    scopePath: lca.lcaScopePath,
     label: connLabel,
     from: lca.from,
     to: lca.to,
   });
 
-  if (added) {
+  if (result.applied) {
     recordUndoPoint();
     if (startSide) {
       savedConnections[connLabel] = { startSide };
     }
-    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
   }
 }
@@ -2154,34 +2108,12 @@ async function handleDeleteSelectedConnection(
     return;
   }
   const { path: targetPath, content: mainContent } = await readMainContent();
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
-
-  let foundScope: string | null = null;
-  for (const sys of doc.systems) {
-    if (sys.connections.some((c) => c.label === label)) {
-      foundScope = sys.label;
-      break;
-    }
-    const searchComps = (comps: ComponentData[], parentPath: string) => {
-      for (const comp of comps) {
-        const curPath = `${parentPath}/${comp.label}`;
-        if (comp.connections.some((c) => c.label === label)) {
-          foundScope = curPath;
-          return;
-        }
-        searchComps(comp.components, curPath);
-      }
-    };
-    searchComps(sys.components, sys.label);
-    if (foundScope) break;
-  }
-
-  if (foundScope) {
-    doc.deleteConnection(foundScope, label);
-    await writeDocHcl(targetPath, doc);
+  // Scope search lives in the dispatcher (`delete_connection_by_label`).
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "delete_connection_by_label",
+    label,
+  });
+  if (result.applied) {
     sources = await readProjectSources(fs);
   }
 
