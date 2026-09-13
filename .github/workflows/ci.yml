@@ -152,11 +152,13 @@ jobs:
       - run: deno run test --project=unit_tests
         working-directory: ./web
 
-  # Build the frontend for Chromatic + GitHub Pages. Runs only for a
-  # "chromatic" push/PR title or a manual dispatch.
+  # Build the frontend for Chromatic + GitHub Pages. Runs on every push to
+  # main (to keep a Chromatic baseline), or for a "chromatic" push/PR title,
+  # or on manual dispatch.
   publish:
     needs: wasm
     if: ${{ github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, 'chromatic')) ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.title, 'chromatic')) }}
     runs-on: ubuntu-latest
