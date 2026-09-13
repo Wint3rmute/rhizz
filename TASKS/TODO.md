@@ -13,49 +13,9 @@ How to work on this file:
 
 ---
 
-## Task <N> — Own HCL serialization in Rust only (Audit finding 1)
+## Task <N> — Single `applyModelMutation` dispatcher (Audit finding 1)
 
-Source: `audit/architecture.md` Finding 1 — the frontend has a second HCL
-serializer next to `rhizz_core::serialize_model`.
-
-Problem: `web/src/DocumentStore.svelte.ts` (`systemHcl`, `serialize*`,
-`escapeHclString` = `JSON.stringify`) duplicates
-`crates/rhizz-core/src/serialize.rs` (`serialize_model`). Known drift:
-multi-line vs one-line `instance`, `localeCompare` vs byte-wise `cmp`,
-HCL escapes vs `JSON.stringify`, default-elision rules kept in step by hand.
-GUI edits are therefore not `rhizz fmt`-clean. WASM `ModelJS.to_hcl()` /
-`serialize_model` exists but only the test harness uses it; all 8 write sites
-in `routes/projects/[id]/diagrams/+page.svelte` + `testing/WorkspaceHarness.ts`
-use the TS emitter. Violates `SPEC/architecture.md` Frontend Contract
-("Do not duplicate logic").
-
-Plan (minimal shape first):
-
-1. Spike test (red): parity test `compile(doc.systemHcl).model().to_hcl() !=
-   doc.systemHcl` on fixtures (instance, unicode, mixed-case labels, defaults).
-2. Expose `modelToHcl()` via `compile.ts` / `rhizz_wasm_wrapper.ts`; add
-   `DocumentStore.canonicalHcl()` (compile in-memory draft → Rust HCL).
-3. Swap one write site to `canonicalHcl` with failure gate (refuse write when
-   `compile().model` is `None` — cf. Finding 2).
-4. Roll out to all write sites; update `actionLog.ts` replay assertion.
-5. Delete TS emitter (`serialize*`, `escapeHclString`, `formatStringList`);
-   keep draft encoder minimal; update `DocumentStore.test.ts`.
-6. Docs: note in `SPEC/architecture.md` that writes must use `serialize_model`
-   via WASM.
-
-Definition of done:
-
-- `rhizz fmt --check` clean after GUI edit.
-- Parity/idempotence test: `TS-draft → compile → to_hcl → compile → to_hcl`
-  stable.
-- `just test`, `just lint`, `just build` green; `just format` run.
-- Red/green TDD, conventional commits.
-
----
-
-## Task <N> — Single `applyModelMutation` dispatcher (Audit finding 2)
-
-Source: `audit/architecture.md` Finding 2 — model mutations round-trip
+Source: `audit/architecture.md` Finding 1 — model mutations round-trip
 through a full re-parse into a hand-built TS model tree, per handler, with no
 failure gating.
 
@@ -68,7 +28,7 @@ read primary .hcl → `new DocumentStore()` → `loadFromHcl()` →
 `compile_system()` → `model.to_js()` → `loadFromRawModel()` (re-derives
 `parentOfComp`, `rootSystemOfComp`, endpoint paths already known to Rust
 `Resolver` / `serialize.rs::endpoint_path`) → mutate TS tree →
-`doc.systemHcl` (Finding 1 emitter) → `fs.writeFile` → recompile.
+`doc.canonicalHcl` (Rust serializer) → `fs.writeFile` → recompile.
 `loadFromSources` swallows failed compiles (`console.warn; return`) so handlers
 write near-empty models over hard-error files (data-loss hazard). Rename
 bypasses `DocumentStore.renameComponent` (`comp.label = newLabel`), skipping
@@ -80,7 +40,7 @@ Plan:
 1. Add `web/src/history/applyMutation.ts` (or extend
    `routes/projects/[id]/diagrams/history.ts`): `applyModelMutation(op)` —
    read sources once, refuse when current `compile().model` is `None`, apply
-   op via `DocumentStore` API, write canonical HCL (Finding 1 `canonicalHcl`),
+   op via `DocumentStore` API, write canonical HCL (`DocumentStore.canonicalHcl` — landed with former finding 1),
    single recompile. Ops: add/rename/update/delete component, reparent,
    create connection (+ layout ops passthrough).
 2. Route one handler first (`handleRenameSelectedComponent` →
