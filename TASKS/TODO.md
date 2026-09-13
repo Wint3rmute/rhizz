@@ -13,44 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Rust-owned model mutations via ModelJS (structural, after dispatcher)
-
-Source: removed `audit/architecture.md` Finding 1, structural option 2
-("Potential simplification") — the minimal option (canonical writes) already
-landed, so this is the recorded follow-up, not a live audit finding.
-
-Goal: move mutation execution into `rhizz-core` behind the `ModelJS` WASM API
-so the TypeScript model tree and draft HCL encoder are deleted entirely
-instead of merely bypassed for writes.
-
-Plan:
-
-1. Prerequisite landed (`applyModelMutation` + gate tests in
-   `web/src/history/applyMutation.ts`): reuse its op taxonomy (add/rename/update/delete
-   component, reparent, add/delete connection, ports/protocols) as this
-   task's spec.
-2. Expose mutations on `ModelJS` (`crates/rhizz-wasm/src/lib.rs`): one method
-   per op, returning `to_hcl()` (canonical), with `Diagnostic`-carrying
-   `Result`s so the UI keeps the same refuse-and-surface behavior.
-3. Re-target `applyModelMutation` to execute ops through WASM; keep its
-   signature, failure gate, and action-log notifications unchanged so
-handlers, Undo/Redo, and replay scripts don't move again.
-4. Delete the dead TS model tree (`ComponentData`/`SystemData` trees,
-   `loadFromRawModel`, draft `systemHcl` encoder) once every reader goes
-   through `model.to_js()` / derived view data; keep Svelte reactivity by
-   deriving view state from WASM snapshots.
-5. Update `DocumentStore.*.test.ts`, harness, and Storybook stories.
-
-Definition of done:
-
-- No TS model tree or HCL emitter remains; all writes are `ModelJS` →
-  `to_hcl()`.
-- Dispatcher op + gate tests pass unchanged against the Rust backend.
-- `just test`, `just lint`, `just build` green; `just format` run.
-- Red/green TDD, conventional commits.
-
----
-
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
