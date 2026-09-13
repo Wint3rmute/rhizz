@@ -265,6 +265,9 @@ pub struct Project {
 }
 
 /// A resolved top-level system container.
+///
+/// Systems are implicitly level 0 (SPEC.md §2.2) — there is no `level`
+/// attribute; children default to `parent level + 1` from there.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct System {
     /// Unique identifier for this system.
@@ -273,8 +276,6 @@ pub struct System {
     pub description: String,
     /// Filtering tags.
     pub tags: Vec<String>,
-    /// Abstraction level.
-    pub level: i32,
     /// Direct child components.
     pub components: Vec<ComponentId>,
     /// Direct child connections.

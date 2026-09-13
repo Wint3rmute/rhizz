@@ -134,9 +134,7 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
             format_string_list(&sys.tags)
         );
     }
-    if sys.level != 0 {
-        let _ = writeln!(out, "{indent}level       = {}", sys.level);
-    }
+    // Systems are implicitly level 0 (SPEC.md §2.2) — never emitted.
 
     // Direct child components: instances are emitted as `instance` blocks using
     // their `source` reference; inline components (rare) as `component` blocks.
@@ -177,7 +175,8 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
 
     for conn in child_conns {
         out.push('\n');
-        serialize_connection(out, conn, model, 1, sys.level);
+        // Systems are implicitly level 0 (SPEC.md §2.2).
+        serialize_connection(out, conn, model, 1, 0);
     }
 
     out.push_str("}\n");
@@ -1098,7 +1097,6 @@ protocol "pcie" {
 system "root-sys" {
   description = "A \"complex\" system with\nmultiple lines"
   tags        = ["tag-a", "tag-b"]
-  level       = 1
 
   component "sub-system" {
     description = "Intermediate subsystem"

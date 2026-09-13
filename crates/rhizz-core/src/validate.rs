@@ -123,10 +123,11 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W006 -- `level` value decreases relative to parent (likely a mistake)
+    // W006 -- `level` value decreases relative to parent (likely a mistake).
+    // Systems are implicitly level 0 (SPEC.md §2.2).
     for comp in &model.components {
         let parent_level = match comp.parent {
-            Some(ComponentParent::System(sid)) => model.system(sid).map_or(0, |s| s.level),
+            Some(ComponentParent::System(_)) => 0,
             Some(ComponentParent::Component(pid)) => model.component(pid).map_or(0, |c| c.level),
             // A top-level definition has no placement parent; nothing to compare.
             None => continue,
@@ -142,11 +143,11 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
     // For connections: determine parent scope level by scanning system/component
-    // `connections` lists, then compare.
+    // `connections` lists, then compare. Systems are implicitly level 0.
     let mut conn_parent_level: HashMap<usize, i32> = HashMap::new();
     for sys in &model.systems {
         for cid in &sys.connections {
-            conn_parent_level.insert(cid.0, sys.level);
+            conn_parent_level.insert(cid.0, 0);
         }
     }
     for comp in &model.components {
@@ -578,14 +579,19 @@ mod tests {
 
     #[test]
     fn w006_level_decreases() {
+        // Systems are implicitly level 0; exercise the decrease through a
+        // component parent instead (child level 1 < parent level 2).
         let src = r#"
-            component "c" {
-              level = 2
+            component "child" {
+              level = 1
               leaf  = true
             }
+            component "parent" {
+              level = 2
+              instance "c" { source = "child" }
+            }
             system "s" {
-              level = 5
-              instance "c" { source = "c" }
+              instance "p" { source = "parent" }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
