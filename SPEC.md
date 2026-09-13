@@ -14,8 +14,8 @@ language for defining system architectures at various levels of abstraction.
 ## 1. Project Structure
 
 A project consists of a single system model file (`system.hcl` or `main.hcl`)
-containing the system architecture model. View definition files are located under `diagrams/*.hcl`. Documentation for components of the system
-is located under `docs/*.md`, each markdown file corresponding to a component (e.g. `component plane` -> `docs/plane.md`).
+containing the system architecture model. View definition files live under `diagrams/*.hcl`. Component documentation
+lives under `docs/*.md`, with each Markdown file corresponding to a component (e.g. `component "plane"` -> `docs/plane.md`).
 
 ```
 project/
@@ -57,7 +57,7 @@ project {
 
 ### 2.2 `system` Block
 
-Top-level block. One or more per project. One of possible realizations of your
+Top-level block. One or more per project. One possible realization of your
 project, be it a final product, one of your product variants, a prototype or a
 testing setup.
 
@@ -85,7 +85,7 @@ system "consumer-drone" {
 
 ### 2.3 `component` Block
 
-Represents a reusable physical or logical building block. Defined on the top
+Represents a reusable physical or logical building block. Defined at the top
 level, instantiated inside a system or parent component using the `instance`
 block. Components declare their external interface via `port` blocks; ports are
 allowed on both leaf and non-leaf components.
@@ -196,7 +196,7 @@ system "quadcopter" {
 
 ### 2.5 `protocol` Block
 
-Top-level block in the system model. Defines a protocol schema that can be
+Top-level block in the system model file. Defines a protocol schema that can be
 referenced by multiple ports across components.
 
 ```hcl
@@ -261,7 +261,7 @@ port "spi" {
 
 ### 2.7 `connection` Block
 
-Defined inside a `system` or `component`. Wires components or ports together
+Defined inside a `system` or `component`. Wires components and ports together
 across any hierarchy level.
 
 #### Connection Placement Rule
@@ -375,7 +375,7 @@ field "altitude" {
 
 ### 2.10 `view` Block
 
-Top-level block defined under `diagrams/*.hcl` files.
+Top-level block defined in files under `diagrams/`.
 Defines a visual perspective on a system: which components are placed on the
 canvas and where. Each file under `diagrams/` holds exactly one `view` block
 whose label matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
