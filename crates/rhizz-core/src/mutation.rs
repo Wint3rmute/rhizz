@@ -317,6 +317,8 @@ pub struct MutationResult {
     pub applied: bool,
     /// Canonical HCL to persist (`None` when refused).
     pub hcl: Option<String>,
+    /// Created component path (`CreateComponent` only).
+    pub path: Option<String>,
     /// Actions for the web action log.
     pub actions: Vec<LoggedAction>,
     /// Non-blocking resolve warnings accompanying the new model.
@@ -348,6 +350,7 @@ pub fn mutate_to_hcl(
         return Ok(MutationResult {
             applied: false,
             hcl: None,
+            path: None,
             actions: Vec::new(),
             warnings: Vec::new(),
         });
@@ -369,6 +372,7 @@ pub fn mutate_to_hcl(
         Ok((model, warnings)) => Ok(MutationResult {
             applied: true,
             hcl: Some(serialize::serialize_model(&model)),
+            path: outcome.path,
             actions: outcome.actions,
             warnings,
         }),
