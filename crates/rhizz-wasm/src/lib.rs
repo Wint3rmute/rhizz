@@ -723,6 +723,51 @@ pub fn serialize_model(model: &ModelJS) -> String {
     model.to_hcl()
 }
 
+// ── Model mutations ───────────────────────────────────────────────────────────
+
+/// Result of applying one [`rhizz_core::ModelOp`] to a primary file.
+/// Refusals (parse errors, guard failures, resolve errors) are reported
+/// inside the object (`applied: false` plus `diagnostics`), never thrown.
+#[derive(Serialize)]
+struct ApplyOpResultJS {
+    applied: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hcl: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    actions: Vec<rhizz_core::LoggedAction>,
+    diagnostics: Vec<rhizz_core::Diagnostic>,
+}
+
+/// Applies one declarative model mutation to a primary file and returns
+/// canonical HCL plus logged actions.
+///
+/// # Errors
+///
+/// Returns a `JsError` when the op JSON or the result fails to serialize.
+#[wasm_bindgen]
+pub fn apply_model_op(filename: &str, content: &str, op: JsValue) -> Result<JsValue, JsError> {
+    let op: rhizz_core::ModelOp =
+        serde_wasm_bindgen::from_value(op).map_err(|e| JsError::new(&e.to_string()))?;
+    let outcome = match rhizz_core::mutate_to_hcl(filename, content, &op) {
+        Ok(result) => ApplyOpResultJS {
+            applied: result.applied,
+            hcl: result.hcl,
+            path: result.path,
+            actions: result.actions,
+            diagnostics: result.warnings,
+        },
+        Err(diagnostics) => ApplyOpResultJS {
+            applied: false,
+            hcl: None,
+            path: None,
+            actions: Vec::new(),
+            diagnostics,
+        },
+    };
+    serde_wasm_bindgen::to_value(&outcome).map_err(|e| JsError::new(&e.to_string()))
+}
+
 /// Serializes an array of [`rhizz_core::ViewDefinition`] JS objects into canonical HCL for `views.hcl`.
 ///
 /// # Errors
