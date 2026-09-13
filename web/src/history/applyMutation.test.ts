@@ -378,6 +378,62 @@ describe("applyModelMutation", () => {
     expect(content).toContain('instance "imu"');
   });
 
+  it("add_connection under an instance persists in the definition body", async () => {
+    // UI regression: wiring two children of an instance (e.g. main/drone)
+    // silently dropped the connection — instance blocks carry only `source`.
+    const fs = memoryFs();
+    let baseline = "";
+    for (
+      const op of [
+        { kind: "add_component_definition", label: "drone" },
+        { kind: "add_component_definition", label: "battery" },
+        { kind: "add_component_definition", label: "flight-controller" },
+        { kind: "add_system", label: "main" },
+        {
+          kind: "add_instance",
+          parentPath: "main",
+          label: "drone",
+          source: "drone",
+        },
+        {
+          kind: "add_instance",
+          parentPath: "drone",
+          label: "battery",
+          source: "battery",
+        },
+        {
+          kind: "add_instance",
+          parentPath: "drone",
+          label: "flight-controller",
+          source: "flight-controller",
+        },
+      ] as const
+    ) {
+      const seeded = await applyModelMutation(fs, "system.hcl", baseline, op);
+      if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
+      baseline = fs.store.get("system.hcl") ?? "";
+    }
+    const added = await applyModelMutation(fs, "system.hcl", baseline, {
+      kind: "add_connection",
+      scopePath: "main/drone",
+      label: "power-supply",
+      from: "battery",
+      to: "flight-controller",
+    });
+    expect(added.applied).toBe(true);
+    const content = fs.store.get("system.hcl") ?? "";
+    expect(content).toContain('connection "power-supply"');
+
+    const deleted = await applyModelMutation(fs, "system.hcl", content, {
+      kind: "delete_connection_by_label",
+      label: "power-supply",
+    });
+    expect(deleted.applied).toBe(true);
+    expect(fs.store.get("system.hcl")).not.toContain(
+      'connection "power-supply"',
+    );
+  });
+
   it("delete_connection_by_label finds nested scopes", async () => {
     const fs = memoryFs();
     await seedDemo(fs);
