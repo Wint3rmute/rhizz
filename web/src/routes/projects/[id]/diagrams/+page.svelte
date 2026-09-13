@@ -118,10 +118,10 @@ async function handleCopyDebug(): Promise<void> {
   // NOT the current on-disk content (which already includes this session's
   // mutations and would double-apply them).
   const baselineHcl = debugBaselineHcl;
-  const script = asTestScript(actionLog.actions(), docStore.canonicalHcl ?? docStore.systemHcl, {
+  const script = asTestScript(actionLog.actions(), docStore.systemHcl, {
     baselineHcl,
   });
-  await copyDebugScript(actionLog, docStore.canonicalHcl ?? docStore.systemHcl, baselineHcl);
+  await copyDebugScript(actionLog, docStore.systemHcl, baselineHcl);
   console.log(script);
   copiedDebug = true;
   setTimeout(() => {

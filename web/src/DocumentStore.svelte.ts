@@ -264,33 +264,21 @@ export class DocumentStore {
       lines.push("}\n");
     }
 
-    // Protocol blocks
-    const sortedProtocols = [...this.protocols].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const proto of sortedProtocols) {
+    // Protocol blocks (draft order — canonical ordering is Rust-owned via
+    // `canonicalHcl`, so the draft must only be valid, not pretty).
+    for (const proto of this.protocols) {
       this.serializeProtocol(lines, proto);
       lines.push("");
     }
 
-    // Component definitions: every top-level reusable definition is emitted
-    // as a standalone `component` block keyed by its own label. Instances never
-    // get a definition block of their own — a system / definition reuses a
-    // definition via an `instance` block below. Sorted by label.
-    const sortedDefinitions = [...this.definitions].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const def of sortedDefinitions) {
+    // Component definitions (draft order; see above).
+    for (const def of this.definitions) {
       lines.push("");
       this.serializeComponentDef(lines, def);
     }
 
-    // System blocks
-    const sortedSystems = [...this.systems].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (let i = 0; i < sortedSystems.length; i++) {
-      const sys = arenaAt(sortedSystems, i);
+    // System blocks (draft order; see above).
+    for (const sys of this.systems) {
       lines.push("");
       lines.push(`system ${escapeHclString(sys.label)} {`);
       if (sys.description) {
@@ -301,12 +289,8 @@ export class DocumentStore {
       }
       // Systems are implicitly level 0 (SPEC.md §2.2) — never emitted.
 
-      // Direct child instances, referenced via `source` pointing at their
-      // top-level definition.
-      const sortedComps = [...sys.components].sort((a, b) =>
-        a.label.localeCompare(b.label)
-      );
-      for (const comp of sortedComps) {
+      // Direct child instances (draft order; see above).
+      for (const comp of sys.components) {
         lines.push("");
         lines.push(`  instance ${escapeHclString(comp.label)} {`);
         lines.push(
@@ -315,11 +299,8 @@ export class DocumentStore {
         lines.push("  }");
       }
 
-      // System-level connections (systems are implicitly level 0).
-      const sortedConns = [...sys.connections].sort((a, b) =>
-        a.label.localeCompare(b.label)
-      );
-      for (const conn of sortedConns) {
+      // System-level connections (draft order; see above).
+      for (const conn of sys.connections) {
         lines.push("");
         this.serializeConnection(lines, conn, 1, 0);
       }
@@ -400,21 +381,14 @@ export class DocumentStore {
     }
     if (comp.leaf) lines.push(`${inner}leaf        = true`);
 
-    // Ports
-    const sortedPorts = [...comp.ports].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const port of sortedPorts) {
+    // Ports (draft order; see above).
+    for (const port of comp.ports) {
       lines.push("");
       this.serializePort(lines, port, 1);
     }
 
-    // Child instances, referenced via `source` pointing at their own
-    // definition.
-    const sortedChildren = [...comp.components].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const child of sortedChildren) {
+    // Child instances (draft order; see above).
+    for (const child of comp.components) {
       lines.push("");
       lines.push(`  instance ${escapeHclString(child.label)} {`);
       lines.push(
@@ -423,11 +397,8 @@ export class DocumentStore {
       lines.push("  }");
     }
 
-    // Sub-connections
-    const sortedConns = [...comp.connections].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const conn of sortedConns) {
+    // Sub-connections (draft order; see above).
+    for (const conn of comp.connections) {
       lines.push("");
       this.serializeConnection(lines, conn, 1, comp.level ?? 1);
     }
@@ -449,10 +420,7 @@ export class DocumentStore {
       lines.push(`${inner}roles       = ${formatStringList(proto.roles)}`);
     }
 
-    const sortedMsgs = [...proto.messages].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const msg of sortedMsgs) {
+    for (const msg of proto.messages) {
       lines.push("");
       this.serializeMessage(lines, msg, 1, 0);
     }
@@ -509,10 +477,7 @@ export class DocumentStore {
       lines.push(`${inner}level       = ${String(msg.level)}`);
     }
 
-    const sortedFields = [...msg.fields].sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
-    for (const f of sortedFields) {
+    for (const f of msg.fields) {
       lines.push("");
       this.serializeField(lines, f, depth + 1);
     }
@@ -562,8 +527,7 @@ export class DocumentStore {
     lines.push(`${inner}to           = ${escapeHclString(conn.to)}`);
 
     if (conn.encapsulates && conn.encapsulates.length > 0) {
-      const sortedEnc = [...conn.encapsulates].sort();
-      lines.push(`${inner}encapsulates = ${formatStringList(sortedEnc)}`);
+      lines.push(`${inner}encapsulates = ${formatStringList(conn.encapsulates)}`);
     }
 
     lines.push(`${indent}}`);
