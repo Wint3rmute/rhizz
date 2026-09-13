@@ -142,7 +142,7 @@ component "flight-controller" {
   leaf        = false
 
   port "motor-out" { protocol = "dshot600"; role = "provider" }
-  component "mcu"  { /* ... */ }
+  instance "mcu" { /* ... */ }
   connection "spi-bus" { /* ... */ }
 }
 ```
@@ -175,8 +175,8 @@ system "quadcopter" {
 
 - `source` is a **label reference** to a top-level `component`, not a file path.
   Resolution happens during the resolution pass.
-- Nested `source` is supported: a top-level component may itself contain
-  children with `source` references to other top-level components.
+- A top-level component can itself contain child instances with `source`
+  references to other top-level components.
 - Circular `source` chains are detected and produce error E013.
 - `source` references an undefined top-level component → error E014.
 - No keys other than `source` are allowed in an `instance` block → error E012.
@@ -281,15 +281,27 @@ compatibility is validated at resolution time. The connection carries no
 messages and no direction — both are derived from the connected ports.
 
 ```hcl
+component "flight-controller" {
+  instance "mcu" {
+    source = "mcu"
+  }
+}
+
+component "mcu" {
+  port "spi" { protocol = "spi"; role = "provider"; external = true }
+}
+
+component "imu" {
+  port "spi" { protocol = "spi"; role = "consumer"; external = true }
+}
+
 system "drone" {
-  component "flight-controller" {
-    component "mcu" {
-      port "spi" { protocol = "spi"; role = "provider"; external = true }
-    }
+  instance "flight-controller" {
+    source = "flight-controller"
   }
 
-  component "imu" {
-    port "spi" { protocol = "spi"; role = "consumer"; external = true }
+  instance "imu" {
+    source = "imu"
   }
 
   # Declared in system "drone" (the Lowest Common Ancestor of 'mcu' and 'imu')
@@ -445,7 +457,7 @@ All references use **name-based or UNIX-style path notation**:
 | `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component                      |
 | `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path from scope   |
 | `encapsulates`                                    | Sibling `connection` labels in the same parent scope                   |
-| `component.source`                                | Top-level `component` label                                            |
+| `instance.source`                                | Top-level `component` label                                            |
 | `view.system`                                     | Top-level `system` label                                               |
 
 ---
@@ -620,228 +632,32 @@ $ rhizz build ./drone-project/   # after fix
 
 ## 8. Full Example
 
-A minimal but complete drone project defined in `system.hcl` and `diagrams/overview.hcl`:
-
-### `system.hcl`
-
-```hcl
-project {
-  name    = "mini-drone"
-  version = "0.1.0"
-}
-
-# ── Protocols ─────────────────────────────
-
-protocol "dshot600" {
-  description = "DShot600 digital motor protocol"
-  roles       = ["provider", "consumer"]
-
-  message "throttle-command" {
-    description = "Per-motor throttle value"
-    tags        = ["motor", "control"]
-    field "motor_id" { type = "uint8";  description = "Motor index 1-4" }
-    field "value"    { type = "uint16"; description = "Throttle 0-2047" }
-  }
-}
-
-protocol "crsf" {
-  description = "Crossfire serial link for RC input and telemetry"
-  roles       = ["peer"]
-
-  message "rc-channels" {
-    description = "16-channel RC input values"
-    field "channels" { type = "uint16[16]"; description = "Channel values 172-1811" }
-  }
-
-  message "telemetry-frame" {
-    description = "Telemetry sent back to transmitter"
-    field "rssi"    { type = "uint8";   unit = "dBm"; description = "Signal strength" }
-    field "battery" { type = "float32"; unit = "V";   description = "Battery voltage"  }
-  }
-}
-
-protocol "spi" {
-  description = "SPI bus interface"
-  roles       = ["provider", "consumer"]
-
-  message "transaction" {
-    description = "SPI transfer frame"
-    field "cs"   { type = "uint8"; description = "Chip select line" }
-    field "data" { type = "bytes"; description = "Payload"          }
-  }
-}
-
-protocol "power-dc" {
-  description = "DC power delivery rail"
-  roles       = ["provider", "consumer"]
-}
-
-# ── System ────────────────────────────────
-
-system "mini-drone" {
-  description = "Minimal quadcopter drone"
-  tags        = ["product", "drone"]
-
-  # ── Components ────────────────────────────
-
-  component "flight-controller" {
-    description = "Central flight management unit"
-    tags        = ["electronics", "compute"]
-    leaf        = false
-
-    port "dshot" {
-      description = "DShot600 motor control output"
-      protocol    = "dshot600"
-      role        = "provider"
-      external    = true
-      tags        = ["electronics", "motor", "data"]
-    }
-
-    port "crsf" {
-      description = "CRSF serial link for RC input and telemetry"
-      protocol    = "crsf"
-      role        = "peer"
-      external    = true
-      tags        = ["rf", "control", "data"]
-    }
-
-    component "mcu" {
-      description = "STM32H7 ARM Cortex-M7"
-      tags        = ["electronics", "compute"]
-      leaf        = true
-
-      port "spi" {
-        description = "SPI master bus"
-        protocol    = "spi"
-        role        = "provider"
-        external    = true
-        tags        = ["electronics", "data"]
-      }
-    }
-
-    component "imu" {
-      description = "ICM-42688 6-axis IMU"
-      tags        = ["electronics", "sensor"]
-      leaf        = true
-      # no ports defined yet — W007 fires for the spi-bus connection below
-    }
-
-    connection "spi-bus" {
-      description = "SPI link between MCU and IMU"
-      tags        = ["electronics", "data"]
-      level       = 2
-      from        = "mcu/spi"
-      to          = "imu"     # untyped — W007
-    }
-  }
-
-  component "esc" {
-    description = "4-in-1 electronic speed controller"
-    tags        = ["electronics", "power", "motor"]
-    leaf        = true
-
-    port "dshot" {
-      description = "DShot600 motor control input"
-      protocol    = "dshot600"
-      role        = "consumer"
-      external    = true
-      tags        = ["electronics", "motor", "data"]
-    }
-
-    port "power-in" {
-      description = "Main battery power input"
-      protocol    = "power-dc"
-      role        = "consumer"
-      external    = true
-      tags        = ["power"]
-    }
-
-    port "bec-out" {
-      description = "5V BEC regulated output"
-      protocol    = "power-dc"
-      role        = "provider"
-      external    = true
-      tags        = ["power"]
-    }
-  }
-
-  component "battery" {
-    description = "4S 1500mAh LiPo"
-    tags        = ["power"]
-    leaf        = true
-
-    port "power-out" {
-      description = "Main discharge output"
-      protocol    = "power-dc"
-      role        = "provider"
-      external    = true
-      tags        = ["power"]
-    }
-  }
-
-  component "radio-rx" {
-    description = "ELRS 2.4GHz receiver"
-    tags        = ["electronics", "rf", "control"]
-    leaf        = true
-
-    port "crsf" {
-      description = "CRSF serial link to flight controller"
-      protocol    = "crsf"
-      role        = "peer"
-      external    = true
-      tags        = ["rf", "control", "data"]
-    }
-  }
-
-  # ── Connections ────────────────────────────
-
-  connection "dshot-bus" {
-    description = "DShot600 motor control signal"
-    tags        = ["electronics", "motor", "data"]
-    from        = "flight-controller/dshot"
-    to          = "esc/dshot"
-  }
-
-  connection "power-main" {
-    description = "Main battery power rail"
-    tags        = ["power"]
-    from        = "battery/power-out"
-    to          = "esc/power-in"
-  }
-
-  connection "power-bec" {
-    description = "5V BEC output to flight controller"
-    tags        = ["power"]
-    from        = "esc/bec-out"
-    to          = "flight-controller"   # untyped — W007
-  }
-
-  connection "crsf-link" {
-    description = "Crossfire serial protocol for RC input"
-    tags        = ["rf", "control", "data"]
-    from        = "radio-rx/crsf"
-    to          = "flight-controller/crsf"
-  }
-}
-```
-
-### `diagrams/overview.hcl`
+The preceding sections describe each block in isolation; here is how they fit
+together. The canonical small example is
+[`examples/single-file/system.hcl`](./examples/single-file/system.hcl)
+(home-monitor — 2 protocols, 3 leaf components, 1 system with 3 instances and
+2 typed connections), whose system block is reproduced below as it shows the
+instance pattern in one place:
 
 ```hcl
-view "overview" {
-  system = "mini-drone"
-  node "mini-drone/flight-controller" {
-    x          = 20
-    y          = 50
-    width      = 100
-    height     = 50
+system "home-monitor" {
+  description = "Smart home environmental monitoring node"
+  tags        = ["iot", "data"]
+
+  instance "broker" { source = "broker" }
+  instance "controller" { source = "controller" }
+  instance "sensor" { source = "temp-sensor" }
+
+  connection "read-sensor" {
+    description = "I2C acquisition from sensor to controller"
+    from        = "/home-monitor/sensor/i2c"
+    to          = "/home-monitor/controller/i2c-in"
   }
 
-  node "mini-drone/battery" {
-    x          = 20
-    y          = 150
-    width      = 100
-    height     = 50
+  connection "send-telemetry" {
+    description = "MQTT upload from controller to cloud broker"
+    from        = "/home-monitor/controller/mqtt-out"
+    to          = "/home-monitor/broker/mqtt-in"
   }
 }
 ```
