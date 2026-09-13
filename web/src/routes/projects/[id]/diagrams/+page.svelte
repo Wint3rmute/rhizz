@@ -118,12 +118,14 @@ subscribeToMutations((action) => {
 async function handleCopyDebug(): Promise<void> {
   // Seed the replay from the pre-session baseline captured at project load,
   // NOT the current on-disk content (which already includes this session's
-  // mutations and would double-apply them).
+  // mutations and would double-apply them). The expected final state is the
+  // current on-disk canonical HCL.
   const baselineHcl = debugBaselineHcl;
-  const script = asTestScript(actionLog.actions(), docStore.systemHcl, {
+  const { content: finalHcl } = await readMainContent();
+  const script = asTestScript(actionLog.actions(), finalHcl, {
     baselineHcl,
   });
-  await copyDebugScript(actionLog, docStore.systemHcl, baselineHcl);
+  await copyDebugScript(actionLog, finalHcl, baselineHcl);
   console.log(script);
   copiedDebug = true;
   setTimeout(() => {
