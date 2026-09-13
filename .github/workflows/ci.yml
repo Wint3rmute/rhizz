@@ -131,7 +131,9 @@ jobs:
       - run: nix develop --command deno run check
         working-directory: ./web
 
-      - run: nix develop --command deno run test --project=unit_tests
+      # All projects, including the Playwright browser tests (project=
+      # storybook); browsers come from the flake (PLAYWRIGHT_BROWSERS_PATH).
+      - run: nix develop --command deno run test
         working-directory: ./web
 
   # Build the frontend for Chromatic + GitHub Pages. Runs on every push to
