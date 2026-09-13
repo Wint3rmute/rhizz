@@ -108,19 +108,55 @@ brevity, I marked `wheel` with `leaf = true`, so that the compiler won't
 complain about the battery not being fully defined. We'll come back to this
 later, you can ignore this fact for now.
 
+## Nesting
+
+A component can have children (and those children can have their own children). Let's
+add a `tire` to our wheel:
+
+```rhizz
+component "tire" {
+  description = "A 24in bicycle tire"
+  leaf = true
+}
+
+component "wheel" {
+  description = "A spinning round object"
+  instance "tire" {source = "tire"}
+}
+
+system "bicycle" {
+  description = "Personal transport vehicle"
+
+  instance "front-wheel" {source = "wheel"}
+  instance "rear-wheel" {source = "wheel"}
+}
+```
+
+> [!IMPORTANT]
+> A crucial concept to understand in this example is that adding the `tire` as the
+  child component of `wheel`
+> causes this change to be propagated along all instances of `wheel`.
+  `front-wheel` and `rear-wheel` both
+> have a `tire` child component now, as we've changed the **definition** of what `wheel` means.
+
 ## Connections
 
-The warning *"component 'NAME' is not referenced by any connection"* keeps on
-appearing, let's fix it by building a bike with:
+The warnings *"component 'NAME' is not referenced by any connection"* appear
+multiple times, let's fix some of them by building a bike with:
 
 - A bicycle frame
 - A bicycle fork
 - Wheels attached
 
 ```rhizz
+component "tire" {
+  description = "A 24in bicycle tire"
+  leaf = true
+}
+
 component "wheel" {
   description = "A spinning round object"
-  leaf = true
+  instance "tire" {source = "tire"}
 }
 
 component "fork" {
