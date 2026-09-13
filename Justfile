@@ -27,6 +27,16 @@ test: wasm
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
 
+# Single instrumented coverage pass, mirroring CI: runs all tests (incl.
+# doctests, hence RUSTC_BOOTSTRAP) under llvm-cov, enforces the 80% line
+# gate, and writes lcov + cobertura reports under target/coverage/.
+# rhizz-wasm is excluded (wasm cdylib, no host tests) and crates/*/tests
+# are not counted as source.
+coverage:
+    {{run}} mkdir -p target/coverage
+    {{run}} sh -lc 'RUSTC_BOOTSTRAP=1 cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info'
+    {{run}} sh -lc 'cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml'
+
 wasm:
     {{run}} wasm-pack build crates/rhizz-wasm --target web --release
 

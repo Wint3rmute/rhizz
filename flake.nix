@@ -24,6 +24,7 @@
               pkgs.rustfmt
               pkgs.wasm-pack
               pkgs.deno
+              pkgs.just
               pkgs.lld
               pkgs.flyctl
               pkgs.gh
