@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Reject unknown attributes in HCL blocks (`deny_unknown_fields`)
+
+Unknown/misspelled attributes are now blocking parse errors instead of being silently dropped.
+
+- **`#[serde(deny_unknown_fields)]` on all 14 `*Attrs` structs** (`parse.rs`: Project, System, Component, Instance, Protocol, Port, Connection, Message, Field; `serialize.rs`: View, Filter, Node, ConnectionLayout, Annotation). `attrs()` / `view_attrs()` strip child blocks before deserialization so the deny only fires on attributes — nested `port`/`instance`/`connection`/`filter`/`node` blocks still parse.
+- **`instance` extras → E012** (`SPEC.md §2.4`): `parse_instance` rejects child blocks and maps serde unknown-field errors to `E012: instance block must contain only a 'source' attribute`. `compile()` maps `E012:`-marked parse failures to `DiagnosticCode::E012`; everything else surfaces as E000.
+- **Docs**: `SPEC/models.md` Parsing rules documents E000 vs E012 choice.
+- **Tests**: per-block typo tests in `parse.rs` + `serialize.rs`, plus `compile()` E000/E012 mapping tests in `lib.rs`. Examples still compile with 0 errors, no `book.lock` re-canonicalization needed.
+- `just test`, `just lint`, `just build` green.
+
+---
+
 ## Task — Compile `diagrams/*.hcl` in the web workbench
 
 Step 1 of the Rust-owned view model plan: the browser now compiles the same

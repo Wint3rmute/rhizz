@@ -186,6 +186,7 @@ pub struct RawField {
 
 /// Serde helper for deserializing project attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct ProjectAttrs {
     /// Optional project name.
     name: Option<String>,
@@ -197,6 +198,7 @@ struct ProjectAttrs {
 
 /// Serde helper for deserializing system attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct SystemAttrs {
     /// Optional description.
     description: Option<String>,
@@ -208,6 +210,7 @@ struct SystemAttrs {
 
 /// Serde helper for deserializing component attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct ComponentAttrs {
     /// Optional description.
     description: Option<String>,
@@ -230,6 +233,7 @@ struct ComponentAttrs {
 
 /// Serde helper for deserializing instance attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct InstanceAttrs {
     /// Required source reference to a top-level definition.
     source: Option<String>,
@@ -237,6 +241,7 @@ struct InstanceAttrs {
 
 /// Serde helper for deserializing protocol attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct ProtocolAttrs {
     /// Optional description.
     pub description: Option<String>,
@@ -248,6 +253,7 @@ struct ProtocolAttrs {
 
 /// Serde helper for deserializing port attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct PortAttrs {
     /// Optional description.
     description: Option<String>,
@@ -265,6 +271,7 @@ struct PortAttrs {
 
 /// Serde helper for deserializing connection attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct ConnectionAttrs {
     /// Optional description.
     description: Option<String>,
@@ -282,6 +289,7 @@ struct ConnectionAttrs {
 
 /// Serde helper for deserializing message attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct MessageAttrs {
     /// Optional description.
     description: Option<String>,
@@ -293,6 +301,7 @@ struct MessageAttrs {
 
 /// Serde helper for deserializing field attributes.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct FieldAttrs {
     // `type` is a Rust keyword; serde rename handles this transparently.
     /// Data type string (renamed from HCL `type`).
@@ -318,8 +327,14 @@ fn first_label(block: &hcl::Block) -> Result<String> {
 }
 
 /// Deserialize attribute-only fields from a body, discarding child blocks.
+///
+/// Child blocks are handled separately by each block parser (or surfaced as
+/// W015), so they are stripped before deserialization. This keeps
+/// `#[serde(deny_unknown_fields)]` scoped to attributes only: typos like
+/// `descripton` fail, while nested `port`/`instance`/`connection` blocks do not.
 fn attrs<T: for<'de> Deserialize<'de> + Default>(body: &hcl::Body) -> Result<T> {
-    hcl::from_body(body.clone()).context("failed to deserialize block attributes")
+    let filtered: hcl::Body = body.attributes().cloned().collect::<Vec<_>>().into();
+    hcl::from_body(filtered).context("failed to deserialize block attributes")
 }
 
 /// Deserializes a `border` attribute value into a [`BorderStyle`], accepting
@@ -479,8 +494,17 @@ fn parse_component(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Resul
 
 /// Parse an `instance "<local>" { source = "<definition>" }` block. An instance
 /// has no body — only a `source` attribute naming the definition it reuses.
+/// Any extra attribute or child block is an E012 exclusivity violation.
 fn parse_instance(body: &hcl::Body) -> Result<RawInstance> {
-    let a: InstanceAttrs = attrs(body)?;
+    if let Some(block) = body.blocks().next() {
+        bail!(
+            "E012: instance block must contain only a 'source' attribute, found child block '{}'",
+            block.identifier()
+        );
+    }
+    let a: InstanceAttrs = attrs(body).map_err(|e| {
+        anyhow!("E012: instance block must contain only a 'source' attribute: {e:#}")
+    })?;
     if a.source.is_none() {
         bail!("instance block is missing a 'source' attribute");
     }
@@ -1228,5 +1252,91 @@ mod tests {
         let labels: Vec<&str> = merged.protocols.iter().map(|p| p.label.as_str()).collect();
         assert!(labels.contains(&"proto-a"));
         assert!(labels.contains(&"proto-b"));
+    }
+
+    // ── deny_unknown_fields ────────────────────────────────────────────────
+
+    fn assert_parse_fails(src: &str) -> String {
+        let path = PathBuf::from("test.hcl");
+        let err = parse_file(src, &path).expect_err("unknown attribute should fail to parse");
+        // `{err:#}` flattens the anyhow cause chain (outer `in component 'c'`
+        // context + inner serde unknown-field error) so the key name is visible.
+        format!("{err:#}")
+    }
+
+    #[test]
+    fn unknown_attr_on_component_is_error() {
+        let msg = assert_parse_fails(r#"component "c" { descripton = "typo" }"#);
+        assert!(
+            msg.contains("descripton"),
+            "should name the unknown key, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn unknown_attr_on_system_is_error() {
+        let msg = assert_parse_fails(r#"system "s" { descripton = "typo" }"#);
+        assert!(msg.contains("descripton"), "got: {msg}");
+    }
+
+    #[test]
+    fn unknown_attr_on_project_is_error() {
+        let msg = assert_parse_fails(r#"project { nam = "a" }"#);
+        assert!(msg.contains("nam"), "got: {msg}");
+    }
+
+    #[test]
+    fn unknown_attr_on_protocol_is_error() {
+        let msg = assert_parse_fails(r#"protocol "p" { descripton = "x" }"#);
+        assert!(msg.contains("descripton"), "got: {msg}");
+    }
+
+    #[test]
+    fn unknown_attr_on_port_is_error() {
+        let msg = assert_parse_fails(r#"component "c" { port "p" { descripton = "x" } }"#);
+        assert!(msg.contains("descripton"), "got: {msg}");
+    }
+
+    #[test]
+    fn unknown_attr_on_connection_is_error() {
+        let msg = assert_parse_fails(
+            r#"system "s" { connection "c" { from = "a" to = "b" sorce = "x" } }"#,
+        );
+        assert!(msg.contains("sorce"), "got: {msg}");
+    }
+
+    #[test]
+    fn unknown_attr_on_message_is_error() {
+        let msg = assert_parse_fails(r#"protocol "p" { message "m" { descripton = "x" } }"#);
+        assert!(msg.contains("descripton"), "got: {msg}");
+    }
+
+    #[test]
+    fn unknown_attr_on_field_is_error() {
+        let msg =
+            assert_parse_fails(r#"protocol "p" { message "m" { field "f" { typ = "uint8" } } }"#);
+        assert!(msg.contains("typ"), "got: {msg}");
+    }
+
+    #[test]
+    fn extra_attr_on_instance_is_e012() {
+        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    description = \"extra\"\n  }\n}";
+        let path = PathBuf::from("test.hcl");
+        let err = parse_file(src, &path).expect_err("instance extra attr should fail");
+        let full = format!("{err:#}");
+        assert!(full.contains("E012"), "expected E012, got: {full}");
+    }
+
+    #[test]
+    fn child_block_on_instance_is_e012() {
+        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    port \"p\" {}\n  }\n}";
+        // Note: `port "p" {}` without braces content still parses as a child
+        // block inside the instance body, which must be rejected as E012.
+        let path = PathBuf::from("test.hcl");
+        let result = parse_file(src, &path);
+        assert!(
+            result.is_err() && format!("{:#}", result.unwrap_err()).contains("E012"),
+            "expected E012 for child block in instance"
+        );
     }
 }
