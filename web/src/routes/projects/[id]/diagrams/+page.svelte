@@ -45,6 +45,7 @@ import {
   redoHistory,
   undoHistory,
 } from "./history";
+import { applyModelMutation } from "../../../../history/applyMutation";
 import {
   createForceLayout,
   groupBySiblings,
@@ -1396,15 +1397,16 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   const newKey = `${parentPath}/${newLabel}`;
 
   const { path: targetPath, content: mainContent } = await readMainContent();
-  const doc = new DocumentStore();
-  if (mainContent.trim()) {
-    doc.loadFromHcl(mainContent);
-  }
+  // Routed through the store API (not a direct label assignment) so the
+  // sibling-collision check runs and the mutation observer records the
+  // rename for the action log.
+  const result = await applyModelMutation(fs, targetPath, mainContent, {
+    kind: "rename_component",
+    path: selectedKey,
+    newLabel,
+  });
 
-  const comp = doc.findComponent(selectedKey);
-  if (comp) {
-    comp.label = newLabel;
-    await writeDocHcl(targetPath, doc);
+  if (result.applied) {
     sources = await readProjectSources(fs);
 
     if (checked[selectedKey]) {
