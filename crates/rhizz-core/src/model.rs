@@ -266,8 +266,8 @@ pub struct Project {
 
 /// A resolved top-level system container.
 ///
-/// Systems are implicitly level 0 (SPEC.md §2.2) — there is no `level`
-/// attribute; children default to `parent level + 1` from there.
+/// Systems have no `level` — the concept does not apply to them; child
+/// entities default their levels from an implicit root of 0.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct System {
     /// Unique identifier for this system.

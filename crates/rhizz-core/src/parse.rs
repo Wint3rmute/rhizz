@@ -254,9 +254,6 @@ struct ProjectAttrs {
 }
 
 /// Serde helper for deserializing system attributes.
-///
-/// Note: no `level` — systems are implicitly level 0 (SPEC.md §2.2). An
-/// explicit `level` key is rejected by `deny_unknown_fields`.
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct SystemAttrs {
@@ -1108,8 +1105,8 @@ mod tests {
 
     #[test]
     fn system_level_rejected() {
-        // Systems are implicitly level 0 (SPEC.md §2.2) — a `level` key is
-        // rejected by `deny_unknown_fields` on `SystemAttrs`.
+        // Systems have no `level` key; one is rejected by
+        // `deny_unknown_fields` on `SystemAttrs`.
         let src = r#"
             system "my-sys" {
                 level = 0
