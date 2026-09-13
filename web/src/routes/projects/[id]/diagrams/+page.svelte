@@ -118,10 +118,10 @@ async function handleCopyDebug(): Promise<void> {
   // NOT the current on-disk content (which already includes this session's
   // mutations and would double-apply them).
   const baselineHcl = debugBaselineHcl;
-  const script = asTestScript(actionLog.actions(), docStore.systemHcl, {
+  const script = asTestScript(actionLog.actions(), docStore.canonicalHcl ?? docStore.systemHcl, {
     baselineHcl,
   });
-  await copyDebugScript(actionLog, docStore.systemHcl, baselineHcl);
+  await copyDebugScript(actionLog, docStore.canonicalHcl ?? docStore.systemHcl, baselineHcl);
   console.log(script);
   copiedDebug = true;
   setTimeout(() => {
@@ -1119,6 +1119,21 @@ async function readMainContent(): Promise<{ path: string; content: string }> {
   }
 }
 
+// Writes the Rust-canonical HCL (audit Finding 1). Refuses when the draft has
+// blocking errors and there is no model — overwriting then would persist a
+// near-empty model over the user's content (Finding 2 hazard).
+async function writeDocHcl(
+  targetPath: string,
+  doc: DocumentStore,
+): Promise<void> {
+  const hcl = doc.canonicalHcl;
+  if (hcl === null) {
+    console.warn("Refusing model write: draft has blocking errors");
+    return;
+  }
+  await fs.writeFile(targetPath, hcl);
+}
+
 async function executeReparent(
   sourceKey: string,
   targetParentKey: string,
@@ -1133,7 +1148,7 @@ async function executeReparent(
   if (doc.reparentComponent(sourceKey, targetParentKey)) {
     const label = sourceKey.split("/").at(-1);
     const newKey = label ? `${targetParentKey}/${label}` : null;
-    await fs.writeFile(targetPath, doc.systemHcl);
+    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
     if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
   }
@@ -1151,7 +1166,7 @@ async function handleAddSystem(): Promise<void> {
     doc.loadFromHcl(mainContent);
   }
   doc.addSystem(name);
-  await fs.writeFile(targetPath, doc.systemHcl);
+  await writeDocHcl(targetPath, doc);
   sources = await readProjectSources(fs);
 }
 
@@ -1288,7 +1303,7 @@ async function handleModalCreateComponent(data: {
     doc.addInstance(parent, data.label, data.sourceLabel);
   }
 
-  await fs.writeFile(targetPath, doc.systemHcl);
+  await writeDocHcl(targetPath, doc);
   sources = await readProjectSources(fs);
 
   const fullKey = data.sourceLabel || parent
@@ -1367,7 +1382,7 @@ async function handleUpdateSelectedComponent(
     doc.loadFromHcl(mainContent);
   }
   if (doc.updateComponent(selectedKey, patch)) {
-    await fs.writeFile(targetPath, doc.systemHcl);
+    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
   }
 }
@@ -1389,7 +1404,7 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   const comp = doc.findComponent(selectedKey);
   if (comp) {
     comp.label = newLabel;
-    await fs.writeFile(targetPath, doc.systemHcl);
+    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
 
     if (checked[selectedKey]) {
@@ -1414,7 +1429,7 @@ async function handleDeleteSelectedComponent(): Promise<void> {
   }
 
   if (doc.deleteComponent(keyToDelete)) {
-    await fs.writeFile(targetPath, doc.systemHcl);
+    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
 
     delete checked[keyToDelete];
@@ -1523,7 +1538,7 @@ async function handleCreateConnection(
     if (startSide) {
       savedConnections[connLabel] = { startSide };
     }
-    await fs.writeFile(targetPath, doc.systemHcl);
+    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
   }
 }
@@ -2164,7 +2179,7 @@ async function handleDeleteSelectedConnection(
 
   if (foundScope) {
     doc.deleteConnection(foundScope, label);
-    await fs.writeFile(targetPath, doc.systemHcl);
+    await writeDocHcl(targetPath, doc);
     sources = await readProjectSources(fs);
   }
 
