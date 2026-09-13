@@ -12,6 +12,7 @@ alias t := test
 alias d := dev
 alias s := storybook
 alias fmt := format
+alias bs := book-serve
 
 run := if has_nix == "true" { "nix develop --command" } else { "" }
 
