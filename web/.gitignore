@@ -30,3 +30,8 @@ chromatic.log
 
 # ESLint cache
 .eslintcache
+
+# Playwright
+/test-results
+/playwright-report
+/playwright/.cache
