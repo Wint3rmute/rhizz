@@ -30,14 +30,12 @@ struct RawFile {
 - Top level accepts only `project | system | component | protocol`.
 - `system` / `component` bodies accept only `instance` / `port` / `connection`
   children — any other nested block type is skipped with a W015 warning.
-- All `*Attrs` structs use `#[serde(deny_unknown_fields)]` on attribute-only
-  bodies (child blocks are stripped before deserialization, so they never
-  trigger unknown-field errors). Unknown attributes are blocking parse errors
-  surfacing as E000 — typos like `descripton` fail instead of being silently
-  dropped. View files (`diagrams/*.hcl`) follow the same rule.
+- Unknown attributes are rejected: blocking parse error (E000) — typos like
+  `descripton` fail instead of being silently dropped. View files
+  (`diagrams/*.hcl`) follow the same rule.
 - `instance` accepts only the required `source` attribute: missing `source` is a
-  parse error, anything extra (attribute or child block) is an E012 exclusivity
-  violation (not generic E000).
+  parse error, anything extra (attribute or child block) is rejected as an E012
+  exclusivity violation.
 - Raw preserves what the user wrote; defaults are applied during resolution.
 
 ## Source resolution
