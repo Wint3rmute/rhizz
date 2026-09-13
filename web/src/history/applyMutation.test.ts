@@ -3,6 +3,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { subscribeToMutations } from "../DocumentStore.svelte";
+import type { ModelAction } from "../actionLog";
+import { compile_system } from "../rhizz_wasm_wrapper";
 import { applyModelMutation } from "./applyMutation";
 
 beforeAll(async () => {
@@ -102,6 +104,8 @@ describe("applyModelMutation", () => {
       });
       expect(refused.applied).toBe(false);
       expect(fs.store.get("system.hcl")).toBe(before);
+      // Refusals record nothing.
+      expect(recorded).toEqual([]);
 
       const renamed = await applyModelMutation(fs, "system.hcl", before, {
         kind: "rename_component",
@@ -116,6 +120,165 @@ describe("applyModelMutation", () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it("reports instance updates against their definition", async () => {
+    const fs = memoryFs();
+    await seedDemo(fs);
+    const recorded: ModelAction[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action);
+    });
+    try {
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        fs.store.get("system.hcl") ?? "",
+        {
+          kind: "update_component",
+          path: "demo/a",
+          patch: { description: "hot chip" },
+        },
+      );
+      expect(result.applied).toBe(true);
+      expect(fs.store.get("system.hcl")).toContain("hot chip");
+      // Body edits land on the reused definition, not the instance.
+      expect(recorded).toContainEqual({
+        op: "update_component",
+        path: "compA",
+        patch: { description: "hot chip" },
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("persists port edits via update patch on the definition", async () => {
+    const fs = memoryFs();
+    await seedDemo(fs);
+    const recorded: ModelAction[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action);
+    });
+    try {
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        fs.store.get("system.hcl") ?? "",
+        {
+          kind: "update_component",
+          path: "demo/a",
+          patch: { ports: [{ label: "p", role: "peer" }] },
+        },
+      );
+      expect(result.applied).toBe(true);
+      expect(fs.store.get("system.hcl")).toContain('port "p"');
+      expect(recorded).toContainEqual({
+        op: "update_component",
+        path: "compA",
+        patch: { ports: [{ label: "p", role: "peer" }] },
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("deletes instances before their definitions", async () => {
+    const fs = memoryFs();
+    await seedDemo(fs);
+    const baseline = fs.store.get("system.hcl") ?? "";
+
+    const delInst = await applyModelMutation(fs, "system.hcl", baseline, {
+      kind: "delete_component",
+      path: "demo/b",
+    });
+    expect(delInst.applied).toBe(true);
+    const afterInst = fs.store.get("system.hcl") ?? "";
+    expect(afterInst).not.toContain('instance "b"');
+
+    // The definition is deletable once no instance uses it.
+    const delDef = await applyModelMutation(fs, "system.hcl", afterInst, {
+      kind: "delete_component",
+      path: "compB",
+    });
+    expect(delDef.applied).toBe(true);
+    expect(fs.store.get("system.hcl")).not.toContain('component "compB"');
+
+    // ...but not while still instanced (would dangle E014).
+    const refused = await applyModelMutation(
+      fs,
+      "system.hcl",
+      fs.store.get("system.hcl") ?? "",
+      { kind: "delete_component", path: "compA" },
+    );
+    expect(refused.applied).toBe(false);
+  });
+
+  it("builds nested instances with relative endpoints that compile", async () => {
+    const fs = memoryFs();
+    let baseline = "";
+    for (
+      const op of [
+        { kind: "add_component_definition", label: "antenna" },
+        { kind: "add_component_definition", label: "rf" },
+        { kind: "add_component_definition", label: "dsp" },
+        { kind: "add_component_definition", label: "baseband" },
+        { kind: "add_system", label: "mobile" },
+        {
+          kind: "add_instance",
+          parentPath: "mobile",
+          label: "antenna",
+          source: "antenna",
+        },
+        {
+          kind: "add_instance",
+          parentPath: "mobile",
+          label: "baseband",
+          source: "baseband",
+        },
+        {
+          kind: "add_instance",
+          parentPath: "baseband",
+          label: "rf",
+          source: "rf",
+        },
+        {
+          kind: "add_instance",
+          parentPath: "baseband",
+          label: "dsp",
+          source: "dsp",
+        },
+        {
+          kind: "add_connection",
+          scopePath: "mobile",
+          label: "rf-antenna",
+          from: "baseband/rf",
+          to: "antenna",
+        },
+        {
+          kind: "add_connection",
+          scopePath: "mobile",
+          label: "rf-dsp",
+          from: "baseband/rf",
+          to: "baseband/dsp",
+        },
+      ] as const
+    ) {
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        baseline,
+        op,
+      );
+      if (!result.applied) throw new Error(`seed op failed: ${op.kind}`);
+      baseline = fs.store.get("system.hcl") ?? "";
+    }
+    expect(baseline).toContain('from         = "/mobile/baseband/rf"');
+    expect(baseline).not.toContain("baseband:rf");
+    expect(
+      compile_system([{ filename: "system.hcl", content: baseline }])
+        .error_count(),
+    ).toBe(0);
   });
 
   it("refuses mutations when the baseline has blocking errors, file untouched", async () => {

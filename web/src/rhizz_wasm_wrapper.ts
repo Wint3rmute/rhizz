@@ -1,4 +1,5 @@
 import {
+  apply_model_op as wasm_apply_model_op,
   CompileResultJS,
   get_example_projects as wasm_get_example_projects,
   type ModelJS,
@@ -6,6 +7,7 @@ import {
   serialize_model as wasm_serialize_model,
   serialize_views as wasm_serialize_views,
 } from "rhizz";
+import type { ModelAction } from "./actionLog";
 
 export interface NodeLayout {
   component: string;
@@ -57,6 +59,31 @@ export function compile_system(
 
 export function serialize_model(model: ModelJS): string {
   return wasm_serialize_model(model);
+}
+
+export interface MutationDiagnostic {
+  code: string;
+  message: string;
+  file: string | null;
+  line: number | null;
+}
+
+export interface ApplyModelOpResult {
+  applied: boolean;
+  hcl?: string;
+  path?: string;
+  actions: ModelAction[];
+  diagnostics: MutationDiagnostic[];
+}
+
+/** Applies one declarative model mutation via Rust; refusals come back as
+ * `{ applied: false, diagnostics }`, never thrown. */
+export function apply_model_op(
+  filename: string,
+  content: string,
+  op: unknown,
+): ApplyModelOpResult {
+  return wasm_apply_model_op(filename, content, op) as ApplyModelOpResult;
 }
 
 export function serialize_views(views: ViewDefinition[]): string {

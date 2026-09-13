@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Rust-owned model mutations via ModelJS (structural)
+
+Mutation execution moved into `rhizz-core`: the web dispatcher sends a
+declarative op verbatim to `mutate_to_hcl` (via the `apply_model_op` WASM
+binding) and persists the returned canonical HCL. Branch diff vs `main`:
++2145/−1738 (net +407, driven ~2:1 by new contract tests).
+
+- **Core** (`crates/rhizz-core/src/mutation.rs`): `ModelOp` (10 ops, JSON
+  mirrors the TS dispatcher 1:1, contract-tested), raw-tree application with
+  TS-parity semantics (idempotent adds, guards, instance→definition
+  redirect, place-on-create with the `"Main system"` fallback), resolve
+  as the failure gate (dangling deletes refuse with E014 instead of
+  persisting broken files), `LoggedAction`s in exact `ModelAction` JSON.
+- **Web**: dispatcher executes via WASM and forwards Rust-reported actions
+  to the action log; deleted the TS write model (16 store mutators, draft
+  emitter + `serialize*` helpers, compile/model/score deriveds,
+  `placement.ts`, `canonical.test.ts`); replay scripts rewritten to
+  ops-based replays with WASM init; `SPEC/architecture.md` contract now
+  requires core-owned writes.
+- **Deliberately kept**: the TypeScript tree as a reactive *read* model for
+  rendering (deleting it needs a UI-read rewrite, a separate epic), and the
+  view/layout store (separate file domain).
+- `just test` (57 files / 585 web tests + cargo), `just lint`, `just build`,
+  `just format` green (branch `task/rust-owned-model-mutations`).
+
+---
+
 ## Task — Single `applyModelMutation` dispatcher (fixed audit Finding 1)
 
 All UI-driven model mutations go through one dispatcher

@@ -1,12 +1,12 @@
 // A pure, dependency-free action log for the model editor.
 //
-// Every durable model / layout-persistence mutation the UI performs is
-// recorded here as a `ModelAction` — a faithful, ordered description of the
-// exact `DocumentStore` method calls that produced the current state. The log
-// can be turned into a self-contained TypeScript test body (`asTestScript`)
-// that replays the same sequence against a fresh `DocumentStore`, which is how
-// a bug report becomes a reproduction: copy the console block into a
-// `*.test.ts`, run it, and the failing state is rebuilt deterministically.
+// Every durable model mutation the UI performs is recorded here as a
+// `ModelAction` — a faithful, ordered description of the ops the dispatcher
+// executed. The log can be turned into a self-contained TypeScript test body
+// (`asTestScript`) that replays the same op sequence through
+// `applyModelMutation` against an in-memory file map, which is how a bug
+// report becomes a reproduction: copy the console block into a `*.test.ts`,
+// run it, and the failing state is rebuilt deterministically.
 //
 // Deliberately has zero dependency on Svelte or the WASM runtime (see
 // DocumentStore.svelte.ts — importing it does not initialize WASM), so this
@@ -136,199 +136,152 @@ function tsTemplate(s: string): string {
   }\``;
 }
 
-function tsStringArray(items: readonly string[]): string {
-  return `[${items.map(tsString).join(", ")}]`;
+// Renders a single `ModelAction` as one `applyModelMutation` call against
+// an in-memory file map. The emitted op mirrors the recorded action 1:1 so
+// the trace stays honest to the edit it reflects. Actions with no model-op
+// equivalent (project seeding, ports/protocols edited outside the canvas,
+// view layout) become comment lines so replay scripts stay runnable.
+export function encodeCall(action: ModelAction, fileVar: string): string {
+  const op = toMutationOp(action);
+  if (op === null) {
+    return `// ${action.op} is not replayable through model ops (no-op in replay)`;
+  }
+  return `await applyModelMutation(${fileVar}, "system.hcl", await ${fileVar}.readFile("system.hcl"), ${
+    JSON.stringify(op)
+  });`;
 }
 
-function tsBool(b: boolean): string {
-  return b ? "true" : "false";
-}
-
-// Renders a single `ModelAction` as one line of TypeScript that invokes the
-// corresponding `DocumentStore` method on `projVar`. The emitted calls mirror
-// the real mutator signatures 1:1 so the trace is honest to the edit it
-// reflects and can be stepped through in a debugger.
-export function encodeCall(action: ModelAction, projVar: string): string {
+function toMutationOp(action: ModelAction): unknown {
   switch (action.op) {
-    case "new_project":
-      return `${projVar}.setProject(${tsString(action.name)}, ${
-        tsString(action.version)
-      }, ${tsStringArray(action.authors)});`;
     case "add_system":
-      return `${projVar}.addSystem(${tsString(action.label)}, ${
-        tsString(action.description)
-      });`;
+      return {
+        kind: "add_system",
+        label: action.label,
+        description: action.description,
+      };
     case "add_component_definition": {
-      const opts: string[] = [];
-      if (action.leaf) opts.push(`leaf: true`);
-      if (action.description !== "") {
-        opts.push(`description: ${tsString(action.description)}`);
-      }
-      if (action.tags.length > 0) {
-        opts.push(`tags: ${tsStringArray(action.tags)}`);
-      }
-      if (action.icon !== undefined) {
-        opts.push(`icon: ${tsString(action.icon)}`);
-      }
-      if (action.color !== undefined) {
-        opts.push(`color: ${tsString(action.color)}`);
-      }
-      if (action.border !== undefined) {
-        opts.push(`border: ${tsString(action.border)}`);
-      }
-      if (action.font !== undefined) {
-        opts.push(`font: ${tsString(action.font)}`);
-      }
-      if (action.ports.length > 0) {
-        opts.push(`ports: [${action.ports.map(encodePort).join(", ")}]`);
-      }
-      return `${projVar}.addComponentDefinition(${tsString(action.label)}${
-        opts.length > 0 ? `, { ${opts.join(", ")} }` : ""
-      });`;
+      const options: {
+        leaf: boolean;
+        description: string;
+        tags: string[];
+        ports: PortData[];
+        icon?: string;
+        color?: string;
+        border?: string;
+        font?: string;
+      } = {
+        leaf: action.leaf,
+        description: action.description,
+        tags: action.tags,
+        ports: action.ports,
+      };
+      if (action.icon !== undefined) options.icon = action.icon;
+      if (action.color !== undefined) options.color = action.color;
+      if (action.border !== undefined) options.border = action.border;
+      if (action.font !== undefined) options.font = action.font;
+      return { kind: "add_component_definition", label: action.label, options };
     }
     case "add_instance":
-      return `${projVar}.addInstance(${tsString(action.parentPath)}, ${
-        tsString(action.label)
-      }, ${tsString(action.source)});`;
+      return {
+        kind: "add_instance",
+        parentPath: action.parentPath,
+        label: action.label,
+        source: action.source,
+      };
     case "rename_component":
-      return `${projVar}.renameComponent(${tsString(action.path)}, ${
-        tsString(action.newLabel)
-      });`;
+      return {
+        kind: "rename_component",
+        path: action.path,
+        newLabel: action.newLabel,
+      };
     case "delete_component":
-      return `${projVar}.deleteComponent(${tsString(action.path)});`;
+      return { kind: "delete_component", path: action.path };
     case "reparent_component":
-      return `${projVar}.reparentComponent(${tsString(action.sourcePath)}, ${
-        tsString(action.targetParentPath)
-      });`;
+      return {
+        kind: "reparent_component",
+        sourcePath: action.sourcePath,
+        targetParentPath: action.targetParentPath,
+      };
     case "update_component":
-      return `${projVar}.updateComponent(${tsString(action.path)}, ${
-        encodePatch(action.patch)
-      });`;
+      return {
+        kind: "update_component",
+        path: action.path,
+        patch: action.patch,
+      };
     case "add_connection":
-      return `${projVar}.addConnection(${
-        tsString(action.scopePath)
-      }, { label: ${tsString(action.label)}, from: ${
-        tsString(action.from)
-      }, to: ${tsString(action.to)} });`;
+      return {
+        kind: "add_connection",
+        scopePath: action.scopePath,
+        label: action.label,
+        from: action.from,
+        to: action.to,
+      };
     case "delete_connection":
-      return `${projVar}.deleteConnection(${tsString(action.scopePath)}, ${
-        tsString(action.label)
-      });`;
+      // The dispatcher resolves the scope itself; the recorded scope is
+      // redundant for replay.
+      return { kind: "delete_connection_by_label", label: action.label };
+    case "new_project":
     case "add_port":
-      return `${projVar}.addPort(${tsString(action.compPath)}, ${
-        tsString(action.port.label)
-      }, ${tsString(action.port.protocol ?? "")}, ${
-        tsString(action.port.role)
-      }, ${tsBool(action.port.external ?? false)}, ${
-        tsBool(action.port.required ?? true)
-      });`;
     case "update_port":
-      return `${projVar}.updatePort(${tsString(action.compPath)}, ${
-        tsString(action.portLabel)
-      }, ${encodePatch(action.patch)});`;
     case "delete_port":
-      return `${projVar}.deletePort(${tsString(action.compPath)}, ${
-        tsString(action.portLabel)
-      });`;
     case "add_protocol":
-      return `${projVar}.addProtocol(${tsString(action.label)}, ${
-        tsString(action.description)
-      });`;
     case "delete_protocol":
-      return `${projVar}.deleteProtocol(${tsString(action.label)});`;
     case "add_view":
-      return `${projVar}.addView(${tsString(action.label)}, ${
-        tsString(action.system)
-      });`;
     case "update_node_layout":
-      return `${projVar}.updateNodeLayout(${tsString(action.viewLabel)}, ${
-        tsString(action.componentKey)
-      }, ${encodeLayout(action.layout)});`;
+      return null;
   }
-}
-
-function encodePort(port: PortData): string {
-  const opts: string[] = [`label: ${tsString(port.label)}`];
-  if (port.description) opts.push(`description: ${tsString(port.description)}`);
-  if (port.protocol) opts.push(`protocol: ${tsString(port.protocol)}`);
-  opts.push(`role: ${tsString(port.role)}`);
-  if (port.external) opts.push(`external: true`);
-  if (port.required === false) opts.push(`required: false`);
-  if (port.tags && port.tags.length > 0) {
-    opts.push(`tags: ${tsStringArray(port.tags)}`);
-  }
-  return `{ ${opts.join(", ")} }`;
-}
-
-function encodePatch(patch: Record<string, unknown>): string {
-  const entries = Object.entries(patch).map(([key, value]) => {
-    if (value === undefined) return `${key}: undefined`;
-    if (typeof value === "boolean") return `${key}: ${tsBool(value)}`;
-    if (typeof value === "number") return `${key}: ${String(value)}`;
-    if (Array.isArray(value)) {
-      if (
-        value.length > 0 && typeof value[0] === "object" && value[0] !== null
-      ) {
-        return `${key}: [${
-          value.map((v) => encodePort(v as PortData)).join(", ")
-        }]`;
-      }
-      return `${key}: ${tsStringArray(value.map((v) => String(v)))}`;
-    }
-    return `${key}: ${tsString(value as string)}`;
-  });
-  return `{ ${entries.join(", ")} }`;
-}
-
-function encodeLayout(layout: NodeLayoutPatch): string {
-  const entries: string[] = [
-    `x: ${String(layout.x)}`,
-    `y: ${String(layout.y)}`,
-  ];
-  if (layout.width !== undefined) {
-    entries.push(`width: ${String(layout.width)}`);
-  }
-  if (layout.height !== undefined) {
-    entries.push(`height: ${String(layout.height)}`);
-  }
-  if (layout.text_align !== undefined) {
-    entries.push(`text_align: ${tsString(layout.text_align)}`);
-  }
-  return `{ ${entries.join(", ")} }`;
 }
 
 // ── Test-script generation ───────────────────────────────────────────────────
 
-// Renders the whole log as a self-contained Vitest test body. The emitted
-// script constructs a fresh `DocumentStore`, seeds it with the project's
-// baseline HCL (the state before the traced session began — matching how the
-// UI loads the primary file before each edit), replays every recorded action,
-// and asserts the canonical `systemHcl` matches the state the traced session
-// produced. Copying the block into a `*.test.ts` reproduces the exact model
+// Renders the whole log as a self-contained Vitest test. The emitted script
+// seeds an in-memory `system.hcl` with the pre-session baseline, replays
+// every recorded action through `applyModelMutation` (real Rust execution,
+// real canonical writes), and asserts the file matches the traced final
+// state. Copying the block into a `*.test.ts` reproduces the exact model
 // state (and any bug that depends on it).
 export function asTestScript(
   actions: readonly ModelAction[],
   finalHcl: string,
-  opts: { projVar?: string; testName?: string; baselineHcl?: string } = {},
+  opts: { testName?: string; baselineHcl?: string } = {},
 ): string {
-  const projVar = opts.projVar ?? "project";
   const testName = opts.testName ?? "replays the traced model-editor session";
+  const baseline = opts.baselineHcl ?? "";
   const lines: string[] = [
-    `import { describe, expect, it } from "vitest";`,
-    `import { DocumentStore } from "./DocumentStore.svelte";`,
+    `import { beforeAll, describe, expect, it } from "vitest";`,
+    `import init from "rhizz";`,
+    `import * as nodeFs from "node:fs/promises";`,
+    `import * as nodePath from "node:path";`,
+    `import { applyModelMutation } from "./history/applyMutation";`,
+    ``,
+    `beforeAll(async () => {`,
+    `  const wasmPath = nodePath.resolve(`,
+    `    __dirname,`,
+    `    "../../crates/rhizz-wasm/pkg/rhizz_wasm_bg.wasm",`,
+    `  );`,
+    `  const buffer = await nodeFs.readFile(wasmPath);`,
+    `  await init({ module_or_path: buffer });`,
+    `});`,
     ``,
     `describe("model editor replay", () => {`,
-    `  it(${tsString(testName)}, () => {`,
-    `    const ${projVar} = new DocumentStore();`,
+    `  it(${tsString(testName)}, async () => {`,
+    `    const files = new Map<string, string>([["system.hcl", ${
+      tsTemplate(baseline)
+    }]]);`,
+    `    const fs = {`,
+    `      readFile: (filePath: string) =>`,
+    `        Promise.resolve(files.get(filePath) ?? ""),`,
+    `      writeFile: (filePath: string, content: string) => {`,
+    `        files.set(filePath, content);`,
+    `        return Promise.resolve();`,
+    `      },`,
+    `    };`,
   ];
-  if (opts.baselineHcl !== undefined && opts.baselineHcl !== "") {
-    lines.push(`    ${projVar}.loadFromHcl(${tsTemplate(opts.baselineHcl)});`);
-  }
   for (const action of actions) {
-    lines.push(`    ${encodeCall(action, projVar)}`);
+    lines.push(`    ${encodeCall(action, "fs")}`);
   }
   lines.push(
-    `    expect(${projVar}.systemHcl).toBe(${tsTemplate(finalHcl)});`,
+    `    expect(files.get("system.hcl")).toBe(${tsTemplate(finalHcl)});`,
     `  });`,
     `});`,
     ``,

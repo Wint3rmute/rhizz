@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  apply_model_op,
   compile_system,
   get_example_projects,
   parse_views,
@@ -221,6 +222,83 @@ system "demo" {
       to: c2Idx,
       label: "link",
     });
+  });
+
+  it("applies model ops to canonical HCL with logged actions", () => {
+    const addSystem = apply_model_op("system.hcl", "", {
+      kind: "add_system",
+      label: "demo",
+    });
+    expect(addSystem.applied).toBe(true);
+    if (addSystem.hcl === undefined) throw new Error("expected hcl");
+    expect(addSystem.actions).toEqual([
+      { op: "add_system", label: "demo", description: "" },
+    ]);
+
+    const addDef = apply_model_op("system.hcl", addSystem.hcl, {
+      kind: "add_component_definition",
+      label: "cpu",
+      options: { leaf: true },
+    });
+    expect(addDef.applied).toBe(true);
+    if (addDef.hcl === undefined) throw new Error("expected hcl");
+
+    const inst = apply_model_op("system.hcl", addDef.hcl, {
+      kind: "add_instance",
+      parentPath: "demo",
+      label: "a",
+      source: "cpu",
+    });
+    expect(inst.applied).toBe(true);
+    if (inst.hcl === undefined) throw new Error("expected hcl");
+    expect(inst.hcl).toContain('instance "a" { source = "cpu" }');
+
+    const renamed = apply_model_op("system.hcl", inst.hcl, {
+      kind: "rename_component",
+      path: "demo/a",
+      newLabel: "b",
+    });
+    expect(renamed.applied).toBe(true);
+    expect(renamed.actions).toEqual([
+      { op: "rename_component", path: "demo/a", newLabel: "b" },
+    ]);
+  });
+
+  it("refuses broken baselines and dangling deletes with diagnostics", () => {
+    const broken = apply_model_op(
+      "system.hcl",
+      'system "demo" {\n  this is not valid hcl!!!\n}\n',
+      { kind: "add_system", label: "other" },
+    );
+    expect(broken.applied).toBe(false);
+    expect(broken.hcl).toBeUndefined();
+    expect(broken.diagnostics.length).toBeGreaterThan(0);
+    expect(broken.diagnostics[0]?.code.startsWith("E")).toBe(true);
+
+    const seed = apply_model_op("system.hcl", "", {
+      kind: "add_component_definition",
+      label: "cpu",
+      options: { leaf: true },
+    });
+    if (seed.hcl === undefined) throw new Error("expected hcl");
+    const sys = apply_model_op("system.hcl", seed.hcl, {
+      kind: "add_system",
+      label: "demo",
+    });
+    if (sys.hcl === undefined) throw new Error("expected hcl");
+    const placed = apply_model_op("system.hcl", sys.hcl, {
+      kind: "add_instance",
+      parentPath: "demo",
+      label: "a",
+      source: "cpu",
+    });
+    if (placed.hcl === undefined) throw new Error("expected hcl");
+    const dangling = apply_model_op("system.hcl", placed.hcl, {
+      kind: "delete_component",
+      path: "cpu",
+    });
+    expect(dangling.applied).toBe(false);
+    expect(dangling.diagnostics.some((d) => d.code === "E014")).toBe(true);
   });
 
   it("returns embedded example projects from WASM", () => {

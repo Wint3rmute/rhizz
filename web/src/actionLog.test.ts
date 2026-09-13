@@ -20,53 +20,28 @@ describe("actionLog", () => {
     expect(log.actions()).toEqual([]);
   });
 
-  it("encodes a new_project call", () => {
-    expect(
-      encodeCall(
-        { op: "new_project", name: "drone", version: "1.0.0", authors: ["A"] },
-        "project",
-      ),
-    ).toBe('project.setProject("drone", "1.0.0", ["A"]);');
-  });
-
-  it("encodes an add_system call", () => {
+  it("encodes an add_system call as a dispatcher op", () => {
     expect(
       encodeCall(
         { op: "add_system", label: "main", description: "A system" },
-        "p",
+        "fs",
       ),
-    ).toBe('p.addSystem("main", "A system");');
-  });
-
-  it("encodes an add_component_definition call with ports", () => {
-    const action: ModelAction = {
-      op: "add_component_definition",
-      label: "drone",
-      leaf: false,
-      description: "",
-      tags: ["power"],
-      icon: "rocket",
-      color: "primary",
-      border: "dashed",
-      font: "bold",
-      ports: [{ label: "rf", role: "peer" }],
-    };
-    expect(encodeCall(action, "project")).toBe(
-      'project.addComponentDefinition("drone", { tags: ["power"], icon: "rocket", color: "primary", border: "dashed", font: "bold", ports: [{ label: "rf", role: "peer" }] });',
+    ).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_system","label":"main","description":"A system"});',
     );
   });
 
-  it("omits the options object when a definition has no extra fields", () => {
+  it("encodes an add_component_definition call with options JSON", () => {
     const action: ModelAction = {
       op: "add_component_definition",
       label: "drone",
-      leaf: false,
+      leaf: true,
       description: "",
       tags: [],
       ports: [],
     };
-    expect(encodeCall(action, "project")).toBe(
-      'project.addComponentDefinition("drone");',
+    expect(encodeCall(action, "fs")).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_component_definition","label":"drone","options":{"leaf":true,"description":"","tags":[],"ports":[]}});',
     );
   });
 
@@ -80,25 +55,27 @@ describe("actionLog", () => {
         leaf: true,
       },
     };
-    expect(encodeCall(action, "project")).toBe(
-      'project.updateComponent("main/drone", { description: "A quadcopter", tags: ["power", "flight"], leaf: true });',
+    expect(encodeCall(action, "fs")).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"update_component","path":"main/drone","patch":{"description":"A quadcopter","tags":["power","flight"],"leaf":true}});',
     );
   });
 
-  it("encodes an add_connection call", () => {
-    const action: ModelAction = {
-      op: "add_connection",
-      scopePath: "main",
-      label: "rf-link",
-      from: "drone",
-      to: "antenna",
-    };
-    expect(encodeCall(action, "project")).toBe(
-      'project.addConnection("main", { label: "rf-link", from: "drone", to: "antenna" });',
+  it("encodes delete_connection via the by-label op", () => {
+    expect(
+      encodeCall(
+        {
+          op: "delete_connection",
+          scopePath: "main",
+          label: "rf-link",
+        },
+        "fs",
+      ),
+    ).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"delete_connection_by_label","label":"rf-link"});',
     );
   });
 
-  it("encodes add_port, add_protocol and update_node_layout calls", () => {
+  it("renders non-model actions as replay no-op comments", () => {
     expect(
       encodeCall(
         {
@@ -111,17 +88,17 @@ describe("actionLog", () => {
             external: true,
           },
         },
-        "project",
+        "fs",
       ),
-    ).toBe(
-      'project.addPort("main/drone", "rf", "data", "provider", true, true);',
-    );
+    ).toBe("// add_port is not replayable through model ops (no-op in replay)");
     expect(
       encodeCall(
         { op: "add_protocol", label: "data", description: "A data protocol" },
-        "project",
+        "fs",
       ),
-    ).toBe('project.addProtocol("data", "A data protocol");');
+    ).toBe(
+      "// add_protocol is not replayable through model ops (no-op in replay)",
+    );
     expect(
       encodeCall(
         {
@@ -130,14 +107,22 @@ describe("actionLog", () => {
           componentKey: "main/drone",
           layout: { x: 100, y: 200, width: 120, text_align: "top-left" },
         },
-        "project",
+        "fs",
       ),
     ).toBe(
-      'project.updateNodeLayout("main", "main/drone", { x: 100, y: 200, width: 120, text_align: "top-left" });',
+      "// update_node_layout is not replayable through model ops (no-op in replay)",
+    );
+    expect(
+      encodeCall(
+        { op: "new_project", name: "drone", version: "1.0.0", authors: ["A"] },
+        "fs",
+      ),
+    ).toBe(
+      "// new_project is not replayable through model ops (no-op in replay)",
     );
   });
 
-  it("escapes quotes and backslashes in labels", () => {
+  it("round-trips quotes and backslashes through op JSON", () => {
     const action: ModelAction = {
       op: "add_component_definition",
       label: 'say "hi" \\ now',
@@ -146,14 +131,17 @@ describe("actionLog", () => {
       tags: [],
       ports: [],
     };
-    expect(encodeCall(action, "project")).toContain(
-      'project.addComponentDefinition("say \\"hi\\" \\\\ now", { leaf: true });',
-    );
+    const line = encodeCall(action, "fs");
+    const opJson = line.slice(line.indexOf("{"), line.lastIndexOf("}") + 1);
+    expect(JSON.parse(opJson)).toEqual({
+      kind: "add_component_definition",
+      label: 'say "hi" \\ now',
+      options: { leaf: true, description: "", tags: [], ports: [] },
+    });
   });
 
   it("renders a full replayable test script", () => {
     const actions: ModelAction[] = [
-      { op: "new_project", name: "drone", version: "0.1.0", authors: [] },
       { op: "add_system", label: "main", description: "" },
       {
         op: "add_component_definition",
@@ -169,28 +157,25 @@ describe("actionLog", () => {
         label: "drone",
         source: "drone",
       },
-      {
-        op: "add_connection",
-        scopePath: "main",
-        label: "rf-link",
-        from: "drone",
-        to: "antenna",
-      },
     ];
-    const script = asTestScript(actions, "project { ... }");
+    const script = asTestScript(actions, "<final>");
     expect(script).toContain(
-      'import { describe, expect, it } from "vitest";',
+      'import { beforeAll, describe, expect, it } from "vitest";',
+    );
+    expect(script).toContain('import init from "rhizz";');
+    expect(script).toContain(
+      'import { applyModelMutation } from "./history/applyMutation";',
+    );
+    expect(script).toContain("beforeAll(async () => {");
+    expect(script).toContain('[["system.hcl", ``]]');
+    expect(script).toContain(
+      '{"kind":"add_system","label":"main","description":""}',
     );
     expect(script).toContain(
-      'import { DocumentStore } from "./DocumentStore.svelte";',
-    );
-    expect(script).toContain("const project = new DocumentStore();");
-    expect(script).toContain('project.addSystem("main", "");');
-    expect(script).toContain(
-      'project.addConnection("main", { label: "rf-link", from: "drone", to: "antenna" });',
+      '{"kind":"add_instance","parentPath":"main","label":"drone","source":"drone"}',
     );
     expect(script).toContain(
-      "expect(project.systemHcl).toBe(`project { ... }`);",
+      'expect(files.get("system.hcl")).toBe(`<final>`);',
     );
   });
 
@@ -209,11 +194,9 @@ describe("actionLog", () => {
 
     // Newlines are preserved as literal newlines inside backticks, not escaped
     // into \n — so the emitted source stays as readable as the HCL itself.
+    expect(script).toContain('[["system.hcl", `system "demo" {');
     expect(script).toContain(
-      '    project.loadFromHcl(`system "demo" {\n  instance "a" {',
-    );
-    expect(script).toContain(
-      '    expect(project.systemHcl).toBe(`system "demo" {\n  instance "b" {',
+      'expect(files.get("system.hcl")).toBe(`system "demo" {\n  instance "b" {',
     );
   });
 
@@ -224,22 +207,7 @@ describe("actionLog", () => {
     expect(script).toContain(`toBe(\`label = \\\`x\\\` and \\\${y}\`)`);
   });
 
-  it("encodes an add_instance call", () => {
-    const action: ModelAction = {
-      op: "add_instance",
-      parentPath: "testing-harness",
-      label: "engine",
-      source: "engine",
-    };
-    expect(encodeCall(action, "project")).toBe(
-      'project.addInstance("testing-harness", "engine", "engine");',
-    );
-  });
-
-  it("emits the expected baseline (pre-session state), not the post-session state", () => {
-    // The user's trace: baseline already contains drone/engine + a drone system.
-    // The replay must seed from the *pre-session* baseline (an empty project),
-    // then apply the mutations once — never double-apply them.
+  it("seeds the pre-session baseline and applies actions exactly once", () => {
     const preSessionBaseline = `project {
 }
 `;
@@ -258,11 +226,15 @@ describe("actionLog", () => {
       baselineHcl: preSessionBaseline,
     });
     // The baseline seeded into the replay is the pre-session content.
-    expect(script).toContain("    project.loadFromHcl(`project {\n}");
-    // And the actions are applied exactly once.
-    expect(script).toContain('project.addSystem("drone", "");');
-    expect(script).toContain(
-      'project.addComponentDefinition("engine", { leaf: true });',
-    );
+    expect(script).toContain('[["system.hcl", `project {\n}\n`]]');
+    // And each action is applied exactly once.
+    expect(
+      script.split('{"kind":"add_system","label":"drone","description":""}')
+        .length - 1,
+    ).toBe(1);
+    expect(
+      script.split('"kind":"add_component_definition","label":"engine"')
+        .length - 1,
+    ).toBe(1);
   });
 });
