@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "chapter": "basics.md",
+      "chapter": "01_basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    description = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
       "input_sha256": "a5821a30e07f6aa317009b666d79611c367f011268341d5a1cdcdf43bb420e1b",
       "output": {
@@ -34,7 +34,7 @@
       }
     },
     {
-      "chapter": "basics.md",
+      "chapter": "01_basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
       "input_sha256": "c6df9297fcd60ca8df1f49594b62ba4996109c49612ea0d4d35f3af9382b741a",
       "output": {
@@ -76,7 +76,7 @@
       }
     },
     {
-      "chapter": "basics.md",
+      "chapter": "01_basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n}",
       "input_sha256": "e60a19d0d7a42325a736f04e05be52a9d526b2796a98fe1af3a3dfc9803c7204",
       "output": {
@@ -114,7 +114,7 @@
       }
     },
     {
-      "chapter": "basics.md",
+      "chapter": "01_basics.md",
       "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}\n\nsystem \"also-nothing\" {\n  description = \"Nothingness 2.0: Electric Bongaloo\"\n}",
       "input_sha256": "ea62c8ea8a728e4fae990f0287978800f2d93189bad9eeee612d385193777b5c",
       "output": {
@@ -147,7 +147,7 @@
       }
     },
     {
-      "chapter": "basics.md",
+      "chapter": "01_basics.md",
       "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}",
       "input_sha256": "fa10bcd472f8d57c7e8b5444c160fc7f8f73a0d0296583dfdaa0a1905243289c",
       "output": {
@@ -180,7 +180,7 @@
       }
     },
     {
-      "chapter": "connections_ports.md",
+      "chapter": "03_connections_ports.md",
       "hcl": "component \"computer\" {\n  description = \"Personal Computer (PC)\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\ncomponent \"mouse\" {\n  description = \"Computer Mouse\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\nsystem \"work-computer\" {\n  description = \"My work computer\"\n  instance \"computer\" { source = \"computer\" }\n  instance \"mouse\" { source = \"mouse\" }\n\n  connection \"mouse-to-computer\" {\n    description = \"Mouse connected to the PC by a USB-C cable\"\n    from = \"computer/usb-c\"\n    to = \"mouse/usb-c\"\n  }\n}",
       "input_sha256": "630dc0355ff1cf2008b550835b8d88ce7fb4e422429b6099d34d41e7f3e63048",
       "output": {
@@ -213,7 +213,7 @@
       }
     },
     {
-      "chapter": "connections_ports.md",
+      "chapter": "03_connections_ports.md",
       "hcl": "component \"server\" {\n  description = \"Server in the cloud\"\n  leaf = true\n}\n\ncomponent \"client\" {\n  description = \"Client's computer\"\n  leaf = true\n}\n\nsystem \"banking-application\" {\n  description = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    description = \"REST API with OAuth2\"\n    from = \"server\"\n    to = \"client\"\n  }\n}",
       "input_sha256": "c1426e020bdd5ab8e52b3cf3171956f7737f8aa16aeea57fc80b40641ff8b2fc",
       "output": {
@@ -246,7 +246,7 @@
       }
     },
     {
-      "chapter": "sketch.md",
+      "chapter": "04_warnings_errors.md",
       "hcl": "project {\n  name = \"sketch\"\n}\n\nprotocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  component \"controller\" {\n    leaf = true\n\n    port \"uart\" {\n      protocol = \"serial\"\n    }\n  }\n\n  component \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
       "input_sha256": "b152e530691ecdfad4caa46930628fb375578bf1de9b57ad0b8d770a8d60644c",
       "output": {
@@ -283,51 +283,12 @@
           }
         ]
       }
-    },
-    {
-      "chapter": "wiring-bug.md",
-      "hcl": "project {\n  name = \"wiring-bug\"\n}\n\nprotocol \"greeting\" {\n  description = \"A simple greeting\"\n\n  message \"hello\" {\n    description = \"The greeting payload\"\n    field \"text\" { type = \"string\" }\n  }\n}\n\nsystem \"app\" {\n  description = \"Two components with a broken connection\"\n\n  component \"sender\" {\n    description = \"Sends a greeting\"\n    leaf        = true\n\n    port \"out\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  component \"receiver\" {\n    description = \"Receives a greeting\"\n    leaf        = true\n\n    port \"in\" {\n      protocol = \"greeting\"\n    }\n  }\n\n  connection \"greet\" {\n    from = \"sender/outgoing\" // typo: this port does not exist\n    to   = \"receiver/in\"\n  }\n}",
-      "input_sha256": "4f58b6a87ec8e504d5c64c18e73f7061d5376d85bad577ba617bb0dece3e1855",
-      "output": {
-        "errors": [
-          {
-            "code": "E011",
-            "message": "connection 'greet' references undefined component 'receiver' in 'to'"
-          },
-          {
-            "code": "E011",
-            "message": "connection 'greet' references undefined component 'sender' in 'from'"
-          }
-        ],
-        "warnings": [
-          {
-            "code": "W004",
-            "message": "connection 'greet' is missing a description"
-          },
-          {
-            "code": "W005",
-            "message": "connection 'greet' has 'from' and 'to' pointing to the same component"
-          },
-          {
-            "code": "W012",
-            "message": "top-level protocol 'greeting' is not referenced by any port"
-          },
-          {
-            "code": "W015",
-            "message": "unexpected block type 'component' inside system ignored"
-          },
-          {
-            "code": "W015",
-            "message": "unexpected block type 'component' inside system ignored"
-          }
-        ]
-      }
     }
   ],
   "format": 1,
   "projects": [
     {
-      "chapter": "basics.md",
+      "chapter": "01_basics.md",
       "files": [
         {
           "path": "diagrams/main.hcl",
@@ -370,7 +331,7 @@
       "src": "basics/demo"
     },
     {
-      "chapter": "views-intro.md",
+      "chapter": "02_views-intro.md",
       "files": [
         {
           "path": "diagrams/overview.hcl",
@@ -417,7 +378,7 @@
       "src": "views-intro/1_example_simple"
     },
     {
-      "chapter": "views-intro.md",
+      "chapter": "02_views-intro.md",
       "files": [
         {
           "path": "diagrams/overview.hcl",
