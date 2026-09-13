@@ -13,6 +13,160 @@ How to work on this file:
 
 ---
 
+## Task <N> - Codebase Architecture Audit
+
+You are performing a read-only architecture and maintainability audit of this
+existing codebase.
+
+Do NOT modify any source code, tests, configuration, or project files.
+
+Your findings must be written to:
+
+    audit/architecture.md
+
+Create the `audit/` directory if it does not exist.
+
+Do not output your findings, analysis, or report to the user/chat. The audit
+file is the deliverable. Once it has been written, terminate the task.
+
+### Repository context
+
+This is an established codebase with:
+- AGENTS.md, SPEC.md, README.md, other developer/agent documentation
+- strict linters and type checking
+- substantial automated tests, including unit, integration, and end-to-end tests
+- a TypeScript frontend
+- a Rust CLI, backend and a WASM library for sharing business logic with the frontend
+
+Read the repository broadly before forming conclusions. Include relevant
+documentation, tests, build configuration, and tooling in your understanding
+of the architecture.
+
+### What to look for
+
+The primary goal is to find problems that are difficult to see when looking
+at individual files but become apparent when considering the entire system.
+
+Pay particular attention to:
+
+- The same concept implemented independently in multiple places.
+- Logic duplicated between the TypeScript frontend and Rust backend where one
+  side could reasonably own the responsibility.
+- Multiple abstractions which ultimately perform the same job.
+- Locally sensible abstractions that become redundant at the system level.
+- Multiple representations of the same domain concept that can drift apart.
+- Repeated validation, transformation, serialization, parsing, error handling,
+  state management, or business rules.
+- Thin wrappers or layers that provide little actual value.
+- Functionality introduced to solve a local problem that is now unnecessary
+  because another mechanism elsewhere already solves it.
+- Similar functionality implemented differently in different subsystems.
+- Frontend/backend boundaries that cause unnecessary duplication.
+- Over-engineering, unnecessary generality, or excessive indirection.
+- Dead or effectively unreachable functionality.
+- Architectural decisions that make future changes unnecessarily expensive.
+
+#### TypeScript / Rust boundary
+
+Trace important concepts and operations across the frontend/backend boundary.
+
+Look for cases where both sides independently implement substantial portions
+of the same:
+- validation
+- business rules
+- state transitions
+- transformations
+- domain modeling
+- error handling
+- derived data
+
+Do not automatically consider duplication across the API boundary a problem.
+Distinguish intentional protocol/API contracts from duplicated implementation
+logic.
+
+### What NOT to optimize for
+
+Do not report:
+
+- purely stylistic preferences
+- changes based solely on how you personally would structure the code
+- fashionable architectural patterns
+- line-count reduction for its own sake
+- speculative performance improvements
+- minor naming or formatting issues
+- problems already intentionally handled by existing tooling
+- abstractions merely because they could theoretically be removed
+
+Assume existing abstractions may be intentional.
+
+Only report a finding when there is concrete evidence that it introduces
+unnecessary complexity, duplication, coupling, or maintenance cost.
+
+### Findings
+
+Prioritize findings by impact rather than by the number of occurrences.
+
+For each significant finding, include:
+
+### [Short descriptive title]
+
+**Impact:** High / Medium / Low
+
+**Confidence:** High / Medium / Low
+
+**Locations:**
+- relevant files, modules, symbols, or components
+
+**Problem**
+
+Describe what is happening.
+
+**Why it looks reasonable locally**
+
+Explain why an engineer working on an individual component could reasonably
+have made this decision.
+
+**Why it is problematic globally**
+
+Explain the system-level redundancy, coupling, duplication, or complexity that
+becomes visible when considering the whole repository.
+
+**Potential simplification**
+
+Describe the simplest plausible architectural change. Do not implement it.
+
+**Evidence**
+
+Reference the concrete code and relationships that led to the conclusion.
+
+Avoid speculative findings. If evidence is insufficient, do not include the
+finding.
+
+### Final section
+
+End `audit/architecture.md` with:
+
+### Highest-value findings
+
+List the 3–10 findings that are most worth investigating, ordered by expected
+impact.
+
+If the audit does not reveal significant architectural problems, explicitly
+state that rather than inventing findings.
+
+### Important execution constraint
+
+This is an autonomous audit.
+
+Do not ask the user questions.
+Do not wait for user feedback.
+Do not present findings in chat.
+Do not modify anything outside `audit/architecture.md`.
+
+Your final action should be writing the completed report to:
+
+    audit/architecture.md
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
