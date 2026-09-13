@@ -2,8 +2,8 @@
   "entries": [
     {
       "chapter": "01_basics.md",
-      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    description = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
-      "input_sha256": "a5821a30e07f6aa317009b666d79611c367f011268341d5a1cdcdf43bb420e1b",
+      "hcl": "component \"tire\" {\n  description = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  description = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
+      "input_sha256": "7d56d605d17bad608fad2d09c1bfa6f2553824010a3efd42e42a8fb7ab0997c5",
       "output": {
         "errors": [],
         "score": {
@@ -13,7 +13,7 @@
           },
           "connections": {
             "complete": 0,
-            "total": 3
+            "total": 0
           },
           "messages": {
             "complete": 0,
@@ -21,8 +21,8 @@
           },
           "overall": {
             "complete": 7,
-            "percent": 70.0,
-            "total": 10
+            "percent": 100.0,
+            "total": 7
           },
           "ports": {
             "complete": 0,
@@ -30,7 +30,28 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          }
+        ]
       }
     },
     {
@@ -71,6 +92,52 @@
           {
             "code": "W003",
             "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "01_basics.md",
+      "hcl": "component \"tire\" {\n  description = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  description = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    description = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
+      "input_sha256": "d608f4bbe5322497d8eeca5659feaa80fc290ec8349d3c3b3afa79a5bb2f874c",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 11,
+            "total": 11
+          },
+          "connections": {
+            "complete": 0,
+            "total": 3
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 11,
+            "percent": 78.6,
+            "total": 14
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
           }
         ]
       }
@@ -247,39 +314,46 @@
     },
     {
       "chapter": "04_warnings_errors.md",
-      "hcl": "project {\n  name = \"sketch\"\n}\n\nprotocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  component \"controller\" {\n    leaf = true\n\n    port \"uart\" {\n      protocol = \"serial\"\n    }\n  }\n\n  component \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
-      "input_sha256": "b152e530691ecdfad4caa46930628fb375578bf1de9b57ad0b8d770a8d60644c",
+      "hcl": "protocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\ncomponent \"controller\" {\n  leaf = true\n\n  port \"uart\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  instance \"controller\" {\n    source = \"controller\"\n  }\n\n  instance \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
+      "input_sha256": "21cd28baaf7d6a4632685acd44c54bee6a67513ed45e3c64db1c95beb931f63f",
       "output": {
-        "errors": [
-          {
-            "code": "E011",
-            "message": "connection 'link' references undefined component 'controller' in 'from'"
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 2,
+            "total": 4
           },
-          {
-            "code": "E011",
-            "message": "connection 'link' references undefined component 'sensor' in 'to'"
-          }
-        ],
+          "connections": {
+            "complete": 1,
+            "total": 1
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 3,
+            "percent": 44.4,
+            "total": 9
+          },
+          "ports": {
+            "complete": 0,
+            "total": 4
+          },
+          "system": ""
+        },
         "warnings": [
+          {
+            "code": "W004",
+            "message": "component 'controller' is missing a description"
+          },
           {
             "code": "W004",
             "message": "connection 'link' is missing a description"
           },
           {
-            "code": "W005",
-            "message": "connection 'link' has 'from' and 'to' pointing to the same component"
-          },
-          {
             "code": "W011",
             "message": "protocol 'serial' has no messages defined"
-          },
-          {
-            "code": "W015",
-            "message": "unexpected block type 'component' inside system ignored"
-          },
-          {
-            "code": "W015",
-            "message": "unexpected block type 'component' inside system ignored"
           }
         ]
       }
@@ -292,41 +366,54 @@
       "files": [
         {
           "path": "diagrams/main.hcl",
-          "sha256": "f97fb7395c16a583159cef104ec7ddf83d28d1e92600a055822ffe57d335a842"
+          "sha256": "fa324ce5491316606c4d3ae4740265cb3c93c996db78b78bc29af3be37a6cb74"
         },
         {
           "path": "system.hcl",
-          "sha256": "f8e41a5ad0d83ec1c6eb6f65071058372b45da004ccd40740fc1be38ecd2a7f0"
+          "sha256": "5fec2bca183aa7ad5c25c9f5aaa097c0f3394ddc27556497288da60dc318ac10"
         }
       ],
-      "input_sha256": "3851ef8c68cba7bdfcf7da9e5a6c5a483159fa7eabb56351d854d41504250da5",
+      "input_sha256": "cd087e9b97bc2d21a279ebc17f80e21d5a880ee7f7c1466feaba48f16797d971",
       "output": {
         "errors": [],
         "score": {
           "components": {
-            "complete": 4,
-            "total": 4
+            "complete": 11,
+            "total": 11
           },
           "connections": {
-            "complete": 1,
-            "total": 1
+            "complete": 0,
+            "total": 3
           },
           "messages": {
-            "complete": 1,
-            "total": 1
+            "complete": 0,
+            "total": 0
           },
           "overall": {
-            "complete": 10,
-            "percent": 100.0,
-            "total": 10
+            "complete": 11,
+            "percent": 78.6,
+            "total": 14
           },
           "ports": {
-            "complete": 4,
-            "total": 4
+            "complete": 0,
+            "total": 0
           },
-          "system": "book-demo"
+          "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          }
+        ]
       },
       "src": "basics/demo"
     },

@@ -38,7 +38,7 @@ other and that's it. What if we wanted to dig deeper, how about:
 > [!NOTE]
 > Programmers reading this probably think about `ports` in terms of
 > [networking](https://en.wikipedia.org/wiki/Port_(computer_networking)).
-> In the case of this book, please switch into a more generic definition of
+> In the case of this book, think about a more broad/generic definition of
 > "something to connect to".
 
 While this model compiles without any errors, the model completion score
