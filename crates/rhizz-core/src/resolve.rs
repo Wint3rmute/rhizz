@@ -151,7 +151,6 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         sid: SystemId,
         label: String,
         connections: Vec<Labeled<RawConnection>>,
-        system_level: i32,
     }
     let mut pending_systems: Vec<SystemWork> = Vec::new();
 
@@ -166,13 +165,13 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
         let sid = SystemId(r.model.systems.len());
         r.system_label_index.insert(ls.label.clone(), sid);
-        let system_level = ls.inner.level.unwrap_or(0);
+        // Systems are implicitly level 0 (SPEC.md §2.2).
+        let system_level = 0;
 
         r.model.systems.push(System {
             label: ls.label.clone(),
             description: ls.inner.description.clone().unwrap_or_default(),
             tags: ls.inner.tags.clone(),
-            level: system_level,
             components: vec![],
             connections: vec![],
         });
@@ -214,20 +213,13 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             sid,
             label: ls.label,
             connections: ls.inner.connections,
-            system_level,
         });
     }
 
-    // Phase B: system-level connections
+    // Phase B: system-level connections (systems are implicitly level 0).
     for sw in pending_systems {
         let scope = Scope::System(sw.sid);
-        let conn_ids = process_connections_in_scope(
-            &mut r,
-            &sw.connections,
-            scope,
-            sw.system_level,
-            &sw.label,
-        );
+        let conn_ids = process_connections_in_scope(&mut r, &sw.connections, scope, 0, &sw.label);
 
         // Resolve encapsulates now that all sibling connections are registered.
         for (lc, cid) in sw.connections.iter().zip(conn_ids.iter()) {
@@ -1510,7 +1502,6 @@ mod tests {
             component "a" { leaf = true }
             component "b" { leaf = true }
             system "s" {
-              level = 0
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
@@ -1522,8 +1513,7 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
 
-        // Default level: system=0, component=1, connection=1 (parent_level+1)
-        assert_eq!(model.systems[0].level, 0);
+        // Default level: system implicitly 0, component=1, connection=1 (parent_level+1)
         assert_eq!(model.components[0].level, 1);
         assert_eq!(model.connections[0].level, 1);
         // Default description = ""

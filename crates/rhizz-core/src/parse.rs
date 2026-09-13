@@ -121,8 +121,6 @@ pub struct RawSystem {
     pub description: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
-    /// Optional explicit abstraction level.
-    pub level: Option<i32>,
     /// Child instance blocks (`instance "<local>" { source = "<def>" }`).
     pub instances: Vec<Labeled<RawInstance>>,
     /// Child connection blocks.
@@ -256,6 +254,9 @@ struct ProjectAttrs {
 }
 
 /// Serde helper for deserializing system attributes.
+///
+/// Note: no `level` — systems are implicitly level 0 (SPEC.md §2.2). An
+/// explicit `level` key is rejected by `deny_unknown_fields`.
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct SystemAttrs {
@@ -263,8 +264,6 @@ struct SystemAttrs {
     description: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
-    /// Optional abstraction level.
-    level: Option<i32>,
 }
 
 /// Serde helper for deserializing component attributes.
@@ -615,7 +614,6 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> ParseRes
     Ok(RawSystem {
         description: a.description,
         tags: a.tags.unwrap_or_default(),
-        level: a.level,
         instances,
         connections,
     })
@@ -1087,7 +1085,6 @@ mod tests {
             system "my-sys" {
                 description = "test"
                 tags = ["a", "b"]
-                level = 0
 
                 instance "c1" { source = "c1" }
                 connection "i1" {
@@ -1102,12 +1099,28 @@ mod tests {
         let sys = &raw.systems[0];
         assert_eq!(sys.label, "my-sys");
         assert_eq!(sys.inner.tags, vec!["a", "b"]);
-        assert_eq!(sys.inner.level, Some(0));
         assert_eq!(sys.inner.instances.len(), 1);
         assert_eq!(sys.inner.connections.len(), 1);
         let conn = &sys.inner.connections[0];
         assert_eq!(conn.inner.from.as_deref(), Some("c1"));
         assert_eq!(conn.inner.to.as_deref(), Some("c1"));
+    }
+
+    #[test]
+    fn system_level_rejected() {
+        // Systems are implicitly level 0 (SPEC.md §2.2) — a `level` key is
+        // rejected by `deny_unknown_fields` on `SystemAttrs`.
+        let src = r#"
+            system "my-sys" {
+                level = 0
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let err = parse_file(src, &path).expect_err("level on system must not parse");
+        assert!(
+            err.to_string().contains("level"),
+            "error should name the rejected key, got: {err}"
+        );
     }
 
     #[test]
