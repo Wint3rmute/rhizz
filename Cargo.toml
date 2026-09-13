@@ -6,7 +6,7 @@ members = [
     "crates/rhizz-wasm",
     "crates/rhizz-book",
 ]
-resolver = "2"
+resolver = "3"
 
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
