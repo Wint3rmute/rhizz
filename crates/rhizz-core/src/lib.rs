@@ -10,6 +10,7 @@ use tracing::instrument;
 pub mod diagnostics;
 pub mod examples;
 pub mod model;
+pub mod mutation;
 pub mod parse;
 pub mod resolve;
 pub mod score;
@@ -24,6 +25,7 @@ pub use model::{
     MessageId, Model, NodeLayout, Port, PortId, Project, Protocol, ProtocolId, System, SystemId,
     ViewDefinition, ViewFilterDefinition,
 };
+pub use mutation::{LoggedAction, ModelOp, MutationResult, mutate_to_hcl};
 pub use score::{CategoryScore, ScoreReport, score};
 pub use serialize::{parse_views, serialize_model, serialize_views};
 
@@ -210,7 +212,7 @@ fn validate_single_system_model(
     }
 }
 
-fn default_project_name(sources: &[&Source]) -> Option<String> {
+pub(crate) fn default_project_name(sources: &[&Source]) -> Option<String> {
     let paths: Vec<&Path> = sources
         .iter()
         .map(|source| Path::new(&source.filename))

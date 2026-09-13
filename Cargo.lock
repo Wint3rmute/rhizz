@@ -1184,6 +1184,7 @@ dependencies = [
  "hcl-rs",
  "proptest",
  "serde",
+ "serde_json",
  "thiserror",
  "tracing",
  "walkdir",
