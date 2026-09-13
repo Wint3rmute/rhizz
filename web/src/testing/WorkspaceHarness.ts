@@ -7,6 +7,7 @@ import {
   serialize_model,
 } from "../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../vfs/compile";
+import { applyModelMutation } from "../history/applyMutation";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
 import { InMemoryProjectStore } from "../vfs/inMemoryStore";
 
@@ -311,14 +312,14 @@ export class WorkspaceHarness {
     if (!selectedKey) throw new Error("No component selected");
     const primary = await this.primaryHclFile();
     const content = await this.fs.readFile(primary);
-    const doc = new DocumentStore();
-    doc.loadFromHcl(content);
-    if (!doc.updateComponent(selectedKey, patch)) {
+    const result = await applyModelMutation(this.fs, primary, content, {
+      kind: "update_component",
+      path: selectedKey,
+      patch,
+    });
+    if (!result.applied) {
       throw new Error(`Component ${selectedKey} not found in ${primary}`);
     }
-    const hcl = doc.canonicalHcl;
-    if (hcl === null) throw new Error("Refusing model write: blocking errors");
-    await this.fs.writeFile(primary, hcl);
     await this.recompile();
   }
 
