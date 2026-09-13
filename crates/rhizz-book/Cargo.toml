@@ -3,6 +3,7 @@ name = "rhizz-book"
 version = "0.1.0"
 edition = "2024"
 description = "mdBook preprocessor that compiles ```rhizz code blocks with the rhizz compiler and verifies them against book.lock"
+license.workspace = true
 
 [lints]
 workspace = true
