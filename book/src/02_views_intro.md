@@ -38,8 +38,7 @@ the view fails to render and the warning explains why:
 
 Rhizz decides what connections are visible in the view based on the components
 that are visible in the view. If selected components have connections, they will
-be displayed. This behavior ensures that you don't miss any connections
-accidentally.
+be displayed. This behavior ensures that you don't accidentally miss any connections.
 
 ## View syntax
 
