@@ -123,7 +123,6 @@ export interface SystemData {
   label: string;
   description?: string;
   tags?: string[];
-  level?: number;
   /** Placed `instance` children (source-bearing references to definitions). */
   components: ComponentData[];
   connections: ConnectionData[];
@@ -223,7 +222,6 @@ export interface RawModelPayload {
     label: string;
     description?: string;
     tags?: string[];
-    level?: number;
     components?: number[];
     connections?: number[];
   }[];
@@ -300,9 +298,7 @@ export class DocumentStore {
       if (sys.tags && sys.tags.length > 0) {
         lines.push(`  tags        = ${formatStringList(sys.tags)}`);
       }
-      if (sys.level !== undefined && sys.level !== 0) {
-        lines.push(`  level       = ${String(sys.level)}`);
-      }
+      // Systems are implicitly level 0 (SPEC.md §2.2) — never emitted.
 
       // Direct child instances, referenced via `source` pointing at their
       // top-level definition.
@@ -318,13 +314,13 @@ export class DocumentStore {
         lines.push("  }");
       }
 
-      // System-level connections
+      // System-level connections (systems are implicitly level 0).
       const sortedConns = [...sys.connections].sort((a, b) =>
         a.label.localeCompare(b.label)
       );
       for (const conn of sortedConns) {
         lines.push("");
-        this.serializeConnection(lines, conn, 1, sys.level ?? 0);
+        this.serializeConnection(lines, conn, 1, 0);
       }
 
       lines.push("}");
@@ -573,7 +569,6 @@ export class DocumentStore {
       label,
       description,
       tags: [],
-      level: 0,
       components: [],
       connections: [],
     };
@@ -1264,7 +1259,6 @@ export class DocumentStore {
       label: sys.label,
       description: sys.description ?? "",
       tags: sys.tags ?? [],
-      level: sys.level ?? 0,
       components: (sys.components ?? []).map((cid: number) => buildComp(cid)),
       connections: (sys.connections ?? []).map((connId: number) =>
         buildConn(connId, sys.label)
