@@ -1462,3 +1462,124 @@ mod tests {
         assert!(json.get("icon").is_none());
     }
 }
+
+#[cfg(test)]
+mod leaf_and_visual_tests {
+    use super::{DefinitionOptions, ModelOp, PatchJson, mutate_to_hcl};
+
+    #[test]
+    fn adding_child_clears_definition_leaf() {
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            "",
+            &ModelOp::AddDefinition {
+                label: "parent".to_owned(),
+                options: DefinitionOptions {
+                    leaf: Some(true),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::AddDefinition {
+                label: "child".to_owned(),
+                options: DefinitionOptions {
+                    leaf: Some(true),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::AddInstance {
+                parent_path: "parent".to_owned(),
+                label: "child".to_owned(),
+                source: "child".to_owned(),
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        // Only the child keeps its leaf flag; the parent lost it on gaining
+        // a child.
+        assert_eq!(hcl.matches("leaf        = true").count(), 1);
+    }
+
+    #[test]
+    fn update_maps_visuals_and_clears_empties() {
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            "",
+            &ModelOp::AddDefinition {
+                label: "comp".to_owned(),
+                options: DefinitionOptions {
+                    leaf: Some(true),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::Update {
+                path: "comp".to_owned(),
+                patch: PatchJson {
+                    color: Some("#00ff00".to_owned()),
+                    border: Some("dotted".to_owned()),
+                    font: Some("italic".to_owned()),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(hcl.contains(r##"color       = "#00ff00""##));
+        assert!(hcl.contains(r##"border      = "dotted""##));
+        assert!(hcl.contains(r##"font        = "italic""##));
+
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::Update {
+                path: "comp".to_owned(),
+                patch: PatchJson {
+                    color: Some(String::new()),
+                    border: Some("solid".to_owned()),
+                    font: None,
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(!hcl.contains("color       ="));
+        assert!(!hcl.contains("border      ="));
+
+        let bad = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::Update {
+                path: "comp".to_owned(),
+                patch: PatchJson {
+                    border: Some("groovy".to_owned()),
+                    ..Default::default()
+                },
+            },
+        );
+        assert!(bad.is_err());
+    }
+}
