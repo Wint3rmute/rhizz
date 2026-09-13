@@ -47,6 +47,14 @@ function notifyMutations(action: ModelAction): void {
   for (const observer of mutationObservers) observer(action);
 }
 
+/** Forwards a Rust-reported model action to the mutation observers.
+ * `applyModelMutation` executes ops in `rhizz-core`, so the store methods
+ * that used to notify never run on the write path — the dispatcher calls
+ * this with each action Rust reports instead. */
+export function recordModelAction(action: ModelAction): void {
+  notifyMutations(action);
+}
+
 export interface ProjectMetadata {
   name: string;
   version: string;
