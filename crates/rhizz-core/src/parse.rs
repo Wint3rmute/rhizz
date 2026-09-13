@@ -9,10 +9,69 @@ use crate::{Diagnostic, DiagnosticCode};
 ///   2. `parse_file` / `merge_into` that turn HCL text into those structs.
 ///
 /// No validation, no resolution — that is Task 2+.
-use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
 use tracing::instrument;
+
+// ── Typed parse errors ───────────────────────────────────────────────────────
+
+/// Strongly-typed parse failure carrying a [`DiagnosticCode`] plus a
+/// human-readable message with full cause chain.
+///
+/// `lib.rs` matches on `code` — no string sniffing for markers.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
+pub struct ParseError {
+    /// Machine-readable diagnostic class (E000 generic, E012 instance
+    /// exclusivity, E010 duplicate project).
+    pub code: DiagnosticCode,
+    /// User-facing message including nested `in ...` context.
+    pub message: String,
+}
+
+impl ParseError {
+    /// Generic HCL/attribute parse failure → E000.
+    pub fn e000(message: impl Into<String>) -> Self {
+        Self {
+            code: DiagnosticCode::E000,
+            message: message.into(),
+        }
+    }
+
+    /// Duplicate `project` block → E010.
+    pub fn e010(message: impl Into<String>) -> Self {
+        Self {
+            code: DiagnosticCode::E010,
+            message: message.into(),
+        }
+    }
+
+    /// `instance` exclusivity violation → E012.
+    pub fn e012(message: impl Into<String>) -> Self {
+        Self {
+            code: DiagnosticCode::E012,
+            message: message.into(),
+        }
+    }
+
+    /// Prepend `in ...` context, preserving the diagnostic code.
+    #[must_use]
+    pub fn with_prefix(self, ctx: impl Into<String>) -> Self {
+        Self {
+            code: self.code,
+            message: format!("{}: {}", ctx.into(), self.message),
+        }
+    }
+}
+
+impl From<anyhow::Error> for ParseError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::e000(format!("{err:#}"))
+    }
+}
+
+/// Shorthand for fallible parse functions.
+pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 // ── Raw model types ──────────────────────────────────────────────────────────
 
@@ -318,12 +377,14 @@ struct FieldAttrs {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Extract the first label from a block (e.g. `system "label" { … }`).
-fn first_label(block: &hcl::Block) -> Result<String> {
+fn first_label(block: &hcl::Block) -> ParseResult<String> {
     block
         .labels()
         .first()
         .map(|l| l.as_str().to_owned())
-        .ok_or_else(|| anyhow!("block '{}' is missing a label", block.identifier()))
+        .ok_or_else(|| {
+            ParseError::e000(format!("block '{}' is missing a label", block.identifier()))
+        })
 }
 
 /// Deserialize attribute-only fields from a body, discarding child blocks.
@@ -332,9 +393,10 @@ fn first_label(block: &hcl::Block) -> Result<String> {
 /// W015), so they are stripped before deserialization. This keeps
 /// `#[serde(deny_unknown_fields)]` scoped to attributes only: typos like
 /// `descripton` fail, while nested `port`/`instance`/`connection` blocks do not.
-fn attrs<T: for<'de> Deserialize<'de> + Default>(body: &hcl::Body) -> Result<T> {
+fn attrs<T: for<'de> Deserialize<'de> + Default>(body: &hcl::Body) -> ParseResult<T> {
     let filtered: hcl::Body = body.attributes().cloned().collect::<Vec<_>>().into();
-    hcl::from_body(filtered).context("failed to deserialize block attributes")
+    hcl::from_body::<T>(filtered)
+        .map_err(|e| ParseError::e000(format!("failed to deserialize block attributes: {e:#}")))
 }
 
 /// Deserializes a `border` attribute value into a [`BorderStyle`], accepting
@@ -355,7 +417,7 @@ where
 // ── Block parsers ─────────────────────────────────────────────────────────────
 
 /// Parse a `project` block body into a [`RawProject`].
-fn parse_project(body: &hcl::Body) -> Result<RawProject> {
+fn parse_project(body: &hcl::Body) -> ParseResult<RawProject> {
     let a: ProjectAttrs = attrs(body)?;
     Ok(RawProject {
         name: a.name,
@@ -365,7 +427,7 @@ fn parse_project(body: &hcl::Body) -> Result<RawProject> {
 }
 
 /// Parse a `field` block body into a [`RawField`].
-fn parse_field(body: &hcl::Body) -> Result<RawField> {
+fn parse_field(body: &hcl::Body) -> ParseResult<RawField> {
     let a: FieldAttrs = attrs(body)?;
     Ok(RawField {
         field_type: a.field_type,
@@ -376,13 +438,14 @@ fn parse_field(body: &hcl::Body) -> Result<RawField> {
 }
 
 /// Parse a `message` block body into a [`RawMessage`].
-fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
+fn parse_message(body: &hcl::Body) -> ParseResult<RawMessage> {
     let a: MessageAttrs = attrs(body)?;
     let mut fields = Vec::new();
     for block in body.blocks() {
         if block.identifier() == "field" {
             let label = first_label(block)?;
-            let inner = parse_field(block.body()).with_context(|| format!("in field '{label}'"))?;
+            let inner = parse_field(block.body())
+                .map_err(|e| e.with_prefix(format!("in field '{label}'")))?;
             fields.push(Labeled { label, inner });
         }
     }
@@ -395,7 +458,7 @@ fn parse_message(body: &hcl::Body) -> Result<RawMessage> {
 }
 
 /// Parse a `port` block body into a [`RawPort`].
-fn parse_port(body: &hcl::Body) -> Result<RawPort> {
+fn parse_port(body: &hcl::Body) -> ParseResult<RawPort> {
     let a: PortAttrs = attrs(body)?;
     Ok(RawPort {
         description: a.description,
@@ -408,14 +471,14 @@ fn parse_port(body: &hcl::Body) -> Result<RawPort> {
 }
 
 /// Parse a `protocol` block body into a [`RawProtocol`].
-fn parse_protocol(body: &hcl::Body) -> Result<RawProtocol> {
+fn parse_protocol(body: &hcl::Body) -> ParseResult<RawProtocol> {
     let a: ProtocolAttrs = attrs(body)?;
     let mut messages = Vec::new();
     for block in body.blocks() {
         if block.identifier() == "message" {
             let label = first_label(block)?;
-            let inner =
-                parse_message(block.body()).with_context(|| format!("in message '{label}'"))?;
+            let inner = parse_message(block.body())
+                .map_err(|e| e.with_prefix(format!("in message '{label}'")))?;
             messages.push(Labeled { label, inner });
         }
     }
@@ -428,7 +491,7 @@ fn parse_protocol(body: &hcl::Body) -> Result<RawProtocol> {
 }
 
 /// Parse a `connection` block body into a [`RawConnection`].
-fn parse_connection(body: &hcl::Body) -> Result<RawConnection> {
+fn parse_connection(body: &hcl::Body) -> ParseResult<RawConnection> {
     let a: ConnectionAttrs = attrs(body)?;
     Ok(RawConnection {
         description: a.description,
@@ -444,7 +507,10 @@ fn parse_connection(body: &hcl::Body) -> Result<RawConnection> {
 ///
 /// Unknown block types inside a component are skipped but recorded as a W015
 /// warning on `diagnostics` (so they surface instead of being silently ignored).
-fn parse_component(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<RawComponent> {
+fn parse_component(
+    body: &hcl::Body,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> ParseResult<RawComponent> {
     let a: ComponentAttrs = attrs(body)?;
     let mut ports = Vec::new();
     let mut instances = Vec::new();
@@ -453,20 +519,20 @@ fn parse_component(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Resul
         match block.identifier() {
             "port" => {
                 let label = first_label(block)?;
-                let inner =
-                    parse_port(block.body()).with_context(|| format!("in port '{label}'"))?;
+                let inner = parse_port(block.body())
+                    .map_err(|e| e.with_prefix(format!("in port '{label}'")))?;
                 ports.push(Labeled { label, inner });
             }
             "instance" => {
                 let label = first_label(block)?;
                 let inner = parse_instance(block.body())
-                    .with_context(|| format!("in instance '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in instance '{label}'")))?;
                 instances.push(Labeled { label, inner });
             }
             "connection" => {
                 let label = first_label(block)?;
                 let inner = parse_connection(block.body())
-                    .with_context(|| format!("in connection '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in connection '{label}'")))?;
                 connections.push(Labeled { label, inner });
             }
             other => {
@@ -495,18 +561,23 @@ fn parse_component(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Resul
 /// Parse an `instance "<local>" { source = "<definition>" }` block. An instance
 /// has no body — only a `source` attribute naming the definition it reuses.
 /// Any extra attribute or child block is an E012 exclusivity violation.
-fn parse_instance(body: &hcl::Body) -> Result<RawInstance> {
+fn parse_instance(body: &hcl::Body) -> ParseResult<RawInstance> {
     if let Some(block) = body.blocks().next() {
-        bail!(
-            "E012: instance block must contain only a 'source' attribute, found child block '{}'",
+        return Err(ParseError::e012(format!(
+            "instance block must contain only a 'source' attribute, found child block '{}'",
             block.identifier()
-        );
+        )));
     }
     let a: InstanceAttrs = attrs(body).map_err(|e| {
-        anyhow!("E012: instance block must contain only a 'source' attribute: {e:#}")
+        ParseError::e012(format!(
+            "instance block must contain only a 'source' attribute: {}",
+            e.message
+        ))
     })?;
     if a.source.is_none() {
-        bail!("instance block is missing a 'source' attribute");
+        return Err(ParseError::e000(
+            "instance block is missing a 'source' attribute",
+        ));
     }
     Ok(RawInstance { source: a.source })
 }
@@ -515,7 +586,7 @@ fn parse_instance(body: &hcl::Body) -> Result<RawInstance> {
 ///
 /// Unknown block types inside a system are skipped but recorded as a W015
 /// warning on `diagnostics` (so they surface instead of being silently ignored).
-fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<RawSystem> {
+fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> ParseResult<RawSystem> {
     let a: SystemAttrs = attrs(body)?;
     let mut instances = Vec::new();
     let mut connections = Vec::new();
@@ -524,13 +595,13 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<R
             "instance" => {
                 let label = first_label(block)?;
                 let inner = parse_instance(block.body())
-                    .with_context(|| format!("in instance '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in instance '{label}'")))?;
                 instances.push(Labeled { label, inner });
             }
             "connection" => {
                 let label = first_label(block)?;
                 let inner = parse_connection(block.body())
-                    .with_context(|| format!("in connection '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in connection '{label}'")))?;
                 connections.push(Labeled { label, inner });
             }
             other => {
@@ -559,8 +630,9 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> Result<R
 ///
 /// Returns an error if the HCL source fails to parse.
 #[instrument(skip(src), fields(path = %path.display()))]
-pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
-    let body = hcl::parse(src).with_context(|| format!("HCL parse error in {}", path.display()))?;
+pub fn parse_file(src: &str, path: &Path) -> ParseResult<RawFile> {
+    let body = hcl::parse(src)
+        .map_err(|e| ParseError::e000(format!("HCL parse error in {}: {e:#}", path.display())))?;
 
     let mut file = RawFile::default();
 
@@ -568,34 +640,39 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
         match block.identifier() {
             "project" => {
                 if file.project.is_some() {
-                    bail!(
-                        "E010: duplicate project block (second occurrence in {})",
+                    return Err(ParseError::e010(format!(
+                        "duplicate project block (second occurrence in {})",
                         path.display()
-                    );
+                    )));
                 }
-                file.project = Some(parse_project(block.body()).context("in project block")?);
+                file.project = Some(
+                    parse_project(block.body()).map_err(|e| e.with_prefix("in project block"))?,
+                );
                 file.project_source = Some(path.to_path_buf());
             }
             "system" => {
                 let label = first_label(block)?;
                 let inner = parse_system(block.body(), &mut file.diagnostics)
-                    .with_context(|| format!("in system '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in system '{label}'")))?;
                 file.systems.push(Labeled { label, inner });
             }
             "component" => {
                 let label = first_label(block)?;
                 let inner = parse_component(block.body(), &mut file.diagnostics)
-                    .with_context(|| format!("in component '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in component '{label}'")))?;
                 file.components.push(Labeled { label, inner });
             }
             "protocol" => {
                 let label = first_label(block)?;
                 let inner = parse_protocol(block.body())
-                    .with_context(|| format!("in protocol '{label}'"))?;
+                    .map_err(|e| e.with_prefix(format!("in protocol '{label}'")))?;
                 file.protocols.push(Labeled { label, inner });
             }
             other => {
-                bail!("unknown top-level block '{}' in {}", other, path.display());
+                return Err(ParseError::e000(format!(
+                    "unknown top-level block '{other}' in {}",
+                    path.display()
+                )));
             }
         }
     }
@@ -605,13 +682,13 @@ pub fn parse_file(src: &str, path: &Path) -> Result<RawFile> {
 
 /// Merge `src` into `dst`.  Returns an error on E010 (duplicate project block).
 #[instrument(skip(dst, src), fields(path = %path.display()))]
-pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result<()> {
+pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> ParseResult<()> {
     if let Some(proj) = src.project {
         if dst.project.is_some() {
-            bail!(
-                "E010: more than one project block defined (second in {})",
+            return Err(ParseError::e010(format!(
+                "more than one project block defined (second in {})",
                 path.display()
-            );
+            )));
         }
         dst.project = Some(proj);
         dst.project_source = src.project_source;
@@ -627,6 +704,7 @@ pub(crate) fn merge_into(dst: &mut RawFile, src: RawFile, path: &Path) -> Result
 
 #[cfg(test)]
 pub(crate) fn parse_dir(dir: &std::path::Path) -> anyhow::Result<RawFile> {
+    use anyhow::Context;
     use walkdir::WalkDir;
     let mut merged = RawFile::default();
     let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
@@ -931,9 +1009,10 @@ mod tests {
         "#;
         let path = PathBuf::from("test.hcl");
         let err = parse_file(src, &path).unwrap_err();
-        assert!(
-            err.to_string().contains("E010"),
-            "expected E010 error, got: {err}"
+        assert_eq!(
+            err.code,
+            DiagnosticCode::E010,
+            "expected E010 error, got: {err:?}"
         );
     }
 
@@ -1256,66 +1335,75 @@ mod tests {
 
     // ── deny_unknown_fields ────────────────────────────────────────────────
 
-    fn assert_parse_fails(src: &str) -> String {
+    fn assert_parse_fails(src: &str) -> ParseError {
         let path = PathBuf::from("test.hcl");
-        let err = parse_file(src, &path).expect_err("unknown attribute should fail to parse");
-        // `{err:#}` flattens the anyhow cause chain (outer `in component 'c'`
-        // context + inner serde unknown-field error) so the key name is visible.
-        format!("{err:#}")
+        parse_file(src, &path).expect_err("unknown attribute should fail to parse")
+    }
+
+    fn assert_e000_with_key(src: &str, key: &str) {
+        let err = assert_parse_fails(src);
+        assert_eq!(
+            err.code,
+            DiagnosticCode::E000,
+            "unknown attr should be E000, got: {err:?}"
+        );
+        assert!(
+            err.message.contains(key),
+            "should name the unknown key '{key}', got: {}",
+            err.message
+        );
     }
 
     #[test]
     fn unknown_attr_on_component_is_error() {
-        let msg = assert_parse_fails(r#"component "c" { descripton = "typo" }"#);
-        assert!(
-            msg.contains("descripton"),
-            "should name the unknown key, got: {msg}"
-        );
+        assert_e000_with_key(r#"component "c" { descripton = "typo" }"#, "descripton");
     }
 
     #[test]
     fn unknown_attr_on_system_is_error() {
-        let msg = assert_parse_fails(r#"system "s" { descripton = "typo" }"#);
-        assert!(msg.contains("descripton"), "got: {msg}");
+        assert_e000_with_key(r#"system "s" { descripton = "typo" }"#, "descripton");
     }
 
     #[test]
     fn unknown_attr_on_project_is_error() {
-        let msg = assert_parse_fails(r#"project { nam = "a" }"#);
-        assert!(msg.contains("nam"), "got: {msg}");
+        assert_e000_with_key(r#"project { nam = "a" }"#, "nam");
     }
 
     #[test]
     fn unknown_attr_on_protocol_is_error() {
-        let msg = assert_parse_fails(r#"protocol "p" { descripton = "x" }"#);
-        assert!(msg.contains("descripton"), "got: {msg}");
+        assert_e000_with_key(r#"protocol "p" { descripton = "x" }"#, "descripton");
     }
 
     #[test]
     fn unknown_attr_on_port_is_error() {
-        let msg = assert_parse_fails(r#"component "c" { port "p" { descripton = "x" } }"#);
-        assert!(msg.contains("descripton"), "got: {msg}");
+        assert_e000_with_key(
+            r#"component "c" { port "p" { descripton = "x" } }"#,
+            "descripton",
+        );
     }
 
     #[test]
     fn unknown_attr_on_connection_is_error() {
-        let msg = assert_parse_fails(
+        assert_e000_with_key(
             r#"system "s" { connection "c" { from = "a" to = "b" sorce = "x" } }"#,
+            "sorce",
         );
-        assert!(msg.contains("sorce"), "got: {msg}");
     }
 
     #[test]
     fn unknown_attr_on_message_is_error() {
-        let msg = assert_parse_fails(r#"protocol "p" { message "m" { descripton = "x" } }"#);
-        assert!(msg.contains("descripton"), "got: {msg}");
+        assert_e000_with_key(
+            r#"protocol "p" { message "m" { descripton = "x" } }"#,
+            "descripton",
+        );
     }
 
     #[test]
     fn unknown_attr_on_field_is_error() {
-        let msg =
-            assert_parse_fails(r#"protocol "p" { message "m" { field "f" { typ = "uint8" } } }"#);
-        assert!(msg.contains("typ"), "got: {msg}");
+        assert_e000_with_key(
+            r#"protocol "p" { message "m" { field "f" { typ = "uint8" } } }"#,
+            "typ",
+        );
     }
 
     #[test]
@@ -1323,20 +1411,22 @@ mod tests {
         let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    description = \"extra\"\n  }\n}";
         let path = PathBuf::from("test.hcl");
         let err = parse_file(src, &path).expect_err("instance extra attr should fail");
-        let full = format!("{err:#}");
-        assert!(full.contains("E012"), "expected E012, got: {full}");
+        assert_eq!(
+            err.code,
+            DiagnosticCode::E012,
+            "expected E012, got: {err:?}"
+        );
     }
 
     #[test]
     fn child_block_on_instance_is_e012() {
         let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    port \"p\" {}\n  }\n}";
-        // Note: `port "p" {}` without braces content still parses as a child
-        // block inside the instance body, which must be rejected as E012.
         let path = PathBuf::from("test.hcl");
-        let result = parse_file(src, &path);
-        assert!(
-            result.is_err() && format!("{:#}", result.unwrap_err()).contains("E012"),
-            "expected E012 for child block in instance"
+        let err = parse_file(src, &path).expect_err("expected E012 for child block");
+        assert_eq!(
+            err.code,
+            DiagnosticCode::E012,
+            "expected E012, got: {err:?}"
         );
     }
 }

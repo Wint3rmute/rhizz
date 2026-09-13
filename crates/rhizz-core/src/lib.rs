@@ -128,20 +128,9 @@ fn compile_model_sources(sources: &[&Source]) -> CompileResult {
         let mut file = match parse::parse_file(&source.content, path) {
             Ok(f) => f,
             Err(e) => {
-                // `{e:#}` flattens the anyhow chain so the inner E012 marker
-                // from `parse_instance` survives the outer `in instance ...`
-                // context. The full chain is also user-facing for E000 typos.
-                let msg = format!("{e:#}");
-                // `instance` exclusivity violations carry an E012 marker
-                // (SPEC §2.4); everything else is a generic HCL parse failure.
-                let code = if msg.contains("E012:") {
-                    DiagnosticCode::E012
-                } else {
-                    DiagnosticCode::E000
-                };
                 return CompileResult {
                     model: None,
-                    diagnostics: vec![Diagnostic::error(code, msg)],
+                    diagnostics: vec![Diagnostic::error(e.code, e.message)],
                 };
             }
         };
@@ -155,7 +144,7 @@ fn compile_model_sources(sources: &[&Source]) -> CompileResult {
         if let Err(e) = parse::merge_into(&mut merged, file, path) {
             return CompileResult {
                 model: None,
-                diagnostics: vec![Diagnostic::error(DiagnosticCode::E010, e.to_string())],
+                diagnostics: vec![Diagnostic::error(e.code, e.message)],
             };
         }
     }

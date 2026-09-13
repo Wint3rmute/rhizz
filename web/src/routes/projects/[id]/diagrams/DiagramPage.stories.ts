@@ -118,7 +118,7 @@ export const DuplicateProjectBlock: Story = {
     ).toBeInTheDocument();
     await expect(canvas.getByText(/1 error detected in the system model/))
       .toBeInTheDocument();
-    await expect(canvas.getByText("[E000]"))
+    await expect(canvas.getByText("[E010]"))
       .toBeInTheDocument();
 
     const editorLink = canvas.getByRole("link", { name: "Open Editor to Fix" });
