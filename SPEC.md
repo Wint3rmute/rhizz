@@ -425,6 +425,12 @@ parsed and round-tripped, but no renderer applies it. See §9.
 
 ---
 
+### 2.11 `docs/` Folder
+
+Markdown files under `docs/` document components (`docs/plane.md` ↔ `component "plane"`, matched by label). They are frontend-only — ignored by the compiler — authored in the Editor and rendered as hover popups in Explore and embedded diagrams.
+
+---
+
 ## 3. Reference Resolution
 
 > **Impl:** see [Scope lookup helper](SPEC/models.md#scope-lookup-helper) and
