@@ -145,6 +145,19 @@ export const NoReusableDefinitions: Story = {
   args: {
     reusableDefinitions: [],
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The reuse option is disabled with an explanatory tooltip.
+    const reuseBtn = canvas.getByRole("button", {
+      name: "Use Existing Component",
+    });
+    await expect(reuseBtn).toBeDisabled();
+    const wrapper = reuseBtn.closest("[data-tip]");
+    await expect(wrapper?.getAttribute("data-tip")).toBe(
+      "No components defined yet",
+    );
+  },
 };
 
 export const TopLevelDefinition: Story = {
