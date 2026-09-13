@@ -527,7 +527,9 @@ export class DocumentStore {
     lines.push(`${inner}to           = ${escapeHclString(conn.to)}`);
 
     if (conn.encapsulates && conn.encapsulates.length > 0) {
-      lines.push(`${inner}encapsulates = ${formatStringList(conn.encapsulates)}`);
+      lines.push(
+        `${inner}encapsulates = ${formatStringList(conn.encapsulates)}`,
+      );
     }
 
     lines.push(`${indent}}`);
