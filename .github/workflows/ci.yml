@@ -22,9 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: DeterminateSystems/nix-installer-action@main
-
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - run: nix develop --command just wasm
@@ -38,19 +36,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: DeterminateSystems/nix-installer-action@main
-
       - uses: DeterminateSystems/magic-nix-cache-action@main
-
       # Swatinem/rust-cache persists workspace target/, which lives outside
       # /nix/store and is therefore not covered by the Nix cache.
       - uses: Swatinem/rust-cache@v2
 
       - run: nix develop --command cargo fmt --all -- --check
-
       - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
-
       # Single instrumented pass: runs all tests (incl. doctests) + writes
       # lcov + enforces the 80% line-coverage gate. rhizz-wasm is excluded
       # (wasm cdylib, no host tests) and crates/*/tests are not counted as
@@ -73,7 +66,6 @@ jobs:
       checks: write
     steps:
       - uses: actions/checkout@v6
-
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -85,15 +77,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: DeterminateSystems/nix-installer-action@main
-
       - uses: DeterminateSystems/magic-nix-cache-action@main
-
       - uses: Swatinem/rust-cache@v2
 
       - run: nix develop --command just book
-
       - run: |
           rm -rf book-artifact
           mkdir -p book-artifact
@@ -109,11 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: DeterminateSystems/nix-installer-action@main
-
       - uses: DeterminateSystems/magic-nix-cache-action@main
-
       - uses: actions/download-artifact@v8
         with:
           name: rhizz-wasm
@@ -144,11 +129,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: DeterminateSystems/nix-installer-action@main
-
       - uses: DeterminateSystems/magic-nix-cache-action@main
-
       - uses: actions/download-artifact@v8
         with:
           name: rhizz-wasm
