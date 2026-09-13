@@ -1,52 +1,46 @@
-project {
-  name = "book-demo"
+component "tire" {
+  description = "A 24in bicycle tire"
+  leaf = true
 }
 
-protocol "temp-bus" {
-  description = "Temperature sensor bus"
-  roles       = ["provider", "consumer"]
+component "wheel" {
+  description = "A spinning round object"
+  instance "tire" {source = "tire"}
+}
 
-  message "reading" {
-    description = "A single temperature reading"
+component "fork" {
+  description = "Holds the front wheel"
+  leaf = true
+}
 
-    field "celsius" {
-      type        = "f32"
-      description = "Temperature in Celsius"
-    }
+component "frame"  {
+  description = "main component of a bicycle"
+  leaf = true
+}
+
+system "bicycle" {
+  description = "Personal transport vehicle"
+
+  instance "front-wheel" {source = "wheel"}
+  instance "rear-wheel" {source = "wheel"}
+  instance "fork" {source = "fork"}
+  instance "frame" {source = "frame"}
+
+  connection "front-wheel-mount" {
+    description = "keeps the front wheel attached"
+    from = "./front-wheel"
+    to = "fork"
   }
-}
 
-component "sensor" {
-  description = "Temperature sensor"
-  leaf        = true
-
-  port "out" {
-    description = "Reading output"
-    protocol    = "temp-bus"
-    role        = "provider"
+  connection "rear-wheel-mount" {
+    description = "keeps the rear wheel attached"
+    from = "./rear-wheel"
+    to = "./frame"
   }
-}
 
-component "hub" {
-  description = "Reading collector"
-  leaf        = true
-
-  port "in" {
-    description = "Reading input"
-    protocol    = "temp-bus"
-    role        = "consumer"
-  }
-}
-
-system "demo" {
-  description = "Minimal book example"
-
-  instance "sensor" { source = "sensor" }
-  instance "hub" { source = "hub" }
-
-  connection "reading" {
-    description = "Delivers readings to the hub"
-    from        = "sensor/out"
-    to          = "hub/in"
+  connection "fork-mount" {
+    description = "bearing connecting the fork to the frame"
+    from = "./fork"
+    to = "./frame"
   }
 }
