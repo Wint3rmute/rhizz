@@ -4,6 +4,28 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Single `applyModelMutation` dispatcher (fixed audit Finding 1)
+
+All UI-driven model mutations go through one dispatcher
+(`web/src/history/applyMutation.ts`): declarative `ModelMutationOp` union
+(11 ops), one compile→gate→mutate→canonical-write path per call.
+
+- **Failure gate**: baseline compiled once; blocking errors refuse with the
+  file byte-identical (tested), warnings pass through; empty baseline is a
+  new file. Draft-level `null` model also refuses.
+- **Handlers migrated** (`+page.svelte`, `WorkspaceHarness`): 9×
+  `new DocumentStore` / `loadFromHcl` copies and the inline scope search
+  deleted (`+page.svelte` −67 net); writes already canonical from the
+  previous task. Rename now routes via `renameComponent`, restoring the
+  sibling-collision check and action-log recording the direct label
+  assignment skipped.
+- `just test` (58 files / 596 web tests + cargo), `just lint`, `just build`,
+  `just format` green (branch `task/apply-model-mutation-dispatcher`).
+  Pre-existing note: `src/testing/*` fails under bare `npx vitest` (wasm
+  `fetch` env issue, fails on clean tree too); green under `just test`.
+
+---
+
 ## Task — Own HCL serialization in Rust only (fixed audit Finding 1)
 
 The frontend no longer owns the on-disk HCL format: all diagram-canvas writes
