@@ -18,105 +18,13 @@ own second implementation of the model (an HCL emitter, a model tree, a scoring
 rule, a view-layout store) next to the Rust one that is already compiled into
 the page via WASM. Most of the findings below are facets of that one theme.
 
+Fixed findings are removed from this file; see `TASKS/FINISHED.md` for what was done.
+
 ---
 
 ## Findings
 
-### 1. The frontend has a second HCL serializer next to `rhizz_core::serialize_model`
-
-**Impact:** High
-
-**Confidence:** High
-
-**Locations:**
-- `web/src/DocumentStore.svelte.ts` — `systemHcl` (`$derived`, ~line 231),
-  `serializeComponentDef`, `serializeProtocol`, `serializePort`,
-  `serializeMessage`, `serializeField`, `serializeConnection`,
-  `escapeHclString`, `formatStringList`
-- `crates/rhizz-core/src/serialize.rs` — `serialize_model`,
-  `serialize_system`, `serialize_component_def`, `serialize_port`,
-  `serialize_protocol`, `serialize_message`, `serialize_field`,
-  `serialize_connection`, `escape_string`, `format_string_list`
-- `crates/rhizz-wasm/src/lib.rs` — `ModelJS::to_hcl`, `serialize_model`
-  (exported to JS, unused by the app)
-- `crates/rhizz-cli/src/cli.rs` — `run_fmt` / `format_project` (uses the Rust
-  serializer)
-- `SPEC/architecture.md` — "Frontend Contract → Do not duplicate logic"
-
-**Problem**
-
-`DocumentStore.systemHcl` is a complete, hand-written HCL emitter for the
-system model (project, protocols, definitions, systems, instances, ports,
-messages, fields, connections). `rhizz-core` already ships a canonical
-serializer with documented determinism and round-trip guarantees, and it is
-already exported through WASM (`ModelJS.to_hcl()` / `serialize_model`). The
-only production consumer of the Rust serializer on the web side is the test
-harness (`WorkspaceHarness.ts`); every actual user edit on the diagram canvas
-is written to disk through the TypeScript emitter.
-
-**Why it looks reasonable locally**
-
-`DocumentStore` holds a mutable TypeScript tree; emitting HCL directly from
-that tree is the shortest path to "write the file". The alternative — pushing
-the mutation through WASM and getting HCL back — required the Rust side to
-expose mutation operations it does not have, so the store grew its own
-emitter incrementally as the editor gained features.
-
-**Why it is problematic globally**
-
-Two independent implementations of the same canonical format are already
-diverging, so a project edited in the GUI is not `rhizz fmt`-clean and vice
-versa:
-
-- Instances: Rust emits `instance "x" { source = "y" }` on one line
-  (`serialize.rs` `serialize_system` / `serialize_component_def`); TS emits a
-  three-line block (`systemHcl` and `serializeComponentDef`).
-- Ordering: Rust sorts siblings with byte-wise `cmp`; TS uses
-  `localeCompare`, which orders case and punctuation differently.
-- Escaping: Rust `escape_string` implements HCL escapes; TS
-  `escapeHclString` is `JSON.stringify`, which additionally escapes
-  `\u2028`/`\u2029` and control characters as `\uXXXX` and does not match
-  the Rust output for the same input.
-- Defaulting rules (`level != 1`, `required == false`, `border != solid`,
-  `version != "0.0.0"`) are re-encoded in both places and must be kept in
-  step by hand each time the schema changes (the recent "remove system
-  `level`" and `deny_unknown_fields` tasks each touched both).
-
-Every schema change (new attribute, new block) now costs three edits: Rust
-parse structs, Rust serializer, TS emitter — plus the mirrors in finding 3.
-The spec's own frontend contract ("if behaviour needed by a frontend is
-missing from `rhizz-core`, add it there") is not being followed for the
-highest-traffic write path in the product.
-
-**Potential simplification**
-
-Own serialization in Rust only. Two plausible shapes:
-
-1. Minimal: keep TS mutations, but derive the written text as
-   `compile(tsDraft).model().to_hcl()` instead of `systemHcl`, so the on-disk
-   form is always the Rust canonical form. The TS emitter becomes an internal
-   draft encoder whose exact formatting no longer matters (and could be
-   reduced to the simplest correct encoding).
-2. Structural: expose model mutations on `ModelJS` (add instance, add
-   definition, add connection, rename, reparent, update attrs, …) and return
-   `to_hcl()`; delete the TS emitter and the TS model tree entirely (see
-   finding 2).
-
-**Evidence**
-
-- `DocumentStore.svelte.ts` lines ~231–330 (`systemHcl`) and ~349–560 (the
-  `serialize*` helpers) mirror `serialize.rs` lines 43–560 function-for-
-  function.
-- `grep to_hcl|serialize_model web/src` → only `rhizz_wasm_wrapper.ts`
-  (re-export) and `testing/WorkspaceHarness.ts`.
-- All 12 write sites in `routes/projects/[id]/diagrams/+page.svelte`
-  (`fs.writeFile(targetPath, doc.systemHcl)`) use the TS emitter.
-- `cli.rs` `format_project` uses `serialize_model` — so `rhizz fmt --check`
-  on a GUI-edited project will report differences.
-
----
-
-### 2. Model mutations round-trip through a full re-parse into a hand-built TS model tree, per handler, with no failure gating
+### 1. Model mutations round-trip through a full re-parse into a hand-built TS model tree, per handler, with no failure gating
 
 **Impact:** High
 
@@ -142,7 +50,7 @@ Every canvas mutation runs the same pipeline, copy-pasted into each handler:
 read primary .hcl → new DocumentStore() → loadFromHcl()
   → compile_system() [WASM]  → model.to_js()
   → loadFromRawModel(): rebuild a nested TS tree from the arena
-  → mutate the TS tree → doc.systemHcl (TS emitter, finding 1)
+  → mutate the TS tree → doc.canonicalHcl (Rust serializer; former finding 1, fixed)
   → fs.writeFile → readProjectSources → compile_system() again
 ```
 
@@ -154,8 +62,8 @@ resolved arena into a hierarchy" (parent maps, root-system lookup, absolute
 
 The pipeline has no failure gate: `loadFromSources` swallows a failed
 compile (`console.warn(...); return;`), leaving the store empty, and every
-handler then continues to mutate and **write `doc.systemHcl` back to the
-primary file**. If the primary file currently has a hard error (a typo the
+handler then continues to mutate and **write `doc.canonicalHcl` back to the
+primary file** (the write helper only refuses when the in-memory draft itself fails to compile). If the primary file currently has a hard error (a typo the
 user is fixing in the Editor pane, a reference to a definition in another
 file → E014), one drag on the canvas rewrites the file with a near-empty
 model. The harness acknowledges the related multi-file limitation
@@ -199,7 +107,7 @@ precisely to avoid touching the already-large page.
 One mutation entry point (`applyModelMutation(op)`) that: reads the sources
 once, refuses to proceed when the current compile has blocking errors,
 applies the op, writes canonical HCL (Rust serializer), and triggers a single
-recompile. Whether the op is applied in TS or in Rust (finding 1, option 2)
+recompile. Whether the op is applied in TS or in Rust (former finding 1's structural option)
 is secondary; the important part is one path, one gate. Route
 `handleRenameSelectedComponent` through `renameComponent`.
 
@@ -207,7 +115,7 @@ is secondary; the important part is one path, one gate. Route
 
 - `DocumentStore.svelte.ts` `loadFromSources` (~1279–1291): on `!model` →
   `console.warn` + `return`; callers at the page lines above never check and
-  proceed to `fs.writeFile(targetPath, doc.systemHcl)`.
+  proceed to `fs.writeFile(targetPath, doc.canonicalHcl)`.
 - `+page.svelte` ~1384–1405: `comp.label = newLabel` vs
   `DocumentStore.renameComponent` (~line 764) which exists, validates, and
   calls `notifyMutations`.
@@ -217,7 +125,7 @@ is secondary; the important part is one path, one gate. Route
 
 ---
 
-### 3. The Rust `Model` shape is hand-mirrored in TypeScript three times, alongside a partially-used typed wrapper API
+### 2. The Rust `Model` shape is hand-mirrored in TypeScript three times, alongside a partially-used typed wrapper API
 
 **Impact:** High
 
@@ -299,7 +207,7 @@ wrappers (children/ports/connections/definitions indices) and delete
 
 ---
 
-### 4. Two view-layout models in the frontend; one of them is unreachable from the UI
+### 3. Two view-layout models in the frontend; one of them is unreachable from the UI
 
 **Impact:** Medium
 
@@ -360,7 +268,7 @@ the corresponding `ModelAction` variants (or, conversely, route
 
 ---
 
-### 5. Completion scoring and report/diagnostic projections are re-declared per frontend, and the three copies of the scoring rule disagree with the spec
+### 4. Completion scoring and report/diagnostic projections are re-declared per frontend, and the three copies of the scoring rule disagree with the spec
 
 **Impact:** Medium
 
@@ -440,7 +348,7 @@ hand-maintained shapes for the same two records mean any new field (e.g. a
 
 ---
 
-### 6. Two SVG diagram renderers: the interactive canvas and `DiagramElements`
+### 5. Two SVG diagram renderers: the interactive canvas and `DiagramElements`
 
 **Impact:** Medium
 
@@ -497,7 +405,7 @@ interaction chrome (handles, marquee, port hit targets) in the page.
 
 ---
 
-### 7. Each route independently loads, compiles, and indexes the project
+### 6. Each route independently loads, compiles, and indexes the project
 
 **Impact:** Medium (already targeted by a TODO task)
 
@@ -530,7 +438,7 @@ nodes "so a page's own edits are never at risk of being shadowed".
 
 This is the root cause the "Modular multi-pane workspace with shared
 reactive context" task in `TASKS/TODO.md` is meant to fix; it is listed here
-for completeness because findings 1–4 should be resolved in the same
+for completeness because findings 1–3 should be resolved in the same
 consolidation (a single reactive `compileResult` is the natural place for a
 single mutation gate). No further action is proposed beyond the existing
 task.
@@ -545,7 +453,7 @@ task.
 
 ---
 
-### 8. Example diagram layouts are duplicated in TypeScript and overwrite the embedded HCL examples
+### 7. Example diagram layouts are duplicated in TypeScript and overwrite the embedded HCL examples
 
 **Impact:** Low–Medium
 
@@ -599,7 +507,7 @@ special case in `selectExample`.
 
 ---
 
-### 9. "Primary model file" has four different definitions
+### 8. "Primary model file" has four different definitions
 
 **Impact:** Low–Medium
 
@@ -653,7 +561,7 @@ the file the system block came from.
 
 ---
 
-### 10. Component path/key computation is implemented three times in Rust and twice in TypeScript
+### 9. Component path/key computation is implemented three times in Rust and twice in TypeScript
 
 **Impact:** Low
 
@@ -699,7 +607,7 @@ formatters for key/endpoint/definition-label, exposed to JS so
 
 ---
 
-### 11. Views are parsed by a second mini-framework inside `serialize.rs`
+### 10. Views are parsed by a second mini-framework inside `serialize.rs`
 
 **Impact:** Low
 
@@ -746,7 +654,7 @@ Move `parse_views` and its raw attrs into `parse.rs`, reuse `attrs`/
 
 ---
 
-### 12. Dead or vestigial surface
+### 11. Dead or vestigial surface
 
 **Impact:** Low
 
@@ -765,7 +673,7 @@ Move `parse_views` and its raw attrs into `parse.rs`, reuse `attrs`/
   `format_diagnostic`, `JsonDiagnostic`, the book's `NormDiagnostic` sort
   key, and the `SPEC.md` §7 example (`system.hcl:14`) all carry/format it.
   Either populate it from `hcl-rs` spans or drop it from the projections.
-- `crates/rhizz-wasm/src/lib.rs` — accessors listed in finding 3 with zero
+- `crates/rhizz-wasm/src/lib.rs` — accessors listed in finding 2 with zero
   application callers.
 - `.hcl` discovery (`WalkDir` → `Vec<Source>`) written five times:
   `cli.rs::load_sources` (production), `rhizz-book/project.rs::collect_hcl`
@@ -787,7 +695,7 @@ or remove it from the projections and the SPEC example until it exists.
 
 ---
 
-### 13. Specification documents describe a different frontend and API than the code
+### 12. Specification documents describe a different frontend and API than the code
 
 **Impact:** Low (but AGENTS.md directs every task to read SPEC first)
 
@@ -821,15 +729,14 @@ actual WASM API; document `fmt`/`watch`; point tasks at `just`.
 
 ## Highest-value findings
 
-1. **Frontend HCL emitter duplicates `rhizz_core::serialize_model` (Finding 1)** — already diverging (instance formatting, sort order, escaping); breaks `rhizz fmt` interoperability; every schema change is a three-place edit.
-2. **Per-handler load→compile→TS-tree→emit→write pipeline with no failure gate (Finding 2)** — 12 copies, a data-loss path when the primary file does not compile, and a rename that bypasses the store's API and the debug action log.
-3. **Hand-mirrored Rust model shapes in TS plus a half-used typed wrapper API (Finding 3)** — three untyped mirrors of `model.rs`, two parallel WASM access paths, unused accessors.
-4. **Dead view-layout surface in `DocumentStore` next to the live `persistence.ts` layout model (Finding 4)** — action log never records layout changes; two shapes for `diagrams/*.hcl`.
-5. **Scoring rule and report/diagnostic projections re-declared per frontend, with SPEC/impl disagreement (Finding 5)** — TS `completionScore` vs `score_component` vs SPEC §5; four score/diagnostic shapes; `DiagnosticJS` drops `file`/`line`.
-6. **Two SVG renderers for the same diagram (Finding 6)** — editor markup vs `DiagramElements`; visual changes made twice.
-7. **Example diagrams overridden by TS constants (Finding 8)** — embedded examples are not the source of truth the docs claim.
-8. **"Primary model file" defined differently in GUI, CLI, harness and spec (Finding 9)** — GUI `main.hcl` vs `rhizz fmt` `system.hcl`.
-9. **Seven independent load/compile/index blocks across routes (Finding 7)** — already the subject of a TODO task; resolve together with 1–4.
+1. **Per-handler load→compile→TS-tree→emit→write pipeline with no failure gate (Finding 1)** — copies in every handler, a data-loss path when the primary file does not compile, and a rename that bypasses the store's API and the debug action log.
+2. **Hand-mirrored Rust model shapes in TS plus a half-used typed wrapper API (Finding 2)** — three untyped mirrors of `model.rs`, two parallel WASM access paths, unused accessors.
+3. **Dead view-layout surface in `DocumentStore` next to the live `persistence.ts` layout model (Finding 3)** — action log never records layout changes; two shapes for `diagrams/*.hcl`.
+4. **Scoring rule and report/diagnostic projections re-declared per frontend, with SPEC/impl disagreement (Finding 4)** — TS `completionScore` vs `score_component` vs SPEC §5; four score/diagnostic shapes; `DiagnosticJS` drops `file`/`line`.
+5. **Two SVG renderers for the same diagram (Finding 5)** — editor markup vs `DiagramElements`; visual changes made twice.
+6. **Example diagrams overridden by TS constants (Finding 7)** — embedded examples are not the source of truth the docs claim.
+7. **"Primary model file" defined differently in GUI, CLI, harness and spec (Finding 8)** — GUI `main.hcl` vs `rhizz fmt` `system.hcl`.
+8. **Seven independent load/compile/index blocks across routes (Finding 6)** — already the subject of a TODO task; resolve together with 1–3.
 
-Findings 10–13 are low-cost clean-ups that reduce the number of places a
+Findings 9–12 are low-cost clean-ups that reduce the number of places a
 schema, path-syntax, or documentation change must touch.

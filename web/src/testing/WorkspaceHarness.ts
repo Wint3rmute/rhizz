@@ -316,7 +316,9 @@ export class WorkspaceHarness {
     if (!doc.updateComponent(selectedKey, patch)) {
       throw new Error(`Component ${selectedKey} not found in ${primary}`);
     }
-    await this.fs.writeFile(primary, doc.systemHcl);
+    const hcl = doc.canonicalHcl;
+    if (hcl === null) throw new Error("Refusing model write: blocking errors");
+    await this.fs.writeFile(primary, hcl);
     await this.recompile();
   }
 

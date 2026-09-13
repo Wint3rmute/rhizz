@@ -13,6 +13,93 @@ How to work on this file:
 
 ---
 
+## Task <N> — Single `applyModelMutation` dispatcher (Audit finding 1)
+
+Source: `audit/architecture.md` Finding 1 — model mutations round-trip
+through a full re-parse into a hand-built TS model tree, per handler, with no
+failure gating.
+
+Problem: every canvas mutation in
+`web/src/routes/projects/[id]/diagrams/+page.svelte` (`executeReparent`,
+`handleAddSystem`, `handleModalCreateComponent`, `handleUpdateSelectedComponent`,
+`handleRenameSelectedComponent`, `handleDeleteSelectedComponent`,
+`handleCreateConnection`, … — 12 write sites) copy-pastes the pipeline:
+read primary .hcl → `new DocumentStore()` → `loadFromHcl()` →
+`compile_system()` → `model.to_js()` → `loadFromRawModel()` (re-derives
+`parentOfComp`, `rootSystemOfComp`, endpoint paths already known to Rust
+`Resolver` / `serialize.rs::endpoint_path`) → mutate TS tree →
+`doc.canonicalHcl` (Rust serializer) → `fs.writeFile` → recompile.
+`loadFromSources` swallows failed compiles (`console.warn; return`) so handlers
+write near-empty models over hard-error files (data-loss hazard). Rename
+bypasses `DocumentStore.renameComponent` (`comp.label = newLabel`), skipping
+sibling-collision check and `notifyMutations`, so "Copy Debug Info" replay
+(`web/src/actionLog.ts`) silently omits renames.
+
+Plan:
+
+1. Add `web/src/history/applyMutation.ts` (or extend
+   `routes/projects/[id]/diagrams/history.ts`): `applyModelMutation(op)` —
+   read sources once, refuse when current `compile().model` is `None`, apply
+   op via `DocumentStore` API, write canonical HCL (`DocumentStore.canonicalHcl` — landed with former finding 1),
+   single recompile. Ops: add/rename/update/delete component, reparent,
+   create connection (+ layout ops passthrough).
+2. Route one handler first (`handleRenameSelectedComponent` →
+   `renameComponent`) with red/green test in `DocumentStore.test.ts` +
+harness test (rename reaches mutation observer / action log).
+3. Migrate remaining handlers one by one; delete per-handler
+   `readMainContent` / `new DocumentStore()` / `loadFromRawModel` copies.
+4. Add failure-gate test: hard-error fixture (typo / cross-file E014) +
+   canvas op → file untouched, error surfaced.
+5. Wire to `TASKS/TODO.md` "Unified command-based transaction history"
+   (`Ctrl+Z/Y`) and "Modular multi-pane workspace" single-dispatcher
+   prerequisite.
+
+Definition of done:
+
+- One mutation entry point; no handler constructs its own store.
+- Rename/collision + action-log replay covered; failure-gate test green.
+- `just test`, `just lint`, `just build` green; `just format` run.
+- Red/green TDD, conventional commits.
+
+---
+
+## Task <N> — Rust-owned model mutations via ModelJS (structural, after dispatcher)
+
+Source: removed `audit/architecture.md` Finding 1, structural option 2
+("Potential simplification") — the minimal option (canonical writes) already
+landed, so this is the recorded follow-up, not a live audit finding.
+
+Goal: move mutation execution into `rhizz-core` behind the `ModelJS` WASM API
+so the TypeScript model tree and draft HCL encoder are deleted entirely
+instead of merely bypassed for writes.
+
+Plan:
+
+1. Do the dispatcher task first — its `applyModelMutation(op)` taxonomy
+   (add/rename/update/delete component, reparent, add/delete connection,
+   ports/protocols) plus gate tests are this task's spec.
+2. Expose mutations on `ModelJS` (`crates/rhizz-wasm/src/lib.rs`): one method
+   per op, returning `to_hcl()` (canonical), with `Diagnostic`-carrying
+   `Result`s so the UI keeps the same refuse-and-surface behavior.
+3. Re-target `applyModelMutation` to execute ops through WASM; keep its
+   signature, failure gate, and action-log notifications unchanged so
+handlers, Undo/Redo, and replay scripts don't move again.
+4. Delete the dead TS model tree (`ComponentData`/`SystemData` trees,
+   `loadFromRawModel`, draft `systemHcl` encoder) once every reader goes
+   through `model.to_js()` / derived view data; keep Svelte reactivity by
+   deriving view state from WASM snapshots.
+5. Update `DocumentStore.*.test.ts`, harness, and Storybook stories.
+
+Definition of done:
+
+- No TS model tree or HCL emitter remains; all writes are `ModelJS` →
+  `to_hcl()`.
+- Dispatcher op + gate tests pass unchanged against the Rust backend.
+- `just test`, `just lint`, `just build` green; `just format` run.
+- Red/green TDD, conventional commits.
+
+---
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,

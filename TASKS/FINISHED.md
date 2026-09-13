@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Own HCL serialization in Rust only (fixed audit Finding 1)
+
+The frontend no longer owns the on-disk HCL format: all diagram-canvas writes
+persist `rhizz-core::serialize_model` output via WASM instead of the
+hand-written TypeScript emitter.
+
+- **`DocumentStore.canonicalHcl`** (`web/src/DocumentStore.svelte.ts`): new
+  derived returning `serialize_model(model)`, `null` when the draft has
+  blocking errors. New `DocumentStore.canonical.test.ts` proves the old drift
+  (three-line TS `instance` vs one-line Rust `instance`) and roundtrip
+  stability (`compile → to_hcl → compile → to_hcl`).
+- **Write path** (`routes/projects/[id]/diagrams/+page.svelte`,
+  `testing/WorkspaceHarness.ts`): all 8 canvas handlers + the harness write
+  through a `writeDocHcl` helper that persists the canonical form and refuses
+  (warns) when there is no model.
+- **Draft simplified**: the TS `systemHcl` emitter is now an unsorted,
+  draft-order encoder used only to feed the compiler; Rust owns ordering,
+  escaping, and default elision. Copy-Debug replay scripts still assert the
+draft (replaying needs no WASM). Full TS-tree removal stays with the
+`applyModelMutation` dispatcher task.
+- `just test` (57 files / 588 web tests + cargo), `just lint`, `just build`,
+  `just format` green (branch `task/audit-01-canonical-hcl-serializer`).
+
+---
+
 ## Task — Codebase Architecture Audit
 
 Read-only architecture and maintainability audit of the whole repository.
