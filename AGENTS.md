@@ -95,3 +95,10 @@ manually replayed steps — makes the bug reproducible and quickly fixable.
   social-media, software-house).
 - Use `just test` to run all tests.
 - Assert exact diagnostic codes (not just counts) for error/warning tests.
+
+## Voice Commands
+
+- The operator may send voice commands as audio attachments (e.g. Telegram voice notes in `.ogg`/Opus).
+- If you receive an audio recording, transcribe it first via the `whisper` CLI available in the environment:
+  `whisper <audio-file> --model tiny --output_dir /tmp/whisper_out --output_format txt --fp16 False`
+  then read the resulting `.txt` and follow the transcribed instruction.
