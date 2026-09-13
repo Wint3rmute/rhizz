@@ -835,6 +835,10 @@ struct CreateParams<'a> {
     ports: Option<Vec<PortJson>>,
 }
 
+/// Fallback system created when a create has nowhere to place, mirroring
+/// the web editor (`EMPTY_PROJECT_HCL` / the create fallback).
+const FALLBACK_SYSTEM_DESCRIPTION: &str = "Main system";
+
 fn create_component(raw: &mut RawFile, params: &CreateParams<'_>) -> Result<ApplyOutcome, MutationError> {
     if params.label.is_empty() {
         return Err(MutationError::InvalidInput(
@@ -845,25 +849,25 @@ fn create_component(raw: &mut RawFile, params: &CreateParams<'_>) -> Result<Appl
     let mut parent = params.parent_key.to_owned();
     let container_known = !parent.is_empty() && resolve_scope(raw, &parent).is_ok();
     if !container_known {
-        if !params.source_label.is_empty() {
-            // Instances need a real container; fall back to the first system.
-            if raw.systems.is_empty() {
-                if parent.is_empty() {
-                    parent = "main".to_owned();
-                }
-                actions.extend(add_system(raw, &parent, "")?);
-            } else {
-                parent = raw
-                    .systems
-                    .first()
-                    .map_or_else(String::new, |s| s.label.clone());
-            }
+        // Both modes need a real container: fall back to the first system,
+        // creating a "main" system when the model has none yet.
+        if raw.systems.is_empty() {
+            actions.extend(add_system(raw, "main", FALLBACK_SYSTEM_DESCRIPTION)?);
+            parent = "main".to_owned();
         } else {
-            // New reusable definitions have no system parent.
-            parent.clear();
+            parent = raw
+                .systems
+                .first()
+                .map_or_else(String::new, |s| s.label.clone());
         }
     }
+    // Children of an instance persist in that instance's definition body:
+    // `resolve_scope` walks instance paths through their `source`
+    // definition, which is exactly the store location. The returned path
+    // stays on the canvas path (`parent` as given).
     if params.source_label.is_empty() {
+        // New-definition mode also places an instance — otherwise creation
+        // closes with nothing visibly changing on the canvas.
         actions.extend(add_definition(raw, params.label, &DefinitionOptions {
             leaf: params.leaf,
             description: params.description.clone(),
@@ -871,9 +875,14 @@ fn create_component(raw: &mut RawFile, params: &CreateParams<'_>) -> Result<Appl
             ports: params.ports.clone(),
             ..Default::default()
         })?);
+        let scope = resolve_scope(raw, &parent).map_err(|_| {
+            MutationError::InvalidInput(format!("unknown container '{parent}'"))
+        })?;
+        actions.extend(add_instance(raw, scope, params.label, params.label)?);
+        let label = params.label;
         Ok(ApplyOutcome {
             applied: true,
-            path: Some(params.label.to_owned()),
+            path: Some(format!("{parent}/{label}")),
             actions,
         })
     } else {
@@ -1319,23 +1328,52 @@ mod tests {
     }
 
     #[test]
-    fn create_component_falls_back_to_fresh_system() {
+    fn create_component_places_definition_instance_in_fresh_system() {
+        // Definition mode on an empty model: definition + "main" system +
+        // placed instance, mirroring the web place-on-create flow.
         let created = mutate(
             "",
-            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true}}"#,
-        )
-        .expect("ok")
-        .hcl
-        .expect("hcl");
-        let created = mutate(
-            &created,
-            r#"{"kind":"create_component","label":"cpu","sourceLabel":"cpu"}"#,
+            r#"{"kind":"create_component","label":"sensor","leaf":true}"#,
         )
         .expect("ok");
         assert!(created.applied);
         let hcl = created.hcl.expect("hcl");
+        assert!(hcl.contains(r#"component "sensor""#));
         assert!(hcl.contains(r#"system "main""#));
-        assert!(hcl.contains(r#"instance "cpu" { source = "cpu" }"#));
+        assert!(hcl.contains(r#"instance "sensor" { source = "sensor" }"#));
+    }
+
+    #[test]
+    fn create_component_under_instance_persists_in_definition_body() {
+        let hcl = mutate(
+            "",
+            r#"{"kind":"add_component_definition","label":"sensor"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"main"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"main","label":"sensor","source":"sensor"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+
+        let created = mutate(
+            &hcl,
+            r#"{"kind":"create_component","label":"imu","parentKey":"main/sensor","leaf":true}"#,
+        )
+        .expect("ok");
+        assert!(created.applied);
+        let hcl = created.hcl.expect("hcl");
+        // Stored in the sensor definition body (instance blocks carry only
+        // `source`), while the reported path stays on the canvas path.
+        assert!(hcl.contains(r#"instance "imu""#));
     }
 
     #[test]
