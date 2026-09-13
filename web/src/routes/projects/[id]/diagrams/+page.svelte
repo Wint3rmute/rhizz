@@ -1259,7 +1259,9 @@ async function handleModalCreateComponent(data: {
     kind: "create_component",
     label: data.label,
     parentKey: data.parentKey,
-    ...(data.sourceLabel === undefined ? {} : { sourceLabel: data.sourceLabel }),
+    ...(data.sourceLabel === undefined
+      ? {}
+      : { sourceLabel: data.sourceLabel }),
     leaf: data.leaf,
     description: data.description,
     tags: data.tags,

@@ -178,7 +178,9 @@ export async function applyModelMutation(
       if (!op.sourceLabel) {
         doc.addComponentDefinition(op.label, {
           ...(op.leaf === undefined ? {} : { leaf: op.leaf }),
-          ...(op.description === undefined ? {} : { description: op.description }),
+          ...(op.description === undefined
+            ? {}
+            : { description: op.description }),
           ...(op.tags === undefined ? {} : { tags: op.tags }),
           ...(op.ports === undefined ? {} : { ports: op.ports }),
         });
