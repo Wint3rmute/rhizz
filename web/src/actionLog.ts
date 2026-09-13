@@ -160,16 +160,25 @@ function toMutationOp(action: ModelAction): unknown {
         description: action.description,
       };
     case "add_component_definition": {
-      const options: Record<string, unknown> = {
+      const options: {
+        leaf: boolean;
+        description: string;
+        tags: string[];
+        ports: PortData[];
+        icon?: string;
+        color?: string;
+        border?: string;
+        font?: string;
+      } = {
         leaf: action.leaf,
         description: action.description,
         tags: action.tags,
         ports: action.ports,
       };
-      if (action.icon !== undefined) options["icon"] = action.icon;
-      if (action.color !== undefined) options["color"] = action.color;
-      if (action.border !== undefined) options["border"] = action.border;
-      if (action.font !== undefined) options["font"] = action.font;
+      if (action.icon !== undefined) options.icon = action.icon;
+      if (action.color !== undefined) options.color = action.color;
+      if (action.border !== undefined) options.border = action.border;
+      if (action.font !== undefined) options.font = action.font;
       return { kind: "add_component_definition", label: action.label, options };
     }
     case "add_instance":

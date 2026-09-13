@@ -31,8 +31,9 @@ use crate::{Source, resolve, serialize};
 
 // ── Op input (mirrors the TypeScript `ModelMutationOp` JSON 1:1) ─────────────
 
-/// A single declarative model mutation, deserialized from the frontend's op
-/// JSON. Variant names match the TypeScript `kind` strings (`snake_case`);
+/// A single declarative model mutation for the frontend's op JSON.
+///
+/// Variant names match the TypeScript `kind` strings (`snake_case`);
 /// variant fields match the TypeScript property names (`camelCase`).
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind")]
@@ -132,7 +133,7 @@ pub struct DefinitionOptions {
 }
 
 /// A port block carried inside op JSON (creation and full-list replacement).
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PortJson {
     /// Port label (required).
     pub label: String,
@@ -159,7 +160,7 @@ pub struct PortJson {
 /// Attribute patch for [`ModelOp::Update`]. `None` means untouched; empty
 /// strings clear their field (mirroring the old TypeScript emitter, which
 /// omitted defaults).
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PatchJson {
     /// Human-readable description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -192,7 +193,7 @@ pub struct PatchJson {
 /// Actions an applied op reports, in the exact JSON shape the web action log
 /// records. The TypeScript dispatcher forwards these to its mutation
 /// observers untouched.
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(tag = "op")]
 pub enum LoggedAction {
     /// A system block was added.
@@ -497,7 +498,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             label,
             source,
         } => {
-            let Some(scope) = resolve_scope_or_idle(raw, parent_path)? else {
+            let Some(scope) = resolve_scope_or_idle(raw, parent_path) else {
                 return Ok(idle());
             };
             let action = add_instance(raw, scope, label, source)?;
@@ -539,78 +540,12 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             label,
             from,
             to,
-        } => {
-            let Some(scope) = resolve_scope_or_idle(raw, scope_path)? else {
-                return Ok(idle());
-            };
-            let connections = scope_connections_mut(raw, scope)?;
-            if connections.iter().any(|c| c.label == *label) {
-                return Ok(applied_none());
-            }
-            connections.push(Labeled {
-                label: label.clone(),
-                inner: RawConnection {
-                    from: non_empty(from),
-                    to: non_empty(to),
-                    ..Default::default()
-                },
-            });
-            Ok(ApplyOutcome {
-                applied: true,
-                path: None,
-                actions: vec![LoggedAction::AddConnection {
-                    scope_path: scope_path.clone(),
-                    label: label.clone(),
-                    from: from.clone(),
-                    to: to.clone(),
-                }],
-            })
-        }
-        ModelOp::DeleteConnectionByLabel { label } => {
-            if let Some(index) = raw
-                .systems
-                .iter()
-                .position(|s| s.inner.connections.iter().any(|c| c.label == *label))
-            {
-                let system = raw
-                    .systems
-                    .get(index)
-                    .map_or_else(String::new, |s| s.label.clone());
-                delete_connection(raw, Scope::System(index), label);
-                return Ok(ApplyOutcome {
-                    applied: true,
-                    path: None,
-                    actions: vec![LoggedAction::DeleteConnection {
-                        scope_path: system,
-                        label: label.clone(),
-                    }],
-                });
-            }
-            if let Some(index) = raw
-                .components
-                .iter()
-                .position(|c| c.inner.connections.iter().any(|c| c.label == *label))
-            {
-                let definition = raw
-                    .components
-                    .get(index)
-                    .map_or_else(String::new, |c| c.label.clone());
-                delete_connection(raw, Scope::Definition(index), label);
-                return Ok(ApplyOutcome {
-                    applied: true,
-                    path: None,
-                    actions: vec![LoggedAction::DeleteConnection {
-                        scope_path: definition,
-                        label: label.clone(),
-                    }],
-                });
-            }
-            Ok(idle())
-        }
+        } => add_connection(raw, scope_path, label, from, to),
+        ModelOp::DeleteConnectionByLabel { label } => Ok(delete_connection_by_label(raw, label)),
     }
 }
 
-fn idle() -> ApplyOutcome {
+const fn idle() -> ApplyOutcome {
     ApplyOutcome {
         applied: false,
         path: None,
@@ -618,7 +553,7 @@ fn idle() -> ApplyOutcome {
     }
 }
 
-fn applied_none() -> ApplyOutcome {
+const fn applied_none() -> ApplyOutcome {
     ApplyOutcome {
         applied: true,
         path: None,
@@ -626,7 +561,7 @@ fn applied_none() -> ApplyOutcome {
     }
 }
 
-fn applied(actions: Vec<LoggedAction>) -> ApplyOutcome {
+const fn applied(actions: Vec<LoggedAction>) -> ApplyOutcome {
     ApplyOutcome {
         applied: true,
         path: None,
@@ -635,11 +570,8 @@ fn applied(actions: Vec<LoggedAction>) -> ApplyOutcome {
 }
 
 /// `None` when the container is unknown (guard refusal, not an error).
-fn resolve_scope_or_idle(raw: &RawFile, path: &str) -> Result<Option<Scope>, MutationError> {
-    match resolve_scope(raw, path) {
-        Ok(scope) => Ok(Some(scope)),
-        Err(_) => Ok(None),
-    }
+fn resolve_scope_or_idle(raw: &RawFile, path: &str) -> Option<Scope> {
+    resolve_scope(raw, path).ok()
 }
 
 fn scope_instances_mut(
@@ -772,10 +704,10 @@ fn add_instance(
         ));
     }
     // A scope that gains a child is not atomic anymore.
-    if let Scope::Definition(i) = scope {
-        if let Some(definition) = raw.components.get_mut(i) {
-            definition.inner.leaf = Some(false);
-        }
+    if let Scope::Definition(i) = scope
+        && let Some(definition) = raw.components.get_mut(i)
+    {
+        definition.inner.leaf = Some(false);
     }
     let instances = scope_instances_mut(raw, scope)?;
     if instances.iter().any(|i| i.label == label) {
@@ -835,7 +767,7 @@ fn create_component(
         // creating a "main" system when the model has none yet.
         if raw.systems.is_empty() {
             actions.extend(add_system(raw, "main", FALLBACK_SYSTEM_DESCRIPTION)?);
-            parent = "main".to_owned();
+            "main".clone_into(&mut parent);
         } else {
             parent = raw
                 .systems
@@ -847,9 +779,9 @@ fn create_component(
     // `resolve_scope` walks instance paths through their `source`
     // definition, which is exactly the store location. The returned path
     // stays on the canvas path (`parent` as given).
-    if params.source_label.is_empty() {
-        // New-definition mode also places an instance — otherwise creation
-        // closes with nothing visibly changing on the canvas.
+    // New-definition mode also places an instance — otherwise creation
+    // closes with nothing visibly changing on the canvas.
+    let source = if params.source_label.is_empty() {
         actions.extend(add_definition(
             raw,
             params.label,
@@ -861,26 +793,19 @@ fn create_component(
                 ..Default::default()
             },
         )?);
-        let scope = resolve_scope(raw, &parent)
-            .map_err(|_| MutationError::InvalidInput(format!("unknown container '{parent}'")))?;
-        actions.extend(add_instance(raw, scope, params.label, params.label)?);
-        let label = params.label;
-        Ok(ApplyOutcome {
-            applied: true,
-            path: Some(format!("{parent}/{label}")),
-            actions,
-        })
+        params.label
     } else {
-        let scope = resolve_scope(raw, &parent)
-            .map_err(|_| MutationError::InvalidInput(format!("unknown container '{parent}'")))?;
-        actions.extend(add_instance(raw, scope, params.label, params.source_label)?);
-        let label = params.label;
-        Ok(ApplyOutcome {
-            applied: true,
-            path: Some(format!("{parent}/{label}")),
-            actions,
-        })
-    }
+        params.source_label
+    };
+    let scope = resolve_scope(raw, &parent)
+        .map_err(|_| MutationError::InvalidInput(format!("unknown container '{parent}'")))?;
+    actions.extend(add_instance(raw, scope, params.label, source)?);
+    let label = params.label;
+    Ok(ApplyOutcome {
+        applied: true,
+        path: Some(format!("{parent}/{label}")),
+        actions,
+    })
 }
 
 fn reparent(
@@ -902,8 +827,8 @@ fn reparent(
     {
         return Ok(idle());
     }
-    let source_scope = resolve_scope_or_idle(raw, &source_parent)?;
-    let target_scope = resolve_scope_or_idle(raw, target_parent_path)?;
+    let source_scope = resolve_scope_or_idle(raw, &source_parent);
+    let target_scope = resolve_scope_or_idle(raw, target_parent_path);
     let (Some(source_scope), Some(target_scope)) = (source_scope, target_scope) else {
         return Ok(idle());
     };
@@ -921,10 +846,10 @@ fn reparent(
     };
     let moved = scope_instances_mut(raw, source_scope)?.remove(position);
     // A scope that gains a child is not atomic anymore.
-    if let Scope::Definition(i) = target_scope {
-        if let Some(definition) = raw.components.get_mut(i) {
-            definition.inner.leaf = Some(false);
-        }
+    if let Scope::Definition(i) = target_scope
+        && let Some(definition) = raw.components.get_mut(i)
+    {
+        definition.inner.leaf = Some(false);
     }
     scope_instances_mut(raw, target_scope)?.push(moved);
     Ok(applied(vec![LoggedAction::ReparentComponent {
@@ -951,7 +876,7 @@ fn rename(raw: &mut RawFile, path: &str, new_label: &str) -> Result<ApplyOutcome
         return Ok(idle());
     }
     let parent_path: String = parent_segments.join("/");
-    let Some(scope) = resolve_scope_or_idle(raw, &parent_path)? else {
+    let Some(scope) = resolve_scope_or_idle(raw, &parent_path) else {
         return Ok(idle());
     };
     let instances = scope_instances_mut(raw, scope)?;
@@ -961,54 +886,57 @@ fn rename(raw: &mut RawFile, path: &str, new_label: &str) -> Result<ApplyOutcome
     let Some(entry) = instances.iter_mut().find(|i| i.label == old_label) else {
         return Ok(idle());
     };
-    entry.label = new_label.to_owned();
+    new_label.clone_into(&mut entry.label);
     Ok(applied(vec![LoggedAction::RenameComponent {
         path: path.to_owned(),
         new_label: new_label.to_owned(),
     }]))
 }
 
-fn update(raw: &mut RawFile, path: &str, patch: &PatchJson) -> Result<ApplyOutcome, MutationError> {
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-    let Some((&first, _)) = segments.split_first() else {
+fn update(
+    raw: &mut RawFile,
+    path: &str,
+    changes: &PatchJson,
+) -> Result<ApplyOutcome, MutationError> {
+    let Some((definition_label, notified_path)) = update_target(raw, path) else {
         return Ok(idle());
     };
-    let definition_label: String;
-    let notified_path: String;
-    if segments.len() == 1 {
-        // Bare labels address top-level definitions.
-        definition_label = first.to_owned();
-        notified_path = path.to_owned();
-    } else {
-        let Some((&leaf, parent_segments)) = segments.split_last() else {
-            return Ok(idle());
-        };
-        let parent_path: String = parent_segments.join("/");
-        let Some(scope) = resolve_scope_or_idle(raw, &parent_path)? else {
-            return Ok(idle());
-        };
-        let Some(source) = scope_instances(raw, scope)
-            .iter()
-            .find(|i| i.label == leaf)
-            .and_then(|i| i.inner.source.clone())
-        else {
-            return Ok(idle());
-        };
-        // Body edits land on the reused definition, not the instance.
-        definition_label = source.clone();
-        notified_path = source;
-    }
     let Some(definition) = find_definition(raw, &definition_label) else {
         return Ok(idle());
     };
     let Some(body) = raw.components.get_mut(definition) else {
         return Ok(idle());
     };
-    apply_patch(&mut body.inner, patch)?;
+    apply_patch(&mut body.inner, changes)?;
     Ok(applied(vec![LoggedAction::UpdateComponent {
         path: notified_path,
-        patch: patch.clone(),
+        patch: changes.clone(),
     }]))
+}
+
+/// Resolve an update path to `(definition label, notified path)`. Instance
+/// paths redirect to their reused definition, since body edits land there
+/// rather than on the instance. `None` refuses the op.
+fn update_target(raw: &RawFile, path: &str) -> Option<(String, String)> {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    if segments.len() == 1 {
+        // Bare labels address top-level definitions.
+        let (&only, _) = segments.split_first()?;
+        return Some((only.to_owned(), path.to_owned()));
+    }
+    let (&leaf, parent_segments) = segments.split_last()?;
+    if parent_segments.is_empty() {
+        return None;
+    }
+    let parent_path: String = parent_segments.join("/");
+    let scope = resolve_scope_or_idle(raw, &parent_path)?;
+    let source = scope_instances(raw, scope)
+        .iter()
+        .find(|i| i.label == leaf)?
+        .inner
+        .source
+        .clone()?;
+    Some((source.clone(), source))
 }
 
 fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), MutationError> {
@@ -1028,7 +956,7 @@ fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), Mutatio
         body.font = non_empty(font);
     }
     if let Some(tags) = &patch.tags {
-        body.tags = tags.clone();
+        body.tags.clone_from(tags);
     }
     if let Some(leaf) = patch.leaf {
         body.leaf = Some(leaf);
@@ -1058,7 +986,7 @@ fn delete(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> 
             return Ok(idle());
         };
         let parent_path: String = parent_segments.join("/");
-        let Some(scope) = resolve_scope_or_idle(raw, &parent_path)? else {
+        let Some(scope) = resolve_scope_or_idle(raw, &parent_path) else {
             return Ok(idle());
         };
         let instances = scope_instances_mut(raw, scope)?;
@@ -1070,6 +998,75 @@ fn delete(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> 
     Ok(applied(vec![LoggedAction::DeleteComponent {
         path: path.to_owned(),
     }]))
+}
+
+
+fn add_connection(
+    raw: &mut RawFile,
+    scope_path: &str,
+    label: &str,
+    from: &str,
+    to: &str,
+) -> Result<ApplyOutcome, MutationError> {
+    let Some(scope) = resolve_scope_or_idle(raw, scope_path) else {
+        return Ok(idle());
+    };
+    let connections = scope_connections_mut(raw, scope)?;
+    if connections.iter().any(|c| c.label == label) {
+        return Ok(applied_none());
+    }
+    connections.push(Labeled {
+        label: label.to_owned(),
+        inner: RawConnection {
+            from: non_empty(from),
+            to: non_empty(to),
+            ..Default::default()
+        },
+    });
+    Ok(ApplyOutcome {
+        applied: true,
+        path: None,
+        actions: vec![LoggedAction::AddConnection {
+            scope_path: scope_path.to_owned(),
+            label: label.to_owned(),
+            from: from.to_owned(),
+            to: to.to_owned(),
+        }],
+    })
+}
+
+fn delete_connection_by_label(raw: &mut RawFile, label: &str) -> ApplyOutcome {
+    if let Some(index) = raw
+        .systems
+        .iter()
+        .position(|s| s.inner.connections.iter().any(|c| c.label == label))
+    {
+        let system = raw
+            .systems
+            .get(index)
+            .map_or_else(String::new, |s| s.label.clone());
+        delete_connection(raw, Scope::System(index), label);
+        return applied(vec![LoggedAction::DeleteConnection {
+            scope_path: system,
+            label: label.to_owned(),
+        }]);
+    }
+    if let Some(index) = raw
+        .components
+        .iter()
+        .position(|c| c.inner.connections.iter().any(|c| c.label == label))
+    {
+        let definition = raw
+            .components
+            .get(index)
+            .map_or_else(String::new, |c| c.label.clone());
+        delete_connection(raw, Scope::Definition(index), label);
+        return applied(vec![LoggedAction::DeleteConnection {
+            scope_path: definition,
+            label: label.to_owned(),
+        }]);
+    }
+    idle()
 }
 
 #[cfg(test)]
@@ -1525,8 +1522,8 @@ mod leaf_and_visual_tests {
         .hcl
         .expect("hcl");
         assert!(hcl.contains(r##"color       = "#00ff00""##));
-        assert!(hcl.contains(r##"border      = "dotted""##));
-        assert!(hcl.contains(r##"font        = "italic""##));
+        assert!(hcl.contains(r#"border      = "dotted""#));
+        assert!(hcl.contains(r#"font        = "italic""#));
 
         let hcl = mutate_to_hcl(
             "system.hcl",
