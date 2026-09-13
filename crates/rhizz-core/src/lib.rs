@@ -128,9 +128,20 @@ fn compile_model_sources(sources: &[&Source]) -> CompileResult {
         let mut file = match parse::parse_file(&source.content, path) {
             Ok(f) => f,
             Err(e) => {
+                // `{e:#}` flattens the anyhow chain so the inner E012 marker
+                // from `parse_instance` survives the outer `in instance ...`
+                // context. The full chain is also user-facing for E000 typos.
+                let msg = format!("{e:#}");
+                // `instance` exclusivity violations carry an E012 marker
+                // (SPEC §2.4); everything else is a generic HCL parse failure.
+                let code = if msg.contains("E012:") {
+                    DiagnosticCode::E012
+                } else {
+                    DiagnosticCode::E000
+                };
                 return CompileResult {
                     model: None,
-                    diagnostics: vec![Diagnostic::error(DiagnosticCode::E000, e.to_string())],
+                    diagnostics: vec![Diagnostic::error(code, msg)],
                 };
             }
         };
@@ -708,6 +719,36 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
                 .iter()
                 .any(|d| d.code == DiagnosticCode::E016),
             "phase 2 must be skipped when phase 1 fails: {:?}",
+            codes(&result)
+        );
+    }
+
+    #[test]
+    fn unknown_model_attr_surfaces_as_e000() {
+        let sources = vec![model_source(r#"system "s" { descripton = "typo" }"#)];
+        let result = compile(&sources);
+        assert!(result.model.is_none(), "model must not survive E000");
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E000),
+            "expected E000, got {:?}",
+            codes(&result)
+        );
+    }
+
+    #[test]
+    fn instance_extra_attr_surfaces_as_e012() {
+        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    description = \"extra\"\n  }\n}";
+        let result = compile(&[model_source(src)]);
+        assert!(result.model.is_none(), "model must not survive E012");
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::E012),
+            "expected E012, got {:?}",
             codes(&result)
         );
     }

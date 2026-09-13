@@ -764,6 +764,7 @@ fn format_number(n: f64) -> String {
 // ── Views Parsing ─────────────────────────────────────────────────────────────
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawViewAttrs {
     description: Option<String>,
     tags: Option<Vec<String>>,
@@ -771,6 +772,7 @@ struct RawViewAttrs {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawFilterAttrs {
     include_tags: Option<Vec<String>>,
     exclude_tags: Option<Vec<String>>,
@@ -780,6 +782,7 @@ struct RawFilterAttrs {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawNodeAttrs {
     x: Option<f64>,
     y: Option<f64>,
@@ -789,12 +792,14 @@ struct RawNodeAttrs {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawConnectionLayoutAttrs {
     start_side: Option<String>,
     end_side: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawAnnotationAttrs {
     x: Option<f64>,
     y: Option<f64>,
@@ -810,6 +815,16 @@ fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
         Some("right") => Some(ConnectionSide::Right),
         _ => None,
     }
+}
+
+/// Deserialize attribute-only fields from a view block body, stripping child
+/// blocks so `deny_unknown_fields` only rejects unknown attributes.
+fn view_attrs<T: for<'de> serde::Deserialize<'de>>(
+    body: &hcl::Body,
+    ctx: &str,
+) -> anyhow::Result<T> {
+    let filtered: hcl::Body = body.attributes().cloned().collect::<Vec<_>>().into();
+    hcl::from_body(filtered).context(ctx.to_owned())
 }
 
 /// Parses an HCL string representing `views.hcl` into a vector of [`ViewDefinition`]s.
@@ -830,8 +845,8 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                 .map(|l| l.as_str().to_owned())
                 .ok_or_else(|| anyhow::anyhow!("view block is missing a label"))?;
 
-            let attrs: RawViewAttrs = hcl::from_body(block.body().clone())
-                .context("failed to deserialize view attributes")?;
+            let attrs: RawViewAttrs =
+                view_attrs(block.body(), "failed to deserialize view attributes")?;
 
             let mut filter = ViewFilterDefinition::default();
             let mut nodes = Vec::new();
@@ -841,8 +856,8 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
             for child in block.body().blocks() {
                 match child.identifier() {
                     "filter" => {
-                        let fa: RawFilterAttrs = hcl::from_body(child.body().clone())
-                            .context("failed to deserialize filter attributes")?;
+                        let fa: RawFilterAttrs =
+                            view_attrs(child.body(), "failed to deserialize filter attributes")?;
                         filter = ViewFilterDefinition {
                             include_tags: fa.include_tags.unwrap_or_default(),
                             exclude_tags: fa.exclude_tags.unwrap_or_default(),
@@ -857,8 +872,8 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             .first()
                             .map(|l| l.as_str().to_owned())
                             .ok_or_else(|| anyhow::anyhow!("node block is missing a label"))?;
-                        let na: RawNodeAttrs = hcl::from_body(child.body().clone())
-                            .context("failed to deserialize node attributes")?;
+                        let na: RawNodeAttrs =
+                            view_attrs(child.body(), "failed to deserialize node attributes")?;
                         nodes.push(NodeLayout {
                             component: node_label,
                             x: na.x.unwrap_or(0.0),
@@ -876,8 +891,10 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             .ok_or_else(|| {
                                 anyhow::anyhow!("connection layout block is missing a label")
                             })?;
-                        let ca: RawConnectionLayoutAttrs = hcl::from_body(child.body().clone())
-                            .context("failed to deserialize connection layout attributes")?;
+                        let ca: RawConnectionLayoutAttrs = view_attrs(
+                            child.body(),
+                            "failed to deserialize connection layout attributes",
+                        )?;
                         connections.push(ConnectionLayout {
                             connection: conn_label,
                             start_side: parse_connection_side(ca.start_side.as_deref()),
@@ -885,8 +902,10 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                         });
                     }
                     "annotation" => {
-                        let aa: RawAnnotationAttrs = hcl::from_body(child.body().clone())
-                            .context("failed to deserialize annotation attributes")?;
+                        let aa: RawAnnotationAttrs = view_attrs(
+                            child.body(),
+                            "failed to deserialize annotation attributes",
+                        )?;
                         annotations.push(Annotation {
                             text: aa.text.unwrap_or_default(),
                             x: aa.x.unwrap_or(0.0),
@@ -1788,5 +1807,24 @@ system "main" {
         let reparsed = parse_views(&serialized).expect("reparse");
         assert_eq!(reparsed, views, "annotation round trip must be stable");
         assert!(serialized.contains("annotation {"));
+    }
+
+    #[test]
+    fn unknown_attr_on_view_is_error() {
+        let hcl = r#"view "main" { system = "s" descripton = "typo" }"#;
+        let err = parse_views(hcl).expect_err("unknown view attr should fail");
+        let full = format!("{err:#}");
+        assert!(
+            full.contains("descripton"),
+            "should name unknown key, got: {full}"
+        );
+    }
+
+    #[test]
+    fn unknown_attr_on_view_node_is_error() {
+        let hcl = r#"view "main" { system = "s" node "a" { x = 1 typo = 2 } }"#;
+        let err = parse_views(hcl).expect_err("unknown node attr should fail");
+        let full = format!("{err:#}");
+        assert!(full.contains("typo"), "got: {full}");
     }
 }

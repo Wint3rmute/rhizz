@@ -13,32 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Reject unknown attributes in HCL blocks (`deny_unknown_fields`)
-
-Every block parser in `crates/rhizz-core/src/parse.rs` deserializes attributes
-via `attrs<T>()` (`hcl::from_body`) into plain serde structs with no
-`deny_unknown_fields`, so any misspelled or misplaced attribute
-(`descripton`, `sorce`, `description` on an `instance`, stale `level` on a
-`system`) is silently dropped. The view parser (`serialize.rs::parse_views`)
-behaves the same way.
-
-Definition of done:
-
-1. Add `#[serde(deny_unknown_fields)]` to each `*Attrs` struct (model + view
-   parsers) so unknown keys become parse errors (surfacing as E000), or map
-   them to a dedicated non-blocking warning if that fits the gradual model
-   better — pick one, document it in `SPEC/models.md` (Parsing rules).
-2. Special-case `instance`: extra keys there must surface as E012 (not generic
-   E000), since SPEC.md §2.4 names that code.
-3. Red/green TDD: unit tests per block type asserting a typo'd attribute no
-   longer parses silently (e.g. `descripton` on a component, `description` on
-   an `instance`, `level` on a `system`).
-4. Re-canonicalize examples / `book.lock` if any relied on silently-ignored
-   keys; `just test`, `just lint`, `just build` green.
-
-Note: this subsumes item 3 of the `system`-`level` task below (the rejection
-mechanism); that task then only removes the field itself.
-
 ## Task <N> — Remove `level` support in `system` blocks
 
 `system` blocks no longer carry a `level` attribute (SPEC.md §2.2) — systems
