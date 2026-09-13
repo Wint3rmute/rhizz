@@ -24,8 +24,8 @@ describe("DocumentStore.canonicalHcl (Audit finding 1)", () => {
 
     const draft = doc.systemHcl;
     const canonical = doc.canonicalHcl;
+    if (canonical === null) throw new Error("expected canonical HCL");
 
-    expect(canonical).not.toBeNull();
     // TS draft emits a three-line instance block; Rust canonical is one line.
     expect(draft).toContain('instance "cpu" {\n    source = "cpu"');
     expect(canonical).toContain('instance "cpu" { source = "cpu" }');
@@ -41,15 +41,15 @@ describe("DocumentStore.canonicalHcl (Audit finding 1)", () => {
     doc.addInstance("main", "a-def", "a-def");
 
     const canonical = doc.canonicalHcl;
-    expect(canonical).not.toBeNull();
+    if (canonical === null) throw new Error("expected canonical HCL");
 
     const out = compile_system([{
       filename: "system.hcl",
-      content: canonical as string,
+      content: canonical,
     }]);
     const model = out.model();
-    expect(model).toBeDefined();
+    if (model === undefined) throw new Error("expected compiled model");
     expect(out.error_count()).toBe(0);
-    expect(serialize_model(model!)).toEqual(canonical);
+    expect(serialize_model(model)).toEqual(canonical);
   });
 });
