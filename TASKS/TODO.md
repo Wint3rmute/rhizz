@@ -13,26 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Remove `level` support in `system` blocks
-
-`system` blocks no longer carry a `level` attribute (SPEC.md §2.2) — systems
-are implicitly level 0 and only components/connections/messages use `level`.
-The parser and model still accept and store it, so it parses silently despite
-being out of spec.
-
-Definition of done:
-
-1. Remove `level` from `SystemAttrs` / `RawSystem` / resolved `System` in
-   `crates/rhizz-core` (`parse.rs`, `model.rs`, `resolve.rs`, `serialize.rs`).
-2. Systems resolve at implicit level 0; component `level` defaults to
-   `parent level + 1` from there (no behavior change for components).
-3. A `level` key on a `system` block is rejected (parse error or diagnostic —
-   pick one and document it).
-4. Update/remove tests using `level` on systems (`parse_minimal_system`,
-   resolve tests, serializer round-trips) and re-canonicalize examples /
-   `book.lock` if affected.
-5. `just test`, `just lint`, `just build` green.
-
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,

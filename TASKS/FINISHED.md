@@ -4,6 +4,29 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Remove `level` support in `system` blocks
+
+Systems are implicitly level 0 (SPEC.md §2.2) — the `level` attribute is gone
+from `system` blocks entirely.
+
+- **Core (`rhizz-core`)**: removed `level` from `SystemAttrs` / `RawSystem` /
+  resolved `System` (`parse.rs`, `model.rs`); `resolve.rs` always resolves
+  systems at 0 (children keep the untouched `parent + 1` defaulting);
+  `serialize.rs` no longer emits system `level`; W006 roots system-placed
+  components/connections at 0 (`validate.rs`). A stale `level` key is a
+  blocking parse error via the earlier `deny_unknown_fields` work (E000).
+- **Frontend**: dropped system `level` from `DocumentStore` (`SystemData`, raw
+  payload type, HCL emitter, model builder, `addSystem`); system connections
+  root at 0. WASM `SystemJS` needed no change (label only).
+- **Tests**: new `system_level_rejected` parse test; `parse_minimal_system`,
+  `defaults_applied`, `w006_level_decreases` (now via a component parent),
+  and the deep-hierarchy roundtrip updated off system `level`.
+- **Examples**: none set `level` on systems — all `fmt --check` clean, no
+  `book.lock` changes needed.
+- `just test`, `just lint`, `just build` green.
+
+---
+
 ## Task — Reject unknown attributes in HCL blocks (`deny_unknown_fields`)
 
 Unknown/misspelled attributes are now blocking parse errors instead of being silently dropped.
