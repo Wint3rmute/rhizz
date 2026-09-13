@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { subscribeToMutations } from "../DocumentStore.svelte";
+import type { ModelAction } from "../actionLog";
 import { applyModelMutation } from "./applyMutation";
 
 beforeAll(async () => {
@@ -113,6 +114,37 @@ describe("applyModelMutation", () => {
         'instance "c" { source = "compA" }',
       );
       expect(recorded).toContain("rename_component");
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("reports instance updates against their definition", async () => {
+    const fs = memoryFs();
+    await seedDemo(fs);
+    const recorded: ModelAction[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action);
+    });
+    try {
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        fs.store.get("system.hcl") ?? "",
+        {
+          kind: "update_component",
+          path: "demo/a",
+          patch: { description: "hot chip" },
+        },
+      );
+      expect(result.applied).toBe(true);
+      expect(fs.store.get("system.hcl")).toContain("hot chip");
+      // Body edits land on the reused definition, not the instance.
+      expect(recorded).toContainEqual({
+        op: "update_component",
+        path: "compA",
+        patch: { description: "hot chip" },
+      });
     } finally {
       unsubscribe();
     }
