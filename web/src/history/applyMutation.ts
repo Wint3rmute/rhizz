@@ -100,7 +100,9 @@ export async function applyModelMutation(
   if (!result.applied) {
     const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
     console.warn(
-      `Refusing model mutation (${op.kind}): ${codes.join(", ") || "guard refusal"}`,
+      `Refusing model mutation (${op.kind}): ${
+        codes.join(", ") || "guard refusal"
+      }`,
     );
     return { applied: false };
   }

@@ -174,7 +174,9 @@ describe("actionLog", () => {
     expect(script).toContain(
       '{"kind":"add_instance","parentPath":"main","label":"drone","source":"drone"}',
     );
-    expect(script).toContain('expect(files.get("system.hcl")).toBe(`<final>`);');
+    expect(script).toContain(
+      'expect(files.get("system.hcl")).toBe(`<final>`);',
+    );
   });
 
   it("renders multi-line HCL as a readable template literal", () => {
