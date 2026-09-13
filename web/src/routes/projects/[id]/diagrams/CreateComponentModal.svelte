@@ -192,21 +192,25 @@ function handleCreate() {
         >
           New Component Definition
         </button>
-        <button
-          type="button"
-          class="btn btn-sm join-item flex-1 {mode === 'reuse' ? 'btn-primary' : 'btn-ghost'}"
-          onclick={() => (mode = "reuse")}
-          disabled={reusableDefinitions.length === 0}
-          title={reusableDefinitions.length === 0
-            ? "No reusable definitions yet — create one first"
-            : ""}
+        <span
+          class="join-item flex-1 {reusableDefinitions.length === 0 ? 'tooltip tooltip-bottom' : ''}"
+          data-tip={reusableDefinitions.length === 0
+            ? "No components defined yet"
+            : null}
         >
-          Use Existing Component
-        </button>
+          <button
+            type="button"
+            class="btn btn-sm w-full {mode === 'reuse' ? 'btn-primary' : 'btn-ghost'}"
+            onclick={() => (mode = "reuse")}
+            disabled={reusableDefinitions.length === 0}
+          >
+            Use Existing Component
+          </button>
+        </span>
       </div>
       <p class="text-xs text-base-content/50 mt-2">
         {mode === "new"
-          ? "Creates a top-level reusable definition (no system parent) that any system can reuse."
+          ? "Creates a new reusable component definition."
           : "Places an instance of an existing definition inside the chosen system/container."}
       </p>
     </div>
