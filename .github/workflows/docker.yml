@@ -5,7 +5,7 @@ name: docker
 # already-reviewed, merged state.
 on:
   push:
-    branches: [main]
+    # branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -45,6 +45,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: true
+          # push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

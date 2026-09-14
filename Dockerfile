@@ -11,17 +11,23 @@
 # frontend talks to the same-origin `/api/vfs` (the VFS persistence API) rather
 # than a hardcoded host.
 # ─────────────────────────────────────────────────────────────────────────────
+# Pinned Deno binary, matching flake.nix / local toolchain (`deno --version`).
+# `:bin-*` is the minimal variant meant for `COPY --from`. Never use `:latest`
+# here: a floating tag re-introduces the npm-style drift that broke the
+# frontend build (see `@storybook/addon-vitest` / vitest peer conflict).
+FROM denoland/deno:bin-2.9.6 AS deno
 FROM rust:1-bookworm AS frontend
 
 WORKDIR /app
 
+COPY --from=deno /deno /usr/local/bin/deno
+
 # Rust toolchain is already present; add the wasm32 target + wasm-pack.
-# The frontend build also needs Node (npm + vite), which the rust image
-# doesn't ship — install a pinned Node 22 LTS from the official tarball.
+# The frontend build runs via Deno (`deno install` + `deno run build`, same as
+# CI) which handles npm compat for `vite build`, so no separate Node install
+# is needed.
 RUN rustup target add wasm32-unknown-unknown \
-    && cargo install wasm-pack --locked \
-    && curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz \
-        | tar -xJ -C /usr/local --strip-components=1
+    && cargo install wasm-pack --locked
 
 # Build the WASM package that the web frontend imports. Copy the whole
 # crates/ tree: the workspace Cargo.toml lists every crate as a member, so
@@ -35,11 +41,13 @@ COPY examples examples
 COPY Cargo.toml Cargo.lock ./
 RUN wasm-pack build crates/rhizz-wasm --target web --release
 
-# Build the frontend with the VFS-sync env var set.
+# Build the frontend with the VFS-sync env var set. Uses Deno (same as CI),
+# with `deno.lock` as the source of truth — not `npm install`, whose strict
+# peer resolution breaks on `@storybook/addon-vitest` / vitest mismatches.
 COPY web web
 RUN cd web \
-    && npm install \
-    && VITE_RHIZZ_SERVER_URL=/ npm run build
+    && deno install \
+    && VITE_RHIZZ_SERVER_URL=/ deno run build
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — build the backend, embedding the frontend artifacts.
