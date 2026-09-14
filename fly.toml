@@ -11,7 +11,6 @@ primary_region = 'fra'
 
 [env]
   RHIZZ_ADDR = '0.0.0.0:8080'
-  RHIZZ_DATA_DIR = '/data'
   RUST_LOG = 'info'
 
 [[mounts]]
