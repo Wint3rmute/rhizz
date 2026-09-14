@@ -7,7 +7,11 @@ import {
   serialize_model,
 } from "../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../vfs/compile";
-import { applyModelMutation } from "../history/applyMutation";
+import { applyModelMutation, type ModelMutationOp } from "../history/applyMutation";
+import {
+  snapshotTransaction,
+  TransactionManager,
+} from "../history/TransactionManager";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
 import { InMemoryProjectStore } from "../vfs/inMemoryStore";
 
@@ -42,7 +46,24 @@ export type WorkspaceAction =
     font?: string | undefined;
   }
   | { type: "move-node"; component: string; x: number; y: number }
-  | { type: "add-diagram-view"; name: string };
+  | { type: "add-diagram-view"; name: string }
+  | {
+    type: "create-component";
+    label: string;
+    parentKey?: string | undefined;
+    sourceLabel?: string | undefined;
+  }
+  | { type: "delete-component"; component: string }
+  | {
+    type: "add-connection";
+    scopePath: string;
+    label: string;
+    from: string;
+    to: string;
+  }
+  | { type: "delete-connection"; label: string }
+  | { type: "undo" }
+  | { type: "redo" };
 
 async function populateFiles(
   fs: ProjectFs,
@@ -60,6 +81,7 @@ async function populateFiles(
 
 export class WorkspaceHarness {
   readonly fs: ProjectFs;
+  readonly transactions = new TransactionManager(100);
   #sources: Source[] = [];
   #components: ComponentJS[] = [];
   #componentKeys: string[] = [];
@@ -141,33 +163,241 @@ export class WorkspaceHarness {
         this.selectComponent(action.component);
         return;
       case "set-node-visuals": {
-        this.selectComponent(action.component);
-        const selectedBefore = this.selectedComponentKey;
-        await this.setSelectedComponentVisuals({
-          color: action.color,
-          border: action.border,
-          font: action.font,
-        });
-        if (this.selectedComponentKey !== selectedBefore) {
-          throw new Error(
-            `selected-component-stability: before=${
-              String(selectedBefore)
-            } after=${String(this.selectedComponentKey)}`,
-          );
-        }
+        await this.executeModelTransaction(
+          `visual ${action.component}`,
+          {
+            kind: "update_component",
+            path: action.component,
+            patch: {
+              ...(action.color === undefined
+                ? {}
+                : { color: action.color }),
+              ...(action.border === undefined
+                ? {}
+                : { border: action.border }),
+              ...(action.font === undefined ? {} : { font: action.font }),
+            },
+          },
+          action.component,
+        );
         return;
       }
       case "move-node":
         if (!this.componentKeys.includes(action.component)) {
           throw new Error(`Component ${action.component} not found`);
         }
-        this.#layout.set(action.component, { x: action.x, y: action.y });
+        await this.executeLayoutTransaction(
+          `move ${action.component}`,
+          () => {
+            this.#layout.set(action.component, {
+              x: action.x,
+              y: action.y,
+            });
+          },
+        );
         return;
       case "add-diagram-view":
-        this.#diagrams.add(action.name);
-        this.#activeDiagram = action.name;
+        await this.executeLayoutTransaction(
+          `view ${action.name}`,
+          () => {
+            this.#diagrams.add(action.name);
+            this.#activeDiagram = action.name;
+          },
+        );
+        return;
+      case "create-component":
+        await this.executeModelTransaction(
+          `create ${action.label}`,
+          {
+            kind: "create_component",
+            label: action.label,
+            ...(action.parentKey === undefined
+              ? {}
+              : { parentKey: action.parentKey }),
+            ...(action.sourceLabel === undefined
+              ? {}
+              : { sourceLabel: action.sourceLabel }),
+            leaf: true,
+          },
+          undefined,
+          true,
+        );
+        return;
+      case "delete-component":
+        await this.executeModelTransaction(
+          `delete ${action.component}`,
+          { kind: "delete_component", path: action.component },
+          undefined,
+          true,
+        );
+        return;
+      case "add-connection":
+        await this.executeModelTransaction(
+          `connect ${action.label}`,
+          {
+            kind: "add_connection",
+            scopePath: action.scopePath,
+            label: action.label,
+            from: action.from,
+            to: action.to,
+          },
+          undefined,
+          true,
+        );
+        return;
+      case "delete-connection":
+        await this.executeModelTransaction(
+          `disconnect ${action.label}`,
+          { kind: "delete_connection_by_label", label: action.label },
+          undefined,
+          true,
+        );
+        return;
+      case "undo":
+        await this.undo();
+        return;
+      case "redo":
+        await this.redo();
         return;
     }
+  }
+
+  get canUndo(): boolean {
+    return this.transactions.canUndo;
+  }
+
+  get canRedo(): boolean {
+    return this.transactions.canRedo;
+  }
+
+  async undo(): Promise<boolean> {
+    const undone = await this.transactions.undo();
+    if (undone) await this.recompile();
+    return undone;
+  }
+
+  async redo(): Promise<boolean> {
+    const redone = await this.transactions.redo();
+    if (redone) await this.recompile();
+    return redone;
+  }
+
+  private async snapshotHarness(): Promise<{
+    primaryPath: string;
+    primaryContent: string;
+    layout: [string, { x: number; y: number }][];
+    diagrams: string[];
+    active: string;
+    selected: string | null;
+  }> {
+    const primaryPath = await this.primaryHclFile();
+    let primaryContent = "";
+    try {
+      primaryContent = await this.fs.readFile(primaryPath);
+    } catch {
+      primaryContent = "";
+    }
+    return {
+      primaryPath,
+      primaryContent,
+      layout: [...this.#layout.entries()].map(([key, pos]) => [
+        key,
+        { ...pos },
+      ]),
+      diagrams: [...this.#diagrams],
+      active: this.#activeDiagram,
+      selected: this.#selectedKey,
+    };
+  }
+
+  private async restoreHarness(snapshot: {
+    primaryPath: string;
+    primaryContent: string;
+    layout: [string, { x: number; y: number }][];
+    diagrams: string[];
+    active: string;
+    selected: string | null;
+  }): Promise<void> {
+    await this.fs.writeFile(
+      snapshot.primaryPath,
+      snapshot.primaryContent,
+    );
+    this.#layout = new Map(snapshot.layout);
+    this.#diagrams = new Set(snapshot.diagrams);
+    this.#activeDiagram = snapshot.active;
+    this.#selectedKey = snapshot.selected;
+    await this.recompile();
+  }
+
+  /** Model mutation + recompile as one undoable transaction. */
+  private async executeModelTransaction(
+    label: string,
+    op: ModelMutationOp,
+    selectAfter?: string | undefined,
+    lenient = false,
+  ): Promise<boolean> {
+    const tx = snapshotTransaction({
+      label,
+      snapshot: () => this.snapshotHarness(),
+      apply: async () => {
+        const before = await this.snapshotHarness();
+        const result = await applyModelMutation(
+          this.fs,
+          before.primaryPath,
+          before.primaryContent,
+          op,
+        );
+        if (!result.applied) return false;
+        if (selectAfter !== undefined) {
+          try {
+            this.selectComponent(selectAfter);
+          } catch {
+            // Selection follows the edit when possible; a renamed or
+            // deleted key simply leaves the previous selection behind.
+          }
+        }
+        // Place newly created components on the canvas so Ctrl+Z undoes
+        // both the HCL entity and its visual placement.
+        if (op.kind === "create_component" && result.path) {
+          this.#layout.set(result.path, { x: 100, y: 100 });
+        }
+        if (op.kind === "delete_component") {
+          const deleted = (op as { path: string }).path;
+          this.#layout.delete(deleted);
+          if (this.#selectedKey === deleted) this.#selectedKey = null;
+        }
+        await this.recompile();
+        return true;
+      },
+      restore: (snapshot) => this.restoreHarness(snapshot),
+      isEqual: (a, b) =>
+        a.primaryContent === b.primaryContent &&
+        JSON.stringify(a.layout) === JSON.stringify(b.layout) &&
+        JSON.stringify(a.diagrams) === JSON.stringify(b.diagrams),
+    });
+    const applied = await this.transactions.execute(tx);
+    if (!applied && !lenient) {
+      throw new Error(`Transaction refused: ${label}`);
+    }
+    return applied;
+  }
+
+  /** Layout-only mutation as one undoable transaction. */
+  private async executeLayoutTransaction(
+    label: string,
+    mutate: () => void,
+  ): Promise<boolean> {
+    const tx = snapshotTransaction({
+      label,
+      snapshot: () => this.snapshotHarness(),
+      apply: async () => {
+        mutate();
+        await this.recompile();
+        return true;
+      },
+      restore: (snapshot) => this.restoreHarness(snapshot),
+    });
+    return this.transactions.execute(tx);
   }
 
   assertInvariants(): void {
@@ -310,17 +540,15 @@ export class WorkspaceHarness {
   ): Promise<void> {
     const selectedKey = this.selectedComponentKey;
     if (!selectedKey) throw new Error("No component selected");
-    const primary = await this.primaryHclFile();
-    const content = await this.fs.readFile(primary);
-    const result = await applyModelMutation(this.fs, primary, content, {
-      kind: "update_component",
-      path: selectedKey,
-      patch,
-    });
-    if (!result.applied) {
+    const applied = await this.executeModelTransaction(
+      `visual ${selectedKey}`,
+      { kind: "update_component", path: selectedKey, patch },
+      selectedKey,
+    );
+    if (!applied) {
+      const primary = await this.primaryHclFile();
       throw new Error(`Component ${selectedKey} not found in ${primary}`);
     }
-    await this.recompile();
   }
 
   private async primaryHclFile(): Promise<string> {
