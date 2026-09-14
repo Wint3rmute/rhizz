@@ -101,7 +101,9 @@ COPY --from=backend /app/target/release/rhizz-server /usr/local/bin/rhizz-server
 
 # rhizz-server binds RHIZZ_ADDR (default 127.0.0.1:3000); Fly forwards to the
 # container port, so bind all interfaces. The data dir defaults to ./rhizz-data
-# relative to cwd, so point it at the volume.
+# relative to cwd, so point it at the volume. This ENV is the single source of
+# truth for RHIZZ_DATA_DIR — fly.toml intentionally omits it and inherits the
+# image value (it must still match the [[mounts]] destination in fly.toml).
 ENV RHIZZ_ADDR=0.0.0.0:8080 \
     RHIZZ_DATA_DIR=/data \
     RUST_LOG=info
