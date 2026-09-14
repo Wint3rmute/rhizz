@@ -123,10 +123,9 @@ describe("deterministic workspace simulation", () => {
                   editable.length === 0 &&
                   workspace.componentKeys.length > 0
                 ) continue;
-                const label =
-                  `gen-${String(edit.diagramSelector % 8)}-${
-                    String(edit.componentSelector % 32)
-                  }`;
+                const label = `gen-${String(edit.diagramSelector % 8)}-${
+                  String(edit.componentSelector % 32)
+                }`;
                 await workspace.dispatch({
                   type: "create-component",
                   label,
@@ -138,8 +137,7 @@ describe("deterministic workspace simulation", () => {
               if (edit.kind === "delete") {
                 const editable = await workspace.editableComponentKeys();
                 if (editable.length === 0) continue;
-                const key =
-                  editable[edit.componentSelector % editable.length];
+                const key = editable[edit.componentSelector % editable.length];
                 if (!key) continue;
                 // Lenient: deletes that would dangle (E014) refuse without
                 // throwing, so invariants still hold either way.
@@ -172,8 +170,7 @@ describe("deterministic workspace simulation", () => {
                 if (!shared) continue;
                 const [scopePath, leaves] = shared;
                 const from = leaves[edit.componentSelector % leaves.length];
-                const to =
-                  leaves[(edit.componentSelector + 1) % leaves.length];
+                const to = leaves[(edit.componentSelector + 1) % leaves.length];
                 if (!from || !to || from === to) continue;
                 await workspace.dispatch({
                   type: "add-connection",

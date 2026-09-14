@@ -7,7 +7,10 @@ import {
   serialize_model,
 } from "../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../vfs/compile";
-import { applyModelMutation, type ModelMutationOp } from "../history/applyMutation";
+import {
+  applyModelMutation,
+  type ModelMutationOp,
+} from "../history/applyMutation";
 import {
   snapshotTransaction,
   TransactionManager,
@@ -169,12 +172,8 @@ export class WorkspaceHarness {
             kind: "update_component",
             path: action.component,
             patch: {
-              ...(action.color === undefined
-                ? {}
-                : { color: action.color }),
-              ...(action.border === undefined
-                ? {}
-                : { border: action.border }),
+              ...(action.color === undefined ? {} : { color: action.color }),
+              ...(action.border === undefined ? {} : { border: action.border }),
               ...(action.font === undefined ? {} : { font: action.font }),
             },
           },
@@ -291,7 +290,7 @@ export class WorkspaceHarness {
     selected: string | null;
   }> {
     const primaryPath = await this.primaryHclFile();
-    let primaryContent = "";
+    let primaryContent: string;
     try {
       primaryContent = await this.fs.readFile(primaryPath);
     } catch {
@@ -333,7 +332,7 @@ export class WorkspaceHarness {
   private async executeModelTransaction(
     label: string,
     op: ModelMutationOp,
-    selectAfter?: string | undefined,
+    selectAfter?: string,
     lenient = false,
   ): Promise<boolean> {
     const tx = snapshotTransaction({
