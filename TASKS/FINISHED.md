@@ -4,6 +4,29 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Unified command-based transaction history (Undo/Redo)
+
+Model writes and canvas placement now undo/redo together through one
+`web/src/history/TransactionManager.ts` (`do()`/`undo()`, limit 100,
+snapshot-pair so Rust higher-level ops need no hand-written inverses).
+
+- **Core**: generic command stack + `snapshotTransaction` helper (refusals
+  never pushed, redo cleared on new work, no-op writes skipped).
+- **Web** (`diagrams/+page.svelte`): create/update/rename/delete,
+  add/delete connection, reparent, add-system run via
+  `runModelLayoutTransaction`; `onDiagramKeyDown` owns `Ctrl+Z/Y/Shift+Z`
+  and prefers unified history with the legacy layout stack as fallback, so
+  drag/resize undo keeps working.
+- **Harness**: `WorkspaceHarness.dispatch` extended with
+  `create/delete-component`, `add/delete-connection`, `undo`/`redo`
+  (lenient on dispatcher refusals); `set-node-visuals`/`move-node`/`view`
+  are transactional; simulation fuzz covers the new kinds under
+  `editableComponentKeys` guards.
+- `just test` (58 files / 594 web tests + cargo), `just lint`, `just build`,
+  `just format` green (branch `fix/unified-transaction-history`).
+
+---
+
 ## Task — Rust-owned model mutations via ModelJS (structural)
 
 Mutation execution moved into `rhizz-core`: the web dispatcher sends a
