@@ -13,6 +13,70 @@ How to work on this file:
 
 ---
 
+## Task <N> — Unified command-based transaction history (Undo/Redo)
+
+Consolidate all UI-driven model mutations and diagram layout changes into
+a single unified transaction and undo/redo history engine. (Today `Ctrl+Z`
+only reverts the layout-only snapshot in `diagrams/history.ts`; model writes
+through `applyModelMutation` have no `undo()` — so add/remove leaves `system.hcl`
+behind.)
+
+- **Strategy**
+  - Build on the existing single entry point `web/src/history/applyMutation.ts`
+    (Rust-owned `apply_model_op` via WASM). `DocumentStore.svelte.ts` is a
+    reactive **read** model and is never mutated on the write path — do not
+    build a second dispatcher.
+  - Add a centralized `TransactionManager` where each action encapsulates
+    bidirectional execution (`do()` and `undo()`), covering both the primary
+    HCL write **and** the corresponding `views.hcl` layout write
+    (`DocumentStore.updateNodeLayout` / `diagrams/persistence.ts` /
+    `ViewEditorState`).
+  - Inverse ops must invert the Rust dispatcher's higher-level ops, not just
+    the TS call site: `create_component` (container fallback,
+    definition+instance creation, instance-under-instance redirection) and
+    connection ops (LCA scope resolution, `delete_connection_by_label`).
+    Undoing a create must remove exactly what the dispatcher created
+    (including any auto-created definition); undoing a delete must restore
+    scope/label.
+- **Implementation Scope**
+  - Create `web/src/history/TransactionManager.ts` (preferred —
+    `web/src/history/` currently holds only `applyMutation.ts`) rather than
+    widening the diagram-scoped generic stack in
+    `web/src/routes/projects/[id]/diagrams/history.ts` (`DiagramSnapshot`,
+    `UNDO_HISTORY_LIMIT = 100`, page-level `diagramHistory`). The page-scoped
+    stack is the migration source for drag/resize snapshots, not the new home.
+  - Define transactions covering:
+    - Model mutations: component creation/deletion, property updates,
+      connection additions/deletions (via `applyModelMutation` kinds).
+    - Layout mutations: node moves, resizing, visual attribute styling,
+      alignment changes (via `updateNodeLayout` / `views.hcl` persistence).
+  - Connect UI trigger points (`CreateComponentModal` →
+    `handleModalCreateComponent`, node drags, `NodeInspector` →
+    `handleUpdateSelectedComponent`, connection handlers) to dispatch
+    transactions through the manager.
+  - Replace the page-scoped `onDiagramKeyDown` handler in `diagrams/+page.svelte`
+    (deliberately kept out of `KeyboardState.svelte`) with wiring to the unified
+    manager: `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z`. Resolve ownership explicitly —
+    no double handling between page and global scope.
+- **Acceptance Criteria**
+  - Creating a component via the diagram modal and pressing `Ctrl+Z` undoes both
+    its visual placement and deletes the entity from `system.hcl`.
+  - Redo (`Ctrl+Y`) restores both the HCL definition and canvas coordinates.
+  - Existing diagram drag/resize undo/redo remains functional without regressions.
+  - Integrated into the deterministic simulation test harness from Task 89
+    (not 88) to verify undo/redo reversibility: extend `WorkspaceHarness.dispatch`
+    (currently only `select-component`, `set-node-visuals`, `move-node`,
+    `add-diagram-view`) with create/delete component, connection ops, and undo;
+    generated sequences must respect `editableComponentKeys` guards (single
+    primary HCL file, `apollo-11` excluded, visual-owners only — sourced
+    instances edit shared definitions).
+  - Note: the planned change of delete-key semantics to view-only removal will
+    shift undo semantics when it lands; undo of full-model delete must not be
+    assumed to survive that change.
+  - Validated with `just test`, `just lint`, and `just build`.
+  
+---
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
@@ -32,27 +96,6 @@ detected is not very informative, although at this point I've no idea how to
 point the user towards resolving their issue.
 
 
-## Task <N> — Unified command-based transaction history (Undo/Redo)
-
-Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
-changes into a single unified transaction and undo/redo history engine.
-
-- **Strategy**
-  - Replace disparate ad-hoc file writes and layout snapshots with a centralized command/action dispatcher.
-  - Each action encapsulates bidirectional execution (`do()` and `undo()`) or represents an immutable document transaction across both `DocumentStore` and diagram layout files.
-- **Implementation Scope**
-  - Create `web/src/history/TransactionManager.ts` (or extend `web/src/routes/projects/[id]/diagrams/history.ts` into a workspace-wide store).
-  - Define transactions covering:
-    - Model mutations: Component creation/deletion, property updates, connection additions.
-    - Layout mutations: Node moves, resizing, visual attribute styling, alignment changes.
-  - Connect UI trigger points (`CreateComponentModal`, node drags, inspector inputs) to dispatch transactions through the manager.
-  - Wire `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` to the unified manager.
-- **Acceptance Criteria**
-  - Creating a component via the diagram modal and pressing `Ctrl+Z` undoes both its visual placement and deletes the entity from `system.hcl`.
-  - Redo (`Ctrl+Y`) restores both the HCL definition and canvas coordinates.
-  - Existing diagram drag/resize undo/redo remains functional without regressions.
-  - Integrated into the deterministic simulation test harness from Task 88 to verify undo/redo reversibility across arbitrary sequences.
-  - Validated with `just test`, `just lint`, and `just build`.
 
 ---
 
