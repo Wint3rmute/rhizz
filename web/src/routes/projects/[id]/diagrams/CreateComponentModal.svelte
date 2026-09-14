@@ -161,6 +161,7 @@ function handleCreate() {
   class="modal modal-open z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center cursor-pointer"
   role="dialog"
   aria-modal="true"
+  data-testid="create-component-modal"
   tabindex="-1"
   onclick={(e) => {
       if (e.target === e.currentTarget) onclose();

@@ -820,11 +820,21 @@ const diagramHistory = createHistoryStack<DiagramSnapshot>();
 
 // Unified model+layout history. Each entry covers one `applyModelMutation`
 // HCL write *and* its canvas placement, so Ctrl+Z undoes both. Layout-only
-// gestures (drag/resize) stay on `diagramHistory` — the migration source —
-// and the unified undo below falls back to it, so existing drag/resize
-// undo keeps working. `DocumentStore` is never mutated on this path; all
-// model writes go through `applyModelMutation` inside the transaction.
+// gestures (drag/resize) stay on `diagramHistory` — the migration source.
+// Both stacks share one monotonic sequence so interleaved undo (drag after
+// create) reverts in true last-first order instead of preferring one stack.
+// `DocumentStore` is never mutated on this path; all model writes go through
+// `applyModelMutation` inside the transaction.
 const unifiedHistory = new TransactionManager(UNDO_HISTORY_LIMIT);
+let historySeq = 0;
+const diagramUndoSeqs: number[] = [];
+const diagramRedoSeqs: number[] = [];
+const unifiedUndoSeqs: number[] = [];
+const unifiedRedoSeqs: number[] = [];
+
+function top(values: number[]): number | undefined {
+  return values[values.length - 1];
+}
 
 function snapshotDiagram(): DiagramSnapshot {
   return {
@@ -850,23 +860,32 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
 // is one undo step, not one per mousemove event (see call sites).
 function recordUndoPoint() {
   pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
+  diagramUndoSeqs.push(++historySeq);
+  while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+    diagramUndoSeqs.shift();
+  }
+  diagramRedoSeqs.length = 0;
 }
 
-// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
-// diagram-mutating interactions — restoring a snapshot while the
-// animation loop is still writing every frame would just get immediately
-// overwritten. Unified model+layout entries go first (they restore both
-// `system.hcl` and the canvas); layout-only `diagramHistory` is the
-// fallback so drag/resize undo keeps working.
-async function undoDiagramEdit() {
-  if (autoLayoutRunning) return;
-  if (unifiedHistory.canUndo) {
-    if (await unifiedHistory.undo()) {
-      sources = await readProjectSources(fs);
-      flashActivity("Undo");
-      return;
+async function undoUnifiedEntry(): Promise<boolean> {
+  if (!unifiedHistory.canUndo) return false;
+  if (await unifiedHistory.undo()) {
+    const seq = unifiedUndoSeqs.pop();
+    if (seq !== undefined) {
+      unifiedRedoSeqs.push(seq);
+      while (unifiedRedoSeqs.length > UNDO_HISTORY_LIMIT) {
+        unifiedRedoSeqs.shift();
+      }
     }
+    sources = await readProjectSources(fs);
+    flashActivity("Undo");
+    return true;
   }
+  unifiedUndoSeqs.pop();
+  return false;
+}
+
+function undoDiagramEntry(): boolean {
   const previous = undoHistory(
     diagramHistory,
     snapshotDiagram(),
@@ -874,20 +893,38 @@ async function undoDiagramEdit() {
   );
   if (previous) {
     applyDiagramSnapshot(previous);
+    const seq = diagramUndoSeqs.pop();
+    if (seq !== undefined) {
+      diagramRedoSeqs.push(seq);
+      while (diagramRedoSeqs.length > UNDO_HISTORY_LIMIT) {
+        diagramRedoSeqs.shift();
+      }
+    }
     flashActivity("Undo");
+    return true;
   }
+  diagramUndoSeqs.pop();
+  return false;
 }
 
-// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
-async function redoDiagramEdit() {
-  if (autoLayoutRunning) return;
-  if (unifiedHistory.canRedo) {
-    if (await unifiedHistory.redo()) {
-      sources = await readProjectSources(fs);
-      flashActivity("Redo");
-      return;
+async function redoUnifiedEntry(): Promise<boolean> {
+  if (!unifiedHistory.canRedo) return false;
+  if (await unifiedHistory.redo()) {
+    const seq = unifiedRedoSeqs.pop();
+    if (seq !== undefined) {
+      unifiedUndoSeqs.push(seq);
+      while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+        unifiedUndoSeqs.shift();
+      }
     }
+    sources = await readProjectSources(fs);
+    flashActivity("Redo");
+    return true;
   }
+  return false;
+}
+
+function redoDiagramEntry(): boolean {
   const next = redoHistory(
     diagramHistory,
     snapshotDiagram(),
@@ -895,8 +932,59 @@ async function redoDiagramEdit() {
   );
   if (next) {
     applyDiagramSnapshot(next);
+    const seq = diagramRedoSeqs.pop();
+    if (seq !== undefined) {
+      diagramUndoSeqs.push(seq);
+      while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+        diagramUndoSeqs.shift();
+      }
+    }
     flashActivity("Redo");
+    return true;
   }
+  return false;
+}
+
+// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
+// diagram-mutating interactions — restoring a snapshot while the
+// animation loop is still writing every frame would just get immediately
+// overwritten. Picks the most recent entry across both stacks by sequence,
+// so a drag after a create reverts the drag first.
+async function undoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const unifiedTop = top(unifiedUndoSeqs);
+  const diagramTop = top(diagramUndoSeqs);
+  if (
+    unifiedTop !== undefined &&
+    (diagramTop === undefined || unifiedTop > diagramTop)
+  ) {
+    if (await undoUnifiedEntry()) return;
+    undoDiagramEntry();
+    return;
+  }
+  if (diagramTop !== undefined) {
+    if (undoDiagramEntry()) return;
+  }
+  await undoUnifiedEntry();
+}
+
+// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
+async function redoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const unifiedTop = top(unifiedRedoSeqs);
+  const diagramTop = top(diagramRedoSeqs);
+  if (
+    unifiedTop !== undefined &&
+    (diagramTop === undefined || unifiedTop > diagramTop)
+  ) {
+    if (await redoUnifiedEntry()) return;
+    redoDiagramEntry();
+    return;
+  }
+  if (diagramTop !== undefined) {
+    if (redoDiagramEntry()) return;
+  }
+  await redoUnifiedEntry();
 }
 
 // Runs one model mutation plus its canvas placement as a single undoable
@@ -929,7 +1017,15 @@ async function runModelLayoutTransaction(
       noteDiagramEdited();
     },
   };
-  return unifiedHistory.execute(tx);
+  const applied = await unifiedHistory.execute(tx);
+  if (applied) {
+    unifiedUndoSeqs.push(++historySeq);
+    while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+      unifiedUndoSeqs.shift();
+    }
+    unifiedRedoSeqs.length = 0;
+  }
+  return applied;
 }
 
 // Handles the diagram keyboard shortcuts. Scoped to this page (via the
@@ -2749,6 +2845,7 @@ $effect(() => {
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <svg
         bind:this={root_svg}
+        data-testid="diagram-canvas"
         version="1.1"
         width="100%"
         height="100%"
