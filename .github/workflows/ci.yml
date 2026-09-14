@@ -134,6 +134,8 @@ jobs:
   e2e:
     needs: wasm
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
@@ -160,6 +162,15 @@ jobs:
         with:
           name: playwright-videos
           path: web/test-results/**/*.webm
+
+      - uses: marocchino/sticky-pull-request-comment@v2
+        if: always() && github.event_name == 'pull_request'
+        with:
+          header: playwright-e2e
+          message: |
+            🎬 **E2E recordings ready** — [open the run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) and grab them from the bottom **Artifacts** section:
+            - `playwright-videos` — `.webm` per spec, plays in Chrome
+            - `playwright-report` — HTML report with embedded video + traces
 
   # Build the frontend for Chromatic + GitHub Pages. Runs on every push to
   # main (to keep a Chromatic baseline), or for a "chromatic" push/PR title,
