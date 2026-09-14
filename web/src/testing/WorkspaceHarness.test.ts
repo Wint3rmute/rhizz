@@ -82,4 +82,98 @@ describe("WorkspaceHarness", () => {
     expect(workspace.selectedComponentKey).toBe(key);
     expect(workspace.selectedIndex).toBe(0);
   });
+
+  it("undoes a created component's HCL and canvas placement together", async () => {
+    const workspace = await WorkspaceHarness.empty();
+    const before = workspace.snapshot().canonicalHcl;
+
+    await workspace.dispatch({
+      type: "create-component",
+      label: "sensor",
+    });
+    workspace.assertInvariants();
+    expect(workspace.snapshot().canonicalHcl).toContain('component "sensor"');
+    const createdKey = workspace.componentKeys.find((key) =>
+      key.endsWith("/sensor")
+    );
+    if (!createdKey) throw new Error("created sensor not found");
+    expect(workspace.layoutPosition(createdKey)).toEqual({
+      x: 100,
+      y: 100,
+    });
+    expect(workspace.canUndo).toBe(true);
+
+    await workspace.dispatch({ type: "undo" });
+    workspace.assertInvariants();
+    expect(workspace.snapshot().canonicalHcl).toBe(before);
+    expect(workspace.layoutPosition(createdKey)).toBeUndefined();
+
+    await workspace.dispatch({ type: "redo" });
+    workspace.assertInvariants();
+    expect(workspace.snapshot().canonicalHcl).toContain('component "sensor"');
+    const restoredKey = workspace.componentKeys.find((key) =>
+      key.endsWith("/sensor")
+    );
+    if (!restoredKey) throw new Error("redone sensor not found");
+    expect(workspace.layoutPosition(restoredKey)).toEqual({
+      x: 100,
+      y: 100,
+    });
+  });
+
+  it("undoes a delete, restoring scope and label", async () => {
+    const workspace = await WorkspaceHarness.empty();
+    await workspace.dispatch({
+      type: "create-component",
+      label: "cpu",
+    });
+    const createdKey = workspace.componentKeys.find((key) =>
+      key.endsWith("/cpu")
+    );
+    if (!createdKey) throw new Error("created cpu not found");
+    const withCpu = workspace.snapshot().canonicalHcl;
+
+    await workspace.dispatch({
+      type: "delete-component",
+      component: createdKey,
+    });
+    workspace.assertInvariants();
+    expect(workspace.snapshot().canonicalHcl).not.toContain(
+      'instance "cpu"',
+    );
+
+    await workspace.dispatch({ type: "undo" });
+    workspace.assertInvariants();
+    expect(workspace.snapshot().canonicalHcl).toBe(withCpu);
+
+    await workspace.dispatch({ type: "redo" });
+    workspace.assertInvariants();
+    expect(workspace.snapshot().canonicalHcl).not.toContain(
+      'instance "cpu"',
+    );
+  });
+
+  it("keeps drag/resize undo working alongside model transactions", async () => {
+    const workspace = await WorkspaceHarness.fromExample("drone");
+    const key = workspace.componentKeys.find((candidate) =>
+      candidate.endsWith("/flight-controller")
+    );
+    if (!key) throw new Error("drone flight controller not found");
+
+    await workspace.dispatch({
+      type: "move-node",
+      component: key,
+      x: 120,
+      y: -40,
+    });
+    expect(workspace.layoutPosition(key)).toEqual({ x: 120, y: -40 });
+
+    await workspace.dispatch({ type: "undo" });
+    expect(workspace.layoutPosition(key)).toBeUndefined();
+    workspace.assertInvariants();
+
+    await workspace.dispatch({ type: "redo" });
+    expect(workspace.layoutPosition(key)).toEqual({ x: 120, y: -40 });
+    workspace.assertInvariants();
+  });
 });

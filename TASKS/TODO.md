@@ -32,27 +32,6 @@ detected is not very informative, although at this point I've no idea how to
 point the user towards resolving their issue.
 
 
-## Task <N> — Unified command-based transaction history (Undo/Redo)
-
-Consolidate all UI-driven model mutations (AST/HCL writes) and diagram layout
-changes into a single unified transaction and undo/redo history engine.
-
-- **Strategy**
-  - Replace disparate ad-hoc file writes and layout snapshots with a centralized command/action dispatcher.
-  - Each action encapsulates bidirectional execution (`do()` and `undo()`) or represents an immutable document transaction across both `DocumentStore` and diagram layout files.
-- **Implementation Scope**
-  - Create `web/src/history/TransactionManager.ts` (or extend `web/src/routes/projects/[id]/diagrams/history.ts` into a workspace-wide store).
-  - Define transactions covering:
-    - Model mutations: Component creation/deletion, property updates, connection additions.
-    - Layout mutations: Node moves, resizing, visual attribute styling, alignment changes.
-  - Connect UI trigger points (`CreateComponentModal`, node drags, inspector inputs) to dispatch transactions through the manager.
-  - Wire `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` to the unified manager.
-- **Acceptance Criteria**
-  - Creating a component via the diagram modal and pressing `Ctrl+Z` undoes both its visual placement and deletes the entity from `system.hcl`.
-  - Redo (`Ctrl+Y`) restores both the HCL definition and canvas coordinates.
-  - Existing diagram drag/resize undo/redo remains functional without regressions.
-  - Integrated into the deterministic simulation test harness from Task 88 to verify undo/redo reversibility across arbitrary sequences.
-  - Validated with `just test`, `just lint`, and `just build`.
 
 ---
 

@@ -129,10 +129,13 @@ jobs:
 
   # Full-app browser tests via @playwright/test (web/e2e). Chromium comes
   # from the flake (PLAYWRIGHT_BROWSERS_PATH); the HTML report + traces
-  # are kept as an artifact for post-failure inspection.
+  # are kept as an artifact for post-failure inspection. Videos record on
+  # every run and upload always, so undo/redo flows are directly viewable.
   e2e:
     needs: wasm
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
@@ -153,6 +156,21 @@ jobs:
         with:
           name: playwright-report
           path: web/playwright-report/
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-videos
+          path: web/test-results/**/*.webm
+
+      - uses: marocchino/sticky-pull-request-comment@v2
+        if: always() && github.event_name == 'pull_request'
+        with:
+          header: playwright-e2e
+          message: |
+            🎬 **E2E recordings ready** — [open the run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) and grab them from the bottom **Artifacts** section:
+            - `playwright-videos` — `.webm` per spec, plays in Chrome
+            - `playwright-report` — HTML report with embedded video + traces
 
   # Build the frontend for Chromatic + GitHub Pages. Runs on every push to
   # main (to keep a Chromatic baseline), or for a "chromatic" push/PR title,

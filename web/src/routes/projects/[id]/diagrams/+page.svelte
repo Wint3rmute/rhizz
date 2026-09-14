@@ -47,6 +47,8 @@ import {
   undoHistory,
 } from "./history";
 import { applyModelMutation } from "../../../../history/applyMutation";
+import type { ModelMutationOp } from "../../../../history/applyMutation";
+import { TransactionManager } from "../../../../history/TransactionManager";
 import {
   createForceLayout,
   groupBySiblings,
@@ -816,6 +818,24 @@ type DiagramSnapshot = {
 const UNDO_HISTORY_LIMIT = 100;
 const diagramHistory = createHistoryStack<DiagramSnapshot>();
 
+// Unified model+layout history. Each entry covers one `applyModelMutation`
+// HCL write *and* its canvas placement, so Ctrl+Z undoes both. Layout-only
+// gestures (drag/resize) stay on `diagramHistory` — the migration source.
+// Both stacks share one monotonic sequence so interleaved undo (drag after
+// create) reverts in true last-first order instead of preferring one stack.
+// `DocumentStore` is never mutated on this path; all model writes go through
+// `applyModelMutation` inside the transaction.
+const unifiedHistory = new TransactionManager(UNDO_HISTORY_LIMIT);
+let historySeq = 0;
+const diagramUndoSeqs: number[] = [];
+const diagramRedoSeqs: number[] = [];
+const unifiedUndoSeqs: number[] = [];
+const unifiedRedoSeqs: number[] = [];
+
+function top(values: number[]): number | undefined {
+  return values[values.length - 1];
+}
+
 function snapshotDiagram(): DiagramSnapshot {
   return {
     checked: { ...checked },
@@ -840,14 +860,32 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
 // is one undo step, not one per mousemove event (see call sites).
 function recordUndoPoint() {
   pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
+  diagramUndoSeqs.push(++historySeq);
+  while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+    diagramUndoSeqs.shift();
+  }
+  diagramRedoSeqs.length = 0;
 }
 
-// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
-// diagram-mutating interactions — restoring a snapshot while the
-// animation loop is still writing every frame would just get immediately
-// overwritten.
-function undoDiagramEdit() {
-  if (autoLayoutRunning) return;
+async function undoUnifiedEntry(): Promise<boolean> {
+  if (!unifiedHistory.canUndo) return false;
+  if (await unifiedHistory.undo()) {
+    const seq = unifiedUndoSeqs.pop();
+    if (seq !== undefined) {
+      unifiedRedoSeqs.push(seq);
+      while (unifiedRedoSeqs.length > UNDO_HISTORY_LIMIT) {
+        unifiedRedoSeqs.shift();
+      }
+    }
+    sources = await readProjectSources(fs);
+    flashActivity("Undo");
+    return true;
+  }
+  unifiedUndoSeqs.pop();
+  return false;
+}
+
+function undoDiagramEntry(): boolean {
   const previous = undoHistory(
     diagramHistory,
     snapshotDiagram(),
@@ -855,13 +893,38 @@ function undoDiagramEdit() {
   );
   if (previous) {
     applyDiagramSnapshot(previous);
+    const seq = diagramUndoSeqs.pop();
+    if (seq !== undefined) {
+      diagramRedoSeqs.push(seq);
+      while (diagramRedoSeqs.length > UNDO_HISTORY_LIMIT) {
+        diagramRedoSeqs.shift();
+      }
+    }
     flashActivity("Undo");
+    return true;
   }
+  diagramUndoSeqs.pop();
+  return false;
 }
 
-// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
-function redoDiagramEdit() {
-  if (autoLayoutRunning) return;
+async function redoUnifiedEntry(): Promise<boolean> {
+  if (!unifiedHistory.canRedo) return false;
+  if (await unifiedHistory.redo()) {
+    const seq = unifiedRedoSeqs.pop();
+    if (seq !== undefined) {
+      unifiedUndoSeqs.push(seq);
+      while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+        unifiedUndoSeqs.shift();
+      }
+    }
+    sources = await readProjectSources(fs);
+    flashActivity("Redo");
+    return true;
+  }
+  return false;
+}
+
+function redoDiagramEntry(): boolean {
   const next = redoHistory(
     diagramHistory,
     snapshotDiagram(),
@@ -869,15 +932,109 @@ function redoDiagramEdit() {
   );
   if (next) {
     applyDiagramSnapshot(next);
+    const seq = diagramRedoSeqs.pop();
+    if (seq !== undefined) {
+      diagramUndoSeqs.push(seq);
+      while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+        diagramUndoSeqs.shift();
+      }
+    }
     flashActivity("Redo");
+    return true;
   }
+  return false;
+}
+
+// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
+// diagram-mutating interactions — restoring a snapshot while the
+// animation loop is still writing every frame would just get immediately
+// overwritten. Picks the most recent entry across both stacks by sequence,
+// so a drag after a create reverts the drag first.
+async function undoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const unifiedTop = top(unifiedUndoSeqs);
+  const diagramTop = top(diagramUndoSeqs);
+  if (
+    unifiedTop !== undefined &&
+    (diagramTop === undefined || unifiedTop > diagramTop)
+  ) {
+    if (await undoUnifiedEntry()) return;
+    undoDiagramEntry();
+    return;
+  }
+  if (diagramTop !== undefined) {
+    if (undoDiagramEntry()) return;
+  }
+  await undoUnifiedEntry();
+}
+
+// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
+async function redoDiagramEdit() {
+  if (autoLayoutRunning) return;
+  const unifiedTop = top(unifiedRedoSeqs);
+  const diagramTop = top(diagramRedoSeqs);
+  if (
+    unifiedTop !== undefined &&
+    (diagramTop === undefined || unifiedTop > diagramTop)
+  ) {
+    if (await redoUnifiedEntry()) return;
+    redoDiagramEntry();
+    return;
+  }
+  if (diagramTop !== undefined) {
+    if (redoDiagramEntry()) return;
+  }
+  await redoUnifiedEntry();
+}
+
+// Runs one model mutation plus its canvas placement as a single undoable
+// transaction. Inverse ops invert the Rust dispatcher's higher-level ops
+// via snapshots — undoing a create removes exactly what was created
+// (container fallback, auto-created definition, redirection), undoing a
+// delete restores scope/label — without hand-written inverses.
+async function runModelLayoutTransaction(
+  label: string,
+  op: ModelMutationOp,
+  layoutApply?: (createdPath?: string) => void,
+): Promise<boolean> {
+  const diagramBefore = snapshotDiagram();
+  const { path: targetPath, content: systemBefore } = await readMainContent();
+  const tx = {
+    label,
+    do: async (): Promise<boolean> => {
+      const cur = await readMainContent();
+      const result = await applyModelMutation(fs, cur.path, cur.content, op);
+      if (!result.applied) return false;
+      sources = await readProjectSources(fs);
+      layoutApply?.(result.path);
+      noteDiagramEdited();
+      return true;
+    },
+    undo: async (): Promise<void> => {
+      await fs.writeFile(targetPath, systemBefore);
+      sources = await readProjectSources(fs);
+      applyDiagramSnapshot(diagramBefore);
+      noteDiagramEdited();
+    },
+  };
+  const applied = await unifiedHistory.execute(tx);
+  if (applied) {
+    unifiedUndoSeqs.push(++historySeq);
+    while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+      unifiedUndoSeqs.shift();
+    }
+    unifiedRedoSeqs.length = 0;
+  }
+  return applied;
 }
 
 // Handles the diagram keyboard shortcuts. Scoped to this page (via the
 // <svelte:window> binding below), rather than living in the app-wide
-// KeyboardState.svelte module, since "undo" here specifically means
-// "undo a diagram edit" — a different page (e.g. the HCL text editor)
-// would want its own, unrelated undo behavior.
+// KeyboardState.svelte module — ownership is explicit here: Ctrl+Z/Y routes
+// to the unified model+layout `TransactionManager` (with the legacy
+// layout-only stack as fallback), so model writes and canvas placement undo
+// together. A different page (e.g. the HCL text editor) wants its own,
+// unrelated undo behavior.
 //
 // The t/b/c/f attribute-cycling shortcuts only fire while the canvas has
 // focus (canvasFocused) and no modifier is held, so they never trigger
@@ -889,10 +1046,10 @@ function onDiagramKeyDown(event: KeyboardEvent) {
   if (primary) {
     if (key === "z" && !event.shiftKey) {
       event.preventDefault();
-      undoDiagramEdit();
+      void undoDiagramEdit();
     } else if (key === "y" || (key === "z" && event.shiftKey)) {
       event.preventDefault();
-      redoDiagramEdit();
+      void redoDiagramEdit();
     }
     return;
   }
@@ -1159,20 +1316,19 @@ async function executeReparent(
   sourceKey: string,
   targetParentKey: string,
 ): Promise<void> {
-  const { path: targetPath, content: mainContent } = await readMainContent();
-
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
-    kind: "reparent_component",
-    sourcePath: sourceKey,
-    targetParentPath: targetParentKey,
-  });
-
-  if (result.applied) {
-    const label = sourceKey.split("/").at(-1);
-    const newKey = label ? `${targetParentKey}/${label}` : null;
-    sources = await readProjectSources(fs);
-    if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
-  }
+  const label = sourceKey.split("/").at(-1);
+  const newKey = label ? `${targetParentKey}/${label}` : null;
+  await runModelLayoutTransaction(
+    `reparent ${sourceKey}`,
+    {
+      kind: "reparent_component",
+      sourcePath: sourceKey,
+      targetParentPath: targetParentKey,
+    },
+    () => {
+      if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
+    },
+  );
 }
 
 async function handleAddSystem(): Promise<void> {
@@ -1180,15 +1336,10 @@ async function handleAddSystem(): Promise<void> {
     ?.trim();
   if (!name) return;
 
-  const { path: targetPath, content: mainContent } = await readMainContent();
-
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
+  await runModelLayoutTransaction(`add system ${name}`, {
     kind: "add_system",
     label: name,
   });
-  if (result.applied) {
-    sources = await readProjectSources(fs);
-  }
 }
 
 let availableParents = $derived.by(() => {
@@ -1286,53 +1437,54 @@ async function handleModalCreateComponent(data: {
 }): Promise<void> {
   isCreateModalOpen = false;
 
-  const { path: targetPath, content: mainContent } = await readMainContent();
-
   // Container fallback (first system / fresh "main"), definition +
   // instance creation, and instance-under-instance redirection all live in
   // the dispatcher; the returned path is the created component's key.
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
-    kind: "create_component",
-    label: data.label,
-    parentKey: data.parentKey,
-    ...(data.sourceLabel === undefined
-      ? {}
-      : { sourceLabel: data.sourceLabel }),
-    leaf: data.leaf,
-    description: data.description,
-    tags: data.tags,
-    ports: data.ports,
-  });
-  if (!result.applied) return;
-  sources = await readProjectSources(fs);
-
-  const fullKey = result.path ?? data.label;
-  if (!data.sourceLabel) {
-    const slash = fullKey.lastIndexOf("/");
-    const placementParent = slash === -1 ? fullKey : fullKey.slice(0, slash);
-    toastState.show(
-      `Created definition "${data.label}" and placed it in ${placementParent}`,
-      "success",
-    );
-  }
-  {
-    const worldX = data.position ? snap(data.position.x) : 100;
-    const worldY = data.position ? snap(data.position.y) : 100;
-
-    checked[fullKey] = {
-      x: worldX,
-      y: worldY,
-      width: DEFAULT_NODE_WIDTH,
-      height: DEFAULT_NODE_HEIGHT,
-      textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
-    };
-    savedLayout[fullKey] = { ...checked[fullKey] };
-
-    const newIndex = keyToIndex.get(fullKey);
-    if (newIndex !== undefined) {
-      selectOnly(newIndex);
-    }
-  }
+  // Model write + canvas placement are one unified transaction so Ctrl+Z
+  // undoes both.
+  const applied = await runModelLayoutTransaction(
+    `create ${data.label}`,
+    {
+      kind: "create_component",
+      label: data.label,
+      parentKey: data.parentKey,
+      ...(data.sourceLabel === undefined
+        ? {}
+        : { sourceLabel: data.sourceLabel }),
+      leaf: data.leaf,
+      description: data.description,
+      tags: data.tags,
+      ports: data.ports,
+    },
+    (createdPath) => {
+      const fullKey = createdPath ?? data.label;
+      if (!data.sourceLabel) {
+        const slash = fullKey.lastIndexOf("/");
+        const placementParent = slash === -1
+          ? fullKey
+          : fullKey.slice(0, slash);
+        toastState.show(
+          `Created definition "${data.label}" and placed it in ${placementParent}`,
+          "success",
+        );
+      }
+      const worldX = data.position ? snap(data.position.x) : 100;
+      const worldY = data.position ? snap(data.position.y) : 100;
+      checked[fullKey] = {
+        x: worldX,
+        y: worldY,
+        width: DEFAULT_NODE_WIDTH,
+        height: DEFAULT_NODE_HEIGHT,
+        textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
+      };
+      savedLayout[fullKey] = { ...checked[fullKey] };
+      const newIndex = keyToIndex.get(fullKey);
+      if (newIndex !== undefined) {
+        selectOnly(newIndex);
+      }
+    },
+  );
+  if (!applied) return;
 }
 
 function onCanvasDblClick(event: MouseEvent) {
@@ -1382,15 +1534,12 @@ async function handleUpdateSelectedComponent(
   patch: Partial<ComponentData>,
 ): Promise<void> {
   if (!selectedKey) return;
-  const { path: targetPath, content: mainContent } = await readMainContent();
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
+  const key = selectedKey;
+  await runModelLayoutTransaction(`update ${key}`, {
     kind: "update_component",
-    path: selectedKey,
+    path: key,
     patch,
   });
-  if (result.applied) {
-    sources = await readProjectSources(fs);
-  }
 }
 
 async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
@@ -1400,48 +1549,47 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
   if (newLabel === oldLabel) return;
   const parentPath = parts.slice(0, -1).join("/");
   const newKey = `${parentPath}/${newLabel}`;
+  const oldKey = selectedKey;
 
-  const { path: targetPath, content: mainContent } = await readMainContent();
   // Routed through the store API (not a direct label assignment) so the
   // sibling-collision check runs and the mutation observer records the
   // rename for the action log.
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
-    kind: "rename_component",
-    path: selectedKey,
-    newLabel,
-  });
-
-  if (result.applied) {
-    sources = await readProjectSources(fs);
-
-    if (checked[selectedKey]) {
-      checked[newKey] = checked[selectedKey];
-      delete checked[selectedKey];
-    }
-    if (savedLayout[selectedKey]) {
-      savedLayout[newKey] = savedLayout[selectedKey];
-      delete savedLayout[selectedKey];
-    }
-    if (selectedKeys.delete(selectedKey)) selectedKeys.add(newKey);
-  }
+  await runModelLayoutTransaction(
+    `rename ${oldKey}`,
+    {
+      kind: "rename_component",
+      path: oldKey,
+      newLabel,
+    },
+    () => {
+      if (checked[oldKey]) {
+        checked[newKey] = checked[oldKey];
+        delete checked[oldKey];
+      }
+      if (savedLayout[oldKey]) {
+        savedLayout[newKey] = savedLayout[oldKey];
+        delete savedLayout[oldKey];
+      }
+      if (selectedKeys.delete(oldKey)) selectedKeys.add(newKey);
+    },
+  );
 }
 
 async function handleDeleteSelectedComponent(): Promise<void> {
   if (!selectedKey) return;
   const keyToDelete = selectedKey;
-  const { path: targetPath, content: mainContent } = await readMainContent();
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
-    kind: "delete_component",
-    path: keyToDelete,
-  });
-
-  if (result.applied) {
-    sources = await readProjectSources(fs);
-
-    delete checked[keyToDelete];
-    delete savedLayout[keyToDelete];
-    clearSelection();
-  }
+  await runModelLayoutTransaction(
+    `delete ${keyToDelete}`,
+    {
+      kind: "delete_component",
+      path: keyToDelete,
+    },
+    () => {
+      delete checked[keyToDelete];
+      delete savedLayout[keyToDelete];
+      clearSelection();
+    },
+  );
 }
 
 function onPortMouseDown(
@@ -1527,22 +1675,21 @@ async function handleCreateConnection(
   const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
   if (!connLabel) return;
 
-  const { path: targetPath, content: mainContent } = await readMainContent();
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
-    kind: "add_connection",
-    scopePath: lca.lcaScopePath,
-    label: connLabel,
-    from: lca.from,
-    to: lca.to,
-  });
-
-  if (result.applied) {
-    recordUndoPoint();
-    if (startSide) {
-      savedConnections[connLabel] = { startSide };
-    }
-    sources = await readProjectSources(fs);
-  }
+  await runModelLayoutTransaction(
+    `connect ${connLabel}`,
+    {
+      kind: "add_connection",
+      scopePath: lca.lcaScopePath,
+      label: connLabel,
+      from: lca.from,
+      to: lca.to,
+    },
+    () => {
+      if (startSide) {
+        savedConnections[connLabel] = { startSide };
+      }
+    },
+  );
 }
 
 // Middle mouse button, or the left button while Space is held, always
@@ -2153,18 +2300,18 @@ async function handleDeleteSelectedConnection(
   ) {
     return;
   }
-  const { path: targetPath, content: mainContent } = await readMainContent();
   // Scope search lives in the dispatcher (`delete_connection_by_label`).
-  const result = await applyModelMutation(fs, targetPath, mainContent, {
-    kind: "delete_connection_by_label",
-    label,
-  });
-  if (result.applied) {
-    sources = await readProjectSources(fs);
-  }
-
-  delete savedConnections[label];
-  selectedConnection = null;
+  await runModelLayoutTransaction(
+    `disconnect ${label}`,
+    {
+      kind: "delete_connection_by_label",
+      label,
+    },
+    () => {
+      delete savedConnections[label];
+      selectedConnection = null;
+    },
+  );
 }
 
 // Only connections where both endpoints are currently on the canvas.
@@ -2698,6 +2845,7 @@ $effect(() => {
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <svg
         bind:this={root_svg}
+        data-testid="diagram-canvas"
         version="1.1"
         width="100%"
         height="100%"
