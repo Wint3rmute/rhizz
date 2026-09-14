@@ -3,10 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { applyModelMutation } from "./applyMutation";
-import {
-  snapshotTransaction,
-  TransactionManager,
-} from "./TransactionManager";
+import { snapshotTransaction, TransactionManager } from "./TransactionManager";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -128,10 +125,11 @@ describe("TransactionManager", () => {
 
     const tx = snapshotTransaction({
       label: "create sensor",
-      snapshot: () => JSON.stringify({
-        hcl: mem.store.get("system.hcl") ?? "",
-        layout: [...layout.entries()],
-      }),
+      snapshot: () =>
+        JSON.stringify({
+          hcl: mem.store.get("system.hcl") ?? "",
+          layout: [...layout.entries()],
+        }),
       apply: async () => {
         const result = await applyModelMutation(
           mem,
