@@ -499,6 +499,17 @@ Each diagnostic code is documented in its own file under
 [`SPEC/diagnostics/`](SPEC/diagnostics/) (e.g. `E001.md`, `W003.md`). Error
 codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
 
+### Warning Levels
+
+> **Impl:** see [warning levels](SPEC/warning-levels.md) — the `WarningLevel`
+> ordering, the per-code mapping, and the gating rule.
+
+Every warning declares the least-detailed spec level it belongs to —
+`business`, `architectural`, or `component`. The selected warning level gates
+which warnings are reported: `business`-level warnings appear everywhere and
+`component`-level warnings only in component-level specs. Errors are never
+gated, so an incomplete spec still compiles at every level.
+
 ### Locality of Component Verification
 
 Rhizz supports verifying components in isolation (e.g. library components or
@@ -615,6 +626,7 @@ rhizz <command> [options] [path]
 | `--strict`   | Treat warnings as errors              |
 | `--json`     | Output report in JSON format (for CI/CD integration) |
 | `--no-color` | Disable colored terminal output       |
+| `--warning-level <LEVEL>` | Least-detailed warning level to report: `business`, `architectural`, or `component` (default `component`). See §4. |
 
 ### Example Session
 

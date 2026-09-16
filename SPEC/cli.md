@@ -34,6 +34,7 @@ abort on errors: if `check` finds errors, `score` is skipped.
 | `--strict`   |       | flag   | `false` | Treat warnings as errors (exit `1` on any warning) |
 | `--json`     |       | flag   | `false` | Machine-readable JSON output (for CI/CD)   |
 | `--no-color` |       | flag   | `false` | Disable ANSI color codes in output         |
+| `--warning-level` |  | enum   | `component` | Least-detailed warning level to report: `business`, `architectural`, or `component`. Warnings are cumulative, so a lower level reports fewer of them; see [warning levels](warning-levels.md). Ignored by `fmt`. |
 
 ### `--json` output shape
 
@@ -48,6 +49,8 @@ remains human-readable for fatal parse errors.
   "warnings": [
     { "code": "W001", "file": "system.hcl", "line": 31, "message": "..." }
   ],
+  // the level the warnings above were filtered to
+  "warning_level": "component",
   // present only if check passed:
   "score": {
     "system": "mini-drone",
@@ -88,6 +91,10 @@ struct Cli {
     /// Disable colored output
     #[arg(long)]
     no_color: bool,
+
+    /// Least-detailed warning level to report
+    #[arg(long, global = true, default_value_t = WarningLevel::Component)]
+    warning_level: WarningLevel,
 }
 
 #[derive(Subcommand)]
@@ -110,10 +117,15 @@ priority order). Use `colored` or `owo-colors` with a global toggle.
 Each command maps to a sequence of pipeline stages:
 
 ```
-check → parse_all → merge → resolve (with validation)
+check → parse_all → merge → resolve (with validation) → filter by warning level
 score → check + compute_scores + print_report
 build → check + score
 ```
+
+Warnings below the selected `--warning-level` are dropped as soon as the
+compile finishes — before the summary line, the `--strict` escalation, and the
+JSON encoding — so every downstream count sees one consistent set. Errors are
+never dropped.
 
 The resolved `Model` (see [models.md](models.md#resolved-models)) is the input
 to all stages after `check`.
