@@ -392,7 +392,7 @@ Defines a visual perspective on a system: which components are placed on the
 canvas and where. Each file under `diagrams/` holds exactly one `view` block
 whose label matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
 Every `node` path is resolved against the model (see §3); dangling paths emit a
-warning (W016).
+warning (W016). `annotation` blocks are used to add additional comments to the view.
 
 ```hcl
 view "overview" {
@@ -410,6 +410,12 @@ view "overview" {
     y      = 150
     width  = 100
     height = 50
+  }
+
+  annotation {
+    x    = 20
+    y    = 100
+    text = "Some comment about the view"
   }
 }
 ```
@@ -434,6 +440,27 @@ parsed and round-tripped, but no renderer applies it. See §9.
 | `max_level`     | integer      | no       | `∞`              | Maximum abstraction level to display                                      |
 | `components`    | list(string) | no       | `[]` (all)       | Whitelist of component labels to include                                  |
 | `show_messages` | bool         | no       | `true`           | Whether to list messages (from connected ports) as connection edge labels |
+
+**`annotation` sub-block (zero or more per view):**
+
+A free-standing text note placed at an absolute position on the canvas. Unlike
+`node`, an `annotation` block has **no label** and holds no reference into the
+model — it is pure view-level metadata, persisted in `diagrams/*.hcl` and never
+written to the system model. Because it references nothing, it is not resolved
+or validated and emits no diagnostics.
+
+| Attribute | Type   | Required | Default | Description                                        |
+| --------- | ------ | -------- | ------- | -------------------------------------------------- |
+| `x`       | number | no       | `0`     | X coordinate on canvas (absolute, world units)     |
+| `y`       | number | no       | `0`     | Y coordinate on canvas (absolute, world units)     |
+| `text`    | string | no       | `""`    | Note text; may contain `\n` for a multi-line label |
+| `scale`   | number | no       | `1.0`   | Font size multiplier (`1.0` = 100%)                |
+
+- `x`/`y` are **absolute** canvas coordinates, not offsets relative to any
+  component; annotations do not move when the components near them move.
+- `scale` is omitted from canonical output when it equals the `1.0` default.
+- Annotations are emitted sorted by `text`, keeping canonical output stable.
+- Unknown attributes are rejected (E000), as in every other block.
 
 ---
 

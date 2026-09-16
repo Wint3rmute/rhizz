@@ -1,8 +1,14 @@
-# AI coding agents instructions for rhizz
+# AI coding agents instructions for Rhizz
+
+When reading this file for the first time, follow introductory instructions and
+read linked documentation and spec.
+
+The user will either ask you to work on a specific task from TODO.md or will
+start chatting with you to discuss something project-related.
 
 ## Project Overview
 
-**rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in
+**Rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in
 Rust, with a frontend in Svelt. Systems are described in `.hcl` files (HCL
 syntax, same as Terraform) that can be version-controlled, diffed, and reviewed
 with or without a GUI. Read `SPEC.md` (and `SPEC/` if needed) for the full
@@ -20,6 +26,7 @@ SPEC.md              – full specification (single file)
 SPEC/                – specification split by topic (cli.md, models.md, …)
 TASKS.md             – ordered implementation tasks
 FINISHED_TASKS.md    – completed tasks (most recent first)
+book/                – the Rhizz book
 ```
 
 ## Development Workflow
