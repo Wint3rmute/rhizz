@@ -14,13 +14,6 @@ How to work on this file:
 ---
 
 
-## For later Task <N> — Adding annotation to plots
-
-Make it possible to attach a text marker to a component with a specified offset.
-This attachment should be saved on the view-level not on the system model.
-
----
-
 ## (For later brainstorming) Task <N> - map errors to different usage modes
 
 I want Rhizz to be usable in different usage modes, such as:
