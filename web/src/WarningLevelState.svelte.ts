@@ -27,6 +27,22 @@ export function parseWarningLevel(value: string | null): WarningLevel | null {
   return WARNING_LEVELS.find((level) => level === value) ?? null;
 }
 
+/**
+ * Display spellings for the level names. The stored value and the compiler
+ * vocabulary are lowercase (matching the CLI's `--warning-level`), but the
+ * navbar control reads better capitalised.
+ */
+const WARNING_LEVEL_LABELS: Record<WarningLevel, string> = {
+  business: "Business",
+  architectural: "Architectural",
+  component: "Component",
+};
+
+/** Human-readable label for a level, for use in UI controls. */
+export function warningLevelLabel(level: WarningLevel): string {
+  return WARNING_LEVEL_LABELS[level];
+}
+
 function readInitialWarningLevel(): WarningLevel {
   if (typeof localStorage === "undefined") return DEFAULT_WARNING_LEVEL;
   return parseWarningLevel(localStorage.getItem(WARNING_LEVEL_STORAGE_KEY)) ??

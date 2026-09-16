@@ -13,7 +13,11 @@ import {
   getCurrentProjectId,
   getCurrentScore,
 } from "../ProjectState.svelte";
-import { getWarningLevel, setWarningLevel } from "../WarningLevelState.svelte";
+import {
+  getWarningLevel,
+  setWarningLevel,
+  warningLevelLabel,
+} from "../WarningLevelState.svelte";
 import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
 
 let {
@@ -117,20 +121,25 @@ function closeMenu() {
           </div>
         {/if}
         <!-- Project-wide warning preset: gates which warnings the compiler
-             reports (errors are never gated). Persisted across reloads. -->
+             reports (errors are never gated). Persisted across reloads. The
+             visible label only appears from `lg` up — the navbar is already
+             tight at `md` — but stays in the accessibility tree at every
+             width, and `title` explains the control either way. -->
         <div
-          class="flex items-center gap-1.5 text-xs text-base-content/70"
+          class="flex items-center gap-1.5 whitespace-nowrap text-xs text-base-content/70"
           title="How much detail this project is specified at — gates which warnings are reported. Errors are always reported."
         >
-          <label for="warning-level">Warning level</label>
+          <label for="warning-level" class="sr-only lg:not-sr-only">
+            Warning level
+          </label>
           <select
             id="warning-level"
-            class="select select-xs select-bordered"
+            class="select select-sm select-bordered text-xs"
             value={warningLevel}
             onchange={(event) => setWarningLevel(event.currentTarget.value)}
           >
             {#each WARNING_LEVELS as level (level)}
-              <option value={level}>{level}</option>
+              <option value={level}>{warningLevelLabel(level)}</option>
             {/each}
           </select>
         </div>
@@ -221,19 +230,19 @@ function closeMenu() {
 
       <!-- Mobile warning-level picker: the same project-wide preset as the
            desktop select, which is hidden below the md breakpoint. -->
-      <div class="flex items-center justify-between pt-1">
+      <div class="flex items-center justify-between gap-2 pt-1">
         <label
           for="warning-level-mobile"
-          class="text-xs text-base-content/70"
+          class="whitespace-nowrap text-xs text-base-content/70"
         >Warning level</label>
         <select
           id="warning-level-mobile"
-          class="select select-sm select-bordered"
+          class="select select-sm select-bordered text-xs"
           value={warningLevel}
           onchange={(event) => setWarningLevel(event.currentTarget.value)}
         >
           {#each WARNING_LEVELS as level (level)}
-            <option value={level}>{level}</option>
+            <option value={level}>{warningLevelLabel(level)}</option>
           {/each}
         </select>
       </div>

@@ -141,6 +141,11 @@ export const WarningLevelSelector: Story = {
     await expect(
       Array.from(select.options).map((option) => option.value),
     ).toEqual(["business", "architectural", "component"]);
+    // ...rendering capitalised labels while the values stay lowercase, matching
+    // the compiler's vocabulary.
+    await expect(
+      Array.from(select.options).map((option) => option.text),
+    ).toEqual(["Business", "Architectural", "Component"]);
 
     // ...and changing it writes back to the shared setting, which re-renders
     // the select (Svelte flushes reactivity asynchronously).
@@ -168,6 +173,9 @@ export const MobileWarningLevelSelector: Story = {
       name: "Warning level",
     });
     await expect(select.value).toBe("architectural");
+    await expect(
+      Array.from(select.options).map((option) => option.text),
+    ).toEqual(["Business", "Architectural", "Component"]);
 
     await userEvent.selectOptions(select, "component");
     await expect(getWarningLevel()).toBe("component");
