@@ -13,6 +13,11 @@ How to work on this file:
 
 ---
 
+## Task <N> — Annotations do not work with undo/redo
+
+An AI agent noticed that view annotations don't follow the unified undo/redo
+flow along with other entities. Reproduce behavior via a test, find root cause,
+and fix it.
 
 ## Task <N> — Detect isolated component trees in systems
 
