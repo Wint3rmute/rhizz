@@ -4,6 +4,37 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — View annotations (text notes on the canvas)
+
+Free-standing text notes placed on a diagram, persisted as `annotation` blocks
+in `diagrams/*.hcl` (view-level metadata, never written to the system model).
+Position is stored as absolute canvas coordinates rather than a
+component anchor + offset — a deliberate choice that keeps notes independent of
+the component layout.
+
+- **Core** (`crates/rhizz-core/src/{model,serialize}.rs`): `Annotation { text, x,
+  y, scale }` on `ViewDefinition`; `annotation { x y text scale }` emit/parse via
+  `serialize_annotation` / `RawAnnotationAttrs` (unknown attributes rejected like
+  every other block); `scale` omitted from canonical output at the `1.0` default
+  and notes emitted sorted by `text` for stable diffs. Round-trip test
+  `annotations_round_trip_through_views_hcl`.
+- **Web** (`diagrams/+page.svelte`, `persistence.ts`): “+ Note” toolbar button,
+  inline text editing, drag (single and group-drag alongside nodes), corner
+  resize → font `scale`, delete via `Delete`/`Backspace`, selection mutually
+  exclusive with nodes. `layoutToHcl`/`viewsToLayout` round-trip plus a
+  “survives reload” persistence test.
+- **Rendering**: drawn by the interactive canvas, `DiagramStaticView`,
+  `DiagramEmbedView`, and the book example; `annotationBounds`/
+  `annotationLines` geometry is unit-tested.
+- **Stories**: `WithAnnotations`, `AnnotationsExtendTheFittedViewport`,
+  `AnnotationsOnly`, `WithDistantAnnotations`, `WithAnnotationButton`.
+- **Spec**: `SPEC.md §2.10` now documents the `annotation` sub-block.
+- Known follow-ups (not part of this task): annotations are absent from the
+  action log / “Copy Debug Info” dump, and adding/deleting/editing a note does
+  not record an undo point (drag and resize do).
+
+---
+
 ## Task — Unified command-based transaction history (Undo/Redo)
 
 Model writes and canvas placement now undo/redo together through one
