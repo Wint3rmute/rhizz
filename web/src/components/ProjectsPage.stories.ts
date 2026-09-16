@@ -93,3 +93,39 @@ export const EmptyLandingOpensExampleModal: Story = {
     }
   },
 };
+
+// The header stacks below the `sm` breakpoint so both actions sit under the
+// "Projects" heading rather than running off the right edge — it overflows a
+// phone-width card when they share a row. Storybook's test runner renders
+// narrower than `sm`, so this story exercises the mobile layout.
+export const MobileHeaderStacks: Story = {
+  args: {
+    projects,
+  },
+  globals: {
+    viewport: { value: "mobile1" },
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile1" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heading = canvas.getByRole("heading", { name: "Projects" });
+    const header = heading.closest("div");
+    if (!header) throw new Error("the heading should have a header container");
+
+    const newFromExample = within(header).getByRole("button", {
+      name: "New from example",
+    });
+    const newProject = within(header).getByRole("button", {
+      name: "New project",
+    });
+
+    // Both actions belong to the header...
+    await expect(newFromExample).toBeInTheDocument();
+    // ...and sit below the heading instead of beside it.
+    await expect(newProject.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      heading.getBoundingClientRect().bottom,
+    );
+  },
+};
