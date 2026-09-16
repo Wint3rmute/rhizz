@@ -12,7 +12,9 @@ use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 use walkdir::WalkDir;
 
-use rhizz_core::{Diagnostic, DiagnosticCode, Source, is_view_source, serialize_model};
+use rhizz_core::{
+    Diagnostic, DiagnosticCode, Source, WarningLevel, is_view_source, serialize_model,
+};
 
 // ── CLI argument types ───────────────────────────────────────────────────────
 
@@ -39,6 +41,12 @@ pub struct Cli {
     /// Disable colored output.
     #[arg(long, global = true)]
     pub no_color: bool,
+
+    /// Minimum warning level to report: `business`, `architectural`, or
+    /// `component`. Warnings are cumulative, so a lower level reports fewer of
+    /// them; errors are always reported. Ignored by `fmt`.
+    #[arg(long, global = true, value_name = "LEVEL", default_value_t = WarningLevel::Component)]
+    pub warning_level: WarningLevel,
 }
 
 /// Available subcommands.
@@ -203,11 +211,11 @@ fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
 /// Serialise `value` as pretty JSON on stdout. If serialisation fails (which
 /// should be impossible for our output types), fall back to a minimal valid
 /// JSON error payload instead of panicking.
-fn print_json<T: serde::Serialize>(value: &T) {
+fn print_json<T: serde::Serialize>(value: &T, warning_level: WarningLevel) {
     match serde_json::to_string_pretty(value) {
         Ok(s) => println!("{s}"),
         Err(e) => println!(
-            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"score\": null}}"
+            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"warning_level\": \"{warning_level}\", \"score\": null}}"
         ),
     }
 }
@@ -284,6 +292,8 @@ struct JsonOutput {
     errors: Vec<JsonDiagnostic>,
     /// Warning diagnostics.
     warnings: Vec<JsonDiagnostic>,
+    /// Warning level the warnings were filtered to.
+    warning_level: String,
     /// Score report (present only if check passed).
     #[serde(skip_serializing_if = "Option::is_none")]
     score: Option<JsonScore>,
@@ -320,9 +330,10 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                         message: format!("{e:#}"),
                     }],
                     warnings: vec![],
+                    warning_level: cli.warning_level.to_string(),
                     score: None,
                 };
-                print_json(&out);
+                print_json(&out, cli.warning_level);
             } else {
                 let d = Diagnostic::error(DiagnosticCode::E000, format!("{e:#}"));
                 eprintln!("{}", format_diagnostic(&d, color));
@@ -333,7 +344,9 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
     };
 
     // ── Compile (parse + resolve + validate) ──────────────────────────────────
-    let result = rhizz_core::compile(&sources);
+    // Warnings below the requested level are dropped here, not at print time, so
+    // every downstream count (summary line, `--strict`, JSON) sees one set.
+    let result = rhizz_core::compile_with_warning_level(&sources, cli.warning_level);
     let model = result.model;
     let diagnostics = result.diagnostics;
 
@@ -357,6 +370,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
         let json_out = JsonOutput {
             errors: errors.iter().map(|d| to_json_diagnostic(d)).collect(),
             warnings: warnings.iter().map(|d| to_json_diagnostic(d)).collect(),
+            warning_level: cli.warning_level.to_string(),
             score: score_report.as_ref().map(|r| JsonScore {
                 system: r.project_name.clone(),
                 components: JsonCategoryScore {
@@ -383,7 +397,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
                 },
             }),
         };
-        print_json(&json_out);
+        print_json(&json_out, cli.warning_level);
     } else {
         // Print diagnostics.
         for d in &diagnostics {
@@ -804,6 +818,155 @@ mod tests {
         ]);
         let code = run(&cli);
         assert_eq!(code, 1, "invalid path should exit 1");
+    }
+
+    // ── warning levels ────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_warning_level_defaults_to_component() {
+        let cli = parse_args(&["examples/drone"]);
+        assert_eq!(cli.warning_level, WarningLevel::Component);
+    }
+
+    #[test]
+    fn parse_warning_level_accepts_every_level() {
+        for level in WarningLevel::ALL {
+            let level_arg = level.to_string();
+            let cli = parse_args(&["check", "examples/drone", "--warning-level", &level_arg]);
+            assert_eq!(cli.warning_level, level, "--warning-level {level_arg}");
+        }
+    }
+
+    #[test]
+    fn parse_warning_level_rejects_unknown_level() {
+        let result = Cli::try_parse_from(["rhizz", "check", "--warning-level", "verbose", "."]);
+        assert!(
+            result.is_err(),
+            "an unknown warning level must be rejected at parse time"
+        );
+    }
+
+    /// Writes `hcl` as the only `system.hcl` of a fresh temporary project.
+    fn project_with_system_hcl(hcl: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("system.hcl"), hcl).expect("write system.hcl");
+        dir
+    }
+
+    /// Runs `check --strict` at `level`; warnings alone decide the exit code.
+    fn check_strict_at(dir: &Path, level: WarningLevel) -> i32 {
+        let level_arg = level.to_string();
+        let cli = parse_args(&[
+            "check",
+            dir.to_str().expect("test paths are UTF-8"),
+            "--strict",
+            "--no-color",
+            "--warning-level",
+            &level_arg,
+        ]);
+        run(&cli)
+    }
+
+    /// Raises exactly one architectural warning: W003 for the unwired instance.
+    const ARCHITECTURAL_ONLY: &str = r#"component "c" {
+  leaf        = true
+  description = "d"
+}
+
+system "s" {
+  description = "d"
+  instance "i" { source = "c" }
+}
+"#;
+
+    /// Raises only component-level warnings: unused ports (W010) and a protocol
+    /// without messages (W011). Both instances are wired, so no W003.
+    const COMPONENT_ONLY: &str = r#"protocol "bus" { description = "d" }
+
+component "c" {
+  description = "d"
+  leaf        = true
+
+  port "p" {
+    protocol = "bus"
+    role     = "r"
+  }
+}
+
+system "s" {
+  description = "d"
+
+  instance "i" { source = "c" }
+  instance "j" { source = "c" }
+
+  connection "l" {
+    description = "d"
+    from        = "i"
+    to          = "j"
+  }
+}
+"#;
+
+    #[test]
+    fn business_level_suppresses_everything_below_it() {
+        let architectural = project_with_system_hcl(ARCHITECTURAL_ONLY);
+        let component = project_with_system_hcl(COMPONENT_ONLY);
+        assert_eq!(
+            check_strict_at(architectural.path(), WarningLevel::Business),
+            0,
+            "business level must hide W003"
+        );
+        assert_eq!(
+            check_strict_at(component.path(), WarningLevel::Business),
+            0,
+            "business level must hide W010/W011"
+        );
+    }
+
+    #[test]
+    fn architectural_level_reports_architectural_but_not_component_warnings() {
+        let architectural = project_with_system_hcl(ARCHITECTURAL_ONLY);
+        let component = project_with_system_hcl(COMPONENT_ONLY);
+        assert_eq!(
+            check_strict_at(architectural.path(), WarningLevel::Architectural),
+            1,
+            "architectural level must report W003"
+        );
+        assert_eq!(
+            check_strict_at(component.path(), WarningLevel::Architectural),
+            0,
+            "architectural level must hide W010/W011"
+        );
+    }
+
+    #[test]
+    fn component_level_reports_every_warning() {
+        let architectural = project_with_system_hcl(ARCHITECTURAL_ONLY);
+        let component = project_with_system_hcl(COMPONENT_ONLY);
+        assert_eq!(
+            check_strict_at(architectural.path(), WarningLevel::Component),
+            1,
+            "component level must report W003"
+        );
+        assert_eq!(
+            check_strict_at(component.path(), WarningLevel::Component),
+            1,
+            "component level must report W010/W011"
+        );
+    }
+
+    #[test]
+    fn errors_are_reported_regardless_of_warning_level() {
+        let dir = project_with_system_hcl(
+            "system \"s\" {\n  instance \"a\" {\n    source = \"missing\"\n  }\n}\n",
+        );
+        for level in WarningLevel::ALL {
+            assert_eq!(
+                check_strict_at(dir.path(), level),
+                1,
+                "E014 must survive the {level} warning level"
+            );
+        }
     }
 
     // ── fmt command ───────────────────────────────────────────────────────
