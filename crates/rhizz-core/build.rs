@@ -41,6 +41,107 @@ fn path_str(path: &Path) -> Result<&str> {
     })
 }
 
+/// Marker that introduces the machine-readable warning-level declaration every
+/// warning document carries directly below its title.
+const WARNING_LEVEL_PREFIX: &str = "warning level:";
+
+/// Accepted warning-level names, paired with the constant `build.rs` emits for
+/// them. Ordered from least to most detailed.
+const WARNING_LEVELS: [(&str, &str); 3] = [
+    ("business", "WarningLevel::Business"),
+    ("architectural", "WarningLevel::Architectural"),
+    ("component", "WarningLevel::Component"),
+];
+
+/// Warning level assigned to error codes. Errors are reported at every level
+/// (see `WarningLevel::reports`), so the value is never consulted for them —
+/// `E*.md` files are forbidden from declaring their own.
+const ERROR_WARNING_LEVEL: &str = "WarningLevel::Business";
+
+/// Builds a build-script error attributed to a diagnostic document.
+fn doc_error(path: &Path, message: &str) -> Box<dyn Error> {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("{}: {message}", path.display()),
+    )
+    .into()
+}
+
+/// Returns the code named by a document's H1, e.g. `Some("W010")` for
+/// `# W010 — Unused port`.
+fn title_code(markdown: &str) -> Option<&str> {
+    markdown
+        .lines()
+        .map(str::trim_start)
+        .find_map(|line| line.strip_prefix("# "))
+        .and_then(|title| title.split_whitespace().next())
+}
+
+/// Extracts the warning level declared on the first non-blank line after the
+/// H1, e.g. `**Warning level:** Component.` -> `Some("component")`.
+///
+/// Markdown emphasis and a trailing period are both optional, so
+/// `Warning level: component` parses identically.
+fn warning_level_declaration(markdown: &str) -> Option<String> {
+    let mut lines = markdown.lines();
+    lines.find(|line| line.trim_start().starts_with("# "))?;
+
+    lines
+        .map(str::trim)
+        .find(|trimmed| !trimmed.is_empty())
+        .map(|trimmed| trimmed.replace('*', "").to_ascii_lowercase())
+        .and_then(|normalized| {
+            normalized
+                .strip_prefix(WARNING_LEVEL_PREFIX)
+                .map(|value| value.trim().trim_end_matches('.').to_owned())
+        })
+}
+
+/// Resolves the `WarningLevel` constant a diagnostic document declares.
+///
+/// Warnings must declare one; errors must not, and always report everywhere.
+fn resolve_warning_level(code: &str, path: &Path, markdown: &str) -> Result<&'static str> {
+    let declared = warning_level_declaration(markdown);
+
+    if code.starts_with('E') {
+        if declared.is_some() {
+            return Err(doc_error(
+                path,
+                &format!(
+                    "{code}: error codes must not declare a warning level — they are reported at \
+                     every level; delete the '**Warning level:**' line"
+                ),
+            ));
+        }
+        return Ok(ERROR_WARNING_LEVEL);
+    }
+
+    let Some(declared) = declared else {
+        return Err(doc_error(
+            path,
+            &format!(
+                "{code}: missing warning level — add '**Warning level:** \
+                 <business|architectural|component>.' as the first line after the title"
+            ),
+        ));
+    };
+
+    WARNING_LEVELS
+        .iter()
+        .find_map(|(name, constant)| (*name == declared).then_some(*constant))
+        .ok_or_else(|| {
+            let allowed = WARNING_LEVELS
+                .iter()
+                .map(|(name, _)| *name)
+                .collect::<Vec<_>>()
+                .join(", ");
+            doc_error(
+                path,
+                &format!("{code}: unknown warning level '{declared}' — expected one of: {allowed}"),
+            )
+        })
+}
+
 /// Generates the `DiagnosticCode` implementation file from markdown documentation.
 fn generate_diagnostic_codes(manifest_dir: &str, out_dir: &str) -> Result<()> {
     let diagnostics_dir = Path::new(manifest_dir).join("../../SPEC/diagnostics");
@@ -81,10 +182,25 @@ fn generate_diagnostic_codes(manifest_dir: &str, out_dir: &str) -> Result<()> {
         } else {
             "Level::Warning"
         };
+        let markdown = fs::read_to_string(&path)?;
+
+        // The H1 names the code, so a document duplicated to a new filename
+        // cannot silently keep the old title.
+        if title_code(&markdown) != Some(code.as_str()) {
+            return Err(doc_error(
+                &path,
+                &format!(
+                    "title must read '# {code} — ...' to match the filename (found: {})",
+                    title_code(&markdown).unwrap_or("<no '# ' title line>")
+                ),
+            ));
+        }
+
+        let min_warning_level = resolve_warning_level(&code, &path, &markdown)?;
         let path_str = path_str(&path)?;
         let _ = writeln!(
             out_code,
-            "    #[doc = include_str!(r#\"{path_str}\"#)]\n    pub const {code}: Self = Self {{\n        code: \"{code}\",\n        level: {level},\n    }};"
+            "    #[doc = include_str!(r#\"{path_str}\"#)]\n    pub const {code}: Self = Self {{\n        code: \"{code}\",\n        level: {level},\n        min_warning_level: {min_warning_level},\n    }};"
         );
     }
 

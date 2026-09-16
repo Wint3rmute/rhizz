@@ -17,7 +17,7 @@ pub mod score;
 pub mod serialize;
 pub mod validate;
 
-pub use diagnostics::{Diagnostic, DiagnosticCode, Level};
+pub use diagnostics::{Diagnostic, DiagnosticCode, Level, ParseWarningLevelError, WarningLevel};
 pub use examples::{ExampleFile, ExampleProject, example_projects};
 pub use model::{
     Annotation, Component, ComponentId, ComponentKind, ComponentParent, Connection,
@@ -115,6 +115,23 @@ pub fn compile(sources: &[Source]) -> CompileResult {
         }
     }
 
+    result
+}
+
+/// Compile `sources` while reporting warnings down to `warning_level`.
+///
+/// Errors are always reported, so a business-level spec produces exactly the
+/// same [`Model`] as a component-level one — it only sees less feedback. See
+/// [`WarningLevel`] for the cumulative semantics.
+#[instrument(skip(sources), fields(source_count = sources.len(), %warning_level))]
+pub fn compile_with_warning_level(
+    sources: &[Source],
+    warning_level: WarningLevel,
+) -> CompileResult {
+    let mut result = compile(sources);
+    result
+        .diagnostics
+        .retain(|diagnostic| warning_level.reports(diagnostic.code));
     result
 }
 
@@ -742,5 +759,84 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
             "expected E012, got {:?}",
             codes(&result)
         );
+    }
+
+    // ── warning levels ───────────────────────────────────────────────────
+
+    /// Raises one warning per level: W005 (business, self-connection), W001
+    /// (architectural, non-leaf definition without children) and W004
+    /// (component, missing description).
+    const MIXED_WARNINGS: &str = "component \"non-leaf\" {}\n\
+system \"s\" {\n\
+  instance \"a\" { source = \"non-leaf\" }\n\
+  connection \"self\" {\n\
+    from = \"a\"\n\
+    to   = \"a\"\n\
+  }\n\
+}";
+
+    fn mixed_warnings_at(level: WarningLevel) -> Vec<&'static str> {
+        codes(&compile_with_warning_level(
+            &[model_source(MIXED_WARNINGS)],
+            level,
+        ))
+    }
+
+    #[test]
+    fn business_level_reports_only_business_warnings() {
+        let raised = mixed_warnings_at(WarningLevel::Business);
+        assert!(raised.contains(&"W005"), "expected W005, got {raised:?}");
+        assert!(!raised.contains(&"W001"), "unexpected W001 in {raised:?}");
+        assert!(!raised.contains(&"W004"), "unexpected W004 in {raised:?}");
+    }
+
+    #[test]
+    fn architectural_level_adds_architectural_warnings() {
+        let raised = mixed_warnings_at(WarningLevel::Architectural);
+        assert!(raised.contains(&"W005"), "expected W005, got {raised:?}");
+        assert!(raised.contains(&"W001"), "expected W001, got {raised:?}");
+        assert!(!raised.contains(&"W004"), "unexpected W004 in {raised:?}");
+    }
+
+    #[test]
+    fn component_level_reports_every_warning() {
+        let raised = mixed_warnings_at(WarningLevel::Component);
+        for expected in ["W001", "W004", "W005"] {
+            assert!(
+                raised.contains(&expected),
+                "expected {expected}, got {raised:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_compile_reports_every_warning() {
+        let sources = [model_source(MIXED_WARNINGS)];
+        assert_eq!(
+            codes(&compile(&sources)),
+            codes(&compile_with_warning_level(
+                &sources,
+                WarningLevel::Component
+            ))
+        );
+    }
+
+    #[test]
+    fn errors_are_reported_at_every_warning_level() {
+        let sources = [model_source(
+            "system \"s\" {\n    instance \"a\" {\n        source = \"missing\"\n    }\n}\n",
+        )];
+        for level in WarningLevel::ALL {
+            let result = compile_with_warning_level(&sources, level);
+            assert!(
+                result.model.is_none(),
+                "model must not survive E014 at {level}"
+            );
+            let raised = codes(&result);
+            assert!(
+                raised.contains(&"E014"),
+                "expected E014 at {level}, got {raised:?}"
+            );
+        }
     }
 }
