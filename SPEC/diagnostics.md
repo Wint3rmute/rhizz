@@ -24,7 +24,27 @@ Error codes (`Exxx`) halt compilation. Warning codes (`Wxxx`) are non-blocking.
 
 ## Markdown file format
 
-Every diagnostic file follows this structure:
+Every diagnostic file follows this structure. **Warning** files must also
+declare their warning level on the first line after the title:
+
+````markdown
+# W010 — Short title
+
+**Warning level:** Component.
+
+Prose description of the condition.
+
+## Example (warning)
+
+\```hcl // HCL snippet that triggers the diagnostic \```
+
+## Fix
+
+\```hcl // Corrected HCL snippet \```
+````
+
+Error files carry no such line, because errors are never gated by a warning
+level (see [warning levels](warning-levels.md)):
 
 ````markdown
 # E001 — Short title
@@ -40,6 +60,21 @@ Prose description of the condition.
 \```hcl // Corrected HCL snippet \```
 ````
 
+### Declaration rules
+
+The declaration is parsed by `build.rs`, which **fails the build** when any of
+these is violated — so a diagnostic cannot ship without a level:
+
+| Rule | Rationale |
+| ---- | --------- |
+| A `Wxxx.md` must declare `**Warning level:** <business\|architectural\|component>.` | Every warning must state the least-detailed spec level it belongs to |
+| The declaration must be the first non-blank line after the title | Keeps the parse unambiguous — a sentence elsewhere containing "warning level:" is never mistaken for it |
+| An `Exxx.md` must *not* declare a level | Errors are reported at every level; a stray line means a copy-paste that forgot to delete it |
+| The title must name the code (`# W010 — …` in `W010.md`) | Catches a duplicated document that kept the old title |
+
+The value is matched case-insensitively and accepts an optional trailing period,
+so `**Warning level:** component` parses identically to `Component.`.
+
 ## How the files are used
 
 ### 1. Automatic Code & Doc Generation (`build.rs`)
@@ -51,8 +86,20 @@ Each `DiagnosticCode` const is generated at build time by `crates/rhizz-core/bui
 pub const E001: Self = Self {
     code: "E001",
     level: Level::Error,
+    min_warning_level: WarningLevel::Business,
+};
+
+#[doc = include_str!(r#"/path/to/SPEC/diagnostics/W010.md"#)]
+pub const W010: Self = Self {
+    code: "W010",
+    level: Level::Warning,
+    min_warning_level: WarningLevel::Component,
 };
 ```
+
+The severity comes from the filename prefix (`E`/`W`), and
+`min_warning_level` from the file's declaration; error codes always carry
+`WarningLevel::Business` and bypass level gating entirely.
 
 This means `cargo doc` renders the full description, HCL examples, and fix guidance for every code with zero hand-written `const` boilerplate or manual `include_str!` mappings to maintain.
 
@@ -86,5 +133,9 @@ the call-site message describes the _specific instance_.
 ## Adding a new diagnostic code
 
 1. Create `SPEC/diagnostics/Xxxx.md` following the format above (`Exxx.md` for errors, `Wxxx.md` for warnings).
-2. Cargo's `build.rs` automatically picks up the new file, generates `DiagnosticCode::Xxxx`, and embeds its documentation.
-3. Emit it via `Diagnostic::error(DiagnosticCode::Xxxx, ...)` or `Diagnostic::warning(DiagnosticCode::Xxxx, ...)` at the appropriate point in parsing, resolution, or validation.
+2. For a warning, add the `**Warning level:** <level>.` line directly below the
+title, choosing the least-detailed level at which the warning is useful (see
+[warning levels](warning-levels.md#choice-of-level) for the rule of thumb).
+3. Cargo's `build.rs` automatically picks up the new file, validates the
+declaration, generates `DiagnosticCode::Xxxx`, and embeds its documentation.
+4. Emit it via `Diagnostic::error(DiagnosticCode::Xxxx, ...)` or `Diagnostic::warning(DiagnosticCode::Xxxx, ...)` at the appropriate point in parsing, resolution, or validation.
