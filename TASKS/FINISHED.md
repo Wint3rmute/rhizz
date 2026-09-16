@@ -4,6 +4,60 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Warning levels (usage-mode presets)
+
+Warnings are now gated by a project-wide *warning level* — `business` <
+`architectural` < `component` — so a high-level spec is no longer nagged about
+leaf-level detail it has not written yet. Errors are never gated, so an
+incomplete spec still compiles at every level. The task proposed a `--preset`
+flag; shipped as `--warning-level` so the CLI, the GUI and `rhizz-core` all use
+one word for the same concept.
+
+- **Diagnostic format** (`SPEC/diagnostics/W*.md`): every warning declares
+  `**Warning level:** <Level>.` as the first line after its title; `E*.md` files
+  must not carry it. `build.rs` parses *and validates* the declaration — a
+  missing or malformed line, one on an error file, or a title that disagrees
+  with the filename fails the build, so a warning cannot ship unmapped. All 17
+  warnings mapped (8 business / 4 architectural / 5 component), with the
+  choice-of-level rule written down in the new `SPEC/warning-levels.md`.
+- **Core** (`crates/rhizz-core/src/diagnostics.rs`): `WarningLevel` (totally
+  ordered, `Default = Component`, `Display`/`FromStr`), the
+  `min_warning_level` field on `DiagnosticCode`, and `WarningLevel::reports()`
+  as the single threshold rule. `compile_with_warning_level()` filters with one
+  `retain`; plain `compile()` still reports everything.
+- **CLI** (`crates/rhizz-cli/src/cli.rs`): `--warning-level` (default
+  `component`), filtered *before* the summary line, the `--strict` escalation
+  and the JSON encoding so every downstream count agrees; the JSON output
+  gains `warning_level`.
+- **WASM + web**: `CompileResultJS.compileWithWarningLevel` alongside the
+  unchanged `compile`; the TS `compile_system(sources, level)` defaults to
+  `component`, so existing call sites and tests are untouched. A persisted
+  `WarningLevelState` singleton plus a navbar selector (desktop and mobile-menu
+  copies) is read inside the `$derived` compiles of the diagnostic-displaying
+  routes (editor, overview, diagrams, embed, book example), so switching the
+  level updates counts and panels live. The mutation failure gate
+  (`apply_model_op`) is deliberately left unfiltered — it consumes diagnostics
+  for correctness, not for reporting.
+- **Spec**: new `SPEC/warning-levels.md`, plus updates to `SPEC.md` §4/§7,
+  `SPEC/cli.md`, `SPEC/diagnostics.md` and `SPEC/diagnostics/README.md`.
+- `just test` (59 files / 604 web tests + cargo), `just lint`, `just build`,
+  `just format` green (branch `warning-levels`).
+
+Notes for whoever touches this next:
+
+- The desktop navbar selector story queries with `hidden: true` and drives the
+  control with `fireEvent` rather than `userEvent`: the storybook test runner's
+  viewport sits below Tailwind's `md` breakpoint, so the `hidden md:flex`
+  cluster is `display: none` and drops out of the accessibility tree.
+- Pre-existing rustdoc warning at `crates/rhizz-core/src/mutation.rs:8`
+  (redundant explicit link target) — unrelated to this task, left alone.
+- Several `SPEC/diagnostics/*.md` examples (and `SPEC.md` §2.6) use `;` as an
+  HCL attribute separator, which does not parse, and `E014.md` still shows the
+  pre-`instance` nested-`component` syntax. They are illustrative only, so no
+  test catches them.
+
+---
+
 ## Task — View annotations (text notes on the canvas)
 
 Free-standing text notes placed on a diagram, persisted as `annotation` blocks

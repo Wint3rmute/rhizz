@@ -14,41 +14,6 @@ How to work on this file:
 ---
 
 
-## (For later brainstorming) Task <N> - map errors to different usage modes
-
-I want Rhizz to be usable in different usage modes, such as:
-
-- Business spec - super high-level
-- Architectural spec - high-level architectural overview
-- Component-level spec - component overview, touching low-level details
-
-Those roles should have different requirements regarding the level of detail they need to provide
-and therefore should see different levels of feedback from the compiler.
-
-A business-level spec has almost no requirements regarding the level of detail,
-while a component-level spec has detailed requirements. The level of detail
-should gradually increase as the spec moves from business to component level.
-
-Keep in mind that the compiler should still allow to build the system even if the spec is incomplete.
-
-For the MVP stage, I want to create 3 presets:
-
-- Business-level spec
-- Architectural spec
-- Component-level spec
-
-On the frontend side, they should be switchable using a select dropdown on the navbar or similar.
-In the CLI, there should be a flag `--preset` that allows the user to select the desired preset.
-
-Now, all warnings defined in `SPEC/diagnostics/` must be mapped to the
-appropriate preset. The current diagnostic Markdown format should be further
-formalized to require assigning each warning to a specific preset. If a warning
-is assigned to business-level, it should be shown on business level and all
-lower levels. Similarly, if a warning is assigned to architectural-level, it
-should be shown on architectural level and all lower levels.
-
----
-
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
