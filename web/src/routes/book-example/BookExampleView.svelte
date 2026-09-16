@@ -2,6 +2,7 @@
 import { SvelteMap } from "svelte/reactivity";
 import { resolveIcon } from "../../iconHelper";
 import { getTheme, toggleTheme } from "../../ThemeState.svelte";
+import { getWarningLevel } from "../../WarningLevelState.svelte";
 import {
   compile_system,
   parse_views,
@@ -48,10 +49,14 @@ let sources = $derived(
     .map((file) => ({ filename: file.path, content: file.content })),
 );
 
+// The project-wide warning preset (navbar select); read inside the `$derived`
+// compile below so the verdict panel follows the same level as the main app.
+let warningLevel = $derived(getWarningLevel());
+
 let output = $derived.by(() => {
   if (sources.length === 0) return null;
   try {
-    return compile_system(sources);
+    return compile_system(sources, warningLevel);
   } catch {
     return null;
   }

@@ -51,10 +51,32 @@ export interface ViewDefinition {
   annotations?: Annotation[];
 }
 
+/**
+ * A project-wide preset describing how much detail a project is specified at
+ * (see `SPEC/warning-levels.md`). It gates which *warnings* the compiler
+ * reports — errors are never gated — and every level reports at least as much
+ * as the less detailed ones (`business` < `architectural` < `component`).
+ *
+ * The strings are exactly what `rhizz_core::WarningLevel::from_str` accepts
+ * (it is case-insensitive, but the UI only ever produces these three).
+ */
+export type WarningLevel = "business" | "architectural" | "component";
+
+/** Every warning level, ordered from least to most detailed. */
+export const WARNING_LEVELS: readonly WarningLevel[] = [
+  "business",
+  "architectural",
+  "component",
+];
+
+/** The most detailed level — reports every warning (the compiler default). */
+export const DEFAULT_WARNING_LEVEL: WarningLevel = "component";
+
 export function compile_system(
   sources: { filename: string; content: string }[],
+  warning_level: WarningLevel = DEFAULT_WARNING_LEVEL,
 ): CompileResultJS {
-  return CompileResultJS.compile(sources);
+  return CompileResultJS.compile_with_warning_level(sources, warning_level);
 }
 
 export function serialize_model(model: ModelJS): string {
