@@ -9,6 +9,8 @@ import {
   parse_views,
   serialize_model,
   serialize_views,
+  WARNING_LEVELS,
+  type WarningLevel,
 } from "./rhizz_wasm_wrapper";
 import { EMPTY_PROJECT_HCL } from "./emptyProject";
 
@@ -313,5 +315,96 @@ system "demo" {
     const singleFile = examples.find((e) => e.id === "single-file");
     expect(singleFile).toBeDefined();
     expect(singleFile?.files.some((f) => f.path === "system.hcl")).toBe(true);
+  });
+
+  describe("warning levels", () => {
+    // `fc` has no description (W004, component level) and `loopback`
+    // connects `fc` to itself (W005, business level) — one warning of each
+    // gated kind, so a level change is observable in both directions.
+    const gatedWarnings = [{
+      filename: "system.hcl",
+      content: `component "fc" {
+  leaf = true
+}
+
+system "drone" {
+  instance "fc" {
+    source = "fc"
+  }
+
+  connection "loopback" {
+    from = "fc"
+    to   = "fc"
+  }
+}
+`,
+    }];
+
+    // Two instances sharing a label in one system — E001, an error, which no
+    // warning level may ever hide.
+    const broken = [{
+      filename: "system.hcl",
+      content: `component "motor" {
+  description = "Brushless motor"
+}
+
+system "drone" {
+  instance "motor" {
+    source = "motor"
+  }
+  instance "motor" {
+    source = "motor"
+  }
+}
+`,
+    }];
+
+    function codes(
+      sources: { filename: string; content: string }[],
+      level?: WarningLevel,
+    ): string[] {
+      return compile_system(sources, level).diagnostics().map((d) => d.code);
+    }
+
+    it("forwards the level to WASM, hiding component warnings at business", () => {
+      const all = codes(gatedWarnings);
+      expect(all).toContain("W004");
+      expect(all).toContain("W005");
+
+      const business = codes(gatedWarnings, "business");
+      expect(business).not.toContain("W004");
+      expect(business).toContain("W005");
+
+      // `architectural` sits between the two: still hides W004, still keeps
+      // the business-level W005.
+      const architectural = codes(gatedWarnings, "architectural");
+      expect(architectural).not.toContain("W004");
+      expect(architectural).toContain("W005");
+    });
+
+    it("defaults to the most detailed level", () => {
+      expect(codes(gatedWarnings)).toEqual(codes(gatedWarnings, "component"));
+      expect(WARNING_LEVELS).toEqual([
+        "business",
+        "architectural",
+        "component",
+      ]);
+    });
+
+    it("never gates errors", () => {
+      for (const level of WARNING_LEVELS) {
+        const result = compile_system(broken, level);
+        expect(result.error_count()).toBeGreaterThan(0);
+        expect(result.diagnostics().map((d) => d.code)).toContain("E001");
+      }
+      expect(compile_system(broken, "business").error_count()).toBe(
+        compile_system(broken, "component").error_count(),
+      );
+    });
+
+    it("rejects an unknown level with a JsError", () => {
+      expect(() => compile_system(gatedWarnings, "verbose" as WarningLevel))
+        .toThrow(/unknown warning level 'verbose'/);
+    });
   });
 });

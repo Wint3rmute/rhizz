@@ -6,6 +6,7 @@ import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
+import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
@@ -20,7 +21,11 @@ $effect(() => {
   });
 });
 
-let output = $derived.by(() => compile_system(sources));
+// The project-wide warning preset (navbar select); reading it inside the
+// `$derived` compile below keeps the diagnostics panel reactive to it.
+let warningLevel = $derived(getWarningLevel());
+
+let output = $derived.by(() => compile_system(sources, warningLevel));
 
 let model = $derived(output.model());
 let diagnostics = $derived(output.diagnostics());

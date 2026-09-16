@@ -4,6 +4,7 @@ import CompilationDiagnosticsOutline from "../../../../components/CompilationDia
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
+import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
@@ -12,6 +13,11 @@ import FileTree from "./FileTree.svelte";
 let { data }: PageProps = $props();
 
 let fs = $derived(openProjectFs(projectStore, data.projectId));
+
+// The project-wide warning preset (navbar select). Reading it inside the
+// `$derived` compile below is what makes the diagnostics panel, the stats and
+// the score react to a change of level without any extra plumbing.
+let warningLevel = $derived(getWarningLevel());
 
 let entries = $state<Dirent[]>([]);
 let selectedPath = $state<string | null>(null);
@@ -180,7 +186,7 @@ async function handleDelete(path: string): Promise<void> {
   }
 }
 
-let output = $derived.by(() => compile_system(sources));
+let output = $derived.by(() => compile_system(sources, warningLevel));
 
 let model = $derived(output.model());
 let diagnostics = $derived(output.diagnostics());

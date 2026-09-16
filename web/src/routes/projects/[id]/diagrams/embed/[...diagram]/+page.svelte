@@ -1,6 +1,7 @@
 <script lang="ts">
 import { SvelteMap } from "svelte/reactivity";
 import { projectStore } from "../../../../../../ProjectState.svelte";
+import { getWarningLevel } from "../../../../../../WarningLevelState.svelte";
 import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";
 import { openProjectFs } from "../../../../../../vfs/fs";
@@ -31,6 +32,9 @@ let normalizedDiagramPath = $derived.by(() => {
 });
 
 let sources = $state<Source[]>([]);
+// The project-wide warning preset (navbar select); read inside the `$derived`
+// compile below so the embed follows the same level as the main app.
+let warningLevel = $derived(getWarningLevel());
 let layout = $state<DiagramLayout>(emptyDiagramLayout());
 let layoutLoaded = $state(false);
 let docs = $state<ProjectDoc[]>([]);
@@ -79,7 +83,7 @@ $effect(() => {
 let output = $derived.by(() => {
   if (sources.length === 0) return null;
   try {
-    return compile_system(sources);
+    return compile_system(sources, warningLevel);
   } catch {
     return null;
   }

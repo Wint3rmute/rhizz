@@ -15,6 +15,7 @@ import {
   setCurrentDiagnostics,
   setCurrentScore,
 } from "../../../../ProjectState.svelte";
+import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import type { PageProps } from "./$types";
@@ -166,7 +167,12 @@ $effect(() => {
   });
 });
 
-let output = $derived.by(() => compile_system(sources));
+// The project-wide warning preset (navbar select). Reading it inside the
+// `$derived` compile below is what makes the navbar's warning count and the
+// diagnostics shown here react to a change of level.
+let warningLevel = $derived(getWarningLevel());
+
+let output = $derived.by(() => compile_system(sources, warningLevel));
 let model = $derived(output.model());
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
