@@ -172,9 +172,14 @@ async function deleteProject(project: Project) {
                hero card, sitting on top of the scrolling background. -->
           <div class="card bg-base-100 shadow-2xl border border-base-content/10 min-h-[100vh]">
             <div class="card-body p-6 sm:p-8">
-              <div class="flex items-center justify-between mb-6">
+              <!-- Stacks below `sm` so the actions sit under the heading
+                   instead of overflowing a narrow viewport; `sm:flex-row`
+                   restores the original side-by-side layout. -->
+              <div
+                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6"
+              >
                 <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
-                <div class="flex gap-2">
+                <div class="flex flex-col gap-2 sm:flex-row">
                   <button class="btn btn-outline" onclick={openExampleModal}>
                     New from example
                   </button>
