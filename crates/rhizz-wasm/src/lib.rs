@@ -841,8 +841,10 @@ pub fn get_example_projects() -> Result<JsValue, JsError> {
 
 /// A compiled result exposed as a JS class with callable Rust methods.
 ///
-/// Construct with [`CompileResultJS::compile`], then inspect diagnostics and
-/// optionally access the model via [`CompileResultJS::model`].
+/// Construct with [`CompileResultJS::compile`] (or
+/// [`CompileResultJS::compile_with_warning_level`] to gate warnings), then
+/// inspect diagnostics and optionally access the model via
+/// [`CompileResultJS::model`].
 ///
 /// ```js
 /// const result = CompileResultJS.compile(sources);
@@ -872,6 +874,39 @@ impl CompileResultJS {
         let sources: Vec<rhizz_core::Source> =
             serde_wasm_bindgen::from_value(sources).map_err(|e| JsError::new(&e.to_string()))?;
         let result = rhizz_core::compile(&sources);
+        Ok(Self {
+            diagnostics: result.diagnostics,
+            model: result.model,
+        })
+    }
+
+    /// Compile one or more HCL sources at an explicit warning level.
+    ///
+    /// # Arguments
+    /// * `sources` – a JS array of `{ filename: string, content: string }` objects.
+    /// * `warning_level` – `"business"`, `"architectural"` or `"component"`
+    ///   (case-insensitive, surrounding whitespace ignored). `undefined`/`null`
+    ///   selects the default level (`"component"`), which reports every warning.
+    ///
+    /// The level gates *warnings* only: errors are always reported, so a model
+    /// that compiles at one level compiles at all of them.
+    ///
+    /// # Errors
+    /// Returns a [`JsError`] if `sources` cannot be deserialised or
+    /// `warning_level` does not name a known level.
+    pub fn compile_with_warning_level(
+        sources: JsValue,
+        warning_level: Option<String>,
+    ) -> Result<Self, JsError> {
+        let sources: Vec<rhizz_core::Source> =
+            serde_wasm_bindgen::from_value(sources).map_err(|e| JsError::new(&e.to_string()))?;
+        let level = match warning_level {
+            Some(level) => level
+                .parse::<rhizz_core::WarningLevel>()
+                .map_err(|e| JsError::new(&e.to_string()))?,
+            None => rhizz_core::WarningLevel::default(),
+        };
+        let result = rhizz_core::compile_with_warning_level(&sources, level);
         Ok(Self {
             diagnostics: result.diagnostics,
             model: result.model,
