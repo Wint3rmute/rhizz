@@ -3,6 +3,7 @@ import {
   getWarningLevel,
   parseWarningLevel,
   setWarningLevel,
+  warningLevelLabel,
 } from "./WarningLevelState.svelte";
 
 describe("WarningLevelState", () => {
@@ -20,6 +21,12 @@ describe("WarningLevelState", () => {
     // produces the canonical lowercase spellings — a stray casing in
     // localStorage is treated as corrupt rather than silently accepted.
     expect(parseWarningLevel("Business")).toBeNull();
+  });
+
+  it("labels every level for display, independent of the stored value", () => {
+    expect(warningLevelLabel("business")).toBe("Business");
+    expect(warningLevelLabel("architectural")).toBe("Architectural");
+    expect(warningLevelLabel("component")).toBe("Component");
   });
 
   it("defaults to the most detailed level", () => {
