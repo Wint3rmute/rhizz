@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Annotations undo/redo
+
+View annotations now follow the same layout undo/redo flow as every other
+canvas entity — no alternative controller, the existing `diagramHistory`
+stack (sequenced against the unified `TransactionManager` via `historySeq`)
+owns them.
+
+- **Root cause** (`web/src/routes/projects/[id]/diagrams/+page.svelte`):
+  `DiagramSnapshot` covered only `checked`/`savedLayout`/`connections` —
+  annotations were never snapshotted, so even drag/resize (which did record
+  undo points) restored everything *except* the note. Add/delete/text-edit
+  additionally never called `recordUndoPoint()` at all.
+- **Fix**: snapshot/restore now deep-copy `annotations` (defensive `?? []`
+  for pre-fix stack entries); `applyDiagramSnapshot` also clears
+  `editingAnnotation` so an in-progress editor never points at a restored
+  index. `addAnnotationHandler` and `deleteSelectedAnnotations` record an
+  undo point *before* mutating; the dblclick-to-edit handler records *before*
+  `bind:value` starts mutating on keystrokes, so one Ctrl+Z restores pre-edit
+  text (a new note's add + initial text stays one step). Model transactions
+  via `runModelLayoutTransaction` pick the fix up automatically since they
+  share `snapshotDiagram()`.
+- **Tests** (`diagramSnapshot.ts` + `diagramSnapshot.test.ts`, new): pure
+  snapshot helpers exercised through the real `history.ts` stack — add,
+  delete, text-edit, drag (x/y), resize (scale) undo, plus a no-aliasing
+  guard. 6 tests green; existing diagram suites (history/persistence/geometry)
+  still green; `eslint` and `svelte-check` clean.
+
+---
+
 ## Task — Warning levels (usage-mode presets)
 
 Warnings are now gated by a project-wide *warning level* — `business` <
