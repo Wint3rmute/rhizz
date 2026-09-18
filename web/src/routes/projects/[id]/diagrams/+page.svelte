@@ -782,6 +782,7 @@ function selectAnnotation(index: number) {
 }
 
 function addAnnotationHandler(): void {
+  recordUndoPoint();
   noteDiagramEdited();
   // Place at the canvas center (world coords) if we can, else 0,0.
   const x = editor_state.view.x + canvas_width / 2 / editor_state.view.zoom;
@@ -794,6 +795,7 @@ function addAnnotationHandler(): void {
 
 function deleteSelectedAnnotations(): void {
   if (selectedAnnotations.size === 0) return;
+  recordUndoPoint();
   noteDiagramEdited();
   const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
   for (const idx of toDelete) annotations.splice(idx, 1);
@@ -815,10 +817,14 @@ function select(index: number) {
 // history. Deliberately excludes `selected` (transient UI state, not
 // diagram content, and not guaranteed to still make sense after
 // restoring an older/newer snapshot) and view/grid/snap preferences.
+// Annotations are persisted view content (diagrams/*.hcl), so they ride
+// the same snapshot — otherwise add/delete/edit/drag/resize of a note
+// can never be undone.
 type DiagramSnapshot = {
   checked: Record<string, StoredBox>;
   savedLayout: Record<string, StoredBox>;
   connections: Record<string, StoredConnection>;
+  annotations: Annotation[];
 };
 
 // How many undo steps (and, independently, redo steps) are kept.
@@ -848,6 +854,7 @@ function snapshotDiagram(): DiagramSnapshot {
     checked: { ...checked },
     savedLayout: { ...savedLayout },
     connections: { ...savedConnections },
+    annotations: annotations.map((ann) => ({ ...ann })),
   };
 }
 
@@ -855,8 +862,10 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
   checked = { ...snapshot.checked };
   savedLayout = { ...snapshot.savedLayout };
   savedConnections = { ...(snapshot.connections || {}) };
+  annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
   clearSelection();
   selectedConnection = null;
+  editingAnnotation = null;
 }
 
 // Records the diagram's current state as an undo point, right *before* a
@@ -3389,6 +3398,9 @@ $effect(() => {
             ondblclick={(e) => {
               e.stopPropagation();
               selectAnnotation(i);
+              // Record BEFORE inline editing mutates the text (bind:value
+              // writes on every keystroke), so Ctrl+Z restores pre-edit text.
+              recordUndoPoint();
               editingAnnotation = i;
             }}
           >
