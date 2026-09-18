@@ -22,6 +22,7 @@ import {
   warningLevelLabel,
 } from "../WarningLevelState.svelte";
 import { get_example_projects, WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+import { toastState } from "../ToastState.svelte";
 import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
@@ -81,6 +82,7 @@ async function startTourFlow(): Promise<void> {
     example.id === "drone"
   );
   if (!drone) return;
+  toastState.show("Creating a new project for the introduction", "info");
   const created = await createProjectWithFiles(drone.name, drone.files);
   await goto(`/projects/${created.id}/overview`);
   requestTourStart(created.id);
@@ -192,8 +194,8 @@ async function startTourFlow(): Promise<void> {
           <button
             onclick={() => void startTourFlow()}
             class="btn btn-ghost btn-sm btn-square"
-            title="Guided drone tour through every workspace page"
-            aria-label="Start the guided drone tour"
+            title="Guided tour through every workspace page"
+            aria-label="Start the guided tour"
             type="button"
           >
             <svg
@@ -272,7 +274,7 @@ async function startTourFlow(): Promise<void> {
         }}
         class="btn btn-ghost btn-sm justify-start w-full text-left"
         type="button"
-        aria-label="Start the guided drone tour"
+        aria-label="Start the guided tour"
       >
         {#if tourIcon}
           <svg

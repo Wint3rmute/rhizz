@@ -3,7 +3,7 @@ import OnboardingTour from "../components/OnboardingTour.svelte";
 import { droneTourSteps } from "./droneTour";
 import { getTourRequest } from "./tourRequest.svelte";
 
-// Hosts the quadcopter-drone guided tour. Mounted in the project layout
+// Hosts the workspace guided tour. Mounted in the project layout
 // (which survives page navigation), so the tour can walk across routes —
 // each step carries the href Zag navigates to before spotlighting.
 //
