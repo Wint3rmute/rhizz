@@ -1,6 +1,8 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
+import { onDestroy } from "svelte";
 import {
+  clearCurrentProject,
   getCurrentProject,
   setCurrentProject,
 } from "../../../ProjectState.svelte";
@@ -16,6 +18,12 @@ let { data, children }: LayoutProps = $props();
 // prop-drilling.
 let loadedId: string | null = null;
 let loading = $state(true);
+
+// Leaving all project routes unmounts this layout: drop the active
+// project so nothing (navbar links, tour flow) keeps acting on it.
+onDestroy(() => {
+  clearCurrentProject();
+});
 
 $effect(() => {
   const id = data.projectId;

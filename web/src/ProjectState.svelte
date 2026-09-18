@@ -80,6 +80,17 @@ export async function setCurrentProject(id: string): Promise<void> {
   if (currentProjectId === id) currentProject = found;
 }
 
+// Drops the active project (e.g. when leaving all project routes) so
+// project-scoped UI — navbar links, badges, the tour button flow — never
+// acts on a stale id. Switching projects (A → B) keeps the layout alive
+// and re-sets state via the effect above, so this only fires on real exit.
+export function clearCurrentProject(): void {
+  currentProjectId = null;
+  currentProject = null;
+  currentScore = null;
+  currentDiagnostics = null;
+}
+
 // Re-reads the active project's metadata (e.g. after a rename elsewhere)
 // without changing which project is active.
 export async function refreshCurrentProject(): Promise<void> {
