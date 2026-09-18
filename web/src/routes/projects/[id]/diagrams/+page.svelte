@@ -82,18 +82,15 @@ import {
   findReparentTarget,
   MIN_NODE_SIZE,
   type ResizeHandle,
-  textPosition,
   unionBox,
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
+import DiagramNodeBody from "./DiagramNodeBody.svelte";
 import {
-  borderStyleToSvg,
   COLOR_OPTIONS,
-  fontStyleToSvg,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
-  selectionOutlineRect,
 } from "./visuals";
 import {
   buildGraduatedGridPatterns,
@@ -2943,18 +2940,13 @@ $effect(() => {
           height: number,
           textAlign: TextAlign,
         )}
-          {@const textPos = textPosition(textAlign, width, height)}
           {@const highlighted = interaction.type === "marquee"
             ? marqueeCandidates.has(index)
             : selected.has(index)}
           {@const compKey = getComponentKey(index)}
           {@const compData = componentData.get(compKey)}
-          {@const icon = resolveIcon(compData?.icon ?? components[index]?.icon)}
-          {@const borderSvg = borderStyleToSvg({
-            color: compData?.color || components[index]?.color,
-            border: compData?.border ?? components[index]?.border,
-          })}
-          {@const fontSvg = fontStyleToSvg(compData?.font ?? components[index]?.font)}
+          {@const modelComp = components[index]}
+          {@const icon = resolveIcon(compData?.icon ?? modelComp?.icon)}
           {@const portPositions = compData && compData.ports.length > 0
             ? computePortPositions(width, height, compData.ports)
             : []}
@@ -2964,34 +2956,17 @@ $effect(() => {
             ondblclick={(e) => onNodeDblClick(e, index)}
             style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
           >
-            <rect
+            <DiagramNodeBody
+              {label}
               {width}
               {height}
-              rx="5"
-              stroke={borderSvg.stroke ?? "var(--color-base-content)"}
-              stroke-width="1"
-              stroke-dasharray={borderSvg.dasharray}
-              fill="var(--color-base-200)"
+              {textAlign}
+              {icon}
+              color={compData?.color || modelComp?.color}
+              border={compData?.border ?? modelComp?.border}
+              font={compData?.font ?? modelComp?.font}
+              selected={highlighted}
             />
-            {#if highlighted}
-              <!-- Selection indicator: a 50%-transparent dotted outline drawn
-                   on top of the node's own border, so the component's style
-                   (color / border) stays visible and isn't obscured. -->
-              {@const outline = selectionOutlineRect(width, height)}
-              <rect
-                x={outline.x}
-                y={outline.y}
-                width={outline.width}
-                height={outline.height}
-                rx="5"
-                fill="none"
-                stroke="var(--color-primary)"
-                stroke-opacity={SELECTION_OUTLINE_OPACITY}
-                stroke-width="1.5"
-                stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
-                style="pointer-events: none"
-              />
-            {/if}
             {#if reparentTargetIndex === index}
               <rect
                 x={-4}
@@ -3006,100 +2981,6 @@ $effect(() => {
                 class="animate-pulse"
                 style="pointer-events: none"
               />
-            {/if}
-            {#if icon}
-              {#if textAlign === "top-left"}
-                <svg
-                  x={8}
-                  y={8}
-                  width="14"
-                  height="14"
-                  viewBox="0 0 {icon.width} {icon.height}"
-                  fill="var(--color-base-content)"
-                  opacity="0.85"
-                >
-                  <path d={icon.svgPath} />
-                </svg>
-                <text
-                  x={26}
-                  y={textPos.y}
-                  fill="var(--color-base-content)"
-                  text-anchor="start"
-                  dominant-baseline={textPos.baseline}
-                  font-weight={fontSvg.fontWeight}
-                  font-style={fontSvg.fontStyle}
-                  text-decoration={fontSvg.textDecoration}
-                  style="pointer-events: none; user-select: none"
-                >
-                  {label}
-                </text>
-              {:else if textAlign === "top-center"}
-                {@const estimatedWidth = Math.min(width - 16, label.length * 7.5 + 18)}
-                {@const startX = Math.max(8, (width - estimatedWidth) / 2)}
-                <svg
-                  x={startX}
-                  y={8}
-                  width="14"
-                  height="14"
-                  viewBox="0 0 {icon.width} {icon.height}"
-                  fill="var(--color-base-content)"
-                  opacity="0.85"
-                >
-                  <path d={icon.svgPath} />
-                </svg>
-                <text
-                  x={startX + 18}
-                  y={textPos.y}
-                  fill="var(--color-base-content)"
-                  text-anchor="start"
-                  dominant-baseline={textPos.baseline}
-                  font-weight={fontSvg.fontWeight}
-                  font-style={fontSvg.fontStyle}
-                  text-decoration={fontSvg.textDecoration}
-                  style="pointer-events: none; user-select: none"
-                >
-                  {label}
-                </text>
-              {:else}
-                <svg
-                  x={width / 2 - 9}
-                  y={height / 2 - 20}
-                  width="18"
-                  height="18"
-                  viewBox="0 0 {icon.width} {icon.height}"
-                  fill="var(--color-base-content)"
-                  opacity="0.85"
-                >
-                  <path d={icon.svgPath} />
-                </svg>
-                <text
-                  x={width / 2}
-                  y={height / 2 + 10}
-                  fill="var(--color-base-content)"
-                  text-anchor="middle"
-                  dominant-baseline="middle"
-                  font-weight={fontSvg.fontWeight}
-                  font-style={fontSvg.fontStyle}
-                  text-decoration={fontSvg.textDecoration}
-                  style="pointer-events: none; user-select: none"
-                >
-                  {label}
-                </text>
-              {/if}
-            {:else}
-              <text
-                x={textPos.x}
-                y={textPos.y}
-                fill="var(--color-base-content)"
-                text-anchor={textPos.anchor}
-                dominant-baseline={textPos.baseline}
-                font-weight={fontSvg.fontWeight}
-                font-style={fontSvg.fontStyle}
-                text-decoration={fontSvg.textDecoration}
-                style="pointer-events: none; user-select: none"
-              >
-                {label}
-              </text>
             {/if}
 
             <!-- 8 transparent resize hit-areas (4 edge strips + 4 corners),
