@@ -110,14 +110,18 @@ $effect(() => {
 {@render children?.()}
 
 {#if api.open}
+  <!-- Fixed overlay root: one stacking context above all page content.
+       DOM order (not competing z-indexes) decides paint: backdrop <
+       spotlight < positioner. -->
+  <div class="tour-root">
   <!-- Dimmed backdrop with a spotlight cutout around the target. -->
   <div {...api.getBackdropProps()} class="tour-backdrop"></div>
   <div {...api.getSpotlightProps()} class="tour-spotlight"></div>
 
   <!-- Floating card (tooltip) or centered card (dialog). -->
   <div {...api.getPositionerProps()} class="tour-positioner">
-  <div {...api.getContentProps()}
-    class="tour-content card bg-base-100 shadow-xl">
+    <div {...api.getContentProps()}
+      class="tour-content card bg-base-100 shadow-xl">
       {#if api.step?.arrow}
         <div {...api.getArrowProps()} class="tour-arrow">
           <div {...api.getArrowTipProps()} class="tour-arrow-tip"></div>
@@ -163,21 +167,36 @@ $effect(() => {
         ></progress>
       </div>
     </div>
+  </div>
 </div>
 {/if}
 
 <style>
-.tour-backdrop {
-  background: rgb(0 0 0 / 0.55);
+/* Single fixed stacking context above all page content. The root itself
+   never intercepts clicks; the backdrop swallows page clicks while the
+   positioner stays interactive. */
+.tour-root {
+  position: fixed;
+  inset: 0;
   z-index: 60;
+  pointer-events: none;
+}
+.tour-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.55);
+  pointer-events: auto;
 }
 .tour-spotlight {
   outline: 2px solid var(--color-primary, #570df8);
   outline-offset: 2px;
-  z-index: 61;
+  pointer-events: none;
 }
 .tour-positioner {
-  z-index: 62;
+  /* Zag sets pointer-events:none until floating-ui resolves the card
+     position; a pending/stuck placement must never leave a
+     visible-but-dead card, so the card stays clickable unconditionally. */
+  pointer-events: auto !important;
 }
 /* Dialog steps (no target) have no floating coordinates — center them. */
 .tour-positioner[data-type="dialog"] {
@@ -196,7 +215,7 @@ $effect(() => {
 }
 .tour-arrow {
   --arrow-size: 12px;
-  --arrow-background: var(--color-base-100, #fff);
+  --arrow-bg: var(--color-base-100, #fff);
 }
 .tour-arrow-tip {
   border-top-width: 1px;

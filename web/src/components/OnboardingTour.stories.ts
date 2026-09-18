@@ -48,6 +48,56 @@ export const AdvanceToSpotlight: Story = {
   },
 };
 
+export const FullWalkthrough: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = await startTour(canvasElement);
+    // Walk every step to Done: each advance must keep the actions usable.
+    // The overlay unmounts mid-transition, so re-query inside waitFor.
+    const titles = [
+      "Welcome to Rhizz 👋",
+      "Projects",
+      "Code-first model",
+      "Diagrams",
+      "You're set 🚀",
+    ];
+    for (const title of titles.slice(1)) {
+      await waitFor(async () => {
+        const next = canvas.getByRole("button", { name: "next step" });
+        await expect(next).toBeEnabled();
+      });
+      await userEvent.click(canvas.getByRole("button", { name: "next step" }));
+      await waitFor(async () => {
+        await expect(canvas.getByText(title)).toBeInTheDocument();
+      });
+      // Regression: the card must be hittable — no overlay (backdrop,
+      // spotlight, or a pointer-events:none placement transient) may sit
+      // between the cursor and the actions.
+      await waitFor(async () => {
+        // Last step offers Done (shares its aria-label with the ✕
+        // trigger, so query its unique visible text there).
+        const action = title === "You're set 🚀"
+          ? canvas.getByText("Done")
+          : canvas.getByRole("button", { name: "next step" });
+        const rect = action.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        await expect(
+          hit?.closest('[data-part="content"]'),
+        ).not.toBeNull();
+      });
+    }
+    // Last step offers Done (a dismiss action, aria-labelled "close tour"
+    // just like the ✕ trigger — so query its unique visible text).
+    const done = canvas.getByText("Done");
+    await userEvent.click(done);
+    await waitFor(async () => {
+      await expect(canvas.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+  },
+};
+
 export const ClosedAfterSkip: Story = {
   play: async ({ canvasElement }) => {
     const canvas = await startTour(canvasElement);
