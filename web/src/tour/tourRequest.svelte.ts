@@ -1,17 +1,24 @@
 // A tiny cross-component signal for starting the project tour.
 //
-// The "Drone tour" button lives in Navbar (root layout) while the tour
-// itself mounts in the project layout — no props cross that boundary, so
-// the two rendezvous here: the button bumps the signal, the tour watches
-// it (same pattern as the walkthrough demo's local startSignal).
-let startSignal = $state(0);
+// The tour button lives in Navbar (root layout) while the tour itself
+// mounts in the project layout — no props cross that boundary, so the two
+// rendezvous here. The request optionally names its target project:
+// a tour host only answers requests aimed at its own project (or
+// project-less ones), so stale requests never ambush other projects.
+const request = $state({
+  generation: 0,
+  projectId: null as string | null,
+});
 
-/** The current start-generation; read inside a `$derived` to stay live. */
-export function getTourStartSignal(): number {
-  return startSignal;
+export function getTourRequest(): {
+  readonly generation: number;
+  readonly projectId: string | null;
+} {
+  return request;
 }
 
-/** Requests the project tour to (re)start from its first step. */
-export function requestTourStart(): void {
-  startSignal += 1;
+/** Requests the project tour to (re)start, optionally aimed at one project. */
+export function requestTourStart(projectId: string | null = null): void {
+  request.projectId = projectId;
+  request.generation += 1;
 }

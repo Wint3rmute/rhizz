@@ -1,4 +1,5 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import type { ProjectJS } from "rhizz";
 import {
@@ -8,17 +9,19 @@ import {
   toggleTheme,
 } from "../ThemeState.svelte";
 import {
+  createProjectWithFiles,
   getCurrentDiagnostics,
   getCurrentProject,
   getCurrentProjectId,
   getCurrentScore,
+  projectStore,
 } from "../ProjectState.svelte";
 import {
   getWarningLevel,
   setWarningLevel,
   warningLevelLabel,
 } from "../WarningLevelState.svelte";
-import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+import { get_example_projects, WARNING_LEVELS } from "../rhizz_wasm_wrapper";
 import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
@@ -55,6 +58,32 @@ function toggleMenu() {
 
 function closeMenu() {
   isOpen = false;
+}
+
+// Starts the drone tour: inside a project it simply plays; with no
+// project open it opens the first available one, otherwise creates the
+// bundled drone example first — then plays on arrival (the project
+// layout mounts the tour, which answers this aimed request).
+async function startTourFlow(): Promise<void> {
+  const current = getCurrentProjectId();
+  if (current) {
+    requestTourStart(current);
+    return;
+  }
+  const projects = await projectStore.listProjects();
+  const first = projects[0];
+  if (first !== undefined) {
+    await goto(`/projects/${first.id}/overview`);
+    requestTourStart(first.id);
+    return;
+  }
+  const drone = get_example_projects().find((example) =>
+    example.id === "drone"
+  );
+  if (!drone) return;
+  const created = await createProjectWithFiles(drone.name, drone.files);
+  await goto(`/projects/${created.id}/overview`);
+  requestTourStart(created.id);
 }
 </script>
 
@@ -159,9 +188,9 @@ function closeMenu() {
         >
           {getTheme() === "dark" ? "🌙" : "☀️"}
         </button>
-        {#if activeProjectId && tourIcon}
+        {#if tourIcon}
           <button
-            onclick={requestTourStart}
+            onclick={() => void startTourFlow()}
             class="btn btn-ghost btn-sm btn-square"
             title="Guided drone tour through every workspace page"
             aria-label="Start the guided drone tour"
@@ -233,29 +262,29 @@ function closeMenu() {
           >
             🔍 System Overview
           </a>
-          <button
-            onclick={() => {
-              closeMenu();
-              requestTourStart();
-            }}
-            class="btn btn-ghost btn-sm justify-start w-full text-left"
-            type="button"
-            aria-label="Start the guided drone tour"
-          >
-            {#if tourIcon}
-              <svg
-                viewBox={`0 0 ${tourIcon.width} ${tourIcon.height}`}
-                class="w-4 h-4 fill-current"
-                aria-hidden="true"
-              >
-                <path d={tourIcon.svgPath} />
-              </svg>
-            {/if}
-            Tour
-          </button>
         </div>
         <div class="divider my-1"></div>
       {/if}
+      <button
+        onclick={() => {
+          closeMenu();
+          void startTourFlow();
+        }}
+        class="btn btn-ghost btn-sm justify-start w-full text-left"
+        type="button"
+        aria-label="Start the guided drone tour"
+      >
+        {#if tourIcon}
+          <svg
+            viewBox={`0 0 ${tourIcon.width} ${tourIcon.height}`}
+            class="w-4 h-4 fill-current"
+            aria-hidden="true"
+          >
+            <path d={tourIcon.svgPath} />
+          </svg>
+        {/if}
+        Tour
+      </button>
 
       <!-- Mobile badges -->
       <div class="flex flex-wrap items-center gap-2 py-1">
