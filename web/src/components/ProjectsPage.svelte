@@ -9,6 +9,7 @@ import {
 } from "../ProjectState.svelte";
 import { EMPTY_PROJECT_HCL } from "../emptyProject";
 import { seedExampleProjectDiagrams } from "../example_system";
+import { pendTourStart } from "../tour/tourRequest.svelte";
 import {
   type ExampleProject,
   get_example_projects,
@@ -66,7 +67,10 @@ async function openProject(project: Project) {
 async function createEmpty() {
   const name = prompt("Project name?", "Untitled project");
   if (!name) return;
+  // First project ever: arm the guided tour to open on arrival.
+  const firstEver = effectiveProjects.length === 0;
   const project = await createProjectWithMainFile(name, EMPTY_PROJECT_HCL);
+  if (firstEver) pendTourStart();
   await refresh();
   await openProject(project);
 }
@@ -80,7 +84,9 @@ async function selectExample(example: ExampleProject) {
   showExampleModal = false;
   const name = prompt("Project name?", example.name);
   if (!name) return;
+  const firstEver = effectiveProjects.length === 0;
   const project = await createProjectWithFiles(name, example.files);
+  if (firstEver) pendTourStart();
   if (example.id === "single-file") {
     await seedExampleProjectDiagrams(project.id);
   }

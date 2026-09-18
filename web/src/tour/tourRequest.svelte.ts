@@ -22,3 +22,42 @@ export function requestTourStart(projectId: string | null = null): void {
   request.projectId = projectId;
   request.generation += 1;
 }
+
+const PENDING_TOUR_KEY = "rhizz-pending-tour";
+
+type FlagStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+function tourFlagStore(): FlagStore | null {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    return localStorage;
+  } catch {
+    // Private browsing etc. — no pending starts without storage.
+    return null;
+  }
+}
+
+/**
+ * Arms a one-shot tour start for the next project page mount — set when
+ * the user's first project is created, so creation opens the tutorial.
+ */
+export function pendTourStart(): void {
+  try {
+    tourFlagStore()?.setItem(PENDING_TOUR_KEY, "1");
+  } catch {
+    // Storage unwritable: the tour simply will not auto-start.
+  }
+}
+
+/** Consumes the armed start (once); false when nothing was armed. */
+export function consumePendingTourStart(): boolean {
+  try {
+    const store = tourFlagStore();
+    const pending = store?.getItem(PENDING_TOUR_KEY) ?? null;
+    if (pending === null) return false;
+    store?.removeItem(PENDING_TOUR_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
