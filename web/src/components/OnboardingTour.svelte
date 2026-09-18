@@ -1,16 +1,10 @@
 <script lang="ts">
 import * as tour from "@zag-js/tour";
 import { normalizeProps, useMachine } from "@zag-js/svelte";
+import { goto } from "$app/navigation";
 import { onMount, type Snippet, untrack } from "svelte";
-
-export interface OnboardingStep {
-  id: string;
-  title: string;
-  description: string;
-  /** Element id to spotlight; omit for a centered dialog step. */
-  targetId?: string | undefined;
-  placement?: tour.StepPlacement | undefined;
-}
+import { tourSelector } from "../tour/tourTargets";
+import type { OnboardingStep } from "../tour/steps";
 
 interface Props {
   /** Zag machine id (unique per tour on the page). */
@@ -36,17 +30,23 @@ let {
 
 function toZagStep(step: OnboardingStep, index: number): tour.StepDetails {
   const last = index === steps.length - 1;
+  const targetKey = step.target;
+  const targetId = step.targetId;
+  const hasTarget = targetKey !== undefined || targetId !== undefined;
   return {
     id: step.id,
     title: step.title,
     description: step.description,
-    type: step.targetId ? "tooltip" : "dialog",
-    target: step.targetId
-      ? () => document.getElementById(step.targetId as string)
+    type: hasTarget ? "tooltip" : "dialog",
+    target: targetKey !== undefined
+      ? () =>
+        document.querySelector<HTMLElement>(tourSelector(targetKey)) ?? null
+      : targetId !== undefined
+      ? () => document.getElementById(targetId) ?? null
       : undefined,
-    placement: step.placement ?? (step.targetId ? "bottom" : "center"),
+    placement: step.placement ?? (hasTarget ? "bottom" : "center"),
     backdrop: true,
-    arrow: Boolean(step.targetId),
+    arrow: hasTarget,
     actions: [
       ...(index > 0 ? [{ label: "Back", action: "prev" as const }] : []),
       ...(last
@@ -67,6 +67,12 @@ const service = useMachine(tour.machine, () => ({
   // Outside clicks must not silently kill it (they also make the flow
   // untestable — any focus shift outside the card dismisses the tour).
   closeOnInteractOutside: false,
+  onStepChange(details: tour.StepChangeDetails) {
+    // Cross-page tours: route to the step's page (no-op when already
+    // there). Zag's resolving state waits for the target to mount.
+    const href = steps.find((step) => step.id === details.stepId)?.href;
+    if (href && window.location.pathname !== href) void goto(href);
+  },
   onStatusChange(details: tour.StatusChangeDetails) {
     // Remember that the user finished (or bailed out of) the tour so the
     // auto-start below only ever fires once per browser.

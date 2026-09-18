@@ -6,6 +6,7 @@ import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
+import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
@@ -146,7 +147,7 @@ function levelBadge(level: number): string {
       {:else}
         <!-- ── Project header ── -->
         {#if project && project.name}
-          <div class="card bg-base-200 shadow">
+          <div class="card bg-base-200 shadow" data-tour={TOUR_TARGETS.overview}>
             <div
               class="card-body py-4 px-6 flex-row items-center gap-4 flex-wrap"
             >

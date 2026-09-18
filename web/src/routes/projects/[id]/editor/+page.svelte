@@ -7,6 +7,7 @@ import { projectStore } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
+import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
 import FileTree from "./FileTree.svelte";
 
@@ -260,6 +261,7 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
       {/if}
       <div
         class="w-full bg-base-200 p-6 rounded shadow flex flex-col flex-1 text-base-content"
+        data-tour={TOUR_TARGETS.editor}
       >
         <h1 class="text-2xl font-semibold mb-4 text-base-content">
           Editor{#if selectedPath}<span

@@ -18,6 +18,7 @@ import {
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
+import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
 import FileTree from "../editor/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
@@ -2696,6 +2697,7 @@ $effect(() => {
   -->
   <aside
     class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300 flex flex-col"
+    data-tour={TOUR_TARGETS.diagramSidebar}
   >
     <h3
       class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
@@ -2853,6 +2855,7 @@ $effect(() => {
   <div class="flex flex-col flex-1 min-w-0">
     <div
       class="relative flex-1 w-full h-full bg-base-300"
+      data-tour={TOUR_TARGETS.diagramCanvas}
       bind:clientWidth={canvas_width}
       bind:clientHeight={canvas_height}
     >
