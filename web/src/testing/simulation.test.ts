@@ -81,7 +81,7 @@ describe("deterministic workspace simulation", () => {
             const workspace = await createFixture(fixture);
             workspace.assertInvariants();
 
-            const editableKeys = await workspace.editableComponentKeys();
+            const editableKeys = workspace.editableComponentKeys();
             const allKeys = workspace.componentKeys;
 
             for (const edit of edits as GeneratedEdit[]) {
@@ -115,7 +115,7 @@ describe("deterministic workspace simulation", () => {
               // single primary HCL file, apollo-11 excluded, visual-owners
               // only (sourced instances edit shared definitions).
               if (edit.kind === "create") {
-                const editable = await workspace.editableComponentKeys();
+                const editable = workspace.editableComponentKeys();
                 // Empty fixture has no editable owners yet but can still
                 // create into a fresh "main" system via the dispatcher
                 // fallback; other guarded fixtures skip when empty.
@@ -135,7 +135,7 @@ describe("deterministic workspace simulation", () => {
               }
 
               if (edit.kind === "delete") {
-                const editable = await workspace.editableComponentKeys();
+                const editable = workspace.editableComponentKeys();
                 if (editable.length === 0) continue;
                 const key = editable[edit.componentSelector % editable.length];
                 if (!key) continue;
@@ -150,7 +150,7 @@ describe("deterministic workspace simulation", () => {
               }
 
               if (edit.kind === "connect") {
-                const editable = await workspace.editableComponentKeys();
+                const editable = workspace.editableComponentKeys();
                 if (editable.length < 2) continue;
                 // Two siblings under one scope: parent path is shared,
                 // endpoints are leaf labels relative to that scope.

@@ -2,7 +2,7 @@ import init from "rhizz";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { subscribeToMutations } from "../DocumentStore.svelte";
+import { subscribeToMutations } from "../mutationObserver";
 import type { ModelAction } from "../actionLog";
 import { compile_system } from "../rhizz_wasm_wrapper";
 import { applyModelMutation } from "./applyMutation";

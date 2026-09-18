@@ -5,76 +5,14 @@
 // This is the *only* place that translates between "/"-joined paths and
 // the underlying id/parentId graph — everything above this module (see
 // ./fs.ts) talks paths only; nothing outside ./vfs should ever need to
-// look at an FsNode's id or parentId directly.
+// look at an FsNode's id or parentId directly. (Rendering a nested tree
+// for a sidebar is a *path*-shaped job — see ./pathTree.ts, which works
+// off readdir's flat Dirent[] and never sees an FsNode.)
 //
 // Every function here assumes its input forms a valid forest (no cycles)
 // except where noted — cycle *prevention* is the job of wouldCreateCycle,
-// called by the store's moveNode before a move is applied; these helpers
-// don't re-validate that invariant on every call, aside from pathOf's
-// defensive guard below.
+// called by the store's moveNode before a move is applied.
 import { type FsNode, isDirectory } from "./types";
-
-export interface TreeNode {
-  node: FsNode;
-  children: TreeNode[];
-}
-
-// Builds a nested tree (for sidebar rendering) from a flat node list. A
-// node is treated as a root when its parentId is null, *or* when
-// parentId points at a node that isn't present in `nodes` — this keeps
-// the function correct whether it's called with every node in the store,
-// or with a pre-filtered slice, without needing a projectId parameter
-// here.
-export function buildTree(nodes: FsNode[]): TreeNode[] {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const childrenOf = new Map<string, FsNode[]>();
-  const roots: FsNode[] = [];
-
-  for (const node of nodes) {
-    if (node.parentId !== null && byId.has(node.parentId)) {
-      const siblings = childrenOf.get(node.parentId) ?? [];
-      siblings.push(node);
-      childrenOf.set(node.parentId, siblings);
-    } else {
-      roots.push(node);
-    }
-  }
-
-  const toTreeNode = (node: FsNode): TreeNode => ({
-    node,
-    children: (childrenOf.get(node.id) ?? []).map(toTreeNode),
-  });
-
-  return roots.map(toTreeNode);
-}
-
-// Returns the "/"-joined path from the node's outermost ancestor down to
-// itself, e.g. "components/imu.hcl". Throws if `nodeId` isn't present in
-// `nodes`, or if a cycle is detected while walking up — callers are
-// expected to pass ids from the same node list, and the store is expected
-// to keep that list acyclic (see wouldCreateCycle).
-export function pathOf(nodeId: string, nodes: FsNode[]): string {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const start = byId.get(nodeId);
-  if (start === undefined) {
-    throw new Error(`pathOf: no node with id "${nodeId}"`);
-  }
-
-  const segments: string[] = [];
-  const seen = new Set<string>();
-  let current: FsNode | undefined = start;
-  while (current !== undefined) {
-    if (seen.has(current.id)) {
-      throw new Error(`pathOf: cycle detected involving node "${current.id}"`);
-    }
-    seen.add(current.id);
-    segments.unshift(current.name);
-    current = current.parentId === null
-      ? undefined
-      : byId.get(current.parentId);
-  }
-  return segments.join("/");
-}
 
 // Returns every descendant of `nodeId` (not including the node itself),
 // in breadth-first order. Used for recursive directory delete, and by

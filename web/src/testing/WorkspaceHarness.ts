@@ -1,5 +1,5 @@
 import init, { type ComponentJS } from "rhizz";
-import { type ComponentData, DocumentStore } from "../DocumentStore.svelte";
+import type { ComponentData } from "../modelView";
 import {
   compile_system,
   type ExampleProject,
@@ -431,27 +431,22 @@ export class WorkspaceHarness {
     }
   }
 
-  async editableComponentKeys(): Promise<string[]> {
-    // The current diagram mutation path rewrites one primary HCL file through
-    // DocumentStore. Multi-file projects and Apollo's sourced component
-    // instances require source-aware editing; flattening a resolved sourced
-    // instance back into the usage site would violate E011. Those fixtures still
-    // participate in compile/round-trip invariants, but generated visual edits
-    // are limited to fixtures the current UI writer can safely round-trip.
+  editableComponentKeys(): string[] {
+    // The current diagram mutation path rewrites one primary HCL file.
+    // Multi-file projects and Apollo's sourced component instances require
+    // source-aware editing; flattening a resolved sourced instance back into
+    // the usage site would violate E011. Those fixtures still participate in
+    // compile/round-trip invariants, but generated visual edits are limited to
+    // fixtures the current UI writer can safely round-trip.
     if (this.#sources.length !== 1 || this.#fixture === "apollo-11") return [];
-    const primary = await this.primaryHclFile();
-    const content = await this.fs.readFile(primary);
-    const doc = new DocumentStore();
-    if (content.trim()) doc.loadFromHcl(content);
     // Only visual *owners* are safe to mutate in isolation. An instance's
     // visuals are cloned from the definition it `source`s, so editing an
     // instance (or a definition that is instantiated) rewrites a shared
     // definition and changes every component in that group. Owners are the
     // components that carry their own visuals (no `source`).
-    return this.componentKeys.filter((key, index) => {
-      if (this.#components[index]?.source) return false;
-      return doc.findComponent(key) !== null;
-    });
+    return this.componentKeys.filter((_key, index) =>
+      !this.#components[index]?.source
+    );
   }
 
   /**

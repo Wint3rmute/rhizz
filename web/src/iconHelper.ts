@@ -62,7 +62,7 @@ export function resolveIcon(name?: string | null): ResolvedIcon | null {
   return null;
 }
 
-// Built-in file tree icon helpers
+// Built-in file-tree icons (the folder/file glyphs FileTree renders).
 export const folderIcon: ResolvedIcon = {
   width: solidIcons.faFolder.icon[0],
   height: solidIcons.faFolder.icon[1],
@@ -73,12 +73,6 @@ export const folderOpenIcon: ResolvedIcon = {
   width: solidIcons.faFolderOpen.icon[0],
   height: solidIcons.faFolderOpen.icon[1],
   svgPath: toSvgPath(solidIcons.faFolderOpen.icon[4]),
-};
-
-export const fileIcon: ResolvedIcon = {
-  width: solidIcons.faFile.icon[0],
-  height: solidIcons.faFile.icon[1],
-  svgPath: toSvgPath(solidIcons.faFile.icon[4]),
 };
 
 export const fileCodeIcon: ResolvedIcon = {

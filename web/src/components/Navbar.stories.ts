@@ -1,9 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
-import type { ProjectJS } from "rhizz";
 import {
+  clearCurrentProject,
   createProjectWithMainFile,
   projectStore,
+  setCurrentDiagnostics,
+  setCurrentProject,
+  setCurrentScore,
 } from "../ProjectState.svelte";
 import { getSelection, setSelection } from "../ThemeState.svelte";
 import { getWarningLevel, setWarningLevel } from "../WarningLevelState.svelte";
@@ -11,32 +14,33 @@ import type { ThemeSelection } from "../theme";
 import type { WarningLevel } from "../rhizz_wasm_wrapper";
 import Navbar from "./Navbar.svelte";
 
-type StoryProject = Pick<ProjectJS, "name" | "version" | "authors">;
-
-const sampleProject = {
-  name: "BuzzVid",
-  version: "1.0.0",
-  authors: ["Ada Lovelace"],
-} satisfies StoryProject;
-
 // Deterministic project id so seeding can stay lazy (and out of module
 // scope — top-level await in story files races the vitest-addon's test
 // registration; see Explore.stories.ts), while staying idempotent across
 // module re-evaluations.
 const NAVBAR_PROJECT_ID = "story-navbar";
 
-// The Navbar's story fixtures don't render store data (args supply a
-// static sample project), but a matching project still needs to exist for
-// project-scoped store/links; created lazily before each story renders.
+// The Navbar reads everything from the shared ProjectState singleton (the app
+// renders `<Navbar />` with no props), so the stories drive that singleton
+// rather than injecting fixtures through props: seed the project, make it the
+// active one, and publish the score/diagnostics the badges render.
 async function ensureNavbarProject(): Promise<void> {
   const existing = await projectStore.listProjects();
-  const match = existing.find((p) => p.id === NAVBAR_PROJECT_ID);
-  if (match) return;
-  await createProjectWithMainFile(
-    "Navbar Story Project",
-    `project { name = "Navbar Story Project" }`,
-    NAVBAR_PROJECT_ID,
-  );
+  if (!existing.some((p) => p.id === NAVBAR_PROJECT_ID)) {
+    await createProjectWithMainFile(
+      "Navbar Story Project",
+      `project { name = "Navbar Story Project" }`,
+      NAVBAR_PROJECT_ID,
+    );
+  }
+  await setCurrentProject(NAVBAR_PROJECT_ID);
+  setCurrentScore({ overall_percentage: 72.5 });
+  setCurrentDiagnostics({ errors: 2, warnings: 1 });
+}
+
+// Leaves no story pinned to the fixture project (or its badges).
+function clearNavbarProject(): void {
+  clearCurrentProject();
 }
 
 const meta = {
@@ -45,12 +49,8 @@ const meta = {
   parameters: {
     layout: "fullscreen",
   },
-  args: {
-    project: sampleProject as ProjectJS,
-    errorCount: 2,
-    warningCount: 1,
-  },
   beforeEach: [ensureNavbarProject],
+  afterEach: [clearNavbarProject],
 } satisfies Meta<typeof Navbar>;
 
 export default meta;
@@ -104,6 +104,7 @@ export const MobileThemePicker = {
   },
   afterEach: () => {
     setSelection(savedSelection);
+    clearNavbarProject();
   },
 } satisfies Story;
 
@@ -128,6 +129,7 @@ export const WarningLevelSelector: Story = {
   },
   afterEach: () => {
     setWarningLevel(savedWarningLevel);
+    clearNavbarProject();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -166,6 +168,7 @@ export const MobileWarningLevelSelector: Story = {
   },
   afterEach: () => {
     setWarningLevel(savedWarningLevel);
+    clearNavbarProject();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

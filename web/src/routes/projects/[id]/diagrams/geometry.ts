@@ -75,7 +75,7 @@ export type ResizeHandle =
   | "bottom-right";
 
 // Nodes can't be resized smaller than this (world units), so a node never
-// shrinks into an unusable sliver. Used by clampResizeWithin below.
+// shrinks into an unusable sliver. Used by computeResizedBox below.
 export const MIN_NODE_SIZE = 40;
 
 // Inset from a node's edges for the two top-aligned TextAlign variants, in
@@ -107,23 +107,6 @@ export function clampWithin(
   const y = Math.min(Math.max(child.y, innerY), innerY + innerHeight - height);
 
   return { x, y, width, height };
-}
-
-// Clamps a resizing box's width/height so it doesn't grow past `parent`'s
-// inner edge, inset by `margin`. Unlike clampWithin, the box's top-left
-// corner (x, y) is treated as fixed — resizing always anchors from the
-// corner opposite the handle being dragged.
-export function clampResizeWithin(
-  box: Box,
-  parent: Box,
-  margin: number,
-): { width: number; height: number } {
-  const maxWidth = parent.x + parent.width - margin - box.x;
-  const maxHeight = parent.y + parent.height - margin - box.y;
-  return {
-    width: Math.min(box.width, Math.max(MIN_NODE_SIZE, maxWidth)),
-    height: Math.min(box.height, Math.max(MIN_NODE_SIZE, maxHeight)),
-  };
 }
 
 // Computes a new bounding box by applying pointer deltas to a specified edge or corner handle.
@@ -547,6 +530,102 @@ export function computeDirectionalHandles(
     { side: "right", x: width, y: height / 2 },
     { side: "bottom", x: width / 2, y: height },
     { side: "left", x: 0, y: height / 2 },
+  ];
+}
+
+/** One node resize hit-area: which handle it drives, its box, and its cursor. */
+export interface ResizeHandleRect {
+  handle: ResizeHandle;
+  /** CSS cursor for this handle's drag direction. */
+  cursor: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// Computes the 8 transparent resize hit-areas around a node — 4 edge strips
+// and 4 corner squares — in node-local coordinates (the caller renders them
+// inside the node's own `translate(x, y)` group). Edge strips are inset by
+// `cornerSize` so they never overlap the corners; every rect is at least 1
+// unit long so a degenerate node still has something to grab.
+export function computeResizeHandles(
+  width: number,
+  height: number,
+  cornerSize: number,
+  edgeThickness: number,
+): ResizeHandleRect[] {
+  const half = cornerSize / 2;
+  const t = edgeThickness / 2;
+  const edgeLengthX = Math.max(1, width - 2 * cornerSize);
+  const edgeLengthY = Math.max(1, height - 2 * cornerSize);
+  return [
+    // Edges.
+    {
+      handle: "top",
+      cursor: "ns-resize",
+      x: cornerSize,
+      y: -t,
+      width: edgeLengthX,
+      height: edgeThickness,
+    },
+    {
+      handle: "bottom",
+      cursor: "ns-resize",
+      x: cornerSize,
+      y: height - t,
+      width: edgeLengthX,
+      height: edgeThickness,
+    },
+    {
+      handle: "left",
+      cursor: "ew-resize",
+      x: -t,
+      y: cornerSize,
+      width: edgeThickness,
+      height: edgeLengthY,
+    },
+    {
+      handle: "right",
+      cursor: "ew-resize",
+      x: width - t,
+      y: cornerSize,
+      width: edgeThickness,
+      height: edgeLengthY,
+    },
+    // Corners.
+    {
+      handle: "top-left",
+      cursor: "nwse-resize",
+      x: -half,
+      y: -half,
+      width: cornerSize,
+      height: cornerSize,
+    },
+    {
+      handle: "top-right",
+      cursor: "nesw-resize",
+      x: width - half,
+      y: -half,
+      width: cornerSize,
+      height: cornerSize,
+    },
+    {
+      handle: "bottom-left",
+      cursor: "nesw-resize",
+      x: -half,
+      y: height - half,
+      width: cornerSize,
+      height: cornerSize,
+    },
+    {
+      handle: "bottom-right",
+      cursor: "nwse-resize",
+      x: width - half,
+      y: height - half,
+      width: cornerSize,
+      height: cornerSize,
+    },
   ];
 }
 

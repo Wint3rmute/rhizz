@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
+import type { ComponentData, PortData } from "../../../../modelView";
+import type { DefinitionOption } from "../../../../modelView";
 import type { TextAlign } from "./geometry";
 import NodeInspector from "./NodeInspector.svelte";
 
@@ -10,21 +11,11 @@ interface ParentOption {
   path: string;
 }
 
-/** A reusable component definition offered by "Use Existing Component". */
-export interface ReusableDefinitionOption {
-  /** The `source` label the instance will reference (the definition's identity). */
-  sourceLabel: string;
-  /** Human-readable label for the dropdown. */
-  label: string;
-  /** Optional icon name for rendering. */
-  icon?: string | undefined;
-}
-
 interface Props {
   isOpen: boolean;
   availableParents: ParentOption[];
   /** Reusable definitions available for "Use Existing Component" mode. */
-  reusableDefinitions: ReusableDefinitionOption[];
+  reusableDefinitions: DefinitionOption[];
   defaultParentKey?: string | undefined;
   initialPosition?: { x: number; y: number } | undefined;
   oncreate: (data: {
@@ -64,15 +55,11 @@ let definitionSearch = $state("");
 let definitionDropdownOpen = $state(false);
 let textAlign = $state<TextAlign>("center");
 
-let compDetails = $state<ComponentData>({
-  label: "",
-  description: "",
-  tags: [],
-  leaf: true,
-  ports: [],
-  components: [],
-  connections: [],
-});
+function emptyComponentDetails(): ComponentData {
+  return { label: "", description: "", tags: [], leaf: true, ports: [] };
+}
+
+let compDetails = $state<ComponentData>(emptyComponentDetails());
 
 $effect(() => {
   if (isOpen) {
@@ -85,15 +72,7 @@ $effect(() => {
     definitionSearch = "";
     definitionDropdownOpen = false;
     textAlign = "center";
-    compDetails = {
-      label: "",
-      description: "",
-      tags: [],
-      leaf: true,
-      ports: [],
-      components: [],
-      connections: [],
-    };
+    compDetails = emptyComponentDetails();
   }
 });
 

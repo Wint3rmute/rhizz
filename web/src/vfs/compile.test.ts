@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "./inMemoryStore";
 import { openProjectFs, type ProjectFs } from "./fs";
-import { readProjectSources } from "./compile";
+import { primaryHclPath, readProjectSources } from "./compile";
+import type { Dirent } from "./fs";
 import { createProjectWithFiles, projectStore } from "../ProjectState.svelte";
 
 let store: InMemoryProjectStore;
@@ -106,5 +107,55 @@ describe("readProjectSources", () => {
     expect(filenames).toContain("project.hcl");
     expect(filenames).toContain("components/mcu.hcl");
     expect(filenames).toContain("diagrams/main.hcl");
+  });
+});
+
+function dirent(path: string, kind: "file" | "directory"): Dirent {
+  return {
+    name: path.split("/").pop() ?? path,
+    path,
+    isFile: () => kind === "file",
+    isDirectory: () => kind === "directory",
+  };
+}
+
+describe("primaryHclPath", () => {
+  it("prefers the canonical system file names, in order", () => {
+    const entries = [
+      dirent("project.hcl", "file"),
+      dirent("main.hcl", "file"),
+      dirent("system.hcl", "file"),
+    ];
+    expect(primaryHclPath(entries)).toBe("system.hcl");
+    expect(primaryHclPath(entries.filter((e) => e.name !== "system.hcl")))
+      .toBe("main.hcl");
+  });
+
+  it("never lets the metadata-only project.hcl shadow a real system file", () => {
+    expect(
+      primaryHclPath([
+        dirent("project.hcl", "file"),
+        dirent("systems.hcl", "file"),
+      ]),
+    ).toBe("systems.hcl");
+  });
+
+  it("falls back to the first root-level .hcl file when none is canonical", () => {
+    expect(primaryHclPath([dirent("custom.hcl", "file")])).toBe("custom.hcl");
+  });
+
+  it("ignores diagram layouts, directories and non-.hcl files", () => {
+    expect(
+      primaryHclPath([
+        dirent("diagrams", "directory"),
+        dirent("diagrams/main.hcl", "file"),
+        dirent("notes.md", "file"),
+      ]),
+    ).toBe("main.hcl");
+  });
+
+  it("returns the fallback when the project has no model file at all", () => {
+    expect(primaryHclPath([])).toBe("main.hcl");
+    expect(primaryHclPath([], "seed.hcl")).toBe("seed.hcl");
   });
 });

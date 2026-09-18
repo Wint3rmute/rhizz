@@ -15,39 +15,18 @@ import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import FileTree from "../editor/FileTree.svelte";
 import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
 import EmbedDiagramButton from "../diagrams/EmbedDiagramButton.svelte";
-import type { DiagramStaticBox } from "../diagrams/types";
 import {
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
+  mapLayoutToBoxes,
   readDiagramLayoutFile,
 } from "../diagrams/persistence";
 import Markdown from "../../../../components/Markdown.svelte";
 import { type ProjectDoc, readProjectDocs } from "./docs";
+import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { diagramTitle, findComponentDiagram } from "./navigation";
-
-// Builds a recursive hierarchical tree from a recursive `readdir` listing, for
-// debug-logging the project's filesystem structure.
-function buildFsTree(entries: Dirent[]): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  for (const entry of entries) {
-    const parts = entry.path.split("/");
-    let node = root;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (part === undefined) continue;
-      const isLast = i === parts.length - 1;
-      if (isLast) {
-        node[part] = entry.isDirectory() ? {} : "<file>";
-      } else {
-        node[part] ??= {};
-        node = node[part] as Record<string, unknown>;
-      }
-    }
-  }
-  return root;
-}
 
 let {
   projectId = null,
@@ -193,18 +172,6 @@ $effect(() => {
       if (cancelled) return;
       docs = [];
     });
-  // Debug: dump the project's filesystem as a recursive hierarchical tree so
-  // the docs directory layout (and how it maps to component labels) is visible.
-  fs.readdir(".", { recursive: true })
-    .then((entries) => {
-      if (cancelled) return;
-      const tree = buildFsTree(entries);
-      console.log("[fs] project filesystem", JSON.stringify(tree, null, 2));
-    })
-    .catch((error) => {
-      if (cancelled) return;
-      console.log("[fs] failed to list filesystem", error);
-    });
 
   return () => {
     cancelled = true;
@@ -228,11 +195,7 @@ let connections = $derived(model ? model.connections() : []);
 // (`Model::component_keys`) and index-aligned with `components`.
 let componentKeys = $derived(model ? model.component_keys() : []);
 
-let keyToIndex = $derived.by(() => {
-  const map = new SvelteMap<string, number>();
-  componentKeys.forEach((key, index) => map.set(key, index));
-  return map;
-});
+let keyToIndex = $derived(componentKeyIndex(model));
 
 let componentDiagrams = $derived.by(() => {
   const map = new SvelteMap<number, Dirent>();
@@ -240,7 +203,7 @@ let componentDiagrams = $derived.by(() => {
     const diagram = findComponentDiagram(
       diagramEntries,
       component.label,
-      componentKeys[index] ?? `#${String(index)}`,
+      componentKeyAt(componentKeys, index),
     );
     if (diagram) map.set(index, diagram);
   });
@@ -271,7 +234,6 @@ let hoverPos = $state<{ x: number; y: number } | null>(null);
 let canvasContainer: HTMLDivElement | undefined = $state();
 
 function handleNodeHover(index: number | null, event?: MouseEvent) {
-  console.log("[hover] on-hover listener triggered", { index, event: !!event });
   hoveredIndex = index;
   if (index === null || !event || !canvasContainer) {
     hoverPos = null;
@@ -287,17 +249,9 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
 // The doc content for the hovered component, if one exists. Matched by the
 // component's unique label rather than its full qualified path.
 let hoveredDoc = $derived(
-  hoveredIndex === null ? null : (() => {
-    const component = components[hoveredIndex];
-    const label = component?.label;
-    const found = label === undefined ? undefined : docsByLabel.get(label);
-    console.log("[hover] markdown search", {
-      label,
-      docsLoaded: docs.length,
-      found: found !== undefined,
-    });
-    return found ?? null;
-  })(),
+  hoveredIndex === null
+    ? null
+    : docsByLabel.get(components[hoveredIndex]?.label ?? "") ?? null,
 );
 
 function handleNodeClick(index: number) {
@@ -311,21 +265,7 @@ function handleNodeClick(index: number) {
   toastState.show(`No detailed view for ${component.label} created`, "info");
 }
 
-let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
-  const next: Record<number, DiagramStaticBox> = {};
-  for (const [key, box] of Object.entries(selectedLayout.checked)) {
-    const index = keyToIndex.get(key);
-    if (index === undefined) continue;
-    next[index] = {
-      x: box.x,
-      y: box.y,
-      width: box.width ?? 100,
-      height: box.height ?? 100,
-      textAlign: box.textAlign ?? "center",
-    };
-  }
-  return next;
-});
+let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
 </script>
 
 <div class="flex flex-col md:flex-row flex-1 w-full h-full overflow-hidden">

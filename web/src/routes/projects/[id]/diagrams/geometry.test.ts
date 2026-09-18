@@ -7,20 +7,19 @@ import {
   boxCenter,
   boxContains,
   boxSidePoint,
-  clampResizeWithin,
   clampWithin,
   computeDirectionalHandles,
   computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
   computeResizedBox,
+  computeResizeHandles,
   computeVisibleConnections,
   type ConnectionSide,
   depthOf,
   elbowPath,
   findConnectTarget,
   findReparentTarget,
-  MIN_NODE_SIZE,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
@@ -127,45 +126,6 @@ describe("clampWithin", () => {
     expect(clampWithin(child, parent, margin)).toEqual(
       clampWithin(child, parent, margin, margin),
     );
-  });
-});
-
-describe("clampResizeWithin", () => {
-  const parent: Box = { x: 0, y: 0, width: 200, height: 200 };
-  const margin = 10;
-
-  it("leaves width/height unchanged when the box already fits", () => {
-    const box: Box = { x: 20, y: 20, width: 50, height: 50 };
-    expect(clampResizeWithin(box, parent, margin)).toEqual({
-      width: 50,
-      height: 50,
-    });
-  });
-
-  it("caps width when it would grow past the parent's right edge", () => {
-    const box: Box = { x: 150, y: 20, width: 100, height: 30 };
-    // Available space to the right: parent.width - margin - box.x = 200 - 10 - 150 = 40
-    expect(clampResizeWithin(box, parent, margin)).toEqual({
-      width: 40,
-      height: 30,
-    });
-  });
-
-  it("caps height when it would grow past the parent's bottom edge", () => {
-    const box: Box = { x: 20, y: 150, width: 30, height: 100 };
-    expect(clampResizeWithin(box, parent, margin)).toEqual({
-      width: 30,
-      height: 40,
-    });
-  });
-
-  it("never caps below MIN_NODE_SIZE, even if the box's position leaves less room than that", () => {
-    // Available space to the right: 200 - 10 - 185 = 5, well under MIN_NODE_SIZE.
-    const box: Box = { x: 185, y: 20, width: 50, height: 30 };
-    expect(clampResizeWithin(box, parent, margin)).toEqual({
-      width: MIN_NODE_SIZE,
-      height: 30,
-    });
   });
 });
 
@@ -544,6 +504,74 @@ describe("boxSidePoint", () => {
 
   it("returns right border midpoint", () => {
     expect(boxSidePoint(box, "right")).toEqual({ x: 300, y: 90 });
+  });
+});
+
+describe("computeResizeHandles", () => {
+  it("returns all 8 handles, edges before corners", () => {
+    expect(computeResizeHandles(120, 80, 10, 6).map((h) => h.handle))
+      .toEqual([
+        "top",
+        "bottom",
+        "left",
+        "right",
+        "top-left",
+        "top-right",
+        "bottom-left",
+        "bottom-right",
+      ]);
+  });
+
+  it("centers edge strips on the border and insets them past the corners", () => {
+    const handles = computeResizeHandles(120, 80, 10, 6);
+    expect(handles.find((h) => h.handle === "top")).toEqual({
+      handle: "top",
+      cursor: "ns-resize",
+      x: 10,
+      y: -3,
+      width: 100,
+      height: 6,
+    });
+    expect(handles.find((h) => h.handle === "left")).toEqual({
+      handle: "left",
+      cursor: "ew-resize",
+      x: -3,
+      y: 10,
+      width: 6,
+      height: 60,
+    });
+  });
+
+  it("straddles the corners and picks the diagonal cursor", () => {
+    const handles = computeResizeHandles(120, 80, 10, 6);
+    expect(handles.find((h) => h.handle === "top-left")).toEqual({
+      handle: "top-left",
+      cursor: "nwse-resize",
+      x: -5,
+      y: -5,
+      width: 10,
+      height: 10,
+    });
+    expect(handles.find((h) => h.handle === "bottom-right")).toEqual({
+      handle: "bottom-right",
+      cursor: "nwse-resize",
+      x: 115,
+      y: 75,
+      width: 10,
+      height: 10,
+    });
+    expect(handles.find((h) => h.handle === "top-right")?.cursor).toBe(
+      "nesw-resize",
+    );
+    expect(handles.find((h) => h.handle === "bottom-left")?.cursor).toBe(
+      "nesw-resize",
+    );
+  });
+
+  it("keeps edge strips at least 1 unit long on a degenerate node", () => {
+    const handles = computeResizeHandles(10, 10, 10, 6);
+    expect(handles.find((h) => h.handle === "top")?.width).toBe(1);
+    expect(handles.find((h) => h.handle === "left")?.height).toBe(1);
   });
 });
 

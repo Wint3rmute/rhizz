@@ -75,50 +75,46 @@ describe("actionLog", () => {
     );
   });
 
-  it("renders non-model actions as replay no-op comments", () => {
+  it("encodes rename/delete/reparent actions as their dispatcher ops", () => {
+    expect(
+      encodeCall(
+        { op: "rename_component", path: "main/drone", newLabel: "quad" },
+        "fs",
+      ),
+    ).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"rename_component","path":"main/drone","newLabel":"quad"});',
+    );
+    expect(
+      encodeCall({ op: "delete_component", path: "main/drone" }, "fs"),
+    ).toContain('{"kind":"delete_component","path":"main/drone"}');
     expect(
       encodeCall(
         {
-          op: "add_port",
-          compPath: "main/drone",
-          port: {
-            label: "rf",
-            role: "provider",
-            protocol: "data",
-            external: true,
-          },
+          op: "reparent_component",
+          sourcePath: "main/drone",
+          targetParentPath: "main/payload",
         },
         "fs",
       ),
-    ).toBe("// add_port is not replayable through model ops (no-op in replay)");
-    expect(
-      encodeCall(
-        { op: "add_protocol", label: "data", description: "A data protocol" },
-        "fs",
-      ),
-    ).toBe(
-      "// add_protocol is not replayable through model ops (no-op in replay)",
+    ).toContain(
+      '{"kind":"reparent_component","sourcePath":"main/drone","targetParentPath":"main/payload"}',
     );
+  });
+
+  it("encodes add_connection with its resolved scope", () => {
     expect(
       encodeCall(
         {
-          op: "update_node_layout",
-          viewLabel: "main",
-          componentKey: "main/drone",
-          layout: { x: 100, y: 200, width: 120, text_align: "top-left" },
+          op: "add_connection",
+          scopePath: "main",
+          label: "rf-link",
+          from: "fc",
+          to: "radio",
         },
         "fs",
       ),
-    ).toBe(
-      "// update_node_layout is not replayable through model ops (no-op in replay)",
-    );
-    expect(
-      encodeCall(
-        { op: "new_project", name: "drone", version: "1.0.0", authors: ["A"] },
-        "fs",
-      ),
-    ).toBe(
-      "// new_project is not replayable through model ops (no-op in replay)",
+    ).toContain(
+      '{"kind":"add_connection","scopePath":"main","label":"rf-link","from":"fc","to":"radio"}',
     );
   });
 

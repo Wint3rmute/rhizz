@@ -5,6 +5,7 @@ import { getWarningLevel } from "../../../../../../WarningLevelState.svelte";
 import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";
 import { openProjectFs } from "../../../../../../vfs/fs";
+import { componentKeyIndex } from "../../../../../../modelKeys";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import type { DiagramStaticBox } from "../../types";
 import {
@@ -94,11 +95,7 @@ let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
-let keyToIndex = $derived.by(() => {
-  const map = new SvelteMap<string, number>();
-  (model?.component_keys() ?? []).forEach((key, index) => map.set(key, index));
-  return map;
-});
+let keyToIndex = $derived(componentKeyIndex(model));
 
 let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
   return mapLayoutToBoxes(layout.checked, keyToIndex);

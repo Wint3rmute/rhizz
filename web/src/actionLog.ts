@@ -8,12 +8,16 @@
 // report becomes a reproduction: copy the console block into a `*.test.ts`,
 // run it, and the failing state is rebuilt deterministically.
 //
-// Deliberately has zero dependency on Svelte or the WASM runtime (see
-// DocumentStore.svelte.ts — importing it does not initialize WASM), so this
-// module is unit-testable in plain Node and reusable from the console writer,
-// the copy button, and the simulation harness alike.
+// The `ModelAction` union mirrors rhizz-core's `LoggedAction` variant for
+// variant — Rust owns the write path (`applyModelMutation` → `apply_model_op`)
+// and reports what it did, so a variant here that Rust never emits would be
+// dead weight.
+//
+// Deliberately has zero dependency on Svelte or the WASM runtime, so this
+// module is unit-testable in plain Node and reusable from the copy button and
+// the simulation harness alike.
 
-import type { ComponentData, PortData } from "./DocumentStore.svelte";
+import type { ComponentData, PortData } from "./modelView";
 
 // The subset of a component's fields the UI can mutate through the inspector
 // / keyboard shortcuts. Kept as a plain object so it can be JSON-serialized
@@ -32,18 +36,7 @@ export type ComponentPatch = Partial<
   >
 >;
 
-export type ConnectionSide = "top" | "bottom" | "left" | "right";
-
-export interface NodeLayoutPatch {
-  x: number;
-  y: number;
-  width?: number | undefined;
-  height?: number | undefined;
-  text_align?: string | undefined;
-}
-
 export type ModelAction =
-  | { op: "new_project"; name: string; version: string; authors: string[] }
   | { op: "add_system"; label: string; description: string }
   | {
     op: "add_component_definition";
@@ -74,24 +67,7 @@ export type ModelAction =
     from: string;
     to: string;
   }
-  | { op: "delete_connection"; scopePath: string; label: string }
-  | { op: "add_port"; compPath: string; port: PortData }
-  | {
-    op: "update_port";
-    compPath: string;
-    portLabel: string;
-    patch: Partial<PortData>;
-  }
-  | { op: "delete_port"; compPath: string; portLabel: string }
-  | { op: "add_protocol"; label: string; description: string }
-  | { op: "delete_protocol"; label: string }
-  | { op: "add_view"; label: string; system: string }
-  | {
-    op: "update_node_layout";
-    viewLabel: string;
-    componentKey: string;
-    layout: NodeLayoutPatch;
-  };
+  | { op: "delete_connection"; scopePath: string; label: string };
 
 export interface ActionLog {
   /** Appends an action to the log. */
@@ -137,17 +113,11 @@ function tsTemplate(s: string): string {
 }
 
 // Renders a single `ModelAction` as one `applyModelMutation` call against
-// an in-memory file map. The emitted op mirrors the recorded action 1:1 so
-// the trace stays honest to the edit it reflects. Actions with no model-op
-// equivalent (project seeding, ports/protocols edited outside the canvas,
-// view layout) become comment lines so replay scripts stay runnable.
+// an in-memory file map. Every action the Rust dispatcher reports has a
+// model-op equivalent, so the trace replays 1:1.
 export function encodeCall(action: ModelAction, fileVar: string): string {
-  const op = toMutationOp(action);
-  if (op === null) {
-    return `// ${action.op} is not replayable through model ops (no-op in replay)`;
-  }
   return `await applyModelMutation(${fileVar}, "system.hcl", await ${fileVar}.readFile("system.hcl"), ${
-    JSON.stringify(op)
+    JSON.stringify(toMutationOp(action))
   });`;
 }
 
@@ -220,15 +190,6 @@ function toMutationOp(action: ModelAction): unknown {
       // The dispatcher resolves the scope itself; the recorded scope is
       // redundant for replay.
       return { kind: "delete_connection_by_label", label: action.label };
-    case "new_project":
-    case "add_port":
-    case "update_port":
-    case "delete_port":
-    case "add_protocol":
-    case "delete_protocol":
-    case "add_view":
-    case "update_node_layout":
-      return null;
   }
 }
 

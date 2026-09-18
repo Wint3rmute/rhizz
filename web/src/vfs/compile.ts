@@ -4,7 +4,7 @@
 // ProjectFs's public readdir/readFile, exactly like a real Node program
 // gathering source files off a real directory would (mirroring how
 // rhizz-core's own CLI-side file discovery globs `**/*.hcl`).
-import type { ProjectFs } from "./fs";
+import type { Dirent, ProjectFs } from "./fs";
 
 // A single compiled source file, matching the `{ filename, content }`
 // shape rhizz-core's `compile()` — and thus `CompileResultJS.compile` /
@@ -40,4 +40,33 @@ export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
       content: await fs.readFile(path),
     })),
   );
+}
+
+// Preference order for "which root-level .hcl file holds the system model".
+// A bare "project.hcl" only carries project metadata, so it must never shadow
+// a real system file just because it sorts earlier.
+const PRIMARY_HCL_CANDIDATES = [
+  "system.hcl",
+  "systems.hcl",
+  "main.hcl",
+  "project.hcl",
+];
+
+// Picks the file model mutations should be written to, out of a recursive
+// project listing: the first preferred candidate present, else the first
+// root-level ".hcl" file (diagram layouts under `diagrams/` are view data,
+// never the model), else `fallback`.
+export function primaryHclPath(
+  entries: Dirent[],
+  fallback = "main.hcl",
+): string {
+  const candidates = entries.filter((entry) =>
+    entry.isFile() &&
+    entry.name.endsWith(".hcl") &&
+    !entry.path.startsWith("diagrams/")
+  );
+  const preferred = PRIMARY_HCL_CANDIDATES
+    .map((name) => candidates.find((entry) => entry.name === name))
+    .find((entry) => entry !== undefined);
+  return preferred?.path ?? candidates[0]?.path ?? fallback;
 }

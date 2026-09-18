@@ -22,8 +22,6 @@ const meta = {
           tags: ["bus"],
         },
       ],
-      components: [],
-      connections: [],
     },
     textAlign: "center",
     onupdate: () => {},
@@ -67,8 +65,6 @@ export const AtomicLeaf: Story = {
       tags: ["sensor"],
       leaf: true,
       ports: [],
-      components: [],
-      connections: [],
     },
   },
   globals: {

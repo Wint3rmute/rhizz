@@ -6,7 +6,7 @@ import {
   reset_view,
 } from "../../../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
-import { SvelteMap, SvelteSet } from "svelte/reactivity";
+import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
@@ -16,7 +16,11 @@ import {
   setCurrentScore,
 } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
-import { readProjectSources, type Source } from "../../../../vfs/compile";
+import {
+  primaryHclPath,
+  readProjectSources,
+  type Source,
+} from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
@@ -28,9 +32,10 @@ import CreateComponentModal from "./CreateComponentModal.svelte";
 import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
 import {
   type ComponentData,
-  DocumentStore,
+  componentDataByKey,
+  definitionOptions,
   type PortData,
-} from "../../../../DocumentStore.svelte";
+} from "../../../../modelView";
 
 import {
   type Annotation,
@@ -69,6 +74,7 @@ import {
   computePortPositions,
   computeRenderOrder,
   computeResizedBox,
+  computeResizeHandles,
   computeVisibleConnections,
   depthOf,
   elbowPath,
@@ -95,16 +101,17 @@ import {
   GRID_GRADUATIONS,
 } from "./grid";
 import { asTestScript, createActionLog } from "../../../../actionLog";
-import { copyDebugScript } from "../../../../actionLogConsole";
-import { subscribeToMutations } from "../../../../DocumentStore.svelte";
+import { copyToClipboard } from "../../../../clipboard";
+import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
+import { subscribeToMutations } from "../../../../mutationObserver";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
 
 // Records every durable model mutation the user makes on this canvas (see
-// actionLog.ts). Mutations are captured through DocumentStore's opt-in module-
-// level mutation observer rather than per-handler calls, so the trace covers
-// every route and the page stays free of scattered logging. Cleared when a new
+// actionLog.ts). Mutations are captured through the opt-in module-level
+// mutation observer rather than per-handler calls, so the trace covers every
+// route and the page stays free of scattered logging. Cleared when a new
 // project is loaded.
 const actionLog = createActionLog();
 let copiedDebug = $state(false);
@@ -129,9 +136,10 @@ async function handleCopyDebug(): Promise<void> {
   const script = asTestScript(actionLog.actions(), finalHcl, {
     baselineHcl,
   });
-  await copyDebugScript(actionLog, finalHcl, baselineHcl);
+  // Also echoed to the console so a developer can grab it without the
+  // clipboard (and so it survives a page reload).
   console.log(script);
-  copiedDebug = true;
+  copiedDebug = await copyToClipboard(script);
   setTimeout(() => {
     copiedDebug = false;
   }, 2000);
@@ -192,7 +200,7 @@ let firstError = $derived(compileErrors[0] ?? null);
 let componentKeys = $derived(model ? model.component_keys() : []);
 
 function getComponentKey(index: number): string {
-  return componentKeys[index] ?? `#${String(index)}`;
+  return componentKeyAt(componentKeys, index);
 }
 
 // Reverse lookup from a persistence key back to the component's current
@@ -200,11 +208,7 @@ function getComponentKey(index: number): string {
 // `checked`/`savedLayout` whose key isn't found here belong to a component
 // that no longer exists (renamed, removed, or reparented) and are simply
 // not rendered.
-let keyToIndex = $derived.by(() => {
-  const map = new SvelteMap<string, number>();
-  componentKeys.forEach((key, index) => map.set(key, index));
-  return map;
-});
+let keyToIndex = $derived(componentKeyIndex(model));
 
 // The set of arena indices currently placed on the canvas, derived from
 // `checked` (keyed by structural componentKey) via the reverse key→index map.
@@ -836,7 +840,7 @@ const diagramHistory = createHistoryStack<DiagramSnapshot>();
 // gestures (drag/resize) stay on `diagramHistory` — the migration source.
 // Both stacks share one monotonic sequence so interleaved undo (drag after
 // create) reverts in true last-first order instead of preferring one stack.
-// `DocumentStore` is never mutated on this path; all model writes go through
+// There is no second TypeScript model on this path; all model writes go through
 // `applyModelMutation` inside the transaction.
 const unifiedHistory = new TransactionManager(UNDO_HISTORY_LIMIT);
 let historySeq = 0;
@@ -1297,19 +1301,7 @@ function isDescendantOf(index: number, possibleAncestor: number): boolean {
 
 async function getPrimaryHclPath(): Promise<string> {
   try {
-    const entries = await fs.readdir(".", { recursive: true });
-    const hclFiles = entries.filter((e) =>
-      e.isFile() &&
-      e.name.endsWith(".hcl") &&
-      !e.path.startsWith("diagrams/")
-    );
-    // Prefer the file that actually holds the system model, in priority
-    // order. A bare "project.hcl" only carries project metadata, so it must
-    // never shadow a real system file just because it sorts earlier.
-    const preferred = ["system.hcl", "systems.hcl", "main.hcl", "project.hcl"]
-      .map((name) => hclFiles.find((e) => e.name === name))
-      .find(Boolean);
-    return preferred?.path ?? hclFiles[0]?.path ?? "main.hcl";
+    return primaryHclPath(await fs.readdir(".", { recursive: true }));
   } catch {
     return "main.hcl";
   }
@@ -1390,15 +1382,8 @@ let availableParents = $derived.by(() => {
 
 // The pool of reusable component definitions offered by "Use Existing
 // Component". Derives directly from the top-level definitions in the compiled
-// model (DocumentStore.definitions), so a definition is offered even with zero
-// current instances. Sorted by label.
-let reusableDefinitions = $derived.by(() => {
-  return docStore.definitions.map((def) => ({
-    sourceLabel: def.label,
-    label: def.label,
-    icon: def.icon || undefined,
-  })).sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel));
-});
+// model, so a definition is offered even with zero current instances.
+let reusableDefinitions = $derived(definitionOptions(model));
 
 let isCreateModalOpen = $state(false);
 let createModalPosition = $state<{ x: number; y: number } | undefined>(
@@ -1514,16 +1499,11 @@ function onCanvasDblClick(event: MouseEvent) {
   }
 }
 
-let docStore = $derived.by(() => {
-  const model = output.model();
-  const doc = new DocumentStore();
-  if (model) {
-    doc.loadFromRawModel(model.to_js());
-  } else if (sources.length > 0) {
-    doc.loadFromSources(sources);
-  }
-  return doc;
-});
+// Flat read-model of the compiled output: one `ComponentData` per canonical
+// component key, rebuilt whenever the model changes. This is the only shape
+// the canvas and the inspector need — they look components up *by key*, never
+// by walking a tree.
+let componentData = $derived(componentDataByKey(model));
 
 $effect(() => {
   const sc = output.model()?.score();
@@ -1543,7 +1523,7 @@ let selectedKey = $derived(
 );
 
 let selectedComponentData = $derived(
-  selectedKey ? docStore.findComponent(selectedKey) : null,
+  selectedKey ? componentData.get(selectedKey) ?? null : null,
 );
 
 async function handleUpdateSelectedComponent(
@@ -1636,7 +1616,7 @@ function findHoveredTarget(
     const box = nodeBox(i);
     if (!box) return [];
     const key = getComponentKey(i);
-    const compData = docStore.findComponent(key);
+    const compData = componentData.get(key);
     const ports = compData && compData.ports.length > 0
       ? computePortPositions(box.width, box.height, compData.ports).map((
         p,
@@ -2269,6 +2249,19 @@ let selectedConnectionData = $derived.by(() => {
   };
 });
 
+// The five routing choices the connection inspector offers for each endpoint:
+// "Auto" (no override, the router picks a side) plus the four border sides.
+const SIDE_OPTIONS: {
+  value: ConnectionSide | undefined;
+  label: string;
+}[] = [
+  { value: undefined, label: "Auto" },
+  { value: "top", label: "Top" },
+  { value: "right", label: "Right" },
+  { value: "bottom", label: "Bottom" },
+  { value: "left", label: "Left" },
+];
+
 function setConnectionStartSide(side: ConnectionSide | undefined) {
   if (!selectedConnection) return;
   recordUndoPoint();
@@ -2683,6 +2676,34 @@ $effect(() => {
 });
 </script>
 
+{#snippet connectionSidePicker(
+  title: string,
+  current: ConnectionSide | undefined,
+  onchange: (side: ConnectionSide | undefined) => void,
+)}
+  <!-- One endpoint's routing override: "Auto" (let the router pick a side)
+       plus the four border sides. Keyed on the label because `value` is
+       undefined for "Auto". -->
+  <div class="space-y-1.5 pt-1">
+  <span
+    class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+      {title}
+    </span>
+  <div class="grid grid-cols-5 gap-1 w-full">
+      {#each SIDE_OPTIONS as option (option.label)}
+        <button
+          class="btn btn-xs {current === option.value
+            ? 'btn-primary'
+            : 'btn-ghost border border-base-300'}"
+          onclick={() => onchange(option.value)}
+        >
+          {option.label}
+        </button>
+      {/each}
+    </div>
+</div>
+{/snippet}
+
 <svelte:window onkeydown={onDiagramKeyDown} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -2744,81 +2765,17 @@ $effect(() => {
           </div>
         </div>
 
-        <div class="space-y-1.5 pt-1">
-          <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
-            {selectedConnectionData.fromCompLabel} starting point
-          </span>
-          <div class="grid grid-cols-5 gap-1 w-full">
-            <button
-              class="btn btn-xs {selectedConnectionData.startSide === undefined ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionStartSide(undefined)}
-            >
-              Auto
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.startSide === 'top' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionStartSide('top')}
-            >
-              Top
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.startSide === 'right' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionStartSide('right')}
-            >
-              Right
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.startSide === 'bottom' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionStartSide('bottom')}
-            >
-              Bottom
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.startSide === 'left' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionStartSide('left')}
-            >
-              Left
-            </button>
-          </div>
-        </div>
+        {@render connectionSidePicker(
+          `${selectedConnectionData.fromCompLabel} starting point`,
+          selectedConnectionData.startSide,
+          setConnectionStartSide,
+        )}
 
-        <div class="space-y-1.5 pt-1">
-          <span class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
-            {selectedConnectionData.toCompLabel} starting point
-          </span>
-          <div class="grid grid-cols-5 gap-1 w-full">
-            <button
-              class="btn btn-xs {selectedConnectionData.endSide === undefined ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionEndSide(undefined)}
-            >
-              Auto
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.endSide === 'top' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionEndSide('top')}
-            >
-              Top
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.endSide === 'right' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionEndSide('right')}
-            >
-              Right
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.endSide === 'bottom' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionEndSide('bottom')}
-            >
-              Bottom
-            </button>
-            <button
-              class="btn btn-xs {selectedConnectionData.endSide === 'left' ? 'btn-primary' : 'btn-ghost border border-base-300'}"
-              onclick={() => setConnectionEndSide('left')}
-            >
-              Left
-            </button>
-          </div>
-        </div>
+        {@render connectionSidePicker(
+          `${selectedConnectionData.toCompLabel} starting point`,
+          selectedConnectionData.endSide,
+          setConnectionEndSide,
+        )}
 
         <div class="divider my-2"></div>
         <button
@@ -2991,7 +2948,7 @@ $effect(() => {
             ? marqueeCandidates.has(index)
             : selected.has(index)}
           {@const compKey = getComponentKey(index)}
-          {@const compData = docStore.findComponent(compKey)}
+          {@const compData = componentData.get(compKey)}
           {@const icon = resolveIcon(compData?.icon ?? components[index]?.icon)}
           {@const borderSvg = borderStyleToSvg({
             color: compData?.color || components[index]?.color,
@@ -3145,97 +3102,27 @@ $effect(() => {
               </text>
             {/if}
 
-            <!-- 4 Edge resize hit strips (transparent, active on hover) -->
-            <!-- Top edge -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={CORNER_HANDLE_SIZE}
-              y={-EDGE_HANDLE_THICKNESS / 2}
-              width={Math.max(1, width - 2 * CORNER_HANDLE_SIZE)}
-              height={EDGE_HANDLE_THICKNESS}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'ns-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "top")}
-            />
-            <!-- Bottom edge -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={CORNER_HANDLE_SIZE}
-              y={height - EDGE_HANDLE_THICKNESS / 2}
-              width={Math.max(1, width - 2 * CORNER_HANDLE_SIZE)}
-              height={EDGE_HANDLE_THICKNESS}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'ns-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom")}
-            />
-            <!-- Left edge -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={-EDGE_HANDLE_THICKNESS / 2}
-              y={CORNER_HANDLE_SIZE}
-              width={EDGE_HANDLE_THICKNESS}
-              height={Math.max(1, height - 2 * CORNER_HANDLE_SIZE)}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'ew-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "left")}
-            />
-            <!-- Right edge -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={width - EDGE_HANDLE_THICKNESS / 2}
-              y={CORNER_HANDLE_SIZE}
-              width={EDGE_HANDLE_THICKNESS}
-              height={Math.max(1, height - 2 * CORNER_HANDLE_SIZE)}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'ew-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "right")}
-            />
+            <!-- 8 transparent resize hit-areas (4 edge strips + 4 corners),
+                 geometry computed by computeResizeHandles in geometry.ts -->
+            {#each computeResizeHandles(
+              width,
+              height,
+              CORNER_HANDLE_SIZE,
+              EDGE_HANDLE_THICKNESS,
+            ) as handle (handle.handle)}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <rect
+                x={handle.x}
+                y={handle.y}
+                width={handle.width}
+                height={handle.height}
+                fill="transparent"
+                style="cursor: {autoLayoutRunning ? 'wait' : handle.cursor}"
+                onmousedown={(e) =>
+                  onResizeHandleMouseDown(e, index, handle.handle)}
+              />
+            {/each}
 
-            <!-- 4 Corner resize handles -->
-            <!-- Top-Left corner -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={-CORNER_HANDLE_SIZE / 2}
-              y={-CORNER_HANDLE_SIZE / 2}
-              width={CORNER_HANDLE_SIZE}
-              height={CORNER_HANDLE_SIZE}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "top-left")}
-            />
-            <!-- Top-Right corner -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={width - CORNER_HANDLE_SIZE / 2}
-              y={-CORNER_HANDLE_SIZE / 2}
-              width={CORNER_HANDLE_SIZE}
-              height={CORNER_HANDLE_SIZE}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'nesw-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "top-right")}
-            />
-            <!-- Bottom-Left corner -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={-CORNER_HANDLE_SIZE / 2}
-              y={height - CORNER_HANDLE_SIZE / 2}
-              width={CORNER_HANDLE_SIZE}
-              height={CORNER_HANDLE_SIZE}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'nesw-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-left")}
-            />
-            <!-- Bottom-Right corner -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <rect
-              x={width - CORNER_HANDLE_SIZE / 2}
-              y={height - CORNER_HANDLE_SIZE / 2}
-              width={CORNER_HANDLE_SIZE}
-              height={CORNER_HANDLE_SIZE}
-              fill="transparent"
-              style="cursor: {autoLayoutRunning ? 'wait' : 'nwse-resize'}"
-              onmousedown={(e) => onResizeHandleMouseDown(e, index, "bottom-right")}
-            />
 
             <!-- Port & Directional handles (visible when selected or actively dragging a connection) -->
             {#if selected.has(index) || interaction.type === "connecting"}

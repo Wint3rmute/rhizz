@@ -8,14 +8,11 @@
 // TypeScript model. Reported actions are forwarded to the mutation observers
 // so the action log sees exactly what the old store calls emitted.
 //
-// The TypeScript `DocumentStore` tree remains only as a reactive read model
-// for rendering; it is never mutated on the write path anymore.
+// The UI reads the model back through `modelView.ts`, a flat projection of
+// the compiled model — there is no second TypeScript model to keep in sync.
 
-import {
-  type ComponentData,
-  type PortData,
-  recordModelAction,
-} from "../DocumentStore.svelte";
+import { type ComponentData, type PortData } from "../modelView";
+import { recordModelAction } from "../mutationObserver";
 import { apply_model_op } from "../rhizz_wasm_wrapper";
 
 // Minimal filesystem surface the dispatcher needs; `ProjectFs` satisfies it
@@ -36,8 +33,7 @@ export interface ComponentDefinitionOptions {
   ports?: PortData[];
 }
 
-// Declarative model mutations, one per `DocumentStore` capability used by the
-// diagram canvas. `create_component` / `delete_connection_by_label` are the
+// Declarative model mutations, one per capability the diagram canvas offers. `create_component` / `delete_connection_by_label` are the
 // two higher-level ops whose container/scope resolution used to live inline
 // in their handlers.
 export type ModelMutationOp =
