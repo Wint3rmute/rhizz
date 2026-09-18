@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 # All toolchains come from flake.nix (pinned via flake.lock): every job
 # installs Nix, warms /nix/store from cache, then runs the same `just`
