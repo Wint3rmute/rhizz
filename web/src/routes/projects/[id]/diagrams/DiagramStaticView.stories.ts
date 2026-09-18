@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import DiagramStaticView from "./DiagramStaticView.svelte";
+import { nodeLabelLayout } from "./geometry";
 import type {
   DiagramStaticBox,
   DiagramStaticComponent,
@@ -157,5 +158,132 @@ export const AnnotationsOnly: Story = {
     connections: pipelineConnections,
     boxes: {},
     annotations: [{ text: "Just a note", x: 0, y: 0 }],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// DiagramNodeBody — the box + selection outline + icon/label block shared by
+// this renderer and the interactive canvas. Exercised through DiagramStaticView
+// (its root is a bare <g>, so it only renders inside a host <svg>), with the
+// rendered geometry asserted against geometry.nodeLabelLayout so the two
+// renderers can never drift apart again.
+// ---------------------------------------------------------------------------
+
+const iconComponents: DiagramStaticComponent[] = [
+  { label: "top-left", icon: "microchip" },
+  { label: "top-center", icon: "server" },
+  { label: "center", icon: "wifi" },
+  { label: "plain top-left" },
+  { label: "plain top-center" },
+  { label: "plain center" },
+];
+// `textAlign` lives on the *box*, not the component — see DiagramStaticBox.
+const iconBoxes: Record<number, DiagramStaticBox> = {
+  0: { x: 0, y: 0, width: 200, height: 120, textAlign: "top-left" },
+  1: { x: 240, y: 0, width: 200, height: 120, textAlign: "top-center" },
+  2: { x: 480, y: 0, width: 200, height: 120, textAlign: "center" },
+  3: { x: 0, y: 160, width: 200, height: 120, textAlign: "top-left" },
+  4: { x: 240, y: 160, width: 200, height: 120, textAlign: "top-center" },
+  5: { x: 480, y: 160, width: 200, height: 120, textAlign: "center" },
+};
+
+// The three icon-bearing nodes, in render order, with the placement
+// nodeLabelLayout says they must get. Spelled out (rather than recomputed
+// from the boxes above) so a change to the layout function shows up here as
+// a deliberate edit, not a silently-updated expectation.
+const expectedIconNodes = [
+  { align: "top-left", label: "top-left", width: 200, height: 120 },
+  { align: "top-center", label: "top-center", width: 200, height: 120 },
+  { align: "center", label: "center", width: 200, height: 120 },
+] as const;
+
+export const IconsAndTextAlignments: Story = {
+  args: {
+    components: iconComponents,
+    connections: [],
+    boxes: iconBoxes,
+  },
+  play: async ({ canvasElement }) => {
+    // DiagramStaticView -> DiagramElements -> DiagramNodeBody, whose root is
+    // the <g> holding the body rect, the icon glyph and the label.
+    const bodies = canvasElement.querySelectorAll("a > g > g");
+    await expect(bodies.length).toBe(6);
+
+    // Only the three icon-bearing nodes render a nested <svg> glyph.
+    const glyphs = canvasElement.querySelectorAll("a > g > g > svg");
+    await expect(glyphs.length).toBe(3);
+
+    for (const [i, node] of expectedIconNodes.entries()) {
+      const expected = nodeLabelLayout(
+        node.align,
+        node.label,
+        node.width,
+        node.height,
+        true,
+      );
+      const glyph = glyphs[i];
+      const text = bodies[i]?.querySelector("text");
+      await expect(glyph?.getAttribute("x")).toBe(String(expected.icon?.x));
+      await expect(glyph?.getAttribute("y")).toBe(String(expected.icon?.y));
+      await expect(glyph?.getAttribute("width")).toBe(
+        String(expected.icon?.size),
+      );
+      await expect(text?.getAttribute("x")).toBe(String(expected.text.x));
+      await expect(text?.getAttribute("y")).toBe(String(expected.text.y));
+      await expect(text?.getAttribute("text-anchor")).toBe(
+        expected.text.anchor,
+      );
+      await expect(text?.getAttribute("dominant-baseline")).toBe(
+        expected.text.baseline,
+      );
+    }
+
+    // Icon-less nodes fall back to the plain textPosition placement.
+    const plain = nodeLabelLayout("center", "plain center", 200, 120, false);
+    const plainText = bodies[5]?.querySelector("text");
+    await expect(plainText?.getAttribute("x")).toBe(String(plain.text.x));
+    await expect(plainText?.getAttribute("y")).toBe(String(plain.text.y));
+  },
+};
+
+// The model-level visual attributes (color / border / font) reach the shared
+// node body: a dashed error-colored border and a bold italic label.
+export const NodeVisualStyles: Story = {
+  args: {
+    components: [
+      { label: "styled", color: "error", border: "dashed", font: "bold" },
+      { label: "dotted", color: "primary", border: "dotted", font: "italic" },
+      { label: "plain" },
+    ],
+    connections: [],
+    boxes: {
+      0: { x: 0, y: 0, width: 160, height: 90 },
+      1: { x: 200, y: 0, width: 160, height: 90 },
+      2: { x: 400, y: 0, width: 160, height: 90 },
+    },
+    selected: new Set([1]),
+  },
+  play: async ({ canvasElement }) => {
+    const bodies = Array.from(canvasElement.querySelectorAll("a > g > g"));
+    await expect(bodies.length).toBe(3);
+
+    // Each body's first rect is the node box itself (the selection outline,
+    // when present, is the second one).
+    const nodeRects = bodies.map((body) => body.querySelector("rect"));
+    const [styled, dotted, plain] = nodeRects;
+    await expect(styled?.getAttribute("stroke")).toBe("var(--color-error)");
+    await expect(styled?.getAttribute("stroke-dasharray")).toBe("6 4");
+    await expect(dotted?.getAttribute("stroke")).toBe("var(--color-primary)");
+    await expect(dotted?.getAttribute("stroke-dasharray")).toBe("1.5 3");
+    // An unstyled node keeps the default solid base-content border.
+    await expect(plain?.getAttribute("stroke")).toBe(
+      "var(--color-base-content)",
+    );
+    await expect(plain?.getAttribute("stroke-dasharray")).toBeNull();
+
+    // The selected node also carries the dotted primary outline on top.
+    const outline = bodies[1]?.querySelectorAll("rect")[1];
+    await expect(outline?.getAttribute("stroke")).toBe("var(--color-primary)");
+    await expect(outline?.getAttribute("fill")).toBe("none");
   },
 };

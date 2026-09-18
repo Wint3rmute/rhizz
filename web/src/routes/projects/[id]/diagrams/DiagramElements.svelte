@@ -8,16 +8,9 @@ import {
   computeVisibleConnections,
   elbowPath,
   type TextAlign,
-  textPosition,
 } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
-import {
-  borderStyleToSvg,
-  fontStyleToSvg,
-  SELECTION_OUTLINE_DASHARRAY,
-  SELECTION_OUTLINE_OPACITY,
-  selectionOutlineRect,
-} from "./visuals";
+import DiagramNodeBody from "./DiagramNodeBody.svelte";
 import type {
   DiagramStaticAnnotation,
   DiagramStaticBox,
@@ -92,17 +85,12 @@ let visibleConnections = $derived(
   {@const box = nodeBox(index)}
   {@const component = components[index]}
   {#if box && component}
-{@const textPos = textPosition(box.textAlign, box.width, box.height)}
-    {@const icon = resolveIcon(component.icon)}
-    {@const borderSvg = borderStyleToSvg({
-      color: component.color,
-      border: component.border,
-    })}
-    {@const fontSvg = fontStyleToSvg(component.font)}
     <a
   href={onnodeclick ? "#" : undefined}
   aria-label={onnodeclick
-        ? `${component.label}${linked.has(index) ? ", open detailed view" : ", no detailed view"}`
+        ? `${component.label}${
+          linked.has(index) ? ", open detailed view" : ", no detailed view"
+        }`
         : undefined}
   onclick={onnodeclick
         ? (event) => {
@@ -119,130 +107,18 @@ let visibleConnections = $derived(
     class:cursor-pointer={onnodeclick !== undefined}
     class:opacity-90={onnodeclick !== undefined && !linked.has(index)}
   >
-      <rect
-        width={box.width}
-        height={box.height}
-        rx="5"
-        stroke={borderSvg.stroke ?? "var(--color-base-content)"}
-        stroke-width="1"
-        stroke-dasharray={borderSvg.dasharray}
-        fill="var(--color-base-200)"
-      />
-      {#if selected.has(index)}
-        <!-- Selection indicator: a 50%-transparent dotted outline drawn on
-             top of the node's own border, so the component's style (color /
-             border) stays visible and isn't obscured. Mirrors the interactive
-             canvas's selection rendering. -->
-        {@const outline = selectionOutlineRect(box.width, box.height)}
-        <rect
-          x={outline.x}
-          y={outline.y}
-          width={outline.width}
-          height={outline.height}
-          rx="5"
-          fill="none"
-          stroke="var(--color-primary)"
-          stroke-opacity={SELECTION_OUTLINE_OPACITY}
-          stroke-width="1.5"
-          stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
-          style="pointer-events: none"
-        />
-      {/if}
-      {#if icon}
-        {#if box.textAlign === "top-left"}
-          <svg
-            x={8}
-            y={8}
-            width="14"
-            height="14"
-            viewBox="0 0 {icon.width} {icon.height}"
-            fill="var(--color-base-content)"
-            opacity="0.85"
-          >
-            <path d={icon.svgPath} />
-          </svg>
-          <text
-            x={26}
-            y={textPos.y}
-            fill="var(--color-base-content)"
-            text-anchor="start"
-            dominant-baseline={textPos.baseline}
-            font-weight={fontSvg.fontWeight}
-            font-style={fontSvg.fontStyle}
-            text-decoration={fontSvg.textDecoration}
-            style="pointer-events: none; user-select: none"
-          >
-            {component.label}
-          </text>
-        {:else if box.textAlign === "top-center"}
-          {@const estimatedWidth = Math.min(box.width - 16, component.label.length * 7.5 + 18)}
-          {@const startX = Math.max(8, (box.width - estimatedWidth) / 2)}
-          <svg
-            x={startX}
-            y={8}
-            width="14"
-            height="14"
-            viewBox="0 0 {icon.width} {icon.height}"
-            fill="var(--color-base-content)"
-            opacity="0.85"
-          >
-            <path d={icon.svgPath} />
-          </svg>
-          <text
-            x={startX + 18}
-            y={textPos.y}
-            fill="var(--color-base-content)"
-            text-anchor="start"
-            dominant-baseline={textPos.baseline}
-            font-weight={fontSvg.fontWeight}
-            font-style={fontSvg.fontStyle}
-            text-decoration={fontSvg.textDecoration}
-            style="pointer-events: none; user-select: none"
-          >
-            {component.label}
-          </text>
-        {:else}
-          <svg
-            x={box.width / 2 - 9}
-            y={box.height / 2 - 20}
-            width="18"
-            height="18"
-            viewBox="0 0 {icon.width} {icon.height}"
-            fill="var(--color-base-content)"
-            opacity="0.85"
-          >
-            <path d={icon.svgPath} />
-          </svg>
-          <text
-            x={box.width / 2}
-            y={box.height / 2 + 10}
-            fill="var(--color-base-content)"
-            text-anchor="middle"
-            dominant-baseline="middle"
-            font-weight={fontSvg.fontWeight}
-            font-style={fontSvg.fontStyle}
-            text-decoration={fontSvg.textDecoration}
-            style="pointer-events: none; user-select: none"
-          >
-            {component.label}
-          </text>
-        {/if}
-      {:else}
-        <text
-          x={textPos.x}
-          y={textPos.y}
-          fill="var(--color-base-content)"
-          text-anchor={textPos.anchor}
-          dominant-baseline={textPos.baseline}
-          font-weight={fontSvg.fontWeight}
-          font-style={fontSvg.fontStyle}
-          text-decoration={fontSvg.textDecoration}
-          style="pointer-events: none; user-select: none"
-        >
-          {component.label}
-        </text>
-      {/if}
-    </g>
+    <DiagramNodeBody
+      label={component.label}
+      width={box.width}
+      height={box.height}
+      textAlign={box.textAlign}
+      icon={resolveIcon(component.icon)}
+      color={component.color}
+      border={component.border}
+      font={component.font}
+      selected={selected.has(index)}
+    />
+  </g>
 </a>
   {/if}
 {/each}
@@ -282,7 +158,7 @@ let visibleConnections = $derived(
 >
     {#each annotationLines(ann.text) as line, li (li)}
       <tspan x={ann.x} dy={li === 0 ? 0 : ANNOTATION_LINE_HEIGHT * annScale}>
-        {line || '\u00a0'}
+        {line || "\u00a0"}
       </tspan>
     {/each}
   </text>

@@ -318,6 +318,107 @@ export function boxCenter(box: Box): { x: number; y: number } {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+// Icon placement inside a node, in node-local coordinates. `size` is the
+// rendered width *and* height (the glyph's own aspect ratio is preserved by
+// the nested <svg>'s viewBox).
+export interface NodeIconPlacement {
+  x: number;
+  y: number;
+  size: number;
+}
+
+export interface NodeTextPlacement {
+  x: number;
+  y: number;
+  anchor: string;
+  baseline: string;
+}
+
+/** Where a node's icon and label go, in node-local coordinates. */
+export interface NodeLabelLayout {
+  /** `null` when the node has no icon. */
+  icon: NodeIconPlacement | null;
+  text: NodeTextPlacement;
+}
+
+// Insets/sizes of the icon+label block, in world units. The top-aligned
+// variants sit in a row along the node's top edge; "center" stacks the icon
+// above the label in the middle of the box.
+const ICON_INSET = 8;
+const ICON_SIZE_TOP = 14;
+const ICON_SIZE_CENTER = 18;
+const ICON_LABEL_GAP = 4;
+const CENTER_ICON_LIFT = 20;
+const CENTER_LABEL_DROP = 10;
+// Rough average advance of one label glyph, used to estimate the label's
+// rendered width so the top-center icon+label row can be centered as a unit.
+const LABEL_GLYPH_WIDTH = 7.5;
+
+/**
+ * Computes where a node's icon and label are drawn for a given text
+ * alignment. Pure so the interactive canvas and the static/embed renderers
+ * can't drift apart, and so the placement rules are unit-testable without a
+ * DOM.
+ *
+ * `label` is only needed for the "top-center" alignment, which centers the
+ * icon *and* the estimated label width as one row; every other placement
+ * depends only on the box size.
+ */
+export function nodeLabelLayout(
+  align: TextAlign,
+  label: string,
+  width: number,
+  height: number,
+  hasIcon: boolean,
+): NodeLabelLayout {
+  if (!hasIcon) {
+    return { icon: null, text: textPosition(align, width, height) };
+  }
+
+  switch (align) {
+    case "top-left":
+      return {
+        icon: { x: ICON_INSET, y: ICON_INSET, size: ICON_SIZE_TOP },
+        text: {
+          x: ICON_INSET + ICON_SIZE_TOP + ICON_LABEL_GAP,
+          y: TEXT_ALIGN_PADDING,
+          anchor: "start",
+          baseline: "hanging",
+        },
+      };
+    case "top-center": {
+      const estimatedWidth = Math.min(
+        width - 2 * ICON_INSET,
+        label.length * LABEL_GLYPH_WIDTH + ICON_SIZE_TOP + ICON_LABEL_GAP,
+      );
+      const startX = Math.max(ICON_INSET, (width - estimatedWidth) / 2);
+      return {
+        icon: { x: startX, y: ICON_INSET, size: ICON_SIZE_TOP },
+        text: {
+          x: startX + ICON_SIZE_TOP + ICON_LABEL_GAP,
+          y: TEXT_ALIGN_PADDING,
+          anchor: "start",
+          baseline: "hanging",
+        },
+      };
+    }
+    case "center":
+      return {
+        icon: {
+          x: width / 2 - ICON_SIZE_CENTER / 2,
+          y: height / 2 - CENTER_ICON_LIFT,
+          size: ICON_SIZE_CENTER,
+        },
+        text: {
+          x: width / 2,
+          y: height / 2 + CENTER_LABEL_DROP,
+          anchor: "middle",
+          baseline: "middle",
+        },
+      };
+  }
+}
+
 // Returns the midpoint of the side of `box` facing `towards`, for the
 // given orientation: the box's left/right-centre if horizontal, or its
 // top/bottom-centre if vertical. Both endpoints of a connection are always

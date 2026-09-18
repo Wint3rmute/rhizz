@@ -20,6 +20,7 @@ import {
   elbowPath,
   findConnectTarget,
   findReparentTarget,
+  nodeLabelLayout,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
@@ -177,6 +178,57 @@ describe("textPosition", () => {
       y: TEXT_ALIGN_PADDING,
       anchor: "start",
       baseline: "hanging",
+    });
+  });
+});
+
+describe("nodeLabelLayout", () => {
+  it("falls back to textPosition when the node has no icon", () => {
+    for (const align of ["center", "top-center", "top-left"] as const) {
+      expect(nodeLabelLayout(align, "imu", 100, 60, false)).toEqual({
+        icon: null,
+        text: textPosition(align, 100, 60),
+      });
+    }
+  });
+
+  it("lays the icon and label out as a top-left row", () => {
+    expect(nodeLabelLayout("top-left", "imu", 100, 60, true)).toEqual({
+      icon: { x: 8, y: 8, size: 14 },
+      text: {
+        x: 26,
+        y: TEXT_ALIGN_PADDING,
+        anchor: "start",
+        baseline: "hanging",
+      },
+    });
+  });
+
+  it("centers the icon+label row as one unit for top-center", () => {
+    // estimatedWidth = min(100 - 16, 3 * 7.5 + 18) = 40.5
+    // startX = max(8, (100 - 40.5) / 2) = 29.75
+    const layout = nodeLabelLayout("top-center", "imu", 100, 60, true);
+    expect(layout.icon).toEqual({ x: 29.75, y: 8, size: 14 });
+    expect(layout.text).toEqual({
+      x: 47.75,
+      y: TEXT_ALIGN_PADDING,
+      anchor: "start",
+      baseline: "hanging",
+    });
+  });
+
+  it("clamps a long top-center label to the node's left inset", () => {
+    // A label wider than the node pins startX to the inset instead of
+    // going negative.
+    const layout = nodeLabelLayout("top-center", "a".repeat(40), 100, 60, true);
+    expect(layout.icon?.x).toBe(8);
+    expect(layout.text.x).toBe(26);
+  });
+
+  it("stacks the icon above the label in the middle of the box", () => {
+    expect(nodeLabelLayout("center", "imu", 100, 60, true)).toEqual({
+      icon: { x: 41, y: 10, size: 18 },
+      text: { x: 50, y: 40, anchor: "middle", baseline: "middle" },
     });
   });
 });
