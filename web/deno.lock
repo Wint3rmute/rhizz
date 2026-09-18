@@ -6,7 +6,7 @@
     "npm:@playwright/test@1.61.1": "1.61.1",
     "npm:@storybook/addon-docs@^10.5.5": "10.5.10_@types+react@19.2.18_storybook@10.5.10_@types+node@24.13.3_vite@7.3.6",
     "npm:@storybook/addon-themes@10.5.5": "10.5.5_storybook@10.5.10",
-    "npm:@storybook/addon-vitest@^10.5.5": "10.5.10_@vitest+browser@3.2.7_@vitest+browser-playwright@5.0.0__playwright@1.61.1__vitest@3.2.7__vite@7.3.6_storybook@10.5.10_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.61.1_playwright@1.61.1_vite@7.3.6",
+    "npm:@storybook/addon-vitest@^10.5.5": "10.5.10_@vitest+browser@3.2.7_@vitest+browser-playwright@5.0.0__playwright@1.61.1__vitest@3.2.7__vite@7.3.6_storybook@10.5.10_vitest@3.2.7_playwright@1.61.1_vite@7.3.6",
     "npm:@storybook/svelte@^10.5.5": "10.5.10_storybook@10.5.10_svelte@5.56.10_@types+react@19.2.18_react@19.2.8",
     "npm:@storybook/sveltekit@^10.5.5": "10.5.10_storybook@10.5.10_svelte@5.56.10_vite@7.3.6_@sveltejs+vite-plugin-svelte@6.2.4_@types+node@24.13.3_@types+react@19.2.18_react@19.2.8",
     "npm:@sveltejs/adapter-auto@^7.0.1": "7.0.1_@sveltejs+kit@2.70.3_@sveltejs+vite-plugin-svelte@6.2.4_@types+node@24.13.3_svelte@5.56.10_typescript@6.0.3_vite@7.3.6",
@@ -20,6 +20,8 @@
     "npm:@vitest/browser-playwright@5": "5.0.0_playwright@1.61.1_vitest@5.0.0_@types+node@24.13.3_@vitest+coverage-v8@5.0.0_@vitest+ui@5.0.0_vite@7.3.6",
     "npm:@vitest/browser@5": "5.0.0_vitest@5.0.0_@types+node@24.13.3_@vitest+browser-playwright@5.0.0_@vitest+coverage-v8@5.0.0_playwright@1.61.1_vite@7.3.6",
     "npm:@vitest/coverage-v8@5": "5.0.0_@vitest+browser@5.0.0_vitest@5.0.0_@types+node@24.13.3_@vitest+browser-playwright@5.0.0_@vitest+ui@5.0.0_vite@7.3.6",
+    "npm:@zag-js/svelte@^1.44.0": "1.44.0_svelte@5.56.10",
+    "npm:@zag-js/tour@^1.44.0": "1.44.0",
     "npm:chromatic@^18.1.0": "18.5.0",
     "npm:d3-force@3": "3.0.0",
     "npm:daisyui@^5.7.7": "5.7.21",
@@ -298,6 +300,22 @@
         "@eslint/core",
         "levn"
       ]
+    },
+    "@floating-ui/core@1.8.0": {
+      "integrity": "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==",
+      "dependencies": [
+        "@floating-ui/utils"
+      ]
+    },
+    "@floating-ui/dom@1.8.0": {
+      "integrity": "sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg==",
+      "dependencies": [
+        "@floating-ui/core",
+        "@floating-ui/utils"
+      ]
+    },
+    "@floating-ui/utils@0.2.12": {
+      "integrity": "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="
     },
     "@fortawesome/fontawesome-common-types@7.3.1": {
       "integrity": "sha512-k0C0sdHmZtAo6dRDtd1Z/qcpyHbL0CKsjV8seMY/21xGhY5Wsv0XRmiI/xEEH4y2c9b1+jvgNs/3EqhV27yUEA=="
@@ -755,7 +773,7 @@
         "ts-dedent"
       ]
     },
-    "@storybook/addon-vitest@10.5.10_@vitest+browser@3.2.7_@vitest+browser-playwright@5.0.0__playwright@1.61.1__vitest@3.2.7__vite@7.3.6_storybook@10.5.10_vitest@3.2.7__@types+node@24.13.3__@vitest+browser@3.2.7__playwright@1.61.1_playwright@1.61.1_vite@7.3.6": {
+    "@storybook/addon-vitest@10.5.10_@vitest+browser@3.2.7_@vitest+browser-playwright@5.0.0__playwright@1.61.1__vitest@3.2.7__vite@7.3.6_storybook@10.5.10_vitest@3.2.7_playwright@1.61.1_vite@7.3.6": {
       "integrity": "sha512-JNQ9DSkLfxC8qqytBCej91zBExIZ7z97B410U2zgfQPki4HkI9Ffz97a15f5yhVZ79ppIrZ/ssI+WcyWn0ykXQ==",
       "dependencies": [
         "@storybook/global",
@@ -1434,6 +1452,83 @@
     },
     "@webcontainer/env@1.1.1": {
       "integrity": "sha512-6aN99yL695Hi9SuIk1oC88l9o0gmxL1nGWWQ/kNy81HigJ0FoaoTXpytCj6ItzgyCEwA9kF1wixsTuv5cjsgng=="
+    },
+    "@zag-js/anatomy@1.44.0": {
+      "integrity": "sha512-gVN02k7cUqEDlEDDv3CcStMIqDQ32e7QCH8FVBwwXqbSH8D5KMuqPrmyfdE8irVZuPfY4PtKuZsNvJLYvXDpgA=="
+    },
+    "@zag-js/core@1.44.0": {
+      "integrity": "sha512-tqDBJeDpDuLfjodk6NetSDZLMy7+r799RcC5oDtVivowfSxfPBSsfh4UxYT/+zXv9RZ0mYG3TzO4yFROPmniIA==",
+      "dependencies": [
+        "@zag-js/dom-query",
+        "@zag-js/utils"
+      ]
+    },
+    "@zag-js/dismissable@1.44.0": {
+      "integrity": "sha512-S4xfFrcy38JQXmgiFlkyP/W+iC/crTwOqHT1d8AcIxaTxDya/dIUb1mTTZVyJRo5DA7C4Xp3oPqFxEJ2jSENFQ==",
+      "dependencies": [
+        "@zag-js/dom-query",
+        "@zag-js/interact-outside",
+        "@zag-js/utils"
+      ]
+    },
+    "@zag-js/dom-query@1.44.0": {
+      "integrity": "sha512-BKdiKNjd9iTtaQjjU07YymGkgKVSO7vXu8ukZPyt+F8tOesAv9xW5wCn3fuEI6zNthzOpHD9ejj48YW0mljnpQ==",
+      "dependencies": [
+        "@zag-js/types"
+      ]
+    },
+    "@zag-js/focus-trap@1.44.0": {
+      "integrity": "sha512-L3HMgBLcVZl4+++ivXt3nVTu+9Me9rZO0IcKWb3g5dLPAza8G85rT0VFqCq9znXU/cHc5iSZTDHssFPpYBcn3w==",
+      "dependencies": [
+        "@zag-js/dom-query"
+      ]
+    },
+    "@zag-js/interact-outside@1.44.0": {
+      "integrity": "sha512-yFX3eHamp82kax65xIYLemXNH8kD9MvXm7lHttnwlp/XZoAgDTR2l+iLJYU6pLZsuSM9GsrnWQrfHaHWBhyNWw==",
+      "dependencies": [
+        "@zag-js/dom-query",
+        "@zag-js/utils"
+      ]
+    },
+    "@zag-js/popper@1.44.0": {
+      "integrity": "sha512-uSYqdkGlDC/rCQqYecHAfjhASQjziAR2uiFBjceUK9eG8bjua4Ev6vcaFEjrD4EcOKMMosve5mjWfHcHh5lL6A==",
+      "dependencies": [
+        "@floating-ui/dom",
+        "@zag-js/dom-query",
+        "@zag-js/utils"
+      ]
+    },
+    "@zag-js/svelte@1.44.0_svelte@5.56.10": {
+      "integrity": "sha512-nKnRIdAB0bZ9ybfIZWx9ClcFpzHJcJyGHi8kcxXC3B2yX0Yixo6byrZKCRQxMkvVf87tCzDRtkYhd1Pv81EV9A==",
+      "dependencies": [
+        "@zag-js/core",
+        "@zag-js/types",
+        "@zag-js/utils",
+        "svelte"
+      ]
+    },
+    "@zag-js/tour@1.44.0": {
+      "integrity": "sha512-7Yceij8JBJf7QYfW8Qi44Ja7nic3vi8dpQ2mIB1m+hcO5CRQAxKoKRDtrvnlNTZbXeMSbcl4/EH8pDAzSSiNVQ==",
+      "dependencies": [
+        "@zag-js/anatomy",
+        "@zag-js/core",
+        "@zag-js/dismissable",
+        "@zag-js/dom-query",
+        "@zag-js/focus-trap",
+        "@zag-js/interact-outside",
+        "@zag-js/popper",
+        "@zag-js/types",
+        "@zag-js/utils"
+      ]
+    },
+    "@zag-js/types@1.44.0": {
+      "integrity": "sha512-hVi+EekA3V2EDyJxhkSg1Znmk8Qhk3JRWH8atkwTvnGckpCXjQQ9YpKGsP6KSzD88ci7PgH/mYj7fU62E+GYqw==",
+      "dependencies": [
+        "csstype"
+      ]
+    },
+    "@zag-js/utils@1.44.0": {
+      "integrity": "sha512-XO4UoPSRBE/CQ781eSqYELOzsc8Bch33340L6/iVEP+5rW8SL5yCyKewu9w0t0bG1Y+EETLlmvswDjI252t1Vw=="
     },
     "acorn-jsx@5.3.2_acorn@8.18.0": {
       "integrity": "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==",
@@ -2837,6 +2932,8 @@
         "npm:@vitest/browser-playwright@5",
         "npm:@vitest/browser@5",
         "npm:@vitest/coverage-v8@5",
+        "npm:@zag-js/svelte@^1.44.0",
+        "npm:@zag-js/tour@^1.44.0",
         "npm:chromatic@^18.1.0",
         "npm:d3-force@3",
         "npm:daisyui@^5.7.7",
