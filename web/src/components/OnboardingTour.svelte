@@ -2,7 +2,7 @@
 import * as tour from "@zag-js/tour";
 import { normalizeProps, useMachine } from "@zag-js/svelte";
 import { goto } from "$app/navigation";
-import { onMount, type Snippet, untrack } from "svelte";
+import { untrack } from "svelte";
 import { tourSelector } from "../tour/tourTargets";
 import type { OnboardingStep } from "../tour/steps";
 
@@ -12,27 +12,14 @@ interface Props {
   steps: OnboardingStep[];
   /** Increment to (re)start the tour from the first step. */
   startSignal?: number;
-  /**
-   * localStorage key; when set, the tour auto-starts once (on mount) until
-   * it is completed, dismissed or skipped — the classic onboarding pattern.
-   */
-  autoStartKey?: string | undefined;
-  children?: Snippet;
 }
 
-let {
-  id = "onboarding",
-  steps,
-  startSignal = 0,
-  autoStartKey = undefined,
-  children,
-}: Props = $props();
+let { id = "onboarding", steps, startSignal = 0 }: Props = $props();
 
 function toZagStep(step: OnboardingStep, index: number): tour.StepDetails {
   const last = index === steps.length - 1;
   const targetKey = step.target;
-  const targetId = step.targetId;
-  const hasTarget = targetKey !== undefined || targetId !== undefined;
+  const hasTarget = targetKey !== undefined;
   return {
     id: step.id,
     title: step.title,
@@ -41,8 +28,6 @@ function toZagStep(step: OnboardingStep, index: number): tour.StepDetails {
     target: targetKey !== undefined
       ? () =>
         document.querySelector<HTMLElement>(tourSelector(targetKey)) ?? null
-      : targetId !== undefined
-      ? () => document.getElementById(targetId) ?? null
       : undefined,
     placement: step.placement ?? (hasTarget ? "bottom" : "center"),
     backdrop: true,
@@ -75,37 +60,8 @@ const service = useMachine(tour.machine, () => ({
     const href = steps.find((step) => step.id === details.stepId)?.href;
     if (href && window.location.pathname !== href) void goto(`${href}`);
   },
-  onStatusChange(details: tour.StatusChangeDetails) {
-    // Remember that the user finished (or bailed out of) the tour so the
-    // auto-start below only ever fires once per browser.
-    if (
-      autoStartKey &&
-      (details.status === "completed" ||
-        details.status === "dismissed" ||
-        details.status === "skipped")
-    ) {
-      try {
-        localStorage.setItem(autoStartKey, "1");
-      } catch {
-        // Private browsing etc. — the tour just shows again next visit.
-      }
-    }
-  },
 }));
 const api = $derived(tour.connect(service, normalizeProps));
-
-onMount(() => {
-  if (!autoStartKey || isSeen(autoStartKey)) return;
-  api.start();
-});
-
-function isSeen(key: string): boolean {
-  try {
-    return localStorage.getItem(key) !== null;
-  } catch {
-    return false;
-  }
-}
 
 $effect(() => {
   const signal = startSignal;
@@ -114,8 +70,6 @@ $effect(() => {
   if (signal > 0) untrack(() => api.start());
 });
 </script>
-
-{@render children?.()}
 
 {#if api.open}
   <!-- Fixed overlay root: one stacking context above all page content.
