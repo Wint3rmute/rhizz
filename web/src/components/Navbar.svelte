@@ -182,14 +182,6 @@ async function startTourFlow(): Promise<void> {
             {/each}
           </select>
         </div>
-        <button
-          onclick={toggleTheme}
-          class="btn btn-ghost btn-sm"
-          title="Toggle light/dark theme (pins the choice; Auto follows the browser preference)"
-          type="button"
-        >
-          {getTheme() === "dark" ? "🌙" : "☀️"}
-        </button>
         {#if tourIcon}
           <button
             onclick={() => void startTourFlow()}
@@ -207,6 +199,14 @@ async function startTourFlow(): Promise<void> {
             </svg>
           </button>
         {/if}
+        <button
+          onclick={toggleTheme}
+          class="btn btn-ghost btn-sm"
+          title="Toggle light/dark theme (pins the choice; Auto follows the browser preference)"
+          type="button"
+        >
+          {getTheme() === "dark" ? "🌙" : "☀️"}
+        </button>
       </div>
 
       <!-- Mobile hamburger button -->
