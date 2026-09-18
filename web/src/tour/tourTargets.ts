@@ -4,6 +4,10 @@
 // `tourSelector`) instead of bare HTML ids: ids are global, collide when a
 // component renders twice (main diagram + embedded view) and break silently
 // on rename — a key of this object is compiler-checked at every use site.
+//
+// Anchor rule: spotlight small chrome (bars, headers, controls), never
+// viewport-filling panels — no outside card placement fits those, so the
+// card escapes the viewport and the step goes dead.
 export const TOUR_TARGETS = {
   /** Top navigation bar (links + project controls). */
   navbar: "navbar",
@@ -15,11 +19,11 @@ export const TOUR_TARGETS = {
   diagramToolbar: "diagrams-toolbar",
   /** Diagrams sidebar (component selection + node inspector). */
   diagramSidebar: "diagrams-sidebar",
-  /** Inventory component list. */
+  /** Inventory filter tabs (above the list). */
   inventory: "inventory-list",
-  /** Explore documentation viewer. */
+  /** Explore diagram breadcrumb. */
   explore: "explore-docs",
-  /** Editor code pane. */
+  /** Editor pane header (shows the open file). */
   editor: "editor-pane",
 } as const;
 

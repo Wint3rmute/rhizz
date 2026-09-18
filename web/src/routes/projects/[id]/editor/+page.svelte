@@ -261,9 +261,11 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
       {/if}
       <div
         class="w-full bg-base-200 p-6 rounded shadow flex flex-col flex-1 text-base-content"
-        data-tour={TOUR_TARGETS.editor}
       >
-        <h1 class="text-2xl font-semibold mb-4 text-base-content">
+        <h1
+          class="text-2xl font-semibold mb-4 text-base-content"
+          data-tour={TOUR_TARGETS.editor}
+        >
           Editor{#if selectedPath}<span
               class="text-base-content/50 font-mono text-base ml-2"
             >{selectedPath}</span>{/if}

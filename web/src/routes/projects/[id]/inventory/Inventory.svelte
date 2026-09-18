@@ -316,7 +316,12 @@ let editHref = $derived(
       <h2 class="font-semibold text-lg">Inventory Browser</h2>
 
       <!-- Filter tabs -->
-      <div class="flex items-center gap-1" role="tablist" aria-label="Inventory filters">
+      <div
+        class="flex items-center gap-1"
+        role="tablist"
+        aria-label="Inventory filters"
+        data-tour={TOUR_TARGETS.inventory}
+      >
         {#each INVENTORY_TABS as tab (tab)}
           <button
             type="button"
@@ -348,7 +353,6 @@ let editHref = $derived(
       <!-- Definition list -->
       <div
         class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 min-h-0"
-        data-tour={TOUR_TARGETS.inventory}
       >
         {#if filtered.length === 0}
           <div class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center">
