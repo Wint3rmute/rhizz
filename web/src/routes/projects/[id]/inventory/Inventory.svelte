@@ -9,21 +9,26 @@
 // Data is taken from the compiled model's raw payload (`model.to_js()`),
 // which — unlike the typed wasm wrappers — exposes children/ports/parent
 // indices needed to reconstruct definition trees and hierarchy paths.
-import { SvelteMap } from "svelte/reactivity";
 import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
+import { componentKeyIndex } from "../../../../modelKeys";
+import type {
+  RawComponent,
+  RawConnection,
+  RawModelPayload,
+} from "../../../../modelView";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
 import {
   type DiagramLayout,
   emptyDiagramLayout,
+  mapLayoutToBoxes,
   readDiagramLayoutFile,
 } from "../diagrams/persistence";
 import type {
-  DiagramStaticBox,
   DiagramStaticComponent,
   DiagramStaticConnection,
 } from "../diagrams/types";
@@ -36,45 +41,6 @@ import {
   type InventoryDefinition,
   InventoryTab,
 } from "./inventory";
-
-// Raw model payload shape (mirrors RawModelPayload in DocumentStore.svelte.ts;
-// duplicated here so Inventory does not instantiate a mutable DocumentStore).
-interface RawComponent {
-  label: string;
-  source?: string;
-  kind?: string;
-  parent?: { Component?: number; System?: number };
-  description?: string;
-  icon?: string;
-  color?: string;
-  border?: string;
-  font?: string;
-  tags?: string[];
-  level?: number;
-  leaf?: boolean;
-  ports?: number[];
-  children?: number[];
-}
-interface RawPort {
-  label: string;
-  description?: string;
-  protocol?: string;
-  role?: string;
-  external?: boolean;
-  required?: boolean;
-}
-interface RawConnection {
-  label: string;
-  from: { component: number; port?: number | null };
-  to: { component: number; port?: number | null };
-}
-interface RawModel {
-  components?: RawComponent[];
-  definitions?: number[];
-  systems?: { label: string; components?: number[]; connections?: number[] }[];
-  ports?: RawPort[];
-  connections?: RawConnection[];
-}
 
 let {
   projectId = null,
@@ -114,7 +80,9 @@ let output = $derived.by(() => {
   }
 });
 let model = $derived(output ? output.model() : undefined);
-let raw = $derived(model ? (model.to_js() as RawModel) : undefined);
+let raw = $derived(
+  model ? (model.to_js() as RawModelPayload) : undefined,
+);
 let comps = $derived(raw?.components ?? []);
 let rawPorts = $derived(raw?.ports ?? []);
 let rawConnections = $derived(raw?.connections ?? []);
@@ -237,29 +205,11 @@ $effect(() => {
 // ── Preview rendering ───────────────────────────────────────────────────────
 // Map layout component keys to indices via rhizz-core's canonical keys
 // (`Model::component_keys`), index-aligned with `comps`/`model.components()`.
-let componentKeys = $derived(model ? model.component_keys() : []);
+let keyToIndex = $derived(componentKeyIndex(model));
 
-let keyToIndex = $derived.by(() => {
-  const map = new SvelteMap<string, number>();
-  componentKeys.forEach((key, index) => map.set(key, index));
-  return map;
-});
-
-let previewBoxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
-  const next: Record<number, DiagramStaticBox> = {};
-  for (const [key, box] of Object.entries(selectedLayout.checked)) {
-    const index = keyToIndex.get(key);
-    if (index === undefined) continue;
-    next[index] = {
-      x: box.x,
-      y: box.y,
-      width: box.width ?? 100,
-      height: box.height ?? 100,
-      textAlign: box.textAlign ?? "center",
-    };
-  }
-  return next;
-});
+let previewBoxes = $derived(
+  mapLayoutToBoxes(selectedLayout.checked, keyToIndex),
+);
 
 // The definition (or one of its placed instances) that the preview
 // emphasizes, plus its whole subtree.

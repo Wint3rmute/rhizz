@@ -7,10 +7,10 @@
 // encapsulates bidirectional execution (`do()` / `undo()`), covering the
 // primary HCL write *and* the corresponding `views.hcl` layout write.
 //
-// `DocumentStore.svelte.ts` stays a reactive **read** model and is never
-// mutated on the write path — transactions go through the single entry
-// point `applyModelMutation` (Rust-owned `apply_model_op` via WASM) plus a
-// layout mutator, never a second dispatcher.
+// There is no second TypeScript model on the write path — transactions go
+// through the single entry point `applyModelMutation` (Rust-owned
+// `apply_model_op` via WASM) plus a layout mutator, never a second
+// dispatcher.
 //
 // Snapshot-pair is preferred over hand-written inverses: undoing a create
 // must remove exactly what the dispatcher created (container fallback,

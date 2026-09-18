@@ -1,6 +1,6 @@
 <script lang="ts">
-import { SvelteMap } from "svelte/reactivity";
 import { resolveIcon } from "../../iconHelper";
+import { componentKeyIndex } from "../../modelKeys";
 import { getTheme, toggleTheme } from "../../ThemeState.svelte";
 import { getWarningLevel } from "../../WarningLevelState.svelte";
 import {
@@ -15,7 +15,7 @@ import {
 } from "../projects/[id]/diagrams/persistence";
 import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
 import { postExampleHeight } from "./autosize";
-import { copyToClipboard } from "./clipboard";
+import { copyToClipboard } from "../../clipboard";
 import { highlightHcl } from "./hclHighlight";
 import VerdictPanel, {
   type VerdictStatRow,
@@ -195,11 +195,7 @@ let showDiagram = $derived(
   !singleFile && diagramView && isDiagram(selectedFile),
 );
 
-let keyToIndex = $derived.by(() => {
-  const map = new SvelteMap<string, number>();
-  (model?.component_keys() ?? []).forEach((key, index) => map.set(key, index));
-  return map;
-});
+let keyToIndex = $derived(componentKeyIndex(model));
 let boxes = $derived(
   mapLayoutToBoxes(viewsToLayout(selectedViews).checked, keyToIndex),
 );

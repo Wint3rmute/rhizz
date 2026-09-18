@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { TextAlign } from "./geometry";
-import type { ComponentData, PortData } from "../../../../DocumentStore.svelte";
+import type { ComponentData, PortData } from "../../../../modelView";
 import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
 import { COLOR_OPTIONS } from "./visuals";
 

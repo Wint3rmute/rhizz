@@ -1,5 +1,6 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
+import { copyToClipboard } from "../../../../clipboard";
 
 let {
   projectId,
@@ -47,16 +48,12 @@ let iframeSnippet = $derived.by(() => {
   return `<iframe src="${fullEmbedUrl}" width="100%" height="500" style="border: 1px solid #ccc; border-radius: 8px;" allowfullscreen></iframe>`;
 });
 
-async function copyToClipboard(text: string, type: "link" | "iframe") {
-  try {
-    await navigator.clipboard.writeText(text);
-    copiedType = type;
-    setTimeout(() => {
-      copiedType = null;
-    }, 2000);
-  } catch (err) {
-    console.error("Failed to copy:", err);
-  }
+async function copy(text: string, type: "link" | "iframe"): Promise<void> {
+  if (!await copyToClipboard(text)) return;
+  copiedType = type;
+  setTimeout(() => {
+    copiedType = null;
+  }, 2000);
 }
 </script>
 
@@ -105,7 +102,7 @@ async function copyToClipboard(text: string, type: "link" | "iframe") {
           <button
             type="button"
             class="btn btn-sm join-item {copiedType === 'link' ? 'btn-success' : 'btn-primary'}"
-            onclick={() => copyToClipboard(fullEmbedUrl, 'link')}
+            onclick={() => void copy(fullEmbedUrl, 'link')}
           >
               {copiedType === 'link' ? '✓ Copied' : 'Copy'}
             </button>
@@ -128,7 +125,7 @@ async function copyToClipboard(text: string, type: "link" | "iframe") {
           <button
             type="button"
             class="btn btn-sm {copiedType === 'iframe' ? 'btn-success' : 'btn-secondary'}"
-            onclick={() => copyToClipboard(iframeSnippet, 'iframe')}
+            onclick={() => void copy(iframeSnippet, 'iframe')}
           >
               {copiedType === 'iframe' ? '✓ Copied Embed Code' : 'Copy <iframe> Code'}
             </button>

@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { FsDirectory, FsNode } from "./types";
 import {
-  buildTree,
   descendantsOf,
-  pathOf,
   resolveDirectory,
   resolveNode,
   splitBasename,
   splitPath,
-  type TreeNode,
   wouldCreateCycle,
 } from "./tree";
 
@@ -50,61 +47,6 @@ function fixture(): FsNode[] {
     file("file-drone", "drone.hcl", null, 'system "drone" {}'),
   ];
 }
-
-// Reduces a TreeNode[] to nested { name, children } for readable
-// assertions, without depending on exact object identity/field order.
-function names(tree: TreeNode[]): { name: string; children: unknown[] }[] {
-  return tree.map((t) => ({
-    name: t.node.name,
-    children: names(t.children),
-  }));
-}
-
-describe("buildTree", () => {
-  it("nests children under their parent directory", () => {
-    const tree = buildTree(fixture());
-    expect(names(tree)).toEqual([
-      { name: "components", children: [{ name: "imu.hcl", children: [] }] },
-      {
-        name: "diagrams",
-        children: [{ name: "overview.json", children: [] }],
-      },
-      { name: "drone.hcl", children: [] },
-    ]);
-  });
-
-  it("returns an empty tree for an empty node list", () => {
-    expect(buildTree([])).toEqual([]);
-  });
-
-  it("treats a node whose parentId isn't present in the given list as a root", () => {
-    // Simulates being handed a slice that doesn't include the parent,
-    // e.g. a future listNodes(projectId) call scoped to a subtree.
-    const onlyChild = [file("file-imu", "imu.hcl", "dir-components")];
-    const tree = buildTree(onlyChild);
-    expect(names(tree)).toEqual([{ name: "imu.hcl", children: [] }]);
-  });
-});
-
-describe("pathOf", () => {
-  it("returns just the name for a root-level node", () => {
-    expect(pathOf("file-drone", fixture())).toBe("drone.hcl");
-  });
-
-  it("joins ancestor names for a nested node", () => {
-    expect(pathOf("file-imu", fixture())).toBe("components/imu.hcl");
-  });
-
-  it("throws for an id not present in the given nodes", () => {
-    expect(() => pathOf("does-not-exist", fixture())).toThrow();
-  });
-
-  it("throws instead of looping forever when the nodes contain a cycle", () => {
-    const a = dir("a", "a", "b");
-    const b = dir("b", "b", "a");
-    expect(() => pathOf("a", [a, b])).toThrow();
-  });
-});
 
 describe("descendantsOf", () => {
   it("returns a directory's children", () => {

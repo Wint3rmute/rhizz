@@ -1,7 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
-import type { ProjectJS } from "rhizz";
 import {
   getSelection,
   getTheme,
@@ -27,28 +26,47 @@ import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
 
-let {
-  project = null,
-  errorCount = null,
-  warningCount = null,
-  isOpen = $bindable(false),
-}: {
-  project?: ProjectJS | null;
-  errorCount?: number | null;
-  warningCount?: number | null;
-  isOpen?: boolean;
-} = $props();
+// `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
+// renders `<Navbar />` with no props and reads everything from the shared
+// ProjectState/WarningLevelState singletons below.
+let { isOpen = $bindable(false) }: { isOpen?: boolean } = $props();
+
+// The project-scoped workspace links, in navbar order. One list drives both
+// the desktop row and the mobile menu, so the two can never drift. `href` is
+// a thunk so `resolve` still sees a literal route id (typed routes).
+const NAV_LINKS = [
+  {
+    label: "Editor",
+    emoji: "📝",
+    href: (id: string) => resolve("/projects/[id]/editor", { id }),
+  },
+  {
+    label: "Diagrams",
+    emoji: "📐",
+    href: (id: string) => resolve("/projects/[id]/diagrams", { id }),
+  },
+  {
+    label: "Explore",
+    emoji: "🧭",
+    href: (id: string) => resolve("/projects/[id]/explore", { id }),
+  },
+  {
+    label: "Inventory",
+    emoji: "📦",
+    href: (id: string) => resolve("/projects/[id]/inventory", { id }),
+  },
+  {
+    label: "System Overview",
+    emoji: "🔍",
+    href: (id: string) => resolve("/projects/[id]/overview", { id }),
+  },
+] as const;
 
 let activeProjectId = $derived(getCurrentProjectId());
 let activeProject = $derived(getCurrentProject());
 let activeScore = $derived(getCurrentScore());
-let stateDiagnostics = $derived(getCurrentDiagnostics());
+let diagnostics = $derived(getCurrentDiagnostics());
 let warningLevel = $derived(getWarningLevel());
-
-let effErrorCount = $derived(errorCount ?? stateDiagnostics?.errors ?? null);
-let effWarningCount = $derived(
-  warningCount ?? stateDiagnostics?.warnings ?? null,
-);
 
 // Plain FontAwesome question mark for the guided-tour button.
 let tourIcon = $derived(resolveIcon("question"));
@@ -89,6 +107,42 @@ async function startTourFlow(): Promise<void> {
 }
 </script>
 
+{#snippet statusBadges(withScoreTooltip: boolean)}
+  {#if activeScore !== null}
+    <div
+  class="badge badge-outline badge-info font-medium text-xs"
+  title={withScoreTooltip
+        ? `Architecture maturity / completion score: ${activeScore.overall_percentage.toFixed(1)}%`
+        : undefined}
+>
+      Score: {activeScore.overall_percentage.toFixed(0)}%
+    </div>
+  {/if}
+  {#if diagnostics !== null}
+    <div
+  class="badge badge-outline {diagnostics.errors > 0
+        ? 'badge-error'
+        : 'badge-success'} text-xs"
+>
+      {diagnostics.errors} errors · {diagnostics.warnings} warnings
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet warningLevelSelect(id: string, labelClass: string)}
+  <label for={id} class={labelClass}>Warning level</label>
+  <select
+  {id}
+  class="select select-sm select-bordered text-xs"
+  value={warningLevel}
+  onchange={(event) => setWarningLevel(event.currentTarget.value)}
+>
+    {#each WARNING_LEVELS as level (level)}
+      <option value={level}>{warningLevelLabel(level)}</option>
+    {/each}
+  </select>
+{/snippet}
+
 <header
   class="bg-base-100 text-base-content border-b border-base-300 w-full shrink-0 z-30"
   data-tour={TOUR_TARGETS.navbar}
@@ -106,36 +160,18 @@ async function startTourFlow(): Promise<void> {
       <!-- Desktop navigation links (positioned next to ← rhizz button) -->
       <div class="hidden md:flex items-center gap-1">
         {#if activeProjectId}
-          <a
-            href={resolve("/projects/[id]/editor", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm"
-          >Editor</a>
-          <a
-            href={resolve("/projects/[id]/diagrams", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm"
-          >Diagrams</a>
-          <a
-            href={resolve("/projects/[id]/explore", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm"
-          >Explore</a>
-          <a
-            href={resolve("/projects/[id]/inventory", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm"
-          >Inventory</a>
-          <a
-            href={resolve("/projects/[id]/overview", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm"
-          >System Overview</a>
+          {#each NAV_LINKS as link (link.label)}
+            <a
+              href={link.href(activeProjectId)}
+              class="btn btn-ghost btn-sm"
+            >{link.label}</a>
+          {/each}
         {/if}
       </div>
 
       {#if activeProject}
         <span class="ml-2 text-xs sm:text-sm text-base-content/70 truncate max-w-[140px] sm:max-w-[200px]">
           {activeProject.name}
-        </span>
-      {:else if project}
-        <span class="ml-2 text-xs sm:text-sm text-base-content/70 truncate max-w-[140px] sm:max-w-[200px]">
-          {project.name}
         </span>
       {/if}
     </div>
@@ -144,43 +180,23 @@ async function startTourFlow(): Promise<void> {
     <div class="ml-auto flex items-center gap-2">
       <!-- Desktop badges and theme toggle -->
       <div class="hidden md:flex items-center gap-2">
-        {#if activeScore !== null}
-          <div
-            class="badge badge-outline badge-info font-medium text-xs"
-            title="Architecture maturity / completion score: {activeScore.overall_percentage.toFixed(1)}%"
-          >
-            Score: {activeScore.overall_percentage.toFixed(0)}%
-          </div>
-        {/if}
-        {#if effErrorCount !== null && effWarningCount !== null}
-          <div
-            class="badge badge-outline {effErrorCount > 0 ? 'badge-error' : 'badge-success'} text-xs"
-          >
-            {effErrorCount} errors · {effWarningCount} warnings
-          </div>
-        {/if}
+        {@render statusBadges(true)}
         <!-- Project-wide warning preset: gates which warnings the compiler
              reports (errors are never gated). Persisted across reloads. The
              visible label only appears from `lg` up — the navbar is already
              tight at `md` — but stays in the accessibility tree at every
              width, and `title` explains the control either way. -->
+        <!-- The project-wide warning preset: gates which warnings the
+             compiler reports (errors are never gated), persisted across
+             reloads. The visible label only appears from `lg` up — the
+             navbar is already tight at `md` — but stays in the
+             accessibility tree at every width, and `title` explains the
+             control either way. -->
         <div
           class="flex items-center gap-1.5 whitespace-nowrap text-xs text-base-content/70"
           title="How much detail this project is specified at — gates which warnings are reported. Errors are always reported."
         >
-          <label for="warning-level" class="sr-only lg:not-sr-only">
-            Warning level
-          </label>
-          <select
-            id="warning-level"
-            class="select select-sm select-bordered text-xs"
-            value={warningLevel}
-            onchange={(event) => setWarningLevel(event.currentTarget.value)}
-          >
-            {#each WARNING_LEVELS as level (level)}
-              <option value={level}>{warningLevelLabel(level)}</option>
-            {/each}
-          </select>
+          {@render warningLevelSelect("warning-level", "sr-only lg:not-sr-only")}
         </div>
         {#if tourIcon}
           <button
@@ -229,78 +245,33 @@ async function startTourFlow(): Promise<void> {
     <nav class="md:hidden border-t border-base-300 bg-base-100 p-3 flex flex-col gap-2 shadow-lg">
       {#if activeProjectId}
         <div class="flex flex-col gap-1">
-          <a
-            href={resolve("/projects/[id]/editor", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm justify-start w-full text-left"
-            onclick={closeMenu}
-          >
-            📝 Editor
-          </a>
-          <a
-            href={resolve("/projects/[id]/diagrams", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm justify-start w-full text-left"
-            onclick={closeMenu}
-          >
-            📐 Diagrams
-          </a>
-          <a
-            href={resolve("/projects/[id]/explore", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm justify-start w-full text-left"
-            onclick={closeMenu}
-          >
-            🧭 Explore
-          </a>
-          <a
-            href={resolve("/projects/[id]/inventory", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm justify-start w-full text-left"
-            onclick={closeMenu}
-          >
-            📦 Inventory
-          </a>
-          <a
-            href={resolve("/projects/[id]/overview", { id: activeProjectId })}
-            class="btn btn-ghost btn-sm justify-start w-full text-left"
-            onclick={closeMenu}
-          >
-            🔍 System Overview
-          </a>
+          {#each NAV_LINKS as link (link.label)}
+            <a
+              href={link.href(activeProjectId)}
+              class="btn btn-ghost btn-sm justify-start w-full text-left"
+              onclick={closeMenu}
+            >
+              {link.emoji} {link.label}
+            </a>
+          {/each}
         </div>
         <div class="divider my-1"></div>
       {/if}
 
       <!-- Mobile badges -->
       <div class="flex flex-wrap items-center gap-2 py-1">
-        {#if activeScore !== null}
-          <div class="badge badge-outline badge-info font-medium text-xs">
-            Score: {activeScore.overall_percentage.toFixed(0)}%
-          </div>
-        {/if}
-        {#if effErrorCount !== null && effWarningCount !== null}
-          <div
-            class="badge badge-outline {effErrorCount > 0 ? 'badge-error' : 'badge-success'} text-xs"
-          >
-            {effErrorCount} errors · {effWarningCount} warnings
-          </div>
-        {/if}
+        {@render statusBadges(false)}
       </div>
 
       <!-- Mobile warning-level picker: the same project-wide preset as the
            desktop select, which is hidden below the md breakpoint. -->
+      <!-- Mobile-menu copy of the same preset (the desktop one is hidden
+           below the md breakpoint). -->
       <div class="flex items-center justify-between gap-2 pt-1">
-        <label
-          for="warning-level-mobile"
-          class="whitespace-nowrap text-xs text-base-content/70"
-        >Warning level</label>
-        <select
-          id="warning-level-mobile"
-          class="select select-sm select-bordered text-xs"
-          value={warningLevel}
-          onchange={(event) => setWarningLevel(event.currentTarget.value)}
-        >
-          {#each WARNING_LEVELS as level (level)}
-            <option value={level}>{warningLevelLabel(level)}</option>
-          {/each}
-        </select>
+        {@render warningLevelSelect(
+          "warning-level-mobile",
+          "whitespace-nowrap text-xs text-base-content/70",
+        )}
       </div>
 
       <!-- Mobile theme picker: Auto follows the browser preference;
