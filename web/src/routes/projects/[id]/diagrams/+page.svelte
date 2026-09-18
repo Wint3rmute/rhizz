@@ -2846,7 +2846,6 @@ $effect(() => {
   <div class="flex flex-col flex-1 min-w-0">
     <div
       class="relative flex-1 w-full h-full bg-base-300"
-      data-tour={TOUR_TARGETS.diagramCanvas}
       bind:clientWidth={canvas_width}
       bind:clientHeight={canvas_height}
     >

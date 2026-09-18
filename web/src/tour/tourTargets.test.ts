@@ -8,7 +8,7 @@ describe("TOUR_TARGETS", () => {
       const key of [
         "navbar",
         "overview",
-        "diagramCanvas",
+        "diagramToolbar",
         "diagramSidebar",
         "inventory",
         "explore",
@@ -28,8 +28,8 @@ describe("TOUR_TARGETS", () => {
   });
 
   it("builds a data-tour selector for a typed key", () => {
-    expect(tourSelector("diagramCanvas")).toBe(
-      '[data-tour="diagrams-canvas"]',
+    expect(tourSelector("diagramToolbar")).toBe(
+      '[data-tour="diagrams-toolbar"]',
     );
   });
 });

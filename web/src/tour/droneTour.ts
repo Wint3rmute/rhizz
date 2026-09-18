@@ -38,10 +38,10 @@ export function droneTourSteps(projectId: string): OnboardingStep[] {
     },
     {
       id: "drone-diagrams-canvas",
-      title: "Diagrams: views",
+      title: "Diagrams: the core tool",
       description:
-        "The core tool. Each view lays the same model out differently — flight controller, propulsion, video link — drag nodes, route connections, add notes.",
-      target: "diagramCanvas",
+        "Each view lays the same drone out differently — switch views in the sidebar, then drag nodes, route connections and add notes here, driven from this toolbar.",
+      target: "diagramToolbar",
       placement: "top",
       href: page(projectId, "diagrams"),
     },
