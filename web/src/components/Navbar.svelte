@@ -19,6 +19,7 @@ import {
   warningLevelLabel,
 } from "../WarningLevelState.svelte";
 import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
 
@@ -44,6 +45,9 @@ let effErrorCount = $derived(errorCount ?? stateDiagnostics?.errors ?? null);
 let effWarningCount = $derived(
   warningCount ?? stateDiagnostics?.warnings ?? null,
 );
+
+// Plain FontAwesome question mark for the guided-tour button.
+let tourIcon = $derived(resolveIcon("question"));
 
 function toggleMenu() {
   isOpen = !isOpen;
@@ -155,14 +159,21 @@ function closeMenu() {
         >
           {getTheme() === "dark" ? "🌙" : "☀️"}
         </button>
-        {#if activeProjectId}
+        {#if activeProjectId && tourIcon}
           <button
             onclick={requestTourStart}
-            class="btn btn-ghost btn-sm"
+            class="btn btn-ghost btn-sm btn-square"
             title="Guided drone tour through every workspace page"
+            aria-label="Start the guided drone tour"
             type="button"
           >
-            🚁 Tour
+            <svg
+              viewBox={`0 0 ${tourIcon.width} ${tourIcon.height}`}
+              class="w-4 h-4 fill-current"
+              aria-hidden="true"
+            >
+              <path d={tourIcon.svgPath} />
+            </svg>
           </button>
         {/if}
       </div>
@@ -229,8 +240,18 @@ function closeMenu() {
             }}
             class="btn btn-ghost btn-sm justify-start w-full text-left"
             type="button"
+            aria-label="Start the guided drone tour"
           >
-            🚁 Drone tour
+            {#if tourIcon}
+              <svg
+                viewBox={`0 0 ${tourIcon.width} ${tourIcon.height}`}
+                class="w-4 h-4 fill-current"
+                aria-hidden="true"
+              >
+                <path d={tourIcon.svgPath} />
+              </svg>
+            {/if}
+            Tour
           </button>
         </div>
         <div class="divider my-1"></div>
