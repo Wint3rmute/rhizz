@@ -70,8 +70,10 @@ const service = useMachine(tour.machine, () => ({
   onStepChange(details: tour.StepChangeDetails) {
     // Cross-page tours: route to the step's page (no-op when already
     // there). Zag's resolving state waits for the target to mount.
+    // A dynamic already-built path (same shape as Explore's
+    // navigateToDiagram) — resolve() only accepts route patterns.
     const href = steps.find((step) => step.id === details.stepId)?.href;
-    if (href && window.location.pathname !== href) void goto(href);
+    if (href && window.location.pathname !== href) void goto(`${href}`);
   },
   onStatusChange(details: tour.StatusChangeDetails) {
     // Remember that the user finished (or bailed out of) the tour so the

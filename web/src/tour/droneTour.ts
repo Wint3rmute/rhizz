@@ -16,7 +16,7 @@ export function droneTourSteps(projectId: string): OnboardingStep[] {
       id: "drone-welcome",
       title: "Meet the quadcopter drone 🚁",
       description:
-        "This tour walks the drone system through every workspace page. For the full effect, open the bundled drone example first: Projects → New from example → drone.",
+        "This tour walks a system through every workspace page — best experienced on the bundled drone example. With no project open, the tour button opens your first project, or creates the drone when the list is empty.",
       href: page(projectId, "overview"),
     },
     {
