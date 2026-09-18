@@ -7,8 +7,6 @@ export interface OnboardingStep {
   description: string;
   /** Typed tour anchor to spotlight; omit for a centered dialog step. */
   target?: TourTargetKey | undefined;
-  /** Raw element id to spotlight (demo pages); prefer `target`. */
-  targetId?: string | undefined;
   /**
    * Route the app navigates to when this step activates — the machine
    * waits up to 3s for the target to appear, so client-side page
