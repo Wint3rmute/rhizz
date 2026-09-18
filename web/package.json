@@ -25,6 +25,8 @@
     "@sveltejs/adapter-static": "^3.0.10",
     "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4.3.3",
+    "@zag-js/svelte": "^1.44.0",
+    "@zag-js/tour": "^1.44.0",
     "d3-force": "^3.0.0",
     "daisyui": "^5.7.7",
     "marked": "^14.0.0",
