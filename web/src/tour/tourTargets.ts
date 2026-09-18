@@ -9,8 +9,10 @@ export const TOUR_TARGETS = {
   navbar: "navbar",
   /** System Overview stats card. */
   overview: "overview-stats",
-  /** Diagrams canvas (views live here). */
-  diagramCanvas: "diagrams-canvas",
+  /** Diagrams floating toolbar (layout, zoom, add) — small and always
+      in view, unlike the viewport-filling canvas (no outside placement
+      fits that, so the canvas itself is never a spotlight target). */
+  diagramToolbar: "diagrams-toolbar",
   /** Diagrams sidebar (component selection + node inspector). */
   diagramSidebar: "diagrams-sidebar",
   /** Inventory component list. */

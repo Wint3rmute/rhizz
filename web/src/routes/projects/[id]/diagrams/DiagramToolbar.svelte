@@ -5,6 +5,7 @@
 // (bindable where the toolbar itself can change it) and every action is
 // a callback prop, so it can be rendered standalone (e.g. in a Storybook
 // story) without any of +page.svelte's canvas/persistence machinery.
+import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 interface Props {
   /** Whether "Snap to Grid" is toggled on. */
   snapEnabled: boolean;
@@ -44,6 +45,7 @@ let {
 
 <div
   data-testid="diagram-toolbar"
+  data-tour={TOUR_TARGETS.diagramToolbar}
   class="absolute bottom-2 left-1/2 w-max -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
 >
   <div class="join">
