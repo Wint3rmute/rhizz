@@ -1,11 +1,9 @@
 // Pure, synchronous operations on VfsData — the single JSON-serializable
-// snapshot of every project and every node. Shared by every ProjectStore
-// implementation (LocalStorageProjectStore, InMemoryProjectStore, ...) so
-// business rules (validation, cascading deletes, "project last touched"
-// bookkeeping) live in exactly one place instead of being reimplemented
-// per backend. Every function either returns a new VfsData (never
-// mutating its input) or throws; none of them perform I/O — that's the
-// caller's job (see localStorageStore.ts/inMemoryStore.ts).
+// snapshot of every project and every node. These *are* the VFS's business
+// rules (validation, cascading deletes, "project last touched" bookkeeping),
+// written once for every backend. Every function either returns a new VfsData
+// (never mutating its input) or throws; none of them perform I/O — loading
+// and persisting the blob is the backend's job (see vfsStore.ts).
 import {
   type FsDirectory,
   type FsFile,

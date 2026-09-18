@@ -3,12 +3,9 @@
 // for instance) is verified against the same rules instead of hand-rolled
 // tests being written for each one separately.
 import { describe, expect, it } from "vitest";
-import { InMemoryProjectStore } from "./inMemoryStore";
-import {
-  LocalStorageProjectStore,
-  type StorageLike,
-} from "./localStorageStore";
-import { ServerProjectStore } from "./serverStore";
+import { InMemoryProjectStore } from "./vfsStore";
+import { LocalStorageProjectStore, type StorageLike } from "./vfsStore";
+import { ServerProjectStore } from "./vfsStore";
 import type { ProjectStore } from "./store";
 
 export function runProjectStoreContractTests(

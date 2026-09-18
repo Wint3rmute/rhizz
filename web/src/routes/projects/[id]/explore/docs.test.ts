@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
+import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import { DOCS_DIR, readProjectDocs } from "./docs";
 

@@ -1,8 +1,8 @@
-// HTTP-specific behavior of ServerProjectStore: what it sends to the
-// server, how it reacts to failures, and how it treats server responses —
-// the storage-agnostic behavioral suite lives in store.contract.test.ts.
+// HTTP-backend-specific behavior: what it sends to the server, how it reacts
+// to failures, and how it treats server responses — the storage-agnostic
+// behavioral suite lives in store.contract.test.ts.
 import { describe, expect, it } from "vitest";
-import { ServerProjectStore } from "./serverStore";
+import { ServerProjectStore } from "./vfsStore";
 
 interface FakeFetchOptions {
   /** In-memory blob the fake server serves; undefined = empty VFS. */
