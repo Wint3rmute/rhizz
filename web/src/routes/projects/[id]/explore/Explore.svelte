@@ -397,12 +397,12 @@ let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
     <!-- Main canvas: full-width on mobile (< md), flex-1 on desktop (>= md) -->
     <div
       class="flex flex-col flex-1 min-w-0 min-h-0 h-full"
-      data-tour={TOUR_TARGETS.explore}
     >
       {#if selectedDiagramPath}
         <nav
           class="flex items-center justify-between px-4 py-2 text-sm border-b border-base-300 bg-base-100"
           aria-label="Diagram breadcrumb"
+          data-tour={TOUR_TARGETS.explore}
         >
           <ul class="breadcrumbs">
             <li><span class="text-base-content/60">Explore</span></li>
