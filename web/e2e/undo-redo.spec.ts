@@ -11,9 +11,16 @@ async function openDiagram(page, name = "E2E undo") {
   await expect(create).toBeVisible();
   page.on("dialog", (dialog) => void dialog.accept(name));
   await create.click();
-  await expect(page).toHaveURL(/\/projects\/.+\/editor/);
-  const url = page.url().replace("/editor", "/diagrams");
-  await page.goto(url);
+  // Fresh projects auto-open the guided tour, which routes to the
+  // overview — either landing proves creation. Silence the tour before
+  // continuing: its backdrop would blanket the canvas under test.
+  await expect(page).toHaveURL(/\/projects\/.+\/(editor|overview)/);
+  const tourDialog = page.getByRole("alertdialog");
+  await expect(tourDialog).toBeVisible();
+  await tourDialog.getByRole("button", { name: "skip tour" }).click();
+  await expect(tourDialog).toBeHidden();
+  const id = new URL(page.url()).pathname.split("/")[2];
+  await page.goto(`/projects/${id}/diagrams`);
   await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
   await expect(page.getByTestId("diagram-canvas")).toBeVisible();
 }

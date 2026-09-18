@@ -13,7 +13,9 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   // before clicking it (same pattern as smoke.spec.ts).
   page.on("dialog", (dialog) => void dialog.accept("E2E tour"));
   await page.getByRole("button", { name: /Quadcopter Drone/ }).click();
-  await expect(page).toHaveURL(/\/projects\/.+\/editor/);
+  // Creation lands on the editor; the armed first-run tour may already
+  // have routed onward to the overview by the time the poll lands.
+  await expect(page).toHaveURL(/\/projects\/.+\/(editor|overview)/);
 
   // First-run pending start: the welcome dialog opens on its own.
   const dialog = page.getByRole("alertdialog");
