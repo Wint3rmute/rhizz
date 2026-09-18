@@ -16,7 +16,7 @@ import {
   TransactionManager,
 } from "../history/TransactionManager";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
-import { InMemoryProjectStore } from "../vfs/inMemoryStore";
+import { InMemoryProjectStore } from "../vfs/vfsStore";
 
 export type ExampleId = "drone" | "software-house" | "apollo-11";
 

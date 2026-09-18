@@ -11,8 +11,8 @@
 // fetch those directly from `projectStore` themselves, so a page's own
 // edits are never at risk of being shadowed by a stale cache living here.
 import { openProjectFs } from "./vfs/fs";
-import { LocalStorageProjectStore } from "./vfs/localStorageStore";
-import { ServerProjectStore } from "./vfs/serverStore";
+import { LocalStorageProjectStore } from "./vfs/vfsStore";
+import { ServerProjectStore } from "./vfs/vfsStore";
 import type { ProjectStore } from "./vfs/store";
 import type { Project } from "./vfs/types";
 

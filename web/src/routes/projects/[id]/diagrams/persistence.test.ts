@@ -2,7 +2,7 @@ import init from "rhizz";
 import * as nodeFs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { InMemoryProjectStore } from "../../../../vfs/inMemoryStore";
+import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,

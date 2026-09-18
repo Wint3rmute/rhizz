@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { InMemoryProjectStore } from "./inMemoryStore";
+import { InMemoryProjectStore } from "./vfsStore";
 import { openProjectFs, type ProjectFs, VfsError } from "./fs";
 
 let store: InMemoryProjectStore;
