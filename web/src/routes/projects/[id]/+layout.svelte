@@ -4,6 +4,7 @@ import {
   getCurrentProject,
   setCurrentProject,
 } from "../../../ProjectState.svelte";
+import ProjectTour from "../../../tour/ProjectTour.svelte";
 import type { LayoutProps } from "./$types";
 
 let { data, children }: LayoutProps = $props();
@@ -49,4 +50,7 @@ let project = $derived(getCurrentProject());
 </div>
 {:else}
   {@render children()}
+  <!-- Quadcopter-drone guided tour: mounted here (not per-page) so it
+       survives the cross-page navigation its steps perform. -->
+  <ProjectTour projectId={data.projectId} />
 {/if}

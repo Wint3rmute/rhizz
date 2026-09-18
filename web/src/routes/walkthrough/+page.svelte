@@ -1,7 +1,6 @@
 <script lang="ts">
-import OnboardingTour, {
-  type OnboardingStep,
-} from "../../components/OnboardingTour.svelte";
+import OnboardingTour from "../../components/OnboardingTour.svelte";
+import type { OnboardingStep } from "../../tour/steps";
 
 // Demo onboarding: five steps over a mock of the Rhizz workspace —
 // welcome dialog, three spotlighted areas, closing dialog.

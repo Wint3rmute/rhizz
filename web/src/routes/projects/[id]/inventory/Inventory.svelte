@@ -15,6 +15,7 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
+import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
 import {
   type DiagramLayout,
@@ -345,7 +346,10 @@ let editHref = $derived(
       />
 
       <!-- Definition list -->
-      <div class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 min-h-0">
+      <div
+        class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 min-h-0"
+        data-tour={TOUR_TARGETS.inventory}
+      >
         {#if filtered.length === 0}
           <div class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center">
             {#if definitions.length === 0}

@@ -19,6 +19,8 @@ import {
   warningLevelLabel,
 } from "../WarningLevelState.svelte";
 import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+import { TOUR_TARGETS } from "../tour/tourTargets";
+import { requestTourStart } from "../tour/tourRequest.svelte";
 
 let {
   project = null,
@@ -53,7 +55,9 @@ function closeMenu() {
 </script>
 
 <header
-  class="bg-base-100 text-base-content border-b border-base-300 w-full shrink-0 z-30">
+  class="bg-base-100 text-base-content border-b border-base-300 w-full shrink-0 z-30"
+  data-tour={TOUR_TARGETS.navbar}
+>
   <div class="navbar min-h-12 px-2 sm:px-4 flex items-center justify-between">
     <!-- Left section: Brand + Desktop navigation links + Project title -->
     <div class="flex items-center gap-2 min-w-0">
@@ -151,6 +155,16 @@ function closeMenu() {
         >
           {getTheme() === "dark" ? "🌙" : "☀️"}
         </button>
+        {#if activeProjectId}
+          <button
+            onclick={requestTourStart}
+            class="btn btn-ghost btn-sm"
+            title="Guided drone tour through every workspace page"
+            type="button"
+          >
+            🚁 Tour
+          </button>
+        {/if}
       </div>
 
       <!-- Mobile hamburger button -->
@@ -208,6 +222,16 @@ function closeMenu() {
           >
             🔍 System Overview
           </a>
+          <button
+            onclick={() => {
+              closeMenu();
+              requestTourStart();
+            }}
+            class="btn btn-ghost btn-sm justify-start w-full text-left"
+            type="button"
+          >
+            🚁 Drone tour
+          </button>
         </div>
         <div class="divider my-1"></div>
       {/if}
