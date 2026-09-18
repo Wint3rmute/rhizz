@@ -9,5 +9,7 @@ test("landing creates a new project", async ({ page }) => {
   await expect(create).toBeVisible();
   page.on("dialog", (dialog) => void dialog.accept("E2E smoke"));
   await create.click();
-  await expect(page).toHaveURL(/\/projects\/.+\/editor/);
+  // First-run creation opens the guided tour, which routes onward to
+  // the overview — either landing proves the creation flow.
+  await expect(page).toHaveURL(/\/projects\/.+\/(editor|overview)/);
 });

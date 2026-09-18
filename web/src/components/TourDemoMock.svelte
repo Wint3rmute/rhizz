@@ -14,7 +14,8 @@ interface Props {
 let { projectId }: Props = $props();
 </script>
 
-<div class="flex min-h-[560px] flex-col gap-3 bg-base-100 p-4 text-base-content">
+<div
+  class="flex min-h-[560px] flex-col gap-3 bg-base-100 p-4 text-base-content">
   <header
     data-tour={TOUR_TARGETS.navbar}
     class="navbar rounded-box bg-base-200 px-4 shadow"
