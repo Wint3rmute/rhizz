@@ -35,9 +35,9 @@
               # Playwright browsers for the web browser-mode tests
               # (`deno run test --project=storybook`, also covered by
               # `just test`). Nixpkgs' playwright-driver version must match the
-              # `playwright` version resolved under web/ (currently 1.61.1),
+              # `playwright` version resolved under web/ (currently 1.63.0),
               # because Playwright looks up browsers by revision directory
-              # name (chromium-1228).
+              # name (chromium-1243).
               pkgs.playwright-driver.browsers
             ];
 
