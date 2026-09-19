@@ -17,7 +17,7 @@
     "build-storybook": "storybook build --config-dir .storybook --output-dir storybook-static",
     "lint": "svelte-kit sync && eslint . --cache --cache-location .eslintcache",
     "eslint": "eslint . --cache --cache-location .eslintcache",
-    "chromatic": "npx chromatic"
+    "chromatic": "dx chromatic"
   },
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
