@@ -79,3 +79,32 @@ export const ExpandCollapseAll: Story = {
     await expect(canvas.getByText("mcu")).toBeInTheDocument();
   },
 };
+
+// Indent guides (VS Code / Zed style): every expanded parent draws one
+// vertical line below itself, through its children's toggle column — the
+// line sits at depth * 12 + 8px (toggle center) with the 12px level step
+// preserved, so rows keep their exact positions.
+export const IndentGuides: Story = {
+  args: {},
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const guides = () =>
+      Array.from(canvasElement.querySelectorAll("ul.tree-guides")) as [
+        HTMLElement,
+      ];
+
+    // drone (system root) and fc (composite) are expanded with children:
+    // one guide each. imu is a leaf: no guide below it.
+    await expect(canvas.getByText("mcu")).toBeInTheDocument();
+    await expect(guides()).toHaveLength(2);
+    const margins = guides().map((ul) => ul.style.marginLeft);
+    await expect(margins).toContain("8px"); // drone's children (depth 0)
+    await expect(margins).toContain("20px"); // fc's children (depth 1)
+
+    // Collapsing fc removes its guide; expanding restores it.
+    await userEvent.click(canvas.getByRole("button", { name: "Collapse all" }));
+    await expect(guides()).toHaveLength(0);
+    await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
+    await expect(guides()).toHaveLength(2);
+  },
+};
