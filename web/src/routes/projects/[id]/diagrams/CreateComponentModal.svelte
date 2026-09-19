@@ -56,7 +56,16 @@ let definitionDropdownOpen = $state(false);
 let textAlign = $state<TextAlign>("center");
 
 function emptyComponentDetails(): ComponentData {
-  return { label: "", description: "", tags: [], leaf: true, ports: [] };
+  return {
+    label: "",
+    description: "",
+    color: "default",
+    border: "solid",
+    font: "unstyled",
+    tags: [],
+    leaf: true,
+    ports: [],
+  };
 }
 
 let compDetails = $state<ComponentData>(emptyComponentDetails());
