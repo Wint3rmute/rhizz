@@ -11,6 +11,11 @@
 // component knowledge. `leading` receives `(node, collapsed)` — the second
 // argument lets a provider render collapsible-aware chrome (e.g. the folder
 // open/closed icon).
+//
+// Indentation is owned by the nested `<ul>`s, not the rows: each children
+// list carries margin + a left border, so every expanded parent draws one
+// VS Code / Zed style vertical guide through its children's toggle column
+// (toggle center = depth * 12 + 8px), and rows keep their exact positions.
 import { SvelteSet } from "svelte/reactivity";
 import type { Snippet } from "svelte";
 import type { TreeNode } from "./treeTypes";
@@ -78,7 +83,6 @@ function expandAll() {
   <li>
     <div
       class="flex items-center gap-1 group/row rounded hover:bg-base-200 {rowClass}"
-      style="padding-left: {depth * 12}px"
     >
       {#if entry.isExpandable}
         <button
@@ -112,7 +116,10 @@ function expandAll() {
       {/if}
     </div>
     {#if entry.isExpandable && !collapsed && entry.children.length > 0}
-      <ul>
+      <ul
+        class="tree-guides border-l border-base-content/20"
+        style="margin-left: {depth * 12 + 8}px; padding-left: 3px"
+      >
         {#each entry.children as child (child.id)}
           {@render node(child, depth + 1)}
         {/each}

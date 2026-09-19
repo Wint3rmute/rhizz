@@ -4,6 +4,29 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Hierarchy indent guides in the Diagrams component tree
+
+Parent nodes in the Diagrams "Components" tree now draw a VS Code / Zed
+style vertical guide below themselves, through their children's toggle
+column, so nesting is visible at a glance. Implemented in the shared
+`Tree.svelte` shell (which owns indentation chrome), so the file trees get
+the same treatment consistently.
+
+- **Web** (`components/Tree.svelte`): indentation moved from per-row
+  `padding-left` to the nested `<ul>`s — each children list carries
+  `margin-left: depth * 12 + 8px` (toggle center), a `border-l
+  border-base-300` guide, and 3px inner padding, preserving the exact
+  12px-per-level row positions. Collapsed subtrees render no list, so no
+  guide — matching the editors. Guide lists carry a `tree-guides` class
+  as a styling/test hook.
+- **Tests** (`ComponentHierarchyTree.stories.ts`, new `IndentGuides`
+  story): red/green — asserts one guide per expanded parent (2 in the
+  fixture), the 8px/20px toggle-center margins, and that Collapse all
+  removes the guides. 63 files / 636 web tests green (unit + storybook),
+  `just lint`, `just build` green.
+
+---
+
 ## Task — Delete removes the node from the current view only
 
 Pressing `Delete`/`Backspace` (or the inspector's delete button) on the
