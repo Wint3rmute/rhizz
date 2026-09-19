@@ -58,7 +58,7 @@ let project = $derived(getCurrentProject());
 </div>
 {:else}
   {@render children()}
-  <!-- Quadcopter-drone guided tour: mounted here (not per-page) so it
+  <!-- Workspace guided tour: mounted here (not per-page) so it
        survives the cross-page navigation its steps perform. -->
   <ProjectTour projectId={data.projectId} />
 {/if}

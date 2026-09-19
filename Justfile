@@ -26,6 +26,7 @@ lint:
 test: wasm
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
+    {{run}} sh -lc 'cd web && dx playwright test'
 
 # Single instrumented coverage pass, mirroring CI: runs all tests (incl.
 # doctests, hence RUSTC_BOOTSTRAP) under llvm-cov, enforces the 80% line
@@ -43,7 +44,7 @@ wasm:
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
 build: wasm
-    {{run}} sh -lc 'cd web && npx vite build'
+    {{run}} sh -lc 'cd web && dx vite build'
     {{run}} sh -lc 'cd web && dx storybook build'
     {{run}} cargo build --release --all-targets
 

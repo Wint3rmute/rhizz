@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { droneTourSteps } from "./droneTour";
+import { tourSteps } from "./Tour";
 import { TOUR_TARGETS } from "./tourTargets";
 
-describe("droneTourSteps", () => {
-  const steps = droneTourSteps("demo-id");
+describe("tourSteps", () => {
+  const steps = tourSteps("demo-id");
 
   it("has unique step ids", () => {
     const ids = steps.map((step) => step.id);
