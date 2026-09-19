@@ -398,19 +398,11 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
   {#if ondelete}
     <div class="divider my-2"></div>
     <button
-      onclick={() => {
-        if (
-          confirm(
-            `Delete component "${component.label}"? This will remove it from the system model.`,
-          )
-        ) {
-          ondelete();
-        }
-      }}
+      onclick={() => ondelete?.()}
       class="btn btn-xs btn-outline btn-error w-full"
-      title="Delete this component from the system model"
+      title="Remove this component from the current view (keeps it in the system model)"
     >
-      Delete Component
+      Remove from View
     </button>
   {/if}
 </div>

@@ -90,13 +90,6 @@ offset to avoid overlapping.
 
 ---
 
-## (For later) Task <N> — Pressing "delete" on a component should not delete it from the whole model
-
-In the diagrams menu, pressing "delete" while having a compoent selected causes
-this component to be wiped out from the entire system model. This is unintuitive
-and dangerous. Change this behavior, so that using "delete" will only delete the
-system from the **current view**.
-
 ## (For later brainstorming) Task <N> - when adding a new node - place it in the center of the viewport
 
 As in the title. Position of the node is persisted across deletes, so it can

@@ -1079,8 +1079,9 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     }
   }
 
-  // Delete key: delete the selected connection, selected annotation, or the
-  // selected component. Only fires when the canvas is focused (so it never
+  // Delete key: delete the selected connection or annotation, or remove
+  // the selected component from the current view (the model keeps it).
+  // Only fires when the canvas is focused (so it never
   // triggers while typing in the inspector or HCL editor).
   if (canvasFocused && (event.key === "Delete" || event.key === "Backspace")) {
     event.preventDefault();
@@ -1570,19 +1571,16 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
 
 async function handleDeleteSelectedComponent(): Promise<void> {
   if (!selectedKey) return;
-  const keyToDelete = selectedKey;
-  await runModelLayoutTransaction(
-    `delete ${keyToDelete}`,
-    {
-      kind: "delete_component",
-      path: keyToDelete,
-    },
-    () => {
-      delete checked[keyToDelete];
-      delete savedLayout[keyToDelete];
-      clearSelection();
-    },
-  );
+  const keyToRemove = selectedKey;
+  // View-only removal: the model keeps the component, so re-checking its
+  // sidebar row restores the node where it was (savedLayout is preserved,
+  // exactly like unchecking). Recorded on the layout history, so Ctrl+Z
+  // brings the node back.
+  recordUndoPoint();
+  delete checked[keyToRemove];
+  const index = keyToIndex.get(keyToRemove);
+  if (index !== undefined) deselect(index);
+  else clearSelection();
 }
 
 function onPortMouseDown(

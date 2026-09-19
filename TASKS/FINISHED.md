@@ -4,6 +4,46 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Delete removes the node from the current view only
+
+Pressing `Delete`/`Backspace` (or the inspector's delete button) on the
+Diagrams page no longer wipes the component from the whole system model.
+`handleDeleteSelectedComponent` now does a view-only unplace — the same
+operation as unchecking the sidebar checkbox: `recordUndoPoint()` plus
+`delete checked[key]`, keeping `savedLayout` so re-checking restores the
+node where it was. The model (`system.hcl`) is untouched; the
+`delete_component` op stays in `rhizz-core`/dispatcher/harness (contract +
+fuzz tests unchanged). Connection delete is unchanged (still model-level).
+
+- **Web** (`diagrams/+page.svelte`, `NodeInspector.svelte`): handler and
+  `onDiagramKeyDown` comment reworded; the inspector button lost its
+  model-delete confirm and is now "Remove from View" (non-destructive and
+  undoable, like unchecking — no confirm needed). Undo/redo flow through
+  the existing layout history, so Ctrl+Z brings the node back.
+- **Tests** (`web/e2e/delete-from-view.spec.ts`, new): red/green e2e —
+  Delete hides the node, the reusable-definition row survives, the Editor
+  still shows the `instance` block, Ctrl+Z/Y round-trips. Fails on the old
+  code at the instance-block assertion (the bare label still matches the
+  leftover definition, so the test matches `instance "…"` specifically).
+  6/6 Playwright green.
+- `just lint`, `just build` green; `just test` green except the pre-existing
+  storybook-browser launch failure (nix browsers drifted 1228→1243,
+  identical on a clean tree).
+
+Notes for whoever touches this next:
+
+- Node `mousedown` calls `preventDefault`, so clicking a node never focuses
+  the canvas — the Delete shortcut only fires when the canvas already has
+  focus (e.g. via Tab). The e2e focuses the canvas explicitly.
+- No Diagrams-page affordance deletes components from the model anymore;
+  removing one from the model is done by editing HCL in the Editor.
+- E2E runs need `PLAYWRIGHT_BROWSERS_PATH` pointed at a store path with
+  chromium-1228 (the flake currently resolves 1243, which 1.61.1 cannot
+  use); unversioned `dx playwright` floats to the latest registry release
+  (seen: 1.62.1), so validate with the repo-locked binary.
+
+---
+
 ## Task — Annotations undo/redo
 
 View annotations now follow the same layout undo/redo flow as every other
