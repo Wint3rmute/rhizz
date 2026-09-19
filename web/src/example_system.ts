@@ -1,4 +1,4 @@
-import { projectStore } from "./ProjectState.svelte";
+import { projectStore } from "./projects";
 import { openProjectFs } from "./vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,

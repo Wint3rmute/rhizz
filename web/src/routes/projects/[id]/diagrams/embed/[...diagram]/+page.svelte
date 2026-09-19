@@ -1,6 +1,6 @@
 <script lang="ts">
 import { SvelteMap } from "svelte/reactivity";
-import { projectStore } from "../../../../../../ProjectState.svelte";
+import { projectStore } from "../../../../../../projects";
 import { getWarningLevel } from "../../../../../../WarningLevelState.svelte";
 import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";

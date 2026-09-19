@@ -5,7 +5,7 @@ import CompilationDiagnosticsOutline from "../../../../components/CompilationDia
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
-import { projectStore } from "../../../../ProjectState.svelte";
+import { projectStore } from "../../../../projects";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";

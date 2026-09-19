@@ -4,10 +4,8 @@ import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
-import {
-  getCurrentProjectId,
-  projectStore,
-} from "../../../../ProjectState.svelte";
+import { getCurrentProjectId } from "../../../../ProjectState.svelte";
+import { projectStore } from "../../../../projects";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { toastState } from "../../../../ToastState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";

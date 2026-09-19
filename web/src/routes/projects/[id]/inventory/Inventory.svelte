@@ -11,7 +11,7 @@
 // indices needed to reconstruct definition trees and hierarchy paths.
 import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import { projectStore } from "../../../../ProjectState.svelte";
+import { projectStore } from "../../../../projects";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
 import { componentKeyIndex } from "../../../../modelKeys";

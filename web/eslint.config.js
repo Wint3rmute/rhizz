@@ -95,25 +95,26 @@ export default ts.config(
     },
   },
   {
-    // A .ts file that imports a first-party non-`.svelte.ts` Svelte module
-    // (e.g. `./ProjectState.svelte`) gets its exports typed as `any` by
-    // typescript-eslint's `projectService`: ESLint's TS program can't parse
-    // `.svelte`, so those imports resolve to `any`, and the `no-unsafe-*`
-    // rules fire on every use of them. svelte-check (run in `just lint`)
-    // types these through svelte2tsx and is clean. These are therefore
-    // false positives limited to story/test/support imports of our own
-    // Svelte module files; the `no-unsafe-*` rules stay fully enabled for
-    // all pure-`.ts` app code. This override is scoped to exactly the
-    // files that import such modules.
+    // A .ts file whose types flow through a `.svelte` file gets them typed as
+    // `any` by typescript-eslint's `projectService`: ESLint's TS program can't
+    // parse `.svelte`, so both a bare Svelte *module* import (e.g.
+    // `./ThemeState.svelte`) and a story's `args` (typed via
+    // `Meta<typeof SomeComponent>`) resolve to `any`, and the `no-unsafe-*`
+    // rules fire on every use. svelte-check (run in `just lint`) types these
+    // through svelte2tsx and is clean. These are therefore false positives
+    // limited to story/test imports of our own Svelte files; the
+    // `no-unsafe-*` rules stay fully enabled for all pure-`.ts` app code.
+    //
+    // Keep this list as short as possible: anything that only needs
+    // non-reactive plumbing should import it from a plain `.ts` module instead
+    // (see src/projects.ts, split out of ProjectState.svelte for exactly this
+    // reason).
     files: [
-      "**/explore/Explore.stories.ts",
-      "**/inventory/InventoryPage.stories.ts",
-      "**/components/Navbar.stories.ts",
-      "**/vfs/compile.test.ts",
+      // Reads `args.selected` / `args.onToggleChecked`, both typed through
+      // ComponentHierarchyTree.svelte.
       "**/diagrams/ComponentHierarchyTree.stories.ts",
-      "**/diagrams/DiagramPage.stories.ts",
-      "**/diagrams/DiagramGridPage.stories.ts",
-      "src/example_system.ts",
+      // Imports the ProjectState/ThemeState Svelte modules directly.
+      "**/components/Navbar.stories.ts",
     ],
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "off",

@@ -1,11 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
-import init from "rhizz";
-import type { Project } from "../../../../vfs/types";
-import {
-  createProjectWithMainFile,
-  projectStore,
-} from "../../../../ProjectState.svelte";
+import { ensureStoryProject } from "../../../../testing/storyProjects";
 import DiagramPage from "./+page.svelte";
 
 // Deterministic project ids so story args can be built synchronously at
@@ -58,40 +53,25 @@ system "demo" {
 }
 `;
 
-async function ensureBrokenProject(): Promise<Project> {
-  await init();
-  // Recreate from scratch every run: the diagrams page seeds a diagram
-  // file (and possibly the model) on load, so an existing project can't
-  // be trusted to still match the fixture below.
-  const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.id === BROKEN_PROJECT_ID
-  );
-  if (stale !== undefined) {
-    await projectStore.deleteProject(stale.id);
-  }
-  return await createProjectWithMainFile(
-    "Broken diagram story",
-    INVALID_SYSTEM_HCL,
-    BROKEN_PROJECT_ID,
-  );
+// Hermetic: the diagrams page seeds a diagram file (and possibly the model)
+// on load, so an existing project can't be trusted to still match the
+// fixtures below.
+function ensureBrokenProject() {
+  return ensureStoryProject({
+    id: BROKEN_PROJECT_ID,
+    name: "Broken diagram story",
+    hcl: INVALID_SYSTEM_HCL,
+    hermetic: true,
+  });
 }
 
-async function ensureLongErrorProject(): Promise<Project> {
-  await init();
-  // Same hermetic-fixture reasoning as ensureBrokenProject above.
-  const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.id === LONG_ERROR_PROJECT_ID
-  );
-  if (stale !== undefined) {
-    await projectStore.deleteProject(stale.id);
-  }
-  return await createProjectWithMainFile(
-    "Long error diagram story",
-    LONG_ERROR_HCL,
-    LONG_ERROR_PROJECT_ID,
-  );
+function ensureLongErrorProject() {
+  return ensureStoryProject({
+    id: LONG_ERROR_PROJECT_ID,
+    name: "Long error diagram story",
+    hcl: LONG_ERROR_HCL,
+    hermetic: true,
+  });
 }
 
 const meta = {

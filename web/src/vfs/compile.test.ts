@@ -3,7 +3,7 @@ import { InMemoryProjectStore } from "./vfsStore";
 import { openProjectFs, type ProjectFs } from "./fs";
 import { primaryHclPath, readProjectSources } from "./compile";
 import type { Dirent } from "./fs";
-import { createProjectWithFiles, projectStore } from "../ProjectState.svelte";
+import { createProjectWithFiles, projectStore } from "../projects";
 
 let store: InMemoryProjectStore;
 let fs: ProjectFs;

@@ -10,20 +10,11 @@
 // list: pages that need the project's files (editor/diagrams/overview)
 // fetch those directly from `projectStore` themselves, so a page's own
 // edits are never at risk of being shadowed by a stale cache living here.
-import { openProjectFs } from "./vfs/fs";
-import { LocalStorageProjectStore } from "./vfs/vfsStore";
-import { ServerProjectStore } from "./vfs/vfsStore";
-import type { ProjectStore } from "./vfs/store";
+//
+// The store itself and the "create a project and seed its files" helpers are
+// non-reactive and live in ./projects.
+import { projectStore } from "./projects";
 import type { Project } from "./vfs/types";
-
-// Storage backend switch: with VITE_RHIZZ_SERVER_URL set, the whole VFS
-// persists through the rhizz-server HTTP API; without it (the default),
-// everything stays in the browser via localStorage. Build-time env var —
-// e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 deno run build`.
-const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
-export const projectStore: ProjectStore = serverUrl
-  ? new ServerProjectStore(serverUrl)
-  : new LocalStorageProjectStore();
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);
@@ -95,54 +86,5 @@ export function clearCurrentProject(): void {
 // without changing which project is active.
 export async function refreshCurrentProject(): Promise<void> {
   if (currentProjectId !== null) await setCurrentProject(currentProjectId);
-}
-
-// Creates a project and seeds it with a single root-level "main.hcl"
-// file — the interim "one editable file per project" convention until
-// Task 58 adds a real file-tree UI. Kept here rather than duplicated at
-// each call site (the /projects page's "new project" and "new from
-// example" actions).
-export async function createProjectWithMainFile(
-  name: string,
-  content: string,
-  id?: string,
-): Promise<Project> {
-  const project = await projectStore.createProject(name, id);
-  await openProjectFs(projectStore, project.id).writeFile(
-    "main.hcl",
-    content,
-  );
-  return project;
-}
-
-// Populates a project's virtual filesystem with a list of relative files.
-// Automatically creates parent directories as needed. Diagram files (e.g.
-// "diagrams/main.hcl") live at the project root under `diagrams/`.
-export async function populateProjectFiles(
-  fs: ReturnType<typeof openProjectFs>,
-  files: Array<{ path: string; content: string }>,
-): Promise<void> {
-  for (const file of files) {
-    const targetPath = file.path;
-
-    const lastSlash = targetPath.lastIndexOf("/");
-    if (lastSlash !== -1) {
-      const dir = targetPath.slice(0, lastSlash);
-      await fs.mkdir(dir, { recursive: true });
-    }
-    await fs.writeFile(targetPath, file.content);
-  }
-}
-
-// Creates a project and writes all supplied files into its virtual filesystem.
-export async function createProjectWithFiles(
-  name: string,
-  files: Array<{ path: string; content: string }>,
-  id?: string,
-): Promise<Project> {
-  const project = await projectStore.createProject(name, id);
-  const fs = openProjectFs(projectStore, project.id);
-  await populateProjectFiles(fs, files);
-  return project;
 }
 </script>

@@ -3,7 +3,7 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
-import { projectStore } from "../../../../ProjectState.svelte";
+import { projectStore } from "../../../../projects";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";

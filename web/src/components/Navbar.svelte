@@ -8,13 +8,12 @@ import {
   toggleTheme,
 } from "../ThemeState.svelte";
 import {
-  createProjectWithFiles,
   getCurrentDiagnostics,
   getCurrentProject,
   getCurrentProjectId,
   getCurrentScore,
-  projectStore,
 } from "../ProjectState.svelte";
+import { createProjectWithFiles, projectStore } from "../projects";
 import {
   getWarningLevel,
   setWarningLevel,

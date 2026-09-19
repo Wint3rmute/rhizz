@@ -1,10 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, waitFor, within } from "storybook/test";
-import type { Project } from "../../../../vfs/types";
-import {
-  createProjectWithFiles,
-  projectStore,
-} from "../../../../ProjectState.svelte";
+import { ensureStoryProject } from "../../../../testing/storyProjects";
 import DiagramPage from "./+page.svelte";
 
 // Deterministic project id so story args can be built synchronously at
@@ -95,24 +91,20 @@ const GRID_VIEWS_HCL = `view "main" {
 }
 `;
 
-async function ensureGridProject(): Promise<Project> {
-  // Recreate from scratch every run: the diagram page mutates its own
-  // diagram file (and stale localStorage from earlier test runs can linger
-  // in the shared chromium profile), so an existing project can't be
-  // trusted to still match the fixtures below.
-  const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) => candidate.id === GRID_PROJECT_ID);
-  if (stale !== undefined) {
-    await projectStore.deleteProject(stale.id);
-  }
-  return createProjectWithFiles(
-    "Graduated grid story",
-    [
+// Hermetic: the diagram page mutates its own diagram file (and stale
+// localStorage from earlier test runs can linger in the shared chromium
+// profile), so an existing project can't be trusted to still match the
+// fixtures below.
+function ensureGridProject() {
+  return ensureStoryProject({
+    id: GRID_PROJECT_ID,
+    name: "Graduated grid story",
+    files: [
       { path: "system.hcl", content: GRID_SYSTEM_HCL },
       { path: "diagrams/main.hcl", content: GRID_VIEWS_HCL },
     ],
-    GRID_PROJECT_ID,
-  );
+    hermetic: true,
+  });
 }
 
 const meta = {

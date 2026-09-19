@@ -11,10 +11,10 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
 import {
-  projectStore,
   setCurrentDiagnostics,
   setCurrentScore,
 } from "../../../../ProjectState.svelte";
+import { projectStore } from "../../../../projects";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import {
   primaryHclPath,

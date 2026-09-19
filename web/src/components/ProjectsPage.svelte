@@ -6,7 +6,7 @@ import {
   createProjectWithFiles,
   createProjectWithMainFile,
   projectStore,
-} from "../ProjectState.svelte";
+} from "../projects";
 import { EMPTY_PROJECT_HCL } from "../emptyProject";
 import { seedExampleProjectDiagrams } from "../example_system";
 import { pendTourStart } from "../tour/tourRequest.svelte";

@@ -1,18 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
-import init from "rhizz";
-import type { Project } from "../../../../vfs/types";
+import type { DiagramLayout } from "../diagrams/persistence";
 import {
-  createProjectWithFiles,
-  projectStore,
-} from "../../../../ProjectState.svelte";
-import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
-import { openProjectFs } from "../../../../vfs/fs";
-import {
-  DIAGRAM_LAYOUT_DIR,
-  type DiagramLayout,
-  writeDiagramLayoutFile,
-} from "../diagrams/persistence";
+  ensureExampleProject,
+  ensureStoryProject,
+} from "../../../../testing/storyProjects";
 import Inventory from "./Inventory.svelte";
 
 // Deterministic project ids so story args can be built synchronously at
@@ -115,43 +107,31 @@ const DEFINITION_DIAGRAMS: Record<string, DiagramLayout> = {
   },
 };
 
-async function ensureInventoryProject(): Promise<Project> {
-  await init();
-  const existing = await projectStore.listProjects();
-  const project = existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
-    await createProjectWithFiles(
-      "Inventory story",
-      [{ path: "main.hcl", content: INVENTORY_HCL }],
-      SEEDED_PROJECT_ID,
-    );
-  const fs = openProjectFs(projectStore, project.id);
-  for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
-    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);
-  }
-  return project;
+function ensureInventoryProject() {
+  return ensureStoryProject({
+    id: SEEDED_PROJECT_ID,
+    name: "Inventory story",
+    hcl: INVENTORY_HCL,
+    diagrams: DEFINITION_DIAGRAMS,
+  });
 }
 
 // An empty project: no definitions at all.
-async function ensureEmptyProject(): Promise<Project> {
-  const existing = await projectStore.listProjects();
-  return existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
-    await createProjectWithFiles(
-      "Inventory empty story",
-      [{ path: "main.hcl", content: 'project {\n  name    = "empty"\n}\n' }],
-      EMPTY_PROJECT_ID,
-    );
+function ensureEmptyProject() {
+  return ensureStoryProject({
+    id: EMPTY_PROJECT_ID,
+    name: "Inventory empty story",
+    hcl: 'project {\n  name    = "empty"\n}\n',
+  });
 }
 
-async function ensureApolloProject(): Promise<Project | undefined> {
-  await init();
-  const example = get_example_projects().find((e) => e.id === "apollo-11");
-  const existing = await projectStore.listProjects();
-  const existingProject = existing.find((p) => p.id === APOLLO_PROJECT_ID);
-  if (existingProject || !example) return existingProject;
-  return await createProjectWithFiles(
-    "Inventory apollo story",
-    example.files,
+// Ensure-only (no reseed): this story just needs Apollo's definitions to
+// browse, and re-writing its files on every run would slow the suite down.
+function ensureApolloProject() {
+  return ensureExampleProject(
     APOLLO_PROJECT_ID,
+    "Inventory apollo story",
+    "apollo-11",
   );
 }
 

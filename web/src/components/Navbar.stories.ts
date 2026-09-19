@@ -2,12 +2,11 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
 import {
   clearCurrentProject,
-  createProjectWithMainFile,
-  projectStore,
   setCurrentDiagnostics,
   setCurrentProject,
   setCurrentScore,
 } from "../ProjectState.svelte";
+import { ensureStoryProject } from "../testing/storyProjects";
 import { getSelection, setSelection } from "../ThemeState.svelte";
 import { getWarningLevel, setWarningLevel } from "../WarningLevelState.svelte";
 import type { ThemeSelection } from "../theme";
@@ -25,14 +24,11 @@ const NAVBAR_PROJECT_ID = "story-navbar";
 // rather than injecting fixtures through props: seed the project, make it the
 // active one, and publish the score/diagnostics the badges render.
 async function ensureNavbarProject(): Promise<void> {
-  const existing = await projectStore.listProjects();
-  if (!existing.some((p) => p.id === NAVBAR_PROJECT_ID)) {
-    await createProjectWithMainFile(
-      "Navbar Story Project",
-      `project { name = "Navbar Story Project" }`,
-      NAVBAR_PROJECT_ID,
-    );
-  }
+  await ensureStoryProject({
+    id: NAVBAR_PROJECT_ID,
+    name: "Navbar Story Project",
+    hcl: `project { name = "Navbar Story Project" }`,
+  });
   await setCurrentProject(NAVBAR_PROJECT_ID);
   setCurrentScore({ overall_percentage: 72.5 });
   setCurrentDiagnostics({ errors: 2, warnings: 1 });
