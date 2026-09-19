@@ -1113,6 +1113,15 @@ let selectedBox = $derived(
 // HCL editor.
 let canvasFocused = $state(false);
 
+function focusCanvas() {
+  // Every canvas mousedown below calls preventDefault (needed to suppress
+  // text selection while dragging), which also kills the browser's implicit
+  // focus move — so focus explicitly. The Delete and t/b/c/f shortcuts
+  // require canvas focus, and without this a mouse user could select a node
+  // yet never trigger them.
+  root_svg?.focus({ preventScroll: true });
+}
+
 // The ordered value sets the t/b/c/f shortcuts cycle through, matching the
 // choices offered by the component inspector. The first entry is the
 // "unset" value (undefined), so cycling starts from the default.
@@ -1694,6 +1703,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   // would visibly do nothing useful) — see the cursor style on <svg>
   // below for the matching "busy" affordance.
   if (autoLayoutRunning) return;
+  focusCanvas();
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     interaction = {
@@ -1764,6 +1774,7 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
   if (autoLayoutRunning) return;
   if (event.button !== 0) return;
   event.preventDefault();
+  focusCanvas();
   recordUndoPoint();
 
   if (event.shiftKey) {
@@ -1848,6 +1859,7 @@ function onCanvasMouseDown(event: MouseEvent) {
   selectedConnection = null;
   // See onNodeMouseDown's matching guard above.
   if (autoLayoutRunning) return;
+  focusCanvas();
   if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
     event.preventDefault();
     interaction = {
