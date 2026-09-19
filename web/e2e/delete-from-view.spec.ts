@@ -43,16 +43,15 @@ test("delete removes the node from the view but keeps it in the model", async ({
 
   const canvas = page.getByTestId("diagram-canvas");
 
-  // Select the node explicitly (creation auto-selects, but the click also
-  // proves selection), then focus the canvas: node mousedown calls
-  // preventDefault, so clicking never moves focus there on its own, yet the
-  // Delete shortcut requires canvas focus.
+  // Select the node explicitly (creation auto-selects, but the click is
+  // the real user flow). Clicking also focuses the canvas — node mousedown
+  // preventDefaults, so the page moves focus explicitly — which the Delete
+  // shortcut requires.
   const node = canvas.getByText("e2e-vanish").first();
   const box = await node.boundingBox();
   if (!box) throw new Error("created node has no bounding box");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(page.getByTestId("node-inspector")).toBeVisible();
-  await canvas.focus();
 
   await page.keyboard.press("Delete");
   await expect(canvas.getByText("e2e-vanish").first()).toBeHidden();
