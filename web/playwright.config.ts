@@ -13,7 +13,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npx vite dev --port 5199",
+    command: "dx vite dev --port 5199",
     url: "http://localhost:5199",
     reuseExistingServer: !process.env.CI,
   },

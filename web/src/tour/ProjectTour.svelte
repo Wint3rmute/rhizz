@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import OnboardingTour from "../components/OnboardingTour.svelte";
-import { droneTourSteps } from "./droneTour";
+import { tourSteps } from "./Tour";
 import { consumePendingTourStart, getTourRequest } from "./tourRequest.svelte";
 
 // Hosts the workspace guided tour. Mounted in the project layout
@@ -19,7 +19,7 @@ interface Props {
 
 let { projectId }: Props = $props();
 
-let steps = $derived(droneTourSteps(projectId));
+let steps = $derived(tourSteps(projectId));
 let request = $derived(getTourRequest());
 let pendingBump = $state(0);
 
@@ -37,4 +37,4 @@ let startSignal = $derived(
 );
 </script>
 
-<OnboardingTour id="drone-tour" {steps} {startSignal} />
+<OnboardingTour id="tour" {steps} {startSignal} />
