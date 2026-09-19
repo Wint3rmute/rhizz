@@ -10,6 +10,9 @@ const meta = {
       label: "flight-controller",
       description: "Central processing unit for flight stabilization",
       tags: ["compute", "core"],
+      color: "default",
+      border: "solid",
+      font: "unstyled",
       leaf: false,
       ports: [
         {
@@ -63,6 +66,9 @@ export const AtomicLeaf: Story = {
       label: "temp-sensor",
       description: "BME280 temperature sensor",
       tags: ["sensor"],
+      color: "default",
+      border: "solid",
+      font: "unstyled",
       leaf: true,
       ports: [],
     },

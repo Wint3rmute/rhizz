@@ -21,6 +21,24 @@ export const COLOR_OPTIONS = [
 
 export type ColorOption = (typeof COLOR_OPTIONS)[number];
 
+// Explicit "no value" sentinels the inspector sends for its reset options
+// (and the read model normalizes to). `undefined` means "untouched" on the
+// wire and empty strings predate the inspector, so neither can spell a
+// clear — these do. Colors stay open (hex/CSS passthrough is real), so the
+// types keep `(string & {})`: known values get autocomplete, anything else
+// still typechecks and passes through to CSS.
+export const DEFAULT_COLOR = "default";
+export const DEFAULT_FONT = "unstyled";
+
+export type ComponentColor =
+  | ColorOption
+  | typeof DEFAULT_COLOR
+  | (string & {});
+export type ComponentFont =
+  | FontStyle
+  | typeof DEFAULT_FONT
+  | (string & {});
+
 export interface ComponentVisuals {
   color?: string | undefined;
   border?: string | undefined;
@@ -72,15 +90,20 @@ export function selectionOutlineRect(
   };
 }
 
-function isColorOption(c: string): c is ColorOption {
+export function isColorOption(c: string): c is ColorOption {
   return (COLOR_OPTIONS as readonly string[]).includes(c);
+}
+
+export function isFontStyle(f: string): f is FontStyle {
+  return f === "bold" || f === "italic" || f === "underline";
 }
 
 // Maps a stored color to an SVG stroke value. daisyUI tokens become CSS
 // variables (so they follow the theme / dark mode); anything else is passed
-// through as-is (hex or named CSS color).
+// through as-is (hex or named CSS color). The explicit default (and empty
+// values) map to no stroke so the renderer falls back.
 export function colorToSvgStroke(color?: string): string | undefined {
-  if (!color) return undefined;
+  if (!color || color === DEFAULT_COLOR) return undefined;
   return isColorOption(color) ? `var(--color-${color})` : color;
 }
 
@@ -89,6 +112,7 @@ export function colorToSvgStroke(color?: string): string | undefined {
 export function borderStyleToDasharray(border?: string): string | undefined {
   switch (border) {
     case undefined:
+    case "solid":
       return undefined;
     case "dashed":
       return "6 4";
@@ -103,6 +127,7 @@ export function borderStyleToDasharray(border?: string): string | undefined {
 export function fontStyleToSvg(font?: string): SvgFont {
   switch (font) {
     case undefined:
+    case "unstyled":
       return {};
     case "bold":
       return { fontWeight: "bold" };

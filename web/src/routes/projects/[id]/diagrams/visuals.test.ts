@@ -4,7 +4,11 @@ import {
   borderStyleToSvg,
   COLOR_OPTIONS,
   colorToSvgStroke,
+  DEFAULT_COLOR,
+  DEFAULT_FONT,
   fontStyleToSvg,
+  isColorOption,
+  isFontStyle,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
   SELECTION_OUTLINE_SCALE,
@@ -33,6 +37,19 @@ describe("colorToSvgStroke", () => {
     expect(colorToSvgStroke(undefined)).toBeUndefined();
     expect(colorToSvgStroke("")).toBeUndefined();
   });
+
+  it("maps the explicit default to no stroke", () => {
+    expect(colorToSvgStroke(DEFAULT_COLOR)).toBeUndefined();
+  });
+
+  it("guards theme tokens and font styles", () => {
+    expect(isColorOption("warning")).toBe(true);
+    expect(isColorOption(DEFAULT_COLOR)).toBe(false);
+    expect(isColorOption("#ff0000")).toBe(false);
+    expect(isFontStyle("bold")).toBe(true);
+    expect(isFontStyle(DEFAULT_FONT)).toBe(false);
+    expect(isFontStyle("fancy")).toBe(false);
+  });
 });
 
 // Maps a border style to an SVG stroke dash-array.
@@ -52,6 +69,7 @@ describe("borderStyleToDasharray", () => {
 describe("fontStyleToSvg", () => {
   it("returns empty presentation for the default / unknown", () => {
     expect(fontStyleToSvg(undefined)).toEqual({});
+    expect(fontStyleToSvg(DEFAULT_FONT)).toEqual({});
     expect(fontStyleToSvg("fancy")).toEqual({});
   });
 
@@ -102,6 +120,15 @@ describe("borderStyleToSvg", () => {
   it("defaults stroke to undefined when no color is set", () => {
     expect(borderStyleToSvg({ border: "dotted" })).toEqual({
       dasharray: "1.5 3",
+      stroke: undefined,
+    });
+  });
+
+  it("maps explicit defaults to no stroke and no dash array", () => {
+    expect(
+      borderStyleToSvg({ color: DEFAULT_COLOR, border: "solid" }),
+    ).toEqual({
+      dasharray: undefined,
       stroke: undefined,
     });
   });

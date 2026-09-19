@@ -11,6 +11,13 @@
 // Node (see modelView.test.ts).
 import type { ModelJS } from "rhizz";
 import { componentKeyAt } from "./modelKeys";
+import type { BorderStyle } from "./routes/projects/[id]/diagrams/visuals";
+import {
+  type ComponentColor,
+  type ComponentFont,
+  DEFAULT_COLOR,
+  DEFAULT_FONT,
+} from "./routes/projects/[id]/diagrams/visuals";
 
 export interface PortData {
   label: string;
@@ -22,14 +29,21 @@ export interface PortData {
   tags?: string[];
 }
 
-/** The component fields the inspector reads and the `update_component` op patches. */
+/** The component fields the inspector reads and the `update_component` op patches.
+ *
+ * Visual attributes are total — never `undefined`: the projection below
+ * normalizes absent/empty values to their explicit defaults (`"default"`,
+ * `"solid"`, `"unstyled"`), so readers never branch on absence and patches
+ * spell a clear with the same vocabulary. Colors and fonts stay open
+ * (hex/CSS passthrough is real), borders are a closed enum.
+ */
 export interface ComponentData {
   label: string;
   description?: string;
   icon?: string | undefined;
-  color?: string | undefined;
-  border?: "solid" | "dashed" | "dotted" | undefined;
-  font?: string | undefined;
+  color: ComponentColor;
+  border: BorderStyle;
+  font: ComponentFont;
   tags?: string[];
   leaf: boolean;
   ports: PortData[];
@@ -102,10 +116,8 @@ function toRole(role: string | undefined): PortData["role"] {
     : "peer";
 }
 
-function toBorder(
-  border: string | undefined,
-): ComponentData["border"] {
-  return border === "dashed" || border === "dotted" ? border : undefined;
+function toBorderStyle(border: string | undefined): BorderStyle {
+  return border === "dashed" || border === "dotted" ? border : "solid";
 }
 
 /**
@@ -135,9 +147,13 @@ export function componentDataByKey(
       label: component.label,
       description: component.description ?? "",
       icon: component.icon ?? "",
-      color: component.color ?? "",
-      border: toBorder(component.border),
-      font: component.font ?? "",
+      color: component.color === "" || component.color === undefined
+        ? DEFAULT_COLOR
+        : component.color,
+      border: toBorderStyle(component.border),
+      font: component.font === "" || component.font === undefined
+        ? DEFAULT_FONT
+        : component.font,
       tags: component.tags ?? [],
       leaf: component.leaf ?? false,
       ports: (component.ports ?? []).map((portIndex) => {

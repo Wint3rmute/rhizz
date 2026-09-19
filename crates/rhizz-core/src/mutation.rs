@@ -157,9 +157,13 @@ pub struct PortJson {
     pub tags: Option<Vec<String>>,
 }
 
-/// Attribute patch for [`ModelOp::Update`]. `None` means untouched; empty
-/// strings clear their field (mirroring the old TypeScript emitter, which
-/// omitted defaults).
+/// Attribute patch for [`ModelOp::Update`].
+///
+/// `None` means untouched; empty strings clear their field (back-compat
+/// with hand-written HCL). The web inspector's reset options send explicit
+/// defaults instead — `"default"` (color), `"solid"` (border),
+/// `"unstyled"` (font) — so a clear is always spelled out, never an absent
+/// value or an empty string.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PatchJson {
     /// Human-readable description.
@@ -168,13 +172,13 @@ pub struct PatchJson {
     /// Optional icon name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
-    /// Optional border color.
+    /// Optional border color; `"default"` clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     /// Border style; `"solid"` and empty clear it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub border: Option<String>,
-    /// Optional font style.
+    /// Optional font style; `"unstyled"` clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub font: Option<String>,
     /// Filtering tags (full replacement).
@@ -430,6 +434,12 @@ fn resolve_scope(raw: &RawFile, path: &str) -> Result<Scope, MutationError> {
 fn unknown_container(path: &str) -> MutationError {
     MutationError::InvalidInput(format!("unknown container '{path}'"))
 }
+
+/// Explicit "no value" sentinels the web inspector sends for its reset
+/// options. `None` on the wire means "leave untouched" and empty strings
+/// predate the inspector, so neither can spell a clear — these do.
+const DEFAULT_COLOR: &str = "default";
+const DEFAULT_FONT: &str = "unstyled";
 
 fn non_empty(value: &str) -> Option<String> {
     if value.is_empty() {
@@ -947,13 +957,21 @@ fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), Mutatio
         body.icon = non_empty(icon);
     }
     if let Some(color) = &patch.color {
-        body.color = non_empty(color);
+        body.color = if color == DEFAULT_COLOR {
+            None
+        } else {
+            non_empty(color)
+        };
     }
     if let Some(border) = &patch.border {
         body.border = parse_border(border)?;
     }
     if let Some(font) = &patch.font {
-        body.font = non_empty(font);
+        body.font = if font == DEFAULT_FONT {
+            None
+        } else {
+            non_empty(font)
+        };
     }
     if let Some(tags) = &patch.tags {
         body.tags.clone_from(tags);
@@ -1439,6 +1457,7 @@ mod tests {
 
 #[cfg(test)]
 mod leaf_and_visual_tests {
+    use super::{DEFAULT_COLOR, DEFAULT_FONT};
     use super::{DefinitionOptions, ModelOp, PatchJson, mutate_to_hcl};
 
     #[test]
@@ -1555,5 +1574,65 @@ mod leaf_and_visual_tests {
             },
         );
         assert!(bad.is_err());
+    }
+
+    #[test]
+    fn update_clears_visuals_on_explicit_defaults() {
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            "",
+            &ModelOp::AddDefinition {
+                label: "comp".to_owned(),
+                options: DefinitionOptions {
+                    leaf: Some(true),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::Update {
+                path: "comp".to_owned(),
+                patch: PatchJson {
+                    color: Some("warning".to_owned()),
+                    border: Some("dotted".to_owned()),
+                    font: Some("bold".to_owned()),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(hcl.contains(r#"color       = "warning""#));
+        assert!(hcl.contains(r#"border      = "dotted""#));
+        assert!(hcl.contains(r#"font        = "bold""#));
+
+        // The web inspector's reset options send explicit defaults —
+        // `"default"` (color), `"solid"` (border), `"unstyled"` (font) —
+        // which must clear the attribute, never persist literally.
+        let hcl = mutate_to_hcl(
+            "system.hcl",
+            &hcl,
+            &ModelOp::Update {
+                path: "comp".to_owned(),
+                patch: PatchJson {
+                    color: Some(DEFAULT_COLOR.to_owned()),
+                    border: Some("solid".to_owned()),
+                    font: Some(DEFAULT_FONT.to_owned()),
+                    ..Default::default()
+                },
+            },
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(!hcl.contains("color       ="));
+        assert!(!hcl.contains("border      ="));
+        assert!(!hcl.contains("font        ="));
     }
 }

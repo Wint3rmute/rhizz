@@ -2,7 +2,12 @@
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../modelView";
 import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
-import { COLOR_OPTIONS } from "./visuals";
+import {
+  type BorderStyle,
+  COLOR_OPTIONS,
+  type ComponentColor,
+  type ComponentFont,
+} from "./visuals";
 
 interface Props {
   componentKey: string;
@@ -70,13 +75,13 @@ function handleLeafChange(e: Event) {
 
 function handleColorChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value;
-  onupdate({ color: value === "none" ? undefined : value });
+  onupdate({ color: value as ComponentColor });
 }
 
 function handleBorderChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value;
-  const border = value === "solid" ? undefined : (value as "dashed" | "dotted");
-  onupdate({ border });
+  // "solid" is the explicit default: it passes through as the clear signal.
+  onupdate({ border: value as BorderStyle });
 }
 
 // ── Port Operations ───────────────────────────────────────────────────────────
@@ -169,13 +174,15 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       </label>
       <select
         id="comp-color-input"
-        value={component.color || "none"}
+        value={component.color}
         onchange={handleColorChange}
         class="select select-sm select-bordered w-full"
       >
-        <option value="none">None</option>
+        <option value="default">Default</option>
         {#each COLOR_OPTIONS as option (option)}
-          <option value={option}>{option}</option>
+          <option value={option}>
+            {option.charAt(0).toUpperCase() + option.slice(1)}
+          </option>
         {/each}
       </select>
     </div>
@@ -189,7 +196,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       </label>
       <select
         id="comp-border-input"
-        value={component.border || "solid"}
+        value={component.border}
         onchange={handleBorderChange}
         class="select select-sm select-bordered w-full"
       >
@@ -208,10 +215,10 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       </label>
       <select
         id="comp-font-input"
-        value={component.font || "unstyled"}
+        value={component.font}
         onchange={(e) => {
           const v = (e.target as HTMLSelectElement).value;
-          onupdate({ font: v === "unstyled" ? undefined : v });
+          onupdate({ font: v as ComponentFont });
         }}
         class="select select-sm select-bordered w-full"
       >

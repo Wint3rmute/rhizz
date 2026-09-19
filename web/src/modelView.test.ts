@@ -79,20 +79,20 @@ component "plain" {
     expect(danger?.border).toBe("dashed");
     expect(danger?.font).toBe("bold");
 
-    // A component with no visual attributes falls back to empties, so the
-    // canvas's `compData?.color || components[i]?.color` fallbacks stay total.
+    // A component with no visual attributes normalizes to the explicit
+    // defaults, so readers never branch on absence.
     const plain = view.get("plain");
-    expect(plain?.color).toBeFalsy();
-    expect(plain?.border).toBeUndefined();
-    expect(plain?.font).toBeFalsy();
+    expect(plain?.color).toBe("default");
+    expect(plain?.border).toBe("solid");
+    expect(plain?.font).toBe("unstyled");
   });
 
-  it("normalizes an unknown border style to undefined (solid)", () => {
+  it("normalizes an unknown border style to solid", () => {
     const view = viewOf(`component "weird" {
   border = "wavy"
 }
 `);
-    expect(view.get("weird")?.border).toBeUndefined();
+    expect(view.get("weird")?.border).toBe("solid");
   });
 
   it("preserves lowercase port roles, without E009", () => {
