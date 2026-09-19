@@ -44,7 +44,7 @@ wasm:
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
 build: wasm
-    {{run}} sh -lc 'cd web && npx vite build'
+    {{run}} sh -lc 'cd web && dx vite build'
     {{run}} sh -lc 'cd web && dx storybook build'
     {{run}} cargo build --release --all-targets
 
