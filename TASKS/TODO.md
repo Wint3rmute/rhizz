@@ -13,6 +13,12 @@ How to work on this file:
 
 ---
 
+## Task <N> — Better hierarchy visibility in the "Components" tree under /diagrams
+
+Draw vertical lines below each parent node in the "Components" tree under /diagrams,
+so that it is clearly visible which nodes are children of which. Take inspiration from 
+the file browser in tools like Visual Studio Code or the Zed Editor.
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
