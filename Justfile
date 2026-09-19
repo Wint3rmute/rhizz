@@ -26,6 +26,7 @@ lint:
 test: wasm
     {{run}} cargo test --quiet --all
     {{run}} sh -lc 'cd web && deno run test'
+    {{run}} sh -lc 'cd web && dx playwright test'
 
 # Single instrumented coverage pass, mirroring CI: runs all tests (incl.
 # doctests, hence RUSTC_BOOTSTRAP) under llvm-cov, enforces the 80% line
