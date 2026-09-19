@@ -88,7 +88,12 @@ import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import { resolveIcon } from "../../../../iconHelper";
 import DiagramNodeBody from "./DiagramNodeBody.svelte";
 import {
+  type BorderStyle,
   COLOR_OPTIONS,
+  type ComponentColor,
+  type ComponentFont,
+  DEFAULT_COLOR,
+  DEFAULT_FONT,
   SELECTION_OUTLINE_DASHARRAY,
   SELECTION_OUTLINE_OPACITY,
 } from "./visuals";
@@ -1126,18 +1131,17 @@ function focusCanvas() {
 // choices offered by the component inspector. The first entry is the
 // "unset" value (undefined), so cycling starts from the default.
 const TEXT_ALIGN_CYCLE: TextAlign[] = ["center", "top-center", "top-left"];
-const BORDER_CYCLE: ("solid" | "dashed" | "dotted")[] = [
-  "solid",
-  "dashed",
-  "dotted",
-];
-const FONT_CYCLE: ("bold" | "italic" | "underline")[] = [
+const BORDER_CYCLE: BorderStyle[] = ["solid", "dashed", "dotted"];
+// COLOR_OPTIONS is imported from ./visuals. Each cycle starts at its
+// explicit default, so keyboard cycling can always return there — never
+// undefined, never stuck on the last value.
+const COLOR_CYCLE: ComponentColor[] = [DEFAULT_COLOR, ...COLOR_OPTIONS];
+const FONT_CYCLE: ComponentFont[] = [
+  DEFAULT_FONT,
   "bold",
   "italic",
   "underline",
 ];
-// COLOR_OPTIONS is imported from ./visuals; "none" (undefined) is the unset
-// state, then cycle through the theme colors.
 
 // Returns the next value after `current` in `cycle`, wrapping around to the
 // first. `current` may be undefined (the unset state).
@@ -1160,40 +1164,23 @@ function cycleSelectedAttribute(key: string) {
       break;
     }
     case "b": {
-      const next = nextInCycle(
-        BORDER_CYCLE,
-        comp.border as
-          | "solid"
-          | "dashed"
-          | "dotted"
-          | undefined,
+      const next = nextInCycle(BORDER_CYCLE, comp.border);
+      // "solid" is the explicit default: it passes through as the clear
+      // signal, never undefined.
+      void handleUpdateSelectedComponent({ border: next }).catch(
+        reportDiagramError,
       );
-      void handleUpdateSelectedComponent({
-        border: next === "solid" ? undefined : next,
-      }).catch(reportDiagramError);
       break;
     }
     case "c": {
-      const next = nextInCycle(
-        COLOR_OPTIONS,
-        comp.color as
-          | (typeof COLOR_OPTIONS)[number]
-          | undefined,
-      );
+      const next = nextInCycle(COLOR_CYCLE, comp.color);
       void handleUpdateSelectedComponent({ color: next }).catch(
         reportDiagramError,
       );
       break;
     }
     case "f": {
-      const next = nextInCycle(
-        FONT_CYCLE,
-        comp.font as
-          | "bold"
-          | "italic"
-          | "underline"
-          | undefined,
-      );
+      const next = nextInCycle(FONT_CYCLE, comp.font);
       void handleUpdateSelectedComponent({
         font: next,
       }).catch(reportDiagramError);
