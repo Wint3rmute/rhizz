@@ -1,11 +1,18 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import { onDestroy } from "svelte";
+import DiagnosticsStatusBar from "../../../components/DiagnosticsStatusBar.svelte";
+import { compile_system } from "../../../rhizz_wasm_wrapper";
 import {
   clearCurrentProject,
   getCurrentProject,
   setCurrentProject,
 } from "../../../ProjectState.svelte";
+import { projectStore } from "../../../ProjectState.svelte";
+import { getWarningLevel } from "../../../WarningLevelState.svelte";
+import { readProjectSources, type Source } from "../../../vfs/compile";
+import { openProjectFs } from "../../../vfs/fs";
 import ProjectTour from "../../../tour/ProjectTour.svelte";
 import type { LayoutProps } from "./$types";
 
@@ -33,7 +40,26 @@ $effect(() => {
   setCurrentProject(id).then(() => {
     loading = false;
   });
+  // Project-wide sources for the diagnostics status bar below (mirrors
+  // what each page compiles individually — a snapshot per navigation).
+  const fs = openProjectFs(projectStore, id);
+  void readProjectSources(fs).then((s) => {
+    layoutSources = s;
+  });
 });
+
+// Embedded diagram views (iframe embeds) stay chrome-free: no bar.
+let isEmbed = $derived(page.url.pathname.includes("/embed/"));
+
+let layoutSources = $state<Source[]>([]);
+
+// The project-wide warning preset (navbar select); reading it inside the
+// `$derived` compile keeps the status bar reactive to it.
+let warningLevel = $derived(getWarningLevel());
+let layoutOutput = $derived.by(() =>
+  compile_system(layoutSources, warningLevel)
+);
+let layoutDiagnostics = $derived(layoutOutput.diagnostics());
 
 let project = $derived(getCurrentProject());
 </script>
@@ -57,7 +83,12 @@ let project = $derived(getCurrentProject());
   </div>
 </div>
 {:else}
-  {@render children()}
+  <div class="flex-1 flex flex-col min-h-0">
+    {@render children()}
+    {#if !isEmbed}
+      <DiagnosticsStatusBar diagnostics={layoutDiagnostics} />
+    {/if}
+  </div>
   <!-- Workspace guided tour: mounted here (not per-page) so it
        survives the cross-page navigation its steps perform. -->
   <ProjectTour projectId={data.projectId} />

@@ -1,7 +1,6 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import DiagnosticsStatusBar from "../../../../components/DiagnosticsStatusBar.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
@@ -23,13 +22,13 @@ $effect(() => {
 });
 
 // The project-wide warning preset (navbar select); reading it inside the
-// `$derived` compile below keeps the diagnostics panel reactive to it.
+// `$derived` compile below keeps the stats reactive to it.
+// Diagnostics live in the layout-level status bar.
 let warningLevel = $derived(getWarningLevel());
 
 let output = $derived.by(() => compile_system(sources, warningLevel));
 
 let model = $derived(output.model());
-let diagnostics = $derived(output.diagnostics());
 
 let components = $derived(model ? model.components() : []);
 let score = $derived(model ? model.score() : null);
@@ -283,5 +282,4 @@ function levelBadge(level: number): string {
     </main>
     </div>
   </div>
-  <DiagnosticsStatusBar {diagnostics} />
 </div>
