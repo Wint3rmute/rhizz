@@ -26,7 +26,7 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   const next = page.getByRole("button", { name: "next step" });
   const titles = [
     "Navbar",
-    "System Overview",
+    "Overview",
     "Diagrams: the core tool",
     "Diagrams: selection & inspector",
     "Inventory",

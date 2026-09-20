@@ -25,7 +25,7 @@ export function tourSteps(projectId: string): OnboardingStep[] {
       id: "tour-navbar",
       title: "Navbar",
       description: `The core navigational component: jump between Editor,
-        Diagrams, Explore, Inventory and System Overview, watch the
+        Diagrams, Explore, Inventory and Overview, watch the
         error/warning counts, and switch warning levels.`,
       target: "navbar",
       placement: "bottom",
@@ -33,7 +33,7 @@ export function tourSteps(projectId: string): OnboardingStep[] {
     },
     {
       id: "tour-overview",
-      title: "System Overview",
+      title: "Overview",
       description: `The model at a glance: component counts, completion score
         and diagnostics for the whole system.`,
       target: "overview",

@@ -11,7 +11,7 @@
 export const TOUR_TARGETS = {
   /** Top navigation bar (links + project controls). */
   navbar: "navbar",
-  /** System Overview stats card. */
+  /** Overview stats card. */
   overview: "overview-stats",
   /** Diagrams floating toolbar (layout, zoom, add) — small and always
       in view, unlike the viewport-filling canvas (no outside placement
