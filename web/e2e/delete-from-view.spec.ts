@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-// Delete on the Diagrams page removes the node from the current view only:
+// Delete on the Modeling page removes the node from the current view only:
 // the canvas hides it, but the model keeps the component — the reusable
-// definition row survives, the Editor still shows its HCL, and Ctrl+Z
+// definition row survives, Code still shows its HCL, and Ctrl+Z
 // undoes the removal.
 async function openDiagram(page, name = "E2E delete view") {
   await page.goto("/");
@@ -13,13 +13,13 @@ async function openDiagram(page, name = "E2E delete view") {
   // Fresh projects auto-open the guided tour, which routes to the
   // overview — either landing proves creation. Silence the tour before
   // continuing: its backdrop would blanket the canvas under test.
-  await expect(page).toHaveURL(/\/projects\/.+\/(editor|overview)/);
+  await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
   const tourDialog = page.getByRole("alertdialog");
   await expect(tourDialog).toBeVisible();
   await tourDialog.getByRole("button", { name: "skip tour" }).click();
   await expect(tourDialog).toBeHidden();
   const id = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`/projects/${id}/diagrams`);
+  await page.goto(`/projects/${id}/modeling`);
   await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
   await expect(page.getByTestId("diagram-canvas")).toBeVisible();
   if (!id) throw new Error("project id missing from URL");
@@ -65,10 +65,10 @@ test("delete removes the node from the view but keeps it in the model", async ({
   await page.keyboard.press("Control+y");
   await expect(canvas.getByText("e2e-vanish").first()).toBeHidden();
 
-  // The model keeps the component: the Editor still shows its instance
+  // The model keeps the component: Code still shows its instance
   // block. (A whole-model delete removes the instance and leaves only the
   // bare `component` definition, so matching the bare label is not enough.)
-  await page.goto(`/projects/${id}/editor`);
+  await page.goto(`/projects/${id}/code`);
   const editor = page.locator(".monaco-editor");
   await expect(editor).toBeVisible();
   await expect(editor.getByText('instance "e2e-vanish"').first())

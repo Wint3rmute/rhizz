@@ -104,15 +104,15 @@ function levelBadge(level: number): string {
       <ul class="space-y-2 text-sm text-base-content/70">
         <li>
           <a
-            href={resolve("/projects/[id]/editor", { id: data.projectId })}
+            href={resolve("/projects/[id]/code", { id: data.projectId })}
             class="block hover:text-base-content"
-          >Editor</a>
+          >Code</a>
         </li>
         <li>
           <a
-            href={resolve("/projects/[id]/diagrams", { id: data.projectId })}
+            href={resolve("/projects/[id]/modeling", { id: data.projectId })}
             class="block hover:text-base-content"
-          >Diagrams</a>
+          >Modeling</a>
         </li>
         <li>
           <a href={resolve("/projects", {})}

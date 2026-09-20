@@ -1,5 +1,5 @@
 <script lang="ts">
-// The component-hierarchy sidebar for the Diagrams editor. Reuses the shared
+// The component-hierarchy sidebar for Modeling. Reuses the shared
 // `Tree` shell to render the nested component tree with expand/collapse,
 // mirroring how FileTree renders file/diagram hierarchies.
 //

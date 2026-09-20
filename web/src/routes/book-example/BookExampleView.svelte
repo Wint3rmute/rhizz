@@ -8,12 +8,12 @@ import {
   parse_views,
   type ViewDefinition,
 } from "../../rhizz_wasm_wrapper";
-import DiagramStaticView from "../projects/[id]/diagrams/DiagramStaticView.svelte";
+import DiagramStaticView from "../projects/[id]/modeling/DiagramStaticView.svelte";
 import {
   mapLayoutToBoxes,
   viewsToLayout,
-} from "../projects/[id]/diagrams/persistence";
-import type { DiagramStaticAnnotation } from "../projects/[id]/diagrams/types";
+} from "../projects/[id]/modeling/persistence";
+import type { DiagramStaticAnnotation } from "../projects/[id]/modeling/types";
 import { postExampleHeight } from "./autosize";
 import { copyToClipboard } from "../../clipboard";
 import { highlightHcl } from "./hclHighlight";

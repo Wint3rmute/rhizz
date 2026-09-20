@@ -31,7 +31,7 @@ describe("tourSteps", () => {
     }
   });
 
-  it("walks navbar -> overview -> diagrams -> inventory -> explore -> editor", () => {
+  it("walks navbar -> overview -> modeling -> inventory -> explore -> code", () => {
     const hrefs = steps.map((step) => {
       if (step.href === undefined) {
         throw new Error(`step ${step.id} has no href`);
@@ -40,10 +40,10 @@ describe("tourSteps", () => {
     });
     const order = [
       "overview",
-      "diagrams",
+      "modeling",
       "inventory",
       "explore",
-      "editor",
+      "code",
     ].map((page) => hrefs.findIndex((href) => href.endsWith(`/${page}`)));
     for (const index of order) expect(index).toBeGreaterThanOrEqual(0);
     expect([...order].sort((a, b) => a - b)).toEqual(order);

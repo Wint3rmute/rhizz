@@ -43,7 +43,7 @@ let bounds = $derived.by(() => {
 
 let fullDiagramUrl = $derived.by(() => {
   if (!projectId) return null;
-  const base = resolve("/projects/[id]/diagrams", { id: projectId });
+  const base = resolve("/projects/[id]/modeling", { id: projectId });
   return diagramPath
     ? `${base}?diagram=${encodeURIComponent(diagramPath)}`
     : base;

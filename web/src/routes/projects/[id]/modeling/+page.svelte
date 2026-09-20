@@ -24,7 +24,7 @@ import {
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
-import FileTree from "../editor/FileTree.svelte";
+import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
@@ -3333,10 +3333,10 @@ $effect(() => {
               </div>
             {/if}
             <a
-              href={resolve("/projects/[id]/editor", { id: data.projectId })}
+              href={resolve("/projects/[id]/code", { id: data.projectId })}
               class="btn btn-sm btn-error"
             >
-              Open Editor to Fix
+              Open Code to Fix
             </a>
           </div>
         </div>

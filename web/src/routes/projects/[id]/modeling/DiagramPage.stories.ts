@@ -131,10 +131,10 @@ export const DuplicateProjectBlock: Story = {
     await expect(canvas.getByText("[E010]"))
       .toBeInTheDocument();
 
-    const editorLink = canvas.getByRole("link", { name: "Open Editor to Fix" });
+    const editorLink = canvas.getByRole("link", { name: "Open Code to Fix" });
     await expect(editorLink).toHaveAttribute(
       "href",
-      expect.stringContaining(`/projects/${BROKEN_PROJECT_ID}/editor`),
+      expect.stringContaining(`/projects/${BROKEN_PROJECT_ID}/code`),
     );
   },
 };

@@ -13,9 +13,9 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   // before clicking it (same pattern as smoke.spec.ts).
   page.on("dialog", (dialog) => void dialog.accept("E2E tour"));
   await page.getByRole("button", { name: /Quadcopter Drone/ }).click();
-  // Creation lands on the editor; the armed first-run tour may already
+  // Creation lands in code; the armed first-run tour may already
   // have routed onward to the overview by the time the poll lands.
-  await expect(page).toHaveURL(/\/projects\/.+\/(editor|overview)/);
+  await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
 
   // First-run pending start: the welcome dialog opens on its own.
   const dialog = page.getByRole("alertdialog");
@@ -27,21 +27,23 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   const titles = [
     "Navbar",
     "Overview",
-    "Diagrams: the core tool",
-    "Diagrams: selection & inspector",
+    "Modeling: the core tool",
+    "Modeling: selection & inspector",
     "Inventory",
     "Explore",
-    "Editor",
+    "Code",
     "You're set 🚀",
   ];
   for (const title of titles) {
     await next.click();
-    await expect(dialog.getByText(title)).toBeVisible();
+    // Titles render as the card heading; getByText would also match
+    // description prose (e.g. "Code" appears in its own description).
+    await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
   }
 
   // Last stop offers Done; the tour closes and the page stays usable.
   await dialog.getByText("Done").click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole("link", { name: "Diagrams" }).first())
+  await expect(page.getByRole("link", { name: "Modeling" }).first())
     .toBeVisible();
 });

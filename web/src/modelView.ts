@@ -11,13 +11,13 @@
 // Node (see modelView.test.ts).
 import type { ModelJS } from "rhizz";
 import { componentKeyAt } from "./modelKeys";
-import type { BorderStyle } from "./routes/projects/[id]/diagrams/visuals";
+import type { BorderStyle } from "./routes/projects/[id]/modeling/visuals";
 import {
   type ComponentColor,
   type ComponentFont,
   DEFAULT_COLOR,
   DEFAULT_FONT,
-} from "./routes/projects/[id]/diagrams/visuals";
+} from "./routes/projects/[id]/modeling/visuals";
 
 export interface PortData {
   label: string;
