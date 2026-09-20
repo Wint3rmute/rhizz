@@ -261,6 +261,19 @@ let snapEnabled = $state(true);
 // not just the persistent toggle.
 let snapActive = $derived(snapEnabled && !isModifierHeld());
 
+// Center of the current viewport in world (SVG) coordinates — where newly
+// added nodes land when they have no remembered or explicitly requested
+// position, so they appear where the user is looking instead of a fixed
+// point that may be off-screen. Mirrors the annotation placement below.
+function viewportCenterBox(): { x: number; y: number } {
+  return {
+    x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom -
+      DEFAULT_NODE_WIDTH / 2,
+    y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom -
+      DEFAULT_NODE_HEIGHT / 2,
+  };
+}
+
 // Rounds `value` to the nearest multiple of snapGridSize, or returns it
 // unchanged when snapping is off. Falls back to the default grid size
 // rather than trusting the persisted value is still a valid, positive
@@ -756,12 +769,13 @@ function toggleComponentChecked(index: number) {
   }
 
   // Restore the remembered layout if this component has been placed before
-  // (even if it was later unchecked), instead of always resetting to the
-  // default position.
+  // (even if it was later unchecked); otherwise land it at the viewport
+  // center so it appears where the user is looking.
   const remembered = savedLayout[getComponentKey(index)];
+  const fallback = viewportCenterBox();
   let box: Box = {
-    x: remembered?.x ?? 100,
-    y: remembered?.y ?? 100,
+    x: remembered?.x ?? fallback.x,
+    y: remembered?.y ?? fallback.y,
     width: remembered?.width ?? DEFAULT_NODE_WIDTH,
     height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
   };
@@ -1543,8 +1557,9 @@ async function handleModalCreateComponent(data: {
           "success",
         );
       }
-      const worldX = data.position ? snap(data.position.x) : 100;
-      const worldY = data.position ? snap(data.position.y) : 100;
+      const center = viewportCenterBox();
+      const worldX = data.position ? snap(data.position.x) : center.x;
+      const worldY = data.position ? snap(data.position.y) : center.y;
       checked[fullKey] = {
         x: worldX,
         y: worldY,
