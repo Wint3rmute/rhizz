@@ -1,6 +1,5 @@
 <script lang="ts">
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -16,8 +15,9 @@ let { data }: PageProps = $props();
 let fs = $derived(openProjectFs(projectStore, data.projectId));
 
 // The project-wide warning preset (navbar select). Reading it inside the
-// `$derived` compile below is what makes the diagnostics panel, the stats and
+// `$derived` compile below is what makes the stats and
 // the score react to a change of level without any extra plumbing.
+// Diagnostics live in the layout-level status bar.
 let warningLevel = $derived(getWarningLevel());
 
 let entries = $state<Dirent[]>([]);
@@ -190,7 +190,6 @@ async function handleDelete(path: string): Promise<void> {
 let output = $derived.by(() => compile_system(sources, warningLevel));
 
 let model = $derived(output.model());
-let diagnostics = $derived(output.diagnostics());
 
 // Persist the last successfully compiled model so stats survive syntax errors.
 let lastModel = $state<ReturnType<typeof output.model>>(undefined);
@@ -237,7 +236,7 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
       />
     </aside>
 
-    <main class="md:col-span-6 lg:col-span-8 flex flex-col gap-4">
+    <main class="md:col-span-9 lg:col-span-10 flex flex-col gap-4">
       {#if lastModel !== undefined}
         <div
           class="
@@ -286,11 +285,5 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
         {/if}
       </div>
     </main>
-
-    <aside
-      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
-    >
-      <CompilationDiagnosticsOutline {diagnostics} />
-    </aside>
   </div>
 </div>
