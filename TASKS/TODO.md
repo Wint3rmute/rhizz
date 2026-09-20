@@ -13,6 +13,48 @@ How to work on this file:
 
 ---
 
+## Task <N> - Treat documentation as first-class citizen
+
+1. Add a compiler warning when a component does not have documentation. Do not fix existing examples.
+2. When in modeling/ page, add a button "open documentation" to the inspector, which will either open existing documentation or create a new file under docs/ if none exists.
+3. When creating new projects, create a docs/ folder by default, same as you create diagrams/
+
+## Task <N> - System model - change `description` to `full_name`
+
+Thorough descriptions of the system were delegated to the `docs/` folder. Now,
+the `description` key no longer has much sense, I want to re-use it for stuff
+like full official names, expanding abbreviations and so on.
+
+- Change the spec to use `full_name` instead of `description`
+- Change it everywhere in the code
+
+## Task <N> - Persist the `Strictness` option in Web app
+
+The Strictness option, selectable in the NavBar is not persisted across reloads.
+Change it so it persists via localStorage.
+
+## Task <N> - Extend the annotation/notes system - Markdown
+
+Make it possible to write Markdown in notes and have it rendered in the diagram.
+When asked to implement, first assess feasiblity, as the diagrams shall still
+be rendered as SVG files. After exploring the codebase and assessing feasiblity,
+report your findings to the user and ask for directions/decisions.
+
+## Task <N> - Rename the diagrams/ folder to views/
+
+As in title - the current diagrams/ folder is not inlined with the whole idea of
+views, it is confusing. Modify all that's needed (SPEC, code, docs), so that the
+current `diagrams/` directory is changed to `views/`.
+
+## Task <N> - Allow for jumping into a component-specific view from Inventory
+
+When in the inventory/ subpage, with a component without a component-specific
+view (view named the same as the component itself), the application tells the
+user that the view of that component is not available. Add a button "Create a
+view for this component", which will create a new view (named the same as the
+component) and switch the user into the modeling subpage with that very view
+open.
+
 ## Task <N> — Warn on view nodes outside the bound system (W017)
 
 Views are bound to one system (`view.system`, immutable in the Modeling UI),
