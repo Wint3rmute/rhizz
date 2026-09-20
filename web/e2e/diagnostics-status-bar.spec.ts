@@ -30,10 +30,15 @@ test("diagnostics status bar shows on overview, code, and modeling", async ({ pa
 
   await page.goto(`/projects/${id}/modeling`);
   await expect(bar).toBeVisible();
-  // The bar expands in place on every page.
+  // The bar expands and collapses again in place.
   await bar.getByRole("button").click();
   await expect(bar.getByRole("button")).toHaveAttribute(
     "aria-expanded",
     "true",
+  );
+  await bar.getByRole("button").click();
+  await expect(bar.getByRole("button")).toHaveAttribute(
+    "aria-expanded",
+    "false",
   );
 });
