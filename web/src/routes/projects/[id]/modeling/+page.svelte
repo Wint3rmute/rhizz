@@ -26,6 +26,7 @@ import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
 import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
+import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
@@ -326,6 +327,48 @@ let editingAnnotationObj = $derived(
 let selectedDiagramPath = $state<string | null>(null);
 let diagramEntries = $state<Dirent[]>([]);
 
+// The system this view is bound to. Immutable after creation — set once on
+// diagram load from the file's `view.system`, never edited via UI (delete +
+// recreate, or hand-edit in Code, to re-bind). `""` means unlinked/legacy.
+let selectedSystem = $state<string>("");
+
+// Effective system shown by this view: the file's bound system, falling back
+// to the first model system for legacy/unlinked views (`system == ""`).
+// Dangling views (bound system not in model) keep their bound label so the
+// file round-trips unchanged until fixed in Code or recreated.
+let effectiveSystem = $derived(selectedSystem || systems[0]?.label || "");
+// Arena index of the effective system in the current model, or -1.
+let selectedSystemIndex = $derived(systems.findIndex((s) => s.label === effectiveSystem));
+let isSystemDangling = $derived(selectedDiagramPath !== null && selectedSystem !== "" && systems.length > 0 && systems.findIndex((s) => s.label === selectedSystem) === -1);
+
+// Arena indices of components belonging to the effective system (transitive
+// via parent links). Used to filter canvas, explorer, and connections list.
+let systemComponentIndices = $derived.by(() => {
+  if (selectedSystemIndex === -1) return new Set<number>();
+  const out = new Set<number>();
+  components.forEach((_c, i) => {
+    if (componentInSystem(components, i, selectedSystemIndex)) out.add(i);
+  });
+  return out;
+});
+
+// Placed nodes whose component no longer belongs to this view's system
+// (legacy mixed diagrams). Hidden, never deleted — unchecking prunes them.
+let hiddenForeignCount = $derived.by(() => {
+  let n = 0;
+  for (const key of Object.keys(checked)) {
+    const index = keyToIndex.get(key);
+    if (index !== undefined && !systemComponentIndices.has(index)) n += 1;
+  }
+  return n;
+});
+
+// Connections sidebar, filtered to this view's system (both endpoints inside).
+let systemConnections = $derived.by(() => {
+  if (selectedSystemIndex === -1) return connections;
+  return connections.filter((c) => systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to));
+});
+
 let fullDiagramPath = $derived(
   selectedDiagramPath === null
     ? null
@@ -416,7 +459,7 @@ $effect(() => {
         await writeDiagramLayoutFile(
           fs,
           `${DIAGRAM_LAYOUT_DIR}/main.hcl`,
-          emptyDiagramLayout(),
+          emptyDiagramLayout(systemName),
           systemName,
         );
         await refreshDiagramEntries();
@@ -461,6 +504,7 @@ $effect(() => {
     savedLayout = {};
     savedConnections = {};
     annotations = [];
+    selectedSystem = "";
     return;
   }
 
@@ -481,6 +525,7 @@ $effect(() => {
       savedLayout = { ...layout.checked };
       savedConnections = layout.connections ?? {};
       annotations = layout.annotations ?? [];
+      selectedSystem = layout.system ?? "";
     }
     diagramLayoutLoaded = true;
     // Frames the newly-opened diagram's content immediately, rather than
@@ -504,13 +549,17 @@ $effect(() => {
   // `checked`/`savedLayout`'s own top-level references, never to writes
   // into them.
   const snapshot: DiagramLayout = {
+    system: effectiveSystem,
     checked: $state.snapshot(checked),
     connections: $state.snapshot(savedConnections),
     annotations: $state.snapshot(annotations),
   };
+  // Subscribe to the effective system so legacy migration ("" -> first
+  // system) persists even before any canvas edit touches checked/etc.
+  void effectiveSystem;
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
-  void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "main");
+  void writeDiagramLayoutFile(fs, path, snapshot, effectiveSystem || "main");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -535,13 +584,30 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
     prompt("New diagram name?", "Untitled.hcl") ?? "",
   );
   if (name === null) return;
+  // Immutable view binding: the system is chosen once here and never edited
+  // via UI afterwards (delete + recreate, or hand-edit in Code, to re-bind).
+  const defaultSystem = systems[0]?.label || "main";
+  const rawSystem = prompt(
+    `System for "${name}"? (immutable)\nAvailable: ${systems.map((s) => s.label).join(", ") || defaultSystem}`,
+    defaultSystem,
+  );
+  if (rawSystem === null) return;
+  const systemChoice = rawSystem.trim() || defaultSystem;
+  if (!systems.some((s) => s.label === systemChoice)) {
+    reportDiagramError(
+      new Error(
+        `Unknown system "${systemChoice}". Available: ${systems.map((s) => s.label).join(", ") || defaultSystem}`,
+      ),
+    );
+    return;
+  }
   const path = joinDiagramPath(parentPath, name);
   try {
     await writeDiagramLayoutFile(
       fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
-      emptyDiagramLayout(),
-      systems[0]?.label || "main",
+      emptyDiagramLayout(systemChoice),
+      systemChoice,
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;
@@ -1397,7 +1463,7 @@ function openCreateComponentModal(
     }
   }
   if (!targetParent) {
-    targetParent = systems[0]?.label || "main";
+    targetParent = effectiveSystem || systems[0]?.label || "main";
   }
 
   createModalPosition = pos;
@@ -2317,10 +2383,11 @@ async function handleDeleteSelectedConnection(
   );
 }
 
-// Only connections where both endpoints are currently on the canvas.
+// Only connections where both endpoints are currently on the canvas AND in
+// this view's bound system.
 let visibleConnections = $derived(
   computeVisibleConnections(
-    connections.map((conn) => {
+    connections.filter((c) => selectedSystemIndex === -1 || (systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to))).map((conn) => {
       const entry: {
         from: number;
         to: number;
@@ -2350,7 +2417,8 @@ let renderOrder = $derived(
   computeRenderOrder(
     Object.keys(checked)
       .map((key) => keyToIndex.get(key))
-      .filter((index): index is number => index !== undefined),
+      .filter((index): index is number => index !== undefined)
+      .filter((index) => selectedSystemIndex === -1 || systemComponentIndices.has(index)),
     parentOf,
   ),
 );
@@ -2804,6 +2872,22 @@ $effect(() => {
 
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
+    {#if selectedDiagramPath !== null}
+      <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-100 border-b border-base-300 text-sm" data-testid="diagram-system-label">
+        <span class="text-base-content/50 font-mono truncate">{selectedDiagramPath}</span>
+        <span class="text-base-content/30">·</span>
+        {#if isSystemDangling}
+          <span class="badge badge-warning badge-sm" title="Bound system not found in model. Fix system = in Code, or delete and recreate the diagram.">system: {selectedSystem} (missing)</span>
+        {:else if effectiveSystem !== ""}
+          <span class="badge badge-ghost badge-sm" title="This view is bound to this system (immutable after creation). Delete and recreate, or hand-edit in Code, to re-bind.">system: {effectiveSystem}</span>
+        {:else}
+          <span class="badge badge-ghost badge-sm">system: —</span>
+        {/if}
+        {#if hiddenForeignCount > 0}
+          <span class="text-xs text-base-content/50" title="Placed nodes from other systems are hidden, not deleted. Uncheck them in Code or re-bind the view.">+{hiddenForeignCount} hidden from other systems</span>
+        {/if}
+      </div>
+    {/if}
     <div
       class="relative flex-1 w-full h-full bg-base-300"
       bind:clientWidth={canvas_width}
@@ -3387,14 +3471,22 @@ $effect(() => {
         <p class="text-base-content/50 text-sm">
           No components found.<br />Open the editor and define some systems.
         </p>
+      {:else if isSystemDangling}
+        <p class="text-warning text-sm" data-testid="dangling-system-hint">
+          Bound system "{selectedSystem}" not found.<br />Fix <span class="font-mono">system =</span> in Code, or delete and recreate this diagram.
+        </p>
       {:else}
         <ComponentHierarchyTree
           {systems}
           {components}
           {selected}
+          filterSystemLabel={effectiveSystem}
           isChecked={(index) => checkedIndices.has(index)}
           onToggleChecked={(index) => toggleComponentChecked(index)}
         />
+        {#if hiddenForeignCount > 0}
+          <p class="text-xs text-base-content/50 mt-2">+{hiddenForeignCount} placed node{hiddenForeignCount === 1 ? "" : "s"} from other systems hidden.</p>
+        {/if}
       {/if}
 
         <div class="divider"></div>
@@ -3432,7 +3524,7 @@ $effect(() => {
       </h3>
 
       <ul class="space-y-1">
-        {#each connections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
+        {#each systemConnections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
           <li class="flex items-center gap-2 text-sm truncate" title={connection.label}>
             {connection.label}
           </li>

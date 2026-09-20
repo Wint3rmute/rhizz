@@ -55,6 +55,31 @@ describe("HCL View conversion and persistence", () => {
     expect(hcl).toContain('text_align = "top-left"');
   });
 
+  it("round-trips the view system through layoutToHcl and viewsToLayout", () => {
+    const layout = {
+      system: "quadcopter",
+      checked: {
+        "quadcopter/fc": { x: 10, y: 20 },
+      },
+    };
+    const hcl = layoutToHcl(layout, "overview", "quadcopter");
+    expect(hcl).toContain('system      = "quadcopter"');
+    const back = viewsToLayout(parse_views(hcl));
+    expect(back.system).toBe("quadcopter");
+    // layout.system fallback when systemName arg is omitted
+    const hcl2 = layoutToHcl(layout, "overview");
+    expect(hcl2).toContain('system      = "quadcopter"');
+  });
+
+  it("defaults to empty system for legacy layouts without one", () => {
+    const layout = viewsToLayout([
+      { label: "overview", system: "", nodes: [] },
+    ]);
+    expect(layout.system).toBe("");
+    expect(emptyDiagramLayout().system).toBe("");
+    expect(emptyDiagramLayout("sys-a").system).toBe("sys-a");
+  });
+
   it("converts parsed views to DiagramLayout", () => {
     const views = [
       {
