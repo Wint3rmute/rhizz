@@ -30,6 +30,7 @@ import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
+import NewViewModal from "./NewViewModal.svelte";
 import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
 import {
   type ComponentData,
@@ -586,33 +587,39 @@ function joinDiagramPath(parentPath: string, name: string): string {
   return parentPath ? `${parentPath}/${name}` : name;
 }
 
-async function handleCreateDiagram(parentPath: string): Promise<void> {
-  const name = sanitizeDiagramSegmentName(
-    prompt("New diagram name?", "Untitled.hcl") ?? "",
-  );
+// New-view modal state. FileTree's "+ File" only supplies the parent folder;
+// the name + immutable system binding are collected in NewViewModal.
+let isNewViewModalOpen = $state(false);
+let newViewParentPath = $state("");
+
+function handleCreateDiagram(parentPath: string): void {
+  newViewParentPath = parentPath;
+  isNewViewModalOpen = true;
+}
+
+async function handleNewViewCreate(data: {
+  name: string;
+  system: string;
+}): Promise<void> {
+  isNewViewModalOpen = false;
+  const name = sanitizeDiagramSegmentName(data.name);
   if (name === null) return;
-  // Immutable view binding: the system is chosen once here and never edited
-  // via UI afterwards (delete + recreate, or hand-edit in Code, to re-bind).
-  const defaultSystem = systems[0]?.label || "main";
-  const rawSystem = prompt(
-    `System for "${name}"? (immutable)\nAvailable: ${
-      systems.map((s) => s.label).join(", ") || defaultSystem
-    }`,
-    defaultSystem,
-  );
-  if (rawSystem === null) return;
-  const systemChoice = rawSystem.trim() || defaultSystem;
-  if (!systems.some((s) => s.label === systemChoice)) {
+  // Immutable view binding: chosen once here, never edited via UI afterwards
+  // (delete + recreate, or hand-edit in Code, to re-bind).
+  const systemChoice = data.system.trim() || systems[0]?.label || "main";
+  if (
+    systems.length > 0 && !systems.some((s) => s.label === systemChoice)
+  ) {
     reportDiagramError(
       new Error(
         `Unknown system "${systemChoice}". Available: ${
-          systems.map((s) => s.label).join(", ") || defaultSystem
+          systems.map((s) => s.label).join(", ")
         }`,
       ),
     );
     return;
   }
-  const path = joinDiagramPath(parentPath, name);
+  const path = joinDiagramPath(newViewParentPath, name);
   try {
     await writeDiagramLayoutFile(
       fs,
@@ -3564,6 +3571,14 @@ $effect(() => {
     </div>
   </aside>
 </div>
+
+<NewViewModal
+  isOpen={isNewViewModalOpen}
+  systems={systems}
+  defaultSystem={systems[0]?.label || "main"}
+  oncreate={(data) => void handleNewViewCreate(data).catch(reportDiagramError)}
+  onclose={() => (isNewViewModalOpen = false)}
+/>
 
 <CreateComponentModal
   isOpen={isCreateModalOpen}
