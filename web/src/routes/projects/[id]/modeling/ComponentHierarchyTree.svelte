@@ -16,6 +16,7 @@ import type { TreeNode } from "../../../../components/treeTypes";
 import { resolveIcon } from "../../../../iconHelper";
 import {
   buildComponentTree,
+  buildSystemSubtree,
   type ComponentTreeComponent,
   type ComponentTreeSystem,
 } from "./componentTree";
@@ -26,18 +27,23 @@ let {
   selected,
   onToggleChecked,
   isChecked,
+  filterSystemLabel = null,
 }: {
   systems: ComponentTreeSystem[];
   components: ComponentTreeComponent[];
   /** The canvas node selection (arena-index set); mutated in place for two-way sync. */
   selected?: SvelteSet<number>;
+  /** When set, only this system's subtree is shown and the system root row is hidden. */
+  filterSystemLabel?: string | null;
   /** True when the given arena index is currently placed on the canvas. */
   isChecked: (index: number) => boolean;
   /** Fired when a row's checkbox is toggled; +page.svelte places/unplaces it. */
   onToggleChecked: (index: number) => void;
 } = $props();
 
-let nodes = $derived(buildComponentTree(systems, components));
+let nodes = $derived(
+  filterSystemLabel ? buildSystemSubtree(systems, components, filterSystemLabel) : buildComponentTree(systems, components),
+);
 
 // The `Tree` shell highlights a single `selectedId`. Map it to/from the
 // canvas's multi-select SvelteSet: when exactly one component is selected,

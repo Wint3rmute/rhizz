@@ -59,18 +59,22 @@ function asConnectionSide(
 // Conventional location for diagram layout data inside a project's VFS.
 export const DIAGRAM_LAYOUT_DIR = "diagrams";
 
-// The persisted content of a single diagram: which components are placed on
-// its canvas, connection routing overrides, and free-standing text
-// annotations. The editor's "remembered layout" for unchecked nodes is
+// The persisted content of a single diagram: which system it shows, which
+// components are placed on its canvas, connection routing overrides, and
+// free-standing text annotations. `system` is immutable after creation — the
+// Modeling UI never offers to change it, only the Code editor can (or delete
+// + recreate). The editor's "remembered layout" for unchecked nodes is
 // transient UI state and is deliberately not persisted (see `+page.svelte`).
 export interface DiagramLayout {
+  /** Label of the system this view shows. `""` means unlinked/legacy. */
+  system?: string;
   checked: Record<string, StoredBox>;
   connections?: Record<string, StoredConnection>;
   annotations?: Annotation[];
 }
 
-export function emptyDiagramLayout(): DiagramLayout {
-  return { checked: {}, connections: {}, annotations: [] };
+export function emptyDiagramLayout(system = ""): DiagramLayout {
+  return { system, checked: {}, connections: {}, annotations: [] };
 }
 
 /**
@@ -112,8 +116,7 @@ export function layoutToHcl(
   layout: DiagramLayout,
   viewName = "diagram",
   systemName = "",
-): string {
-  const nodes = Object.entries(layout.checked).map(([component, box]) => {
+): string {  const nodes = Object.entries(layout.checked).map(([component, box]) => {
     const node: NodeLayout = {
       component,
       x: box.x,
@@ -134,11 +137,12 @@ export function layoutToHcl(
     },
   );
 
+  const resolvedSystem = systemName || layout.system || "";
   const viewDef: ViewDefinition = {
     label: viewName,
     description: "",
     tags: [],
-    system: systemName,
+    system: resolvedSystem,
     filter: {
       include_tags: [],
       exclude_tags: [],
@@ -159,6 +163,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
   const connections: Record<string, StoredConnection> = {};
   const annotations: Annotation[] = [];
+  const system = views[0]?.system ?? "";
 
   for (const view of views) {
     for (const node of view.nodes ?? []) {
@@ -190,7 +195,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
     }
   }
 
-  return { checked, connections, annotations };
+  return { system, checked, connections, annotations };
 }
 
 /**

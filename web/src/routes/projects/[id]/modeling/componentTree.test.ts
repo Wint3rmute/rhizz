@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { TreeNode } from "../../../../components/treeTypes";
 import {
   buildComponentTree,
+  buildSystemSubtree,
+  componentInSystem,
+  systemIndexOfComponent,
   type ComponentTreeComponent,
   type ComponentTreeSystem,
 } from "./componentTree";
@@ -138,5 +141,40 @@ describe("buildComponentTree", () => {
       id: "1",
       isExpandable: true,
     });
+  });
+});
+
+describe("systemIndexOfComponent / componentInSystem", () => {
+  it("resolves direct and nested components to their system", () => {
+    const components = [
+      comp("fc", { parent_system_index: 0 }),
+      comp("mcu", { parent_component_index: 0 }),
+      comp("other", { parent_system_index: 1 }),
+    ];
+    expect(systemIndexOfComponent(components, 0)).toBe(0);
+    expect(systemIndexOfComponent(components, 1)).toBe(0);
+    expect(systemIndexOfComponent(components, 2)).toBe(1);
+    expect(componentInSystem(components, 1, 0)).toBe(true);
+    expect(componentInSystem(components, 1, 1)).toBe(false);
+  });
+
+  it("returns undefined for orphans", () => {
+    expect(systemIndexOfComponent([comp("a")], 0)).toBeUndefined();
+  });
+});
+
+describe("buildSystemSubtree", () => {
+  it("returns only the selected system's children, hiding the system root", () => {
+    const subtree = buildSystemSubtree([sys("a"), sys("b")], [
+      comp("leaf-a", { parent_system_index: 0 }),
+      comp("composite", { parent_system_index: 1 }),
+      comp("child", { parent_component_index: 1 }),
+    ], "b");
+    expect(subtree.map((n) => n.id)).toEqual(["1"]);
+    expect(subtree[0]?.children.map((c) => c.id)).toEqual(["2"]);
+  });
+
+  it("returns empty for an unknown system", () => {
+    expect(buildSystemSubtree([sys("a")], [], "missing")).toEqual([]);
   });
 });

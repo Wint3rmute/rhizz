@@ -31,6 +31,57 @@ export interface ComponentTreeComponent {
 }
 
 /**
+ * Resolves the top-level system index a component belongs to by walking
+ * `parent_component_index` links until a `parent_system_index` is found.
+ * Returns undefined for orphans with no system link.
+ */
+export function systemIndexOfComponent(
+  components: ComponentTreeComponent[],
+  index: number,
+): number | undefined {
+  let current = components[index];
+  const seen = new Set<number>();
+  while (current !== undefined) {
+    if (current.parent_system_index !== undefined) {
+      return current.parent_system_index;
+    }
+    const parent = current.parent_component_index;
+    if (parent === undefined || seen.has(parent)) return undefined;
+    seen.add(parent);
+    current = components[parent];
+  }
+  return undefined;
+}
+
+/**
+ * True when the component at `index` belongs (transitively) to `systemIndex`.
+ */
+export function componentInSystem(
+  components: ComponentTreeComponent[],
+  index: number,
+  systemIndex: number,
+): boolean {
+  return systemIndexOfComponent(components, index) === systemIndex;
+}
+
+/**
+ * Builds the `TreeNode[]` for a single system only, hiding the system root
+ * itself — returns its top-level components (and their subtrees) as roots.
+ * Used by the Modeling explorer when a view is bound to one system.
+ */
+export function buildSystemSubtree(
+  systems: ComponentTreeSystem[],
+  components: ComponentTreeComponent[],
+  systemLabel: string,
+): TreeNode[] {
+  const systemIndex = systems.findIndex((s) => s.label === systemLabel);
+  if (systemIndex === -1) return [];
+  return buildComponentTree(systems, components).find(
+    (n) => n.id === `sys:${String(systemIndex)}`,
+  )?.children ?? [];
+}
+
+/**
  * Builds the `TreeNode[]` for the whole model.
  *
  * All component nodes are created first (each with an initially-empty
