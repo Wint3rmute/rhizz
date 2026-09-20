@@ -11,6 +11,16 @@
 export const TOUR_TARGETS = {
   /** Top navigation bar (links + project controls). */
   navbar: "navbar",
+  /** Navbar link to the Overview page (tour preview stops). */
+  navOverview: "nav-overview",
+  /** Navbar link to the Modeling page (tour preview stops). */
+  navModeling: "nav-modeling",
+  /** Navbar link to the Inventory page (tour preview stops). */
+  navInventory: "nav-inventory",
+  /** Navbar link to the Explore page (tour preview stops). */
+  navExplore: "nav-explore",
+  /** Navbar link to the Code page (tour preview stops). */
+  navCode: "nav-code",
   /** Overview stats card. */
   overview: "overview-stats",
   /** Diagrams floating toolbar (layout, zoom, add) — small and always
