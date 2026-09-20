@@ -3464,11 +3464,15 @@ $effect(() => {
       </h3>
 
       {#if selectedDiagramPath !== null}
-        <div class="mb-2" data-testid="diagram-system-label">
+        <div
+          class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+          data-testid="diagram-system-label"
+          title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind."
+        >
           {#if isSystemDangling}
-            <span class="badge badge-warning badge-xs" title="Bound system not found in model. Fix system = in Code, or delete and recreate the diagram.">system: {selectedSystem} (missing)</span>
+            <span class="text-warning">system: {selectedSystem} (missing)</span>
           {:else if effectiveSystem !== ""}
-            <span class="badge badge-ghost badge-xs" title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind.">system: {effectiveSystem}</span>
+            system: {effectiveSystem}
           {/if}
         </div>
       {/if}
