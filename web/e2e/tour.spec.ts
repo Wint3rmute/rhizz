@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // Full walkthrough e2e: creating the first project (here from the drone
 // example, so every stop has content to spotlight) auto-opens the guided
-// tour, and Next walks all nine stops across the six workspace pages to
+// tour, and Next walks all fourteen stops across the six workspace pages to
 // Done. Desktop viewport only — the tour entry point is desktop-gated.
 // Unit tests cover the step factory/targets/store; this spec proves the
 // cross-page wiring — mount, per-step navigation, spotlight, advance.
@@ -26,11 +26,16 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   const next = page.getByRole("button", { name: "next step" });
   const titles = [
     "Navbar",
+    "Up next: Overview",
     "Overview",
+    "Up next: Modeling",
     "Modeling: the core tool",
     "Modeling: selection & inspector",
+    "Up next: Inventory",
     "Inventory",
+    "Up next: Explore",
     "Explore",
+    "Up next: Code",
     "Code",
     "You're set 🚀",
   ];

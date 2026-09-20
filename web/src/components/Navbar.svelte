@@ -38,26 +38,31 @@ const NAV_LINKS = [
   {
     label: "Overview",
     emoji: "🔍",
+    tour: TOUR_TARGETS.navOverview,
     href: (id: string) => resolve("/projects/[id]/overview", { id }),
   },
   {
     label: "Modeling",
     emoji: "📐",
+    tour: TOUR_TARGETS.navModeling,
     href: (id: string) => resolve("/projects/[id]/modeling", { id }),
   },
   {
     label: "Inventory",
     emoji: "📦",
+    tour: TOUR_TARGETS.navInventory,
     href: (id: string) => resolve("/projects/[id]/inventory", { id }),
   },
   {
     label: "Explore",
     emoji: "🧭",
+    tour: TOUR_TARGETS.navExplore,
     href: (id: string) => resolve("/projects/[id]/explore", { id }),
   },
   {
     label: "Code",
     emoji: "📝",
+    tour: TOUR_TARGETS.navCode,
     href: (id: string) => resolve("/projects/[id]/code", { id }),
   },
 ] as const;
@@ -157,12 +162,17 @@ async function startTourFlow(): Promise<void> {
         Rhizz
       </a>
 
-      <!-- Desktop navigation links (positioned next to ← rhizz button) -->
+      <!-- Desktop navigation links (positioned next to ← rhizz button).
+           Each link carries its tour anchor here only (not in the mobile
+           copy below): querySelector resolves the first match, so a
+           duplicated anchor would spotlight the hidden desktop link on
+           mobile. -->
       <div class="hidden md:flex items-center gap-1">
         {#if activeProjectId}
           {#each NAV_LINKS as link (link.label)}
             <a
               href={link.href(activeProjectId)}
+              data-tour={link.tour}
               class="btn btn-ghost btn-sm"
             >{link.label}</a>
           {/each}

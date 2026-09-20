@@ -53,4 +53,23 @@ describe("tourSteps", () => {
     expect(steps[0]?.target).toBeUndefined();
     expect(steps[steps.length - 1]?.target).toBeUndefined();
   });
+
+  it("previews each page on the navbar before showing it", () => {
+    // Preview stops spotlight a navbar link while staying on the current
+    // page (same href as the previous stop), so the tour never jumps
+    // pages abruptly — the following content stop does the navigating.
+    const previews = steps.filter((step) => step.id.endsWith("-preview"));
+    expect(previews.map((step) => step.target)).toEqual([
+      "navOverview",
+      "navModeling",
+      "navInventory",
+      "navExplore",
+      "navCode",
+    ]);
+    for (const preview of previews) {
+      const index = steps.indexOf(preview);
+      expect(index).toBeGreaterThan(0);
+      expect(steps[index - 1]?.href).toBe(preview.href);
+    }
+  });
 });
