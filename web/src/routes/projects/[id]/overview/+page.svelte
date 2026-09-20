@@ -1,5 +1,4 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
@@ -96,33 +95,8 @@ function levelBadge(level: number): string {
     <div
       class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6"
     >
-      <!-- Left sidebar -->
-      <aside
-        class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
-      >
-        <h3 class="font-semibold mb-3 text-base-content">Navigation</h3>
-        <ul class="space-y-2 text-sm text-base-content/70">
-          <li>
-            <a
-              href={resolve("/projects/[id]/code", { id: data.projectId })}
-              class="block hover:text-base-content"
-            >Code</a>
-          </li>
-          <li>
-            <a
-              href={resolve("/projects/[id]/modeling", { id: data.projectId })}
-              class="block hover:text-base-content"
-            >Modeling</a>
-          </li>
-          <li>
-            <a href={resolve("/projects", {})}
-              class="block hover:text-base-content">Projects</a>
-          </li>
-        </ul>
-      </aside>
-
       <!-- Main dashboard -->
-      <main class="md:col-span-9 lg:col-span-10 flex flex-col gap-6">
+      <main class="md:col-span-12 flex flex-col gap-6">
       {#if !model}
         <div class="card bg-base-200 shadow">
           <div class="card-body items-center text-center py-16">
