@@ -10,11 +10,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
-import {
-  projectStore,
-  setCurrentDiagnostics,
-  setCurrentScore,
-} from "../../../../ProjectState.svelte";
+import { projectStore, setCurrentScore } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import {
   primaryHclPath,
@@ -181,8 +177,8 @@ $effect(() => {
 });
 
 // The project-wide warning preset (navbar select). Reading it inside the
-// `$derived` compile below is what makes the navbar's warning count and the
-// diagnostics shown here react to a change of level.
+// `$derived` compile below is what makes the diagnostics shown here react
+// to a change of level.
 let warningLevel = $derived(getWarningLevel());
 
 let output = $derived.by(() => compile_system(sources, warningLevel));
@@ -1586,13 +1582,8 @@ let componentData = $derived(componentDataByKey(model));
 $effect(() => {
   const sc = output.model()?.score();
   setCurrentScore(sc ? { overall_percentage: sc.overall_percentage } : null);
-  setCurrentDiagnostics({
-    errors: output.error_count(),
-    warnings: output.warning_count(),
-  });
   return () => {
     setCurrentScore(null);
-    setCurrentDiagnostics(null);
   };
 });
 

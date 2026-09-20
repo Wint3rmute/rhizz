@@ -4,7 +4,6 @@ import {
   clearCurrentProject,
   createProjectWithMainFile,
   projectStore,
-  setCurrentDiagnostics,
   setCurrentProject,
   setCurrentScore,
 } from "../ProjectState.svelte";
@@ -23,7 +22,7 @@ const NAVBAR_PROJECT_ID = "story-navbar";
 // The Navbar reads everything from the shared ProjectState singleton (the app
 // renders `<Navbar />` with no props), so the stories drive that singleton
 // rather than injecting fixtures through props: seed the project, make it the
-// active one, and publish the score/diagnostics the badges render.
+// active one, and publish the score the badge renders.
 async function ensureNavbarProject(): Promise<void> {
   const existing = await projectStore.listProjects();
   if (!existing.some((p) => p.id === NAVBAR_PROJECT_ID)) {
@@ -35,7 +34,6 @@ async function ensureNavbarProject(): Promise<void> {
   }
   await setCurrentProject(NAVBAR_PROJECT_ID);
   setCurrentScore({ overall_percentage: 72.5 });
-  setCurrentDiagnostics({ errors: 2, warnings: 1 });
 }
 
 // Leaves no story pinned to the fixture project (or its badges).
