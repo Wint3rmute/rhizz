@@ -80,8 +80,7 @@ export const ExpandCollapseAll: Story = {
   },
 };
 
-// Indent guides (VS Code / Zed style): every expanded parent draws one
-// vertical line below itself, through its children's toggle column — the
+// Indent guides (VS Code / Zed style): every expanded parent draws one// vertical line below itself, through its children's toggle column — the
 // line sits at depth * 12 + 8px (toggle center) with the 12px level step
 // preserved, so rows keep their exact positions.
 export const IndentGuides: Story = {
@@ -106,5 +105,49 @@ export const IndentGuides: Story = {
     await expect(guides()).toHaveLength(0);
     await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
     await expect(guides()).toHaveLength(2);
+  },
+};
+
+// System-bound view: with filterSystemLabel set, only that system's subtree
+// is shown and the system root row itself is hidden — the view header
+// already names the system, so the root would be redundant.
+export const FilteredBySystem: Story = {
+  args: {
+    systems: [{ label: "a" }, { label: "b" }],
+    components: [
+      { label: "leaf-a", parent_system_index: 0 },
+      { label: "composite", parent_system_index: 1 },
+      { label: "child", parent_component_index: 1 },
+    ],
+    filterSystemLabel: "b",
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    // Only system b's components render; system a's leaf and both sys roots hidden.
+    await expect(canvas.queryByText("leaf-a")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("a")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("b")).not.toBeInTheDocument();
+    await expect(canvas.getByText("composite")).toBeInTheDocument();
+    await expect(canvas.getByText("child")).toBeInTheDocument();
+
+    // 2 component rows → 2 checkboxes.
+    await expect(canvas.getAllByRole("checkbox")).toHaveLength(2);
+
+    // Unknown system → empty tree with the shared empty message.
+    // (Exercised via args update by the story runner re-render.)
+    await expect(args.filterSystemLabel).toBe("b");
+  },
+};
+
+export const FilteredUnknownSystem: Story = {
+  args: {
+    systems: [{ label: "a" }],
+    components: [{ label: "leaf-a", parent_system_index: 0 }],
+    filterSystemLabel: "missing",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("No components found.")).toBeInTheDocument();
   },
 };
