@@ -34,7 +34,7 @@ function specUrl(code: string): string {
             Well Done!
           </div>
         {/if}
-        {#each errors as diagnostic (diagnostic.code + diagnostic.message)}
+        {#each errors as diagnostic, i (i)}
           <div role="alert" class="alert alert-error alert-soft">
             <p>
               <a
@@ -46,7 +46,7 @@ function specUrl(code: string): string {
             </p>
           </div>
         {/each}
-        {#each warnings as diagnostic (diagnostic.code + diagnostic.message)}
+        {#each warnings as diagnostic, i (i)}
           <div role="alert" class="alert alert-warning alert-soft">
             <p>
               <a
