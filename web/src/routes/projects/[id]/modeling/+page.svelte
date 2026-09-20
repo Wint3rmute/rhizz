@@ -3495,7 +3495,7 @@ $effect(() => {
           onToggleChecked={(index) => toggleComponentChecked(index)}
         />
         {#if hiddenForeignCount > 0}
-          <p class="text-xs text-base-content/50 mt-2">+{hiddenForeignCount} placed node{hiddenForeignCount === 1 ? "" : "s"} from other systems hidden.</p>
+          <p class="text-xs text-warning mt-2">+{hiddenForeignCount} placed node{hiddenForeignCount === 1 ? "" : "s"} from other systems hidden.</p>
         {/if}
       {/if}
 
