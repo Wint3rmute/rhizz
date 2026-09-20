@@ -2888,22 +2888,6 @@ $effect(() => {
 
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
-    {#if selectedDiagramPath !== null}
-      <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-base-100 border-b border-base-300 text-sm" data-testid="diagram-system-label">
-        <span class="text-base-content/50 font-mono truncate">{selectedDiagramPath}</span>
-        <span class="text-base-content/30">·</span>
-        {#if isSystemDangling}
-          <span class="badge badge-warning badge-sm" title="Bound system not found in model. Fix system = in Code, or delete and recreate the diagram.">system: {selectedSystem} (missing)</span>
-        {:else if effectiveSystem !== ""}
-          <span class="badge badge-ghost badge-sm" title="This view is bound to this system (immutable after creation). Delete and recreate, or hand-edit in Code, to re-bind.">system: {effectiveSystem}</span>
-        {:else}
-          <span class="badge badge-ghost badge-sm">system: —</span>
-        {/if}
-        {#if hiddenForeignCount > 0}
-          <span class="text-xs text-base-content/50" title="Placed nodes from other systems are hidden, not deleted. Uncheck them in Code or re-bind the view.">+{hiddenForeignCount} hidden from other systems</span>
-        {/if}
-      </div>
-    {/if}
     <div
       class="relative flex-1 w-full h-full bg-base-300"
       bind:clientWidth={canvas_width}
@@ -3474,10 +3458,20 @@ $effect(() => {
   >
     <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
       <h3
-        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+        class="font-semibold text-sm mb-1 text-base-content/70 uppercase tracking-wide"
       >
         Components
       </h3>
+
+      {#if selectedDiagramPath !== null}
+        <div class="mb-2" data-testid="diagram-system-label">
+          {#if isSystemDangling}
+            <span class="badge badge-warning badge-xs" title="Bound system not found in model. Fix system = in Code, or delete and recreate the diagram.">system: {selectedSystem} (missing)</span>
+          {:else if effectiveSystem !== ""}
+            <span class="badge badge-ghost badge-xs" title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind.">system: {effectiveSystem}</span>
+          {/if}
+        </div>
+      {/if}
 
       {#if selectedDiagramPath === null}
         <p class="text-base-content/50 text-sm">
