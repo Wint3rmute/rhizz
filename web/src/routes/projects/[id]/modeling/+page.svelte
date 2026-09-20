@@ -338,14 +338,19 @@ let selectedSystem = $state<string>("");
 // file round-trips unchanged until fixed in Code or recreated.
 let effectiveSystem = $derived(selectedSystem || systems[0]?.label || "");
 // Arena index of the effective system in the current model, or -1.
-let selectedSystemIndex = $derived(systems.findIndex((s) => s.label === effectiveSystem));
-let isSystemDangling = $derived(selectedDiagramPath !== null && selectedSystem !== "" && systems.length > 0 && systems.findIndex((s) => s.label === selectedSystem) === -1);
+let selectedSystemIndex = $derived(
+  systems.findIndex((s) => s.label === effectiveSystem),
+);
+let isSystemDangling = $derived(
+  selectedDiagramPath !== null && selectedSystem !== "" && systems.length > 0 &&
+    systems.findIndex((s) => s.label === selectedSystem) === -1,
+);
 
 // Arena indices of components belonging to the effective system (transitive
 // via parent links). Used to filter canvas, explorer, and connections list.
 let systemComponentIndices = $derived.by(() => {
-  if (selectedSystemIndex === -1) return new Set<number>();
-  const out = new Set<number>();
+  if (selectedSystemIndex === -1) return new SvelteSet<number>();
+  const out = new SvelteSet<number>();
   components.forEach((_c, i) => {
     if (componentInSystem(components, i, selectedSystemIndex)) out.add(i);
   });
@@ -366,7 +371,9 @@ let hiddenForeignCount = $derived.by(() => {
 // Connections sidebar, filtered to this view's system (both endpoints inside).
 let systemConnections = $derived.by(() => {
   if (selectedSystemIndex === -1) return connections;
-  return connections.filter((c) => systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to));
+  return connections.filter((c) =>
+    systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to)
+  );
 });
 
 let fullDiagramPath = $derived(
@@ -588,7 +595,9 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
   // via UI afterwards (delete + recreate, or hand-edit in Code, to re-bind).
   const defaultSystem = systems[0]?.label || "main";
   const rawSystem = prompt(
-    `System for "${name}"? (immutable)\nAvailable: ${systems.map((s) => s.label).join(", ") || defaultSystem}`,
+    `System for "${name}"? (immutable)\nAvailable: ${
+      systems.map((s) => s.label).join(", ") || defaultSystem
+    }`,
     defaultSystem,
   );
   if (rawSystem === null) return;
@@ -596,7 +605,9 @@ async function handleCreateDiagram(parentPath: string): Promise<void> {
   if (!systems.some((s) => s.label === systemChoice)) {
     reportDiagramError(
       new Error(
-        `Unknown system "${systemChoice}". Available: ${systems.map((s) => s.label).join(", ") || defaultSystem}`,
+        `Unknown system "${systemChoice}". Available: ${
+          systems.map((s) => s.label).join(", ") || defaultSystem
+        }`,
       ),
     );
     return;
@@ -2387,7 +2398,10 @@ async function handleDeleteSelectedConnection(
 // this view's bound system.
 let visibleConnections = $derived(
   computeVisibleConnections(
-    connections.filter((c) => selectedSystemIndex === -1 || (systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to))).map((conn) => {
+    connections.filter((c) =>
+      selectedSystemIndex === -1 ||
+      (systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to))
+    ).map((conn) => {
       const entry: {
         from: number;
         to: number;
@@ -2418,7 +2432,9 @@ let renderOrder = $derived(
     Object.keys(checked)
       .map((key) => keyToIndex.get(key))
       .filter((index): index is number => index !== undefined)
-      .filter((index) => selectedSystemIndex === -1 || systemComponentIndices.has(index)),
+      .filter((index) =>
+        selectedSystemIndex === -1 || systemComponentIndices.has(index)
+      ),
     parentOf,
   ),
 );

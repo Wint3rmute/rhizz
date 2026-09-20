@@ -42,7 +42,9 @@ let {
 } = $props();
 
 let nodes = $derived(
-  filterSystemLabel ? buildSystemSubtree(systems, components, filterSystemLabel) : buildComponentTree(systems, components),
+  filterSystemLabel
+    ? buildSystemSubtree(systems, components, filterSystemLabel)
+    : buildComponentTree(systems, components),
 );
 
 // The `Tree` shell highlights a single `selectedId`. Map it to/from the

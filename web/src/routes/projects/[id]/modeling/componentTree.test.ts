@@ -4,9 +4,9 @@ import {
   buildComponentTree,
   buildSystemSubtree,
   componentInSystem,
-  systemIndexOfComponent,
   type ComponentTreeComponent,
   type ComponentTreeSystem,
+  systemIndexOfComponent,
 } from "./componentTree";
 
 function comp(

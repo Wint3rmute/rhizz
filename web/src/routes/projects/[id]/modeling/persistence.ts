@@ -116,7 +116,8 @@ export function layoutToHcl(
   layout: DiagramLayout,
   viewName = "diagram",
   systemName = "",
-): string {  const nodes = Object.entries(layout.checked).map(([component, box]) => {
+): string {
+  const nodes = Object.entries(layout.checked).map(([component, box]) => {
     const node: NodeLayout = {
       component,
       x: box.x,
@@ -137,6 +138,7 @@ export function layoutToHcl(
     },
   );
 
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty-string systems must fall through, ?? would keep "".
   const resolvedSystem = systemName || layout.system || "";
   const viewDef: ViewDefinition = {
     label: viewName,

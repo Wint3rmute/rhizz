@@ -7,7 +7,7 @@ async function openDiagram(page, name = "E2E system view") {
   await page.goto("/");
   const create = page.getByRole("button", { name: "New project" }).first();
   await expect(create).toBeVisible();
-  page.on("dialog", (dialog) => void dialog.accept(name));
+  page.once("dialog", (dialog) => void dialog.accept(name));
   await create.click();
   await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
   const tourDialog = page.getByRole("alertdialog");
@@ -22,9 +22,7 @@ async function openDiagram(page, name = "E2E system view") {
   return id;
 }
 
-test("view stays bound to its system after a second system is added", async ({
-  page,
-}) => {
+test("view stays bound to its system after a second system is added", async ({ page }) => {
   await openDiagram(page);
 
   // Fresh project seeds diagrams/main.hcl bound to the auto-created main system.
@@ -42,7 +40,6 @@ test("view stays bound to its system after a second system is added", async ({
     .toBeVisible();
 
   // Add a second system via the toolbar. The view must stay bound to main.
-  page.off("dialog");
   const seen: string[] = [];
   page.on("dialog", (dialog) => {
     seen.push(dialog.message());
