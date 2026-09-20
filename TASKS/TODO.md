@@ -13,6 +13,40 @@ How to work on this file:
 
 ---
 
+## Task <N> — Warn on view nodes outside the bound system (W017)
+
+Views are bound to one system (`view.system`, immutable in the Modeling UI),
+but the compiler currently accepts `node` paths from any system without a
+diagnostic (`W016` only checks global existence). The Modeling frontend hides
+such nodes (`+N hidden from other systems`), yet `rhizz check` stays silent.
+
+Definition of done:
+
+1. Add `SPEC/diagnostics/W017.md` following the warning file format
+   (`**Warning level:** Architectural.` as first line after the title —
+   `build.rs` fails the build otherwise and auto-generates
+   `DiagnosticCode::W017`).
+2. Extend view validation (`validate_view_nodes` in
+   `crates/rhizz-core/src/validate.rs`): for a known `view.system`, resolve
+   each node's component and emit `W017` when it belongs to a different
+   system (e.g. `view "overview" { system = "a" }` with
+   `node "b/comp"`). Only runs when the system is known (same gating as
+   `W016`); unknown node paths keep reporting `W016`, not `W017`.
+3. Decide + document the edge cases in `W017.md`:
+   - bare top-level definition labels (no system scope) — exempt, they are
+     global, not system members;
+   - the view's own system prefix (`"a"` / `"a/..."`) — clean, no warning;
+   - dedupe repeated offending paths (mirrors the `W016` `reported` set).
+4. Add the row to the warning-code mapping table in `SPEC/warning-levels.md`.
+5. Tests (red/green TDD, assert exact codes not counts):
+   - `W017` fires once per foreign path for a node from another system;
+   - no `W017` for own-system nodes, bare definition labels, or when the
+     view system is unknown/dangling (`E006` path);
+   - `W016` behavior unchanged.
+6. Validate with `just test`, `just lint`, `just build`, `just format`.
+
+---
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
