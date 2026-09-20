@@ -17,11 +17,15 @@ function specUrl(code: string): string {
 </script>
 
 <div
-  class="sticky bottom-0 z-10 border-t border-base-300 bg-base-100/95 backdrop-blur-xs"
+  class="relative z-20 border-t border-base-300 bg-base-100/95 backdrop-blur-xs"
   data-testid="diagnostics-status-bar"
 >
   {#if expanded}
-    <div class="max-h-64 overflow-y-auto px-4 sm:px-6 lg:px-8 py-3">
+    <!-- Overlay: floats above the page instead of pushing content up,
+         so expanding never shifts the layout. -->
+    <div
+      class="absolute inset-x-0 bottom-full max-h-64 overflow-y-auto px-4 sm:px-6 lg:px-8 py-3 bg-base-100/95 backdrop-blur-xs border-t border-base-300 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]"
+    >
       <div class="max-w-7xl mx-auto space-y-2 text-sm">
         {#if diagnostics.length === 0}
           <div role="alert" class="alert alert-success alert-soft">
