@@ -3464,15 +3464,9 @@ $effect(() => {
     class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300 flex flex-col justify-between gap-4"
   >
     <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      <h3
-        class="font-semibold text-sm mb-1 text-base-content/70 uppercase tracking-wide"
-      >
-        Components
-      </h3>
-
       {#if selectedDiagramPath !== null}
         <div
-          class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+          class="font-semibold text-sm mb-1 text-base-content uppercase tracking-wide"
           data-testid="diagram-system-label"
           title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind."
         >
@@ -3483,6 +3477,12 @@ $effect(() => {
           {/if}
         </div>
       {/if}
+
+      <h3
+        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+      >
+        Components
+      </h3>
 
       {#if selectedDiagramPath === null}
         <p class="text-base-content/50 text-sm">
