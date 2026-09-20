@@ -108,10 +108,10 @@ export const LinkOrder: Story = {
     await expect(names).toEqual([
       "Rhizz",
       "🔍 Overview",
-      "📐 Diagrams",
+      "📐 Modeling",
       "📦 Inventory",
       "🧭 Explore",
-      "📝 Editor",
+      "📝 Code",
     ]);
   },
 };

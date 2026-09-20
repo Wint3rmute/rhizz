@@ -61,7 +61,7 @@ $effect(() => {
 });
 
 async function openProject(project: Project) {
-  await goto(resolve("/projects/[id]/editor", { id: project.id }));
+  await goto(resolve("/projects/[id]/code", { id: project.id }));
 }
 
 async function createEmpty() {

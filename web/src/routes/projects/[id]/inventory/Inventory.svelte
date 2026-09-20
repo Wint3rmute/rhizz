@@ -4,7 +4,7 @@
 // default diagram (`diagrams/<label>.hcl`) and a tabbed detail pane.
 //
 // Read-only by design: no model mutations are dispatched here; the Edit
-// button deep-links into the Diagrams editor instead.
+// button deep-links into the Modeling editor instead.
 //
 // Data is taken from the compiled model's raw payload (`model.to_js()`),
 // which — unlike the typed wasm wrappers — exposes children/ports/parent
@@ -21,17 +21,17 @@ import type {
   RawModelPayload,
 } from "../../../../modelView";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
+import DiagramStaticView from "../modeling/DiagramStaticView.svelte";
 import {
   type DiagramLayout,
   emptyDiagramLayout,
   mapLayoutToBoxes,
   readDiagramLayoutFile,
-} from "../diagrams/persistence";
+} from "../modeling/persistence";
 import type {
   DiagramStaticComponent,
   DiagramStaticConnection,
-} from "../diagrams/types";
+} from "../modeling/types";
 import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
 import {
@@ -238,7 +238,7 @@ let emptyStatePath = $derived(
 
 let editHref = $derived(
   projectId && selectedDefinition
-    ? resolve("/projects/[id]/diagrams", { id: projectId })
+    ? resolve("/projects/[id]/modeling", { id: projectId })
     : null,
 );
 </script>

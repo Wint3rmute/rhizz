@@ -1,7 +1,7 @@
 <script lang="ts">
 // Bottom detail pane for the selected definition: tabbed
 // Description / Ports (N) / Requirements (placeholder) / Metadata views,
-// plus an Edit button that deep-links into the Diagrams editor.
+// plus an Edit button that deep-links into the Modeling editor.
 import Markdown from "../../../../components/Markdown.svelte";
 import { SvelteSet } from "svelte/reactivity";
 import type { InventoryDefinition } from "./inventory";
@@ -12,7 +12,7 @@ let {
   editHref,
 }: {
   definition: InventoryDefinition | null;
-  /** Navigate-to URL for the Edit button (deep-link into Diagrams). */
+  /** Navigate-to URL for the Edit button (deep-link into Modeling). */
   editHref: string | null;
 } = $props();
 
@@ -83,7 +83,7 @@ function flattenTags(def: InventoryDefinition): string[] {
         <a
           href={editHref}
           class="btn btn-ghost btn-sm gap-1.5"
-          aria-label="Edit {definition.label} in the Diagrams editor"
+          aria-label="Edit {definition.label} in the Modeling editor"
         >
           <svg
             width="14"

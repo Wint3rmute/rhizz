@@ -41,9 +41,9 @@ const NAV_LINKS = [
     href: (id: string) => resolve("/projects/[id]/overview", { id }),
   },
   {
-    label: "Diagrams",
+    label: "Modeling",
     emoji: "📐",
-    href: (id: string) => resolve("/projects/[id]/diagrams", { id }),
+    href: (id: string) => resolve("/projects/[id]/modeling", { id }),
   },
   {
     label: "Inventory",
@@ -56,9 +56,9 @@ const NAV_LINKS = [
     href: (id: string) => resolve("/projects/[id]/explore", { id }),
   },
   {
-    label: "Editor",
+    label: "Code",
     emoji: "📝",
-    href: (id: string) => resolve("/projects/[id]/editor", { id }),
+    href: (id: string) => resolve("/projects/[id]/code", { id }),
   },
 ] as const;
 

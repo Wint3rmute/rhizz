@@ -12,16 +12,16 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { toastState } from "../../../../ToastState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
-import FileTree from "../editor/FileTree.svelte";
-import DiagramStaticView from "../diagrams/DiagramStaticView.svelte";
-import EmbedDiagramButton from "../diagrams/EmbedDiagramButton.svelte";
+import FileTree from "../code/FileTree.svelte";
+import DiagramStaticView from "../modeling/DiagramStaticView.svelte";
+import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
 import {
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   mapLayoutToBoxes,
   readDiagramLayoutFile,
-} from "../diagrams/persistence";
+} from "../modeling/persistence";
 import Markdown from "../../../../components/Markdown.svelte";
 import { type ProjectDoc, readProjectDocs } from "./docs";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
@@ -73,7 +73,7 @@ $effect(() => {
       // `view` file carrying just a `filter` block (see the worked examples)
       // has no canvas content — filters are applied by other renderers, not
       // this viewer — so it would open as a blank diagram. It stays available
-      // in the Diagrams editor.
+      // in the Modeling editor.
       const renderable = (
         await Promise.all(
           files.map(async (file) => ({

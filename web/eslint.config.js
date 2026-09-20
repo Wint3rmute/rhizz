@@ -110,9 +110,9 @@ export default ts.config(
       "**/inventory/InventoryPage.stories.ts",
       "**/components/Navbar.stories.ts",
       "**/vfs/compile.test.ts",
-      "**/diagrams/ComponentHierarchyTree.stories.ts",
-      "**/diagrams/DiagramPage.stories.ts",
-      "**/diagrams/DiagramGridPage.stories.ts",
+      "**/modeling/ComponentHierarchyTree.stories.ts",
+      "**/modeling/DiagramPage.stories.ts",
+      "**/modeling/DiagramGridPage.stories.ts",
       "src/example_system.ts",
     ],
     rules: {

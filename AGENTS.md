@@ -69,11 +69,11 @@ with a predefined set of correct commands for the project.
 When adding new components or changing functionality of existing components,
 always add new Storybook stories which excercise the new/changed functionality.
 
-### Debugging Diagram Editor issues
+### Debugging Modeling editor issues
 
-When a user reports invalid or unexpected behavior in the Diagram Editor, always
+When a user reports invalid or unexpected behavior in the Modeling editor, always
 suggest (and if investigating, ask for) the **history dump** feature: the
-"Copy Debug Info" button in the Diagram Editor's right sidebar exports the
+"Copy Debug Info" button in the Modeling editor's right sidebar exports the
 session's model mutations as a replayable TypeScript test (see the action log
 in `web/src/actionLog.ts`). Getting the user to provide this dump — instead of
 manually replayed steps — makes the bug reproducible and quickly fixable.

@@ -12,7 +12,7 @@ import {
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   writeDiagramLayoutFile,
-} from "../diagrams/persistence";
+} from "../modeling/persistence";
 import Inventory from "./Inventory.svelte";
 
 // Deterministic project ids so story args can be built synchronously at

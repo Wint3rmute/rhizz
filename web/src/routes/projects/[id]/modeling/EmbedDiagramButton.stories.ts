@@ -52,7 +52,7 @@ export const PinnedBaseUrl: Story = {
     // <input>, since the iframe <textarea> value starts with `<iframe`
     // instead. `getByDisplayValue` throws if absent.
     canvas.getByDisplayValue(
-      /^https:\/\/rhizz\.example\.dev\/(?:.*\/)?projects\/demo-project\/diagrams\/embed\/overview\.hcl$/,
+      /^https:\/\/rhizz\.example\.dev\/(?:.*\/)?projects\/demo-project\/modeling\/embed\/overview\.hcl$/,
     );
   },
 };

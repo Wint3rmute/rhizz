@@ -1,7 +1,7 @@
 // Centralized undo/redo for UI-driven mutations.
 //
 // Today `Ctrl+Z` only reverts the layout-only snapshot in
-// `routes/projects/[id]/diagrams/history.ts`; model writes through
+// `routes/projects/[id]/modeling/history.ts`; model writes through
 // `applyModelMutation` have no `undo()` — so add/remove leaves
 // `system.hcl` behind. This manager consolidates both domains: each action
 // encapsulates bidirectional execution (`do()` / `undo()`), covering the

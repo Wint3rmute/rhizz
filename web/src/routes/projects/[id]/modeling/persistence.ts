@@ -1,5 +1,5 @@
 // Schema + projection for the diagram data persisted into the active
-// project's VFS (web/src/routes/projects/[id]/diagrams/+page.svelte's
+// project's VFS (web/src/routes/projects/[id]/modeling/+page.svelte's
 // `checked`).
 // Converts views to/from canonical HCL using rhizz-core's `serialize_views`
 // and `parse_views` (backed by hcl-rs). rhizz-core owns parsing and view

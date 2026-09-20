@@ -3,8 +3,8 @@ import { openProjectFs } from "./vfs/fs";
 import {
   DIAGRAM_LAYOUT_DIR,
   writeDiagramLayoutFile,
-} from "./routes/projects/[id]/diagrams/persistence";
-import type { DiagramLayout } from "./routes/projects/[id]/diagrams/persistence";
+} from "./routes/projects/[id]/modeling/persistence";
+import type { DiagramLayout } from "./routes/projects/[id]/modeling/persistence";
 import { get_example_projects } from "./rhizz_wasm_wrapper";
 
 // Retrieves the single-file example's *system model* from the embedded WASM

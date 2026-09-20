@@ -19,7 +19,7 @@ import {
   DIAGRAM_LAYOUT_DIR,
   type DiagramLayout,
   writeDiagramLayoutFile,
-} from "../diagrams/persistence";
+} from "../modeling/persistence";
 import { DOCS_DIR } from "./docs";
 import Explore from "./Explore.svelte";
 
