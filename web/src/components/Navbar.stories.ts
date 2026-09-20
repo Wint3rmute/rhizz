@@ -94,6 +94,28 @@ export const MobileExpanded: Story = {
   },
 };
 
+// Workspace link order: brand, then Overview → Diagrams → Inventory →
+// Explore → Editor. Asserted on the mobile menu (the desktop row is hidden
+// below the md breakpoint, but one NAV_LINKS list drives both, so they
+// cannot drift). The brand link comes first in DOM order.
+export const LinkOrder: Story = {
+  ...MobileExpanded,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const names = canvas.getAllByRole("link").map((link) =>
+      link.textContent.trim()
+    );
+    await expect(names).toEqual([
+      "Rhizz",
+      "🔍 Overview",
+      "📐 Diagrams",
+      "📦 Inventory",
+      "🧭 Explore",
+      "📝 Editor",
+    ]);
+  },
+};
+
 export const MobileThemePicker = {
   ...MobileExpanded,
   beforeEach: () => {
@@ -134,7 +156,7 @@ export const WarningLevelSelector: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const select = canvas.getByRole<HTMLSelectElement>("combobox", {
-      name: "Warning level",
+      name: "Strictness",
       hidden: true,
     });
 
@@ -173,7 +195,7 @@ export const MobileWarningLevelSelector: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const select = await canvas.findByRole<HTMLSelectElement>("combobox", {
-      name: "Warning level",
+      name: "Strictness",
     });
     await expect(select.value).toBe("architectural");
     await expect(
