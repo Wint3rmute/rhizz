@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import type { DiagnosticJS } from "rhizz";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import DiagnosticsStatusBar from "./DiagnosticsStatusBar.svelte";
 
 type StoryDiagnostic = Pick<DiagnosticJS, "code" | "message">;
@@ -32,10 +32,12 @@ export const Collapsed: Story = {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
     // Collapsed: counts visible, messages hidden.
-    await expect(bar.getByText("1 error")).toBeInTheDocument();
-    await expect(bar.getByText("2 warnings")).toBeInTheDocument();
-    await expect(bar.queryByText(/undefined component/)).not
-      .toBeInTheDocument();
+    await expect(await bar.findByText("1 error")).toBeInTheDocument();
+    await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
+    await waitFor(async () => {
+      await expect(bar.queryByText(/undefined component/)).not
+        .toBeInTheDocument();
+    });
   },
 };
 
@@ -44,13 +46,16 @@ export const ExpandCollapse: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
-    const toggle = bar.getByRole("button");
+    const toggle = await bar.findByRole("button");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(bar.getByText(/undefined component/)).toBeInTheDocument();
-    await expect(bar.getByText(/missing a description/)).toBeInTheDocument();
+    await expect(await bar.findByText(/undefined component/))
+      .toBeInTheDocument();
+    await expect(
+      await bar.findByText(/missing a description/),
+    ).toBeInTheDocument();
 
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -83,10 +88,13 @@ export const DuplicateDiagnostics: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
-    await expect(bar.getByText("2 warnings")).toBeInTheDocument();
-    await userEvent.click(bar.getByRole("button"));
-    await expect(bar.getAllByText(/not referenced by any connection/))
-      .toHaveLength(2);
+    await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
+    await userEvent.click(await bar.findByRole("button"));
+    await waitFor(async () => {
+      await expect(
+        bar.getAllByText(/not referenced by any connection/),
+      ).toHaveLength(2);
+    });
   },
 };
 
@@ -97,9 +105,9 @@ export const Clean: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
-    await expect(bar.getByText("✓ clean")).toBeInTheDocument();
+    await expect(await bar.findByText("✓ clean")).toBeInTheDocument();
     // Expanding a clean run shows the well-done message.
-    await userEvent.click(bar.getByRole("button"));
-    await expect(bar.getByText(/Well Done/)).toBeInTheDocument();
+    await userEvent.click(await bar.findByRole("button"));
+    await expect(await bar.findByText(/Well Done/)).toBeInTheDocument();
   },
 };
