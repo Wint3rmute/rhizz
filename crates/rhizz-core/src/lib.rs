@@ -801,14 +801,8 @@ system "sys2" {
     fn per_file_isolation_keeps_valid_and_invalid_views_independent() {
         let sources = vec![
             model_source(SINGLE_SYSTEM),
-            view_source(
-                "views/overview.hcl",
-                "view \"overview\" { system = \"s\" }",
-            ),
-            view_source(
-                "views/broken.hcl",
-                "view \"broken\" { system = \"nope\" }",
-            ),
+            view_source("views/overview.hcl", "view \"overview\" { system = \"s\" }"),
+            view_source("views/broken.hcl", "view \"broken\" { system = \"nope\" }"),
         ];
         let result = compile(&sources);
         assert!(result.model.is_some(), "model must survive view errors");
@@ -825,10 +819,7 @@ system "sys2" {
     fn valid_diagram_file_emits_no_view_diagnostics() {
         let sources = vec![
             model_source(SINGLE_SYSTEM),
-            view_source(
-                "views/overview.hcl",
-                "view \"overview\" { system = \"s\" }",
-            ),
+            view_source("views/overview.hcl", "view \"overview\" { system = \"s\" }"),
         ];
         let result = compile(&sources);
         assert!(

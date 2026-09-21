@@ -38,12 +38,12 @@ import {
 
 import {
   type Annotation,
-  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   readDiagramLayoutFile,
   type StoredBox,
   type StoredConnection,
+  VIEW_LAYOUT_DIR,
   writeDiagramLayoutFile,
 } from "./persistence";
 import {

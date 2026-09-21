@@ -5,12 +5,12 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
-  VIEW_LAYOUT_DIR,
   emptyDiagramLayout,
   layoutToHcl,
   mapLayoutToBoxes,
   parse_views,
   readDiagramLayoutFile,
+  VIEW_LAYOUT_DIR,
   viewsToLayout,
   writeDiagramLayoutFile,
 } from "./persistence";

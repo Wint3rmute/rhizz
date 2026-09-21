@@ -30,12 +30,6 @@ When asked to implement, first assess feasiblity, as the diagrams shall still
 be rendered as SVG files. After exploring the codebase and assessing feasiblity,
 report your findings to the user and ask for directions/decisions.
 
-## Task <N> - Rename the diagrams/ folder to views/
-
-As in title - the current diagrams/ folder is not inlined with the whole idea of
-views, it is confusing. Modify all that's needed (SPEC, code, docs), so that the
-current `diagrams/` directory is changed to `views/`.
-
 ## Task <N> - Allow for jumping into a component-specific view from Inventory
 
 When in the inventory/ subpage, with a component without a component-specific

@@ -4,6 +4,30 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Rename the diagrams/ folder to views/
+
+Hard rename, no legacy fallback: `views/` is now the only recognized view
+location (`is_view_source` matches the `views` path component; the
+root-level `views.hcl` legacy form is unchanged).
+
+- **Spec/docs**: `diagrams/` → `views/` across `SPEC.md`, `cli.md`,
+  `models.md`, `E016`/`W016`/`W017.md`, `audit/architecture.md` and the
+drone README. Conceptual prose ("drawing diagrams", "embedded
+diagrams") deliberately untouched.
+- **Core/CLI/book/WASM**: path checks, comments, fixture paths and sort
+  expectations updated; `examples/*/diagrams` and `book/src/*/demo` +
+  `views-intro` dirs moved with `git mv`. `book.lock` regenerated
+  (paths-only diff, verdicts unchanged).
+- **Web**: `VIEW_LAYOUT_DIR` / `DEFAULT_VIEW_DIR` / `defaultViewPath` /
+  `joinViewPath` renamed (42 references); all VFS + fixture + story paths
+  moved. UI labels ("Diagrams" page/tree) and story IDs intentionally
+  unchanged — folder only. Server SPA-fallback example URLs untouched
+  (generic route examples, not the folder).
+- **Validation**: full `just test` (cargo + 661 web + 15 e2e), `just lint`,
+  `just build`, `just format` green.
+
+---
+
 ## Task — Persist the `Strictness` option in Web app
 
 The navbar Strictness selector looked wired for persistence but silently

@@ -382,15 +382,15 @@
       "chapter": "01_basics.md",
       "files": [
         {
-          "path": "diagrams/main.hcl",
-          "sha256": "fa324ce5491316606c4d3ae4740265cb3c93c996db78b78bc29af3be37a6cb74"
-        },
-        {
           "path": "system.hcl",
           "sha256": "5fec2bca183aa7ad5c25c9f5aaa097c0f3394ddc27556497288da60dc318ac10"
+        },
+        {
+          "path": "views/main.hcl",
+          "sha256": "fa324ce5491316606c4d3ae4740265cb3c93c996db78b78bc29af3be37a6cb74"
         }
       ],
-      "input_sha256": "cd087e9b97bc2d21a279ebc17f80e21d5a880ee7f7c1466feaba48f16797d971",
+      "input_sha256": "929cca823fe29e6eb0398184210d47d1154f1e96eb9ac113e0c940ce10e0ed11",
       "output": {
         "errors": [],
         "score": {
@@ -439,19 +439,19 @@
       "chapter": "02_views_intro.md",
       "files": [
         {
-          "path": "diagrams/overview.hcl",
+          "path": "system.hcl",
+          "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
+        },
+        {
+          "path": "views/overview.hcl",
           "sha256": "fb4908570795095ce5e3d93b1f450c728467dfa52a03bc789dde49350ff8d3e7"
         },
         {
-          "path": "diagrams/pc-build.hcl",
+          "path": "views/pc-build.hcl",
           "sha256": "296f54542669615288b3e3247c29a2549878f09f293bf041331bd360f2589dcf"
-        },
-        {
-          "path": "system.hcl",
-          "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
         }
       ],
-      "input_sha256": "503a37c583d840acf37a980c10352d16e3c1f2ccc125ef2b70d21d81891aec89",
+      "input_sha256": "d1b0ade2cf52d4f43ad71c228ee40c0032b97545c1260d00b9bff53bb3cb904e",
       "output": {
         "errors": [],
         "score": {
@@ -487,15 +487,15 @@
       "chapter": "02_views_intro.md",
       "files": [
         {
-          "path": "diagrams/overview.hcl",
-          "sha256": "fd14f276fbdb6faa4d72532432cadfdedb42c471a11ab65fd13c2d9a0766a55b"
-        },
-        {
           "path": "system.hcl",
           "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
+        },
+        {
+          "path": "views/overview.hcl",
+          "sha256": "fd14f276fbdb6faa4d72532432cadfdedb42c471a11ab65fd13c2d9a0766a55b"
         }
       ],
-      "input_sha256": "c951413629a9bd60cffef0fcaf9bab934e3282f653d8c89a193eef5767fe260f",
+      "input_sha256": "f00989a57f20c2e0aa1eedbaa644800b8db826ba30ae65c422bace3c0aac6a7b",
       "output": {
         "errors": [],
         "score": {
@@ -525,7 +525,7 @@
         "warnings": [
           {
             "code": "W016",
-            "message": "diagrams/overview.hcl: view 'overview' node 'computer-setup/not-a-computer' does not reference a known component"
+            "message": "views/overview.hcl: view 'overview' node 'computer-setup/not-a-computer' does not reference a known component"
           }
         ]
       },
