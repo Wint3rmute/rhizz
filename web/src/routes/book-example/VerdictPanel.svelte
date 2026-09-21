@@ -103,4 +103,3 @@ const alertClass = $derived(
   color: color-mix(in oklab, var(--alert-color) 55%, black);
 }
 </style>
-
