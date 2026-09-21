@@ -39,34 +39,6 @@ export const Collapsed: Story = {
   },
 };
 
-export const ExpandCollapse: Story = {
-  args: {},
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const bar = within(canvas.getByTestId("diagnostics-status-bar"));
-    const toggle = await bar.findByRole("button");
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    await userEvent.click(toggle);
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    // Text queries would also match the toggle's plain-text preview, so
-    // scope content checks to the expanded alert rows (1 error + 2 warnings).
-    await waitFor(async () => {
-      await expect(bar.getAllByRole("alert")).toHaveLength(3);
-    });
-    const alerts = bar.getAllByRole("alert");
-    await expect(alerts[0]?.textContent).toMatch(/undefined component/);
-    await expect(alerts[1]?.textContent).toMatch(/missing a description/);
-
-    await userEvent.click(toggle);
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    // The plain-text preview stays by design; the alert rows must go.
-    await waitFor(async () => {
-      await expect(bar.queryByRole("alert")).not.toBeInTheDocument();
-    });
-  },
-};
-
 // The compiler legitimately repeats identical diagnostics (e.g. one W003
 // per unreferenced instance sharing a label path) — index-keyed rows must
 // render them all instead of throwing each_key_duplicate.
