@@ -14,10 +14,3 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
-
-// A wider strip for a faster-feeling scroll across a large area.
-export const WideStrip: Story = {
-  args: {
-    width: "150vw",
-  },
-};
