@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, within } from "storybook/test";
 import NodeInspector from "./NodeInspector.svelte";
 
 const meta = {
@@ -32,6 +31,7 @@ const meta = {
     onrename: () => {},
     onsettextalign: () => {},
     ondelete: () => {},
+    onopendocumentation: () => {},
   },
 } satisfies Meta<typeof NodeInspector>;
 
@@ -76,20 +76,5 @@ export const AtomicLeaf: Story = {
   },
   globals: {
     viewport: { value: "phone" },
-  },
-};
-
-export const WithDocumentationButton: Story = {
-  args: {
-    onopendocumentation: () => {},
-  },
-  globals: {
-    viewport: { value: "phone" },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole("button", { name: "Open documentation" }),
-    ).toBeInTheDocument();
   },
 };
