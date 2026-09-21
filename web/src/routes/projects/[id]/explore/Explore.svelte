@@ -16,11 +16,11 @@ import FileTree from "../code/FileTree.svelte";
 import DiagramStaticView from "../modeling/DiagramStaticView.svelte";
 import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
 import {
-  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   mapLayoutToBoxes,
   readDiagramLayoutFile,
+  VIEW_LAYOUT_DIR,
 } from "../modeling/persistence";
 import Markdown from "../../../../components/Markdown.svelte";
 import { type ProjectDoc, readProjectDocs } from "./docs";

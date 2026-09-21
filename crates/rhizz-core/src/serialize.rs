@@ -1479,10 +1479,7 @@ system "apollo" {
                     .unwrap_or_else(|e| panic!("failed parsing {}: {e}", view_path.display()));
                 let serialized1 = serialize_views(&parsed1);
                 let parsed2 = parse_views(&serialized1).unwrap_or_else(|e| {
-                    panic!(
-                        "failed parsing re-serialized {}: {e}",
-                        view_path.display()
-                    )
+                    panic!("failed parsing re-serialized {}: {e}", view_path.display())
                 });
                 assert_eq!(
                     parsed1,

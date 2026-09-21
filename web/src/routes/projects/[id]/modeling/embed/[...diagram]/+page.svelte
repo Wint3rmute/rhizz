@@ -9,11 +9,11 @@ import { componentKeyIndex } from "../../../../../../modelKeys";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import type { DiagramStaticBox } from "../../types";
 import {
-  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   mapLayoutToBoxes,
   readDiagramLayoutFile,
+  VIEW_LAYOUT_DIR,
 } from "../../persistence";
 import { type ProjectDoc, readProjectDocs } from "../../../explore/docs";
 import Markdown from "../../../../../../components/Markdown.svelte";

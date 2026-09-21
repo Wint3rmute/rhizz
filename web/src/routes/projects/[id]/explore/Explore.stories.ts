@@ -16,8 +16,8 @@ import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
 import { openProjectFs } from "../../../../vfs/fs";
 import { toastState } from "../../../../ToastState.svelte";
 import {
-  VIEW_LAYOUT_DIR,
   type DiagramLayout,
+  VIEW_LAYOUT_DIR,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import { DOCS_DIR } from "./docs";
