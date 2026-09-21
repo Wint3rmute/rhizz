@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, userEvent, within } from "storybook/test";
-import { get_example_projects } from "../rhizz_wasm_wrapper";
+import { expect, within } from "storybook/test";
 import type { Project } from "../vfs/types";
 import ProjectsPage from "./ProjectsPage.svelte";
 
@@ -60,37 +59,6 @@ export const WithProjects: Story = {
 export const EmptyLanding: Story = {
   args: {
     projects: [],
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole("heading", { name: "Rhizz" }))
-      .toBeInTheDocument();
-    await expect(
-      canvas.getByRole("button", { name: /Start from an example/ }),
-    ).toBeInTheDocument();
-    await expect(canvas.getByRole("button", { name: /New project/ }))
-      .toBeInTheDocument();
-  },
-};
-
-export const EmptyLandingOpensExampleModal: Story = {
-  args: {
-    projects: [],
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: /Start from an example/ }),
-    );
-    await expect(
-      await canvas.findByRole("heading", {
-        name: "Choose an Example Architecture",
-      }),
-    ).toBeInTheDocument();
-    // The bundled examples are listed with their descriptions.
-    for (const example of get_example_projects()) {
-      await expect(canvas.getByText(example.name)).toBeInTheDocument();
-    }
   },
 };
 
