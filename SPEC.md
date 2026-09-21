@@ -466,7 +466,7 @@ or validated and emits no diagnostics.
 
 ### 2.11 `docs/` Folder
 
-Markdown files under `docs/` document components (`docs/plane.md` ↔ `component "plane"`, matched by label). They are frontend-only — ignored by the compiler — authored in the Editor and rendered as hover popups in Explore and embedded diagrams.
+Markdown files under `docs/` document components (`docs/plane.md` ↔ `component "plane"`, matched by label). They are authored in the Editor and rendered as hover popups in Explore and embedded diagrams. The compiler checks their presence: a definition without a matching doc file emits a `W018` warning (see `SPEC/diagnostics/W018.md`). Doc content itself is never parsed — only the filename matters.
 
 ---
 

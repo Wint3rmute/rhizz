@@ -11,6 +11,8 @@ use tracing::instrument;
 ///
 /// Returns a list of non-blocking [`Diagnostic`] values with codes W001-W011.
 /// This function never emits E-codes; errors are produced by the resolution pass.
+/// It also never emits W018: the missing-documentation check needs the
+/// project's `docs/` listing, which [`validate_with_docs`] takes explicitly.
 // Long but linear: one loop per warning rule (W001-W011), each independent.
 #[allow(clippy::too_many_lines)]
 #[instrument(skip(model))]
@@ -249,6 +251,57 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     }
 
     warnings
+}
+
+/// Run [`validate`] plus the missing-documentation check (W018).
+///
+/// `doc_keys` holds doc paths relative to `docs/`, minus the `.md` suffix
+/// (e.g. `motor`, `sub/motor`). [`crate::compile`] passes the real listing;
+/// callers without one (like [`crate::resolve::resolve`]) use [`validate`]
+/// and never emit W018.
+#[instrument(skip(model, doc_keys))]
+pub fn validate_with_docs(model: &Model, doc_keys: &HashSet<String>) -> Vec<Diagnostic> {
+    let mut warnings = validate(model);
+    warnings.extend(validate_docs(model, doc_keys));
+    warnings
+}
+
+/// Emit **W018** for every top-level component definition without matching
+/// documentation.
+///
+/// `doc_keys` holds doc paths relative to `docs/`, minus the `.md` suffix
+/// (e.g. `motor`, `sub/motor`). A definition matches when its label equals a
+/// key or equals a key's final segment, so `docs/sub/motor.md` still
+/// documents `component "motor"`.
+#[must_use]
+pub fn validate_docs(model: &Model, doc_keys: &HashSet<String>) -> Vec<Diagnostic> {
+    let mut warnings = Vec::new();
+    for comp in &model.components {
+        if comp.kind == ComponentKind::Instance {
+            continue;
+        }
+        if has_doc(&comp.label, doc_keys) {
+            continue;
+        }
+        warnings.push(Diagnostic::warning(
+            DiagnosticCode::W018,
+            format!(
+                "component '{}' is missing documentation (docs/{}.md)",
+                comp.label, comp.label
+            ),
+        ));
+    }
+    warnings
+}
+
+/// Returns `true` when `label` is documented by one of `doc_keys`.
+fn has_doc(label: &str, doc_keys: &HashSet<String>) -> bool {
+    if doc_keys.contains(label) {
+        return true;
+    }
+    doc_keys.iter().any(|key| {
+        key.rsplit('/').next().is_some_and(|base| base == label)
+    })
 }
 
 // ── View validation ───────────────────────────────────────────────────────────
@@ -786,6 +839,99 @@ mod tests {
         assert!(
             warnings.iter().any(|d| d.code == DiagnosticCode::W010),
             "unconnected internal port must emit W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    // ── W018: missing documentation ─────────────────────────────────────
+
+    fn docs(keys: &[&str]) -> HashSet<String> {
+        keys.iter().map(|k| (*k).to_owned()).collect()
+    }
+
+    fn model_with_definition(label: &str) -> Model {
+        let src = format!(
+            "component \"{label}\" {{\n  description = \"d\"\n  leaf = true\n}}"
+        );
+        let raw =
+            crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
+        resolve(raw).unwrap().0
+    }
+
+    #[test]
+    fn w018_fires_when_doc_missing() {
+        let model = model_with_definition("motor");
+        let warnings = validate_docs(&model, &docs(&[]));
+        assert_eq!(
+            warnings
+                .iter()
+                .filter(|d| d.code == DiagnosticCode::W018)
+                .count(),
+            1,
+            "expected one W018, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert!(
+            warnings.iter().any(|d| d.code == DiagnosticCode::W018
+                && d.message.contains("motor")
+                && d.message.contains("docs/motor.md")),
+            "W018 must name the component and the expected path, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w018_suppressed_when_doc_present() {
+        let model = model_with_definition("motor");
+        let warnings = validate_docs(&model, &docs(&["motor"]));
+        assert!(
+            warnings.iter().all(|d| d.code != DiagnosticCode::W018),
+            "doc present, expected no W018, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w018_nested_doc_path_matches_by_final_segment() {
+        let model = model_with_definition("motor");
+        let warnings = validate_docs(&model, &docs(&["sub/motor"]));
+        assert!(
+            warnings.iter().all(|d| d.code != DiagnosticCode::W018),
+            "nested docs/sub/motor.md should document motor, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w018_not_emitted_for_instances() {
+        let src = r#"
+            component "motor" {
+              description = "d"
+              leaf = true
+            }
+            system "s" {
+              instance "m1" { source = "motor" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        // Only the definition is checked: one W018 for `motor`, none for `m1`.
+        let warnings = validate_docs(&model, &docs(&[]));
+        let w018: Vec<&Diagnostic> = warnings
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W018)
+            .collect();
+        assert_eq!(w018.len(), 1, "expected one W018, got {w018:?}");
+        assert!(w018[0].message.contains("motor"));
+    }
+
+    #[test]
+    fn validate_without_docs_never_emits_w018() {
+        let model = model_with_definition("motor");
+        let warnings = validate(&model);
+        assert!(
+            warnings.iter().all(|d| d.code != DiagnosticCode::W018),
+            "plain validate() must stay docs-agnostic, got: {:?}",
             warning_codes(&warnings)
         );
     }
