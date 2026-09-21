@@ -9,15 +9,16 @@ test("explore renders a drone diagram, toast, and embed modal", async ({ page })
   );
   await page.goto(`/projects/${id}/explore`);
 
-  const battery = page.getByRole("link", {
-    name: /battery, no detailed view/i,
+  // Explore opens the first layout-bearing view (ground-station.hcl for drone).
+  const goggles = page.getByRole("link", {
+    name: /goggles, no detailed view/i,
   });
-  await expect(battery).toBeVisible();
+  await expect(goggles).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Diagram breadcrumb" }))
     .toBeVisible();
 
-  await battery.click();
-  await expect(page.getByText("No detailed view for battery created"))
+  await goggles.click();
+  await expect(page.getByText("No detailed view for goggles created"))
     .toBeVisible();
 
   await page.getByRole("button", { name: /embed diagram/i }).click();

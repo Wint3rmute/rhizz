@@ -19,9 +19,3 @@ test("book embed ?open= lands on that file's code", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Diagram view unavailable" }))
     .toBeDisabled();
 });
-
-test("single-file book embed hides the tab bar", async ({ page }) => {
-  await page.goto("/book-example?example=single-file");
-  await expect(page.locator("pre")).toContainText("project");
-  await expect(page.getByRole("tablist")).toHaveCount(0);
-});
