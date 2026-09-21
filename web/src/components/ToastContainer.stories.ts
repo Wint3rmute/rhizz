@@ -6,7 +6,7 @@ const STORY_TIMEOUT_MS = 3_600_000;
 
 function stateWithAll(): ToastState {
   const state = new ToastState();
-  const levels: Array<[string, ToastLevel]> = [
+  const levels: [string, ToastLevel][] = [
     ["Diagram view loaded", "info"],
     ["No detailed view for engine created", "warning"],
     ["Could not save project", "error"],
