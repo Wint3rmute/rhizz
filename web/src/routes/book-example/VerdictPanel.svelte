@@ -63,7 +63,7 @@ const alertClass = $derived(
     {/if}
   </div>
   {#if errors.length > 0}
-    <ul class="verdict-list verdict-errors w-full list-none m-0 py-1 pr-2 pl-8 max-h-48 overflow-auto text-left">
+    <ul class="w-full list-none m-0 px-4 py-1 max-h-48 overflow-auto text-left">
       {#each errors as diagnostic, i (i)}
         <li class="py-px">
           <span class="font-mono font-bold">{diagnostic.code}</span>—
@@ -73,7 +73,7 @@ const alertClass = $derived(
     </ul>
   {/if}
   {#if warnings.length > 0}
-    <ul class="verdict-list verdict-warnings w-full list-none m-0 py-1 pr-2 pl-8 max-h-48 overflow-auto text-left">
+    <ul class="w-full list-none m-0 px-4 py-1 max-h-48 overflow-auto text-left">
       {#each warnings as diagnostic, i (i)}
         <li class="py-px">
           <span class="font-mono font-bold">{diagnostic.code}</span>—
@@ -83,7 +83,7 @@ const alertClass = $derived(
     </ul>
   {/if}
   {#if stats}
-    <ul class="w-full list-none flex flex-wrap gap-x-6 gap-y-1 m-0 px-2 pt-2">
+    <ul class="w-full list-none flex flex-wrap gap-x-6 gap-y-1 m-0 px-4 pt-2">
       {#each stats.rows as row (row.label)}
         <li>
           <span class="opacity-70">{row.label}</span><b class="ml-1">{row.complete}/{row.total}</b>
@@ -97,18 +97,10 @@ const alertClass = $derived(
 </div>
 
 <style>
-/* Only the diagnostic glyphs stay custom: status colors, dark theme and
-   layout all come from daisyUI (`alert alert-soft`) + Tailwind above. */
-.verdict-warnings li::before {
-  content: "⚠️ ";
-}
-.verdict-errors li::before {
-  content: "❌ ";
-}
-/* `alert-soft` paints text in the raw status color, which is unreadable on
-   a light background (bright green/yellow on near-white). Darken it there;
-   the dark theme already reads fine. */
+/* `alert-soft` paints text in the raw status color, unreadable on a light
+   background. Darken it there; the dark theme already reads fine. */
 :global(html[data-theme="light"]) .alert-soft {
   color: color-mix(in oklab, var(--alert-color) 55%, black);
 }
 </style>
+
