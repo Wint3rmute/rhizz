@@ -26,12 +26,6 @@ export const Disabled: Story = {
   },
 };
 
-export const NoDiagramSelected: Story = {
-  args: {
-    diagramPath: null,
-  },
-};
-
 export const PinnedBaseUrl: Story = {
   args: {
     baseUrl: "https://rhizz.example.dev",
