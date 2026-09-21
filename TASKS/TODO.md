@@ -13,12 +13,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Treat documentation as first-class citizen
-
-1. Add a compiler warning when a component does not have documentation. Do not fix existing examples.
-2. When in modeling/ page, add a button "open documentation" to the inspector, which will either open existing documentation or create a new file under docs/ if none exists.
-3. When creating new projects, create a docs/ folder by default, same as you create diagrams/
-
 ## Task <N> - System model - change `description` to `full_name`
 
 Thorough descriptions of the system were delegated to the `docs/` folder. Now,
