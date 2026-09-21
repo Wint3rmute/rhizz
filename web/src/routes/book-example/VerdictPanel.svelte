@@ -37,7 +37,7 @@ let {
 } = $props();
 
 const glyph = $derived(
-  status === "ok" ? "✓" : status === "warn" ? "⚠" : "✗",
+  status === "ok" ? "✅" : status === "warn" ? "⚠️" : "❌",
 );
 
 const alertClass = $derived(
