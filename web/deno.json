@@ -2,7 +2,6 @@
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"]
   },
-  "nodeModulesDir": "manual",
   "unstable": ["fmt-component"],
   "imports": {
     "svelte-check": "npm:svelte-check@^4.7.6"
