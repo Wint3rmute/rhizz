@@ -49,14 +49,6 @@ export const AutoLayoutRunning: Story = {
   },
 };
 
-// Exercises the "+ Note" annotation button alongside the system/component
-// buttons — the new annotation entry point.
-export const WithAnnotationButton: Story = {
-  args: {
-    onaddannotation: () => {},
-  },
-};
-
 // Constrains this story to a tablet-width viewport, unlike the other
 // stories above (which render "fullscreen", giving the toolbar far more
 // room than it actually has in the real app, where it's squeezed
