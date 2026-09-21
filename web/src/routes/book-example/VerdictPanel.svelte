@@ -109,9 +109,6 @@ const glyph = $derived(
 .verdict-level {
   font-size: 0.75em;
   font-weight: 500;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid currentColor;
   opacity: 0.85;
   white-space: nowrap;
 }
