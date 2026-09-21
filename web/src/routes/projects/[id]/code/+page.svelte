@@ -37,7 +37,10 @@ async function refreshEntries(): Promise<void> {
 // at all yet.
 function firstHclPath(): string | null {
   const requested = page.url.searchParams.get("file");
-  if (requested !== null && entries.some((e) => e.isFile() && e.path === requested)) {
+  if (
+    requested !== null &&
+    entries.some((e) => e.isFile() && e.path === requested)
+  ) {
     return requested;
   }
   return entries.find((e) => e.isFile() && e.name.endsWith(".hcl"))?.path ??

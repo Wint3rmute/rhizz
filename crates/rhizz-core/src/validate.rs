@@ -260,7 +260,10 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
 /// callers without one (like [`crate::resolve::resolve`]) use [`validate`]
 /// and never emit W018.
 #[instrument(skip(model, doc_keys))]
-pub fn validate_with_docs(model: &Model, doc_keys: &HashSet<String>) -> Vec<Diagnostic> {
+pub fn validate_with_docs(
+    model: &Model,
+    doc_keys: &HashSet<String, impl std::hash::BuildHasher>,
+) -> Vec<Diagnostic> {
     let mut warnings = validate(model);
     warnings.extend(validate_docs(model, doc_keys));
     warnings
@@ -274,7 +277,10 @@ pub fn validate_with_docs(model: &Model, doc_keys: &HashSet<String>) -> Vec<Diag
 /// key or equals a key's final segment, so `docs/sub/motor.md` still
 /// documents `component "motor"`.
 #[must_use]
-pub fn validate_docs(model: &Model, doc_keys: &HashSet<String>) -> Vec<Diagnostic> {
+pub fn validate_docs(
+    model: &Model,
+    doc_keys: &HashSet<String, impl std::hash::BuildHasher>,
+) -> Vec<Diagnostic> {
     let mut warnings = Vec::new();
     for comp in &model.components {
         if comp.kind == ComponentKind::Instance {
@@ -295,13 +301,13 @@ pub fn validate_docs(model: &Model, doc_keys: &HashSet<String>) -> Vec<Diagnosti
 }
 
 /// Returns `true` when `label` is documented by one of `doc_keys`.
-fn has_doc(label: &str, doc_keys: &HashSet<String>) -> bool {
+fn has_doc(label: &str, doc_keys: &HashSet<String, impl std::hash::BuildHasher>) -> bool {
     if doc_keys.contains(label) {
         return true;
     }
-    doc_keys.iter().any(|key| {
-        key.rsplit('/').next().is_some_and(|base| base == label)
-    })
+    doc_keys
+        .iter()
+        .any(|key| key.rsplit('/').next().is_some_and(|base| base == label))
 }
 
 // ── View validation ───────────────────────────────────────────────────────────
@@ -850,11 +856,8 @@ mod tests {
     }
 
     fn model_with_definition(label: &str) -> Model {
-        let src = format!(
-            "component \"{label}\" {{\n  description = \"d\"\n  leaf = true\n}}"
-        );
-        let raw =
-            crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
+        let src = format!("component \"{label}\" {{\n  description = \"d\"\n  leaf = true\n}}");
+        let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
         resolve(raw).unwrap().0
     }
 
