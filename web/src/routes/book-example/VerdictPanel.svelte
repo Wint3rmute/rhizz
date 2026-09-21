@@ -39,15 +39,22 @@ let {
 const glyph = $derived(
   status === "ok" ? "✓" : status === "warn" ? "⚠" : "✗",
 );
+
+const alertClass = $derived(
+  status === "ok"
+    ? "alert-success"
+    : status === "warn"
+    ? "alert-warning"
+    : "alert-error",
+);
 </script>
 
-<div class="verdict" data-status={status}>
-  <div class="verdict-head">
+<div role="alert" class="alert alert-soft {alertClass} block text-sm">
+  <div class="flex items-center justify-between gap-2 font-semibold">
     <span>{glyph} {head}</span>
     {#if warningLevel}
       <span
-        class="verdict-level"
-        data-pinned={levelPinned}
+        class="whitespace-nowrap text-xs font-medium opacity-70"
         title={levelPinned
           ? `Strictness pinned to ${warningLevel} by this example — warnings below that detail are hidden`
           : `Strictness ${warningLevel} from the app preset — warnings below that detail are hidden`}>
@@ -56,175 +63,46 @@ const glyph = $derived(
     {/if}
   </div>
   {#if errors.length > 0}
-    <ul class="verdict-list verdict-errors">
+    <ul class="verdict-list verdict-errors w-full list-none m-0 py-1 pr-2 pl-8 max-h-48 overflow-auto text-left">
       {#each errors as diagnostic, i (i)}
-        <li>
-          <span class="verdict-code">{diagnostic.code}</span>—
+        <li class="py-px">
+          <span class="font-mono font-bold">{diagnostic.code}</span>—
           {diagnostic.message}
         </li>
       {/each}
     </ul>
   {/if}
   {#if warnings.length > 0}
-    <ul class="verdict-list verdict-warnings">
+    <ul class="verdict-list verdict-warnings w-full list-none m-0 py-1 pr-2 pl-8 max-h-48 overflow-auto text-left">
       {#each warnings as diagnostic, i (i)}
-        <li>
-          <span class="verdict-code">{diagnostic.code}</span>—
+        <li class="py-px">
+          <span class="font-mono font-bold">{diagnostic.code}</span>—
           {diagnostic.message}
         </li>
       {/each}
     </ul>
   {/if}
   {#if stats}
-    <ul class="verdict-stats">
+    <ul class="w-full list-none flex flex-wrap gap-x-6 gap-y-1 m-0 px-2 pt-2 mt-1 border-t border-dashed">
       {#each stats.rows as row (row.label)}
         <li>
-          <span>{row.label}</span><b>{row.complete}/{row.total}</b>
+          <span class="opacity-70">{row.label}</span><b class="ml-1">{row.complete}/{row.total}</b>
         </li>
       {/each}
       <li>
-        <span>Overall</span><b>{stats.overall.toFixed(1)}%</b>
+        <span class="opacity-70">Overall</span><b class="ml-1">{stats.overall.toFixed(1)}%</b>
       </li>
     </ul>
   {/if}
 </div>
 
 <style>
-/* Classic rhizz verdict panels (see book/css/rhizz.css), restyled for the
-   app with explicit light/dark palettes. */
-.verdict {
-  border: 1px solid;
-  border-radius: 6px;
-  font-size: 0.9em;
-  overflow: hidden;
-}
-.verdict-head {
-  padding: 0.45rem 0.8rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-.verdict-level {
-  font-size: 0.75em;
-  font-weight: 500;
-  opacity: 0.85;
-  white-space: nowrap;
-}
-.verdict-list {
-  list-style: none;
-  margin: 0;
-  padding: 0.4rem 0.8rem 0.6rem 2rem;
-  max-height: 12rem;
-  overflow: auto;
-}
-.verdict-list li {
-  padding: 0.1rem 0;
-}
-.verdict-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-weight: 700;
-}
-.verdict-stats {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 1.4rem;
-  margin: 0;
-  padding: 0.5rem 0.8rem;
-  border-top: 1px dashed;
-}
-.verdict-stats span {
-  opacity: 0.7;
-}
-.verdict-stats b {
-  margin-left: 0.3em;
-}
-
-.verdict[data-status="ok"] {
-  border-color: #2e7d32;
-  background: #f1f8f1;
-}
-.verdict[data-status="ok"] .verdict-head {
-  background: #2e7d32;
-  color: #ffffff;
-}
-.verdict[data-status="ok"] .verdict-stats {
-  border-top-color: #2e7d32;
-}
-.verdict[data-status="warn"] {
-  border-color: #e6a700;
-  background: #fffbe9;
-}
-.verdict[data-status="warn"] .verdict-head {
-  background: #e6a700;
-  color: #3a2a00;
-}
-.verdict[data-status="warn"] .verdict-list li {
-  color: #7a4f01;
-}
-.verdict[data-status="warn"] .verdict-stats {
-  border-top-color: #e6a700;
-}
-.verdict[data-status="error"] {
-  border-color: #c62828;
-  background: #fdf1f1;
-}
-.verdict[data-status="error"] .verdict-head {
-  background: #c62828;
-  color: #ffffff;
-}
-.verdict[data-status="error"] .verdict-list li {
-  color: #7f0000;
-}
-.verdict[data-status="error"] .verdict-stats {
-  border-top-color: #c62828;
-}
+/* Only the diagnostic glyphs stay custom: status colors, dark theme and
+   layout all come from daisyUI (`alert alert-soft`) + Tailwind above. */
 .verdict-warnings li::before {
   content: "⚠️ ";
 }
 .verdict-errors li::before {
   content: "❌ ";
-}
-
-:global(html[data-theme="dark"]) .verdict[data-status="ok"] {
-  border-color: #66bb6a;
-  background: #16281b;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="ok"] .verdict-head {
-  background: #66bb6a;
-  color: #0b2210;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="ok"] .verdict-stats {
-  border-top-color: #66bb6a;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="warn"] {
-  border-color: #f0b72f;
-  background: #2b2408;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="warn"] .verdict-head {
-  background: #f0b72f;
-  color: #2b2408;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="warn"] .verdict-list li {
-  color: #ffd54f;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="warn"] .verdict-stats {
-  border-top-color: #f0b72f;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="error"] {
-  border-color: #ef5350;
-  background: #2b1314;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="error"] .verdict-head {
-  background: #ef5350;
-  color: #2b1314;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="error"] .verdict-list li {
-  color: #ff8a80;
-}
-:global(html[data-theme="dark"]) .verdict[data-status="error"] .verdict-stats {
-  border-top-color: #ef5350;
 }
 </style>
