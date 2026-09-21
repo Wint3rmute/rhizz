@@ -1681,7 +1681,9 @@ async function handleOpenDocumentation(): Promise<void> {
     await fs.writeFile(docPath, `# ${label}\n`);
   }
   await goto(
-    `${resolve("/projects/[id]/code", { id: data.projectId })}?file=${encodeURIComponent(docPath)}`,
+    `${resolve("/projects/[id]/code", { id: data.projectId })}?file=${
+      encodeURIComponent(docPath)
+    }`,
   );
 }
 

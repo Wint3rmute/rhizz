@@ -144,7 +144,10 @@ fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
         .collect();
     files.sort();
 
-    if !files.iter().any(|p| p.extension().is_some_and(|ext| ext == "hcl")) {
+    if !files
+        .iter()
+        .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
+    {
         anyhow::bail!("no .hcl files found in {}", dir.display());
     }
 

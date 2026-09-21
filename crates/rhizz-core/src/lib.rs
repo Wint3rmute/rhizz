@@ -84,10 +84,11 @@ pub fn is_docs_source(filename: &str) -> bool {
         .any(|component| component.as_os_str() == "docs")
 }
 
-/// Extract the doc key for a docs source file: its path relative to `docs/`
-/// minus the `.md` suffix (e.g. `docs/motor.md` -> `motor`,
-/// `proj/docs/sub/bar.md` -> `sub/bar`). Returns `None` when the filename
-/// is not a docs source.
+/// Extract the doc key for a docs source file.
+///
+/// The key is the file's path relative to `docs/`, minus the `.md` suffix
+/// (e.g. `docs/motor.md` -> `motor`, `proj/docs/sub/bar.md` ->
+/// `sub/bar`). Returns `None` when the filename is not a docs source.
 #[must_use]
 pub fn doc_key_for(filename: &str) -> Option<String> {
     if !is_docs_source(filename) {
@@ -99,11 +100,14 @@ pub fn doc_key_for(filename: &str) -> Option<String> {
         .map(|c| c.as_os_str().to_string_lossy().into_owned())
         .collect();
     let docs_pos = components.iter().rposition(|c| c == "docs")?;
-    let mut relative = components[docs_pos + 1..].join("/");
-    if let Some(stripped) = relative.strip_suffix(".md") {
-        relative = stripped.to_owned();
+    let start = docs_pos.checked_add(1)?;
+    let joined = components.get(start..)?.join("/");
+    let relative = joined.strip_suffix(".md").unwrap_or(&joined).to_owned();
+    if relative.is_empty() {
+        None
+    } else {
+        Some(relative)
     }
-    if relative.is_empty() { None } else { Some(relative) }
 }
 
 /// Parse, merge, resolve, and validate all `sources`.
