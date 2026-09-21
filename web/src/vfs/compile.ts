@@ -14,32 +14,44 @@ export interface Source {
   content: string;
 }
 
-// Reads every ".hcl" file in the project (recursively) into the
-// `Source[]` shape the compiler accepts, using each file's path as its
-// `filename` — so compiler diagnostics point at a real, human-meaningful
-// path instead of a synthetic placeholder.
+// Reads every ".hcl" file plus every Markdown file under `docs/`
+// (recursively) into the `Source[]` shape the compiler accepts, using each
+// file's path as its `filename` — so compiler diagnostics point at a real,
+// human-meaningful path instead of a synthetic placeholder.
 //
 // Diagram layouts under `diagrams/` are included: `rhizz-core::compile`
 // classifies them by path and validates each one independently (E016/E006/
 // W016), exactly like the CLI and book preprocessor. View errors never clear
 // the resolved model, so the model and canvas keep working.
+//
+// Doc files under `docs/` are never parsed — the compiler checks their
+// presence by filename only (W018) — but they must be included so the check
+// sees them.
 export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
   const entries = await fs.readdir(".", { recursive: true });
-  const hclPaths = entries
+  const sourcePaths = entries
     .filter(
       (entry) =>
         entry.isFile() &&
-        entry.name.endsWith(".hcl") &&
-        !entry.path.startsWith(".git/"),
+        !entry.path.startsWith(".git/") &&
+        (entry.name.endsWith(".hcl") || isDocsSource(entry.path)),
     )
     .map((entry) => entry.path);
 
   return Promise.all(
-    hclPaths.map(async (path) => ({
+    sourcePaths.map(async (path) => ({
       filename: path,
       content: await fs.readFile(path),
     })),
   );
+}
+
+/// Mirrors `rhizz_core::is_docs_source`: a `.md` file under a `docs/`
+/// directory (e.g. `docs/motor.md`). Kept in sync by hand — the compiler is
+/// the authority, this only decides which files to hand it.
+export function isDocsSource(path: string): boolean {
+  if (!path.endsWith(".md")) return false;
+  return path.split("/").includes("docs");
 }
 
 // Preference order for "which root-level .hcl file holds the system model".
