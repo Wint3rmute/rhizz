@@ -10,11 +10,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
-import {
-  projectStore,
-  setCurrentDiagnostics,
-  setCurrentScore,
-} from "../../../../ProjectState.svelte";
+import { projectStore, setCurrentScore } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import {
   primaryHclPath,
@@ -181,8 +177,8 @@ $effect(() => {
 });
 
 // The project-wide warning preset (navbar select). Reading it inside the
-// `$derived` compile below is what makes the navbar's warning count and the
-// diagnostics shown here react to a change of level.
+// `$derived` compile below is what makes the diagnostics shown here react
+// to a change of level.
 let warningLevel = $derived(getWarningLevel());
 
 let output = $derived.by(() => compile_system(sources, warningLevel));
@@ -264,6 +260,19 @@ let snapEnabled = $state(true);
 // "Snap to Grid" button can also reflect the live modifier-key override,
 // not just the persistent toggle.
 let snapActive = $derived(snapEnabled && !isModifierHeld());
+
+// Center of the current viewport in world (SVG) coordinates — where newly
+// added nodes land when they have no remembered or explicitly requested
+// position, so they appear where the user is looking instead of a fixed
+// point that may be off-screen. Mirrors the annotation placement below.
+function viewportCenterBox(): { x: number; y: number } {
+  return {
+    x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom -
+      DEFAULT_NODE_WIDTH / 2,
+    y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom -
+      DEFAULT_NODE_HEIGHT / 2,
+  };
+}
 
 // Rounds `value` to the nearest multiple of snapGridSize, or returns it
 // unchanged when snapping is off. Falls back to the default grid size
@@ -760,12 +769,13 @@ function toggleComponentChecked(index: number) {
   }
 
   // Restore the remembered layout if this component has been placed before
-  // (even if it was later unchecked), instead of always resetting to the
-  // default position.
+  // (even if it was later unchecked); otherwise land it at the viewport
+  // center so it appears where the user is looking.
   const remembered = savedLayout[getComponentKey(index)];
+  const fallback = viewportCenterBox();
   let box: Box = {
-    x: remembered?.x ?? 100,
-    y: remembered?.y ?? 100,
+    x: remembered?.x ?? fallback.x,
+    y: remembered?.y ?? fallback.y,
     width: remembered?.width ?? DEFAULT_NODE_WIDTH,
     height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
   };
@@ -1547,8 +1557,9 @@ async function handleModalCreateComponent(data: {
           "success",
         );
       }
-      const worldX = data.position ? snap(data.position.x) : 100;
-      const worldY = data.position ? snap(data.position.y) : 100;
+      const center = viewportCenterBox();
+      const worldX = data.position ? snap(data.position.x) : center.x;
+      const worldY = data.position ? snap(data.position.y) : center.y;
       checked[fullKey] = {
         x: worldX,
         y: worldY,
@@ -1586,13 +1597,8 @@ let componentData = $derived(componentDataByKey(model));
 $effect(() => {
   const sc = output.model()?.score();
   setCurrentScore(sc ? { overall_percentage: sc.overall_percentage } : null);
-  setCurrentDiagnostics({
-    errors: output.error_count(),
-    warnings: output.warning_count(),
-  });
   return () => {
     setCurrentScore(null);
-    setCurrentDiagnostics(null);
   };
 });
 
