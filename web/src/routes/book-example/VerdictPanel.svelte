@@ -83,7 +83,7 @@ const alertClass = $derived(
     </ul>
   {/if}
   {#if stats}
-    <ul class="w-full list-none flex flex-wrap gap-x-6 gap-y-1 m-0 px-2 pt-2 mt-1 border-t border-dashed">
+    <ul class="w-full list-none flex flex-wrap gap-x-6 gap-y-1 m-0 px-2 pt-2">
       {#each stats.rows as row (row.label)}
         <li>
           <span class="opacity-70">{row.label}</span><b class="ml-1">{row.complete}/{row.total}</b>
