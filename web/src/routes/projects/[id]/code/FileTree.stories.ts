@@ -106,9 +106,3 @@ export const Empty: Story = {
     await expect(canvas.getByText("No files yet.")).toBeInTheDocument();
   },
 };
-
-export const NoSelection: Story = {
-  args: {
-    selectedPath: null,
-  },
-};
