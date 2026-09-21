@@ -9,7 +9,7 @@ import { componentKeyIndex } from "../../../../../../modelKeys";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import type { DiagramStaticBox } from "../../types";
 import {
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   mapLayoutToBoxes,
@@ -70,7 +70,7 @@ $effect(() => {
   if (!currentId || !path) return;
 
   const fs = openProjectFs(projectStore, currentId);
-  readDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${path}`)
+  readDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${path}`)
     .then((loadedLayout) => {
       layout = loadedLayout;
       layoutLoaded = true;

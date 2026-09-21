@@ -16,7 +16,7 @@ import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
 import { openProjectFs } from "../../../../vfs/fs";
 import { toastState } from "../../../../ToastState.svelte";
 import {
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
@@ -206,7 +206,7 @@ async function ensureProjectWithDiagrams(
     await createProjectWithMainFile(name, hclContent, id);
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(diagrams)) {
-    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);
+    await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
   }
   return project;
 }

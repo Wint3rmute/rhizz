@@ -9,7 +9,7 @@ import {
 import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
@@ -126,7 +126,7 @@ async function ensureInventoryProject(): Promise<Project> {
     );
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
-    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${dName}`, layout);
+    await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
   }
   return project;
 }
@@ -203,7 +203,7 @@ export const MissingDefaultDiagram: Story = {
       canvas.getByTestId("inventory-empty-diagram"),
     ).toBeTruthy();
     await expect(
-      canvas.getByText(/diagrams\/draft-module\.hcl/),
+      canvas.getByText(/views\/draft-module\.hcl/),
     ).toBeTruthy();
   },
 };

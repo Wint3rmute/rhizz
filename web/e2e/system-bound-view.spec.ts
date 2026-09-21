@@ -25,7 +25,7 @@ async function openDiagram(page, name = "E2E system view") {
 test("view stays bound to its system after a second system is added", async ({ page }) => {
   await openDiagram(page);
 
-  // Fresh project seeds diagrams/main.hcl bound to the auto-created main system.
+  // Fresh project seeds views/main.hcl bound to the auto-created main system.
   const header = page.getByTestId("diagram-system-label");
   await expect(header).toContainText("system: main");
 

@@ -549,7 +549,7 @@ export class WorkspaceHarness {
     const entries = await this.fs.readdir(".", { recursive: true });
     const files = entries.filter((entry) =>
       entry.isFile() && entry.name.endsWith(".hcl") &&
-      !entry.path.startsWith("diagrams/")
+      !entry.path.startsWith("views/")
     );
     const preferred = ["system.hcl", "systems.hcl", "main.hcl", "project.hcl"]
       .map((name) => files.find((entry) => entry.name === name))

@@ -11,7 +11,7 @@ const FILES = [
     content: 'system "demo" {\n  description = "demo system"\n}\n',
   },
   {
-    path: "diagrams/main.hcl",
+    path: "views/main.hcl",
     content: 'view "main" {\n  system = "demo"\n}\n',
   },
 ];
@@ -100,7 +100,7 @@ describe("book-example payload codec", () => {
     const bad = [
       "/abs.hcl",
       "../escape.hcl",
-      "diagrams/../escape.hcl",
+      "views/../escape.hcl",
       "notes.md",
     ];
     for (const path of bad) {

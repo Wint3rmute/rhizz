@@ -1,7 +1,7 @@
 import { projectStore } from "./ProjectState.svelte";
 import { openProjectFs } from "./vfs/fs";
 import {
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   writeDiagramLayoutFile,
 } from "./routes/projects/[id]/modeling/persistence";
 import type { DiagramLayout } from "./routes/projects/[id]/modeling/persistence";
@@ -11,7 +11,7 @@ import { get_example_projects } from "./rhizz_wasm_wrapper";
 // examples (single source of truth).
 //
 // The embedded file list is sorted by path, so `files[0]` is a
-// `diagrams/*.hcl` view — pick the model file explicitly.
+// `views/*.hcl` view — pick the model file explicitly.
 export function getExampleSystemHcl(): string {
   try {
     const examples = get_example_projects();
@@ -85,6 +85,6 @@ export async function seedExampleProjectDiagrams(
 ): Promise<void> {
   const fs = openProjectFs(projectStore, projectId);
   for (const [name, layout] of Object.entries(EXAMPLE_SYSTEM_DIAGRAMS)) {
-    await writeDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${name}`, layout);
+    await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${name}`, layout);
   }
 }

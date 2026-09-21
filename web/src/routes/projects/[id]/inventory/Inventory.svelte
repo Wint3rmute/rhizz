@@ -1,7 +1,7 @@
 <script lang="ts">
 // Inventory Browser: lists every component *definition* (never instances)
 // in the compiled model, with a read-only preview of the definition's
-// default diagram (`diagrams/<label>.hcl`) and a tabbed detail pane.
+// default diagram (`views/<label>.hcl`) and a tabbed detail pane.
 //
 // Read-only by design: no model mutations are dispatched here; the Edit
 // button deep-links into the Modeling editor instead.
@@ -35,7 +35,7 @@ import type {
 import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
 import {
-  defaultDiagramPath,
+  defaultViewPath,
   filterDefinitions,
   INVENTORY_TABS,
   type InventoryDefinition,
@@ -165,7 +165,7 @@ let selectedDefinition = $derived(
 
 // ── Default diagram loading ─────────────────────────────────────────────────
 // The selected definition's default diagram is the VFS file
-// `diagrams/<label>.hcl`. Missing file → empty state (display-only).
+// `views/<label>.hcl`. Missing file → empty state (display-only).
 let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
 let diagramExists = $state(false);
 
@@ -179,7 +179,7 @@ $effect(() => {
   }
 
   let cancelled = false;
-  const path = defaultDiagramPath(label);
+  const path = defaultViewPath(label);
   const fs = openProjectFs(projectStore, id);
   // Probe existence first: `readDiagramLayoutFile` silently returns an
   // empty layout for ENOENT, but we must distinguish "empty diagram"
@@ -233,7 +233,7 @@ let staticConnections = $derived.by<DiagramStaticConnection[]>(() => {
 });
 
 let emptyStatePath = $derived(
-  selectedDefinition ? defaultDiagramPath(selectedDefinition.label) : null,
+  selectedDefinition ? defaultViewPath(selectedDefinition.label) : null,
 );
 
 let editHref = $derived(

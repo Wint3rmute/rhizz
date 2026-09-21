@@ -3,7 +3,7 @@
 // `history.ts` owns the generic bounded stack; this module owns *what* is
 // snapshotted: node placement (`checked`/`savedLayout`), connection routing
 // overrides, and free-standing text annotations. Annotations are view-level
-// metadata persisted in `diagrams/*.hcl` — they must ride the same
+// metadata persisted in `views/*.hcl` — they must ride the same
 // layout-only undo stack as node drags, otherwise add/delete/edit/drag/
 // resize of a note can never be undone.
 import type { Annotation } from "../../../../rhizz_wasm_wrapper";

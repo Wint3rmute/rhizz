@@ -37,7 +37,7 @@ let {
 } = $props();
 
 // Resolve the `?open=` target: exact path first, then a bare filename
-// (e.g. `main.hcl` matches `diagrams/main.hcl`).
+// (e.g. `main.hcl` matches `views/main.hcl`).
 function matchOpen(candidates: string[], target: string | null): string | null {
   if (target === null) return null;
   if (candidates.includes(target)) return target;
@@ -50,7 +50,7 @@ const checkIcon = resolveIcon("check");
 const sunIcon = resolveIcon("sun");
 const moonIcon = resolveIcon("moon");
 
-// Every source file — model `.hcl`, `diagrams/*.hcl` view layouts, and
+// Every source file — model `.hcl`, `views/*.hcl` view layouts, and
 // `docs/*.md` presence markers — so the browser verdict matches `rhizz`
 // and the book preprocessor (`rhizz-core::compile` validates each diagram
 // file independently and checks docs presence for W018). Doc contents are
@@ -145,7 +145,7 @@ interface DiagramFile {
 }
 
 // Any `.hcl` file carrying view blocks is a diagram candidate — this covers
-// both `diagrams/*.hcl` layouts and root-level `views.hcl` files shipped by
+// both `views/*.hcl` layouts and root-level `views.hcl` files shipped by
 // the worked examples. Files that fail to parse as views are skipped.
 let diagramFiles = $derived.by((): DiagramFile[] => {
   const out: DiagramFile[] = [];

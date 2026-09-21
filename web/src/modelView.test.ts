@@ -165,7 +165,7 @@ system "apollo-11" {
 `,
       },
       {
-        filename: "diagrams/main.hcl",
+        filename: "views/main.hcl",
         content: `view "main" {
   system = "apollo-11"
   node "apollo-11/cm" {
