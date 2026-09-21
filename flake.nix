@@ -38,6 +38,10 @@
               # `playwright` version resolved under web/ (currently 1.63.0),
               # because Playwright looks up browsers by revision directory
               # name (chromium-1243).
+              # After bumping either side, delete web/node_modules and rerun
+              # `deno install`: deno.json sets nodeModulesDir=manual, so a
+              # stale tree keeps resolving the old driver (e.g. 1228 lookups
+              # against 1243 browsers) with no warning.
               pkgs.playwright-driver.browsers
             ];
 
