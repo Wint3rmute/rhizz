@@ -31,13 +31,11 @@ export const Collapsed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
-    // Collapsed: counts visible, messages hidden.
+    // Collapsed: counts visible (plus a plain-text preview of the first
+    // message by design), but no expanded alert rows may render.
     await expect(await bar.findByText("1 error")).toBeInTheDocument();
     await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
-    await waitFor(async () => {
-      await expect(bar.queryByText(/undefined component/)).not
-        .toBeInTheDocument();
-    });
+    await expect(bar.queryByRole("alert")).not.toBeInTheDocument();
   },
 };
 
@@ -59,8 +57,10 @@ export const ExpandCollapse: Story = {
 
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(bar.queryByText(/undefined component/)).not
-      .toBeInTheDocument();
+    // The plain-text preview stays by design; the alert rows must go.
+    await waitFor(async () => {
+      await expect(bar.queryByRole("alert")).not.toBeInTheDocument();
+    });
   },
 };
 
@@ -91,9 +91,9 @@ export const DuplicateDiagnostics: Story = {
     await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
     await userEvent.click(await bar.findByRole("button"));
     await waitFor(async () => {
-      await expect(
-        bar.getAllByText(/not referenced by any connection/),
-      ).toHaveLength(2);
+      // Two expanded alert rows (the collapsed preview span stays too, so
+      // text matching would find three).
+      await expect(bar.getAllByRole("alert")).toHaveLength(2);
     });
   },
 };
