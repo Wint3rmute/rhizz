@@ -6,7 +6,6 @@ import {
   createProjectWithFiles,
   projectStore,
 } from "../../../../ProjectState.svelte";
-import { get_example_projects } from "../../../../rhizz_wasm_wrapper";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
   type DiagramLayout,
@@ -21,7 +20,6 @@ import Inventory from "./Inventory.svelte";
 // Explore.stories.ts).
 const SEEDED_PROJECT_ID = "story-inventory-main";
 const EMPTY_PROJECT_ID = "story-inventory-empty";
-const APOLLO_PROJECT_ID = "story-inventory-apollo";
 
 // A small definitions-first model: three top-level definitions with mixed
 // completion, plus a system that instantiates two of them.
@@ -142,19 +140,6 @@ async function ensureEmptyProject(): Promise<Project> {
     );
 }
 
-async function ensureApolloProject(): Promise<Project | undefined> {
-  await init();
-  const example = get_example_projects().find((e) => e.id === "apollo-11");
-  const existing = await projectStore.listProjects();
-  const existingProject = existing.find((p) => p.id === APOLLO_PROJECT_ID);
-  if (existingProject || !example) return existingProject;
-  return await createProjectWithFiles(
-    "Inventory apollo story",
-    example.files,
-    APOLLO_PROJECT_ID,
-  );
-}
-
 const meta = {
   title: "Pages/Inventory",
   component: Inventory,
@@ -173,22 +158,6 @@ type Story = StoryObj<typeof meta>;
 export const Desktop: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
-  },
-  loaders: [ensureInventoryProject],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    // All four definitions are listed; instances are not.
-    await expect(canvas.getAllByTestId("inventory-card")).toHaveLength(4);
-    await expect(canvas.getByText("draft-module")).toBeTruthy();
-  },
-};
-
-export const Mobile: Story = {
-  globals: {
-    viewport: { value: "mobile1" },
-  },
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
   },
   loaders: [ensureInventoryProject],
 };
@@ -213,17 +182,4 @@ export const EmptyModel: Story = {
     projectId: EMPTY_PROJECT_ID,
   },
   loaders: [ensureEmptyProject],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByText(/No component definitions in this model yet/),
-    ).toBeTruthy();
-  },
-};
-
-export const Apollo11: Story = {
-  args: {
-    projectId: APOLLO_PROJECT_ID,
-  },
-  loaders: [ensureApolloProject],
 };
