@@ -15,7 +15,7 @@ use crate::compile::{Verdict, normalize_result};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use flate2::{Compression, write::ZlibEncoder};
-use rhizz_core::{Source, compile};
+use rhizz_core::{Source, WarningLevel, compile_with_warning_level};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -24,8 +24,10 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-/// URL-hash payloads for every referenced project, keyed by fence `src`.
-pub type ProjectPayloads = HashMap<String, String>;
+/// URL-hash payloads for embeds, keyed by (block hash or project `src`,
+/// warning level): the same source at two levels compiles to two verdicts
+/// and two iframe URLs.
+pub type ProjectPayloads = HashMap<(String, WarningLevel), String>;
 /// Fallback `/book-example` host, used when `book.toml` sets no
 /// `[preprocessor.rhizz] book-example-base-url`.
 pub const DEFAULT_EXAMPLE_BASE_URL: &str = "https://rhizz.fly.dev";
@@ -56,6 +58,10 @@ pub struct ProjectAttrs {
     /// File opened by default in the embed (e.g. `system.hcl` for the code
     /// tab, `diagrams/main.hcl` for a diagram). Must match a project file.
     pub open: Option<String>,
+    /// Warning level the embed compiles at (fence `level="..."`, default
+    /// `component`). Always rendered into the iframe URL so the embed shows
+    /// the same verdict the lock verified — and the reader sees the mode.
+    pub level: WarningLevel,
 }
 
 /// Split an attribute string into whitespace-separated `key="value"` tokens,
@@ -96,6 +102,7 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
     let mut src: Option<String> = None;
     let mut height = DEFAULT_PROJECT_HEIGHT;
     let mut open: Option<String> = None;
+    let mut level = WarningLevel::Component;
     for token in split_attr_tokens(raw)? {
         let Some((key, quoted)) = token.split_once('=') else {
             bail!("malformed rhizz-project attribute {token:?}: expected key=\"value\"");
@@ -120,7 +127,14 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
                 }
                 open = Some(value.to_owned());
             }
-            _ => bail!("unknown rhizz-project attribute {key:?} (expected src, height, open)"),
+            "level" => {
+                level = value.parse::<WarningLevel>().with_context(|| {
+                    format!(
+                        "invalid level {value:?}: expected one of: business, architectural, component"
+                    )
+                })?;
+            }
+            _ => bail!("unknown rhizz-project attribute {key:?} (expected src, height, open, level)"),
         }
     }
     let Some(src) = src else {
@@ -129,7 +143,12 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
     if src.is_empty() {
         bail!("rhizz-project src must not be empty");
     }
-    Ok(ProjectAttrs { src, height, open })
+    Ok(ProjectAttrs {
+        src,
+        height,
+        open,
+        level,
+    })
 }
 
 /// One `.hcl` file of a book project.
@@ -260,7 +279,16 @@ pub fn load_project(src_root: &Path, src: &str) -> Result<LoadedProject> {
 /// `rhizz-core::compile` (and thus the web workbench), so book verdicts match
 /// what users see in the app.
 #[must_use]
+/// Compile a loaded project at the compiler default level (`component`).
 pub fn compile_project(files: &[ProjectFile]) -> Verdict {
+    compile_project_with_level(files, WarningLevel::Component)
+}
+
+/// Compile a loaded project at an explicit warning level (fence
+/// `level="..."`). The level gates warnings only, so the verdict's
+/// validity never depends on it — only its noisiness.
+#[must_use]
+pub fn compile_project_with_level(files: &[ProjectFile], level: WarningLevel) -> Verdict {
     let sources: Vec<Source> = files
         .iter()
         .map(|file| Source {
@@ -268,7 +296,7 @@ pub fn compile_project(files: &[ProjectFile]) -> Verdict {
             content: file.content.clone(),
         })
         .collect();
-    normalize_result(&compile(&sources))
+    normalize_result(&compile_with_warning_level(&sources, level))
 }
 
 #[derive(Serialize)]
@@ -332,10 +360,13 @@ fn url_encode(value: &str) -> String {
 #[must_use]
 pub fn render_project_html(base_url: &str, attrs: &ProjectAttrs, payload: &str) -> String {
     let base = base_url.trim_end_matches('/');
-    let query = attrs
-        .open
-        .as_deref()
-        .map_or_else(String::new, |open| format!("?open={}", url_encode(open)));
+    // The level always travels in the URL (not just when non-default) so
+    // every embed is self-describing: the reader sees the strictness the
+    // lock verified, and the web view compiles at exactly that level.
+    let mut query = format!("?level={}", attrs.level);
+    if let Some(open) = attrs.open.as_deref() {
+        query.push_str(&format!("&open={}", url_encode(open)));
+    }
     let url = format!("{base}/book-example{query}#p={payload}");
     let mut out = String::from("<div class=\"rhizz-project\">");
     let _ = write!(
@@ -357,6 +388,7 @@ mod tests {
     use crate::project::ProjectAttrs;
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
     use flate2::read::ZlibDecoder;
+    use rhizz_core::WarningLevel;
     use serde_json::Value;
     use std::io::Read as _;
 
@@ -397,6 +429,15 @@ mod tests {
         assert_eq!(attrs.src, "projects/demo");
         assert_eq!(attrs.height, DEFAULT_PROJECT_HEIGHT);
         assert_eq!(attrs.open, None);
+        assert_eq!(attrs.level, WarningLevel::Component);
+    }
+
+    #[test]
+    fn attrs_parse_level_and_reject_unknown() {
+        let attrs = parse_project_attrs("src=\"a\" level=\"architectural\"")
+            .expect("level attr");
+        assert_eq!(attrs.level, WarningLevel::Architectural);
+        assert!(parse_project_attrs("src=\"a\" level=\"verbose\"").is_err());
     }
 
     #[test]
@@ -562,11 +603,14 @@ mod tests {
             src: "projects/demo".to_owned(),
             height: 600,
             open: None,
+            level: WarningLevel::Component,
         };
         let html = render_project_html("https://rhizz.fly.dev/", &attrs, "PAYLOAD");
         assert!(html.contains("<div class=\"rhizz-project\">"));
         assert!(html.contains("<iframe class=\"rhizz-example\""));
-        assert!(html.contains("src=\"https://rhizz.fly.dev/book-example#p=PAYLOAD\""));
+        assert!(html.contains(
+            "src=\"https://rhizz.fly.dev/book-example?level=component#p=PAYLOAD\""
+        ));
         assert!(html.contains("height=\"600\""));
         assert!(html.contains("loading=\"lazy\""));
         assert!(html.contains("allow=\"clipboard-write\""));
@@ -587,19 +631,24 @@ mod tests {
             src: "projects/demo".to_owned(),
             height: DEFAULT_PROJECT_HEIGHT,
             open: Some("diagrams/main.hcl".to_owned()),
+            level: WarningLevel::Component,
         };
         let html = render_project_html("https://rhizz.fly.dev", &attrs, "PAYLOAD");
         assert!(html.contains(
-            "src=\"https://rhizz.fly.dev/book-example?open=diagrams%2Fmain.hcl#p=PAYLOAD\""
+            "src=\"https://rhizz.fly.dev/book-example?level=component&open=diagrams%2Fmain.hcl#p=PAYLOAD\""
         ));
-        // Without `open` there is no query string at all.
+        // Without `open` the level query still travels: every embed is
+        // self-describing.
         let plain = ProjectAttrs {
             src: "projects/demo".to_owned(),
             height: DEFAULT_PROJECT_HEIGHT,
             open: None,
+            level: WarningLevel::Architectural,
         };
         let html = render_project_html("https://rhizz.fly.dev", &plain, "PAYLOAD");
-        assert!(html.contains("src=\"https://rhizz.fly.dev/book-example#p=PAYLOAD\""));
+        assert!(
+            html.contains("src=\"https://rhizz.fly.dev/book-example?level=architectural#p=PAYLOAD\"")
+        );
     }
 
     #[test]
@@ -608,8 +657,9 @@ mod tests {
             src: "projects/demo".to_owned(),
             height: DEFAULT_PROJECT_HEIGHT,
             open: Some("a b+c~d.hcl".to_owned()),
+            level: WarningLevel::Component,
         };
         let html = render_project_html("https://example.invalid", &attrs, "P");
-        assert!(html.contains("?open=a%20b%2Bc~d.hcl#p=P"));
+        assert!(html.contains("?level=component&open=a%20b%2Bc~d.hcl#p=P"));
     }
 }

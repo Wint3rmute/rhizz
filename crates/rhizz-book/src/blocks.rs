@@ -5,6 +5,8 @@
 //! trailing newline dropped), blocks are opened by a line matching
 //! `` ```rhizz <attrs> `` and closed by a line of three or more backticks.
 
+use anyhow::{Context, Result, bail};
+use rhizz_core::WarningLevel;
 use sha2::{Digest, Sha256};
 
 /// One segment of a markdown chapter: plain text, a `` ```rhizz `` block, or
@@ -92,6 +94,35 @@ pub fn parse_attrs(raw: &str) -> Vec<String> {
         .collect()
 }
 
+/// Resolve the warning level for a `` ```rhizz `` block from its attributes.
+///
+/// Zero or one `level=<name>` attr is allowed (`business`, `architectural`
+/// or `component`, case-insensitive); no attr means `component`, the
+/// compiler default that reports every warning. Fails loudly on duplicates
+/// or unknown names so a typo can never silently change a chapter's
+/// verdicts.
+///
+/// # Errors
+///
+/// Returns an error when more than one `level=` attr is present or its
+/// value does not name a known warning level.
+pub fn block_warning_level(attrs: &[String]) -> Result<WarningLevel> {
+    let mut level: Option<WarningLevel> = None;
+    for attr in attrs {
+        let Some(name) = attr.strip_prefix("level=") else {
+            continue;
+        };
+        if level.is_some() {
+            bail!("duplicate level= attribute in rhizz fence: {attr:?}");
+        }
+        level = Some(
+            name.parse::<WarningLevel>()
+                .with_context(|| format!("unknown warning level {name:?}: expected one of: business, architectural, component"))?,
+        );
+    }
+    Ok(level.unwrap_or_default())
+}
+
 /// Collect fence body lines starting after the opening fence at `index`;
 /// returns the body and the index to continue scanning from (past the
 /// closing fence, or the end when unterminated).
@@ -161,9 +192,10 @@ pub fn body_hash(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        Segment, body_hash, fence_open_attrs, fence_project_attrs, is_fence_close, parse_attrs,
-        parse_blocks, split_lines,
+        Segment, block_warning_level, body_hash, fence_open_attrs, fence_project_attrs,
+        is_fence_close, parse_attrs, parse_blocks, split_lines,
     };
+    use rhizz_core::WarningLevel;
 
     #[test]
     fn split_lines_drops_single_trailing_newline() {
@@ -290,5 +322,46 @@ mod tests {
         assert_eq!(body_hash("project {}"), body_hash("project {}"));
         assert_ne!(body_hash("project {}"), body_hash("project { }"));
         assert_eq!(body_hash("project {}").len(), 64);
+    }
+
+    #[test]
+    fn block_level_defaults_to_component() {
+        assert_eq!(
+            block_warning_level(&[]).expect("empty attrs"),
+            WarningLevel::Component
+        );
+        assert_eq!(
+            block_warning_level(&["ignore".to_owned()]).expect("unrelated attrs"),
+            WarningLevel::Component
+        );
+    }
+
+    #[test]
+    fn block_level_parses_name_case_insensitively() {
+        for (attr, expected) in [
+            ("level=business", WarningLevel::Business),
+            ("level=Architectural", WarningLevel::Architectural),
+            ("level=COMPONENT", WarningLevel::Component),
+        ] {
+            assert_eq!(
+                block_warning_level(&[attr.to_owned()]).expect(attr),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn block_level_rejects_unknown_and_duplicate() {
+        let message = block_warning_level(&["level=verbose".to_owned()])
+            .expect_err("unknown level must fail")
+            .to_string();
+        assert!(message.contains("unknown warning level"), "{message}");
+        let message = block_warning_level(&[
+            "level=business".to_owned(),
+            "level=component".to_owned(),
+        ])
+        .expect_err("duplicate level must fail")
+        .to_string();
+        assert!(message.contains("duplicate"), "{message}");
     }
 }
