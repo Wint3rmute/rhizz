@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Persist the `Strictness` option in Web app
+
+The navbar Strictness selector looked wired for persistence but silently
+wasn't: the setter `JSON.stringify`d into localStorage while the initial
+read compared the raw (still-quoted) value, so every reload fell back to
+`component`.
+
+- **Web** (`WarningLevelState.svelte.ts`): the read now `JSON.parse`s with
+a fallback to the raw string (healing both machine-written `"business"`
+and hand-edited `business`), validated through `parseWarningLevel`;
+corrupt/unknown entries fall back to the default. The write moved from an
+async `$effect.root` into the setter itself — synchronous, immediately
+testable, no lifecycle timing involved.
+- **Tests** (`e2e/strictness-persist.spec.ts`, new): real-browser proof —
+set Business, assert the stored value, navigate, reload, assert the
+control still reads Business; plus a corrupt-seed case falling back to
+Component. Verified red (reload reverts without the fix) and green with
+it. Full unit suite (665) + eslint + svelte-check green.
+
+---
+
 ## Task — Treat documentation as first-class citizen
 
 - **Compiler** (`rhizz-core`): new `W018` warning (component level) fires
