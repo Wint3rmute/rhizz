@@ -97,10 +97,11 @@ pub fn compile_body(body: &str) -> Verdict {
     compile_body_with_level(body, WarningLevel::Component)
 }
 
-/// Compile one `` ```rhizz `` block body at an explicit warning level
-/// (from the fence's `level=` attribute). The level gates warnings only:
-/// errors are always reported, so the verdict's validity never depends on
-/// it — only its noisiness.
+/// Compile one `` ```rhizz `` block body at an explicit warning level.
+///
+/// The level comes from the fence's `level=` attribute. It gates warnings
+/// only: errors are always reported, so the verdict's validity never depends
+/// on it — only its noisiness.
 #[must_use]
 pub fn compile_body_with_level(body: &str, level: WarningLevel) -> Verdict {
     let source = Source {

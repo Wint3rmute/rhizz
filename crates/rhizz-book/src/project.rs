@@ -10,7 +10,7 @@
 //! project carried in the URL hash (`#p=`). The hash payload uses exactly the
 //! codec the web route decodes: JSON → zlib deflate → base64url (no padding).
 
-use crate::blocks::body_hash;
+use crate::blocks::{BlockKey, body_hash};
 use crate::compile::{Verdict, normalize_result};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -24,10 +24,9 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-/// URL-hash payloads for embeds, keyed by (block hash or project `src`,
-/// warning level): the same source at two levels compiles to two verdicts
-/// and two iframe URLs.
-pub type ProjectPayloads = HashMap<(String, WarningLevel), String>;
+/// URL-hash payloads for embeds, keyed by [`BlockKey`]: the same source at
+/// two levels compiles to two verdicts and two iframe URLs.
+pub type ProjectPayloads = HashMap<BlockKey, String>;
 /// Fallback `/book-example` host, used when `book.toml` sets no
 /// `[preprocessor.rhizz] book-example-base-url`.
 pub const DEFAULT_EXAMPLE_BASE_URL: &str = "https://rhizz.fly.dev";
@@ -134,7 +133,9 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
                     )
                 })?;
             }
-            _ => bail!("unknown rhizz-project attribute {key:?} (expected src, height, open, level)"),
+            _ => {
+                bail!("unknown rhizz-project attribute {key:?} (expected src, height, open, level)")
+            }
         }
     }
     let Some(src) = src else {
@@ -365,7 +366,7 @@ pub fn render_project_html(base_url: &str, attrs: &ProjectAttrs, payload: &str) 
     // lock verified, and the web view compiles at exactly that level.
     let mut query = format!("?level={}", attrs.level);
     if let Some(open) = attrs.open.as_deref() {
-        query.push_str(&format!("&open={}", url_encode(open)));
+        let _ = write!(query, "&open={}", url_encode(open));
     }
     let url = format!("{base}/book-example{query}#p={payload}");
     let mut out = String::from("<div class=\"rhizz-project\">");
@@ -434,8 +435,7 @@ mod tests {
 
     #[test]
     fn attrs_parse_level_and_reject_unknown() {
-        let attrs = parse_project_attrs("src=\"a\" level=\"architectural\"")
-            .expect("level attr");
+        let attrs = parse_project_attrs("src=\"a\" level=\"architectural\"").expect("level attr");
         assert_eq!(attrs.level, WarningLevel::Architectural);
         assert!(parse_project_attrs("src=\"a\" level=\"verbose\"").is_err());
     }
@@ -608,9 +608,9 @@ mod tests {
         let html = render_project_html("https://rhizz.fly.dev/", &attrs, "PAYLOAD");
         assert!(html.contains("<div class=\"rhizz-project\">"));
         assert!(html.contains("<iframe class=\"rhizz-example\""));
-        assert!(html.contains(
-            "src=\"https://rhizz.fly.dev/book-example?level=component#p=PAYLOAD\""
-        ));
+        assert!(
+            html.contains("src=\"https://rhizz.fly.dev/book-example?level=component#p=PAYLOAD\"")
+        );
         assert!(html.contains("height=\"600\""));
         assert!(html.contains("loading=\"lazy\""));
         assert!(html.contains("allow=\"clipboard-write\""));
@@ -647,7 +647,9 @@ mod tests {
         };
         let html = render_project_html("https://rhizz.fly.dev", &plain, "PAYLOAD");
         assert!(
-            html.contains("src=\"https://rhizz.fly.dev/book-example?level=architectural#p=PAYLOAD\"")
+            html.contains(
+                "src=\"https://rhizz.fly.dev/book-example?level=architectural#p=PAYLOAD\""
+            )
         );
     }
 

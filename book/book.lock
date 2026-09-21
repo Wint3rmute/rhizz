@@ -4,6 +4,7 @@
       "chapter": "01_basics.md",
       "hcl": "component \"tire\" {\n  description = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  description = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
       "input_sha256": "7d56d605d17bad608fad2d09c1bfa6f2553824010a3efd42e42a8fb7ab0997c5",
+      "level": "architectural",
       "output": {
         "errors": [],
         "score": {
@@ -50,14 +51,6 @@
           {
             "code": "W003",
             "message": "component 'tire' (source 'tire') is not referenced by any connection"
-          },
-          {
-            "code": "W018",
-            "message": "component 'tire' is missing documentation (docs/tire.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -66,6 +59,7 @@
       "chapter": "01_basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
       "input_sha256": "c6df9297fcd60ca8df1f49594b62ba4996109c49612ea0d4d35f3af9382b741a",
+      "level": "architectural",
       "output": {
         "errors": [],
         "score": {
@@ -100,10 +94,6 @@
           {
             "code": "W003",
             "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
-          },
-          {
-            "code": "W018",
-            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -112,6 +102,7 @@
       "chapter": "01_basics.md",
       "hcl": "component \"tire\" {\n  description = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  description = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    description = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
       "input_sha256": "d608f4bbe5322497d8eeca5659feaa80fc290ec8349d3c3b3afa79a5bb2f874c",
+      "level": "architectural",
       "output": {
         "errors": [],
         "score": {
@@ -150,22 +141,6 @@
           {
             "code": "W003",
             "message": "component 'tire' (source 'tire') is not referenced by any connection"
-          },
-          {
-            "code": "W018",
-            "message": "component 'fork' is missing documentation (docs/fork.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'frame' is missing documentation (docs/frame.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'tire' is missing documentation (docs/tire.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -174,6 +149,7 @@
       "chapter": "01_basics.md",
       "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n}",
       "input_sha256": "e60a19d0d7a42325a736f04e05be52a9d526b2796a98fe1af3a3dfc9803c7204",
+      "level": "architectural",
       "output": {
         "errors": [],
         "score": {
@@ -204,10 +180,6 @@
           {
             "code": "W001",
             "message": "component 'wheel' is non-leaf but has no child components"
-          },
-          {
-            "code": "W018",
-            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -216,6 +188,7 @@
       "chapter": "01_basics.md",
       "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}\n\nsystem \"also-nothing\" {\n  description = \"Nothingness 2.0: Electric Bongaloo\"\n}",
       "input_sha256": "ea62c8ea8a728e4fae990f0287978800f2d93189bad9eeee612d385193777b5c",
+      "level": "component",
       "output": {
         "errors": [],
         "score": {
@@ -249,6 +222,7 @@
       "chapter": "01_basics.md",
       "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}",
       "input_sha256": "fa10bcd472f8d57c7e8b5444c160fc7f8f73a0d0296583dfdaa0a1905243289c",
+      "level": "component",
       "output": {
         "errors": [],
         "score": {
@@ -282,6 +256,7 @@
       "chapter": "03_connections_ports.md",
       "hcl": "component \"computer\" {\n  description = \"Personal Computer (PC)\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\ncomponent \"mouse\" {\n  description = \"Computer Mouse\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\nsystem \"work-computer\" {\n  description = \"My work computer\"\n  instance \"computer\" { source = \"computer\" }\n  instance \"mouse\" { source = \"mouse\" }\n\n  connection \"mouse-to-computer\" {\n    description = \"Mouse connected to the PC by a USB-C cable\"\n    from = \"computer/usb-c\"\n    to = \"mouse/usb-c\"\n  }\n}",
       "input_sha256": "630dc0355ff1cf2008b550835b8d88ce7fb4e422429b6099d34d41e7f3e63048",
+      "level": "architectural",
       "output": {
         "errors": [],
         "score": {
@@ -308,22 +283,14 @@
           },
           "system": ""
         },
-        "warnings": [
-          {
-            "code": "W018",
-            "message": "component 'computer' is missing documentation (docs/computer.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'mouse' is missing documentation (docs/mouse.md)"
-          }
-        ]
+        "warnings": []
       }
     },
     {
       "chapter": "03_connections_ports.md",
       "hcl": "component \"server\" {\n  description = \"Server in the cloud\"\n  leaf = true\n}\n\ncomponent \"client\" {\n  description = \"Client's computer\"\n  leaf = true\n}\n\nsystem \"banking-application\" {\n  description = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    description = \"REST API with OAuth2\"\n    from = \"server\"\n    to = \"client\"\n  }\n}",
       "input_sha256": "c1426e020bdd5ab8e52b3cf3171956f7737f8aa16aeea57fc80b40641ff8b2fc",
+      "level": "architectural",
       "output": {
         "errors": [],
         "score": {
@@ -350,22 +317,14 @@
           },
           "system": ""
         },
-        "warnings": [
-          {
-            "code": "W018",
-            "message": "component 'client' is missing documentation (docs/client.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'server' is missing documentation (docs/server.md)"
-          }
-        ]
+        "warnings": []
       }
     },
     {
       "chapter": "04_warnings_errors.md",
       "hcl": "protocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\ncomponent \"controller\" {\n  leaf = true\n\n  port \"uart\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  instance \"controller\" {\n    source = \"controller\"\n  }\n\n  instance \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
       "input_sha256": "21cd28baaf7d6a4632685acd44c54bee6a67513ed45e3c64db1c95beb931f63f",
+      "level": "component",
       "output": {
         "errors": [],
         "score": {
@@ -417,7 +376,7 @@
       }
     }
   ],
-  "format": 1,
+  "format": 2,
   "projects": [
     {
       "chapter": "01_basics.md",
@@ -470,26 +429,11 @@
           {
             "code": "W003",
             "message": "component 'tire' (source 'tire') is not referenced by any connection"
-          },
-          {
-            "code": "W018",
-            "message": "component 'fork' is missing documentation (docs/fork.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'frame' is missing documentation (docs/frame.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'tire' is missing documentation (docs/tire.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       },
-      "src": "basics/demo"
+      "src": "basics/demo",
+      "level": "architectural"
     },
     {
       "chapter": "02_views_intro.md",
@@ -534,26 +478,10 @@
           },
           "system": ""
         },
-        "warnings": [
-          {
-            "code": "W018",
-            "message": "component 'computer' is missing documentation (docs/computer.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'cpu' is missing documentation (docs/cpu.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'gpu' is missing documentation (docs/gpu.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'monitor' is missing documentation (docs/monitor.md)"
-          }
-        ]
+        "warnings": []
       },
-      "src": "views-intro/1_example_simple"
+      "src": "views-intro/1_example_simple",
+      "level": "architectural"
     },
     {
       "chapter": "02_views_intro.md",
@@ -598,26 +526,11 @@
           {
             "code": "W016",
             "message": "diagrams/overview.hcl: view 'overview' node 'computer-setup/not-a-computer' does not reference a known component"
-          },
-          {
-            "code": "W018",
-            "message": "component 'computer' is missing documentation (docs/computer.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'cpu' is missing documentation (docs/cpu.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'gpu' is missing documentation (docs/gpu.md)"
-          },
-          {
-            "code": "W018",
-            "message": "component 'monitor' is missing documentation (docs/monitor.md)"
           }
         ]
       },
-      "src": "views-intro/2_example_error"
+      "src": "views-intro/2_example_error",
+      "level": "architectural"
     }
   ],
   "rhizz_version": "rhizz 0.1.0"

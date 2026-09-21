@@ -210,6 +210,24 @@ export const WarningsShownDirectly: Story = {
   },
 };
 
+// A pinned `level` quiets the verdict exactly like the preprocessor's lock:
+// the same undocumented components are clean at business strictness.
+const undocumentedFiles: BookPayloadFile[] = SAMPLE_FILES.filter(
+  (file) => !file.path.startsWith("docs/"),
+);
+
+export const PinnedLevelQuietsDocsWarnings: Story = {
+  args: {
+    files: undocumentedFiles,
+    level: "business",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText(/No errors, no warnings/);
+    await canvas.findByText("Strictness: business");
+  },
+};
+
 // Diagram files are compiled (not just rendered), so a stale `node` path in a
 // view routes through rhizz-core's view validation and surfaces W016 in the
 // same verdict panel — without blocking the model.

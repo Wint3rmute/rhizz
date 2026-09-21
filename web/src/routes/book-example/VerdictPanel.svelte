@@ -22,12 +22,18 @@ let {
   errors = [],
   warnings = [],
   stats = null,
+  warningLevel = null,
+  levelPinned = false,
 }: {
   status: VerdictStatus;
   head: string;
   errors?: VerdictDiagnostic[];
   warnings?: VerdictDiagnostic[];
   stats?: VerdictStats | null;
+  /** Strictness the verdict was compiled at; shown as a badge so embed readers see the mode. */
+  warningLevel?: string | null;
+  /** True when the level was pinned per-embed (book `?level=`), not inherited from the app preset. */
+  levelPinned?: boolean;
 } = $props();
 
 const glyph = $derived(
@@ -36,7 +42,19 @@ const glyph = $derived(
 </script>
 
 <div class="verdict" data-status={status}>
-  <div class="verdict-head">{glyph} {head}</div>
+  <div class="verdict-head">
+    <span>{glyph} {head}</span>
+    {#if warningLevel}
+      <span
+        class="verdict-level"
+        data-pinned={levelPinned}
+        title={levelPinned
+          ? `Strictness pinned to ${warningLevel} by this example — warnings below that detail are hidden`
+          : `Strictness ${warningLevel} from the app preset — warnings below that detail are hidden`}>
+        Strictness: {warningLevel}
+      </span>
+    {/if}
+  </div>
   {#if errors.length > 0}
     <ul class="verdict-list verdict-errors">
       {#each errors as diagnostic, i (i)}
@@ -83,6 +101,19 @@ const glyph = $derived(
 .verdict-head {
   padding: 0.45rem 0.8rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.verdict-level {
+  font-size: 0.75em;
+  font-weight: 500;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+  white-space: nowrap;
 }
 .verdict-list {
   list-style: none;
