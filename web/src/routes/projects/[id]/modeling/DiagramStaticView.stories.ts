@@ -60,17 +60,6 @@ export const SingleSelected: Story = {
   },
 };
 
-// The same pipeline with two nodes selected at once, as a multi-selection
-// (e.g. after a marquee drag) would look.
-export const MultiSelected: Story = {
-  args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
-    selected: new Set([0, 2]),
-  },
-};
-
 // A nested composite: "Drone" contains "Flight Controller" and "Motor",
 // which are drawn on top of (rendered after) their parent thanks to
 // DiagramStaticView's depth-based render order — exercising
