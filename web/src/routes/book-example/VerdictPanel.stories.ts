@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { within } from "storybook/test";
+import { expect, within } from "storybook/test";
 import VerdictPanel from "./VerdictPanel.svelte";
 
 const meta = {
@@ -76,5 +76,20 @@ export const Errors: Story = {
     const canvas = within(canvasElement);
     await canvas.findByText(/1 error/);
     await canvas.findByText(/E011/);
+  },
+};
+
+export const StrictnessBadge: Story = {
+  args: {
+    status: "ok",
+    head: "No errors, no warnings",
+    stats,
+    warningLevel: "architectural",
+    levelPinned: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const badge = await canvas.findByText("Strictness: architectural");
+    await expect(badge.title).toMatch(/pinned/);
   },
 };

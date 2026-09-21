@@ -6,7 +6,10 @@
 //! `book` JSON back on stdout. mdbook sets the working directory to the book
 //! root and `context.root` holds that root, which is where `book.lock` lives.
 
-use crate::blocks::{Segment, block_warning_level, body_hash, parse_blocks, split_lines};
+use crate::blocks::{
+    BlockBodies, BlockKey, BlockUsage, Segment, block_warning_level, body_hash, parse_blocks,
+    split_lines,
+};
 use crate::compile::BLOCK_FILENAME;
 use crate::compile::{Verdict, compile_body_with_level};
 use crate::lock::{
@@ -17,9 +20,9 @@ use crate::project::{
     LoadedProject, ProjectAttrs, ProjectFile, ProjectPayloads, compile_project_with_level,
     encode_payload, load_project, parse_project_attrs,
 };
-use rhizz_core::WarningLevel;
 use crate::transform::{CompileResults, transform_chapter};
 use anyhow::{Context, Result, bail};
+use rhizz_core::WarningLevel;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -137,15 +140,16 @@ fn walk_mut(items: &mut [Value], rewrite: &mut impl FnMut(&str, &str) -> String)
 /// the share count). Returns verdicts and URL-hash payloads keyed by
 /// (body digest, warning level).
 fn compile_and_encode_bodies(
-    bodies: &HashMap<(String, WarningLevel), String>,
-    used_by: &HashMap<(String, WarningLevel), Vec<String>>,
-) -> Result<(CompileResults, HashMap<(String, WarningLevel), String>)> {
+    bodies: &BlockBodies,
+    used_by: &BlockUsage,
+) -> Result<(CompileResults, ProjectPayloads)> {
     let mut results: CompileResults = HashMap::with_capacity(bodies.len());
-    let mut payloads: HashMap<(String, WarningLevel), String> =
-        HashMap::with_capacity(bodies.len());
+    let mut payloads: ProjectPayloads = HashMap::with_capacity(bodies.len());
     for ((hash, level), body) in bodies {
         let verdict = compile_body_with_level(body, *level);
-        let chapters = used_by.get(&(hash.clone(), *level)).map_or(&[][..], Vec::as_slice);
+        let chapters = used_by
+            .get(&(hash.clone(), *level))
+            .map_or(&[][..], Vec::as_slice);
         match chapters {
             [chapter] => tracing::info!(
                 chapter = %chapter,
@@ -196,8 +200,8 @@ struct BuiltProject {
 fn build_book_projects(
     refs: &[(String, ProjectAttrs)],
     src_root: &Path,
-) -> Result<(HashMap<(String, WarningLevel), BuiltProject>, Vec<ProjectLockEntry>)> {
-    let mut built: HashMap<(String, WarningLevel), BuiltProject> = HashMap::new();
+) -> Result<(HashMap<BlockKey, BuiltProject>, Vec<ProjectLockEntry>)> {
+    let mut built: HashMap<BlockKey, BuiltProject> = HashMap::new();
     for (chapter, attrs) in refs {
         if built.contains_key(&(attrs.src.clone(), attrs.level)) {
             continue;
@@ -289,14 +293,9 @@ fn build_book_projects(
 /// # Errors
 ///
 /// Returns an error when a block fence carries a malformed `level=` attr.
-fn collect_block_bodies(
-    book: &Value,
-) -> Result<(
-    HashMap<(String, WarningLevel), String>,
-    HashMap<(String, WarningLevel), Vec<String>>,
-)> {
-    let mut bodies: HashMap<(String, WarningLevel), String> = HashMap::new();
-    let mut used_by: HashMap<(String, WarningLevel), Vec<String>> = HashMap::new();
+fn collect_block_bodies(book: &Value) -> Result<(BlockBodies, BlockUsage)> {
+    let mut bodies: BlockBodies = HashMap::new();
+    let mut used_by: BlockUsage = HashMap::new();
     let mut failure: Option<anyhow::Error> = None;
     for_each_chapter(book, &mut |chapter, content| {
         if failure.is_some() {
@@ -309,9 +308,8 @@ fn collect_block_bodies(
                 let level = match block_warning_level(attrs) {
                     Ok(level) => level,
                     Err(error) => {
-                        failure = Some(error.context(format!(
-                            "invalid rhizz fence in '{chapter}'"
-                        )));
+                        failure =
+                            Some(error.context(format!("invalid rhizz fence in '{chapter}'")));
                         return;
                     }
                 };
@@ -628,9 +626,21 @@ mod tests {
         let text = std::fs::read_to_string(&lock_path).expect("read lock");
         let payload: crate::lock::LockPayload = serde_json::from_str(&text).expect("lock parses");
         assert_eq!(payload.projects.len(), 0);
-        assert_eq!(payload.entries.len(), 2, "same body at two levels traces twice");
-        let component = payload.entries.iter().find(|e| e.level == "component").expect("component trace");
-        let business = payload.entries.iter().find(|e| e.level == "business").expect("business trace");
+        assert_eq!(
+            payload.entries.len(),
+            2,
+            "same body at two levels traces twice"
+        );
+        let component = payload
+            .entries
+            .iter()
+            .find(|e| e.level == "component")
+            .expect("component trace");
+        let business = payload
+            .entries
+            .iter()
+            .find(|e| e.level == "business")
+            .expect("business trace");
         assert!(
             component.output.warnings.iter().any(|w| w.code == "W018"),
             "component level must report W018"
@@ -647,8 +657,7 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         let lock_path = PathBuf::from(dir.path()).join("book.lock");
         let mut err = Cursor::new(Vec::new());
-        let mut book =
-            project_book("# T\n\n```rhizz,level=verbose\nproject {}\n```\n");
+        let mut book = project_book("# T\n\n```rhizz,level=verbose\nproject {}\n```\n");
         let error = process_book(
             &mut book,
             &lock_path,

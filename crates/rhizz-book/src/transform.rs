@@ -2,18 +2,17 @@
 //! `/book-example` embed, and its input→output trace is recorded for
 //! `book.lock`.
 
-use crate::blocks::{Segment, block_warning_level, body_hash, parse_blocks, split_lines};
+use crate::blocks::{BlockKey, Segment, block_warning_level, body_hash, parse_blocks, split_lines};
 use crate::compile::{BLOCK_FILENAME, Verdict};
 use crate::lock::LockEntry;
 use crate::project::{
     ProjectAttrs, ProjectPayloads, block_embed_height, parse_project_attrs, render_project_html,
 };
 use crate::render::{IGNORE_PANEL, tool_error_panel};
-use rhizz_core::WarningLevel;
 use std::collections::HashMap;
 
-/// Compiled-block results keyed by (body SHA-256 digest, warning level).
-pub type CompileResults = HashMap<(String, WarningLevel), Verdict>;
+/// Compiled-block results keyed by [`BlockKey`].
+pub type CompileResults = HashMap<BlockKey, Verdict>;
 
 /// Rewrite one chapter and return its lock traces.
 ///
@@ -70,9 +69,7 @@ pub fn transform_chapter(
                 let level = match block_warning_level(attrs) {
                     Ok(level) => level,
                     Err(error) => {
-                        out.push(tool_error_panel(&format!(
-                            "invalid rhizz fence: {error:#}"
-                        )));
+                        out.push(tool_error_panel(&format!("invalid rhizz fence: {error:#}")));
                         out.push(String::new());
                         continue;
                     }
@@ -269,7 +266,9 @@ mod tests {
             TEST_BASE_URL,
         );
         assert!(new_content.contains("<div class=\"rhizz-project\">"));
-        assert!(new_content.contains("https://example.invalid/book-example?level=component#p=PAYLOAD"));
+        assert!(
+            new_content.contains("https://example.invalid/book-example?level=component#p=PAYLOAD")
+        );
         assert!(new_content.contains("height="));
         assert!(!new_content.contains("```hcl"));
         assert!(!new_content.contains("rhizz-diag"));
@@ -332,7 +331,9 @@ mod tests {
             "project traces are recorded by the pipeline"
         );
         assert!(new_content.contains("<div class=\"rhizz-project\">"));
-        assert!(new_content.contains("https://example.invalid/book-example?level=component#p=PAYLOAD"));
+        assert!(
+            new_content.contains("https://example.invalid/book-example?level=component#p=PAYLOAD")
+        );
         assert!(new_content.contains("height=\"600\""));
         assert!(!new_content.contains("rhizz-project-caption"));
     }

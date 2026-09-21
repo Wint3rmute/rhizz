@@ -7,6 +7,7 @@ import {
   compile_system,
   parse_views,
   type ViewDefinition,
+  type WarningLevel,
 } from "../../rhizz_wasm_wrapper";
 import { isDocsSource } from "../../vfs/compile";
 import DiagramStaticView from "../projects/[id]/modeling/DiagramStaticView.svelte";
@@ -24,8 +25,16 @@ import VerdictPanel, {
 } from "./VerdictPanel.svelte";
 import type { BookPayloadFile } from "./payload";
 
-let { files, open = null }: { files: BookPayloadFile[]; open?: string | null } =
-  $props();
+let {
+  files,
+  open = null,
+  level = null,
+}: {
+  files: BookPayloadFile[];
+  open?: string | null;
+  /** Pinned strictness from the embed URL (`?level=`); falls back to the app-wide preset. */
+  level?: WarningLevel | null;
+} = $props();
 
 // Resolve the `?open=` target: exact path first, then a bare filename
 // (e.g. `main.hcl` matches `diagrams/main.hcl`).
@@ -52,14 +61,18 @@ let sources = $derived(
     .map((file) => ({ filename: file.path, content: file.content })),
 );
 
-// The project-wide warning preset (navbar select); read inside the `$derived`
-// compile below so the verdict panel follows the same level as the main app.
+// The embed URL's `?level=` (written by the book preprocessor from the
+// fence's `level=` attribute) pins the verdict; otherwise the app-wide
+// preset applies — same rule as every other page, just with a per-embed
+// override so the browser verdict matches the locked one.
 let warningLevel = $derived(getWarningLevel());
+let effectiveLevel = $derived(level ?? warningLevel);
+let levelPinned = $derived(level !== null);
 
 let output = $derived.by(() => {
   if (sources.length === 0) return null;
   try {
-    return compile_system(sources, warningLevel);
+    return compile_system(sources, effectiveLevel);
   } catch {
     return null;
   }
@@ -413,6 +426,8 @@ $effect(() => {
       errors={errorDiags}
       warnings={warningDiags}
       {stats}
+      warningLevel={effectiveLevel}
+      {levelPinned}
     />
   </div>
 </div>

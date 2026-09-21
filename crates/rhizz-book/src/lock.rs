@@ -413,7 +413,8 @@ pub fn compare_lock(
         }
     }
 
-    let current_projects: HashSet<(&str, &str, &str, &str)> = projects.iter().map(project_key).collect();
+    let current_projects: HashSet<(&str, &str, &str, &str)> =
+        projects.iter().map(project_key).collect();
     for entry in &lock.projects {
         if !current_projects.contains(&project_key(entry)) {
             diffs.push(Diff::RemovedProject {
@@ -435,7 +436,7 @@ pub fn compare_lock(
 
 /// The lock identity of a trace: (chapter, input hash, level). The level is
 /// part of the key so the same body compiled at two levels traces twice.
-fn entry_key(entry: &LockEntry) -> (&str, &str, &str) {
+const fn entry_key(entry: &LockEntry) -> (&str, &str, &str) {
     (
         entry.chapter.as_str(),
         entry.input_sha256.as_str(),

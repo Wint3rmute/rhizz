@@ -8,6 +8,18 @@
 use anyhow::{Context, Result, bail};
 use rhizz_core::WarningLevel;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+
+/// Identity of one compiled embed: (block body digest or project `src`,
+/// warning level). The same source at two levels compiles to two verdicts,
+/// so the level is part of every key.
+pub type BlockKey = (String, WarningLevel);
+
+/// Block bodies keyed by [`BlockKey`].
+pub type BlockBodies = HashMap<BlockKey, String>;
+
+/// Chapter attributions keyed by [`BlockKey`].
+pub type BlockUsage = HashMap<BlockKey, Vec<String>>;
 
 /// One segment of a markdown chapter: plain text, a `` ```rhizz `` block, or
 /// a `` ```rhizz-project `` embed directive.
@@ -356,12 +368,10 @@ mod tests {
             .expect_err("unknown level must fail")
             .to_string();
         assert!(message.contains("unknown warning level"), "{message}");
-        let message = block_warning_level(&[
-            "level=business".to_owned(),
-            "level=component".to_owned(),
-        ])
-        .expect_err("duplicate level must fail")
-        .to_string();
+        let message =
+            block_warning_level(&["level=business".to_owned(), "level=component".to_owned()])
+                .expect_err("duplicate level must fail")
+                .to_string();
         assert!(message.contains("duplicate"), "{message}");
     }
 }
