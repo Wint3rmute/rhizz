@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   completionBadge,
-  DEFAULT_DIAGRAM_DIR,
-  defaultDiagramPath,
+  DEFAULT_VIEW_DIR,
+  defaultViewPath,
   definitionDepth,
   filterDefinitions,
   type InventoryDefinition,
@@ -142,9 +142,9 @@ describe("filterDefinitions", () => {
   });
 });
 
-describe("defaultDiagramPath", () => {
-  it("builds the conventional diagrams/<label>.hcl path", () => {
-    expect(defaultDiagramPath("cm")).toBe("diagrams/cm.hcl");
-    expect(DEFAULT_DIAGRAM_DIR).toBe("diagrams");
+describe("defaultViewPath", () => {
+  it("builds the conventional views/<label>.hcl path", () => {
+    expect(defaultViewPath("cm")).toBe("views/cm.hcl");
+    expect(DEFAULT_VIEW_DIR).toBe("views");
   });
 });

@@ -102,7 +102,7 @@ $effect(() => {
 
 // Compiles the *whole* project (every ".hcl" file), not just whichever
 // one is open — matching rhizz-core's actual "flat merge of a directory"
-// semantics, and how diagrams/overview already compile. The open file's
+// semantics, and how views/overview already compile. The open file's
 // on-disk copy can lag one write behind `content` (the write-back effect
 // above is async), so its entry is patched in-place with the live,
 // in-editor value instead of trusting readProjectSources' own read of

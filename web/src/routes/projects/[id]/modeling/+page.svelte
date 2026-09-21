@@ -38,7 +38,7 @@ import {
 
 import {
   type Annotation,
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   readDiagramLayoutFile,
@@ -330,8 +330,8 @@ let editingAnnotationObj = $derived(
   editingAnnotation === null ? undefined : annotations[editingAnnotation],
 );
 
-// Which diagram (a `diagrams/<name>.hcl` file) is currently open on the
-// canvas, relative to DIAGRAM_LAYOUT_DIR — e.g. "main.hcl" — exactly like
+// Which diagram (a `views/<name>.hcl` file) is currently open on the
+// canvas, relative to VIEW_LAYOUT_DIR — e.g. "main.hcl" — exactly like
 // the editor's own `selectedPath` is relative to the project root. `null`
 // means no diagram exists yet (or none is selected), in which case the
 // canvas below simply has nothing placed on it.
@@ -390,17 +390,17 @@ let systemConnections = $derived.by(() => {
 let fullDiagramPath = $derived(
   selectedDiagramPath === null
     ? null
-    : `${DIAGRAM_LAYOUT_DIR}/${selectedDiagramPath}`,
+    : `${VIEW_LAYOUT_DIR}/${selectedDiagramPath}`,
 );
 
 async function refreshDiagramEntries(): Promise<void> {
   try {
-    diagramEntries = await fs.readdir(DIAGRAM_LAYOUT_DIR, {
+    diagramEntries = await fs.readdir(VIEW_LAYOUT_DIR, {
       recursive: true,
     });
   } catch {
     // No diagram has ever been saved for this project yet, so
-    // DIAGRAM_LAYOUT_DIR itself doesn't exist (ENOENT) — there's simply
+    // VIEW_LAYOUT_DIR itself doesn't exist (ENOENT) — there's simply
     // nothing to list.
     diagramEntries = [];
   }
@@ -476,7 +476,7 @@ $effect(() => {
         }
         await writeDiagramLayoutFile(
           fs,
-          `${DIAGRAM_LAYOUT_DIR}/main.hcl`,
+          `${VIEW_LAYOUT_DIR}/main.hcl`,
           emptyDiagramLayout(systemName),
           systemName,
         );
@@ -593,7 +593,7 @@ function sanitizeDiagramSegmentName(name: string): string | null {
   return trimmed;
 }
 
-function joinDiagramPath(parentPath: string, name: string): string {
+function joinViewPath(parentPath: string, name: string): string {
   return parentPath ? `${parentPath}/${name}` : name;
 }
 
@@ -629,11 +629,11 @@ async function handleNewViewCreate(data: {
     );
     return;
   }
-  const path = joinDiagramPath(newViewParentPath, name);
+  const path = joinViewPath(newViewParentPath, name);
   try {
     await writeDiagramLayoutFile(
       fs,
-      `${DIAGRAM_LAYOUT_DIR}/${path}`,
+      `${VIEW_LAYOUT_DIR}/${path}`,
       emptyDiagramLayout(systemChoice),
       systemChoice,
     );
@@ -651,7 +651,7 @@ async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
   if (name === null) return;
   try {
     await fs.mkdir(
-      `${DIAGRAM_LAYOUT_DIR}/${joinDiagramPath(parentPath, name)}`,
+      `${VIEW_LAYOUT_DIR}/${joinViewPath(parentPath, name)}`,
       { recursive: true },
     );
     await refreshDiagramEntries();
@@ -666,11 +666,11 @@ async function handleRenameDiagram(path: string): Promise<void> {
   const parentPath = segments.slice(0, -1).join("/");
   const name = sanitizeDiagramSegmentName(prompt("Rename to?", oldName) ?? "");
   if (name === null || name === oldName) return;
-  const newPath = joinDiagramPath(parentPath, name);
+  const newPath = joinViewPath(parentPath, name);
   try {
     await fs.rename(
-      `${DIAGRAM_LAYOUT_DIR}/${path}`,
-      `${DIAGRAM_LAYOUT_DIR}/${newPath}`,
+      `${VIEW_LAYOUT_DIR}/${path}`,
+      `${VIEW_LAYOUT_DIR}/${newPath}`,
     );
     if (selectedDiagramPath === path) selectedDiagramPath = newPath;
     await refreshDiagramEntries();
@@ -682,7 +682,7 @@ async function handleRenameDiagram(path: string): Promise<void> {
 async function handleDeleteDiagram(path: string): Promise<void> {
   if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
   try {
-    await fs.rm(`${DIAGRAM_LAYOUT_DIR}/${path}`, { recursive: true });
+    await fs.rm(`${VIEW_LAYOUT_DIR}/${path}`, { recursive: true });
     if (
       selectedDiagramPath === path ||
       selectedDiagramPath?.startsWith(`${path}/`)
@@ -918,7 +918,7 @@ function select(index: number) {
 // history. Deliberately excludes `selected` (transient UI state, not
 // diagram content, and not guaranteed to still make sense after
 // restoring an older/newer snapshot) and view/grid/snap preferences.
-// Annotations are persisted view content (diagrams/*.hcl), so they ride
+// Annotations are persisted view content (views/*.hcl), so they ride
 // the same snapshot — otherwise add/delete/edit/drag/resize of a note
 // can never be undone.
 type DiagramSnapshot = {

@@ -1,6 +1,6 @@
 // Schema + loading for the Markdown "knowledge database" persisted into the
 // active project's VFS under `docs/` (mirroring how diagram layouts live under
-// `diagrams/`). Each `.md` file's path (minus the `.md` suffix) is the key
+// `views/`). Each `.md` file's path (minus the `.md` suffix) is the key
 // that associates it with a component's label, e.g. `docs/product.md` ↔
 // component label `product`.
 import { type ProjectFs } from "../../../../vfs/fs";

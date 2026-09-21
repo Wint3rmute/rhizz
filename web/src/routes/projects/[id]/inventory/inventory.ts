@@ -5,11 +5,11 @@
 // reusable by both the page component and its Storybook stories.
 
 /** Where a component's default (per-component) diagram lives in the VFS. */
-export const DEFAULT_DIAGRAM_DIR = "diagrams";
+export const DEFAULT_VIEW_DIR = "views";
 
-/** The VFS path of a definition's default diagram: `diagrams/<label>.hcl`. */
-export function defaultDiagramPath(label: string): string {
-  return `${DEFAULT_DIAGRAM_DIR}/${label}.hcl`;
+/** The VFS path of a definition's default diagram: `views/<label>.hcl`. */
+export function defaultViewPath(label: string): string {
+  return `${DEFAULT_VIEW_DIR}/${label}.hcl`;
 }
 
 /** A port flattened into plain display data for the Inventory. */

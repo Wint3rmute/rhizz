@@ -16,7 +16,7 @@ import FileTree from "../code/FileTree.svelte";
 import DiagramStaticView from "../modeling/DiagramStaticView.svelte";
 import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
 import {
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   type DiagramLayout,
   emptyDiagramLayout,
   mapLayoutToBoxes,
@@ -64,7 +64,7 @@ $effect(() => {
 
   let cancelled = false;
   const fs = openProjectFs(projectStore, id);
-  fs.readdir(DIAGRAM_LAYOUT_DIR)
+  fs.readdir(VIEW_LAYOUT_DIR)
     .then(async (entries) => {
       const files = entries.filter(
         (entry) => entry.isFile() && entry.name.endsWith(".hcl"),
@@ -80,7 +80,7 @@ $effect(() => {
             file,
             layout: await readDiagramLayoutFile(
               fs,
-              `${DIAGRAM_LAYOUT_DIR}/${file.path}`,
+              `${VIEW_LAYOUT_DIR}/${file.path}`,
             ),
           })),
         )
@@ -129,7 +129,7 @@ $effect(() => {
 
   let cancelled = false;
   const fs = openProjectFs(projectStore, id);
-  readDiagramLayoutFile(fs, `${DIAGRAM_LAYOUT_DIR}/${path}`)
+  readDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${path}`)
     .then((layout) => {
       if (cancelled) return;
       selectedLayout = layout;

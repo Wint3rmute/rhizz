@@ -106,7 +106,7 @@ system "quad" {
     const result = compile_system([
       { filename: "main.hcl", content: EMPTY_PROJECT_HCL },
       {
-        filename: "diagrams/main.hcl",
+        filename: "views/main.hcl",
         content: 'view "main" { system = "main" }\n',
       },
     ]);
@@ -127,21 +127,21 @@ system "computer-setup" {
     const result = compile_system([
       { filename: "system.hcl", content: systemHcl },
       // Zero view blocks -> E016.
-      { filename: "diagrams/empty.hcl", content: 'project { name = "x" }' },
+      { filename: "views/empty.hcl", content: 'project { name = "x" }' },
       // Two view blocks -> E016.
       {
-        filename: "diagrams/combined.hcl",
+        filename: "views/combined.hcl",
         content: 'view "combined" { system = "computer-setup" }\n' +
           'view "other" { system = "computer-setup" }\n',
       },
       // Unknown view system -> E006.
       {
-        filename: "diagrams/broken.hcl",
+        filename: "views/broken.hcl",
         content: 'view "broken" { system = "nope" }\n',
       },
       // Unknown node path -> W016 (non-blocking).
       {
-        filename: "diagrams/overview.hcl",
+        filename: "views/overview.hcl",
         content: 'view "overview" {\n' +
           '  system = "computer-setup"\n' +
           '  node "computer-setup/ghost" {\n' +

@@ -1,5 +1,5 @@
 // Force-directed auto-layout for the diagrams canvas (web/src/routes/
-// diagrams/+page.svelte). Deliberately has zero Svelte/DOM dependency —
+// views/+page.svelte). Deliberately has zero Svelte/DOM dependency —
 // and, per TASKS.md Task 50's explicit constraint, zero dependency on
 // `rhizz-wasm`/`rhizz-core` types — so it can be unit tested directly
 // (see forceLayout.test.ts) and stays a pure "diagram data model"

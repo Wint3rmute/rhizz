@@ -7,7 +7,7 @@
 //
 // This deliberately only tracks the active project's *metadata*
 // (Project, from vfs/types.ts — the workspace container), not its node
-// list: pages that need the project's files (editor/diagrams/overview)
+// list: pages that need the project's files (editor/views/overview)
 // fetch those directly from `projectStore` themselves, so a page's own
 // edits are never at risk of being shadowed by a stale cache living here.
 import { openProjectFs } from "./vfs/fs";
@@ -100,7 +100,7 @@ export async function createProjectWithMainFile(
 
 // Populates a project's virtual filesystem with a list of relative files.
 // Automatically creates parent directories as needed. Diagram files (e.g.
-// "diagrams/main.hcl") live at the project root under `diagrams/`.
+// "views/main.hcl") live at the project root under `views/`.
 export async function populateProjectFiles(
   fs: ReturnType<typeof openProjectFs>,
   files: Array<{ path: string; content: string }>,

@@ -29,8 +29,8 @@ describe("readProjectSources", () => {
   });
 
   it("excludes non-.hcl files", async () => {
-    await fs.mkdir("diagrams", { recursive: true });
-    await fs.writeFile("diagrams/overview.json", "{}");
+    await fs.mkdir("views", { recursive: true });
+    await fs.writeFile("views/overview.json", "{}");
     await fs.writeFile("notes.md", "# stray note outside docs/");
     await fs.writeFile("main.hcl", 'system "x" {}');
 
@@ -54,10 +54,10 @@ describe("readProjectSources", () => {
     ]);
   });
 
-  it("includes .hcl files inside diagrams/ in the compilation sources", async () => {
-    await fs.mkdir("diagrams", { recursive: true });
+  it("includes .hcl files inside views/ in the compilation sources", async () => {
+    await fs.mkdir("views", { recursive: true });
     await fs.writeFile(
-      "diagrams/overview.hcl",
+      "views/overview.hcl",
       'view "overview" { system = "main" }',
     );
     await fs.writeFile("main.hcl", "# empty project without system main");
@@ -66,11 +66,11 @@ describe("readProjectSources", () => {
     expect(
       sources.toSorted((a, b) => a.filename.localeCompare(b.filename)),
     ).toEqual([
+      { filename: "main.hcl", content: "# empty project without system main" },
       {
-        filename: "diagrams/overview.hcl",
+        filename: "views/overview.hcl",
         content: 'view "overview" { system = "main" }',
       },
-      { filename: "main.hcl", content: "# empty project without system main" },
     ]);
   });
 
@@ -83,7 +83,7 @@ describe("readProjectSources", () => {
     expect(await readProjectSources(fs)).toEqual([]);
   });
 
-  it("unpacks example diagrams into diagrams/ at the project root without duplicating", async () => {
+  it("unpacks example diagrams into views/ at the project root without duplicating", async () => {
     const files = [
       { path: "project.hcl", content: 'project { name = "apollo" }' },
       {
@@ -91,7 +91,7 @@ describe("readProjectSources", () => {
         content: 'component "mcu" { leaf = true }',
       },
       {
-        path: "diagrams/main.hcl",
+        path: "views/main.hcl",
         content: 'view "main" { system = "apollo" }',
       },
     ];
@@ -99,17 +99,17 @@ describe("readProjectSources", () => {
     const project = await createProjectWithFiles("apollo-test", files);
     const projFs = openProjectFs(projectStore, project.id);
 
-    // Root entries should contain project.hcl, components, and diagrams
+    // Root entries should contain project.hcl, components, and views
     const rootEntries = await projFs.readdir(".");
     const rootNames = rootEntries.map((e) => e.name);
     expect(rootNames).toContain("project.hcl");
     expect(rootNames).toContain("components");
-    expect(rootNames).toContain("diagrams");
+    expect(rootNames).toContain("views");
     expect(rootNames).not.toContain(".rhizz");
 
-    // Check diagrams contains main.hcl
-    const diagrams = await projFs.readdir("diagrams");
-    expect(diagrams.map((e) => e.name)).toContain("main.hcl");
+    // Check views contains main.hcl
+    const views = await projFs.readdir("views");
+    expect(views.map((e) => e.name)).toContain("main.hcl");
 
     // Check components directory contains mcu.hcl
     const compEntries = await projFs.readdir("components");
@@ -121,7 +121,7 @@ describe("readProjectSources", () => {
     const filenames = sources.map((s) => s.filename);
     expect(filenames).toContain("project.hcl");
     expect(filenames).toContain("components/mcu.hcl");
-    expect(filenames).toContain("diagrams/main.hcl");
+    expect(filenames).toContain("views/main.hcl");
   });
 });
 
@@ -162,8 +162,8 @@ describe("primaryHclPath", () => {
   it("ignores diagram layouts, directories and non-.hcl files", () => {
     expect(
       primaryHclPath([
-        dirent("diagrams", "directory"),
-        dirent("diagrams/main.hcl", "file"),
+        dirent("views", "directory"),
+        dirent("views/main.hcl", "file"),
         dirent("notes.md", "file"),
       ]),
     ).toBe("main.hcl");

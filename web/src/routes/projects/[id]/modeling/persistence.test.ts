@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
-  DIAGRAM_LAYOUT_DIR,
+  VIEW_LAYOUT_DIR,
   emptyDiagramLayout,
   layoutToHcl,
   mapLayoutToBoxes,
@@ -15,7 +15,7 @@ import {
   writeDiagramLayoutFile,
 } from "./persistence";
 
-const MAIN_DIAGRAM_PATH = `${DIAGRAM_LAYOUT_DIR}/main.hcl`;
+const MAIN_DIAGRAM_PATH = `${VIEW_LAYOUT_DIR}/main.hcl`;
 
 async function projectFs() {
   const store = new InMemoryProjectStore();
@@ -232,14 +232,14 @@ describe("HCL View conversion and persistence", () => {
     const fs = await projectFs();
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());
     const entries = await fs.readdir(".", { recursive: true });
-    expect(entries.some((e) => e.path === "diagrams" && e.isDirectory())).toBe(
+    expect(entries.some((e) => e.path === "views" && e.isDirectory())).toBe(
       true,
     );
   });
 
   it("returns an empty layout for unparseable garbage", async () => {
     const fs = await projectFs();
-    await fs.mkdir(DIAGRAM_LAYOUT_DIR, { recursive: true });
+    await fs.mkdir(VIEW_LAYOUT_DIR, { recursive: true });
     await fs.writeFile(MAIN_DIAGRAM_PATH, "invalid { garbage !@#");
     expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
       emptyDiagramLayout(),

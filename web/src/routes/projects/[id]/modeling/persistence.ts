@@ -57,7 +57,7 @@ function asConnectionSide(
 }
 
 // Conventional location for diagram layout data inside a project's VFS.
-export const DIAGRAM_LAYOUT_DIR = "diagrams";
+export const VIEW_LAYOUT_DIR = "views";
 
 // The persisted content of a single diagram: which system it shows, which
 // components are placed on its canvas, connection routing overrides, and
@@ -102,7 +102,7 @@ export function mapLayoutToBoxes(
 }
 
 /**
- * Extracts a clean view name from a file path (e.g. "diagrams/overview.hcl" -> "overview").
+ * Extracts a clean view name from a file path (e.g. "views/overview.hcl" -> "overview").
  */
 export function viewNameFromPath(path: string): string {
   const filename = path.split("/").pop() ?? "diagram";
@@ -240,7 +240,7 @@ export async function writeDiagramLayoutFile(
   systemName = "",
 ): Promise<void> {
   const lastSlash = path.lastIndexOf("/");
-  const dir = lastSlash !== -1 ? path.slice(0, lastSlash) : DIAGRAM_LAYOUT_DIR;
+  const dir = lastSlash !== -1 ? path.slice(0, lastSlash) : VIEW_LAYOUT_DIR;
   await fs.mkdir(dir, { recursive: true });
 
   const viewName = viewNameFromPath(path);

@@ -1,4 +1,4 @@
-// Pure geometry helpers for the diagrams canvas (web/src/routes/diagrams/
+// Pure geometry helpers for the diagrams canvas (web/src/routes/views/
 // +page.svelte). Deliberately has zero Svelte/DOM dependency, so it can be
 // unit tested directly (see geometry.test.ts) without mounting a component.
 

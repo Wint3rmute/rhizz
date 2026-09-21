@@ -109,7 +109,7 @@ async function ensureGridProject(): Promise<Project> {
     "Graduated grid story",
     [
       { path: "system.hcl", content: GRID_SYSTEM_HCL },
-      { path: "diagrams/main.hcl", content: GRID_VIEWS_HCL },
+      { path: "views/main.hcl", content: GRID_VIEWS_HCL },
     ],
     GRID_PROJECT_ID,
   );

@@ -64,7 +64,7 @@ system "demo" {
 `,
   },
   {
-    path: "diagrams/main.hcl",
+    path: "views/main.hcl",
     content: `view "main" {
   system = "demo"
 
@@ -234,7 +234,7 @@ export const PinnedLevelQuietsDocsWarnings: Story = {
 const viewWarningFiles: BookPayloadFile[] = [
   ...SAMPLE_FILES,
   {
-    path: "diagrams/overview.hcl",
+    path: "views/overview.hcl",
     content: `view "overview" {
   system = "demo"
 
@@ -270,11 +270,11 @@ export const OpenCodeFile: Story = {
   },
 };
 
-// ?open=diagrams/main.hcl lands on that diagram (and not on the code).
+// ?open=views/main.hcl lands on that diagram (and not on the code).
 export const OpenDiagram: Story = {
   args: {
     files: SAMPLE_FILES,
-    open: "diagrams/main.hcl",
+    open: "views/main.hcl",
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -329,7 +329,7 @@ export const SingleFile: Story = {
   },
 };
 
-// A bare filename also resolves (?open=main.hcl finds diagrams/main.hcl).
+// A bare filename also resolves (?open=main.hcl finds views/main.hcl).
 export const OpenBareFilename: Story = {
   args: {
     files: SAMPLE_FILES,

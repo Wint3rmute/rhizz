@@ -35,15 +35,15 @@ function file(
 //
 // components/ (dir-components)
 //   imu.hcl    (file-imu)
-// diagrams/    (dir-diagrams)
+// views/    (dir-views)
 //   overview.json (file-overview)
 // drone.hcl    (file-drone, root-level)
 function fixture(): FsNode[] {
   return [
     dir("dir-components", "components", null),
     file("file-imu", "imu.hcl", "dir-components", 'component "imu" {}'),
-    dir("dir-diagrams", "diagrams", null),
-    file("file-overview", "overview.json", "dir-diagrams", "{}"),
+    dir("dir-views", "views", null),
+    file("file-overview", "overview.json", "dir-views", "{}"),
     file("file-drone", "drone.hcl", null, 'system "drone" {}'),
   ];
 }
@@ -92,7 +92,7 @@ describe("wouldCreateCycle", () => {
   });
 
   it("is false when moving under an unrelated node", () => {
-    expect(wouldCreateCycle("dir-components", "dir-diagrams", fixture()))
+    expect(wouldCreateCycle("dir-components", "dir-views", fixture()))
       .toBe(false);
   });
 });
