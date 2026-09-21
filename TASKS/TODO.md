@@ -23,11 +23,6 @@ like full official names, expanding abbreviations and so on.
 - Change the spec to use `full_name` instead of `description`
 - Change it everywhere in the code
 
-## Task <N> - Persist the `Strictness` option in Web app
-
-The Strictness option, selectable in the NavBar is not persisted across reloads.
-Change it so it persists via localStorage.
-
 ## Task <N> - Extend the annotation/notes system - Markdown
 
 Make it possible to write Markdown in notes and have it rendered in the diagram.
