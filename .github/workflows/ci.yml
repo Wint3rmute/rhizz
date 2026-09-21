@@ -145,6 +145,26 @@ jobs:
       - run: nix develop --command deno install
         working-directory: ./web
 
+      # Fail fast when the installed Playwright driver expects browser
+      # revisions absent from the Nix-provided browsers (see flake.nix).
+      # Catches both a package.json/flake.lock pin mismatch and a stale
+      # web/node_modules resolving an old driver.
+      - run: |
+          nix develop --command python3 -c '
+          import glob, json, os, sys
+          match = glob.glob("node_modules/.deno/playwright-core@*/node_modules/playwright-core/browsers.json")
+          expected = set()
+          for path in match:
+              for b in json.load(open(path))["browsers"]:
+                  if b["name"] in ("chromium", "chromium-headless-shell"):
+                      expected.add(b["name"].replace("-", "_") + "-" + b["revision"])
+          missing = expected - set(os.listdir(os.environ["PLAYWRIGHT_BROWSERS_PATH"]))
+          if missing:
+              sys.exit("playwright/nix browser mismatch, missing: " + ", ".join(sorted(missing)))
+          print("playwright browsers match: " + ", ".join(sorted(expected)))
+          '
+        working-directory: ./web
+
       - run: nix develop --command deno run test:e2e
         working-directory: ./web
 
