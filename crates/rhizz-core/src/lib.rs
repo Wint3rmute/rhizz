@@ -56,17 +56,17 @@ pub struct CompileResult {
 
 /// Returns `true` when `filename` names a view/diagram source file.
 ///
-/// View files live under a `diagrams/` directory or are a legacy root-level
+/// View files live under a `views/` directory or are a legacy root-level
 /// `views.hcl`. They are validated one-file-at-a-time in phase 2 rather than
 /// being merged into the system model.
 #[must_use]
 pub fn is_view_source(filename: &str) -> bool {
     let path = Path::new(filename);
-    let under_diagrams = path
+    let under_views = path
         .components()
-        .any(|component| component.as_os_str() == "diagrams");
+        .any(|component| component.as_os_str() == "views");
     let named_views = path.file_name().is_some_and(|name| name == "views.hcl");
-    under_diagrams || named_views
+    under_views || named_views
 }
 
 /// Returns `true` when `filename` names a component documentation file.
@@ -116,7 +116,7 @@ pub fn doc_key_for(filename: &str) -> Option<String> {
 /// 1. The system model sources (`system.hcl`/`main.hcl`, i.e. anything that is
 ///    not a view file) are parsed, merged, resolved and validated exactly as
 ///    before. When this phase produces hard errors, phase 2 is skipped.
-/// 2. Each view file (`diagrams/*.hcl` or a root-level `views.hcl`) is parsed
+/// 2. Each view file (`views/*.hcl` or a root-level `views.hcl`) is parsed
 ///    and validated independently against the resolved model. View errors are
 ///    appended to the result but never clear the model, so one bad view file
 ///    cannot hide the others or the model itself.
@@ -509,7 +509,7 @@ system "main" {
                 .to_string(),
             },
             Source {
-                filename: "diagrams/overview.hcl".to_string(),
+                filename: "views/overview.hcl".to_string(),
                 content: r#"
 view "overview" {
   system = "main"
@@ -581,12 +581,12 @@ system "sys2" {
     // ── source classification ────────────────────────────────────────────
 
     #[test]
-    fn is_view_source_classifies_diagrams_and_legacy_views() {
-        assert!(is_view_source("diagrams/overview.hcl"));
-        assert!(is_view_source("examples/drone/diagrams/main.hcl"));
+    fn is_view_source_classifies_views_and_legacy_views() {
+        assert!(is_view_source("views/overview.hcl"));
+        assert!(is_view_source("examples/drone/views/main.hcl"));
         assert!(is_view_source("views.hcl"));
         assert!(is_view_source("examples/drone/views.hcl"));
-        assert!(is_view_source("diagrams/views.hcl"));
+        assert!(is_view_source("views/views.hcl"));
         assert!(!is_view_source("system.hcl"));
         assert!(!is_view_source("examples/drone/system.hcl"));
         assert!(!is_view_source("diagrams.hcl"));
@@ -609,7 +609,7 @@ system "sys2" {
         assert!(!is_docs_source("docs/motor.hcl"));
         assert!(!is_docs_source("system.hcl"));
         assert!(!is_docs_source("docs.hcl"));
-        assert!(!is_docs_source("diagrams/overview.hcl"));
+        assert!(!is_docs_source("views/overview.hcl"));
     }
 
     #[test]
@@ -727,7 +727,7 @@ system "sys2" {
     fn diagram_file_with_zero_views_emits_e016() {
         let sources = vec![
             model_source(SINGLE_SYSTEM),
-            view_source("diagrams/overview.hcl", "project { name = \"x\" }"),
+            view_source("views/overview.hcl", "project { name = \"x\" }"),
         ];
         let result = compile(&sources);
         assert!(result.model.is_some(), "model must survive view errors");
@@ -738,7 +738,7 @@ system "sys2" {
             .collect();
         assert_eq!(e016.len(), 1, "expected one E016, got {:?}", codes(&result));
         assert!(
-            e016[0].message.contains("diagrams/overview.hcl"),
+            e016[0].message.contains("views/overview.hcl"),
             "E016 must name the file: {}",
             e016[0].message
         );
@@ -749,7 +749,7 @@ system "sys2" {
         let content = "view \"a\" { system = \"s\" }\nview \"b\" { system = \"s\" }";
         let sources = vec![
             model_source(SINGLE_SYSTEM),
-            view_source("diagrams/combined.hcl", content),
+            view_source("views/combined.hcl", content),
         ];
         let result = compile(&sources);
         assert_eq!(
@@ -768,7 +768,7 @@ system "sys2" {
     fn diagram_file_label_mismatch_emits_e016() {
         let sources = vec![
             model_source(SINGLE_SYSTEM),
-            view_source("diagrams/overview.hcl", "view \"other\" { system = \"s\" }"),
+            view_source("views/overview.hcl", "view \"other\" { system = \"s\" }"),
         ];
         let result = compile(&sources);
         let e016: Vec<_> = result
@@ -798,15 +798,15 @@ system "sys2" {
     }
 
     #[test]
-    fn per_file_isolation_keeps_valid_and_invalid_diagrams_independent() {
+    fn per_file_isolation_keeps_valid_and_invalid_views_independent() {
         let sources = vec![
             model_source(SINGLE_SYSTEM),
             view_source(
-                "diagrams/overview.hcl",
+                "views/overview.hcl",
                 "view \"overview\" { system = \"s\" }",
             ),
             view_source(
-                "diagrams/broken.hcl",
+                "views/broken.hcl",
                 "view \"broken\" { system = \"nope\" }",
             ),
         ];
@@ -818,7 +818,7 @@ system "sys2" {
             .filter(|d| d.code == DiagnosticCode::E006)
             .collect();
         assert_eq!(e006.len(), 1, "expected one E006, got {:?}", codes(&result));
-        assert!(e006[0].message.contains("diagrams/broken.hcl"));
+        assert!(e006[0].message.contains("views/broken.hcl"));
     }
 
     #[test]
@@ -826,7 +826,7 @@ system "sys2" {
         let sources = vec![
             model_source(SINGLE_SYSTEM),
             view_source(
-                "diagrams/overview.hcl",
+                "views/overview.hcl",
                 "view \"overview\" { system = \"s\" }",
             ),
         ];
@@ -846,7 +846,7 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
         let diagram = "view \"overview\" {\n  system = \"computer-setup\"\n\n  node \"computer-setup/ghost\" {\n    x = 1\n    y = 2\n  }\n}";
         let sources = vec![
             model_source(model),
-            view_source("diagrams/overview.hcl", diagram),
+            view_source("views/overview.hcl", diagram),
         ];
         let result = compile(&sources);
         assert!(
@@ -875,7 +875,7 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
                 filename: "other.hcl".to_string(),
                 content: "project { name = \"b\" }".to_string(),
             },
-            view_source("diagrams/overview.hcl", "view \"other\" { system = \"s\" }"),
+            view_source("views/overview.hcl", "view \"other\" { system = \"s\" }"),
         ];
         let result = compile(&sources);
         assert!(result.model.is_none());

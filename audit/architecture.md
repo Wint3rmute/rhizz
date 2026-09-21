@@ -31,7 +31,7 @@ Fixed findings are removed from this file; see `TASKS/FINISHED.md` for what was 
 **Confidence:** High
 
 **Locations:**
-- `web/src/routes/projects/[id]/diagrams/+page.svelte` — `readMainContent`,
+- `web/src/routes/projects/[id]/views/+page.svelte` — `readMainContent`,
   `getPrimaryHclPath`, and the handlers at ~1128 (`executeReparent`), 1149
   (`handleAddSystem`), 1255 (`handleModalCreateComponent`), 1330
   (`docStore` derived), 1365 (`handleUpdateSelectedComponent`), 1384
@@ -216,7 +216,7 @@ wrappers (children/ports/connections/definitions indices) and delete
 **Locations:**
 - `web/src/DocumentStore.svelte.ts` — `views`, `viewsHcl`, `getView`,
   `addView`, `updateNodeLayout`, `loadFromRawModel(…, viewsHcl?)`
-- `web/src/routes/projects/[id]/diagrams/persistence.ts` — `DiagramLayout`,
+- `web/src/routes/projects/[id]/views/persistence.ts` — `DiagramLayout`,
   `StoredBox`, `StoredConnection`, `layoutToHcl`, `viewsToLayout`,
   `mapLayoutToBoxes`, `readDiagramLayoutFile`, `writeDiagramLayoutFile`
 - `web/src/actionLog.ts` — `add_view`, `update_node_layout` ops and their
@@ -245,7 +245,7 @@ records that map directly onto SVG state. Each piece is internally coherent.
 
 **Why it is problematic globally**
 
-Two TypeScript shapes for the same `diagrams/*.hcl` content (`ViewDefinition`
+Two TypeScript shapes for the same `views/*.hcl` content (`ViewDefinition`
 and `DiagramLayout`) plus conversion functions between them, and a dead
 mutation surface that still has to be kept compiling and tested. The
 planned unified undo/redo (TODO) will have to choose one; today's code makes
@@ -355,10 +355,10 @@ hand-maintained shapes for the same two records mean any new field (e.g. a
 **Confidence:** High
 
 **Locations:**
-- `web/src/routes/projects/[id]/diagrams/+page.svelte` (3,542 lines; inline
+- `web/src/routes/projects/[id]/views/+page.svelte` (3,542 lines; inline
   `<rect>`/`<path>`/`<text>` node, connection, port, and annotation markup,
   ~lines 3100–3400)
-- `web/src/routes/projects/[id]/diagrams/DiagramElements.svelte` (used by
+- `web/src/routes/projects/[id]/views/DiagramElements.svelte` (used by
   `DiagramStaticView.svelte`, `DiagramEmbedView.svelte`, and through them by
   Explore, Inventory, the embed route, and the book example)
 - shared helpers: `geometry.ts` (`elbowPath`, `textPosition`,
@@ -412,8 +412,8 @@ interaction chrome (handles, marquee, port hit targets) in the page.
 **Confidence:** High
 
 **Locations:**
-- `web/src/routes/projects/[id]/diagrams/+page.svelte`,
-  `…/diagrams/embed/[...diagram]/+page.svelte`, `…/explore/Explore.svelte`,
+- `web/src/routes/projects/[id]/views/+page.svelte`,
+  `…/views/embed/[...diagram]/+page.svelte`, `…/explore/Explore.svelte`,
   `…/inventory/Inventory.svelte`, `…/overview/+page.svelte`,
   `…/editor/+page.svelte`, `web/src/routes/book-example/BookExampleView.svelte`
 - `web/src/ProjectState.svelte` — `setCurrentScore`/`setCurrentDiagnostics`
@@ -463,7 +463,7 @@ task.
 - `web/src/example_system.ts` — `EXAMPLE_SYSTEM_DIAGRAMS`,
   `seedExampleProjectDiagrams`
 - `web/src/components/ProjectsPage.svelte` — `selectExample` (~84–86)
-- `examples/single-file/diagrams/overview.hcl`, `cloud-path.hcl`
+- `examples/single-file/views/overview.hcl`, `cloud-path.hcl`
 - `crates/rhizz-core/build.rs` (`generate_example_projects`),
   `crates/rhizz-core/src/examples.rs`, `crates/rhizz-wasm/src/lib.rs`
   (`get_example_projects`)
@@ -474,7 +474,7 @@ task.
 truth" and written into a new project by `createProjectWithFiles`. For the
 `single-file` example only, `selectExample` then calls
 `seedExampleProjectDiagrams`, which overwrites the just-written
-`diagrams/overview.hcl` and `diagrams/cloud-path.hcl` with layouts hard-coded
+`views/overview.hcl` and `views/cloud-path.hcl` with layouts hard-coded
 in TypeScript. The two sources disagree: the HCL files carry `description`
 and a `filter` block but no `node`s; the TS version carries `node`s (with
 float coordinates such as `57.934548314051284`) but no description/filter.
@@ -494,7 +494,7 @@ both and remembering the override exists.
 
 **Potential simplification**
 
-Move the node coordinates into `examples/single-file/diagrams/*.hcl` and
+Move the node coordinates into `examples/single-file/views/*.hcl` and
 delete `EXAMPLE_SYSTEM_DIAGRAMS` / `seedExampleProjectDiagrams` and the
 special case in `selectExample`.
 
@@ -503,7 +503,7 @@ special case in `selectExample`.
 - `ProjectsPage.svelte:84–86`: `if (example.id === "single-file") await
   seedExampleProjectDiagrams(project.id);` immediately after
   `createProjectWithFiles(name, example.files)`.
-- `examples/single-file/diagrams/overview.hcl` contains no `node` blocks.
+- `examples/single-file/views/overview.hcl` contains no `node` blocks.
 
 ---
 
@@ -514,7 +514,7 @@ special case in `selectExample`.
 **Confidence:** High
 
 **Locations:**
-- `web/src/routes/projects/[id]/diagrams/+page.svelte` — `getPrimaryHclPath`
+- `web/src/routes/projects/[id]/views/+page.svelte` — `getPrimaryHclPath`
   (`["system.hcl","systems.hcl","main.hcl","project.hcl"]`, fallback
   `hclFiles[0]`, fallback `"main.hcl"`)
 - `web/src/testing/WorkspaceHarness.ts` — `primaryHclFile` (same list, copy)
@@ -571,7 +571,7 @@ the file the system block came from.
 - `crates/rhizz-core/src/model.rs` — `Model::component_key`
 - `crates/rhizz-core/src/serialize.rs` — `component_path`, `endpoint_path`
 - `web/src/DocumentStore.svelte.ts` — `compPath`, `buildConn.rel`
-- `web/src/routes/projects/[id]/diagrams/geometry.ts` — `computeLcaConnection`
+- `web/src/routes/projects/[id]/views/geometry.ts` — `computeLcaConnection`
   (the inverse: splits keys and derives scope-relative endpoints)
 
 **Problem**
@@ -731,7 +731,7 @@ actual WASM API; document `fmt`/`watch`; point tasks at `just`.
 
 1. **Per-handler load→compile→TS-tree→emit→write pipeline with no failure gate (Finding 1)** — copies in every handler, a data-loss path when the primary file does not compile, and a rename that bypasses the store's API and the debug action log.
 2. **Hand-mirrored Rust model shapes in TS plus a half-used typed wrapper API (Finding 2)** — three untyped mirrors of `model.rs`, two parallel WASM access paths, unused accessors.
-3. **Dead view-layout surface in `DocumentStore` next to the live `persistence.ts` layout model (Finding 3)** — action log never records layout changes; two shapes for `diagrams/*.hcl`.
+3. **Dead view-layout surface in `DocumentStore` next to the live `persistence.ts` layout model (Finding 3)** — action log never records layout changes; two shapes for `views/*.hcl`.
 4. **Scoring rule and report/diagnostic projections re-declared per frontend, with SPEC/impl disagreement (Finding 4)** — TS `completionScore` vs `score_component` vs SPEC §5; four score/diagnostic shapes; `DiagnosticJS` drops `file`/`line`.
 5. **Two SVG renderers for the same diagram (Finding 5)** — editor markup vs `DiagramElements`; visual changes made twice.
 6. **Example diagrams overridden by TS constants (Finding 7)** — embedded examples are not the source of truth the docs claim.

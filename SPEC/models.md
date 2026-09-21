@@ -11,7 +11,7 @@ field lists — they are not duplicated here):
    `Rc`/`Arc`), fully populated with defaults applied.
 
 Pipeline: `.hcl` files → `hcl::from_str` → raw → merge → resolve → `Model`.
-View files (`diagrams/*.hcl`) are parsed and validated independently against the
+View files (`views/*.hcl`) are parsed and validated independently against the
 resolved `Model`, never merged into it.
 
 ```rust
@@ -32,7 +32,7 @@ struct RawFile {
   children — any other nested block type is skipped with a W015 warning.
 - Unknown attributes are rejected: blocking parse error (E000) — typos like
   `descripton` fail instead of being silently dropped. View files
-  (`diagrams/*.hcl`) follow the same rule.
+  (`views/*.hcl`) follow the same rule.
 - `instance` accepts only the required `source` attribute: missing `source` is a
   parse error, anything extra (attribute or child block) is rejected as an E012
   exclusivity violation.
@@ -101,7 +101,7 @@ held in a transient index built during resolution.
 
 ## View models
 
-Views are not part of `Model`. Each `diagrams/*.hcl` file yields one
+Views are not part of `Model`. Each `views/*.hcl` file yields one
 `ViewDefinition` (see `serialize.rs`: label, system, filter, nodes, connection
 layouts, annotations) validated per step 8 above. `filter` is parsed and
 round-tripped but not applied by any renderer yet.

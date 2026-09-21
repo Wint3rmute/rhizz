@@ -14,14 +14,14 @@ language for defining system architectures at various levels of abstraction.
 ## 1. Project Structure
 
 A project consists of a single system model file (`system.hcl` or `main.hcl`)
-containing the system architecture model. View definition files live under `diagrams/*.hcl`. Component documentation
+containing the system architecture model. View definition files live under `views/*.hcl`. Component documentation
 lives under `docs/*.md`, with each Markdown file corresponding to a component (e.g. `component "plane"` -> `docs/plane.md`).
 
 ```
 project/
 ├── system.hcl      # system model
 ├── docs/*.md       # component documentation
-└── diagrams/*.hcl  # system views
+└── views/*.hcl  # system views
 ```
 
 All system model entities (`project`, `system`, `component`, `protocol`, `port`,
@@ -387,10 +387,10 @@ field "altitude" {
 
 ### 2.10 `view` Block
 
-Top-level block defined in files under `diagrams/`.
+Top-level block defined in files under `views/`.
 Defines a visual perspective on a system: which components are placed on the
-canvas and where. Each file under `diagrams/` holds exactly one `view` block
-whose label matches the filename (`diagrams/overview.hcl` -> `view "overview"`).
+canvas and where. Each file under `views/` holds exactly one `view` block
+whose label matches the filename (`views/overview.hcl` -> `view "overview"`).
 Every `node` path is resolved against the model (see §3); dangling paths emit a
 warning (W016). `annotation` blocks are used to add additional comments to the view.
 
@@ -445,7 +445,7 @@ parsed and round-tripped, but no renderer applies it. See §9.
 
 A free-standing text note placed at an absolute position on the canvas. Unlike
 `node`, an `annotation` block has **no label** and holds no reference into the
-model — it is pure view-level metadata, persisted in `diagrams/*.hcl` and never
+model — it is pure view-level metadata, persisted in `views/*.hcl` and never
 written to the system model. Because it references nothing, it is not resolved
 or validated and emits no diagnostics.
 
@@ -582,7 +582,7 @@ Overall:      20/37           54.1%
 
 > **Impl:** the `ViewDefinition`, `ViewFilterDefinition`, and `NodeLayout`
 > structs are defined in [view models](SPEC/models.md#view-models). Views are
-> parsed from `diagrams/*.hcl` and validated against the resolved `Model`
+> parsed from `views/*.hcl` and validated against the resolved `Model`
 > (E016/E006/W016); all visual rendering is owned by the web application.
 
 Connection direction is inferred from the `role` values of the connected ports:
@@ -634,7 +634,7 @@ rhizz <command> [options] [path]
 $ rhizz build ./drone-project/
 
   Parsing 2 files...
-  ✓ Parsed: system.hcl, diagrams/overview.hcl
+  ✓ Parsed: system.hcl, views/overview.hcl
 
   Validation:
   ✗ E002  system.hcl:14  connection "uart-link" references undefined component "gps-module"

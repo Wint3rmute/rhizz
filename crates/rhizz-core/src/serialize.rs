@@ -12,7 +12,7 @@
 //!    - `serialize_views(parse_views(serialize_views(views))) == serialize_views(views)`
 //! 3. **Pure model & view separation**: architectural entities are serialized into
 //!    system model files, while view definitions and visual layout coordinates are
-//!    serialized into individual `diagrams/<label>.hcl` files (one view per file).
+//!    serialized into individual `views/<label>.hcl` files (one view per file).
 
 use std::fmt::Write as _;
 
@@ -1461,41 +1461,41 @@ system "apollo" {
         let examples_dir = workspace_dir.join("examples");
 
         for example_name in ["drone", "social-media", "software-house", "web-app"] {
-            let diagrams_dir = examples_dir.join(example_name).join("diagrams");
-            if !diagrams_dir.exists() {
+            let views_dir = examples_dir.join(example_name).join("views");
+            if !views_dir.exists() {
                 continue;
             }
-            let mut diagram_paths: Vec<std::path::PathBuf> = fs::read_dir(&diagrams_dir)
-                .expect("should read diagrams dir")
+            let mut view_paths: Vec<std::path::PathBuf> = fs::read_dir(&views_dir)
+                .expect("should read views dir")
                 .filter_map(std::result::Result::ok)
                 .map(|entry| entry.path())
                 .filter(|path| path.extension().is_some_and(|ext| ext == "hcl"))
                 .collect();
-            diagram_paths.sort();
+            view_paths.sort();
 
-            for diagram_path in diagram_paths {
-                let content = fs::read_to_string(&diagram_path).expect("should read diagram");
+            for view_path in view_paths {
+                let content = fs::read_to_string(&view_path).expect("should read view");
                 let parsed1 = parse_views(&content)
-                    .unwrap_or_else(|e| panic!("failed parsing {}: {e}", diagram_path.display()));
+                    .unwrap_or_else(|e| panic!("failed parsing {}: {e}", view_path.display()));
                 let serialized1 = serialize_views(&parsed1);
                 let parsed2 = parse_views(&serialized1).unwrap_or_else(|e| {
                     panic!(
                         "failed parsing re-serialized {}: {e}",
-                        diagram_path.display()
+                        view_path.display()
                     )
                 });
                 assert_eq!(
                     parsed1,
                     parsed2,
                     "views mismatch for {}",
-                    diagram_path.display()
+                    view_path.display()
                 );
                 let serialized2 = serialize_views(&parsed2);
                 assert_eq!(
                     serialized1,
                     serialized2,
                     "views serialization idempotency failed for {}",
-                    diagram_path.display()
+                    view_path.display()
                 );
             }
         }

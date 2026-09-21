@@ -30,4 +30,4 @@ station.
 | ----------- | ------------------------------------------------------------------------ |
 | `system.hcl`  | Complete system model: project metadata, protocols, and both systems (`quadcopter`, `ground-control`) |
 | `views.hcl`   | Four view definitions with different filters                            |
-| `diagrams/main.hcl` | The main diagram's canvas layout, including free-standing annotation notes |
+| `views/main.hcl` | The main diagram's canvas layout, including free-standing annotation notes |
