@@ -17,6 +17,8 @@ interface Props {
   onrename: (newLabel: string) => void;
   onsettextalign: (align: TextAlign) => void;
   ondelete?: () => void;
+  /** Open (creating if needed) the component's `docs/<label>.md` file. */
+  onopendocumentation?: () => void;
   /** Hide the name field (the creation modal already has its own). */
   showName?: boolean;
 }
@@ -29,6 +31,7 @@ let {
   onrename,
   onsettextalign,
   ondelete,
+  onopendocumentation,
   showName = true,
 }: Props = $props();
 
@@ -401,6 +404,18 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       </div>
     {/if}
   </div>
+
+  {#if onopendocumentation}
+    <div class="pt-1">
+      <button
+        onclick={() => onopendocumentation?.()}
+        class="btn btn-xs btn-outline btn-primary w-full"
+        title="Open docs/{component.label}.md in the Editor (created if missing)"
+      >
+        Open documentation
+      </button>
+    </div>
+  {/if}
 
   {#if ondelete}
     <div class="divider my-2"></div>

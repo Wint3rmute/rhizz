@@ -92,6 +92,14 @@ system "demo" {
 }
 `,
   },
+  {
+    path: "docs/sensor.md",
+    content: "# sensor\n\nTemperature sensor.\n",
+  },
+  {
+    path: "docs/hub.md",
+    content: "# hub\n\nReading collector.\n",
+  },
 ];
 
 const meta = {
@@ -199,6 +207,24 @@ export const WarningsShownDirectly: Story = {
     const canvas = within(canvasElement);
     await canvas.findByText(/1 warning/);
     await canvas.findByText(/W004/);
+  },
+};
+
+// A pinned `level` quiets the verdict exactly like the preprocessor's lock:
+// the same undocumented components are clean at business strictness.
+const undocumentedFiles: BookPayloadFile[] = SAMPLE_FILES.filter(
+  (file) => !file.path.startsWith("docs/"),
+);
+
+export const PinnedLevelQuietsDocsWarnings: Story = {
+  args: {
+    files: undocumentedFiles,
+    level: "business",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText(/No errors, no warnings/);
+    await canvas.findByText("Strictness: business");
   },
 };
 

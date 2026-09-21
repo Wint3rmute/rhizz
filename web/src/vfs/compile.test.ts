@@ -31,10 +31,25 @@ describe("readProjectSources", () => {
   it("excludes non-.hcl files", async () => {
     await fs.mkdir("diagrams", { recursive: true });
     await fs.writeFile("diagrams/overview.json", "{}");
+    await fs.writeFile("notes.md", "# stray note outside docs/");
     await fs.writeFile("main.hcl", 'system "x" {}');
 
     const sources = await readProjectSources(fs);
     expect(sources).toEqual([
+      { filename: "main.hcl", content: 'system "x" {}' },
+    ]);
+  });
+
+  it("includes Markdown files under docs/ so the compiler sees them (W018)", async () => {
+    await fs.mkdir("docs", { recursive: true });
+    await fs.writeFile("docs/motor.md", "# Motor\n");
+    await fs.writeFile("main.hcl", 'system "x" {}');
+
+    const sources = await readProjectSources(fs);
+    expect(
+      sources.toSorted((a, b) => a.filename.localeCompare(b.filename)),
+    ).toEqual([
+      { filename: "docs/motor.md", content: "# Motor\n" },
       { filename: "main.hcl", content: 'system "x" {}' },
     ]);
   });

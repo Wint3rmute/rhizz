@@ -15,7 +15,7 @@ has 2 views:
 - `pc-build.hcl` - Internals of the computer
 
 
-```rhizz-project src="views-intro/1_example_simple"
+```rhizz-project src="views-intro/1_example_simple" level="architectural"
 ```
 
 Both of those views utilize the same model underneath. Components are imported
@@ -28,7 +28,7 @@ All views are checked for correctness. The example below demonstrates what
 happens when you use a non-existing component in a system view. As you can see,
 the view fails to render and the warning explains why:
 
-```rhizz-project src="views-intro/2_example_error"
+```rhizz-project src="views-intro/2_example_error" level="architectural"
 ```
 
 ## Visibility of connections

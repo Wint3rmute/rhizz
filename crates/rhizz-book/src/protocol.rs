@@ -6,19 +6,23 @@
 //! `book` JSON back on stdout. mdbook sets the working directory to the book
 //! root and `context.root` holds that root, which is where `book.lock` lives.
 
-use crate::blocks::{Segment, body_hash, parse_blocks, split_lines};
+use crate::blocks::{
+    BlockBodies, BlockKey, BlockUsage, Segment, block_warning_level, body_hash, parse_blocks,
+    split_lines,
+};
 use crate::compile::BLOCK_FILENAME;
-use crate::compile::{Verdict, compile_body};
+use crate::compile::{Verdict, compile_body_with_level};
 use crate::lock::{
     LOCK_FORMAT, LockPayload, ProjectFileEntry, ProjectLockEntry, accept_changes_enabled,
     compare_lock, format_diff, read_lock, short_sha, sorted_entries, sorted_projects, write_lock,
 };
 use crate::project::{
-    LoadedProject, ProjectAttrs, ProjectFile, ProjectPayloads, compile_project, encode_payload,
-    load_project, parse_project_attrs,
+    LoadedProject, ProjectAttrs, ProjectFile, ProjectPayloads, compile_project_with_level,
+    encode_payload, load_project, parse_project_attrs,
 };
 use crate::transform::{CompileResults, transform_chapter};
 use anyhow::{Context, Result, bail};
+use rhizz_core::WarningLevel;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -131,21 +135,25 @@ fn walk_mut(items: &mut [Value], rewrite: &mut impl FnMut(&str, &str) -> String)
     }
 }
 
-/// Compile and encode each distinct body once, logging one line per body
-/// (naming the owning chapter when the body is unique, else the share
-/// count). Returns verdicts and URL-hash payloads keyed by body digest.
+/// Compile and encode each distinct (body, level) pair once, logging one
+/// line per pair (naming the owning chapter when the body is unique, else
+/// the share count). Returns verdicts and URL-hash payloads keyed by
+/// (body digest, warning level).
 fn compile_and_encode_bodies(
-    bodies: &HashMap<String, String>,
-    used_by: &HashMap<String, Vec<String>>,
-) -> Result<(CompileResults, HashMap<String, String>)> {
+    bodies: &BlockBodies,
+    used_by: &BlockUsage,
+) -> Result<(CompileResults, ProjectPayloads)> {
     let mut results: CompileResults = HashMap::with_capacity(bodies.len());
-    let mut payloads: HashMap<String, String> = HashMap::with_capacity(bodies.len());
-    for (hash, body) in bodies {
-        let verdict = compile_body(body);
-        let chapters = used_by.get(hash).map_or(&[][..], Vec::as_slice);
+    let mut payloads: ProjectPayloads = HashMap::with_capacity(bodies.len());
+    for ((hash, level), body) in bodies {
+        let verdict = compile_body_with_level(body, *level);
+        let chapters = used_by
+            .get(&(hash.clone(), *level))
+            .map_or(&[][..], Vec::as_slice);
         match chapters {
             [chapter] => tracing::info!(
                 chapter = %chapter,
+                level = %level,
                 errors = verdict.errors.len(),
                 warnings = verdict.warnings.len(),
                 scored = verdict.score.is_some(),
@@ -153,6 +161,7 @@ fn compile_and_encode_bodies(
             ),
             chapters => tracing::info!(
                 chapters = chapters.len(),
+                level = %level,
                 errors = verdict.errors.len(),
                 warnings = verdict.warnings.len(),
                 scored = verdict.score.is_some(),
@@ -166,8 +175,8 @@ fn compile_and_encode_bodies(
         };
         let payload = encode_payload(std::slice::from_ref(&file))
             .with_context(|| format!("cannot encode rhizz block {}", short_sha(hash)))?;
-        payloads.insert(hash.clone(), payload);
-        results.insert(hash.clone(), verdict);
+        payloads.insert((hash.clone(), *level), payload);
+        results.insert((hash.clone(), *level), verdict);
     }
     Ok((results, payloads))
 }
@@ -191,10 +200,10 @@ struct BuiltProject {
 fn build_book_projects(
     refs: &[(String, ProjectAttrs)],
     src_root: &Path,
-) -> Result<(HashMap<String, BuiltProject>, Vec<ProjectLockEntry>)> {
-    let mut built: HashMap<String, BuiltProject> = HashMap::new();
+) -> Result<(HashMap<BlockKey, BuiltProject>, Vec<ProjectLockEntry>)> {
+    let mut built: HashMap<BlockKey, BuiltProject> = HashMap::new();
     for (chapter, attrs) in refs {
-        if built.contains_key(&attrs.src) {
+        if built.contains_key(&(attrs.src.clone(), attrs.level)) {
             continue;
         }
         let project = load_project(src_root, &attrs.src).with_context(|| {
@@ -203,10 +212,11 @@ fn build_book_projects(
                 attrs.src
             )
         })?;
-        let verdict = compile_project(&project.files);
+        let verdict = compile_project_with_level(&project.files, attrs.level);
         tracing::info!(
             chapter = %chapter,
             src = %attrs.src,
+            level = %attrs.level,
             files = project.files.len(),
             errors = verdict.errors.len(),
             warnings = verdict.warnings.len(),
@@ -219,7 +229,7 @@ fn build_book_projects(
             )
         })?;
         built.insert(
-            attrs.src.clone(),
+            (attrs.src.clone(), attrs.level),
             BuiltProject {
                 project,
                 verdict,
@@ -228,12 +238,12 @@ fn build_book_projects(
         );
     }
     let mut traces: Vec<ProjectLockEntry> = Vec::new();
-    let mut seen: HashSet<(String, String)> = HashSet::new();
+    let mut seen: HashSet<(String, String, WarningLevel)> = HashSet::new();
     for (chapter, attrs) in refs {
-        if !seen.insert((chapter.clone(), attrs.src.clone())) {
+        if !seen.insert((chapter.clone(), attrs.src.clone(), attrs.level)) {
             continue;
         }
-        let Some(entry) = built.get(&attrs.src) else {
+        let Some(entry) = built.get(&(attrs.src.clone(), attrs.level)) else {
             bail!(
                 "internal error: project '{}' was loaded but is missing",
                 attrs.src
@@ -268,32 +278,55 @@ fn build_book_projects(
             input_sha256: entry.project.input_sha256.clone(),
             output: entry.verdict.sorted.clone(),
             src: attrs.src.clone(),
+            level: attrs.level.to_string(),
         });
     }
     Ok((built, traces))
 }
 
-/// Collect the distinct `` ```rhizz `` block bodies, tracking which chapters
-/// reference each one so compile logs can name their origin even though a
-/// body is compiled once across the whole book (and may be shared).
-fn collect_block_bodies(book: &Value) -> (HashMap<String, String>, HashMap<String, Vec<String>>) {
-    let mut bodies: HashMap<String, String> = HashMap::new();
-    let mut used_by: HashMap<String, Vec<String>> = HashMap::new();
+/// Collect the distinct (`` ```rhizz `` block body, warning level) pairs,
+/// tracking which chapters reference each one so compile logs can name their
+/// origin even though a pair is compiled once across the whole book (and may
+/// be shared). The level comes from the fence's `level=` attribute; an
+/// invalid attr aborts the build loudly.
+///
+/// # Errors
+///
+/// Returns an error when a block fence carries a malformed `level=` attr.
+fn collect_block_bodies(book: &Value) -> Result<(BlockBodies, BlockUsage)> {
+    let mut bodies: BlockBodies = HashMap::new();
+    let mut used_by: BlockUsage = HashMap::new();
+    let mut failure: Option<anyhow::Error> = None;
     for_each_chapter(book, &mut |chapter, content| {
+        if failure.is_some() {
+            return;
+        }
         for segment in &parse_blocks(&split_lines(content)) {
             if let Segment::Block { attrs, body } = segment
                 && !attrs.iter().any(|attr| attr == "ignore")
             {
+                let level = match block_warning_level(attrs) {
+                    Ok(level) => level,
+                    Err(error) => {
+                        failure =
+                            Some(error.context(format!("invalid rhizz fence in '{chapter}'")));
+                        return;
+                    }
+                };
                 let body_new = body.join("\n");
                 let hash = body_hash(&body_new);
-                if !used_by.contains_key(&hash) {
-                    bodies.insert(hash.clone(), body_new);
+                let key = (hash, level);
+                if !used_by.contains_key(&key) {
+                    bodies.insert(key.clone(), body_new);
                 }
-                used_by.entry(hash).or_default().push(chapter.to_owned());
+                used_by.entry(key).or_default().push(chapter.to_owned());
             }
         }
     });
-    (bodies, used_by)
+    if let Some(error) = failure {
+        return Err(error);
+    }
+    Ok((bodies, used_by))
 }
 
 /// Collect every `rhizz-project` fence in chapter order and parse its
@@ -347,7 +380,7 @@ pub fn process_book(
     err: &mut dyn Write,
     example_base_url: &str,
 ) -> Result<String> {
-    let (bodies, used_by) = collect_block_bodies(book);
+    let (bodies, used_by) = collect_block_bodies(book)?;
 
     // Compile and encode each distinct body once, attributing the log line
     // to its chapter when the body is unique, otherwise noting the share
@@ -367,7 +400,7 @@ pub fn process_book(
     let (built, project_traces) = build_book_projects(&refs, &src_root)?;
     let payloads: ProjectPayloads = built
         .iter()
-        .map(|(src, built)| (src.clone(), built.payload.clone()))
+        .map(|((src, level), built)| ((src.clone(), *level), built.payload.clone()))
         .collect();
 
     // Transform every chapter, collecting the input→output traces.
@@ -568,6 +601,78 @@ mod tests {
     }
 
     #[test]
+    fn block_level_attr_gates_warnings_and_travels_in_url() {
+        let dir = TempDir::new().expect("tempdir");
+        let lock_path = PathBuf::from(dir.path()).join("book.lock");
+        let mut err = Cursor::new(Vec::new());
+        // A bare definition warns W018 (missing docs) at the default
+        // component level but is quiet at business level.
+        let body = "component \"motor\" {\n  leaf = true\n}";
+        let mut book = project_book(&format!(
+            "# T\n\n```rhizz\n{body}\n```\n\n```rhizz,level=business\n{body}\n```\n"
+        ));
+        let json_out = process_book(
+            &mut book,
+            &lock_path,
+            "rhizz 0.1.0",
+            true,
+            false,
+            &mut err,
+            "https://example.invalid",
+        )
+        .expect("level attrs should compile");
+        assert!(json_out.contains("book-example?level=component#"));
+        assert!(json_out.contains("book-example?level=business#"));
+        let text = std::fs::read_to_string(&lock_path).expect("read lock");
+        let payload: crate::lock::LockPayload = serde_json::from_str(&text).expect("lock parses");
+        assert_eq!(payload.projects.len(), 0);
+        assert_eq!(
+            payload.entries.len(),
+            2,
+            "same body at two levels traces twice"
+        );
+        let component = payload
+            .entries
+            .iter()
+            .find(|e| e.level == "component")
+            .expect("component trace");
+        let business = payload
+            .entries
+            .iter()
+            .find(|e| e.level == "business")
+            .expect("business trace");
+        assert!(
+            component.output.warnings.iter().any(|w| w.code == "W018"),
+            "component level must report W018"
+        );
+        assert!(
+            business.output.warnings.is_empty(),
+            "business level must hide W018, got {:?}",
+            business.output.warnings
+        );
+    }
+
+    #[test]
+    fn block_level_attr_rejects_unknown_level_loudly() {
+        let dir = TempDir::new().expect("tempdir");
+        let lock_path = PathBuf::from(dir.path()).join("book.lock");
+        let mut err = Cursor::new(Vec::new());
+        let mut book = project_book("# T\n\n```rhizz,level=verbose\nproject {}\n```\n");
+        let error = process_book(
+            &mut book,
+            &lock_path,
+            "rhizz 0.1.0",
+            true,
+            false,
+            &mut err,
+            "https://example.invalid",
+        )
+        .expect_err("unknown level must fail the build");
+        let full = format!("{error:#}");
+        assert!(full.contains("unknown warning level"), "{full}");
+    }
+
+    #[test]
     fn process_book_end_to_end_generates_then_verifies_lock() {
         let dir = TempDir::new().expect("tempdir");
         let lock_path = PathBuf::from(dir.path()).join("book.lock");
@@ -585,7 +690,7 @@ mod tests {
         )
         .expect("pipeline should succeed when accepting changes");
         assert!(json_out.contains("rhizz-project"));
-        assert!(json_out.contains("book-example#p="));
+        assert!(json_out.contains("book-example?level=component#p="));
         assert!(!json_out.contains("```hcl"));
         assert!(lock_path.exists(), "lock should be written on first run");
 
@@ -732,7 +837,7 @@ mod tests {
         )
         .expect("project pipeline should succeed when accepting");
         assert!(json_out.contains("rhizz-project"));
-        assert!(json_out.contains("https://example.invalid/book-example#p="));
+        assert!(json_out.contains("https://example.invalid/book-example?level=component#p="));
         assert!(!json_out.contains("rhizz-project-caption"));
         assert!(lock_path.exists(), "lock should be written on first run");
 
@@ -830,7 +935,7 @@ mod tests {
         )
         .expect("open target should embed");
         assert!(
-            json_out.contains("book-example?open=diagrams%2Fmain.hcl#p="),
+            json_out.contains("book-example?level=component&open=diagrams%2Fmain.hcl#p="),
             "iframe URL should carry the open target"
         );
     }

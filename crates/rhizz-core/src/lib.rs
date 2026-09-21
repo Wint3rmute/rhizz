@@ -69,6 +69,47 @@ pub fn is_view_source(filename: &str) -> bool {
     under_diagrams || named_views
 }
 
+/// Returns `true` when `filename` names a component documentation file.
+///
+/// Doc files live under a `docs/` directory and end in `.md` (e.g.
+/// `docs/motor.md`). They are never parsed as HCL: [`compile`] extracts
+/// their label keys and checks them against component definitions (W018).
+#[must_use]
+pub fn is_docs_source(filename: &str) -> bool {
+    let path = Path::new(filename);
+    if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        return false;
+    }
+    path.components()
+        .any(|component| component.as_os_str() == "docs")
+}
+
+/// Extract the doc key for a docs source file.
+///
+/// The key is the file's path relative to `docs/`, minus the `.md` suffix
+/// (e.g. `docs/motor.md` -> `motor`, `proj/docs/sub/bar.md` ->
+/// `sub/bar`). Returns `None` when the filename is not a docs source.
+#[must_use]
+pub fn doc_key_for(filename: &str) -> Option<String> {
+    if !is_docs_source(filename) {
+        return None;
+    }
+    let path = Path::new(filename);
+    let components: Vec<String> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let docs_pos = components.iter().rposition(|c| c == "docs")?;
+    let start = docs_pos.checked_add(1)?;
+    let joined = components.get(start..)?.join("/");
+    let relative = joined.strip_suffix(".md").unwrap_or(&joined).to_owned();
+    if relative.is_empty() {
+        None
+    } else {
+        Some(relative)
+    }
+}
+
 /// Parse, merge, resolve, and validate all `sources`.
 ///
 /// Compilation happens in two phases:
@@ -81,13 +122,23 @@ pub fn is_view_source(filename: &str) -> bool {
 ///    cannot hide the others or the model itself.
 ///
 /// Returns a [`CompileResult`] with the optional model and all diagnostics.
+///
+/// Doc files (`docs/*.md`) are never parsed: their label keys are extracted
+/// and checked against component definitions (W018) once the model resolves.
 #[instrument(skip(sources), fields(source_count = sources.len()))]
 pub fn compile(sources: &[Source]) -> CompileResult {
-    let (view_sources, model_sources): (Vec<&Source>, Vec<&Source>) = sources
+    let (docs_sources, rest): (Vec<&Source>, Vec<&Source>) = sources
         .iter()
+        .partition(|source| is_docs_source(&source.filename));
+    let doc_keys: std::collections::HashSet<String> = docs_sources
+        .iter()
+        .filter_map(|source| doc_key_for(&source.filename))
+        .collect();
+    let (view_sources, model_sources): (Vec<&Source>, Vec<&Source>) = rest
+        .into_iter()
         .partition(|source| is_view_source(&source.filename));
 
-    let mut result = compile_model_sources(&model_sources);
+    let mut result = compile_model_sources(&model_sources, &doc_keys);
 
     let phase_one_ok =
         result.model.is_some() && !result.diagnostics.iter().any(Diagnostic::is_error);
@@ -136,8 +187,13 @@ pub fn compile_with_warning_level(
 }
 
 /// Phase 1 of [`compile`]: parse, merge, resolve and validate only the system
-/// model sources. View blocks no longer take part in the merge.
-fn compile_model_sources(sources: &[&Source]) -> CompileResult {
+/// model sources. View blocks no longer take part in the merge. `doc_keys`
+/// carries the `docs/` listing so the missing-documentation check (W018)
+/// fires on the resolved model.
+fn compile_model_sources(
+    sources: &[&Source],
+    doc_keys: &std::collections::HashSet<String>,
+) -> CompileResult {
     let mut merged = parse::RawFile::default();
     let mut system_files = Vec::new();
     let mut pre_diagnostics = Vec::new();
@@ -187,6 +243,7 @@ fn compile_model_sources(sources: &[&Source]) -> CompileResult {
     match resolve::resolve(merged) {
         Ok((model, mut diagnostics)) => {
             pre_diagnostics.append(&mut diagnostics);
+            pre_diagnostics.extend(validate::validate_docs(&model, doc_keys));
             CompileResult {
                 model: Some(model),
                 diagnostics: pre_diagnostics,
@@ -533,6 +590,115 @@ system "sys2" {
         assert!(!is_view_source("system.hcl"));
         assert!(!is_view_source("examples/drone/system.hcl"));
         assert!(!is_view_source("diagrams.hcl"));
+    }
+
+    // ── docs sources (W018) ────────────────────────────────────────────
+
+    fn docs_source(filename: &str) -> Source {
+        Source {
+            filename: filename.to_string(),
+            content: "# doc\n".to_string(),
+        }
+    }
+
+    #[test]
+    fn is_docs_source_classifies_docs_markdown_only() {
+        assert!(is_docs_source("docs/motor.md"));
+        assert!(is_docs_source("examples/software-house/docs/product.md"));
+        assert!(is_docs_source("/abs/proj/docs/sub/motor.md"));
+        assert!(!is_docs_source("docs/motor.hcl"));
+        assert!(!is_docs_source("system.hcl"));
+        assert!(!is_docs_source("docs.hcl"));
+        assert!(!is_docs_source("diagrams/overview.hcl"));
+    }
+
+    #[test]
+    fn doc_key_for_strips_docs_prefix_and_suffix() {
+        assert_eq!(doc_key_for("docs/motor.md").as_deref(), Some("motor"));
+        assert_eq!(
+            doc_key_for("examples/software-house/docs/product.md").as_deref(),
+            Some("product")
+        );
+        assert_eq!(
+            doc_key_for("proj/docs/sub/motor.md").as_deref(),
+            Some("sub/motor")
+        );
+        assert_eq!(doc_key_for("system.hcl"), None);
+        assert_eq!(doc_key_for("docs/motor.hcl"), None);
+    }
+
+    const DOC_MODEL: &str = "component \"motor\" {\n  description = \"d\"\n  leaf = true\n}";
+
+    #[test]
+    fn missing_doc_emits_w018() {
+        let result = compile(&[model_source(DOC_MODEL)]);
+        assert!(result.model.is_some());
+        let w018: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W018)
+            .collect();
+        assert_eq!(w018.len(), 1, "expected one W018, got {:?}", codes(&result));
+        assert!(w018[0].message.contains("motor"));
+        assert!(w018[0].message.contains("docs/motor.md"));
+    }
+
+    #[test]
+    fn present_doc_suppresses_w018() {
+        let result = compile(&[model_source(DOC_MODEL), docs_source("docs/motor.md")]);
+        assert!(result.model.is_some());
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|d| d.code != DiagnosticCode::W018),
+            "doc present, expected no W018, got {:?}",
+            codes(&result)
+        );
+    }
+
+    #[test]
+    fn docs_sources_are_never_parsed_as_hcl() {
+        // Markdown content must not break compilation: docs files only
+        // contribute their filename, never their body.
+        let result = compile(&[
+            model_source(DOC_MODEL),
+            Source {
+                filename: "docs/motor.md".to_string(),
+                content: "# Motor\n\ncomponent \"broken \" {{{".to_string(),
+            },
+        ]);
+        assert!(result.model.is_some());
+        assert!(
+            result.diagnostics.iter().all(|d| !d.is_error()),
+            "docs content must never error, got {:?}",
+            codes(&result)
+        );
+    }
+
+    #[test]
+    fn w018_is_gated_at_component_level() {
+        let sources = vec![model_source(DOC_MODEL)];
+        for level in [WarningLevel::Business, WarningLevel::Architectural] {
+            let result = compile_with_warning_level(&sources, level);
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .all(|d| d.code != DiagnosticCode::W018),
+                "W018 must be hidden at {level}, got {:?}",
+                codes(&result)
+            );
+        }
+        let result = compile_with_warning_level(&sources, WarningLevel::Component);
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| d.code == DiagnosticCode::W018),
+            "W018 must show at component level, got {:?}",
+            codes(&result)
+        );
     }
 
     // ── phase 2: per-file view validation ────────────────────────────────

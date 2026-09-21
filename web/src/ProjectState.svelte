@@ -83,17 +83,18 @@ export async function refreshCurrentProject(): Promise<void> {
 // file — the interim "one editable file per project" convention until
 // Task 58 adds a real file-tree UI. Kept here rather than duplicated at
 // each call site (the /projects page's "new project" and "new from
-// example" actions).
+// example" actions). Also seeds an empty `docs/` folder (via `.gitkeep`,
+// so the directory persists in the VFS) alongside the model file.
 export async function createProjectWithMainFile(
   name: string,
   content: string,
   id?: string,
 ): Promise<Project> {
   const project = await projectStore.createProject(name, id);
-  await openProjectFs(projectStore, project.id).writeFile(
-    "main.hcl",
-    content,
-  );
+  const fs = openProjectFs(projectStore, project.id);
+  await fs.writeFile("main.hcl", content);
+  await fs.mkdir("docs", { recursive: true });
+  await fs.writeFile("docs/.gitkeep", "");
   return project;
 }
 

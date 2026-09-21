@@ -120,24 +120,39 @@ impl Cli {
 
 // ── I/O helpers ───────────────────────────────────────────────────────────────
 
-/// Recursively walk `dir` and return a [`Source`] for every `.hcl` file found.
+/// Recursively walk `dir` and return a [`Source`] for every `.hcl` file
+/// found, plus every Markdown file under a `docs/` directory (which the
+/// compiler checks for W018 by filename only — their content is loaded
+/// verbatim but never parsed).
 ///
 /// Files are sorted by path so that the compilation order is deterministic.
 fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
-    let mut hcl_files: Vec<PathBuf> = WalkDir::new(dir)
+    let mut files: Vec<PathBuf> = WalkDir::new(dir)
         .into_iter()
         .filter_map(std::result::Result::ok)
-        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "hcl"))
+        .filter(|e| {
+            if !e.file_type().is_file() {
+                return false;
+            }
+            let path = e.path();
+            if path.extension().is_some_and(|ext| ext == "hcl") {
+                return true;
+            }
+            rhizz_core::is_docs_source(&path.to_string_lossy())
+        })
         .map(|e| e.path().to_path_buf())
         .collect();
-    hcl_files.sort();
+    files.sort();
 
-    if hcl_files.is_empty() {
+    if !files
+        .iter()
+        .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
+    {
         anyhow::bail!("no .hcl files found in {}", dir.display());
     }
 
     let mut sources = Vec::new();
-    for path in &hcl_files {
+    for path in &files {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("cannot read {}", path.display()))?;
         sources.push(Source {

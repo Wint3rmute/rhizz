@@ -4,6 +4,32 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Treat documentation as first-class citizen
+
+- **Compiler** (`rhizz-core`): new `W018` warning (component level) fires
+  for every top-level component definition without a matching `docs/<label>.md`
+  file. Doc files travel inside the existing `Source[]` (`is_docs_source` /
+  `doc_key_for` in `lib.rs`); `compile` partitions them out (never parsed as
+  HCL) and appends `validate_docs` after resolution. Instances exempt,
+  nested `docs/sub/<label>.md` matches by final segment. Rule logic lives
+  only in core — CLI (`load_sources`), web (`readProjectSources`) and book
+  embeds just hand the filenames over.
+- **Spec**: new `SPEC/diagnostics/W018.md`, row in `SPEC/warning-levels.md`,
+  §2.11 no longer claims docs are frontend-only. `book/book.lock`
+  regenerated (purely additive W018, 0 removals).
+- **Web**: modeling `NodeInspector` gained an "Open documentation" button
+  (presentational `onopendocumentation` prop + `WithDocumentationButton`
+  story); the modeling page creates `docs/<label>.md` (`# <label>`) if
+  missing and deep-links the Editor via `?file=` (honored by
+  `code/+page.svelte`). New projects seed `docs/.gitkeep`.
+- **Tests**: red/green — 5 `validate_docs` unit tests + 4 `compile`-level
+  tests (classification, suppression, never-parsed, level gating); web
+  `compile.test.ts` docs-inclusion case. Full `just test` green (174 core /
+  659 web / 13 e2e), `just lint`, `just build`, `just format` green.
+  Existing examples deliberately left without docs (they now warn).
+
+---
+
 ## Task — Hierarchy indent guides in the Diagrams component tree
 
 Parent nodes in the Diagrams "Components" tree now draw a VS Code / Zed

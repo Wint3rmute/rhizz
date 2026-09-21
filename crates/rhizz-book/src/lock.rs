@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Current lock format version.
-pub const LOCK_FORMAT: u64 = 1;
+pub const LOCK_FORMAT: u64 = 2;
 
 /// The lock file name, relative to the book root.
 pub const LOCK_FILENAME: &str = "book.lock";
@@ -29,8 +29,18 @@ pub struct LockEntry {
     pub hcl: String,
     /// SHA-256 hex digest of the exact HCL body — the input key.
     pub input_sha256: String,
+    /// Warning level the block was compiled at (fence `level=` attr,
+    /// default `component`). Part of the lock identity: the same body at
+    /// two levels has two verdicts.
+    #[serde(default = "default_level")]
+    pub level: String,
     /// Normalized compiler verdict.
     pub output: NormalizedOutput,
+}
+
+/// Default warning level for lock entries written before levels existed.
+fn default_level() -> String {
+    "component".to_owned()
 }
 
 /// One traced `` ```rhizz-project `` embed. Field order is alphabetical for
@@ -47,6 +57,10 @@ pub struct ProjectLockEntry {
     pub output: NormalizedOutput,
     /// Project directory as written in the fence (relative to `book/src/`).
     pub src: String,
+    /// Warning level the project was compiled at (fence `level="..."` attr,
+    /// default `component`). Part of the lock identity, like for blocks.
+    #[serde(default = "default_level")]
+    pub level: String,
 }
 
 /// One locked file of a book project.
@@ -339,7 +353,7 @@ pub fn compare_lock(
         return (diffs, notes);
     }
 
-    let locked: HashSet<(&str, &str)> = lock.entries.iter().map(entry_key).collect();
+    let locked: HashSet<(&str, &str, &str)> = lock.entries.iter().map(entry_key).collect();
 
     for block in blocks {
         if !locked.contains(&entry_key(block)) {
@@ -364,7 +378,7 @@ pub fn compare_lock(
         }
     }
 
-    let current: HashSet<(&str, &str)> = blocks.iter().map(entry_key).collect();
+    let current: HashSet<(&str, &str, &str)> = blocks.iter().map(entry_key).collect();
     for entry in &lock.entries {
         if !current.contains(&entry_key(entry)) {
             diffs.push(Diff::RemovedBlock {
@@ -374,7 +388,7 @@ pub fn compare_lock(
         }
     }
 
-    let locked_projects: HashSet<(&str, &str, &str)> =
+    let locked_projects: HashSet<(&str, &str, &str, &str)> =
         lock.projects.iter().map(project_key).collect();
     for project in projects {
         if !locked_projects.contains(&project_key(project)) {
@@ -399,7 +413,8 @@ pub fn compare_lock(
         }
     }
 
-    let current_projects: HashSet<(&str, &str, &str)> = projects.iter().map(project_key).collect();
+    let current_projects: HashSet<(&str, &str, &str, &str)> =
+        projects.iter().map(project_key).collect();
     for entry in &lock.projects {
         if !current_projects.contains(&project_key(entry)) {
             diffs.push(Diff::RemovedProject {
@@ -419,42 +434,50 @@ pub fn compare_lock(
     (diffs, notes)
 }
 
-/// The lock identity of a trace: (chapter, input hash).
-const fn entry_key(entry: &LockEntry) -> (&str, &str) {
-    (entry.chapter.as_str(), entry.input_sha256.as_str())
+/// The lock identity of a trace: (chapter, input hash, level). The level is
+/// part of the key so the same body compiled at two levels traces twice.
+const fn entry_key(entry: &LockEntry) -> (&str, &str, &str) {
+    (
+        entry.chapter.as_str(),
+        entry.input_sha256.as_str(),
+        entry.level.as_str(),
+    )
 }
 
-/// The lock identity of a project trace: (chapter, src, input hash). The
-/// input hash is part of the key so changed sources surface as a
+/// The lock identity of a project trace: (chapter, src, input hash, level).
+/// The input hash is part of the key so changed sources surface as a
 /// removed/new pair even when the compiler verdict is unchanged (the
 /// rendered iframe payload still changed); an identical key with a different
 /// verdict means the compiler itself changed its output.
-const fn project_key(entry: &ProjectLockEntry) -> (&str, &str, &str) {
+const fn project_key(entry: &ProjectLockEntry) -> (&str, &str, &str, &str) {
     (
         entry.chapter.as_str(),
         entry.src.as_str(),
         entry.input_sha256.as_str(),
+        entry.level.as_str(),
     )
 }
 
-/// Sort lock entries by (chapter, input hash) for a stable file.
+/// Sort lock entries by (chapter, input hash, level) for a stable file.
 #[must_use]
 pub fn sorted_entries(mut entries: Vec<LockEntry>) -> Vec<LockEntry> {
     entries.sort_by(|left, right| {
         left.chapter
             .cmp(&right.chapter)
             .then_with(|| left.input_sha256.cmp(&right.input_sha256))
+            .then_with(|| left.level.cmp(&right.level))
     });
     entries
 }
 
-/// Sort project lock entries by (chapter, src) for a stable file.
+/// Sort project lock entries by (chapter, src, level) for a stable file.
 #[must_use]
 pub fn sorted_projects(mut projects: Vec<ProjectLockEntry>) -> Vec<ProjectLockEntry> {
     projects.sort_by(|left, right| {
         left.chapter
             .cmp(&right.chapter)
             .then_with(|| left.src.cmp(&right.src))
+            .then_with(|| left.level.cmp(&right.level))
     });
     projects
 }
@@ -474,6 +497,7 @@ mod tests {
             chapter: chapter.to_owned(),
             hcl: "x".to_owned(),
             input_sha256: hash.to_owned(),
+            level: "component".to_owned(),
             output,
         }
     }
@@ -503,6 +527,7 @@ mod tests {
                 sha256: "abc".to_owned(),
             }],
             input_sha256: "def".to_owned(),
+            level: "component".to_owned(),
             output,
             src: src.to_owned(),
         }

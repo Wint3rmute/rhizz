@@ -67,7 +67,7 @@ rest of your product's infrastructure.
 
 ## Components
 
-```rhizz
+```rhizz,level=architectural
 component "wheel" {
   description = "A spinning round object"
 }
@@ -89,7 +89,7 @@ page!
 You now know about `systems` and about `components`, lets put this together
 and place a component in a system:
 
-```rhizz
+```rhizz,level=architectural
 component "wheel" {
   description = "A spinning round object"
   leaf = true
@@ -113,7 +113,7 @@ later, you can ignore this fact for now.
 A component can have children (and those children can have their own children). Let's
 add a `tire` to our wheel:
 
-```rhizz
+```rhizz,level=architectural
 component "tire" {
   description = "A 24in bicycle tire"
   leaf = true
@@ -148,7 +148,7 @@ multiple times, let's fix some of them by building a bike with:
 - A bicycle fork
 - Wheels attached
 
-```rhizz
+```rhizz,level=architectural
 component "tire" {
   description = "A 24in bicycle tire"
   leaf = true
@@ -213,5 +213,5 @@ All examples in this book are **actual Rhizz projects**.
 So far we've been only working with single-file examples,
 here you can see a project with a system model and a view.
 
-```rhizz-project src="basics/demo" open="diagrams/main.hcl"
+```rhizz-project src="basics/demo" open="diagrams/main.hcl" level="architectural"
 ```

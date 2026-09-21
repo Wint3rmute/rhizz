@@ -3,7 +3,7 @@
 This chapter focuses on how to model connections between the components of your
 system. You've already seen the basic component-to-component connection schema:
 
-```rhizz
+```rhizz,level=architectural
 component "server" {
   description = "Server in the cloud"
   leaf = true
@@ -51,7 +51,7 @@ points us towards things to specify further:
 
 ## Defining & connecting ports
 
-```rhizz
+```rhizz,level=architectural
 component "computer" {
   description = "Personal Computer (PC)"
   leaf = true
