@@ -49,11 +49,14 @@ export const ExpandCollapse: Story = {
 
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(await bar.findByText(/undefined component/))
-      .toBeInTheDocument();
-    await expect(
-      await bar.findByText(/missing a description/),
-    ).toBeInTheDocument();
+    // Text queries would also match the toggle's plain-text preview, so
+    // scope content checks to the expanded alert rows (1 error + 2 warnings).
+    await waitFor(async () => {
+      await expect(bar.getAllByRole("alert")).toHaveLength(3);
+    });
+    const alerts = bar.getAllByRole("alert");
+    await expect(alerts[0]?.textContent).toMatch(/undefined component/);
+    await expect(alerts[1]?.textContent).toMatch(/missing a description/);
 
     await userEvent.click(toggle);
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
