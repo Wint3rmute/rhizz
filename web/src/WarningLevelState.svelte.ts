@@ -5,10 +5,10 @@
 // The level is a project-wide preset (see SPEC/warning-levels.md) that gates
 // which *warnings* the compiler reports; errors are never gated. It is
 // persisted to localStorage so the choice survives a reload, using the same
-// JSON-encoded single-value convention as ./Persisted.svelte — but through an
-// explicit `$effect.root`, because this singleton is created at module scope,
-// outside any component's lifecycle, where a bare `$effect` would have no root
-// to attach to (the same reason ThemeState.svelte uses one).
+// JSON-encoded single-value convention as ./Persisted.svelte: the setter
+// writes synchronously (no `$effect` timing involved), and the initial read
+// JSON-decodes with a fallback to the raw value, so both machine-written
+// (`"business"`) and hand-edited (`business`) entries load.
 //
 // Validation lives here rather than in ./Persisted.svelte: a stale or
 // hand-edited localStorage entry must never reach the compiler, which would
@@ -45,21 +45,26 @@ export function warningLevelLabel(level: WarningLevel): string {
 
 function readInitialWarningLevel(): WarningLevel {
   if (typeof localStorage === "undefined") return DEFAULT_WARNING_LEVEL;
-  return parseWarningLevel(localStorage.getItem(WARNING_LEVEL_STORAGE_KEY)) ??
-    DEFAULT_WARNING_LEVEL;
+  const raw = localStorage.getItem(WARNING_LEVEL_STORAGE_KEY);
+  if (raw === null) return DEFAULT_WARNING_LEVEL;
+  // Machine-written entries are JSON-encoded; tolerate bare hand-edited
+  // ones. Anything else (garbage, unknown names, wrong types) is corrupt.
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    decoded = raw;
+  }
+  return typeof decoded === "string"
+    ? (parseWarningLevel(decoded) ?? DEFAULT_WARNING_LEVEL)
+    : DEFAULT_WARNING_LEVEL;
 }
 
 let warningLevel = $state<WarningLevel>(readInitialWarningLevel());
 
-if (typeof window !== "undefined") {
-  $effect.root(() => {
-    $effect(() => {
-      localStorage.setItem(
-        WARNING_LEVEL_STORAGE_KEY,
-        JSON.stringify(warningLevel),
-      );
-    });
-  });
+function persistWarningLevel(level: WarningLevel): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(WARNING_LEVEL_STORAGE_KEY, JSON.stringify(level));
 }
 
 /** The active warning level; reactive to {@link setWarningLevel}. */
@@ -67,8 +72,10 @@ export function getWarningLevel(): WarningLevel {
   return warningLevel;
 }
 
-/** Sets the warning level. Unknown values are ignored, never thrown. */
+/** Sets the warning level, persisting it. Unknown values are ignored, never thrown. */
 export function setWarningLevel(value: string): void {
   const parsed = parseWarningLevel(value);
-  if (parsed !== null) warningLevel = parsed;
+  if (parsed === null) return;
+  warningLevel = parsed;
+  persistWarningLevel(parsed);
 }
