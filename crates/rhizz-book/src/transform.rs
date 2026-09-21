@@ -2,17 +2,18 @@
 //! `/book-example` embed, and its input→output trace is recorded for
 //! `book.lock`.
 
-use crate::blocks::{Segment, body_hash, parse_blocks, split_lines};
+use crate::blocks::{Segment, block_warning_level, body_hash, parse_blocks, split_lines};
 use crate::compile::{BLOCK_FILENAME, Verdict};
 use crate::lock::LockEntry;
 use crate::project::{
     ProjectAttrs, ProjectPayloads, block_embed_height, parse_project_attrs, render_project_html,
 };
 use crate::render::{IGNORE_PANEL, tool_error_panel};
+use rhizz_core::WarningLevel;
 use std::collections::HashMap;
 
-/// Compiled-block results keyed by body SHA-256 digest.
-pub type CompileResults = HashMap<String, Verdict>;
+/// Compiled-block results keyed by (body SHA-256 digest, warning level).
+pub type CompileResults = HashMap<(String, WarningLevel), Verdict>;
 
 /// Rewrite one chapter and return its lock traces.
 ///
@@ -64,10 +65,24 @@ pub fn transform_chapter(
                     continue;
                 }
 
-                match results.get(&sha) {
+                // The pipeline validates `level=` attrs before transforming,
+                // so a parse failure here is unreachable in practice.
+                let level = match block_warning_level(attrs) {
+                    Ok(level) => level,
+                    Err(error) => {
+                        out.push(tool_error_panel(&format!(
+                            "invalid rhizz fence: {error:#}"
+                        )));
+                        out.push(String::new());
+                        continue;
+                    }
+                };
+                let key = (sha.clone(), level);
+                match results.get(&key) {
                     Some(verdict) => {
                         tracing::info!(
                             chapter = %chapter_path,
+                            level = %level,
                             compiled = true,
                             errors = verdict.errors.len(),
                             warnings = verdict.warnings.len(),
@@ -77,14 +92,16 @@ pub fn transform_chapter(
                             chapter: chapter_path.to_owned(),
                             hcl: body_new,
                             input_sha256: sha.clone(),
+                            level: level.to_string(),
                             output: verdict.sorted.clone(),
                         });
-                        match block_payloads.get(&sha) {
+                        match block_payloads.get(&key) {
                             Some(payload) => {
                                 let attrs = ProjectAttrs {
                                     src: BLOCK_FILENAME.to_owned(),
                                     height: block_embed_height(body.len()),
                                     open: None,
+                                    level,
                                 };
                                 out.push(render_project_html(example_base_url, &attrs, payload));
                             }
@@ -99,16 +116,19 @@ pub fn transform_chapter(
                 // Attribute errors abort the build in the pipeline's loading
                 // pass, so a parse failure here is unreachable in practice.
                 match parse_project_attrs(attrs) {
-                    Ok(project_attrs) => match project_payloads.get(&project_attrs.src) {
-                        Some(payload) => {
-                            out.push(render_project_html(
-                                example_base_url,
-                                &project_attrs,
-                                payload,
-                            ));
+                    Ok(project_attrs) => {
+                        let key = (project_attrs.src.clone(), project_attrs.level);
+                        match project_payloads.get(&key) {
+                            Some(payload) => {
+                                out.push(render_project_html(
+                                    example_base_url,
+                                    &project_attrs,
+                                    payload,
+                                ));
+                            }
+                            None => out.push(tool_error_panel("no project payload recorded")),
                         }
-                        None => out.push(tool_error_panel("no project payload recorded")),
-                    },
+                    }
                     Err(error) => {
                         out.push(tool_error_panel(&format!(
                             "invalid rhizz-project fence: {error:#}"
@@ -131,7 +151,13 @@ mod tests {
 
     fn results_with(body: &str, verdict: Verdict) -> CompileResults {
         let mut results = HashMap::new();
-        results.insert(crate::blocks::body_hash(body), verdict);
+        results.insert(
+            (
+                crate::blocks::body_hash(body),
+                rhizz_core::WarningLevel::Component,
+            ),
+            verdict,
+        );
         results
     }
 
@@ -139,17 +165,23 @@ mod tests {
         HashMap::new()
     }
 
-    fn no_projects() -> HashMap<String, String> {
+    fn no_projects() -> HashMap<(String, rhizz_core::WarningLevel), String> {
         HashMap::new()
     }
 
-    fn no_blocks() -> HashMap<String, String> {
+    fn no_blocks() -> HashMap<(String, rhizz_core::WarningLevel), String> {
         HashMap::new()
     }
 
-    fn blocks_with(body: &str) -> HashMap<String, String> {
+    fn blocks_with(body: &str) -> HashMap<(String, rhizz_core::WarningLevel), String> {
         let mut map = HashMap::new();
-        map.insert(crate::blocks::body_hash(body), "PAYLOAD".to_owned());
+        map.insert(
+            (
+                crate::blocks::body_hash(body),
+                rhizz_core::WarningLevel::Component,
+            ),
+            "PAYLOAD".to_owned(),
+        );
         map
     }
 
@@ -179,7 +211,7 @@ mod tests {
 
         // compiled blocks become live embeds, not hcl fences
         assert!(new_content.contains("<div class=\"rhizz-project\">"));
-        assert!(new_content.contains("book-example#p=PAYLOAD"));
+        assert!(new_content.contains("book-example?level=component#p=PAYLOAD"));
         assert!(!new_content.contains("```hcl\nproject"));
 
         // ignore blocks keep their source plus the notice, and are not traced
@@ -237,7 +269,7 @@ mod tests {
             TEST_BASE_URL,
         );
         assert!(new_content.contains("<div class=\"rhizz-project\">"));
-        assert!(new_content.contains("https://example.invalid/book-example#p=PAYLOAD"));
+        assert!(new_content.contains("https://example.invalid/book-example?level=component#p=PAYLOAD"));
         assert!(new_content.contains("height="));
         assert!(!new_content.contains("```hcl"));
         assert!(!new_content.contains("rhizz-diag"));
@@ -278,7 +310,13 @@ mod tests {
     #[test]
     fn project_fence_renders_embed_without_block_trace() {
         let mut payloads = HashMap::new();
-        payloads.insert("projects/demo".to_owned(), "PAYLOAD".to_owned());
+        payloads.insert(
+            (
+                "projects/demo".to_owned(),
+                rhizz_core::WarningLevel::Component,
+            ),
+            "PAYLOAD".to_owned(),
+        );
         let content =
             "# T\n\n```rhizz-project src=\"projects/demo\" height=\"600\"\nA caption\n```\n";
         let (new_content, traces) = transform_chapter(
@@ -294,7 +332,7 @@ mod tests {
             "project traces are recorded by the pipeline"
         );
         assert!(new_content.contains("<div class=\"rhizz-project\">"));
-        assert!(new_content.contains("https://example.invalid/book-example#p=PAYLOAD"));
+        assert!(new_content.contains("https://example.invalid/book-example?level=component#p=PAYLOAD"));
         assert!(new_content.contains("height=\"600\""));
         assert!(!new_content.contains("rhizz-project-caption"));
     }

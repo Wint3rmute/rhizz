@@ -5,7 +5,7 @@
 //! machinery entirely while producing the exact same normalized verdicts.
 
 use crate::normalize::{NormDiagnostic, NormalizedOutput, sort_diagnostics};
-use rhizz_core::{CompileResult, Diagnostic, Source, score};
+use rhizz_core::{CompileResult, Diagnostic, Source, WarningLevel, score};
 use serde_json::{Value, json};
 
 /// Filename under which every book block is compiled (used for diagnostics).
@@ -90,14 +90,27 @@ pub fn normalize_result(result: &CompileResult) -> Verdict {
     Verdict::new(errors, warnings, score_value)
 }
 
-/// Compile one `` ```rhizz `` block body.
+/// Compile one `` ```rhizz `` block body at the compiler default level
+/// (`component`, reporting every warning).
 #[must_use]
 pub fn compile_body(body: &str) -> Verdict {
+    compile_body_with_level(body, WarningLevel::Component)
+}
+
+/// Compile one `` ```rhizz `` block body at an explicit warning level
+/// (from the fence's `level=` attribute). The level gates warnings only:
+/// errors are always reported, so the verdict's validity never depends on
+/// it — only its noisiness.
+#[must_use]
+pub fn compile_body_with_level(body: &str, level: WarningLevel) -> Verdict {
     let source = Source {
         filename: BLOCK_FILENAME.to_owned(),
         content: body.to_owned(),
     };
-    normalize_result(&rhizz_core::compile(std::slice::from_ref(&source)))
+    normalize_result(&rhizz_core::compile_with_warning_level(
+        std::slice::from_ref(&source),
+        level,
+    ))
 }
 
 /// Build the JSON score object with the same shape as `rhizz --json build`
