@@ -105,4 +105,10 @@ const alertClass = $derived(
 .verdict-errors li::before {
   content: "❌ ";
 }
+/* `alert-soft` paints text in the raw status color, which is unreadable on
+   a light background (bright green/yellow on near-white). Darken it there;
+   the dark theme already reads fine. */
+:global(html[data-theme="light"]) .alert-soft {
+  color: color-mix(in oklab, var(--alert-color) 55%, black);
+}
 </style>
