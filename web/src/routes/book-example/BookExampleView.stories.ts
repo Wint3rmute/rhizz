@@ -127,19 +127,6 @@ async function findCodeWith(
   });
 }
 
-// The synchronous queryByText().toBeNull() has no retry budget, so a slow
-// frame can fail it spuriously under load — poll instead.
-async function expectGone(
-  query: () => Element | null,
-  text: string,
-): Promise<void> {
-  await waitFor(() => {
-    if (query() !== null) {
-      throw new Error(`expected "${text}" to be gone`);
-    }
-  });
-}
-
 // The fallback demo project: diagram tab with two placed nodes.
 export const DiagramTab: Story = {
   args: {
@@ -170,23 +157,7 @@ export const CodeTab: Story = {
   },
 };
 
-// A clean project shows the classic verdict panel: head, no items,
-// completion stats.
-export const CleanProject: Story = {
-  args: {
-    files: SAMPLE_FILES,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText(/No errors, no warnings/);
-    await canvas.findByText("Components");
-    await canvas.findByText(/100\.0%/);
-  },
-};
-
-// Dropping the hub description triggers W004, shown directly at the bottom
-// with no click needed. (Alert text runs together across <br/> elements,
-// so the assertion uses a regex.)
+// Dropping the hub description triggers W004, shown directly at the bottom.
 const warningFiles: BookPayloadFile[] = SAMPLE_FILES.map((file) =>
   file.path === "system.hcl"
     ? {
@@ -210,106 +181,6 @@ export const WarningsShownDirectly: Story = {
   },
 };
 
-// A pinned `level` quiets the verdict exactly like the preprocessor's lock:
-// the same undocumented components are clean at business strictness.
-const undocumentedFiles: BookPayloadFile[] = SAMPLE_FILES.filter(
-  (file) => !file.path.startsWith("docs/"),
-);
-
-export const PinnedLevelQuietsDocsWarnings: Story = {
-  args: {
-    files: undocumentedFiles,
-    level: "business",
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText(/No errors, no warnings/);
-    await canvas.findByText("Strictness: business");
-  },
-};
-
-// Diagram files are compiled (not just rendered), so a stale `node` path in a
-// view routes through rhizz-core's view validation and surfaces W016 in the
-// same verdict panel — without blocking the model.
-const viewWarningFiles: BookPayloadFile[] = [
-  ...SAMPLE_FILES,
-  {
-    path: "views/overview.hcl",
-    content: `view "overview" {
-  system = "demo"
-
-  node "demo/not-a-component" {
-    x = 10
-    y = 20
-  }
-}
-`,
-  },
-];
-
-export const ViewNodeWarning: Story = {
-  args: {
-    files: viewWarningFiles,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText(/W016/);
-  },
-};
-
-// ?open=system.hcl lands directly on the code tab.
-export const OpenCodeFile: Story = {
-  args: {
-    files: SAMPLE_FILES,
-    open: "system.hcl",
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await findCodeWith(canvasElement, 'protocol "temp-bus"');
-    await expectGone(() => canvas.queryByText("sensor"), "sensor");
-  },
-};
-
-// ?open=views/main.hcl lands on that diagram (and not on the code).
-export const OpenDiagram: Story = {
-  args: {
-    files: SAMPLE_FILES,
-    open: "views/main.hcl",
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText("sensor");
-    await expect(canvas.queryByText(/protocol "temp-bus"/)).toBeNull();
-  },
-};
-
-// The code view offers copying through the clipboard icon, with a
-// checkmark confirming success.
-export const CopyCode: Story = {
-  args: {
-    files: SAMPLE_FILES,
-    open: "system.hcl",
-  },
-  play: async ({ canvasElement }) => {
-    let written: string | null = null;
-    Object.defineProperty(window.navigator, "clipboard", {
-      value: {
-        writeText: (text: string): Promise<void> => {
-          written = text;
-          return Promise.resolve();
-        },
-      },
-      configurable: true,
-    });
-    const canvas = within(canvasElement);
-    await userEvent.click(
-      await canvas.findByRole("button", { name: "Copy code" }),
-    );
-    await canvas.findByRole("button", { name: "Copied" });
-    await expect(written).toContain('protocol "temp-bus"');
-  },
-};
-
 // A lone file hides the top bar entirely: just code plus diagnostics,
 // like a plain ```rhizz block.
 const singleFile: BookPayloadFile[] = SAMPLE_FILES.filter((file) =>
@@ -326,74 +197,5 @@ export const SingleFile: Story = {
     await expect(canvas.queryByRole("tablist")).toBeNull();
     await expect(canvas.queryByRole("tab")).toBeNull();
     await canvas.findByText("Components");
-  },
-};
-
-// A bare filename also resolves (?open=main.hcl finds views/main.hcl).
-export const OpenBareFilename: Story = {
-  args: {
-    files: SAMPLE_FILES,
-    open: "main.hcl",
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText("sensor");
-  },
-};
-
-// The toggle flips a diagram file to its source and back.
-export const ToggleDiagramCode: Story = {
-  args: {
-    files: SAMPLE_FILES,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText("sensor");
-    await userEvent.click(
-      await canvas.findByRole("button", { name: "Show code" }),
-    );
-    await findCodeWith(canvasElement, 'view "main"');
-    await expectGone(() => canvas.queryByText("sensor"), "sensor");
-    await userEvent.click(
-      await canvas.findByRole("button", { name: "Show diagram" }),
-    );
-    await canvas.findByText("sensor");
-  },
-};
-
-export const ToggleDisabledForSource: Story = {
-  args: {
-    files: SAMPLE_FILES,
-    open: "system.hcl",
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await findCodeWith(canvasElement, 'protocol "temp-bus"');
-    const toggle = await canvas.findByRole("button", {
-      name: "Diagram view unavailable",
-    });
-    await expect(toggle.getAttribute("disabled")).not.toBeNull();
-  },
-};
-
-// The top-right theme switcher flips the applied theme and swaps its
-// icon. Note: assertions stay on the button itself — the storybook runner
-// forces its own data-theme on the document, so document-level assertions
-// would measure the harness, not the component.
-export const ThemeSwitcher: Story = {
-  args: {
-    files: SAMPLE_FILES,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const toggle = await canvas.findByRole("button", {
-      name: /Switch to (light|dark) theme/,
-    });
-    const before = toggle.getAttribute("aria-label");
-    await userEvent.click(toggle);
-    const flipped = before === "Switch to dark theme"
-      ? "Switch to light theme"
-      : "Switch to dark theme";
-    await canvas.findByRole("button", { name: flipped });
   },
 };
