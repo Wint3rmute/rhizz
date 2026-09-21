@@ -26,15 +26,3 @@ export const Empty: Story = {
     value: "",
   },
 };
-
-export const ServerIcon: Story = {
-  args: {
-    value: "server",
-  },
-};
-
-export const WifiIcon: Story = {
-  args: {
-    value: "wifi",
-  },
-};
