@@ -315,14 +315,14 @@ fn has_doc(label: &str, doc_keys: &HashSet<String, impl std::hash::BuildHasher>)
 /// Validate one view/diagram file against the resolved [`Model`].
 ///
 /// `filename` is the file the views were parsed from (e.g.
-/// `diagrams/overview.hcl`). It is used both as the diagnostic's structured
+/// `views/overview.hcl`). It is used both as the diagnostic's structured
 /// `file` and embedded in the message, because downstream consumers (the
 /// book/lock) drop the `file` field.
 ///
 /// Checks:
 /// - **E016** — the file must contain exactly one `view` block.
 /// - **E016** — the view label must match the filename stem
-///   (`diagrams/overview.hcl` -> `view "overview"`).
+///   (`views/overview.hcl` -> `view "overview"`).
 /// - **E006** — the view's `system` must name a defined system.
 /// - **W016** — every `node` path must resolve to a known component (the
 ///   structurally-stable keys the diagram editor persists).
@@ -1088,11 +1088,11 @@ mod tests {
     #[test]
     fn validate_view_zero_views_emits_e016() {
         let model = model_with_system("s");
-        let diags = validate_view(&model, &[], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[], "views/overview.hcl");
         assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
         assert_eq!(diags[0].code, DiagnosticCode::E016);
         assert!(
-            diags[0].message.contains("diagrams/overview.hcl"),
+            diags[0].message.contains("views/overview.hcl"),
             "message must name the file: {}",
             diags[0].message
         );
@@ -1102,17 +1102,17 @@ mod tests {
     fn validate_view_multiple_views_emits_e016() {
         let model = model_with_system("s");
         let views = vec![view("a", "s"), view("b", "s")];
-        let diags = validate_view(&model, &views, "diagrams/combined.hcl");
+        let diags = validate_view(&model, &views, "views/combined.hcl");
         assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
         assert_eq!(diags[0].code, DiagnosticCode::E016);
-        assert!(diags[0].message.contains("diagrams/combined.hcl"));
+        assert!(diags[0].message.contains("views/combined.hcl"));
     }
 
     #[test]
     fn validate_view_label_mismatch_emits_e016() {
         let model = model_with_system("s");
         let views = vec![view("other", "s")];
-        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        let diags = validate_view(&model, &views, "views/overview.hcl");
         assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
         assert_eq!(diags[0].code, DiagnosticCode::E016);
         assert!(diags[0].message.contains("overview"));
@@ -1122,7 +1122,7 @@ mod tests {
     fn validate_view_unknown_system_emits_e006() {
         let model = model_with_system("s");
         let views = vec![view("overview", "nope")];
-        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        let diags = validate_view(&model, &views, "views/overview.hcl");
         assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
         assert_eq!(diags[0].code, DiagnosticCode::E006);
         assert!(diags[0].message.contains("nope"));
@@ -1132,7 +1132,7 @@ mod tests {
     fn validate_view_missing_system_emits_e006() {
         let model = model_with_system("s");
         let views = vec![view("overview", "")];
-        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        let diags = validate_view(&model, &views, "views/overview.hcl");
         assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
         assert_eq!(diags[0].code, DiagnosticCode::E006);
     }
@@ -1141,17 +1141,17 @@ mod tests {
     fn validate_view_valid_file_emits_nothing() {
         let model = model_with_system("s");
         let views = vec![view("overview", "s")];
-        let diags = validate_view(&model, &views, "diagrams/overview.hcl");
+        let diags = validate_view(&model, &views, "views/overview.hcl");
         assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
     }
 
     #[test]
     fn validate_view_diagnostic_carries_file() {
         let model = model_with_system("s");
-        let diags = validate_view(&model, &[], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[], "views/overview.hcl");
         assert_eq!(
             diags[0].file.as_deref(),
-            Some(Path::new("diagrams/overview.hcl"))
+            Some(Path::new("views/overview.hcl"))
         );
     }
 
@@ -1232,7 +1232,7 @@ system "other" {
                 "cpu",
             ],
         );
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
     }
 
@@ -1244,7 +1244,7 @@ system "other" {
             "computer-setup",
             &["computer-setup/not-a-computer"],
         );
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert_eq!(diags.len(), 1, "expected one diagnostic, got {diags:?}");
         assert_eq!(diags[0].code, DiagnosticCode::W016);
         assert!(
@@ -1260,7 +1260,7 @@ system "other" {
         // presentation smell (one view shows one system), not a hard error.
         let model = model_with_components();
         let view = view_with_nodes("overview", "computer-setup", &["other/monitor"]);
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         let w017: Vec<_> = diags
             .iter()
             .filter(|d| d.code == DiagnosticCode::W017)
@@ -1290,7 +1290,7 @@ system "other" {
             "computer-setup",
             &["other/monitor", "other/monitor"],
         );
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert_eq!(
             diags
                 .iter()
@@ -1305,7 +1305,7 @@ system "other" {
     fn validate_view_unknown_node_emits_no_w017() {
         let model = model_with_components();
         let view = view_with_nodes("overview", "computer-setup", &["computer-setup/ghost"]);
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert!(
             diags.iter().all(|d| d.code != DiagnosticCode::W017),
             "unknown paths are W016-only, got {diags:?}"
@@ -1316,7 +1316,7 @@ system "other" {
     fn validate_view_foreign_node_skipped_when_system_unknown() {
         let model = model_with_components();
         let view = view_with_nodes("overview", "nope", &["other/monitor"]);
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E006),
             "expected E006, got {diags:?}"
@@ -1335,7 +1335,7 @@ system "other" {
             "computer-setup",
             &["computer-setup/ghost", "computer-setup/ghost"],
         );
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert_eq!(
             w016_paths(&diags).len(),
             1,
@@ -1347,7 +1347,7 @@ system "other" {
     fn validate_view_nodes_skipped_when_system_unknown() {
         let model = model_with_components();
         let view = view_with_nodes("overview", "nope", &["computer-setup/ghost"]);
-        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        let diags = validate_view(&model, &[view], "views/overview.hcl");
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E006),
             "expected E006, got {diags:?}"

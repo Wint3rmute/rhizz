@@ -213,5 +213,5 @@ All examples in this book are **actual Rhizz projects**.
 So far we've been only working with single-file examples,
 here you can see a project with a system model and a view.
 
-```rhizz-project src="basics/demo" open="diagrams/main.hcl" level="architectural"
+```rhizz-project src="basics/demo" open="views/main.hcl" level="architectural"
 ```

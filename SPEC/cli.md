@@ -10,7 +10,7 @@
 rhizz <command> [options] [path]
 ```
 
-`path` defaults to `.` (current directory). The project's system model file (`system.hcl` or `main.hcl`) and any view definition files (`diagrams/*.hcl`) are discovered and compiled.
+`path` defaults to `.` (current directory). The project's system model file (`system.hcl` or `main.hcl`) and any view definition files (`views/*.hcl`) are discovered and compiled.
 
 ---
 
