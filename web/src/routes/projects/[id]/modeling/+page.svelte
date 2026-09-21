@@ -1,5 +1,6 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
+import { goto } from "$app/navigation";
 import {
   clamp_zoom,
   create_editor_state,
@@ -1669,6 +1670,21 @@ async function handleDeleteSelectedComponent(): Promise<void> {
   else clearSelection();
 }
 
+async function handleOpenDocumentation(): Promise<void> {
+  if (!selectedComponentData) return;
+  const label = selectedComponentData.label;
+  const docPath = `docs/${label}.md`;
+  try {
+    await fs.readFile(docPath);
+  } catch {
+    await fs.mkdir("docs", { recursive: true });
+    await fs.writeFile(docPath, `# ${label}\n`);
+  }
+  await goto(
+    `${resolve("/projects/[id]/code", { id: data.projectId })}?file=${encodeURIComponent(docPath)}`,
+  );
+}
+
 function onPortMouseDown(
   event: MouseEvent,
   compIndex: number,
@@ -2837,6 +2853,8 @@ $effect(() => {
         onsettextalign={(align) => setSelectedTextAlign(align)}
         ondelete={() =>
           void handleDeleteSelectedComponent().catch(reportDiagramError)}
+        onopendocumentation={() =>
+          void handleOpenDocumentation().catch(reportDiagramError)}
       />
     {:else if selectedConnectionData}
       <div class="space-y-4 text-sm" data-testid="connection-inspector">

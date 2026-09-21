@@ -50,6 +50,14 @@
           {
             "code": "W003",
             "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W018",
+            "message": "component 'tire' is missing documentation (docs/tire.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -92,6 +100,10 @@
           {
             "code": "W003",
             "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+          },
+          {
+            "code": "W018",
+            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -138,6 +150,22 @@
           {
             "code": "W003",
             "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W018",
+            "message": "component 'fork' is missing documentation (docs/fork.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'frame' is missing documentation (docs/frame.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'tire' is missing documentation (docs/tire.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -176,6 +204,10 @@
           {
             "code": "W001",
             "message": "component 'wheel' is non-leaf but has no child components"
+          },
+          {
+            "code": "W018",
+            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       }
@@ -276,7 +308,16 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W018",
+            "message": "component 'computer' is missing documentation (docs/computer.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'mouse' is missing documentation (docs/mouse.md)"
+          }
+        ]
       }
     },
     {
@@ -309,7 +350,16 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W018",
+            "message": "component 'client' is missing documentation (docs/client.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'server' is missing documentation (docs/server.md)"
+          }
+        ]
       }
     },
     {
@@ -354,6 +404,14 @@
           {
             "code": "W011",
             "message": "protocol 'serial' has no messages defined"
+          },
+          {
+            "code": "W018",
+            "message": "component 'controller' is missing documentation (docs/controller.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'sensor-hat' is missing documentation (docs/sensor-hat.md)"
           }
         ]
       }
@@ -412,6 +470,22 @@
           {
             "code": "W003",
             "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W018",
+            "message": "component 'fork' is missing documentation (docs/fork.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'frame' is missing documentation (docs/frame.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'tire' is missing documentation (docs/tire.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'wheel' is missing documentation (docs/wheel.md)"
           }
         ]
       },
@@ -460,7 +534,24 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W018",
+            "message": "component 'computer' is missing documentation (docs/computer.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'cpu' is missing documentation (docs/cpu.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'gpu' is missing documentation (docs/gpu.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'monitor' is missing documentation (docs/monitor.md)"
+          }
+        ]
       },
       "src": "views-intro/1_example_simple"
     },
@@ -507,6 +598,22 @@
           {
             "code": "W016",
             "message": "diagrams/overview.hcl: view 'overview' node 'computer-setup/not-a-computer' does not reference a known component"
+          },
+          {
+            "code": "W018",
+            "message": "component 'computer' is missing documentation (docs/computer.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'cpu' is missing documentation (docs/cpu.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'gpu' is missing documentation (docs/gpu.md)"
+          },
+          {
+            "code": "W018",
+            "message": "component 'monitor' is missing documentation (docs/monitor.md)"
           }
         ]
       },
