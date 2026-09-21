@@ -9,7 +9,9 @@ test("explore renders a drone diagram, toast, and embed modal", async ({ page })
   );
   await page.goto(`/projects/${id}/explore`);
 
-  const battery = page.getByRole("link", { name: /battery, no detailed view/i });
+  const battery = page.getByRole("link", {
+    name: /battery, no detailed view/i,
+  });
   await expect(battery).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Diagram breadcrumb" }))
     .toBeVisible();

@@ -74,4 +74,3 @@ export const WithDistantAnnotations: Story = {
     diagramPath: "overview.hcl",
   },
 };
-
