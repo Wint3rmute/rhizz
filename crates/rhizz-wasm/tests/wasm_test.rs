@@ -166,7 +166,7 @@ fn diagram_view_errors_do_not_clear_the_model() {
             content: r#"system "s" { description = "d" }"#.to_string(),
         },
         rhizz_core::Source {
-            filename: "diagrams/overview.hcl".to_string(),
+            filename: "views/overview.hcl".to_string(),
             content: r#"view "a" { system = "s" }
 view "b" { system = "s" }"#
                 .to_string(),

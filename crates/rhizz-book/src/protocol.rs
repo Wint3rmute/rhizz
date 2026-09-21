@@ -804,14 +804,14 @@ mod tests {
 
     fn write_demo_project(root: &std::path::Path) {
         let proj = root.join("src/projects/demo");
-        std::fs::create_dir_all(proj.join("diagrams")).expect("mkdir diagrams");
+        std::fs::create_dir_all(proj.join("views")).expect("mkdir views");
         std::fs::write(
             proj.join("system.hcl"),
             "system \"demo\" {\n  description = \"d\"\n}\n",
         )
         .expect("write system.hcl");
         std::fs::write(
-            proj.join("diagrams/main.hcl"),
+            proj.join("views/main.hcl"),
             "view \"main\" {\n  system = \"demo\"\n}\n",
         )
         .expect("write main.hcl");
@@ -922,7 +922,7 @@ mod tests {
         let lock_path = PathBuf::from(dir.path()).join("book.lock");
         let mut err = Cursor::new(Vec::new());
         let mut book = project_book(
-            "# Demo\n\n```rhizz-project src=\"projects/demo\" open=\"diagrams/main.hcl\"\n```\n",
+            "# Demo\n\n```rhizz-project src=\"projects/demo\" open=\"views/main.hcl\"\n```\n",
         );
         let json_out = process_book(
             &mut book,
@@ -935,7 +935,7 @@ mod tests {
         )
         .expect("open target should embed");
         assert!(
-            json_out.contains("book-example?level=component&open=diagrams%2Fmain.hcl#p="),
+            json_out.contains("book-example?level=component&open=views%2Fmain.hcl#p="),
             "iframe URL should carry the open target"
         );
     }

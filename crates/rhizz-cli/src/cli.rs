@@ -443,7 +443,7 @@ fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
 ///
 /// Loads the project's `.hcl` files, compiles the system model, and rewrites
 /// the canonical `system.hcl` in place (atomic, will not clobber on compile
-/// errors). View files (`diagrams/*.hcl` and legacy `views.hcl`) are ignored:
+/// errors). View files (`views/*.hcl` and legacy `views.hcl`) are ignored:
 /// `rhizz fmt` neither reads, writes, nor reformats them. Returns an exit code:
 /// 0 formatted/already-correct, 1 if `--check` found the file unformatted (or a
 /// hard error occurred).
@@ -1057,11 +1057,11 @@ system "s" {
     #[test]
     fn fmt_ignores_view_files() {
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::create_dir_all(dir.path().join("diagrams")).expect("mkdir diagrams");
+        std::fs::create_dir_all(dir.path().join("views")).expect("mkdir views");
         // A diagram file holding two views would fail compilation, but `fmt`
         // must ignore view files entirely.
         let diagram = "view \"a\" { system = \"s\" }\nview \"b\" { system = \"s\" }\n";
-        std::fs::write(dir.path().join("diagrams/overview.hcl"), diagram).expect("write diagram");
+        std::fs::write(dir.path().join("views/overview.hcl"), diagram).expect("write diagram");
         std::fs::write(
             dir.path().join("system.hcl"),
             "system \"s\" { description = \"d\" }\n",
@@ -1079,7 +1079,7 @@ system "s" {
             "fmt must not create views.hcl"
         );
         assert_eq!(
-            std::fs::read_to_string(dir.path().join("diagrams/overview.hcl")).unwrap(),
+            std::fs::read_to_string(dir.path().join("views/overview.hcl")).unwrap(),
             diagram,
             "fmt must not touch diagram files"
         );

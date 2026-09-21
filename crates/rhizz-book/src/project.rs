@@ -55,7 +55,7 @@ pub struct ProjectAttrs {
     /// iframe height in px.
     pub height: u32,
     /// File opened by default in the embed (e.g. `system.hcl` for the code
-    /// tab, `diagrams/main.hcl` for a diagram). Must match a project file.
+    /// tab, `views/main.hcl` for a diagram). Must match a project file.
     pub open: Option<String>,
     /// Warning level the embed compiles at (fence `level="..."`, default
     /// `component`). Always rendered into the iframe URL so the embed shows
@@ -155,7 +155,7 @@ pub fn parse_project_attrs(raw: &str) -> Result<ProjectAttrs> {
 /// One `.hcl` file of a book project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectFile {
-    /// POSIX-style path relative to the project dir (e.g. `diagrams/main.hcl`).
+    /// POSIX-style path relative to the project dir (e.g. `views/main.hcl`).
     pub path: String,
     /// Raw file content.
     pub content: String,
@@ -275,7 +275,7 @@ pub fn load_project(src_root: &Path, src: &str) -> Result<LoadedProject> {
 
 /// Compile a loaded project.
 ///
-/// Compiles the system model sources plus every `diagrams/*.hcl` view file,
+/// Compiles the system model sources plus every `views/*.hcl` view file,
 /// validated per-file against the resolved model. Mirrors
 /// `rhizz-core::compile` (and thus the web workbench), so book verdicts match
 /// what users see in the app.
@@ -399,14 +399,14 @@ mod tests {
     const TS_GOLDEN_PAYLOAD: &str = "eJxlzUEKwyAUBNCryKylpVshJ-nvQvS3EeI3qKQU8e5NIHXT7QzzpmHjXEISmJvGMyxcYO4Nq60zDMqnVI6X2S3QcEkqSx2xIniOiaAaiVKei8thrTumpqMjkHQSdD08H-wr21iu0Qb5Y7fA7314dD_0fJrG10k--hcAYT8M";
 
     fn write_project(dir: &std::path::Path) {
-        std::fs::create_dir_all(dir.join("diagrams")).expect("mkdir diagrams");
+        std::fs::create_dir_all(dir.join("views")).expect("mkdir views");
         std::fs::write(
             dir.join("system.hcl"),
             "system \"demo\" {\n  description = \"d\"\n}\n",
         )
         .expect("write system.hcl");
         std::fs::write(
-            dir.join("diagrams/main.hcl"),
+            dir.join("views/main.hcl"),
             "view \"main\" {\n  system = \"demo\"\n}\n",
         )
         .expect("write main.hcl");
@@ -459,7 +459,7 @@ mod tests {
         write_project(&proj);
         let loaded = load_project(dir.path(), "projects/demo").expect("load");
         let paths: Vec<&str> = loaded.files.iter().map(|file| file.path.as_str()).collect();
-        assert_eq!(paths, vec!["diagrams/main.hcl", "system.hcl"]);
+        assert_eq!(paths, vec!["system.hcl", "views/main.hcl"]);
         assert_eq!(loaded.files.len(), 2);
         assert!(!loaded.input_sha256.is_empty());
         for file in &loaded.files {
@@ -499,7 +499,7 @@ mod tests {
         write_project(&proj);
         // Point the diagram at a system that does not exist.
         std::fs::write(
-            proj.join("diagrams/main.hcl"),
+            proj.join("views/main.hcl"),
             "view \"main\" {\n  system = \"ghost\"\n}\n",
         )
         .expect("write bad main.hcl");
@@ -518,7 +518,7 @@ mod tests {
         let proj = dir.path().join("demo");
         write_project(&proj);
         std::fs::write(
-            proj.join("diagrams/main.hcl"),
+            proj.join("views/main.hcl"),
             "view \"a\" { system = \"demo\" }\nview \"b\" { system = \"demo\" }\n",
         )
         .expect("write multi-view main.hcl");
@@ -537,7 +537,7 @@ mod tests {
         let proj = dir.path().join("demo");
         write_project(&proj);
         std::fs::write(
-            proj.join("diagrams/main.hcl"),
+            proj.join("views/main.hcl"),
             "view \"main\" {\n  system = \"demo\"\n\n  node \"demo/ghost\" {\n    x = 1\n    y = 2\n  }\n}\n",
         )
         .expect("write diagram with bad node");
@@ -573,7 +573,7 @@ mod tests {
         let value: Value = serde_json::from_str(&json).expect("payload is json");
         assert_eq!(value["version"], 1);
         assert_eq!(value["files"].as_array().map(Vec::len), Some(2));
-        assert_eq!(value["files"][0]["path"], "diagrams/main.hcl");
+        assert_eq!(value["files"][1]["path"], "views/main.hcl");
     }
 
     #[test]
@@ -630,12 +630,12 @@ mod tests {
         let attrs = ProjectAttrs {
             src: "projects/demo".to_owned(),
             height: DEFAULT_PROJECT_HEIGHT,
-            open: Some("diagrams/main.hcl".to_owned()),
+            open: Some("views/main.hcl".to_owned()),
             level: WarningLevel::Component,
         };
         let html = render_project_html("https://rhizz.fly.dev", &attrs, "PAYLOAD");
         assert!(html.contains(
-            "src=\"https://rhizz.fly.dev/book-example?level=component&open=diagrams%2Fmain.hcl#p=PAYLOAD\""
+            "src=\"https://rhizz.fly.dev/book-example?level=component&open=views%2Fmain.hcl#p=PAYLOAD\""
         ));
         // Without `open` the level query still travels: every embed is
         // self-describing.
