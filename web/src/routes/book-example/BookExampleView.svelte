@@ -8,6 +8,7 @@ import {
   parse_views,
   type ViewDefinition,
 } from "../../rhizz_wasm_wrapper";
+import { isDocsSource } from "../../vfs/compile";
 import DiagramStaticView from "../projects/[id]/modeling/DiagramStaticView.svelte";
 import {
   mapLayoutToBoxes,
@@ -40,12 +41,14 @@ const checkIcon = resolveIcon("check");
 const sunIcon = resolveIcon("sun");
 const moonIcon = resolveIcon("moon");
 
-// Every `.hcl` file — model sources and `diagrams/*.hcl` view layouts — so
-// the browser verdict matches `rhizz` and the book preprocessor
-// (`rhizz-core::compile` validates each diagram file independently).
+// Every source file — model `.hcl`, `diagrams/*.hcl` view layouts, and
+// `docs/*.md` presence markers — so the browser verdict matches `rhizz`
+// and the book preprocessor (`rhizz-core::compile` validates each diagram
+// file independently and checks docs presence for W018). Doc contents are
+// never parsed, only their filenames matter.
 let sources = $derived(
   files
-    .filter((file) => file.path.endsWith(".hcl"))
+    .filter((file) => file.path.endsWith(".hcl") || isDocsSource(file.path))
     .map((file) => ({ filename: file.path, content: file.content })),
 );
 

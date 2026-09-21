@@ -92,6 +92,14 @@ system "demo" {
 }
 `,
   },
+  {
+    path: "docs/sensor.md",
+    content: "# sensor\n\nTemperature sensor.\n",
+  },
+  {
+    path: "docs/hub.md",
+    content: "# hub\n\nReading collector.\n",
+  },
 ];
 
 const meta = {

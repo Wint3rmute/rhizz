@@ -1,5 +1,6 @@
 <script lang="ts">
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
+import { page } from "$app/state";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -28,11 +29,17 @@ async function refreshEntries(): Promise<void> {
   entries = await fs.readdir(".", { recursive: true });
 }
 
-// Picks a sensible default file to open: the first ".hcl" file found
-// (in practice always "main.hcl" for projects created via
-// ProjectState.svelte's createProjectWithMainFile), or `null` if the
-// project has no source files at all yet.
+// Picks a sensible default file to open: the `?file=` query param (used by
+// the modeling inspector's "Open documentation" button) wins when it names
+// a real file, else the first ".hcl" file found (in practice always
+// "main.hcl" for projects created via ProjectState.svelte's
+// createProjectWithMainFile), or `null` if the project has no source files
+// at all yet.
 function firstHclPath(): string | null {
+  const requested = page.url.searchParams.get("file");
+  if (requested !== null && entries.some((e) => e.isFile() && e.path === requested)) {
+    return requested;
+  }
   return entries.find((e) => e.isFile() && e.name.endsWith(".hcl"))?.path ??
     null;
 }
