@@ -4,9 +4,17 @@ import ToastContainer from "./ToastContainer.svelte";
 
 const STORY_TIMEOUT_MS = 3_600_000;
 
-function stateWith(message: string, level: ToastLevel): ToastState {
+function stateWithAll(): ToastState {
   const state = new ToastState();
-  state.show(message, level, STORY_TIMEOUT_MS);
+  const levels: Array<[string, ToastLevel]> = [
+    ["Diagram view loaded", "info"],
+    ["No detailed view for engine created", "warning"],
+    ["Could not save project", "error"],
+    ["Project saved", "success"],
+  ];
+  for (const [message, level] of levels) {
+    state.show(message, level, STORY_TIMEOUT_MS);
+  }
   return state;
 }
 
@@ -22,26 +30,8 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Info: Story = {
+export const AllLevels: Story = {
   args: {
-    state: stateWith("Diagram view loaded", "info"),
-  },
-};
-
-export const Warning: Story = {
-  args: {
-    state: stateWith("No detailed view for engine created", "warning"),
-  },
-};
-
-export const Error: Story = {
-  args: {
-    state: stateWith("Could not save project", "error"),
-  },
-};
-
-export const Success: Story = {
-  args: {
-    state: stateWith("Project saved", "success"),
+    state: stateWithAll(),
   },
 };
