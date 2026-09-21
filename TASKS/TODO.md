@@ -13,6 +13,82 @@ How to work on this file:
 
 ---
 
+## Task <N> - Treat documentation as first-class citizen
+
+1. Add a compiler warning when a component does not have documentation. Do not fix existing examples.
+2. When in modeling/ page, add a button "open documentation" to the inspector, which will either open existing documentation or create a new file under docs/ if none exists.
+3. When creating new projects, create a docs/ folder by default, same as you create diagrams/
+
+## Task <N> - System model - change `description` to `full_name`
+
+Thorough descriptions of the system were delegated to the `docs/` folder. Now,
+the `description` key no longer has much sense, I want to re-use it for stuff
+like full official names, expanding abbreviations and so on.
+
+- Change the spec to use `full_name` instead of `description`
+- Change it everywhere in the code
+
+## Task <N> - Persist the `Strictness` option in Web app
+
+The Strictness option, selectable in the NavBar is not persisted across reloads.
+Change it so it persists via localStorage.
+
+## Task <N> - Extend the annotation/notes system - Markdown
+
+Make it possible to write Markdown in notes and have it rendered in the diagram.
+When asked to implement, first assess feasiblity, as the diagrams shall still
+be rendered as SVG files. After exploring the codebase and assessing feasiblity,
+report your findings to the user and ask for directions/decisions.
+
+## Task <N> - Rename the diagrams/ folder to views/
+
+As in title - the current diagrams/ folder is not inlined with the whole idea of
+views, it is confusing. Modify all that's needed (SPEC, code, docs), so that the
+current `diagrams/` directory is changed to `views/`.
+
+## Task <N> - Allow for jumping into a component-specific view from Inventory
+
+When in the inventory/ subpage, with a component without a component-specific
+view (view named the same as the component itself), the application tells the
+user that the view of that component is not available. Add a button "Create a
+view for this component", which will create a new view (named the same as the
+component) and switch the user into the modeling subpage with that very view
+open.
+
+## Task <N> — Warn on view nodes outside the bound system (W017)
+
+Views are bound to one system (`view.system`, immutable in the Modeling UI),
+but the compiler currently accepts `node` paths from any system without a
+diagnostic (`W016` only checks global existence). The Modeling frontend hides
+such nodes (`+N hidden from other systems`), yet `rhizz check` stays silent.
+
+Definition of done:
+
+1. Add `SPEC/diagnostics/W017.md` following the warning file format
+   (`**Warning level:** Architectural.` as first line after the title —
+   `build.rs` fails the build otherwise and auto-generates
+   `DiagnosticCode::W017`).
+2. Extend view validation (`validate_view_nodes` in
+   `crates/rhizz-core/src/validate.rs`): for a known `view.system`, resolve
+   each node's component and emit `W017` when it belongs to a different
+   system (e.g. `view "overview" { system = "a" }` with
+   `node "b/comp"`). Only runs when the system is known (same gating as
+   `W016`); unknown node paths keep reporting `W016`, not `W017`.
+3. Decide + document the edge cases in `W017.md`:
+   - bare top-level definition labels (no system scope) — exempt, they are
+     global, not system members;
+   - the view's own system prefix (`"a"` / `"a/..."`) — clean, no warning;
+   - dedupe repeated offending paths (mirrors the `W016` `reported` set).
+4. Add the row to the warning-code mapping table in `SPEC/warning-levels.md`.
+5. Tests (red/green TDD, assert exact codes not counts):
+   - `W017` fires once per foreign path for a node from another system;
+   - no `W017` for own-system nodes, bare definition labels, or when the
+     view system is unknown/dangling (`E006` path);
+   - `W016` behavior unchanged.
+6. Validate with `just test`, `just lint`, `just build`, `just format`.
+
+---
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,

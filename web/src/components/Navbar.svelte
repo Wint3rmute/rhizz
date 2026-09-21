@@ -9,7 +9,6 @@ import {
 } from "../ThemeState.svelte";
 import {
   createProjectWithFiles,
-  getCurrentDiagnostics,
   getCurrentProject,
   getCurrentProjectId,
   getCurrentScore,
@@ -70,7 +69,6 @@ const NAV_LINKS = [
 let activeProjectId = $derived(getCurrentProjectId());
 let activeProject = $derived(getCurrentProject());
 let activeScore = $derived(getCurrentScore());
-let diagnostics = $derived(getCurrentDiagnostics());
 let warningLevel = $derived(getWarningLevel());
 
 // Plain FontAwesome question mark for the guided-tour button.
@@ -121,15 +119,6 @@ async function startTourFlow(): Promise<void> {
         : undefined}
 >
       Score: {activeScore.overall_percentage.toFixed(0)}%
-    </div>
-  {/if}
-  {#if diagnostics !== null}
-    <div
-  class="badge badge-outline {diagnostics.errors > 0
-        ? 'badge-error'
-        : 'badge-success'} text-xs"
->
-      {diagnostics.errors} errors · {diagnostics.warnings} warnings
     </div>
   {/if}
 {/snippet}

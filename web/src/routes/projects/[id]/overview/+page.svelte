@@ -1,7 +1,5 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import CompilationDiagnosticsOutline from "../../../../components/CompilationDiagnosticsOutline.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
@@ -23,13 +21,13 @@ $effect(() => {
 });
 
 // The project-wide warning preset (navbar select); reading it inside the
-// `$derived` compile below keeps the diagnostics panel reactive to it.
+// `$derived` compile below keeps the stats reactive to it.
+// Diagnostics live in the layout-level status bar.
 let warningLevel = $derived(getWarningLevel());
 
 let output = $derived.by(() => compile_system(sources, warningLevel));
 
 let model = $derived(output.model());
-let diagnostics = $derived(output.diagnostics());
 
 let components = $derived(model ? model.components() : []);
 let score = $derived(model ? model.score() : null);
@@ -92,37 +90,13 @@ function levelBadge(level: number): string {
 }
 </script>
 
-<div class="flex-1 w-full bg-base-100 overflow-y-auto">
-  <div
-    class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6"
-  >
-    <!-- Left sidebar -->
-    <aside
-      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
+<div class="flex-1 w-full bg-base-100 flex flex-col min-h-0">
+  <div class="flex-1 overflow-y-auto">
+    <div
+      class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6"
     >
-      <h3 class="font-semibold mb-3 text-base-content">Navigation</h3>
-      <ul class="space-y-2 text-sm text-base-content/70">
-        <li>
-          <a
-            href={resolve("/projects/[id]/code", { id: data.projectId })}
-            class="block hover:text-base-content"
-          >Code</a>
-        </li>
-        <li>
-          <a
-            href={resolve("/projects/[id]/modeling", { id: data.projectId })}
-            class="block hover:text-base-content"
-          >Modeling</a>
-        </li>
-        <li>
-          <a href={resolve("/projects", {})}
-            class="block hover:text-base-content">Projects</a>
-        </li>
-      </ul>
-    </aside>
-
-    <!-- Main dashboard -->
-    <main class="md:col-span-6 lg:col-span-8 flex flex-col gap-6">
+      <!-- Main dashboard -->
+      <main class="md:col-span-12 flex flex-col gap-6">
       {#if !model}
         <div class="card bg-base-200 shadow">
           <div class="card-body items-center text-center py-16">
@@ -138,8 +112,8 @@ function levelBadge(level: number): string {
               <div
                 class="alert alert-error alert-soft mt-4 text-left"
               >
-                {output.error_count()} compilation error(s) — check the
-                Diagnostics panel.
+                {output.error_count()} compilation error(s) — see the
+                status bar below.
               </div>
             {/if}
           </div>
@@ -280,12 +254,6 @@ function levelBadge(level: number): string {
         {/if}
       {/if}
     </main>
-
-    <!-- Right sidebar -->
-    <aside
-      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
-    >
-      <CompilationDiagnosticsOutline {diagnostics} />
-    </aside>
+    </div>
   </div>
 </div>

@@ -109,6 +109,7 @@ export default ts.config(
       "**/explore/Explore.stories.ts",
       "**/inventory/InventoryPage.stories.ts",
       "**/components/Navbar.stories.ts",
+      "**/components/DiagnosticsStatusBar.stories.ts",
       "**/vfs/compile.test.ts",
       "**/modeling/ComponentHierarchyTree.stories.ts",
       "**/modeling/DiagramPage.stories.ts",

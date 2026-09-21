@@ -10,11 +10,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
-import {
-  projectStore,
-  setCurrentDiagnostics,
-  setCurrentScore,
-} from "../../../../ProjectState.svelte";
+import { projectStore, setCurrentScore } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import {
   primaryHclPath,
@@ -26,9 +22,11 @@ import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
 import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
+import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
+import NewViewModal from "./NewViewModal.svelte";
 import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
 import {
   type ComponentData,
@@ -179,8 +177,8 @@ $effect(() => {
 });
 
 // The project-wide warning preset (navbar select). Reading it inside the
-// `$derived` compile below is what makes the navbar's warning count and the
-// diagnostics shown here react to a change of level.
+// `$derived` compile below is what makes the diagnostics shown here react
+// to a change of level.
 let warningLevel = $derived(getWarningLevel());
 
 let output = $derived.by(() => compile_system(sources, warningLevel));
@@ -263,6 +261,19 @@ let snapEnabled = $state(true);
 // not just the persistent toggle.
 let snapActive = $derived(snapEnabled && !isModifierHeld());
 
+// Center of the current viewport in world (SVG) coordinates — where newly
+// added nodes land when they have no remembered or explicitly requested
+// position, so they appear where the user is looking instead of a fixed
+// point that may be off-screen. Mirrors the annotation placement below.
+function viewportCenterBox(): { x: number; y: number } {
+  return {
+    x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom -
+      DEFAULT_NODE_WIDTH / 2,
+    y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom -
+      DEFAULT_NODE_HEIGHT / 2,
+  };
+}
+
 // Rounds `value` to the nearest multiple of snapGridSize, or returns it
 // unchanged when snapping is off. Falls back to the default grid size
 // rather than trusting the persisted value is still a valid, positive
@@ -325,6 +336,55 @@ let editingAnnotationObj = $derived(
 // canvas below simply has nothing placed on it.
 let selectedDiagramPath = $state<string | null>(null);
 let diagramEntries = $state<Dirent[]>([]);
+
+// The system this view is bound to. Immutable after creation — set once on
+// diagram load from the file's `view.system`, never edited via UI (delete +
+// recreate, or hand-edit in Code, to re-bind). `""` means unlinked/legacy.
+let selectedSystem = $state<string>("");
+
+// Effective system shown by this view: the file's bound system, falling back
+// to the first model system for legacy/unlinked views (`system == ""`).
+// Dangling views (bound system not in model) keep their bound label so the
+// file round-trips unchanged until fixed in Code or recreated.
+let effectiveSystem = $derived(selectedSystem || systems[0]?.label || "");
+// Arena index of the effective system in the current model, or -1.
+let selectedSystemIndex = $derived(
+  systems.findIndex((s) => s.label === effectiveSystem),
+);
+let isSystemDangling = $derived(
+  selectedDiagramPath !== null && selectedSystem !== "" && systems.length > 0 &&
+    systems.findIndex((s) => s.label === selectedSystem) === -1,
+);
+
+// Arena indices of components belonging to the effective system (transitive
+// via parent links). Used to filter canvas, explorer, and connections list.
+let systemComponentIndices = $derived.by(() => {
+  if (selectedSystemIndex === -1) return new SvelteSet<number>();
+  const out = new SvelteSet<number>();
+  components.forEach((_c, i) => {
+    if (componentInSystem(components, i, selectedSystemIndex)) out.add(i);
+  });
+  return out;
+});
+
+// Placed nodes whose component no longer belongs to this view's system
+// (legacy mixed diagrams). Hidden, never deleted — unchecking prunes them.
+let hiddenForeignCount = $derived.by(() => {
+  let n = 0;
+  for (const key of Object.keys(checked)) {
+    const index = keyToIndex.get(key);
+    if (index !== undefined && !systemComponentIndices.has(index)) n += 1;
+  }
+  return n;
+});
+
+// Connections sidebar, filtered to this view's system (both endpoints inside).
+let systemConnections = $derived.by(() => {
+  if (selectedSystemIndex === -1) return connections;
+  return connections.filter((c) =>
+    systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to)
+  );
+});
 
 let fullDiagramPath = $derived(
   selectedDiagramPath === null
@@ -416,7 +476,7 @@ $effect(() => {
         await writeDiagramLayoutFile(
           fs,
           `${DIAGRAM_LAYOUT_DIR}/main.hcl`,
-          emptyDiagramLayout(),
+          emptyDiagramLayout(systemName),
           systemName,
         );
         await refreshDiagramEntries();
@@ -461,6 +521,7 @@ $effect(() => {
     savedLayout = {};
     savedConnections = {};
     annotations = [];
+    selectedSystem = "";
     return;
   }
 
@@ -481,6 +542,7 @@ $effect(() => {
       savedLayout = { ...layout.checked };
       savedConnections = layout.connections ?? {};
       annotations = layout.annotations ?? [];
+      selectedSystem = layout.system ?? "";
     }
     diagramLayoutLoaded = true;
     // Frames the newly-opened diagram's content immediately, rather than
@@ -504,13 +566,17 @@ $effect(() => {
   // `checked`/`savedLayout`'s own top-level references, never to writes
   // into them.
   const snapshot: DiagramLayout = {
+    system: effectiveSystem,
     checked: $state.snapshot(checked),
     connections: $state.snapshot(savedConnections),
     annotations: $state.snapshot(annotations),
   };
+  // Subscribe to the effective system so legacy migration ("" -> first
+  // system) persists even before any canvas edit touches checked/etc.
+  void effectiveSystem;
   const path = fullDiagramPath;
   if (!diagramLayoutLoaded || path === null) return;
-  void writeDiagramLayoutFile(fs, path, snapshot, systems[0]?.label || "main");
+  void writeDiagramLayoutFile(fs, path, snapshot, effectiveSystem || "main");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -530,18 +596,45 @@ function joinDiagramPath(parentPath: string, name: string): string {
   return parentPath ? `${parentPath}/${name}` : name;
 }
 
-async function handleCreateDiagram(parentPath: string): Promise<void> {
-  const name = sanitizeDiagramSegmentName(
-    prompt("New diagram name?", "Untitled.hcl") ?? "",
-  );
+// New-view modal state. FileTree's "+ File" only supplies the parent folder;
+// the name + immutable system binding are collected in NewViewModal.
+let isNewViewModalOpen = $state(false);
+let newViewParentPath = $state("");
+
+function handleCreateDiagram(parentPath: string): void {
+  newViewParentPath = parentPath;
+  isNewViewModalOpen = true;
+}
+
+async function handleNewViewCreate(data: {
+  name: string;
+  system: string;
+}): Promise<void> {
+  isNewViewModalOpen = false;
+  const name = sanitizeDiagramSegmentName(data.name);
   if (name === null) return;
-  const path = joinDiagramPath(parentPath, name);
+  // Immutable view binding: chosen once here, never edited via UI afterwards
+  // (delete + recreate, or hand-edit in Code, to re-bind).
+  const systemChoice = data.system.trim() || systems[0]?.label || "main";
+  if (
+    systems.length > 0 && !systems.some((s) => s.label === systemChoice)
+  ) {
+    reportDiagramError(
+      new Error(
+        `Unknown system "${systemChoice}". Available: ${
+          systems.map((s) => s.label).join(", ")
+        }`,
+      ),
+    );
+    return;
+  }
+  const path = joinDiagramPath(newViewParentPath, name);
   try {
     await writeDiagramLayoutFile(
       fs,
       `${DIAGRAM_LAYOUT_DIR}/${path}`,
-      emptyDiagramLayout(),
-      systems[0]?.label || "main",
+      emptyDiagramLayout(systemChoice),
+      systemChoice,
     );
     await refreshDiagramEntries();
     selectedDiagramPath = path;
@@ -676,12 +769,13 @@ function toggleComponentChecked(index: number) {
   }
 
   // Restore the remembered layout if this component has been placed before
-  // (even if it was later unchecked), instead of always resetting to the
-  // default position.
+  // (even if it was later unchecked); otherwise land it at the viewport
+  // center so it appears where the user is looking.
   const remembered = savedLayout[getComponentKey(index)];
+  const fallback = viewportCenterBox();
   let box: Box = {
-    x: remembered?.x ?? 100,
-    y: remembered?.y ?? 100,
+    x: remembered?.x ?? fallback.x,
+    y: remembered?.y ?? fallback.y,
     width: remembered?.width ?? DEFAULT_NODE_WIDTH,
     height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
   };
@@ -1397,7 +1491,7 @@ function openCreateComponentModal(
     }
   }
   if (!targetParent) {
-    targetParent = systems[0]?.label || "main";
+    targetParent = effectiveSystem || systems[0]?.label || "main";
   }
 
   createModalPosition = pos;
@@ -1463,8 +1557,9 @@ async function handleModalCreateComponent(data: {
           "success",
         );
       }
-      const worldX = data.position ? snap(data.position.x) : 100;
-      const worldY = data.position ? snap(data.position.y) : 100;
+      const center = viewportCenterBox();
+      const worldX = data.position ? snap(data.position.x) : center.x;
+      const worldY = data.position ? snap(data.position.y) : center.y;
       checked[fullKey] = {
         x: worldX,
         y: worldY,
@@ -1502,13 +1597,8 @@ let componentData = $derived(componentDataByKey(model));
 $effect(() => {
   const sc = output.model()?.score();
   setCurrentScore(sc ? { overall_percentage: sc.overall_percentage } : null);
-  setCurrentDiagnostics({
-    errors: output.error_count(),
-    warnings: output.warning_count(),
-  });
   return () => {
     setCurrentScore(null);
-    setCurrentDiagnostics(null);
   };
 });
 
@@ -2317,10 +2407,14 @@ async function handleDeleteSelectedConnection(
   );
 }
 
-// Only connections where both endpoints are currently on the canvas.
+// Only connections where both endpoints are currently on the canvas AND in
+// this view's bound system.
 let visibleConnections = $derived(
   computeVisibleConnections(
-    connections.map((conn) => {
+    connections.filter((c) =>
+      selectedSystemIndex === -1 ||
+      (systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to))
+    ).map((conn) => {
       const entry: {
         from: number;
         to: number;
@@ -2350,7 +2444,10 @@ let renderOrder = $derived(
   computeRenderOrder(
     Object.keys(checked)
       .map((key) => keyToIndex.get(key))
-      .filter((index): index is number => index !== undefined),
+      .filter((index): index is number => index !== undefined)
+      .filter((index) =>
+        selectedSystemIndex === -1 || systemComponentIndices.has(index)
+      ),
     parentOf,
   ),
 );
@@ -3373,6 +3470,20 @@ $effect(() => {
     class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300 flex flex-col justify-between gap-4"
   >
     <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+      {#if selectedDiagramPath !== null}
+        <div
+          class="font-semibold text-sm mb-1 text-base-content uppercase tracking-wide"
+          data-testid="diagram-system-label"
+          title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind."
+        >
+          {#if isSystemDangling}
+            <span class="text-warning">system: {selectedSystem} (missing)</span>
+          {:else if effectiveSystem !== ""}
+            system: {effectiveSystem}
+          {/if}
+        </div>
+      {/if}
+
       <h3
         class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
       >
@@ -3387,14 +3498,22 @@ $effect(() => {
         <p class="text-base-content/50 text-sm">
           No components found.<br />Open the editor and define some systems.
         </p>
+      {:else if isSystemDangling}
+        <p class="text-warning text-sm" data-testid="dangling-system-hint">
+          Bound system "{selectedSystem}" not found.<br />Fix <span class="font-mono">system =</span> in Code, or delete and recreate this diagram.
+        </p>
       {:else}
         <ComponentHierarchyTree
           {systems}
           {components}
           {selected}
+          filterSystemLabel={effectiveSystem}
           isChecked={(index) => checkedIndices.has(index)}
           onToggleChecked={(index) => toggleComponentChecked(index)}
         />
+        {#if hiddenForeignCount > 0}
+          <p class="text-xs text-warning mt-2">+{hiddenForeignCount} placed node{hiddenForeignCount === 1 ? "" : "s"} from other systems hidden.</p>
+        {/if}
       {/if}
 
         <div class="divider"></div>
@@ -3432,7 +3551,7 @@ $effect(() => {
       </h3>
 
       <ul class="space-y-1">
-        {#each connections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
+        {#each systemConnections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
           <li class="flex items-center gap-2 text-sm truncate" title={connection.label}>
             {connection.label}
           </li>
@@ -3458,6 +3577,14 @@ $effect(() => {
     </div>
   </aside>
 </div>
+
+<NewViewModal
+  isOpen={isNewViewModalOpen}
+  systems={systems}
+  defaultSystem={systems[0]?.label || "main"}
+  oncreate={(data) => void handleNewViewCreate(data).catch(reportDiagramError)}
+  onclose={() => (isNewViewModalOpen = false)}
+/>
 
 <CreateComponentModal
   isOpen={isCreateModalOpen}

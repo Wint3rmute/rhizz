@@ -83,6 +83,7 @@ a generated-by-hand summary. Change the level in the diagnostic file.
 | W014 | Undefined protocol reference | `business` |
 | W015 | Unexpected block type ignored | `business` |
 | W016 | View node references unknown component | `architectural` |
+| W017 | View node outside the view's system | `architectural` |
 
 `W000` is emitted by frontends rather than the compiler; its declared level is
 therefore inert and exists only to satisfy the format.

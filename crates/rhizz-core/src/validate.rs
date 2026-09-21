@@ -267,6 +267,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
 /// - **E006** — the view's `system` must name a defined system.
 /// - **W016** — every `node` path must resolve to a known component (the
 ///   structurally-stable keys the diagram editor persists).
+/// - **W017** — every `node` path must belong to the view's own system.
 #[must_use]
 pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
@@ -339,7 +340,8 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
 }
 
 /// Emit **W016** for `node` blocks whose component path does not resolve to a
-/// real component.
+/// real component, and **W017** for paths that resolve to a component placed
+/// in a different system than the view's own.
 fn validate_view_nodes(
     model: &Model,
     view: &ViewDefinition,
@@ -350,20 +352,58 @@ fn validate_view_nodes(
     let keys = model.component_keys();
     let mut reported: HashSet<&str> = HashSet::new();
     for node in &view.nodes {
-        if keys.contains(&node.component) {
+        let index = keys.iter().position(|key| key == &node.component);
+        let Some(index) = index else {
+            if !reported.insert(node.component.as_str()) {
+                continue;
+            }
+            diagnostics.push(view_diagnostic(
+                DiagnosticCode::W016,
+                file,
+                format!(
+                    "{filename}: view '{}' node '{}' does not reference a known component",
+                    view.label, node.component
+                ),
+            ));
+            continue;
+        };
+        // Bare top-level definition labels (parent-less) are global: they
+        // belong to no system and are exempt from the membership check.
+        let Some(owner) = system_label_of(model, index) else {
+            continue;
+        };
+        if owner == view.system {
             continue;
         }
         if !reported.insert(node.component.as_str()) {
             continue;
         }
         diagnostics.push(view_diagnostic(
-            DiagnosticCode::W016,
+            DiagnosticCode::W017,
             file,
             format!(
-                "{filename}: view '{}' node '{}' does not reference a known component",
-                view.label, node.component
+                "{filename}: view '{}' node '{}' belongs to system '{}', not the view's system '{}'",
+                view.label, node.component, owner, view.system
             ),
         ));
+    }
+}
+
+/// Resolve the owning system label of the component at `index` by walking
+/// `parent` links to the enclosing system. Returns `None` for top-level
+/// reusable definitions, which are placed in no system.
+fn system_label_of(model: &Model, index: usize) -> Option<&str> {
+    let mut current = model.components.get(index)?;
+    loop {
+        match current.parent {
+            None => return None,
+            Some(ComponentParent::System(system)) => {
+                return model.systems.get(system.0).map(|s| s.label.as_str());
+            }
+            Some(ComponentParent::Component(parent)) => {
+                current = model.components.get(parent.0)?;
+            }
+        }
     }
 }
 
@@ -1066,14 +1106,76 @@ system "other" {
     }
 
     #[test]
-    fn validate_view_node_in_other_system_resolves() {
-        // Live example: drone's `main` view targets `ground-control` but also
-        // places nodes from `quadcopter`. A node is valid if it names any real
-        // component key, not only one inside the view's own system.
+    fn validate_view_node_in_other_system_emits_w017() {
+        // A node naming a real component outside the view's own system is a
+        // presentation smell (one view shows one system), not a hard error.
         let model = model_with_components();
         let view = view_with_nodes("overview", "computer-setup", &["other/monitor"]);
         let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
-        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+        let w017: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W017)
+            .collect();
+        assert_eq!(w017.len(), 1, "expected one W017, got {diags:?}");
+        assert!(
+            w017[0].message.contains("other/monitor"),
+            "message must name the bad path: {}",
+            w017[0].message
+        );
+        assert!(
+            w017[0].message.contains("other") && w017[0].message.contains("computer-setup"),
+            "message must name both systems: {}",
+            w017[0].message
+        );
+        assert!(
+            w016_paths(&diags).is_empty(),
+            "a known foreign path is W017, not W016, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn validate_view_repeated_foreign_node_emits_one_w017() {
+        let model = model_with_components();
+        let view = view_with_nodes(
+            "overview",
+            "computer-setup",
+            &["other/monitor", "other/monitor"],
+        );
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert_eq!(
+            diags
+                .iter()
+                .filter(|d| d.code == DiagnosticCode::W017)
+                .count(),
+            1,
+            "expected one W017, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn validate_view_unknown_node_emits_no_w017() {
+        let model = model_with_components();
+        let view = view_with_nodes("overview", "computer-setup", &["computer-setup/ghost"]);
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert!(
+            diags.iter().all(|d| d.code != DiagnosticCode::W017),
+            "unknown paths are W016-only, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn validate_view_foreign_node_skipped_when_system_unknown() {
+        let model = model_with_components();
+        let view = view_with_nodes("overview", "nope", &["other/monitor"]);
+        let diags = validate_view(&model, &[view], "diagrams/overview.hcl");
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E006),
+            "expected E006, got {diags:?}"
+        );
+        assert!(
+            diags.iter().all(|d| d.code != DiagnosticCode::W017),
+            "node checks must be skipped when the system is unknown, got {diags:?}"
+        );
     }
 
     #[test]
