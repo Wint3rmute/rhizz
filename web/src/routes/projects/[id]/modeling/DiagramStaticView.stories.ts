@@ -101,7 +101,8 @@ export const Empty: Story = {
 
 // The pipeline with free-standing view annotations rendered at absolute
 // canvas positions — including a multi-line annotation (newline in text).
-// SVG collapses "\n" inside <text>, so each line must be its own <tspan>.
+// Each Markdown line is its own outer <tspan>; styled runs nest one level
+// deeper, so the two lines share a grandparent <text>.
 export const WithAnnotations: Story = {
   args: {
     components: pipelineComponents,
@@ -115,12 +116,15 @@ export const WithAnnotations: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // The multi-line annotation renders one <tspan> per line.
+    // The multi-line annotation renders one outer <tspan> per line, with
+    // the text in a nested run tspan.
     const firstLine = await canvas.findByText("Processed here");
     const secondLine = await canvas.findByText("(2 workers)");
     await expect(firstLine.tagName.toLowerCase()).toBe("tspan");
     await expect(secondLine.tagName.toLowerCase()).toBe("tspan");
-    await expect(firstLine.parentElement).toBe(secondLine.parentElement);
+    await expect(firstLine.parentElement?.parentElement).toBe(
+      secondLine.parentElement?.parentElement,
+    );
   },
 };
 
@@ -143,8 +147,10 @@ export const WithMarkdownAnnotations: Story = {
     // Heading + bold body render as text runs.
     await canvas.findByText("Ingest path");
     await canvas.findByText("raw");
-    // List bullets, inline code and link labels render.
-    await canvas.findByText("•");
+    // List bullets render as a "• " prefix run (separate tspan from the
+    // item text, so assert via full text content, not findByText).
+    await canvas.findByText("fast");
+    await expect(canvasElement.textContent).toContain("•");
     await canvas.findByText("durable");
     await canvas.findByText("docs");
     // Quote + code fence render.
