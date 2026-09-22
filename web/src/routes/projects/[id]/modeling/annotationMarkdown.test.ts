@@ -69,8 +69,10 @@ describe("annotationSvgLines", () => {
   it("requires a blank line for a new paragraph (standard markdown)", () => {
     const joined = annotationSvgLines("line1\nline2");
     expect(joined.map(annotationSvgLineText).join("\n")).toBe("line1\nline2");
+    // Blank line lexes as paragraph/space/paragraph → separator row kept
+    // for vertical rhythm (same as the legacy plain-text renderer).
     const split = annotationSvgLines("para one\n\npara two");
-    expect(split).toHaveLength(2);
+    expect(split.map(annotationSvgLineText)).toEqual(["para one", "", "para two"]);
   });
 
   it("never throws on hostile input", () => {
