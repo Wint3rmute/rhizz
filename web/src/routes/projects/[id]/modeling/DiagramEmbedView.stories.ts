@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, within } from "storybook/test";
 import DiagramEmbedView from "./DiagramEmbedView.svelte";
 import type {
   DiagramStaticBox,
@@ -61,16 +62,25 @@ export const Selected: Story = {
 // Annotations far outside the node cluster: the zoom-to-fill bounds must
 // extend to cover them (and they must actually be rendered), mirroring
 // DiagramStaticView's fitted viewport behavior in the interactive embed.
+// The far-above note carries Markdown (**bold**) so this storybook also
+// exercises styled annotation runs.
 export const WithDistantAnnotations: Story = {
   args: {
     components: sampleComponents,
     connections: sampleConnections,
     boxes: sampleBoxes,
     annotations: [
-      { text: "far above", x: 300, y: -400, scale: 2 },
+      { text: "**far above**", x: 300, y: -400, scale: 2 },
       { text: "far below", x: 300, y: 700 },
     ],
     projectId: "demo-project",
     diagramPath: "overview.hcl",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bold = await canvas.findByText("far above");
+    await expect(bold.getAttribute("font-weight")).toBe("bold");
+    await expect(canvas.queryByText("**far above**")).toBeNull();
+    await canvas.findByText("far below");
   },
 };
