@@ -124,7 +124,7 @@ export interface ExampleFile {
 export interface ExampleProject {
   id: string;
   name: string;
-  full_name: string;
+  description: string;
   files: ExampleFile[];
 }
 

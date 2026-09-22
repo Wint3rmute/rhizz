@@ -14,11 +14,7 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
     if comp.leaf {
         // Leaf component: complete if it has a full_name, partial otherwise.
         // (ports are optional detail — a leaf with full_name and no ports is Complete)
-        if comp.full_name.is_empty() {
-            0.5
-        } else {
-            1.0
-        }
+        if comp.full_name.is_empty() { 0.5 } else { 1.0 }
     } else if comp.children.is_empty() {
         // Non-leaf, no children yet -> incomplete.
         0.0

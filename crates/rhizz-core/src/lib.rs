@@ -922,7 +922,7 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
 
     /// Raises one warning per level: W005 (business, self-connection), W001
     /// (architectural, non-leaf definition without children) and W004
-    /// (component, missing full_name).
+    /// (component, missing `full_name`).
     const MIXED_WARNINGS: &str = "component \"non-leaf\" {}\n\
 system \"s\" {\n\
   instance \"a\" { source = \"non-leaf\" }\n\
