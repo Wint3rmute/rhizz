@@ -2,106 +2,8 @@
   "entries": [
     {
       "chapter": "01_basics.md",
-      "hcl": "component \"tire\" {\n  description = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  description = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
-      "input_sha256": "7d56d605d17bad608fad2d09c1bfa6f2553824010a3efd42e42a8fb7ab0997c5",
-      "level": "architectural",
-      "output": {
-        "errors": [],
-        "score": {
-          "components": {
-            "complete": 7,
-            "total": 7
-          },
-          "connections": {
-            "complete": 0,
-            "total": 0
-          },
-          "messages": {
-            "complete": 0,
-            "total": 0
-          },
-          "overall": {
-            "complete": 7,
-            "percent": 100.0,
-            "total": 7
-          },
-          "ports": {
-            "complete": 0,
-            "total": 0
-          },
-          "system": ""
-        },
-        "warnings": [
-          {
-            "code": "W003",
-            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
-          }
-        ]
-      }
-    },
-    {
-      "chapter": "01_basics.md",
-      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
-      "input_sha256": "c6df9297fcd60ca8df1f49594b62ba4996109c49612ea0d4d35f3af9382b741a",
-      "level": "architectural",
-      "output": {
-        "errors": [],
-        "score": {
-          "components": {
-            "complete": 3,
-            "total": 3
-          },
-          "connections": {
-            "complete": 0,
-            "total": 0
-          },
-          "messages": {
-            "complete": 0,
-            "total": 0
-          },
-          "overall": {
-            "complete": 3,
-            "percent": 100.0,
-            "total": 3
-          },
-          "ports": {
-            "complete": 0,
-            "total": 0
-          },
-          "system": ""
-        },
-        "warnings": [
-          {
-            "code": "W003",
-            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
-          }
-        ]
-      }
-    },
-    {
-      "chapter": "01_basics.md",
-      "hcl": "component \"tire\" {\n  description = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  description = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\ncomponent \"fork\" {\n  description = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  description = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  description = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    description = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    description = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    description = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
-      "input_sha256": "d608f4bbe5322497d8eeca5659feaa80fc290ec8349d3c3b3afa79a5bb2f874c",
+      "hcl": "component \"tire\" {\n  full_name = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  full_name = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\ncomponent \"fork\" {\n  full_name = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  full_name = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  full_name = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    full_name = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    full_name = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    full_name = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
+      "input_sha256": "02d93e57014e0170af1abc6fd5fd34c5470ac6873a412219428514b15a8bfee0",
       "level": "architectural",
       "output": {
         "errors": [],
@@ -147,8 +49,8 @@
     },
     {
       "chapter": "01_basics.md",
-      "hcl": "component \"wheel\" {\n  description = \"A spinning round object\"\n}",
-      "input_sha256": "e60a19d0d7a42325a736f04e05be52a9d526b2796a98fe1af3a3dfc9803c7204",
+      "hcl": "component \"wheel\" {\n  full_name = \"A spinning round object\"\n}",
+      "input_sha256": "50ee71ff8253a3cd8f0eb663fddb091056fad96693381349452246ddabbdc3a6",
       "level": "architectural",
       "output": {
         "errors": [],
@@ -186,8 +88,51 @@
     },
     {
       "chapter": "01_basics.md",
-      "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}\n\nsystem \"also-nothing\" {\n  description = \"Nothingness 2.0: Electric Bongaloo\"\n}",
-      "input_sha256": "ea62c8ea8a728e4fae990f0287978800f2d93189bad9eeee612d385193777b5c",
+      "hcl": "component \"wheel\" {\n  full_name = \"A spinning round object\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  full_name = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
+      "input_sha256": "a6ddcc421dd5beef7727c32b4b2441b59e6c0574eec6bcfaaf9bc567d7b83e05",
+      "level": "architectural",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 3,
+            "total": 3
+          },
+          "connections": {
+            "complete": 0,
+            "total": 0
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 3,
+            "percent": 100.0,
+            "total": 3
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "01_basics.md",
+      "hcl": "system \"nothing\" {\n  full_name = \"an empty system\"\n}\n\nsystem \"also-nothing\" {\n  full_name = \"Nothingness 2.0: Electric Bongaloo\"\n}",
+      "input_sha256": "c473870b58787f96632230e2ddeebc6208ad3a36492838fb4f2f21a05e4aa128",
       "level": "component",
       "output": {
         "errors": [],
@@ -220,8 +165,63 @@
     },
     {
       "chapter": "01_basics.md",
-      "hcl": "system \"nothing\" {\n  description = \"an empty system\"\n}",
-      "input_sha256": "fa10bcd472f8d57c7e8b5444c160fc7f8f73a0d0296583dfdaa0a1905243289c",
+      "hcl": "component \"tire\" {\n  full_name = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  full_name = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\nsystem \"bicycle\" {\n  full_name = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n}",
+      "input_sha256": "d5ea982502899ed3b0fccdedb881151670991f7d29849ff52c2c3af1e5287b9e",
+      "level": "architectural",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 7,
+            "total": 7
+          },
+          "connections": {
+            "complete": 0,
+            "total": 0
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 7,
+            "percent": 100.0,
+            "total": 7
+          },
+          "ports": {
+            "complete": 0,
+            "total": 0
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "01_basics.md",
+      "hcl": "system \"nothing\" {\n  full_name = \"an empty system\"\n}",
+      "input_sha256": "ecc1e8933c6245be77e34e62894183d34801bdc4cb9cbca721830015e1cb67c4",
       "level": "component",
       "output": {
         "errors": [],
@@ -254,8 +254,8 @@
     },
     {
       "chapter": "03_connections_ports.md",
-      "hcl": "component \"computer\" {\n  description = \"Personal Computer (PC)\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\ncomponent \"mouse\" {\n  description = \"Computer Mouse\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\nsystem \"work-computer\" {\n  description = \"My work computer\"\n  instance \"computer\" { source = \"computer\" }\n  instance \"mouse\" { source = \"mouse\" }\n\n  connection \"mouse-to-computer\" {\n    description = \"Mouse connected to the PC by a USB-C cable\"\n    from = \"computer/usb-c\"\n    to = \"mouse/usb-c\"\n  }\n}",
-      "input_sha256": "630dc0355ff1cf2008b550835b8d88ce7fb4e422429b6099d34d41e7f3e63048",
+      "hcl": "component \"computer\" {\n  full_name = \"Personal Computer (PC)\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\ncomponent \"mouse\" {\n  full_name = \"Computer Mouse\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\nsystem \"work-computer\" {\n  full_name = \"My work computer\"\n  instance \"computer\" { source = \"computer\" }\n  instance \"mouse\" { source = \"mouse\" }\n\n  connection \"mouse-to-computer\" {\n    full_name = \"Mouse connected to the PC by a USB-C cable\"\n    from = \"computer/usb-c\"\n    to = \"mouse/usb-c\"\n  }\n}",
+      "input_sha256": "6d31856fbba069c9fb6f9e2daeb6b0a3c5b38d23bb50199c5d98aa4c0b815c82",
       "level": "architectural",
       "output": {
         "errors": [],
@@ -288,8 +288,8 @@
     },
     {
       "chapter": "03_connections_ports.md",
-      "hcl": "component \"server\" {\n  description = \"Server in the cloud\"\n  leaf = true\n}\n\ncomponent \"client\" {\n  description = \"Client's computer\"\n  leaf = true\n}\n\nsystem \"banking-application\" {\n  description = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    description = \"REST API with OAuth2\"\n    from = \"server\"\n    to = \"client\"\n  }\n}",
-      "input_sha256": "c1426e020bdd5ab8e52b3cf3171956f7737f8aa16aeea57fc80b40641ff8b2fc",
+      "hcl": "component \"server\" {\n  full_name = \"Server in the cloud\"\n  leaf = true\n}\n\ncomponent \"client\" {\n  full_name = \"Client's computer\"\n  leaf = true\n}\n\nsystem \"banking-application\" {\n  full_name = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    full_name = \"REST API with OAuth2\"\n    from = \"server\"\n    to = \"client\"\n  }\n}",
+      "input_sha256": "c63e9940ef24c65947997e768ba9f75a5a63b18001bd039db01dd9aa9899642e",
       "level": "architectural",
       "output": {
         "errors": [],
@@ -322,8 +322,8 @@
     },
     {
       "chapter": "04_warnings_errors.md",
-      "hcl": "protocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  description = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\ncomponent \"controller\" {\n  leaf = true\n\n  port \"uart\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  description = \"A rough first sketch\"\n\n  instance \"controller\" {\n    source = \"controller\"\n  }\n\n  instance \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
-      "input_sha256": "21cd28baaf7d6a4632685acd44c54bee6a67513ed45e3c64db1c95beb931f63f",
+      "hcl": "protocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  full_name = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\ncomponent \"controller\" {\n  leaf = true\n\n  port \"uart\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  full_name = \"A rough first sketch\"\n\n  instance \"controller\" {\n    source = \"controller\"\n  }\n\n  instance \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
+      "input_sha256": "68f0de96b196262d0f9ec810adf9fa07a4276f01ffcf4802630d14e6a5b54534",
       "level": "component",
       "output": {
         "errors": [],
@@ -354,11 +354,11 @@
         "warnings": [
           {
             "code": "W004",
-            "message": "component 'controller' is missing a description"
+            "message": "component 'controller' is missing a full_name"
           },
           {
             "code": "W004",
-            "message": "connection 'link' is missing a description"
+            "message": "connection 'link' is missing a full_name"
           },
           {
             "code": "W011",
@@ -383,14 +383,14 @@
       "files": [
         {
           "path": "system.hcl",
-          "sha256": "5fec2bca183aa7ad5c25c9f5aaa097c0f3394ddc27556497288da60dc318ac10"
+          "sha256": "7a8d9ccbc34a7ec1c508694b2115cad5b4f1835112934453296a1efd72063ad3"
         },
         {
           "path": "views/main.hcl",
           "sha256": "fa324ce5491316606c4d3ae4740265cb3c93c996db78b78bc29af3be37a6cb74"
         }
       ],
-      "input_sha256": "929cca823fe29e6eb0398184210d47d1154f1e96eb9ac113e0c940ce10e0ed11",
+      "input_sha256": "83f5bf2e4e4c06b3a9920b6c91ed180720bdd11cf74161d8ad012e52250ac786",
       "output": {
         "errors": [],
         "score": {
@@ -440,7 +440,7 @@
       "files": [
         {
           "path": "system.hcl",
-          "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
+          "sha256": "50cb65dafe320c959dda2d4d72afc7c3760971c92a904b64e41f924c6288326b"
         },
         {
           "path": "views/overview.hcl",
@@ -451,7 +451,7 @@
           "sha256": "296f54542669615288b3e3247c29a2549878f09f293bf041331bd360f2589dcf"
         }
       ],
-      "input_sha256": "d1b0ade2cf52d4f43ad71c228ee40c0032b97545c1260d00b9bff53bb3cb904e",
+      "input_sha256": "52784e46bf2adc9284b8a1109acfbbb18e20d9db3907aef23002618e610e60f3",
       "output": {
         "errors": [],
         "score": {
@@ -488,14 +488,14 @@
       "files": [
         {
           "path": "system.hcl",
-          "sha256": "e3844f505895a0ed9e0055bd2201c2bab8147a6d358ef285c89262ff0545c45a"
+          "sha256": "50cb65dafe320c959dda2d4d72afc7c3760971c92a904b64e41f924c6288326b"
         },
         {
           "path": "views/overview.hcl",
           "sha256": "fd14f276fbdb6faa4d72532432cadfdedb42c471a11ab65fd13c2d9a0766a55b"
         }
       ],
-      "input_sha256": "f00989a57f20c2e0aa1eedbaa644800b8db826ba30ae65c422bace3c0aac6a7b",
+      "input_sha256": "c86fc8ea48fceca08888e4f91f5a38c28763c64e43781a32e7438f74cb4e4118",
       "output": {
         "errors": [],
         "score": {

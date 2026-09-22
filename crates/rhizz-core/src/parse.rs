@@ -1214,10 +1214,7 @@ mod tests {
         assert_eq!(raw.components.len(), 1);
         let comp = &raw.components[0];
         assert_eq!(comp.label, "shared-comp");
-        assert_eq!(
-            comp.inner.full_name.as_deref(),
-            Some("top-level component")
-        );
+        assert_eq!(comp.inner.full_name.as_deref(), Some("top-level component"));
         assert_eq!(comp.inner.ports.len(), 1);
         assert_eq!(comp.inner.ports[0].label, "p1");
     }
