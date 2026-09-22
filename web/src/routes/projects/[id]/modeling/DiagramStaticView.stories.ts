@@ -138,7 +138,11 @@ export const WithMarkdownAnnotations: Story = {
     boxes: pipelineBoxes,
     annotations: [
       { text: "# Ingest path\n\nCarries **raw** events", x: 10, y: 10 },
-      { text: "- fast\n- `durable`\n- [docs](https://example.com)", x: 230, y: 140 },
+      {
+        text: "- fast\n- `durable`\n- [docs](https://example.com)",
+        x: 230,
+        y: 140,
+      },
       { text: "> watch the lag\n\n```\nqps > 9000\n```", x: 200, y: 260 },
     ],
   },
