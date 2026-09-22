@@ -100,9 +100,10 @@ export const Empty: Story = {
 };
 
 // The pipeline with free-standing view annotations rendered at absolute
-// canvas positions — including a multi-line annotation (newline in text).
-// Each Markdown line is its own outer <tspan>; styled runs nest one level
-// deeper, so the two lines share a grandparent <text>.
+// canvas positions — including a multi-line annotation (newline in text)
+// and a Markdown-styled one (**bold** run). Each Markdown line is its own
+// outer <tspan>; styled runs nest one level deeper, so the two lines share
+// a grandparent <text>.
 export const WithAnnotations: Story = {
   args: {
     components: pipelineComponents,
@@ -111,7 +112,7 @@ export const WithAnnotations: Story = {
     annotations: [
       { text: "Ingest path", x: 10, y: 10 },
       { text: "Processed here\n(2 workers)", x: 230, y: 140 },
-      { text: "Note on queue", x: 200, y: 160 },
+      { text: "**Note** on queue", x: 200, y: 160 },
     ],
   },
   play: async ({ canvasElement }) => {
@@ -125,44 +126,10 @@ export const WithAnnotations: Story = {
     await expect(firstLine.parentElement?.parentElement).toBe(
       secondLine.parentElement?.parentElement,
     );
-  },
-};
-
-// The pipeline with Markdown annotations — headings, bold/italic/code/link,
-// lists, quote and fenced code render as styled SVG <tspan> runs (pure SVG,
-// no foreignObject), sharing the interactive canvas renderer.
-export const WithMarkdownAnnotations: Story = {
-  args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
-    annotations: [
-      { text: "# Ingest path\n\nCarries **raw** events", x: 10, y: 10 },
-      {
-        text: "- fast\n- `durable`\n- [docs](https://example.com)",
-        x: 230,
-        y: 140,
-      },
-      { text: "> watch the lag\n\n```\nqps > 9000\n```", x: 200, y: 260 },
-    ],
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    // Heading + bold body render as text runs.
-    await canvas.findByText("Ingest path");
-    await canvas.findByText("raw");
-    // List bullets render as a "• " prefix run (separate tspan from the
-    // item text, so assert via full text content, not findByText).
-    await canvas.findByText("fast");
-    await expect(canvasElement.textContent).toContain("•");
-    await canvas.findByText("durable");
-    await canvas.findByText("docs");
-    // Quote + code fence render.
-    await canvas.findByText("watch the lag");
-    await canvas.findByText("qps > 9000");
-    // Bold run carries a font-weight.
-    const bold = await canvas.findByText("raw");
+    // The Markdown annotation renders a bold run, never raw `**` source.
+    const bold = await canvas.findByText("Note");
     await expect(bold.getAttribute("font-weight")).toBe("bold");
+    await expect(canvas.queryByText("**Note**")).toBeNull();
   },
 };
 

@@ -87,7 +87,7 @@ system "demo" {
   annotation {
     x    = 80
     y    = 40
-    text = "Book demo: two components, one connection"
+    text = "Book demo: **two components**, one connection"
   }
 }
 `,
@@ -127,7 +127,8 @@ async function findCodeWith(
   });
 }
 
-// The fallback demo project: diagram tab with two placed nodes.
+// The fallback demo project: diagram tab with two placed nodes (+ a
+// Markdown-styled annotation rendered as a bold run, never raw `**`).
 export const DiagramTab: Story = {
   args: {
     files: SAMPLE_FILES,
@@ -136,29 +137,6 @@ export const DiagramTab: Story = {
     const canvas = within(canvasElement);
     await canvas.findByText("sensor");
     await canvas.findByText("hub");
-  },
-};
-
-// Same diagram but the view annotation carries Markdown: the book embed
-// renders styled runs (bold), never the raw `**` source.
-const markdownFiles: BookPayloadFile[] = SAMPLE_FILES.map((file) =>
-  file.path === "views/main.hcl"
-    ? {
-      path: file.path,
-      content: file.content.replace(
-        'text = "Book demo: two components, one connection"',
-        'text = "Book demo: **two components**, one connection"',
-      ),
-    }
-    : file
-);
-
-export const MarkdownAnnotation: Story = {
-  args: {
-    files: markdownFiles,
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
     const bold = await canvas.findByText("two components");
     await expect(bold.getAttribute("font-weight")).toBe("bold");
     await expect(canvas.queryByText("**two components**")).toBeNull();
