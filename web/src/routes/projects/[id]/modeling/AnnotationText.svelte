@@ -30,7 +30,6 @@ let {
 
 const lines = $derived(annotationSvgLines(text));
 </script>
-</script>
 
 <text
   {x}
