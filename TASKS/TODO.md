@@ -14,15 +14,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - System model - change `description` to `full_name`
-
-Thorough descriptions of the system were delegated to the `docs/` folder. Now,
-the `description` key no longer has much sense, I want to re-use it for stuff
-like full official names, expanding abbreviations and so on.
-
-- Change the spec to use `full_name` instead of `description`
-- Change it everywhere in the code
-
 ## Task <N> - Extend the annotation/notes system - Markdown
 
 Make it possible to write Markdown in notes and have it rendered in the diagram.

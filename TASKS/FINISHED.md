@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — System model - change `description` to `full_name`
+
+Hard rename, no legacy fallback: `full_name` is now the only recognized HCL
+attribute for full official names (expanding abbreviations). Old `description`
+keys fail parsing with E000 (`unknown field 'description', expected 'full_name'`).
+
+- **Core** (`rhizz-core`): `Raw*` + `*Attrs` + resolved `Model` fields renamed
+  (`parse.rs`, `model.rs`, `resolve.rs`, `serialize.rs` incl. views,
+  `validate.rs` W004, `score.rs`, `mutation.rs` op/patch JSON, `lib.rs`,
+  `cli.rs`/`book` fixtures, proptest + regression seeds). W004 retitled to
+  Missing `full_name` with `is missing a full_name` messages; scoring
+  (leaf-complete on `full_name`) unchanged semantically.
+- **WASM** (`rhizz-wasm`): `ComponentJS`/`PortJS`/`ProtocolJS.full_name()`
+  getters; `ExampleProject.description` metadata deliberately unchanged, as are
+  tour/onboarding copy and `actionLog` prose.
+- **Web**: `modelView`, `applyMutation`, `actionLog`, `emptyProject`,
+  modeling (`NodeInspector` Full name field, `CreateComponentModal`,
+  `persistence`, `+page`), inventory (`inventory.ts`, cards, detail pane
+  Full name tab), overview, explore/book stories, HCL highlight + payload
+  tests, W004 story messages. UI labels use "Full name" with `full_name`
+  code identifiers preserved.
+- **Spec/docs/examples/book**: `SPEC.md`, `models.md`, `frontend.md`,
+  `warning-levels.md`, all `SPEC/diagnostics/*.md` HCL snippets, W004/W018
+  prose, `examples/*/system.hcl` + `views/*.hcl` + READMEs,
+  `book/src/**/*.md|.hcl`, `audit/architecture.md`. `book/book.lock`
+  regenerated (hash + W004 message churn only).
+- **Validation**: full `just test` (cargo + 612 web + 19 e2e), `just lint`,
+  `just build`, `just format`, `just book` green. Verified red/green:
+  `full_name` compiles, legacy `description` refuses with E000.
+
+---
+
 ## Task — Rename the diagrams/ folder to views/
 
 Hard rename, no legacy fallback: `views/` is now the only recognized view
