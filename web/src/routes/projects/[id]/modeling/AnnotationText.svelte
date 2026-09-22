@@ -1,3 +1,4 @@
+<script lang="ts">
 // One annotation's Markdown text as SVG <text>/<tspan> runs (pure SVG, no
 // foreignObject). Shared by the interactive canvas (+page.svelte, both the
 // idle and the in-editing states) and DiagramElements (static/embed/book),
@@ -28,6 +29,7 @@ let {
 } = $props();
 
 const lines = $derived(annotationSvgLines(text));
+</script>
 </script>
 
 <text
