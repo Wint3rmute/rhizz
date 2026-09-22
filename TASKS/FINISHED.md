@@ -4,6 +4,34 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Extend the annotation/notes system - Markdown
+
+Markdown in view annotations, rendered as styled SVG `<text>`/`<tspan>` runs
+(pure SVG, no `foreignObject`): headings, bullet/ordered lists (nest cap 2),
+bold/italic/strikethrough/inline-code/link, blockquote, fenced code.
+Tables/images/raw HTML degrade to plain text, never throw. Standard Markdown
+(`breaks: false` — blank line needed for a new paragraph).
+
+- **Web** (`annotationMarkdown.ts`, new, pure + unit-tested): dedicated
+  `new Marked({ breaks: false, gfm: true })` instance (docs rendering
+  untouched); `marked.lexer()` → `AnnotationSvgLine[]` walk, no hand-rolled
+  Markdown parsing. Geometry (`annotationBounds`) measures rendered plain
+  text so hit-test/fit-viewport track the visible output.
+- **Rendering** (`DiagramElements.svelte` — the single funnel for
+  interactive, static, embed and book diagrams): one `<text>` per note, one
+  outer `<tspan>` per Markdown line, nested run `<tspan>`s for
+  bold/italic/strike/monospace/link (underline + primary color,
+  non-clickable). Editor stays a plain-text textarea (Markdown source) with
+  a "Markdown supported" hint.
+- **Tests/stories**: 9 `annotationMarkdown` unit tests (subset, lists,
+  quote/fence, table fallback, blank-line semantics, hostile input);
+  `WithMarkdownAnnotations` story (headings/bold/lists/code/link/quote);
+  legacy `WithAnnotations` story updated for the nested-tspan structure.
+- **Validation**: full `just test` (cargo + 66 files / 622 web + 19 e2e),
+  `just lint`, `just build`, `just format` green.
+
+---
+
 ## Task — System model - change `description` to `full_name`
 
 Hard rename, no legacy fallback: `full_name` is now the only recognized HCL
