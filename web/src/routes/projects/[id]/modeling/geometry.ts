@@ -4,8 +4,8 @@
 // Markdown measuring comes from the equally DOM-free `annotationMarkdown`.
 import {
   ANNOTATION_MD_INDENT_PX,
-  annotationSvgLineText,
   annotationSvgLines,
+  annotationSvgLineText,
 } from "./annotationMarkdown";
 
 // Where a node's label is positioned within its box.

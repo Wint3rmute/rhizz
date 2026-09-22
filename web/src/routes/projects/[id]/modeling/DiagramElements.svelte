@@ -171,7 +171,7 @@ let visibleConnections = $derived(
         font-style={line.quote ? "italic" : undefined}
       >
         {#if line.spans.length === 0}
-          {"\u00a0"}
+          &nbsp;
         {:else}
           {#each line.spans as span, si (si)}
             <tspan

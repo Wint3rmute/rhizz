@@ -12,7 +12,7 @@
 // Supported subset (pragmatic): headings, bullet/ordered lists (nest cap 2),
 // bold/italic/strikethrough/inline-code/link, blockquote, fenced code.
 // Tables, images, raw HTML degrade to plain text — never throw.
-import { Marked, type Tokens } from "marked";
+import { Marked } from "marked";
 
 // Isolated instance: `breaks: false` = standard Markdown (blank line needed
 // for a new paragraph), matching the confirmed UX. Global docs rendering
@@ -51,81 +51,104 @@ export const ANNOTATION_MD_INDENT_PX = 12;
 /** Heading font-size multipliers by depth (1–6). */
 const HEADING_SIZES = [1.5, 1.3, 1.15, 1, 1, 1];
 
-type InlineToken = Tokens.InlineTokens | Tokens.Text;
-
-function styled(text: string, style: Omit<AnnotationSpan, "text"> = {}): AnnotationSpan[] {
-  return text ? [{ text, ...style }] : [];
+/**
+ * Structural view of a marked token — only the fields the mapper reads.
+ * The lexer output is cast here (marked's own `Tokens.*` types trip the
+ * repo's `no-unsafe-*` lint rules), so all fields stay optional and every
+ * access is guarded.
+ */
+interface LexToken {
+  type: string;
+  raw?: string;
+  text?: string;
+  depth?: number;
+  ordered?: boolean;
+  start?: string | number;
+  href?: string;
+  items?: LexToken[];
+  tokens?: LexToken[];
+  header?: LexToken[];
+  rows?: LexToken[][];
+  cells?: LexToken[];
 }
 
-function inlineText(tokens: InlineToken[] | undefined): string {
-  if (!tokens) return "";
-  return tokens.map((t) => {
-    switch (t.type) {
-      case "text":
-      case "escape":
-        return (t as Tokens.Text | Tokens.Escape).text ?? "";
-      case "strong":
-      case "em":
-      case "del":
-        return inlineText((t as Tokens.Strong | Tokens.Em | Tokens.Del).tokens);
-      case "codespan":
-        return (t as Tokens.Codespan).text ?? "";
-      case "link":
-        return inlineText((t as Tokens.Link).tokens);
-      case "image":
-        return (t as Tokens.Image).text ?? "";
-      case "br":
-        return "\n";
-      default:
-        return (t as { text?: string }).text ?? "";
-    }
-  }).join("");
+type SpanStyle = Omit<AnnotationSpan, "text">;
+
+function styled(text: string, style: SpanStyle = {}): AnnotationSpan[] {
+  return text === "" ? [] : [{ text, ...style }];
+}
+
+function inlineText(tokens: LexToken[] | undefined): string {
+  if (tokens === undefined) return "";
+  return tokens
+    .map((t) => {
+      switch (t.type) {
+        case "text":
+        case "escape":
+          return t.text ?? "";
+        case "strong":
+        case "em":
+        case "del":
+          return inlineText(t.tokens);
+        case "codespan":
+          return t.text ?? "";
+        case "link": {
+          const inner = inlineText(t.tokens);
+          if (inner !== "") return inner;
+          return t.text ?? t.href ?? "";
+        }
+        case "image":
+          return t.text ?? "";
+        case "br":
+          return "\n";
+        default:
+          return t.text ?? "";
+      }
+    })
+    .join("");
 }
 
 function inlineSpans(
-  tokens: InlineToken[] | undefined,
-  style: Omit<AnnotationSpan, "text"> = {},
+  tokens: LexToken[] | undefined,
+  style: SpanStyle = {},
 ): AnnotationSpan[] {
   const out: AnnotationSpan[] = [];
   for (const t of tokens ?? []) {
     switch (t.type) {
       case "text":
       case "escape":
-        out.push(...styled((t as Tokens.Text | Tokens.Escape).text ?? "", style));
+        out.push(...styled(t.text ?? "", style));
         break;
       case "strong":
-        out.push(
-          ...inlineSpans((t as Tokens.Strong).tokens, { ...style, bold: true }),
-        );
+        out.push(...inlineSpans(t.tokens, { ...style, bold: true }));
         break;
       case "em":
-        out.push(
-          ...inlineSpans((t as Tokens.Em).tokens, { ...style, italic: true }),
-        );
+        out.push(...inlineSpans(t.tokens, { ...style, italic: true }));
         break;
       case "del":
-        out.push(
-          ...inlineSpans((t as Tokens.Del).tokens, { ...style, strike: true }),
-        );
+        out.push(...inlineSpans(t.tokens, { ...style, strike: true }));
         break;
       case "codespan":
-        out.push(...styled((t as Tokens.Codespan).text ?? "", { ...style, code: true }));
+        out.push(...styled(t.text ?? "", { ...style, code: true }));
         break;
       case "link": {
-        const lt = t as Tokens.Link;
-        const inner = inlineSpans(lt.tokens, { ...style, link: true });
-        out.push(...(inner.length > 0 ? inner : styled(lt.text ?? lt.href ?? "", { ...style, link: true })));
+        const inner = inlineSpans(t.tokens, { ...style, link: true });
+        out.push(
+          ...(inner.length > 0
+            ? inner
+            : styled(t.text ?? t.href ?? "", { ...style, link: true })),
+        );
         break;
       }
       case "image":
-        out.push(...styled((t as Tokens.Image).text ?? "", style));
+        out.push(...styled(t.text ?? "", style));
         break;
       case "br":
         // Soft break inside a paragraph: split the current line.
         out.push({ text: "\n" });
         break;
       default:
-        out.push(...styled((t as { text?: string }).text ?? "", style));
+        out.push(...styled(t.text ?? "", style));
         break;
     }
   }
@@ -139,18 +162,21 @@ function splitLines(spans: AnnotationSpan[]): AnnotationSpan[][] {
     const parts = s.text.split("\n");
     parts.forEach((part, i) => {
       if (i > 0) lines.push([]);
-      if (part) lines[lines.length - 1].push({ ...s, text: part });
+      const current = lines[lines.length - 1];
+      if (part !== "" && current !== undefined) {
+        current.push({ ...s, text: part });
+      }
     });
   }
   return lines;
 }
 
-function prefixSpan(text: string, base: Omit<AnnotationSpan, "text"> = {}): AnnotationSpan {
-  return { text, ...base };
+function prefixSpan(text: string): AnnotationSpan {
+  return { text };
 }
 
 function blockLines(
-  token: Tokens.GenericToken,
+  token: LexToken,
   indent: number,
   out: AnnotationSvgLine[],
 ): void {
@@ -160,61 +186,67 @@ function blockLines(
       out.push({ spans: [] });
       break;
     case "heading": {
-      const h = token as Tokens.Heading;
-      const spans = inlineSpans(h.tokens);
-      for (const parts of splitLines(spans)) {
-        out.push({
-          spans: parts.length > 0 ? parts : [],
-          size: HEADING_SIZES[Math.max(0, Math.min(5, h.depth - 1))],
-          bold: true,
-          indent: capped,
-        });
+      const depth = token.depth ?? 1;
+      const size = HEADING_SIZES[Math.max(0, Math.min(5, depth - 1))] ?? 1;
+      for (const parts of splitLines(inlineSpans(token.tokens))) {
+        out.push({ spans: parts, size, bold: true, indent: capped });
       }
       break;
     }
     case "paragraph": {
-      const p = token as Tokens.Paragraph;
-      for (const parts of splitLines(inlineSpans(p.tokens))) {
+      for (const parts of splitLines(inlineSpans(token.tokens))) {
         out.push({ spans: parts, indent: capped });
       }
       break;
     }
     case "text": {
-      // Loose-list text / fallback block text.
-      const t = token as Tokens.Text;
-      const inner = t.tokens ? inlineSpans(t.tokens) : styled(t.text ?? "");
+      const inner = token.tokens !== undefined
+        ? inlineSpans(token.tokens)
+        : styled(token.text ?? "");
       for (const parts of splitLines(inner)) {
         out.push({ spans: parts, indent: capped });
       }
       break;
     }
     case "list": {
-      const l = token as Tokens.List;
-      l.items.forEach((item, i) => {
-        const bullet = l.ordered ? `${l.start !== "" ? Number(l.start) + i : i + 1}. ` : "• ";
-        itemBlockLines(item, bullet, capped, out, l.ordered ? 0 : undefined);
+      const ordered = token.ordered ?? false;
+      const startNum = typeof token.start === "number"
+        ? token.start
+        : Number.parseInt(token.start ?? "1", 10);
+      const base = Number.isNaN(startNum) ? 1 : startNum;
+      (token.items ?? []).forEach((item, i) => {
+        const bullet = ordered ? `${(base + i).toString()}. ` : "• ";
+        itemBlockLines(item, bullet, capped, out);
       });
       break;
     }
     case "blockquote": {
-      const b = token as Tokens.Blockquote;
       const start = out.length;
-      for (const t of b.tokens ?? []) blockLines(t as Tokens.GenericToken, capped, out);
+      for (const t of token.tokens ?? []) blockLines(t, capped, out);
       for (let i = start; i < out.length; i++) {
         const line = out[i];
-        line.quote = true;
-        line.indent = Math.min((line.indent ?? capped) + 1, ANNOTATION_MD_MAX_INDENT + 1);
-        line.spans = [prefixSpan("│ "), ...line.spans];
+        if (line !== undefined) {
+          line.quote = true;
+          line.indent = Math.min(
+            (line.indent ?? capped) + 1,
+            ANNOTATION_MD_MAX_INDENT + 1,
+          );
+          line.spans = [prefixSpan("│ "), ...line.spans];
+        }
       }
-      if (out.length === start) out.push({ spans: [prefixSpan("│ ")], quote: true, indent: capped + 1 });
+      if (out.length === start) {
+        out.push({
+          spans: [prefixSpan("│ ")],
+          quote: true,
+          indent: capped + 1,
+        });
+      }
       break;
     }
     case "code": {
-      const c = token as Tokens.Code;
-      const rows = (c.text ?? "").split("\n");
-      for (const row of rows) {
+      for (const row of (token.text ?? "").split("\n")) {
         out.push({
-          spans: row ? [{ text: row, code: true }] : [],
+          spans: row === "" ? [] : [{ text: row, code: true }],
           codeBlock: true,
           indent: capped,
         });
@@ -226,43 +258,47 @@ function blockLines(
       break;
     case "table": {
       // Graceful degradation: header + rows as pipe-joined plain text.
-      const t = token as Tokens.Table;
-      const row = (cells: Tokens.TableCell[]) => cells.map((c) => inlineText(c.tokens)).join(" | ");
-      out.push({ spans: styled(row(t.header)) });
-      for (const r of t.rows ?? []) out.push({ spans: styled(row(r)) });
+      const row = (cells: LexToken[] | undefined) =>
+        (cells ?? []).map((c) => inlineText(c.tokens)).join(" | ");
+      out.push({ spans: styled(row(token.header)) });
+      for (const r of token.rows ?? []) out.push({ spans: styled(row(r)) });
       break;
     }
     case "html":
-      out.push({ spans: styled((token as Tokens.HTML).text ?? "") });
+      out.push({ spans: styled(token.text ?? "") });
       break;
-    default:
-      out.push({ spans: styled(inlineText((token as { tokens?: InlineToken[] }).tokens) || (token as { text?: string }).text || (token as { raw?: string }).raw || "") });
+    default: {
+      const inner = inlineText(token.tokens);
+      const text = inner !== "" ? inner : (token.text ?? token.raw ?? "");
+      out.push({ spans: styled(text) });
       break;
+    }
   }
 }
 
 function itemBlockLines(
-  item: Tokens.ListItem,
+  item: LexToken,
   bullet: string,
   indent: number,
   out: AnnotationSvgLine[],
-  _ordered: number | undefined,
 ): void {
   let first = true;
-  const nested: Tokens.GenericToken[] = [];
+  const nested: LexToken[] = [];
   for (const t of item.tokens ?? []) {
     if (t.type === "list") {
-      nested.push(t as Tokens.GenericToken);
+      nested.push(t);
       continue;
     }
     const start = out.length;
-    blockLines(t as Tokens.GenericToken, indent, out);
+    blockLines(t, indent, out);
     for (let i = start; i < out.length; i++) {
+      const line = out[i];
+      if (line === undefined) continue;
       if (first && i === start) {
-        out[i].spans = [prefixSpan(bullet), ...out[i].spans];
+        line.spans = [prefixSpan(bullet), ...line.spans];
         first = false;
       } else if (i === start) {
-        out[i].spans = [prefixSpan("  "), ...out[i].spans];
+        line.spans = [prefixSpan("  "), ...line.spans];
       }
     }
     if (out.length === start) {
@@ -278,12 +314,14 @@ function itemBlockLines(
  * lexer failures fall back to plain lines so a note always renders.
  */
 export function annotationSvgLines(text: string): AnnotationSvgLine[] {
-  if (!text) return [{ spans: [] }];
-  let tokens: Tokens.GenericToken[];
+  if (text === "") return [{ spans: [] }];
+  let tokens: LexToken[];
   try {
-    tokens = annotationMarked.lexer(text) as Tokens.GenericToken[];
+    tokens = annotationMarked.lexer(text) as unknown as LexToken[];
   } catch {
-    return text.split("\n").map((t) => ({ spans: t ? [{ text: t }] : [] }));
+    return text.split("\n").map((t) => ({
+      spans: t === "" ? [] : [{ text: t }],
+    }));
   }
   const out: AnnotationSvgLine[] = [];
   for (const t of tokens) blockLines(t, 0, out);
