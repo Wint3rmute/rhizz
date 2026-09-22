@@ -25,6 +25,7 @@ import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
+import AnnotationText from "./AnnotationText.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
 import NewViewModal from "./NewViewModal.svelte";
@@ -62,8 +63,6 @@ import {
   type LayoutNode,
 } from "./forceLayout";
 import {
-  ANNOTATION_FONT_SIZE,
-  ANNOTATION_LINE_HEIGHT,
   annotationBounds,
   annotationLines,
   boxContains,
@@ -3266,8 +3265,6 @@ $effect(() => {
           {@const isAnnSelected = interaction.type === "marquee"
             ? marqueeAnnotationCandidates.has(i)
             : selectedAnnotations.has(i)}
-          {@const annFontSize = ANNOTATION_FONT_SIZE * (ann.scale ?? 1)}
-          {@const annLineStep = ANNOTATION_LINE_HEIGHT * (ann.scale ?? 1)}
           {@const annHit = annotationHitBox(ann)}
           {@const annX = annHit.x}
           {@const annY = annHit.y}
@@ -3325,37 +3322,24 @@ $effect(() => {
               />
             {/if}
             {#if editingAnnotation === i}
-              <text
+              <AnnotationText
+                text={ann.text}
                 x={ann.x}
                 y={ann.y}
+                scale={ann.scale ?? 1}
                 fill="var(--color-primary)"
-                font-size={annFontSize}
-                text-anchor="start"
-                style="user-select: none"
-              >
-                {#each annotationLines(ann.text) as line, li (li)}
-                  <tspan x={ann.x} dy={li === 0 ? 0 : annLineStep}>
-                    {line || '\u00a0'}
-                  </tspan>
-                {/each}
-              </text>
+                pointerEventsNone={false}
+              />
             {:else}
-              <text
+              <AnnotationText
+                text={ann.text}
                 x={ann.x}
                 y={ann.y}
+                scale={ann.scale ?? 1}
                 fill={isAnnSelected
                   ? "var(--color-primary)"
                   : "var(--color-base-content)"}
-                font-size={annFontSize}
-                text-anchor="start"
-                style="pointer-events: none; user-select: none"
-              >
-                {#each annotationLines(ann.text) as line, li (li)}
-                  <tspan x={ann.x} dy={li === 0 ? 0 : annLineStep}>
-                    {line || '\u00a0'}
-                  </tspan>
-                {/each}
-              </text>
+              />
             {/if}
           </g>
         {/each}
