@@ -3,10 +3,7 @@
 // foreignObject). Shared by the interactive canvas (+page.svelte, both the
 // idle and the in-editing states) and DiagramElements (static/embed/book),
 // so all four render paths can never drift apart.
-import {
-  ANNOTATION_FONT_SIZE,
-  ANNOTATION_LINE_HEIGHT,
-} from "./geometry";
+import { ANNOTATION_FONT_SIZE, ANNOTATION_LINE_HEIGHT } from "./geometry";
 import {
   ANNOTATION_MD_INDENT_PX,
   annotationSvgLines,
