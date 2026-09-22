@@ -1,17 +1,12 @@
 <script lang="ts">
 import {
-  ANNOTATION_FONT_SIZE,
-  ANNOTATION_LINE_HEIGHT,
   type Box,
   computeRenderOrder,
   computeVisibleConnections,
   elbowPath,
   type TextAlign,
 } from "./geometry";
-import {
-  ANNOTATION_MD_INDENT_PX,
-  annotationSvgLines,
-} from "./annotationMarkdown";
+import AnnotationText from "./AnnotationText.svelte";
 import { resolveIcon } from "../../../../iconHelper";
 import DiagramNodeBody from "./DiagramNodeBody.svelte";
 import type {
@@ -150,44 +145,10 @@ let visibleConnections = $derived(
 {/each}
 
 {#each annotations as ann (ann.text + ann.x + ann.y)}
-  {@const annScale = ann.scale ?? 1}
-  {@const mdLines = annotationSvgLines(ann.text)}
-  <text
-  x={ann.x}
-  y={ann.y}
-  fill="var(--color-base-content)"
-  font-size={ANNOTATION_FONT_SIZE * annScale}
-  text-anchor="start"
-  style="pointer-events: none; user-select: none"
->
-    {#each mdLines as line, li (li)}
-      {@const lineSize = line.size ?? 1}
-      {@const lineX = ann.x + (line.indent ?? 0) * ANNOTATION_MD_INDENT_PX * annScale}
-      <tspan
-        x={lineX}
-        dy={li === 0 ? 0 : ANNOTATION_LINE_HEIGHT * annScale}
-        font-size={ANNOTATION_FONT_SIZE * lineSize * annScale}
-        font-weight={line.bold ? "bold" : undefined}
-        font-style={line.quote ? "italic" : undefined}
-      >
-        {#if line.spans.length === 0}
-          &nbsp;
-        {:else}
-          {#each line.spans as span, si (si)}
-            <tspan
-            font-weight={span.bold || line.bold ? "bold" : undefined}
-            font-style={span.italic || line.quote ? "italic" : undefined}
-            text-decoration={span.strike
-              ? "line-through"
-              : span.link
-                ? "underline"
-                : undefined}
-            font-family={span.code || line.codeBlock ? "monospace" : undefined}
-            fill={span.link ? "var(--color-primary)" : undefined}
-          >{span.text}</tspan>
-          {/each}
-        {/if}
-      </tspan>
-    {/each}
-  </text>
+  <AnnotationText
+    text={ann.text}
+    x={ann.x}
+    y={ann.y}
+    scale={ann.scale ?? 1}
+  />
 {/each}
