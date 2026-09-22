@@ -1,5 +1,5 @@
 view "frontend-internals" {
-  description = "Frontend application internals for frontend developers"
+  full_name = "Frontend application internals for frontend developers"
   system      = "Web Application"
 
   filter {

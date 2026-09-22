@@ -2,6 +2,6 @@
 // auto-seeded `views/main.hcl` view (and the component-creation flow)
 // always have a system to link to instead of an empty file.
 export const EMPTY_PROJECT_HCL = `system "main" {
-  description = "Main system"
+  full_name = "Main system"
 }
 `;

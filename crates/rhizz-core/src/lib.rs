@@ -499,9 +499,9 @@ system "demo" {}
                 content: r#"
 project { name = "single-sys" }
 system "main" {
-  description = "Main system"
+  full_name = "Main system"
   component "sensor" {
-    description = "Sensor component"
+    full_name = "Sensor component"
     leaf = true
   }
 }
@@ -544,7 +544,7 @@ view "overview" {
                 filename: "system1.hcl".to_string(),
                 content: r#"
 system "sys1" {
-  description = "System 1"
+  full_name = "System 1"
 }
 "#
                 .to_string(),
@@ -553,7 +553,7 @@ system "sys1" {
                 filename: "system2.hcl".to_string(),
                 content: r#"
 system "sys2" {
-  description = "System 2"
+  full_name = "System 2"
 }
 "#
                 .to_string(),
@@ -627,7 +627,7 @@ system "sys2" {
         assert_eq!(doc_key_for("docs/motor.hcl"), None);
     }
 
-    const DOC_MODEL: &str = "component \"motor\" {\n  description = \"d\"\n  leaf = true\n}";
+    const DOC_MODEL: &str = "component \"motor\" {\n  full_name = \"d\"\n  leaf = true\n}";
 
     #[test]
     fn missing_doc_emits_w018() {
@@ -721,7 +721,7 @@ system "sys2" {
         result.diagnostics.iter().map(|d| d.code.code).collect()
     }
 
-    const SINGLE_SYSTEM: &str = "system \"s\" { description = \"d\" }";
+    const SINGLE_SYSTEM: &str = "system \"s\" { full_name = \"d\" }";
 
     #[test]
     fn diagram_file_with_zero_views_emits_e016() {
@@ -905,7 +905,7 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
 
     #[test]
     fn instance_extra_attr_surfaces_as_e012() {
-        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    description = \"extra\"\n  }\n}";
+        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    full_name = \"extra\"\n  }\n}";
         let result = compile(&[model_source(src)]);
         assert!(result.model.is_none(), "model must not survive E012");
         assert!(
@@ -922,7 +922,7 @@ system \"computer-setup\" {\n  instance \"computer\" { source = \"computer\" }\n
 
     /// Raises one warning per level: W005 (business, self-connection), W001
     /// (architectural, non-leaf definition without children) and W004
-    /// (component, missing description).
+    /// (component, missing full_name).
     const MIXED_WARNINGS: &str = "component \"non-leaf\" {}\n\
 system \"s\" {\n\
   instance \"a\" { source = \"non-leaf\" }\n\

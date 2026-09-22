@@ -272,8 +272,8 @@ pub struct Project {
 pub struct System {
     /// Unique identifier for this system.
     pub label: String,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Direct child components.
@@ -294,8 +294,8 @@ pub struct Component {
     pub source: Option<String>,
     /// Whether this is a reusable definition or a placed instance.
     pub kind: ComponentKind,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Optional icon name (e.g. `FontAwesome` icon identifier).
     pub icon: Option<String>,
     /// Optional border color for diagram rendering.
@@ -326,8 +326,8 @@ pub struct Component {
 pub struct Protocol {
     /// Unique identifier for this protocol.
     pub label: String,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Valid port roles permitted by this protocol.
@@ -341,8 +341,8 @@ pub struct Protocol {
 pub struct Port {
     /// Unique label within the parent component.
     pub label: String,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Free-form protocol name.
     pub protocol: String,
     /// Optional resolved reference to a top-level protocol.
@@ -373,8 +373,8 @@ pub struct ConnectionEndpoint {
 pub struct Connection {
     /// Unique label within its parent scope.
     pub label: String,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Abstraction level.
@@ -392,8 +392,8 @@ pub struct Connection {
 pub struct Message {
     /// Unique label within its parent port.
     pub label: String,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Abstraction level.
@@ -409,8 +409,8 @@ pub struct Field {
     pub label: String,
     /// Free-form type string (e.g. `"uint8"`, `"string"`).
     pub field_type: String,
-    /// Human-readable description.
-    pub description: String,
+    /// Full official name, expanding abbreviations.
+    pub full_name: String,
     /// Physical unit (e.g. `"m"`, `"Hz"`).
     pub unit: String,
     /// Whether this field is mandatory.
@@ -547,9 +547,9 @@ const fn default_annotation_scale() -> f64 {
 pub struct ViewDefinition {
     /// Unique view identifier.
     pub label: String,
-    /// Human-readable description.
+    /// Full official name, expanding abbreviations.
     #[serde(default)]
-    pub description: String,
+    pub full_name: String,
     /// Filtering tags.
     #[serde(default)]
     pub tags: Vec<String>,

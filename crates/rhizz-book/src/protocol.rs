@@ -807,7 +807,7 @@ mod tests {
         std::fs::create_dir_all(proj.join("views")).expect("mkdir views");
         std::fs::write(
             proj.join("system.hcl"),
-            "system \"demo\" {\n  description = \"d\"\n}\n",
+            "system \"demo\" {\n  full_name = \"d\"\n}\n",
         )
         .expect("write system.hcl");
         std::fs::write(
@@ -961,7 +961,7 @@ mod tests {
         // Changing a project source must fail verification without accept.
         std::fs::write(
             dir.path().join("src/projects/demo/system.hcl"),
-            "system \"changed\" {\n  description = \"d\"\n}\n",
+            "system \"changed\" {\n  full_name = \"d\"\n}\n",
         )
         .expect("rewrite system.hcl");
         let mut book = project_book("# Demo\n\n```rhizz-project src=\"projects/demo\"\n```\n");

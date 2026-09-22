@@ -97,7 +97,7 @@ component "plain" {
 
   it("preserves lowercase port roles, without E009", () => {
     const systemHcl = `protocol "i2c" {
-  description = "I2C bus"
+  full_name = "I2C bus"
   roles       = ["provider", "consumer"]
 }
 
@@ -154,7 +154,7 @@ system "demo" {
         filename: "project.hcl",
         content: `project { name = "apollo-11" }
 component "cm" {
-  description = "Command module"
+  full_name = "Command module"
   leaf = true
 }
 system "apollo-11" {
@@ -178,7 +178,7 @@ system "apollo-11" {
     ]);
     const view = componentDataByKey(model);
     expect(view.get("apollo-11/cm")?.label).toBe("cm");
-    expect(view.get("cm")?.description).toBe("Command module");
+    expect(view.get("cm")?.full_name).toBe("Command module");
   });
 
   it("carries tags and the leaf flag", () => {

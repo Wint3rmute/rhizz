@@ -34,12 +34,12 @@ describe("rhizz_wasm_wrapper", () => {
 }
 
 component "fc" {
-  description = "Flight controller"
+  full_name = "Flight controller"
   leaf        = true
 }
 
 system "quad" {
-  description = "Quadcopter"
+  full_name = "Quadcopter"
 
   instance "fc" {
     source = "fc"
@@ -67,7 +67,7 @@ system "quad" {
 
   it("parses and serializes views with node layout", () => {
     const viewsHcl = `view "main" {
-  description = "Main diagram"
+  full_name = "Main diagram"
   system      = "quad"
 
   filter {
@@ -234,7 +234,7 @@ system "demo" {
     expect(addSystem.applied).toBe(true);
     if (addSystem.hcl === undefined) throw new Error("expected hcl");
     expect(addSystem.actions).toEqual([
-      { op: "add_system", label: "demo", description: "" },
+      { op: "add_system", label: "demo", full_name: "" },
     ]);
 
     const addDef = apply_model_op("system.hcl", addSystem.hcl, {
@@ -318,7 +318,7 @@ system "demo" {
   });
 
   describe("warning levels", () => {
-    // `fc` has no description (W004, component level) and `loopback`
+    // `fc` has no full name (W004, component level) and `loopback`
     // connects `fc` to itself (W005, business level) — one warning of each
     // gated kind, so a level change is observable in both directions.
     const gatedWarnings = [{
@@ -345,7 +345,7 @@ system "drone" {
     const broken = [{
       filename: "system.hcl",
       content: `component "motor" {
-  description = "Brushless motor"
+  full_name = "Brushless motor"
 }
 
 system "drone" {

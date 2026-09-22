@@ -233,7 +233,7 @@ impl From<&rhizz_core::Project> for ProjectJS {
 #[wasm_bindgen]
 pub struct ConnectionJS {
     label: String,
-    // description: String,
+    // full_name: String,
     // tags: Vec<String>,
     // level: i32,
     pub from: usize,
@@ -270,7 +270,7 @@ impl ConnectionJS {
 #[wasm_bindgen]
 pub struct PortJS {
     label: String,
-    description: String,
+    full_name: String,
     protocol: String,
     role: Option<String>,
     external: bool,
@@ -288,11 +288,11 @@ impl PortJS {
         self.label.clone()
     }
 
-    /// Human-readable description.
+    /// Full official name, expanding abbreviations.
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn description(&self) -> String {
-        self.description.clone()
+    pub fn full_name(&self) -> String {
+        self.full_name.clone()
     }
 
     /// Referenced protocol name.
@@ -345,7 +345,7 @@ impl From<&rhizz_core::Port> for PortJS {
     fn from(p: &rhizz_core::Port) -> Self {
         Self {
             label: p.label.clone(),
-            description: p.description.clone(),
+            full_name: p.full_name.clone(),
             protocol: p.protocol.clone(),
             role: p.role.clone(),
             external: p.external,
@@ -363,7 +363,7 @@ impl From<&rhizz_core::Port> for PortJS {
 #[wasm_bindgen]
 pub struct ProtocolJS {
     label: String,
-    description: String,
+    full_name: String,
     tags: Vec<String>,
     roles: Vec<String>,
 }
@@ -377,11 +377,11 @@ impl ProtocolJS {
         self.label.clone()
     }
 
-    /// Human-readable description.
+    /// Full official name, expanding abbreviations.
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn description(&self) -> String {
-        self.description.clone()
+    pub fn full_name(&self) -> String {
+        self.full_name.clone()
     }
 
     /// Filtering tags.
@@ -403,7 +403,7 @@ impl From<&rhizz_core::Protocol> for ProtocolJS {
     fn from(proto: &rhizz_core::Protocol) -> Self {
         Self {
             label: proto.label.clone(),
-            description: proto.description.clone(),
+            full_name: proto.full_name.clone(),
             tags: proto.tags.clone(),
             roles: proto.roles.clone(),
         }
@@ -448,7 +448,7 @@ impl From<&rhizz_core::System> for SystemJS {
 #[wasm_bindgen]
 pub struct ComponentJS {
     label: String,
-    description: String,
+    full_name: String,
     icon: Option<String>,
     tags: Vec<String>,
     level: i32,
@@ -474,11 +474,11 @@ impl ComponentJS {
         self.label.clone()
     }
 
-    /// Human-readable description.
+    /// Full official name, expanding abbreviations.
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn description(&self) -> String {
-        self.description.clone()
+    pub fn full_name(&self) -> String {
+        self.full_name.clone()
     }
 
     /// Optional `FontAwesome` icon name.
@@ -566,7 +566,7 @@ impl From<&rhizz_core::Component> for ComponentJS {
         };
         Self {
             label: c.label.clone(),
-            description: c.description.clone(),
+            full_name: c.full_name.clone(),
             icon: c.icon.clone(),
             tags: c.tags.clone(),
             level: c.level,

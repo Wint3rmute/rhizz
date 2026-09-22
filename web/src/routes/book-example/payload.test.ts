@@ -8,7 +8,7 @@ import {
 const FILES = [
   {
     path: "system.hcl",
-    content: 'system "demo" {\n  description = "demo system"\n}\n',
+    content: 'system "demo" {\n  full_name = "demo system"\n}\n',
   },
   {
     path: "views/main.hcl",

@@ -36,13 +36,13 @@ let {
 }: Props = $props();
 
 let editLabel = $state("");
-let editDescription = $state("");
+let editFullName = $state("");
 let editTagsStr = $state("");
 let editLeaf = $state(false);
 
 $effect(() => {
   editLabel = component.label;
-  editDescription = component.description || "";
+  editFullName = component.full_name || "";
   editTagsStr = (component.tags || []).join(", ");
   editLeaf = component.leaf;
 });
@@ -56,9 +56,9 @@ function handleLabelBlur() {
   }
 }
 
-function handleDescriptionBlur() {
-  if (editDescription !== (component.description || "")) {
-    onupdate({ description: editDescription });
+function handleFullNameBlur() {
+  if (editFullName !== (component.full_name || "")) {
+    onupdate({ full_name: editFullName });
   }
 }
 
@@ -97,7 +97,7 @@ function handleAddPort() {
     ...component.ports,
     {
       label: portName,
-      description: "",
+      full_name: "",
       protocol: "data",
       role: "peer" as const,
       external: false,
@@ -147,18 +147,18 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
     {/if}
 
     <div class="form-control">
-      <label class="label py-1" for="comp-desc-input">
+      <label class="label py-1" for="comp-fullname-input">
         <span
           class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Description
+          Full name
         </span>
       </label>
       <textarea
-        id="comp-desc-input"
-        bind:value={editDescription}
-        onblur={handleDescriptionBlur}
+        id="comp-fullname-input"
+        bind:value={editFullName}
+        onblur={handleFullNameBlur}
         class="textarea textarea-sm textarea-bordered w-full resize-y h-16"
-        placeholder="Human-readable description..."
+        placeholder="Full official name, expanding abbreviations..."
       ></textarea>
     </div>
 

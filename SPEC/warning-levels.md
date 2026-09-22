@@ -19,7 +19,7 @@ never the verdict.
 | ----- | ------ | --------------- |
 | `business` | Business spec — super high-level | Systems and components, maybe connections. No ports, messages or fields yet. |
 | `architectural` | Architectural spec — high-level overview | Decomposition into components, wiring between them, diagram layouts. |
-| `component` | Component-level spec — low-level details | Ports, protocols, messages, fields, descriptions, typed connection endpoints. |
+| `component` | Component-level spec — low-level details | Ports, protocols, messages, fields, full_names, typed connection endpoints. |
 
 `component` is the most detailed level and the **default**, so compiling without
 an explicit level reports every warning.
@@ -54,7 +54,7 @@ The rule of thumb, which also drives the mapping below:
 - **Incompleteness of the decomposition** (missing children, unwired or unused
   definitions, dangling view nodes) is what an architectural pass is for.
   → `architectural`
-- **Missing detail on an individual entity** (no description, no fields, no
+- **Missing detail on an individual entity** (no full_name, no fields, no
   messages, an untyped endpoint, an unconnected port) is exactly what a
   high-level spec legitimately has not written yet. → `component`
 
@@ -70,7 +70,7 @@ a generated-by-hand summary. Change the level in the diagnostic file.
 | W001 | Non-leaf component has no children | `architectural` |
 | W002 | Message has no fields | `component` |
 | W003 | Orphan component | `architectural` |
-| W004 | Missing description | `component` |
+| W004 | Missing full_name | `component` |
 | W005 | Self-connection | `business` |
 | W006 | Level decreases relative to parent | `business` |
 | W007 | Mixed typed and bare connection endpoints | `component` |

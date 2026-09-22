@@ -41,10 +41,10 @@ describe("hclHighlight", () => {
   });
 
   it("marks attribute keys before =", () => {
-    const tokens = highlightHcl('  description = "d"');
+    const tokens = highlightHcl('  full_name = "d"');
     expect(tokens).toEqual([
       { text: "  ", cls: "plain" },
-      { text: "description", cls: "attr" },
+      { text: "full_name", cls: "attr" },
       { text: " = ", cls: "plain" },
       { text: '"d"', cls: "string" },
     ]);
@@ -73,7 +73,7 @@ describe("hclHighlight", () => {
       "}",
       "",
       'component "sensor" {',
-      '  description = "Temperature sensor"',
+      '  full_name = "Temperature sensor"',
       "  leaf = true",
       "}",
     ].join("\n");

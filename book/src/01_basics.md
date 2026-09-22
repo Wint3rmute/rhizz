@@ -4,7 +4,7 @@ The smallest possible thing you could write in Rhizz looks like this:
 
 ```rhizz
 system "nothing" {
-  description = "an empty system"
+  full_name = "an empty system"
 }
 ```
 
@@ -31,11 +31,11 @@ the results of examples will be used across this whole book.
 
 ```rhizz
 system "nothing" {
-  description = "an empty system"
+  full_name = "an empty system"
 }
 
 system "also-nothing" {
-  description = "Nothingness 2.0: Electric Bongaloo"
+  full_name = "Nothingness 2.0: Electric Bongaloo"
 }
 ```
 
@@ -69,7 +69,7 @@ rest of your product's infrastructure.
 
 ```rhizz,level=architectural
 component "wheel" {
-  description = "A spinning round object"
+  full_name = "A spinning round object"
 }
 ```
 
@@ -91,12 +91,12 @@ and place a component in a system:
 
 ```rhizz,level=architectural
 component "wheel" {
-  description = "A spinning round object"
+  full_name = "A spinning round object"
   leaf = true
 }
 
 system "bicycle" {
-  description = "Personal transport vehicle"
+  full_name = "Personal transport vehicle"
 
   instance "front-wheel" {source = "wheel"}
   instance "rear-wheel" {source = "wheel"}
@@ -115,17 +115,17 @@ add a `tire` to our wheel:
 
 ```rhizz,level=architectural
 component "tire" {
-  description = "A 24in bicycle tire"
+  full_name = "A 24in bicycle tire"
   leaf = true
 }
 
 component "wheel" {
-  description = "A spinning round object"
+  full_name = "A spinning round object"
   instance "tire" {source = "tire"}
 }
 
 system "bicycle" {
-  description = "Personal transport vehicle"
+  full_name = "Personal transport vehicle"
 
   instance "front-wheel" {source = "wheel"}
   instance "rear-wheel" {source = "wheel"}
@@ -150,27 +150,27 @@ multiple times, let's fix some of them by building a bike with:
 
 ```rhizz,level=architectural
 component "tire" {
-  description = "A 24in bicycle tire"
+  full_name = "A 24in bicycle tire"
   leaf = true
 }
 
 component "wheel" {
-  description = "A spinning round object"
+  full_name = "A spinning round object"
   instance "tire" {source = "tire"}
 }
 
 component "fork" {
-  description = "Holds the front wheel"
+  full_name = "Holds the front wheel"
   leaf = true
 }
 
 component "frame"  {
-  description = "main component of a bicycle"
+  full_name = "main component of a bicycle"
   leaf = true
 }
 
 system "bicycle" {
-  description = "Personal transport vehicle"
+  full_name = "Personal transport vehicle"
 
   instance "front-wheel" {source = "wheel"}
   instance "rear-wheel" {source = "wheel"}
@@ -178,19 +178,19 @@ system "bicycle" {
   instance "frame" {source = "frame"}
 
   connection "front-wheel-mount" {
-    description = "keeps the front wheel attached"
+    full_name = "keeps the front wheel attached"
     from = "./front-wheel"
     to = "fork"
   }
 
   connection "rear-wheel-mount" {
-    description = "keeps the rear wheel attached"
+    full_name = "keeps the rear wheel attached"
     from = "./rear-wheel"
     to = "./frame"
   }
 
   connection "fork-mount" {
-    description = "bearing connecting the fork to the frame"
+    full_name = "bearing connecting the fork to the frame"
     from = "./fork"
     to = "./frame"
   }

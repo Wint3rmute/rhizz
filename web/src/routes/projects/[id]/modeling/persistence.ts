@@ -142,7 +142,7 @@ export function layoutToHcl(
   const resolvedSystem = systemName || layout.system || "";
   const viewDef: ViewDefinition = {
     label: viewName,
-    description: "",
+    full_name: "",
     tags: [],
     system: resolvedSystem,
     filter: {

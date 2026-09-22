@@ -1,5 +1,5 @@
 view "engineering-teams" {
-  description = "Engineering department internal structure"
+  full_name = "Engineering department internal structure"
   system      = "acme-software"
 
   filter {

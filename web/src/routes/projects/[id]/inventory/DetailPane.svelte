@@ -1,6 +1,6 @@
 <script lang="ts">
 // Bottom detail pane for the selected definition: tabbed
-// Description / Ports (N) / Requirements (placeholder) / Metadata views,
+// Full name / Ports (N) / Requirements (placeholder) / Metadata views,
 // plus an Edit button that deep-links into the Modeling editor.
 import Markdown from "../../../../components/Markdown.svelte";
 import { SvelteSet } from "svelte/reactivity";
@@ -16,10 +16,10 @@ let {
   editHref: string | null;
 } = $props();
 
-const TABS = ["Description", "Ports", "Requirements", "Metadata"] as const;
+const TABS = ["Full name", "Ports", "Requirements", "Metadata"] as const;
 type Tab = (typeof TABS)[number];
 
-let activeTab = $state<Tab>("Description");
+let activeTab = $state<Tab>("Full name");
 
 // Reset to the first tab when switching between definitions so stale tab
 // state doesn't leak across selections.
@@ -28,7 +28,7 @@ $effect(() => {
   const label = definition?.label ?? null;
   if (label !== lastLabel) {
     lastLabel = label;
-    activeTab = "Description";
+    activeTab = "Full name";
   }
 });
 
@@ -102,12 +102,12 @@ function flattenTags(def: InventoryDefinition): string[] {
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 text-sm">
-      {#if activeTab === "Description"}
-        {#if definition.description.trim().length > 0}
-          <Markdown content={definition.description} />
+      {#if activeTab === "Full name"}
+        {#if definition.full_name.trim().length > 0}
+          <Markdown content={definition.full_name} />
         {:else}
           <p class="text-base-content/50 italic">
-            No description yet — add a <code>description</code> attribute to
+            No full name yet — add a <code>full_name</code> attribute to
             this component definition.
           </p>
         {/if}

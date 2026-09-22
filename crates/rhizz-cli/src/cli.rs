@@ -885,21 +885,21 @@ mod tests {
     /// Raises exactly one architectural warning: W003 for the unwired instance.
     const ARCHITECTURAL_ONLY: &str = r#"component "c" {
   leaf        = true
-  description = "d"
+  full_name = "d"
 }
 
 system "s" {
-  description = "d"
+  full_name = "d"
   instance "i" { source = "c" }
 }
 "#;
 
     /// Raises only component-level warnings: unused ports (W010) and a protocol
     /// without messages (W011). Both instances are wired, so no W003.
-    const COMPONENT_ONLY: &str = r#"protocol "bus" { description = "d" }
+    const COMPONENT_ONLY: &str = r#"protocol "bus" { full_name = "d" }
 
 component "c" {
-  description = "d"
+  full_name = "d"
   leaf        = true
 
   port "p" {
@@ -909,13 +909,13 @@ component "c" {
 }
 
 system "s" {
-  description = "d"
+  full_name = "d"
 
   instance "i" { source = "c" }
   instance "j" { source = "c" }
 
   connection "l" {
-    description = "d"
+    full_name = "d"
     from        = "i"
     to          = "j"
   }
@@ -992,7 +992,7 @@ system "s" {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(
             dir.path().join("system.hcl"),
-            "project {\n  name = \"fmt-test\"\n}\n\nprotocol \"sig\" {\n  \n  description = \"x\"\n}\n\n\ncomponent \"a\" {\n  \t\tleaf = true\ndescription = \"A\"\n}\n",
+            "project {\n  name = \"fmt-test\"\n}\n\nprotocol \"sig\" {\n  \n  full_name = \"x\"\n}\n\n\ncomponent \"a\" {\n  \t\tleaf = true\nfull_name = \"A\"\n}\n",
         )
         .expect("write messy system.hcl");
         dir
@@ -1064,7 +1064,7 @@ system "s" {
         std::fs::write(dir.path().join("views/overview.hcl"), diagram).expect("write diagram");
         std::fs::write(
             dir.path().join("system.hcl"),
-            "system \"s\" { description = \"d\" }\n",
+            "system \"s\" { full_name = \"d\" }\n",
         )
         .expect("write system");
 

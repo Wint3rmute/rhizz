@@ -101,7 +101,7 @@ The severity comes from the filename prefix (`E`/`W`), and
 `min_warning_level` from the file's declaration; error codes always carry
 `WarningLevel::Business` and bypass level gating entirely.
 
-This means `cargo doc` renders the full description, HCL examples, and fix guidance for every code with zero hand-written `const` boilerplate or manual `include_str!` mappings to maintain.
+This means `cargo doc` renders the full full_name, HCL examples, and fix guidance for every code with zero hand-written `const` boilerplate or manual `include_str!` mappings to maintain.
 
 ### 2. Spec reference
 

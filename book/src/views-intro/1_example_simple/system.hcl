@@ -1,38 +1,38 @@
 component "computer" {
-  description = "PC computer"
+  full_name = "PC computer"
   instance "cpu" { source = "cpu" }
   instance "gpu" { source = "gpu" }
 
   connection "pci" {
-    description = "PCI bus"
+    full_name = "PCI bus"
     from        = "cpu"
     to          = "gpu"
   }
 }
 
 component "gpu" {
-  description = "Graphics Card"
+  full_name = "Graphics Card"
   leaf        = true
 }
 
 component "cpu" {
-  description = "Central Processing Unit"
+  full_name = "Central Processing Unit"
   leaf        = true
 }
 
 component "monitor" {
-  description = "FullHD Monitor"
+  full_name = "FullHD Monitor"
   leaf        = true
 }
 
 system "computer-setup" {
-  description = "Computer Setup"
+  full_name = "Computer Setup"
 
   instance "computer" { source = "computer" }
   instance "monitor" { source = "monitor" }
 
   connection "hdmi" {
-    description = "HDMI connection"
+    full_name = "HDMI connection"
     from        = "computer"
     to          = "monitor"
   }

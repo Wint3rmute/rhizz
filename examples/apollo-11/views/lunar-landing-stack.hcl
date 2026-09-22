@@ -1,5 +1,5 @@
 view "lunar-landing-stack" {
-  description = "Lunar Module descent, landing radar, and ascent guidance interfaces"
+  full_name = "Lunar Module descent, landing radar, and ascent guidance interfaces"
   system      = "apollo-11"
 
   node "apollo-11/lm-ascent" {

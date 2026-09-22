@@ -402,7 +402,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("views")).expect("mkdir views");
         std::fs::write(
             dir.join("system.hcl"),
-            "system \"demo\" {\n  description = \"d\"\n}\n",
+            "system \"demo\" {\n  full_name = \"d\"\n}\n",
         )
         .expect("write system.hcl");
         std::fs::write(

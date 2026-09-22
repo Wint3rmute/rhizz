@@ -1,5 +1,5 @@
 view "full-platform" {
-  description = "Complete BuzzVid platform overview"
+  full_name = "Complete BuzzVid platform overview"
   system      = "buzzvid"
 
   filter {

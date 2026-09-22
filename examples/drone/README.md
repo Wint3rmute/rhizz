@@ -17,7 +17,7 @@ station.
   with a non-default `scale` (font-size multiplier), showing how diagram editor
   annotations are persisted as `annotation` blocks
 - **In-progress modeling** — the `ground-station-pc` component is non-leaf with
-  no children and no description, triggering W001 and W004 warnings while still
+  no children and no full_name, triggering W001 and W004 warnings while still
   compiling cleanly
 - **Single-file model** — the complete architecture (protocols + systems +
   components) lives in one `system.hcl`, kept separate from view definitions

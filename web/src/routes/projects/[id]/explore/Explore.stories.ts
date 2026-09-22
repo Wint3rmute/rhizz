@@ -46,17 +46,17 @@ const CROSS_LEVEL_SYSTEM_HCL = `project {
 }
 
 protocol "power" {
-  description = "DC power delivery"
+  full_name = "DC power delivery"
   roles       = ["provider", "consumer"]
 }
 
 protocol "spi" {
-  description = "Serial peripheral interface"
+  full_name = "Serial peripheral interface"
   roles       = ["provider", "consumer"]
 }
 
 component "battery" {
-  description = "Main power source"
+  full_name = "Main power source"
   leaf        = true
 
   port "power-out" {
@@ -67,7 +67,7 @@ component "battery" {
 }
 
 component "controller" {
-  description = "Processing hub with internal MCU"
+  full_name = "Processing hub with internal MCU"
   leaf        = false
 
   port "power-in" {
@@ -82,7 +82,7 @@ component "controller" {
 }
 
 component "mcu" {
-  description = "Microcontroller unit"
+  full_name = "Microcontroller unit"
   leaf        = true
 
   port "spi" {
@@ -93,7 +93,7 @@ component "mcu" {
 }
 
 component "sensor" {
-  description = "External IMU sensor"
+  full_name = "External IMU sensor"
   leaf        = true
 
   port "spi" {
@@ -104,7 +104,7 @@ component "sensor" {
 }
 
 system "demo-system" {
-  description = "System with sibling and non-sibling cross-level connections"
+  full_name = "System with sibling and non-sibling cross-level connections"
 
   instance "battery" {
     source = "battery"
@@ -119,13 +119,13 @@ system "demo-system" {
   }
 
   connection "power-link" {
-    description = "Power delivery"
+    full_name = "Power delivery"
     from        = "battery/power-out"
     to          = "controller/power-in"
   }
 
   connection "sensor-bus" {
-    description = "Cross-level SPI bus"
+    full_name = "Cross-level SPI bus"
     from        = "controller/mcu/spi"
     to          = "sensor/spi"
   }

@@ -294,7 +294,7 @@ the corresponding `ModelAction` variants (or, conversely, route
 *Scoring rule.* `inventory.ts::completionScore` re-implements the component
 scoring rule in TypeScript because "rhizz-wasm only exposes aggregate
 category scores". There are now three statements of the rule: SPEC §5 says a
-leaf **without** a description is *Incomplete (0.0)*; `score.rs` and
+leaf **without** a full_name is *Incomplete (0.0)*; `score.rs` and
 `inventory.ts` both return **0.5**. The spec and both implementations
 already disagree; a future fix must be applied in two languages.
 
@@ -337,10 +337,10 @@ hand-maintained shapes for the same two records mean any new field (e.g. a
 
 **Evidence**
 
-- `score.rs:14–21` (`if comp.description.is_empty() { 0.5 } else { 1.0 }`)
-  vs `inventory.ts:89–92` (`description.trim().length > 0 ? 1 : 0.5`) vs
+- `score.rs:14–21` (`if comp.full_name.is_empty() { 0.5 } else { 1.0 }`)
+  vs `inventory.ts:89–92` (`full_name.trim().length > 0 ? 1 : 0.5`) vs
   `SPEC.md` §5 table row "Component (leaf) … Incomplete (0.0): No
-  description".
+  full_name".
 - `compile.rs:105–135` builds `score_json` field by field with a comment
   pointing at the CLI shape defined in `cli.rs:244–279`.
 - `DiagnosticJS` (`rhizz-wasm/src/lib.rs:10–50`) has `code`, `message`,
@@ -475,9 +475,9 @@ truth" and written into a new project by `createProjectWithFiles`. For the
 `single-file` example only, `selectExample` then calls
 `seedExampleProjectDiagrams`, which overwrites the just-written
 `views/overview.hcl` and `views/cloud-path.hcl` with layouts hard-coded
-in TypeScript. The two sources disagree: the HCL files carry `description`
+in TypeScript. The two sources disagree: the HCL files carry `full_name`
 and a `filter` block but no `node`s; the TS version carries `node`s (with
-float coordinates such as `57.934548314051284`) but no description/filter.
+float coordinates such as `57.934548314051284`) but no full_name/filter.
 
 **Why it looks reasonable locally**
 

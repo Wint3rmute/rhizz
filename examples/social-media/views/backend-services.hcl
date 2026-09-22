@@ -1,5 +1,5 @@
 view "backend-services" {
-  description = "Backend service decomposition"
+  full_name = "Backend service decomposition"
   system      = "buzzvid"
 
   filter {

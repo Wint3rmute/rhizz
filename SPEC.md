@@ -63,7 +63,7 @@ testing setup.
 
 ```hcl
 system "consumer-drone" {
-  description = "Consumer quadcopter drone"
+  full_name = "Consumer quadcopter drone"
   tags        = ["product", "drone", "v1"]
 
   instance "flight-controller" { /* ... */ }
@@ -76,7 +76,7 @@ system "consumer-drone" {
 | Attribute     | Type         | Required | Default | Description                |
 | ------------- | ------------ | -------- | ------- | -------------------------- |
 | _label_       | string       | **yes**  | —       | Unique system identifier   |
-| `description` | string       | no       | `""`    | Human-readable description |
+| `full_name` | string       | no       | `""`    | Full official name, expanding abbreviations |
 | `tags`        | list(string) | no       | `[]`    | Filtering tags             |
 
 **Children:** `instance`, `connection`
@@ -92,7 +92,7 @@ allowed on both leaf and non-leaf components.
 
 ```hcl
 component "flight-controller" {
-  description = "Central flight management unit"
+  full_name = "Central flight management unit"
   tags        = ["electronics", "compute"]
   level       = 1
   leaf        = false
@@ -115,7 +115,7 @@ component "flight-controller" {
 | Attribute     | Type         | Required | Default          | Description                                                                |
 | ------------- | ------------ | -------- | ---------------- | ---------------------------------------------------------------------------|
 | _label_       | string       | **yes**  | —                | Unique identifier within parent scope (or unique top-level label)          |
-| `description` | string       | no       | `""`             | Human-readable description                                                 |
+| `full_name` | string       | no       | `""`             | Full official name, expanding abbreviations                                                 |
 | `icon`        | string       | no       | `""`             | Optional FontAwesome icon name (e.g. `"microchip"`, `"server"`, `"wifi"`) |
 | `color`       | string       | no       | `""`             | Optional border color for diagram rendering (e.g. `"#ff0000"`, `"red"`) |
 | `border`      | string       | no       | `"solid"`        | Optional border style for diagrams: `"solid"`, `"dashed"`, or `"dotted"` |
@@ -137,7 +137,7 @@ leaf, between child instances)
 ```hcl
 # system.hcl - top-level component definition
 component "flight-controller" {
-  description = "Main flight computer"
+  full_name = "Main flight computer"
   tags        = ["electronics", "compute"]
   leaf        = false
 
@@ -201,14 +201,14 @@ referenced by multiple ports across components.
 
 ```hcl
 protocol "spi" {
-  description = "Serial Peripheral Interface"
+  full_name = "Serial Peripheral Interface"
   tags        = ["electronics", "serial", "bus"]
   roles       = ["provider", "consumer"]
 
   message "transaction" {
-    description = "SPI transfer frame"
-    field "cs"   { type = "uint8";  description = "Chip select line" }
-    field "data" { type = "bytes";  description = "Payload"          }
+    full_name = "SPI transfer frame"
+    field "cs"   { type = "uint8";  full_name = "Chip select line" }
+    field "data" { type = "bytes";  full_name = "Payload"          }
   }
 }
 ```
@@ -216,7 +216,7 @@ protocol "spi" {
 | Attribute     | Type         | Required | Default                             | Description                                      |
 | ------------- | ------------ | -------- | ----------------------------------- | ------------------------------------------------ |
 | _label_       | string       | **yes**  | —                                   | Unique protocol identifier across the project    |
-| `description` | string       | no       | `""`                                | Human-readable description                       |
+| `full_name` | string       | no       | `""`                                | Full official name, expanding abbreviations                       |
 | `tags`        | list(string) | no       | `[]`                                | Filtering tags                                   |
 | `roles`       | list(string) | no       | `[]`                                | Valid port roles permitted by this protocol (empty = any) |
 
@@ -236,7 +236,7 @@ strictly inside `protocol` blocks.
 
 ```hcl
 port "spi" {
-  description = "SPI master interface"
+  full_name = "SPI master interface"
   protocol    = "spi"      # references top-level protocol "spi"
   role        = "master"   # must match one of the roles declared on protocol "spi"
   external    = true       # public boundary port (expected to connect outside this component)
@@ -252,7 +252,7 @@ port "spi" {
 | `role`        | string       | no       | —        | Role string; validated against referenced protocol's `roles` if specified       |
 | `external`    | bool         | no       | `false`  | Whether this port is an external interface point intended for outside wiring    |
 | `required`    | bool         | no       | `true`   | Whether this port must be connected when instantiated inside an outer system    |
-| `description` | string       | no       | `""`     | Human-readable description                                                      |
+| `full_name` | string       | no       | `""`     | Full official name, expanding abbreviations                                                      |
 | `tags`        | list(string) | no       | `[]`     | Filtering tags                                                                  |
 
 **Children:** None
@@ -306,7 +306,7 @@ system "drone" {
 
   # Declared in system "drone" (the Lowest Common Ancestor of 'mcu' and 'imu')
   connection "spi-bus" {
-    description  = "SPI link between MCU and IMU across hierarchy levels"
+    full_name  = "SPI link between MCU and IMU across hierarchy levels"
     tags         = ["electronics", "data"]
     level        = 2
     from         = "flight-controller/mcu/spi"
@@ -321,7 +321,7 @@ system "drone" {
 | _label_        | string       | **yes**  | —                | Unique identifier within parent scope                          |
 | `from`         | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or relative path from declaring scope |
 | `to`           | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or relative path from declaring scope |
-| `description`  | string       | no       | `""`             | Human-readable description                                     |
+| `full_name`  | string       | no       | `""`             | Full official name, expanding abbreviations                                     |
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
 | `encapsulates` | list(string) | no       | `[]`             | Labels of sibling connections this one runs on top of          |
@@ -340,21 +340,21 @@ exchanged over that protocol.
 
 ```hcl
 message "position-report" {
-  description = "Periodic GPS position update"
+  full_name = "Periodic GPS position update"
   tags        = ["telemetry", "gps"]
   level       = 1
 
-  field "latitude"  { type = "float64"; unit = "deg"; description = "WGS84 latitude"  }
-  field "longitude" { type = "float64"; unit = "deg"; description = "WGS84 longitude" }
-  field "altitude"  { type = "float64"; unit = "m";   description = "Altitude MSL"    }
-  field "timestamp" { type = "uint64";  unit = "ms";  description = "Unix timestamp"  }
+  field "latitude"  { type = "float64"; unit = "deg"; full_name = "WGS84 latitude"  }
+  field "longitude" { type = "float64"; unit = "deg"; full_name = "WGS84 longitude" }
+  field "altitude"  { type = "float64"; unit = "m";   full_name = "Altitude MSL"    }
+  field "timestamp" { type = "uint64";  unit = "ms";  full_name = "Unix timestamp"  }
 }
 ```
 
 | Attribute     | Type         | Required | Default      | Description                                      |
 | ------------- | ------------ | -------- | ------------ | ------------------------------------------------ |
 | _label_       | string       | **yes**  | —            | Unique identifier within the parent protocol     |
-| `description` | string       | no       | `""`         | Human-readable description                       |
+| `full_name` | string       | no       | `""`         | Full official name, expanding abbreviations                       |
 | `tags`        | list(string) | no       | `[]`         | Filtering tags                                   |
 | `level`       | integer      | no       | parent level | Abstraction level                                |
 
@@ -370,7 +370,7 @@ Defined inside a `message`. Describes a single data element.
 field "altitude" {
   type        = "float64"
   unit        = "m"
-  description = "Altitude above mean sea level"
+  full_name = "Altitude above mean sea level"
   required    = true
 }
 ```
@@ -379,7 +379,7 @@ field "altitude" {
 | ------------- | ------ | -------- | ------- | ----------------------------------------------------------------------------- |
 | _label_       | string | **yes**  | —       | Unique field name within parent message                                       |
 | `type`        | string | **yes**  | —       | Free-form type string (e.g. `"uint8"`, `"string"`, `"bool"`, `"enum(A,B,C)"`) |
-| `description` | string | no       | `""`    | Human-readable description                                                    |
+| `full_name` | string | no       | `""`    | Full official name, expanding abbreviations                                                    |
 | `unit`        | string | no       | `""`    | Physical unit (e.g. `"m"`, `"Hz"`, `"V"`)                                     |
 | `required`    | bool   | no       | `true`  | Whether the field is mandatory in the message                                 |
 
@@ -544,13 +544,13 @@ aggregated.
 
 | Entity                   | Complete (1.0)                                          | Partial (0.5)                                 | Incomplete (0.0)    |
 | ------------------------ | ------------------------------------------------------- | --------------------------------------------- | ------------------- |
-| **Component** (leaf)     | Has description AND all defined ports complete          | Has description but ≥1 port incomplete        | No description      |
+| **Component** (leaf)     | Has full_name AND all defined ports complete          | Has full_name but ≥1 port incomplete        | No full_name      |
 | **Component** (non-leaf) | ≥1 child component, all children complete               | ≥1 child component, not all children complete | No child components |
 | **Port**                 | Bound protocol has ≥1 message, all messages complete    | Bound protocol has ≥1 message, not all complete | No bound protocol or protocol has no messages |
 | **Connection**           | Both sides typed (`comp/port`) with matching `protocol` | One side typed                                | Both sides untyped  |
 | **Message**              | ≥1 field (defined inside a protocol)                    | —                                             | No fields           |
 
-A leaf component with a description and no ports scores Complete (1.0) — ports
+A leaf component with a full_name and no ports scores Complete (1.0) — ports
 are optional detail. A port referencing a `protocol` block inherits that
 protocol's messages for completeness scoring. Top-level protocol messages are
 scored under the Messages category.
@@ -639,7 +639,7 @@ $ rhizz build ./drone-project/
   Validation:
   ✗ E002  system.hcl:14  connection "uart-link" references undefined component "gps-module"
   ⚠ W001  system.hcl:31  component "power-regulator" has no child components (leaf=false)
-  ⚠ W004  system.hcl:82  component "motor" is missing a description
+  ⚠ W004  system.hcl:82  component "motor" is missing a full_name
 
   1 error, 2 warnings — aborting (fix errors to continue)
 ```
@@ -651,7 +651,7 @@ $ rhizz build ./drone-project/   # after fix
 
   Validation:
   ⚠ W001  system.hcl:31  component "power-regulator" has no child components (leaf=false)
-  ⚠ W004  system.hcl:82  component "motor" is missing a description
+  ⚠ W004  system.hcl:82  component "motor" is missing a full_name
   0 errors, 2 warnings
 
   Completion Report — mini-drone
@@ -679,7 +679,7 @@ instance pattern in one place:
 
 ```hcl
 system "home-monitor" {
-  description = "Smart home environmental monitoring node"
+  full_name = "Smart home environmental monitoring node"
   tags        = ["iot", "data"]
 
   instance "broker" { source = "broker" }
@@ -687,13 +687,13 @@ system "home-monitor" {
   instance "sensor" { source = "temp-sensor" }
 
   connection "read-sensor" {
-    description = "I2C acquisition from sensor to controller"
+    full_name = "I2C acquisition from sensor to controller"
     from        = "/home-monitor/sensor/i2c"
     to          = "/home-monitor/controller/i2c-in"
   }
 
   connection "send-telemetry" {
-    description = "MQTT upload from controller to cloud broker"
+    full_name = "MQTT upload from controller to cloud broker"
     from        = "/home-monitor/controller/mqtt-out"
     to          = "/home-monitor/broker/mqtt-in"
   }

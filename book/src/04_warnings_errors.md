@@ -7,7 +7,7 @@ The Rhizz compiler produces 2 types of diagnostic messages:
 
 Warnings do not stop the build. Example below reuses a top-level component via
 `source = "sensor-hat"`, but its protocol defines no messages yet and two
-entities are missing descriptions. The model still compiles and scores — the
+entities are missing full names. The model still compiles and scores — the
 warnings point at exactly what to finish.
 
 ```rhizz
@@ -16,7 +16,7 @@ protocol "serial" {
 }
 
 component "sensor-hat" {
-  description = "Reusable sensor board"
+  full_name = "Reusable sensor board"
   leaf        = true
 
   port "data" {
@@ -33,7 +33,7 @@ component "controller" {
 }
 
 system "dev-rig" {
-  description = "A rough first sketch"
+  full_name = "A rough first sketch"
 
   instance "controller" {
     source = "controller"
@@ -67,7 +67,7 @@ first sketches, preliminary designs, talking to business people.
 
 ### Architectural spec
 
-Architectural requires more details, descriptions and documentation, focusing on
+Architectural requires more details, full names and documentation, focusing on
 interfaces between large segments of the system.
 
 ### Component-level spec

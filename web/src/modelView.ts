@@ -21,7 +21,7 @@ import {
 
 export interface PortData {
   label: string;
-  description?: string;
+  full_name?: string;
   protocol?: string;
   role: "provider" | "consumer" | "peer";
   external?: boolean | undefined;
@@ -39,7 +39,7 @@ export interface PortData {
  */
 export interface ComponentData {
   label: string;
-  description?: string;
+  full_name?: string;
   icon?: string | undefined;
   color: ComponentColor;
   border: BorderStyle;
@@ -69,7 +69,7 @@ export interface RawModelPayload {
     source?: string;
     /** Parent link, serialized as `{"Component": 0}` or `{"System": 0}`. */
     parent?: { Component?: number; System?: number };
-    description?: string;
+    full_name?: string;
     icon?: string;
     color?: string;
     border?: string;
@@ -86,7 +86,7 @@ export interface RawModelPayload {
   definitions?: number[];
   ports?: {
     label: string;
-    description?: string;
+    full_name?: string;
     protocol?: string;
     role?: string;
     external?: boolean;
@@ -145,7 +145,7 @@ export function componentDataByKey(
     if (result.has(key)) return;
     result.set(key, {
       label: component.label,
-      description: component.description ?? "",
+      full_name: component.full_name ?? "",
       icon: component.icon ?? "",
       color: component.color === "" || component.color === undefined
         ? DEFAULT_COLOR
@@ -160,7 +160,7 @@ export function componentDataByKey(
         const port = ports[portIndex];
         return {
           label: port?.label ?? `#${String(portIndex)}`,
-          description: port?.description ?? "",
+          full_name: port?.full_name ?? "",
           protocol: port?.protocol ?? "",
           role: toRole(port?.role),
           external: port?.external,

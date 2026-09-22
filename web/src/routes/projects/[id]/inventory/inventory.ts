@@ -19,14 +19,14 @@ export interface PortInfo {
   role: string;
   external: boolean;
   required: boolean;
-  description: string;
+  full_name: string;
 }
 
 /** A component definition flattened into plain display data. Instances are
  * never represented here — the Inventory lists definitions only. */
 export interface InventoryDefinition {
   label: string;
-  description: string;
+  full_name: string;
   tags: string[];
   level: number;
   leaf: boolean;
@@ -72,7 +72,7 @@ export type CompletionBadge =
 /**
  * Derives a per-definition completion badge, mirroring `rhizz-core`'s
  * documented `score_component` semantics (a leaf is complete iff it has a
- * description; ports are optional detail; a composite is complete iff all
+ * full_name; ports are optional detail; a composite is complete iff all
  * children are complete). `rhizz-wasm` only exposes aggregate category
  * scores, so this is computed locally from the definition tree.
  */
@@ -88,7 +88,7 @@ export function completionBadge(def: InventoryDefinition): CompletionBadge {
 // in crates/rhizz-core/src/score.rs.
 function completionScore(def: InventoryDefinition): number {
   if (def.leaf) {
-    return def.description.trim().length > 0 ? 1 : 0.5;
+    return def.full_name.trim().length > 0 ? 1 : 0.5;
   }
   if (def.children.length === 0) return 0;
   const allComplete = def.children.every((c) => completionScore(c) === 1);
@@ -96,12 +96,12 @@ function completionScore(def: InventoryDefinition): number {
 }
 
 /** Case-insensitive substring match of `query` against a definition's label,
- * description, and tags. */
+ * full_name, and tags. */
 function matchesQuery(def: InventoryDefinition, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (q === "") return true;
   if (def.label.toLowerCase().includes(q)) return true;
-  if (def.description.toLowerCase().includes(q)) return true;
+  if (def.full_name.toLowerCase().includes(q)) return true;
   return def.tags.some((tag) => tag.toLowerCase().includes(q));
 }
 

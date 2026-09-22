@@ -10,8 +10,8 @@ describe("actionLog", () => {
   it("records actions in order and clears", () => {
     const log = createActionLog();
     expect(log.actions()).toEqual([]);
-    log.record({ op: "add_system", label: "main", description: "" });
-    log.record({ op: "add_system", label: "backup", description: "" });
+    log.record({ op: "add_system", label: "main", full_name: "" });
+    log.record({ op: "add_system", label: "backup", full_name: "" });
     expect(log.actions().map((a) => a.op)).toEqual([
       "add_system",
       "add_system",
@@ -23,11 +23,11 @@ describe("actionLog", () => {
   it("encodes an add_system call as a dispatcher op", () => {
     expect(
       encodeCall(
-        { op: "add_system", label: "main", description: "A system" },
+        { op: "add_system", label: "main", full_name: "A system" },
         "fs",
       ),
     ).toBe(
-      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_system","label":"main","description":"A system"});',
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_system","label":"main","full_name":"A system"});',
     );
   });
 
@@ -36,12 +36,12 @@ describe("actionLog", () => {
       op: "add_component_definition",
       label: "drone",
       leaf: true,
-      description: "",
+      full_name: "",
       tags: [],
       ports: [],
     };
     expect(encodeCall(action, "fs")).toBe(
-      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_component_definition","label":"drone","options":{"leaf":true,"description":"","tags":[],"ports":[]}});',
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_component_definition","label":"drone","options":{"leaf":true,"full_name":"","tags":[],"ports":[]}});',
     );
   });
 
@@ -50,13 +50,13 @@ describe("actionLog", () => {
       op: "update_component",
       path: "main/drone",
       patch: {
-        description: "A quadcopter",
+        full_name: "A quadcopter",
         tags: ["power", "flight"],
         leaf: true,
       },
     };
     expect(encodeCall(action, "fs")).toBe(
-      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"update_component","path":"main/drone","patch":{"description":"A quadcopter","tags":["power","flight"],"leaf":true}});',
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"update_component","path":"main/drone","patch":{"full_name":"A quadcopter","tags":["power","flight"],"leaf":true}});',
     );
   });
 
@@ -123,7 +123,7 @@ describe("actionLog", () => {
       op: "add_component_definition",
       label: 'say "hi" \\ now',
       leaf: true,
-      description: "",
+      full_name: "",
       tags: [],
       ports: [],
     };
@@ -132,18 +132,18 @@ describe("actionLog", () => {
     expect(JSON.parse(opJson)).toEqual({
       kind: "add_component_definition",
       label: 'say "hi" \\ now',
-      options: { leaf: true, description: "", tags: [], ports: [] },
+      options: { leaf: true, full_name: "", tags: [], ports: [] },
     });
   });
 
   it("renders a full replayable test script", () => {
     const actions: ModelAction[] = [
-      { op: "add_system", label: "main", description: "" },
+      { op: "add_system", label: "main", full_name: "" },
       {
         op: "add_component_definition",
         label: "drone",
         leaf: false,
-        description: "",
+        full_name: "",
         tags: [],
         ports: [],
       },
@@ -165,7 +165,7 @@ describe("actionLog", () => {
     expect(script).toContain("beforeAll(async () => {");
     expect(script).toContain('[["system.hcl", ``]]');
     expect(script).toContain(
-      '{"kind":"add_system","label":"main","description":""}',
+      '{"kind":"add_system","label":"main","full_name":""}',
     );
     expect(script).toContain(
       '{"kind":"add_instance","parentPath":"main","label":"drone","source":"drone"}',
@@ -208,12 +208,12 @@ describe("actionLog", () => {
 }
 `;
     const actions: ModelAction[] = [
-      { op: "add_system", label: "drone", description: "" },
+      { op: "add_system", label: "drone", full_name: "" },
       {
         op: "add_component_definition",
         label: "engine",
         leaf: true,
-        description: "",
+        full_name: "",
         tags: [],
         ports: [],
       },
@@ -225,7 +225,7 @@ describe("actionLog", () => {
     expect(script).toContain('[["system.hcl", `project {\n}\n`]]');
     // And each action is applied exactly once.
     expect(
-      script.split('{"kind":"add_system","label":"drone","description":""}')
+      script.split('{"kind":"add_system","label":"drone","full_name":""}')
         .length - 1,
     ).toBe(1);
     expect(

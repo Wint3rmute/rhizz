@@ -29,12 +29,12 @@ fn valid_sources() -> Vec<rhizz_core::Source> {
             filename: "system.hcl".to_string(),
             content: r##"
                 system "web" {
-                    description = "Simple web system"
+                    full_name = "Simple web system"
                     tags        = []
                     level       = 0
 
                     component "server" {
-                        description = "HTTP server"
+                        full_name = "HTTP server"
                         icon        = "server"
                         color       = "#00ff00"
                         border      = "dashed"
@@ -83,7 +83,7 @@ fn components_returns_typed_wrappers() {
         .find(|c: &&rhizz_wasm::ComponentJS| c.label() == "server")
         .expect("expected component 'server'");
     assert!(server.leaf(), "server should be a leaf component");
-    assert_eq!(server.description(), "HTTP server");
+    assert_eq!(server.full_name(), "HTTP server");
     assert_eq!(server.icon(), Some("server".to_string()));
     assert_eq!(server.color(), Some("#00ff00".to_string()));
     assert_eq!(server.border(), Some("dashed".to_string()));
@@ -163,7 +163,7 @@ fn diagram_view_errors_do_not_clear_the_model() {
     let sources = vec![
         rhizz_core::Source {
             filename: "system.hcl".to_string(),
-            content: r#"system "s" { description = "d" }"#.to_string(),
+            content: r#"system "s" { full_name = "d" }"#.to_string(),
         },
         rhizz_core::Source {
             filename: "views/overview.hcl".to_string(),
@@ -193,7 +193,7 @@ fn protocols_and_ports_return_typed_wrappers() {
         filename: "main.hcl".to_string(),
         content: r#"
                 protocol "http" {
-                    description = "HTTP protocol"
+                    full_name = "HTTP protocol"
                     tags        = ["web"]
                     roles       = ["provider", "consumer"]
 
@@ -226,7 +226,7 @@ fn protocols_and_ports_return_typed_wrappers() {
     let protos = model.protocols();
     assert_eq!(protos.len(), 1);
     assert_eq!(protos[0].label(), "http");
-    assert_eq!(protos[0].description(), "HTTP protocol");
+    assert_eq!(protos[0].full_name(), "HTTP protocol");
     assert_eq!(protos[0].tags(), vec!["web"]);
     assert_eq!(protos[0].roles(), vec!["provider", "consumer"]);
 
@@ -301,7 +301,7 @@ fn get_example_projects_returns_all_embedded_examples() {
 #[wasm_bindgen_test]
 fn views_serialization_and_parsing_via_wasm() {
     let views_hcl = r#"view "main" {
-  description = "Main diagram"
+  full_name = "Main diagram"
   system      = "web"
 
   filter {
@@ -336,7 +336,7 @@ fn annotations_round_trip_through_wasm_boundary() {
     // JsValue carrying annotations must serialize to HCL and parse back.
     let view = rhizz_core::ViewDefinition {
         label: "main".to_string(),
-        description: String::new(),
+        full_name: String::new(),
         tags: Vec::new(),
         system: "web".to_string(),
         filter: rhizz_core::ViewFilterDefinition::default(),

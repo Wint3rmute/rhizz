@@ -137,7 +137,7 @@ describe("applyModelMutation", () => {
         {
           kind: "update_component",
           path: "demo/a",
-          patch: { description: "hot chip" },
+          patch: { full_name: "hot chip" },
         },
       );
       expect(result.applied).toBe(true);
@@ -146,7 +146,7 @@ describe("applyModelMutation", () => {
       expect(recorded).toContainEqual({
         op: "update_component",
         path: "compA",
-        patch: { description: "hot chip" },
+        patch: { full_name: "hot chip" },
       });
     } finally {
       unsubscribe();

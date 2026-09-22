@@ -14,49 +14,49 @@ const SAMPLE_FILES: BookPayloadFile[] = [
 }
 
 protocol "temp-bus" {
-  description = "Temperature sensor bus"
+  full_name = "Temperature sensor bus"
   roles       = ["provider", "consumer"]
 
   message "reading" {
-    description = "A single temperature reading"
+    full_name = "A single temperature reading"
 
     field "celsius" {
       type        = "f32"
-      description = "Temperature in Celsius"
+      full_name = "Temperature in Celsius"
     }
   }
 }
 
 component "sensor" {
-  description = "Temperature sensor"
+  full_name = "Temperature sensor"
   leaf        = true
 
   port "out" {
-    description = "Reading output"
+    full_name = "Reading output"
     protocol    = "temp-bus"
     role        = "provider"
   }
 }
 
 component "hub" {
-  description = "Reading collector"
+  full_name = "Reading collector"
   leaf        = true
 
   port "in" {
-    description = "Reading input"
+    full_name = "Reading input"
     protocol    = "temp-bus"
     role        = "consumer"
   }
 }
 
 system "demo" {
-  description = "Minimal book example"
+  full_name = "Minimal book example"
 
   instance "sensor" { source = "sensor" }
   instance "hub" { source = "hub" }
 
   connection "reading" {
-    description = "Delivers readings to the hub"
+    full_name = "Delivers readings to the hub"
     from        = "sensor/out"
     to          = "hub/in"
   }
@@ -157,13 +157,13 @@ export const CodeTab: Story = {
   },
 };
 
-// Dropping the hub description triggers W004, shown directly at the bottom.
+// Dropping the hub full name triggers W004, shown directly at the bottom.
 const warningFiles: BookPayloadFile[] = SAMPLE_FILES.map((file) =>
   file.path === "system.hcl"
     ? {
       path: file.path,
       content: file.content.replace(
-        '  description = "Reading collector"\n',
+        '  full_name = "Reading collector"\n',
         "",
       ),
     }

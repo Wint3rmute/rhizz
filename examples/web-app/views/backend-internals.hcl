@@ -1,5 +1,5 @@
 view "backend-internals" {
-  description = "Backend server ports and message types for backend developers"
+  full_name = "Backend server ports and message types for backend developers"
   system      = "Web Application"
 
   filter {

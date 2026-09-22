@@ -5,148 +5,148 @@ project {
 }
 
 protocol "https" {
-  description = "HTTPS REST API"
+  full_name = "HTTPS REST API"
   roles       = ["provider", "consumer"]
 
   message "api-request" {
-    description = "Generic HTTP API request"
+    full_name = "Generic HTTP API request"
 
     field "method" {
       type        = "string"
-      description = "HTTP method (GET, POST, …)"
+      full_name = "HTTP method (GET, POST, …)"
     }
 
     field "path" {
       type        = "string"
-      description = "Request path"
+      full_name = "Request path"
     }
 
     field "payload" {
       type        = "bytes"
-      description = "Request body"
+      full_name = "Request body"
     }
   }
 
   message "api-response" {
-    description = "Generic HTTP API response"
+    full_name = "Generic HTTP API response"
 
     field "payload" {
       type        = "bytes"
-      description = "Response body"
+      full_name = "Response body"
     }
 
     field "status" {
       type        = "uint16"
-      description = "HTTP status code"
+      full_name = "HTTP status code"
     }
   }
 }
 
 protocol "jwt" {
-  description = "JWT authentication protocol"
+  full_name = "JWT authentication protocol"
   roles       = ["provider", "consumer"]
 
   message "auth-response" {
-    description = "JWT token issued after successful authentication"
+    full_name = "JWT token issued after successful authentication"
 
     field "expires" {
       type        = "uint32"
-      description = "Token lifetime in seconds"
+      full_name = "Token lifetime in seconds"
     }
 
     field "token" {
       type        = "string"
-      description = "Signed JWT access token"
+      full_name = "Signed JWT access token"
     }
   }
 
   message "login-request" {
-    description = "Login credentials submitted by the user"
+    full_name = "Login credentials submitted by the user"
 
     field "password" {
       type        = "string"
-      description = "Hashed password"
+      full_name = "Hashed password"
     }
 
     field "username" {
       type        = "string"
-      description = "User email address"
+      full_name = "User email address"
     }
   }
 }
 
 protocol "postgresql" {
-  description = "PostgreSQL wire protocol"
+  full_name = "PostgreSQL wire protocol"
   roles       = ["provider", "consumer"]
 
   message "db-query" {
-    description = "SQL query sent to the database"
+    full_name = "SQL query sent to the database"
 
     field "params" {
       type        = "bytes"
-      description = "Bound query parameters"
+      full_name = "Bound query parameters"
     }
 
     field "sql" {
       type        = "string"
-      description = "SQL statement"
+      full_name = "SQL statement"
     }
   }
 }
 
 protocol "ui-nav" {
-  description = "Frontend page routing and navigation events"
+  full_name = "Frontend page routing and navigation events"
   roles       = ["provider", "consumer"]
 
   message "nav-event" {
-    description = "Signals a page transition"
+    full_name = "Signals a page transition"
 
     field "destination" {
       type        = "string"
-      description = "Target page identifier"
+      full_name = "Target page identifier"
     }
   }
 }
 
 protocol "websocket" {
-  description = "Real-time bidirectional WebSocket event channel"
+  full_name = "Real-time bidirectional WebSocket event channel"
   roles       = ["provider", "consumer"]
 
   message "match-event" {
-    description = "A new match created by a right swipe"
+    full_name = "A new match created by a right swipe"
 
     field "horse_id" {
       type        = "uint32"
-      description = "Horse profile ID"
+      full_name = "Horse profile ID"
     }
 
     field "match_id" {
       type        = "uint32"
-      description = "Unique match identifier"
+      full_name = "Unique match identifier"
     }
   }
 }
 
 component "backend" {
-  description = "Backend server"
+  full_name = "Backend server"
   leaf        = true
 
   port "api-in" {
-    description = "REST API endpoint"
+    full_name = "REST API endpoint"
     protocol    = "https"
     role        = "provider"
     external    = true
   }
 
   port "auth-in" {
-    description = "JWT authentication endpoint"
+    full_name = "JWT authentication endpoint"
     protocol    = "jwt"
     role        = "provider"
     external    = true
   }
 
   port "db-out" {
-    description = "Database query connection"
+    full_name = "Database query connection"
     protocol    = "postgresql"
     role        = "provider"
     external    = true
@@ -154,22 +154,22 @@ component "backend" {
 }
 
 component "chat_mode" {
-  description = "Chat with horses you have matched with"
+  full_name = "Chat with horses you have matched with"
   leaf        = true
 
   port "match-in" {
-    description = "Match event that opens a new chat thread"
+    full_name = "Match event that opens a new chat thread"
     protocol    = "websocket"
     role        = "consumer"
   }
 }
 
 component "database" {
-  description = "PostgreSQL database"
+  full_name = "PostgreSQL database"
   leaf        = true
 
   port "db-in" {
-    description = "Database query listener"
+    full_name = "Database query listener"
     protocol    = "postgresql"
     role        = "consumer"
     external    = true
@@ -177,17 +177,17 @@ component "database" {
 }
 
 component "frontend" {
-  description = "Frontend application"
+  full_name = "Frontend application"
 
   port "api-out" {
-    description = "REST API calls sent to the backend"
+    full_name = "REST API calls sent to the backend"
     protocol    = "https"
     role        = "consumer"
     external    = true
   }
 
   port "auth-out" {
-    description = "Authentication requests sent to the backend"
+    full_name = "Authentication requests sent to the backend"
     protocol    = "jwt"
     role        = "consumer"
     external    = true
@@ -200,40 +200,40 @@ component "frontend" {
   instance "settings_page" { source = "settings_page" }
 
   connection "app-to-settings" {
-    description  = "Navigation from the main application to the settings page"
+    full_name  = "Navigation from the main application to the settings page"
     from         = "main_app/settings-out"
     to           = "settings_page/nav-in"
   }
 
   connection "login-to-app" {
-    description  = "Navigation from the login page into the main application"
+    full_name  = "Navigation from the login page into the main application"
     from         = "login_page/nav-out"
     to           = "main_app/nav-in"
   }
 }
 
 component "login_page" {
-  description = "Available at /login"
+  full_name = "Available at /login"
   leaf        = true
 
   port "nav-out" {
-    description = "Navigation event emitted after a successful login"
+    full_name = "Navigation event emitted after a successful login"
     protocol    = "ui-nav"
     role        = "provider"
   }
 }
 
 component "main_app" {
-  description = "Root page (/), shows pictures of horses"
+  full_name = "Root page (/), shows pictures of horses"
 
   port "nav-in" {
-    description = "Navigation event that enters the main application"
+    full_name = "Navigation event that enters the main application"
     protocol    = "ui-nav"
     role        = "consumer"
   }
 
   port "settings-out" {
-    description = "Navigation event that opens the settings page"
+    full_name = "Navigation event that opens the settings page"
     protocol    = "ui-nav"
     role        = "provider"
   }
@@ -243,36 +243,36 @@ component "main_app" {
   instance "swipe_mode" { source = "swipe_mode" }
 
   connection "mode-switch" {
-    description  = "Match event bridge: new matches open a chat thread"
+    full_name  = "Match event bridge: new matches open a chat thread"
     from         = "swipe_mode/match-out"
     to           = "chat_mode/match-in"
   }
 }
 
 component "settings_page" {
-  description = "Available at /settings"
+  full_name = "Available at /settings"
   leaf        = true
 
   port "nav-in" {
-    description = "Navigation event that opens the settings page"
+    full_name = "Navigation event that opens the settings page"
     protocol    = "ui-nav"
     role        = "consumer"
   }
 }
 
 component "swipe_mode" {
-  description = "Swipe horses left or right to like or pass"
+  full_name = "Swipe horses left or right to like or pass"
   leaf        = true
 
   port "match-out" {
-    description = "Match event emitted when a user swipes right"
+    full_name = "Match event emitted when a user swipes right"
     protocol    = "websocket"
     role        = "provider"
   }
 }
 
 system "Web Application" {
-  description = "Web Application - Tinder for Horses"
+  full_name = "Web Application - Tinder for Horses"
   tags        = ["web", "application"]
 
   instance "backend" { source = "backend" }
@@ -282,19 +282,19 @@ system "Web Application" {
   instance "frontend" { source = "frontend" }
 
   connection "auth" {
-    description  = "JWT authentication API"
+    full_name  = "JWT authentication API"
     from         = "/Web Application/frontend/auth-out"
     to           = "/Web Application/backend/auth-in"
   }
 
   connection "database-connection" {
-    description  = "TLS connection from the backend to the database"
+    full_name  = "TLS connection from the backend to the database"
     from         = "/Web Application/backend/db-out"
     to           = "/Web Application/database/db-in"
   }
 
   connection "rest-api" {
-    description  = "REST API served by the backend to the frontend"
+    full_name  = "REST API served by the backend to the frontend"
     from         = "/Web Application/frontend/api-out"
     to           = "/Web Application/backend/api-in"
   }

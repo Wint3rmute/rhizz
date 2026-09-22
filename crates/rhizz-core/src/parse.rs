@@ -117,8 +117,8 @@ pub struct RawProject {
 /// Raw system block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawSystem {
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Child instance blocks (`instance "<local>" { source = "<def>" }`).
@@ -130,8 +130,8 @@ pub struct RawSystem {
 /// Raw component block before resolution (a reusable definition).
 #[derive(Debug, Clone, Default)]
 pub struct RawComponent {
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Optional icon name (e.g. `FontAwesome` icon identifier).
     pub icon: Option<String>,
     /// Optional border color for diagram rendering.
@@ -166,8 +166,8 @@ pub struct RawInstance {
 /// Raw protocol block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawProtocol {
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Permitted port roles (e.g. `["provider", "consumer"]`).
@@ -179,8 +179,8 @@ pub struct RawProtocol {
 /// Raw port block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawPort {
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Free-form protocol name.
     pub protocol: Option<String>,
     /// Role string (`"provider"`, `"consumer"`, `"peer"`).
@@ -196,8 +196,8 @@ pub struct RawPort {
 /// Raw connection block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawConnection {
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
@@ -213,8 +213,8 @@ pub struct RawConnection {
 /// Raw message block before resolution.
 #[derive(Debug, Clone, Default)]
 pub struct RawMessage {
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Optional explicit abstraction level.
@@ -228,8 +228,8 @@ pub struct RawMessage {
 pub struct RawField {
     /// Data type string (mapped from HCL `type` attribute).
     pub field_type: Option<String>,
-    /// Optional description text.
-    pub description: Option<String>,
+    /// Optional full name text.
+    pub full_name: Option<String>,
     /// Physical unit string.
     pub unit: Option<String>,
     /// Whether the field is required.
@@ -257,8 +257,8 @@ struct ProjectAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct SystemAttrs {
-    /// Optional description.
-    description: Option<String>,
+    /// Optional full name.
+    full_name: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
 }
@@ -267,8 +267,8 @@ struct SystemAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct ComponentAttrs {
-    /// Optional description.
-    description: Option<String>,
+    /// Optional full name.
+    full_name: Option<String>,
     /// Optional icon name.
     icon: Option<String>,
     /// Optional border color.
@@ -298,8 +298,8 @@ struct InstanceAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct ProtocolAttrs {
-    /// Optional description.
-    pub description: Option<String>,
+    /// Optional full name.
+    pub full_name: Option<String>,
     /// Optional tags list.
     pub tags: Option<Vec<String>>,
     /// Optional roles list.
@@ -310,8 +310,8 @@ struct ProtocolAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct PortAttrs {
-    /// Optional description.
-    description: Option<String>,
+    /// Optional full name.
+    full_name: Option<String>,
     /// Optional protocol name.
     protocol: Option<String>,
     /// Optional role string.
@@ -328,8 +328,8 @@ struct PortAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct ConnectionAttrs {
-    /// Optional description.
-    description: Option<String>,
+    /// Optional full name.
+    full_name: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
     /// Optional abstraction level.
@@ -346,8 +346,8 @@ struct ConnectionAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct MessageAttrs {
-    /// Optional description.
-    description: Option<String>,
+    /// Optional full name.
+    full_name: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
     /// Optional abstraction level.
@@ -362,8 +362,8 @@ struct FieldAttrs {
     /// Data type string (renamed from HCL `type`).
     #[serde(rename = "type")]
     field_type: Option<String>,
-    /// Optional description.
-    description: Option<String>,
+    /// Optional full name.
+    full_name: Option<String>,
     /// Physical unit string.
     unit: Option<String>,
     /// Whether the field is required.
@@ -427,7 +427,7 @@ fn parse_field(body: &hcl::Body) -> ParseResult<RawField> {
     let a: FieldAttrs = attrs(body)?;
     Ok(RawField {
         field_type: a.field_type,
-        description: a.description,
+        full_name: a.full_name,
         unit: a.unit,
         required: a.required,
     })
@@ -446,7 +446,7 @@ fn parse_message(body: &hcl::Body) -> ParseResult<RawMessage> {
         }
     }
     Ok(RawMessage {
-        description: a.description,
+        full_name: a.full_name,
         tags: a.tags.unwrap_or_default(),
         level: a.level,
         fields,
@@ -457,7 +457,7 @@ fn parse_message(body: &hcl::Body) -> ParseResult<RawMessage> {
 fn parse_port(body: &hcl::Body) -> ParseResult<RawPort> {
     let a: PortAttrs = attrs(body)?;
     Ok(RawPort {
-        description: a.description,
+        full_name: a.full_name,
         protocol: a.protocol,
         role: a.role,
         external: a.external,
@@ -479,7 +479,7 @@ fn parse_protocol(body: &hcl::Body) -> ParseResult<RawProtocol> {
         }
     }
     Ok(RawProtocol {
-        description: a.description,
+        full_name: a.full_name,
         tags: a.tags.unwrap_or_default(),
         roles: a.roles,
         messages,
@@ -490,7 +490,7 @@ fn parse_protocol(body: &hcl::Body) -> ParseResult<RawProtocol> {
 fn parse_connection(body: &hcl::Body) -> ParseResult<RawConnection> {
     let a: ConnectionAttrs = attrs(body)?;
     Ok(RawConnection {
-        description: a.description,
+        full_name: a.full_name,
         tags: a.tags.unwrap_or_default(),
         level: a.level,
         from: a.from,
@@ -540,7 +540,7 @@ fn parse_component(
         }
     }
     Ok(RawComponent {
-        description: a.description,
+        full_name: a.full_name,
         icon: a.icon,
         color: a.color,
         border: a.border,
@@ -609,7 +609,7 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> ParseRes
         }
     }
     Ok(RawSystem {
-        description: a.description,
+        full_name: a.full_name,
         tags: a.tags.unwrap_or_default(),
         instances,
         connections,
@@ -754,7 +754,7 @@ mod tests {
             .iter()
             .find(|s| s.label == "quadcopter")
             .unwrap();
-        assert!(quad.inner.description.is_some());
+        assert!(quad.inner.full_name.is_some());
 
         // The quadcopter system references reusable definitions via `instance`.
         let comp_labels: Vec<&str> = quad
@@ -841,13 +841,13 @@ mod tests {
             .expect("ground-station-pc instance missing");
         assert_eq!(gpc_inst.inner.source.as_deref(), Some("ground-station-pc"));
 
-        // The definition has no description and no children — should still parse.
+        // The definition has no full_name and no children — should still parse.
         let gpc = raw
             .components
             .iter()
             .find(|c| c.label == "ground-station-pc")
             .expect("ground-station-pc definition missing");
-        assert!(gpc.inner.description.is_none());
+        assert!(gpc.inner.full_name.is_none());
         assert!(gpc.inner.instances.is_empty());
     }
 
@@ -960,13 +960,13 @@ mod tests {
         assert!(team_labels.contains(&"backend-team"));
         assert!(team_labels.contains(&"platform-team"));
 
-        // operations has no description and no children (definition-side)
+        // operations has no full_name and no children (definition-side)
         let ops = raw
             .components
             .iter()
             .find(|c| c.label == "operations")
             .unwrap();
-        assert!(ops.inner.description.is_none());
+        assert!(ops.inner.full_name.is_none());
         assert!(ops.inner.instances.is_empty());
 
         // Cross-department connections
@@ -1080,7 +1080,7 @@ mod tests {
     fn parse_minimal_system() {
         let src = r#"
             system "my-sys" {
-                description = "test"
+                full_name = "test"
                 tags = ["a", "b"]
 
                 instance "c1" { source = "c1" }
@@ -1128,7 +1128,7 @@ mod tests {
                     field "f" {
                         type        = "uint8"
                         unit        = "ms"
-                        description = "desc"
+                        full_name = "desc"
                     }
                 }
             }
@@ -1146,7 +1146,7 @@ mod tests {
     fn parse_top_level_component_block() {
         let src = r#"
             component "my-comp" {
-                description = "a standalone component"
+                full_name = "a standalone component"
                 icon        = "microchip"
                 tags        = ["x"]
                 level       = 2
@@ -1159,7 +1159,7 @@ mod tests {
         let comp = &raw.components[0];
         assert_eq!(comp.label, "my-comp");
         assert_eq!(
-            comp.inner.description.as_deref(),
+            comp.inner.full_name.as_deref(),
             Some("a standalone component")
         );
         assert_eq!(comp.inner.icon.as_deref(), Some("microchip"));
@@ -1197,7 +1197,7 @@ mod tests {
     fn parse_mixed_system_component_blocks() {
         let src = r#"
             component "shared-comp" {
-                description = "top-level component"
+                full_name = "top-level component"
                 port "p1" { role = "provider" }
             }
 
@@ -1215,7 +1215,7 @@ mod tests {
         let comp = &raw.components[0];
         assert_eq!(comp.label, "shared-comp");
         assert_eq!(
-            comp.inner.description.as_deref(),
+            comp.inner.full_name.as_deref(),
             Some("top-level component")
         );
         assert_eq!(comp.inner.ports.len(), 1);
@@ -1224,8 +1224,8 @@ mod tests {
 
     #[test]
     fn merge_top_level_components_from_multiple_files() {
-        let src1 = r#"component "comp-a" { description = "first" }"#;
-        let src2 = r#"component "comp-b" { description = "second" }"#;
+        let src1 = r#"component "comp-a" { full_name = "first" }"#;
+        let src2 = r#"component "comp-b" { full_name = "second" }"#;
         let path1 = PathBuf::from("file1.hcl");
         let path2 = PathBuf::from("file2.hcl");
 
@@ -1248,15 +1248,15 @@ mod tests {
     fn parse_protocol_block() {
         let src = r#"
             protocol "spi" {
-                description = "Serial Peripheral Interface"
+                full_name = "Serial Peripheral Interface"
                 tags        = ["serial", "bus"]
                 roles       = ["provider", "consumer"]
 
                 message "transaction" {
-                    description = "SPI transfer"
+                    full_name = "SPI transfer"
                     field "cs" {
                         type        = "uint8"
-                        description = "Chip select"
+                        full_name = "Chip select"
                     }
                     field "data" {
                         type = "bytes"
@@ -1271,7 +1271,7 @@ mod tests {
         let proto = &raw.protocols[0];
         assert_eq!(proto.label, "spi");
         assert_eq!(
-            proto.inner.description.as_deref(),
+            proto.inner.full_name.as_deref(),
             Some("Serial Peripheral Interface")
         );
         assert_eq!(proto.inner.tags, vec!["serial", "bus"]);
@@ -1325,8 +1325,8 @@ mod tests {
 
     #[test]
     fn merge_protocols_from_multiple_files() {
-        let src1 = r#"protocol "proto-a" { description = "first" }"#;
-        let src2 = r#"protocol "proto-b" { description = "second" }"#;
+        let src1 = r#"protocol "proto-a" { full_name = "first" }"#;
+        let src2 = r#"protocol "proto-b" { full_name = "second" }"#;
         let path1 = PathBuf::from("file1.hcl");
         let path2 = PathBuf::from("file2.hcl");
 
@@ -1418,7 +1418,7 @@ mod tests {
 
     #[test]
     fn extra_attr_on_instance_is_e012() {
-        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    description = \"extra\"\n  }\n}";
+        let src = "component \"c\" { leaf = true }\nsystem \"s\" {\n  instance \"i\" {\n    source = \"c\"\n    full_name = \"extra\"\n  }\n}";
         let path = PathBuf::from("test.hcl");
         let err = parse_file(src, &path).expect_err("instance extra attr should fail");
         assert_eq!(

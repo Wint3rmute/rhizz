@@ -29,11 +29,11 @@ const INVENTORY_HCL = `project {
 }
 
 protocol "power" {
-  description = "DC power delivery"
+  full_name = "DC power delivery"
   roles       = ["provider", "consumer"]
 
   message "voltage" {
-    description = "Current voltage reading"
+    full_name = "Current voltage reading"
     field "volts" {
       type = "float32"
       unit = "V"
@@ -42,7 +42,7 @@ protocol "power" {
 }
 
 component "battery" {
-  description = "Main power source with a description"
+  full_name = "Main power source with a full name"
   leaf        = true
 
   port "power-out" {
@@ -52,7 +52,7 @@ component "battery" {
 }
 
 component "controller" {
-  description = "Processing hub"
+  full_name = "Processing hub"
   leaf        = false
 
   instance "mcu" {
@@ -74,7 +74,7 @@ component "draft-module" {
 }
 
 system "demo-system" {
-  description = "System using two of the definitions"
+  full_name = "System using two of the definitions"
 
   instance "battery" {
     source = "battery"

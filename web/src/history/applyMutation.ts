@@ -24,7 +24,7 @@ export interface ModelFileSystem {
 
 export interface ComponentDefinitionOptions {
   leaf?: boolean;
-  description?: string;
+  full_name?: string;
   tags?: string[];
   icon?: string;
   color?: string;
@@ -37,7 +37,7 @@ export interface ComponentDefinitionOptions {
 // two higher-level ops whose container/scope resolution used to live inline
 // in their handlers.
 export type ModelMutationOp =
-  | { kind: "add_system"; label: string; description?: string }
+  | { kind: "add_system"; label: string; full_name?: string }
   | {
     kind: "add_component_definition";
     label: string;
@@ -50,7 +50,7 @@ export type ModelMutationOp =
     parentKey?: string;
     sourceLabel?: string;
     leaf?: boolean;
-    description?: string;
+    full_name?: string;
     tags?: string[];
     ports?: PortData[];
   }
