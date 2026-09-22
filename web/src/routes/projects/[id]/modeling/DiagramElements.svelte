@@ -146,9 +146,9 @@ let visibleConnections = $derived(
 
 {#each annotations as ann (ann.text + ann.x + ann.y)}
   <AnnotationText
-    text={ann.text}
-    x={ann.x}
-    y={ann.y}
-    scale={ann.scale ?? 1}
-  />
+  text={ann.text}
+  x={ann.x}
+  y={ann.y}
+  scale={ann.scale ?? 1}
+/>
 {/each}
