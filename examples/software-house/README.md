@@ -13,7 +13,7 @@ processes are interfaces.
   sign-off, and customer feedback are modeled as directed interfaces with
   message payloads (sprint backlogs, bug tickets, approval records)
 - **Mixed completeness** — QA is fully decomposed; Sales is a leaf; Operations
-  has no description or children (W001 + W005), representing a part of the org
+  has no full_name or children (W001 + W005), representing a part of the org
   chart not yet modeled
 - **Views** — three perspectives: org chart overview, engineering team
   internals, and cross-department process map

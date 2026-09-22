@@ -1,5 +1,5 @@
 view "ground-station" {
-  description = "Ground control overview"
+  full_name = "Ground control overview"
   system      = "ground-control"
 
   filter {

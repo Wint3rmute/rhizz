@@ -43,7 +43,7 @@ pub enum ModelOp {
     AddSystem {
         label: String,
         #[serde(default)]
-        description: String,
+        full_name: String,
     },
     /// Add a top-level component definition; no-op when it already exists.
     #[serde(rename = "add_component_definition")]
@@ -73,7 +73,7 @@ pub enum ModelOp {
         #[serde(default)]
         leaf: Option<bool>,
         #[serde(default)]
-        description: Option<String>,
+        full_name: Option<String>,
         #[serde(default)]
         tags: Option<Vec<String>>,
         #[serde(default)]
@@ -116,8 +116,8 @@ pub enum ModelOp {
 pub struct DefinitionOptions {
     /// Atomic flag.
     pub leaf: Option<bool>,
-    /// Human-readable description.
-    pub description: Option<String>,
+    /// Full official name, expanding abbreviations.
+    pub full_name: Option<String>,
     /// Filtering tags.
     pub tags: Option<Vec<String>>,
     /// Optional icon name.
@@ -137,9 +137,9 @@ pub struct DefinitionOptions {
 pub struct PortJson {
     /// Port label (required).
     pub label: String,
-    /// Optional description.
+    /// Optional full name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub full_name: Option<String>,
     /// Protocol name; empty clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
@@ -166,9 +166,9 @@ pub struct PortJson {
 /// value or an empty string.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PatchJson {
-    /// Human-readable description.
+    /// Full official name, expanding abbreviations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub full_name: Option<String>,
     /// Optional icon name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
@@ -202,14 +202,14 @@ pub struct PatchJson {
 pub enum LoggedAction {
     /// A system block was added.
     #[serde(rename = "add_system")]
-    AddSystem { label: String, description: String },
+    AddSystem { label: String, full_name: String },
     /// A component definition was added.
     #[serde(rename = "add_component_definition")]
     #[serde(rename_all = "camelCase")]
     AddDefinition {
         label: String,
         leaf: bool,
-        description: String,
+        full_name: String,
         tags: Vec<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         icon: Option<String>,
@@ -473,7 +473,7 @@ fn port_from_json(port: &PortJson) -> Result<Labeled<RawPort>, MutationError> {
     Ok(Labeled {
         label: port.label.clone(),
         inner: RawPort {
-            description: port.description.clone().and_then(|d| non_empty(&d)),
+            full_name: port.full_name.clone().and_then(|d| non_empty(&d)),
             protocol: port.protocol.clone().and_then(|p| non_empty(&p)),
             role: Some(role),
             external: port.external,
@@ -487,8 +487,8 @@ fn port_from_json(port: &PortJson) -> Result<Labeled<RawPort>, MutationError> {
 
 fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, MutationError> {
     match op {
-        ModelOp::AddSystem { label, description } => {
-            let action = add_system(raw, label, description)?;
+        ModelOp::AddSystem { label, full_name } => {
+            let action = add_system(raw, label, full_name)?;
             Ok(ApplyOutcome {
                 applied: true,
                 path: None,
@@ -523,7 +523,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             parent_key,
             source_label,
             leaf,
-            description,
+            full_name,
             tags,
             ports,
         } => create_component(
@@ -533,7 +533,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
                 parent_key,
                 source_label,
                 leaf: *leaf,
-                description: description.clone(),
+                full_name: full_name.clone(),
                 tags: tags.clone(),
                 ports: ports.clone(),
             },
@@ -629,7 +629,7 @@ fn delete_connection(raw: &mut RawFile, scope: Scope, label: &str) {
 fn add_system(
     raw: &mut RawFile,
     label: &str,
-    description: &str,
+    full_name: &str,
 ) -> Result<Option<LoggedAction>, MutationError> {
     if find_system(raw, label).is_some() {
         return Ok(None);
@@ -642,13 +642,13 @@ fn add_system(
     raw.systems.push(Labeled {
         label: label.to_owned(),
         inner: RawSystem {
-            description: non_empty(description),
+            full_name: non_empty(full_name),
             ..Default::default()
         },
     });
     Ok(Some(LoggedAction::AddSystem {
         label: label.to_owned(),
-        description: description.to_owned(),
+        full_name: full_name.to_owned(),
     }))
 }
 
@@ -674,7 +674,7 @@ fn add_definition(
     raw.components.push(Labeled {
         label: label.to_owned(),
         inner: RawComponent {
-            description: options.description.clone().and_then(|d| non_empty(&d)),
+            full_name: options.full_name.clone().and_then(|d| non_empty(&d)),
             icon: options.icon.clone().and_then(|i| non_empty(&i)),
             color: options.color.clone().and_then(|c| non_empty(&c)),
             border: match &options.border {
@@ -692,7 +692,7 @@ fn add_definition(
     Ok(Some(LoggedAction::AddDefinition {
         label: label.to_owned(),
         leaf: options.leaf.unwrap_or(false),
-        description: options.description.clone().unwrap_or_default(),
+        full_name: options.full_name.clone().unwrap_or_default(),
         tags: options.tags.clone().unwrap_or_default(),
         icon: options.icon.clone().and_then(|i| non_empty(&i)),
         color: options.color.clone().and_then(|c| non_empty(&c)),
@@ -751,14 +751,14 @@ struct CreateParams<'a> {
     parent_key: &'a str,
     source_label: &'a str,
     leaf: Option<bool>,
-    description: Option<String>,
+    full_name: Option<String>,
     tags: Option<Vec<String>>,
     ports: Option<Vec<PortJson>>,
 }
 
 /// Fallback system created when a create has nowhere to place, mirroring
 /// the web editor (`EMPTY_PROJECT_HCL` / the create fallback).
-const FALLBACK_SYSTEM_DESCRIPTION: &str = "Main system";
+const FALLBACK_SYSTEM_FULL_NAME: &str = "Main system";
 
 fn create_component(
     raw: &mut RawFile,
@@ -776,7 +776,7 @@ fn create_component(
         // Both modes need a real container: fall back to the first system,
         // creating a "main" system when the model has none yet.
         if raw.systems.is_empty() {
-            actions.extend(add_system(raw, "main", FALLBACK_SYSTEM_DESCRIPTION)?);
+            actions.extend(add_system(raw, "main", FALLBACK_SYSTEM_FULL_NAME)?);
             "main".clone_into(&mut parent);
         } else {
             parent = raw
@@ -797,7 +797,7 @@ fn create_component(
             params.label,
             &DefinitionOptions {
                 leaf: params.leaf,
-                description: params.description.clone(),
+                full_name: params.full_name.clone(),
                 tags: params.tags.clone(),
                 ports: params.ports.clone(),
                 ..Default::default()
@@ -950,8 +950,8 @@ fn update_target(raw: &RawFile, path: &str) -> Option<(String, String)> {
 }
 
 fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), MutationError> {
-    if let Some(description) = &patch.description {
-        body.description = non_empty(description);
+    if let Some(full_name) = &patch.full_name {
+        body.full_name = non_empty(full_name);
     }
     if let Some(icon) = &patch.icon {
         body.icon = non_empty(icon);
@@ -1102,13 +1102,13 @@ mod tests {
     fn op_json_contract_matches_typescript_shapes() {
         // Every `kind` deserializes from the exact JSON the TS dispatcher sends.
         let cases = [
-            r#"{"kind":"add_system","label":"demo","description":"d"}"#,
+            r#"{"kind":"add_system","label":"demo","full_name":"d"}"#,
             r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true}}"#,
             r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
             r#"{"kind":"create_component","label":"a","parentKey":"demo","sourceLabel":"cpu"}"#,
             r#"{"kind":"reparent_component","sourcePath":"demo/a","targetParentPath":"demo/sub"}"#,
             r#"{"kind":"rename_component","path":"demo/a","newLabel":"b"}"#,
-            r#"{"kind":"update_component","path":"demo/a","patch":{"description":"x"}}"#,
+            r#"{"kind":"update_component","path":"demo/a","patch":{"full_name":"x"}}"#,
             r#"{"kind":"delete_component","path":"demo/a"}"#,
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
@@ -1219,12 +1219,12 @@ mod tests {
 
         let updated = mutate(
             &hcl,
-            r#"{"kind":"update_component","path":"demo/a","patch":{"description":"hot chip"}}"#,
+            r#"{"kind":"update_component","path":"demo/a","patch":{"full_name":"hot chip"}}"#,
         )
         .expect("ok");
         assert!(updated.applied);
         let hcl = updated.hcl.expect("hcl");
-        assert!(hcl.contains(r#"description = "hot chip""#));
+        assert!(hcl.contains(r#"full_name = "hot chip""#));
         // The logged path is the definition, matching the old TS store.
         let action = serde_json::to_value(&updated.actions).expect("json");
         assert_eq!(action[0]["op"], "update_component");
@@ -1430,7 +1430,7 @@ mod tests {
         let action = LoggedAction::AddDefinition {
             label: "cpu".to_owned(),
             leaf: true,
-            description: String::new(),
+            full_name: String::new(),
             tags: Vec::new(),
             icon: None,
             color: None,
@@ -1438,7 +1438,7 @@ mod tests {
             font: None,
             ports: vec![PortJson {
                 label: "p".to_owned(),
-                description: None,
+                full_name: None,
                 protocol: Some("spi".to_owned()),
                 role: Some("provider".to_owned()),
                 external: None,

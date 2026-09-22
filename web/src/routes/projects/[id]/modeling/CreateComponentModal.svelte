@@ -21,7 +21,7 @@ interface Props {
   oncreate: (data: {
     label: string;
     parentKey: string;
-    description: string;
+    full_name: string;
     tags: string[];
     leaf: boolean;
     ports: PortData[];
@@ -58,7 +58,7 @@ let textAlign = $state<TextAlign>("center");
 function emptyComponentDetails(): ComponentData {
   return {
     label: "",
-    description: "",
+    full_name: "",
     color: "default",
     border: "solid",
     font: "unstyled",
@@ -115,7 +115,7 @@ function handleCreate() {
   const data: {
     label: string;
     parentKey: string;
-    description: string;
+    full_name: string;
     tags: string[];
     leaf: boolean;
     ports: PortData[];
@@ -125,7 +125,7 @@ function handleCreate() {
   } = {
     label: trimmed,
     parentKey: selectedParentKey,
-    description: compDetails.description ?? "",
+    full_name: compDetails.full_name ?? "",
     tags: compDetails.tags ?? [],
     leaf: compDetails.leaf,
     ports: compDetails.ports,

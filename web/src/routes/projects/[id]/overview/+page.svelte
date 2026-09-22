@@ -188,7 +188,7 @@ function levelBadge(level: number): string {
                       <th>Label</th>
                       <th>Level</th>
                       <th>Type</th>
-                      <th>Description</th>
+                      <th>Full name</th>
                       <th>Tags</th>
                     </tr>
                   </thead>
@@ -225,8 +225,8 @@ function levelBadge(level: number): string {
                         <td
                           class="text-base-content/70 text-sm max-w-xs truncate"
                         >
-                          {#if comp.description}
-                            {comp.description}
+                          {#if comp.full_name}
+                            {comp.full_name}
                           {:else}
                             <span
                               class="text-base-content/40 italic"

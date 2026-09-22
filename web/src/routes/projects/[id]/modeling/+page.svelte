@@ -465,7 +465,7 @@ $effect(() => {
               {
                 kind: "add_system",
                 label: "main",
-                description: "Main system",
+                full_name: "Main system",
               },
             );
             if (ensured.applied) {
@@ -1517,7 +1517,7 @@ function onNodeDblClick(event: MouseEvent, index: number) {
 async function handleModalCreateComponent(data: {
   label: string;
   parentKey: string;
-  description: string;
+  full_name: string;
   tags: string[];
   leaf: boolean;
   ports: PortData[];
@@ -1542,7 +1542,7 @@ async function handleModalCreateComponent(data: {
         ? {}
         : { sourceLabel: data.sourceLabel }),
       leaf: data.leaf,
-      description: data.description,
+      full_name: data.full_name,
       tags: data.tags,
       ports: data.ports,
     },

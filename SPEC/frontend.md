@@ -84,7 +84,7 @@ export class DiagnosticJS {
 rhizz-core types              rhizz-wasm wrappers          TS (auto-generated)
 ─────────────────              ───────────────────          ───────────────────
 Diagnostic          ──From──▸  DiagnosticJS                 class DiagnosticJS { code, message, … }
-Component           ──From──▸  ComponentJS                  class ComponentJS  { label, description, … }
+Component           ──From──▸  ComponentJS                  class ComponentJS  { label, full_name, … }
 ScoreReport         ──From──▸  ScoreReportJS                class ScoreReportJS { overall_percentage, … }
 CategoryScore       ──From──▸  CategoryScoreJS              class CategoryScoreJS { complete, partial, … }
 ```
@@ -124,7 +124,7 @@ impl CompileResultJS {
 4. Three.js `SVGRenderer` draws the scene: rectangles for components, lines with
    arrowheads for connections.
 5. Pan/zoom via mouse drag and scroll wheel.
-6. Hover hit-testing shows component details (description, tags, ports) in an
+6. Hover hit-testing shows component details (full_name, tags, ports) in an
    overlay panel.
 7. "Export SVG" serialises the current SVG DOM to a downloadable file.
 

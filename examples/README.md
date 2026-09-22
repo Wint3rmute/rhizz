@@ -9,6 +9,6 @@ self-contained directory of `.hcl` files that can be passed to `rhizz build`.
 | [social-media/](social-media/)     | Software — short-video platform        | Service-oriented architecture, API + data flow modeling, mixed leaf/non-leaf depth                              |
 | [software-house/](software-house/) | Organization — software company        | Departments as components, business processes as interfaces, demonstrating rhizz beyond tech systems            |
 
-All three examples intentionally include incomplete parts (missing descriptions,
+All three examples intentionally include incomplete parts (missing full names,
 empty non-leaf components) that compile without errors but produce warnings —
 showing how rhizz supports incremental, work-in-progress modeling.

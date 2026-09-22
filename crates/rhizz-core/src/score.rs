@@ -12,9 +12,9 @@ fn score_component(id: ComponentId, model: &Model) -> f64 {
         return 0.0;
     };
     if comp.leaf {
-        // Leaf component: complete if it has a description, partial otherwise.
-        // (ports are optional detail — a leaf with description and no ports is Complete)
-        if comp.description.is_empty() {
+        // Leaf component: complete if it has a full_name, partial otherwise.
+        // (ports are optional detail — a leaf with full_name and no ports is Complete)
+        if comp.full_name.is_empty() {
             0.5
         } else {
             1.0
@@ -318,7 +318,7 @@ mod tests {
         let report = score(&model);
 
         // Components: ground-station-pc is incomplete (non-leaf, no children)
-        // All others should be complete (leaf with description or non-leaf with complete children)
+        // All others should be complete (leaf with full_name or non-leaf with complete children)
         assert_eq!(
             report.components.incomplete, 2,
             "drone components incomplete"
@@ -395,10 +395,10 @@ mod tests {
     // ── unit: leaf component scoring ────────────────────────────────────────
 
     #[test]
-    fn leaf_component_with_description_scores_1() {
+    fn leaf_component_with_full_name_scores_1() {
         let src = r#"
             component "a" {
-              description = "has one"
+              full_name = "has one"
               leaf = true
             }
             component "b" {
@@ -462,11 +462,11 @@ mod tests {
         let src = r#"
             protocol "proto" {
               message "m1" {
-                description = "has fields"
+                full_name = "has fields"
                 field "x" { type = "uint8" }
               }
               message "m2" {
-                description = "no fields"
+                full_name = "no fields"
               }
             }
 
@@ -501,7 +501,7 @@ mod tests {
         let src = r#"
             protocol "proto" {
               message "m1" {
-                description = "has fields"
+                full_name = "has fields"
                 field "x" { type = "uint8" }
               }
             }
@@ -536,7 +536,7 @@ mod tests {
     fn port_with_empty_protocol_scores_incomplete() {
         let src = r#"
             protocol "empty-proto" {
-              description = "no messages defined"
+              full_name = "no messages defined"
             }
 
             component "a" {

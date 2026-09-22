@@ -1,5 +1,5 @@
 view "power-paths" {
-  description = "Power distribution only"
+  full_name = "Power distribution only"
   system      = "quadcopter"
 
   filter {

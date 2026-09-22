@@ -5,80 +5,80 @@ project {
 }
 
 protocol "grpc" {
-  description = "Internal gRPC microservice communication"
+  full_name = "Internal gRPC microservice communication"
   roles       = ["provider", "consumer"]
 }
 
 protocol "hls" {
-  description = "HLS video streaming"
+  full_name = "HLS video streaming"
   roles       = ["provider", "consumer"]
 }
 
 protocol "https" {
-  description = "HTTP REST API"
+  full_name = "HTTP REST API"
   roles       = ["provider", "consumer"]
 
   message "get-feed" {
-    description = "Request next page of video feed"
+    full_name = "Request next page of video feed"
     tags        = ["api"]
 
     field "cursor" {
       type        = "string"
-      description = "Pagination cursor"
+      full_name = "Pagination cursor"
     }
 
     field "feed_type" {
       type        = "string"
-      description = "for_you | following"
+      full_name = "for_you | following"
     }
   }
 
   message "upload-video" {
-    description = "Initiate video upload"
+    full_name = "Initiate video upload"
     tags        = ["api", "video"]
 
     field "chunk_size" {
       type        = "uint32"
-      description = "Upload chunk size"
+      full_name = "Upload chunk size"
       unit        = "bytes"
     }
 
     field "title" {
       type        = "string"
-      description = "Video title"
+      full_name = "Video title"
     }
   }
 }
 
 protocol "push" {
-  description = "Push notifications"
+  full_name = "Push notifications"
   roles       = ["provider", "consumer"]
 }
 
 protocol "s3" {
-  description = "Object storage protocol"
+  full_name = "Object storage protocol"
   roles       = ["provider", "consumer"]
 }
 
 protocol "sql" {
-  description = "SQL relational database protocol"
+  full_name = "SQL relational database protocol"
   roles       = ["provider", "consumer"]
 }
 
 component "api-gateway" {
-  description = "Edge proxy — rate limiting, auth, routing"
+  full_name = "Edge proxy — rate limiting, auth, routing"
   tags        = ["backend", "infra"]
   leaf        = true
 
   port "internal" {
-    description = "Internal RPC to backend"
+    full_name = "Internal RPC to backend"
     protocol    = "grpc"
     role        = "consumer"
     tags        = ["network", "internal"]
   }
 
   port "public" {
-    description = "Public-facing API endpoint"
+    full_name = "Public-facing API endpoint"
     protocol    = "https"
     role        = "provider"
     tags        = ["network", "api"]
@@ -86,32 +86,32 @@ component "api-gateway" {
 }
 
 component "backend" {
-  description = "Server-side services"
+  full_name = "Server-side services"
   tags        = ["backend"]
 
   port "db" {
-    description = "Database connection pool"
+    full_name = "Database connection pool"
     protocol    = "sql"
     role        = "consumer"
     tags        = ["data"]
   }
 
   port "push-out" {
-    description = "Push notification sender"
+    full_name = "Push notification sender"
     protocol    = "push"
     role        = "provider"
     tags        = ["notification"]
   }
 
   port "rpc" {
-    description = "Internal RPC endpoint"
+    full_name = "Internal RPC endpoint"
     protocol    = "grpc"
     role        = "provider"
     tags        = ["network", "internal"]
   }
 
   port "storage" {
-    description = "Object storage client"
+    full_name = "Object storage client"
     protocol    = "s3"
     role        = "consumer"
     tags        = ["video", "data"]
@@ -126,14 +126,14 @@ component "backend" {
   instance "video-service" { source = "video-service" }
 
   connection "rec-to-feed" {
-    description  = "Recommendation scores fed into feed assembly"
+    full_name  = "Recommendation scores fed into feed assembly"
     tags         = ["data"]
     from         = "recommendation-engine"
     to           = "feed-service"
   }
 
   connection "user-to-feed" {
-    description  = "Follow graph lookup for Following tab"
+    full_name  = "Follow graph lookup for Following tab"
     tags         = ["data"]
     from         = "feed-service"
     to           = "user-service"
@@ -141,19 +141,19 @@ component "backend" {
 }
 
 component "cdn" {
-  description = "Content delivery network for video segments"
+  full_name = "Content delivery network for video segments"
   tags        = ["infra", "video"]
   leaf        = true
 
   port "origin" {
-    description = "Origin pull from object store"
+    full_name = "Origin pull from object store"
     protocol    = "s3"
     role        = "consumer"
     tags        = ["video", "infra"]
   }
 
   port "stream-out" {
-    description = "HLS/DASH streaming to clients"
+    full_name = "HLS/DASH streaming to clients"
     protocol    = "hls"
     role        = "provider"
     tags        = ["video", "network"]
@@ -161,12 +161,12 @@ component "cdn" {
 }
 
 component "database" {
-  description = "PostgreSQL primary store"
+  full_name = "PostgreSQL primary store"
   tags        = ["infra", "data"]
   leaf        = true
 
   port "sql" {
-    description = "SQL query endpoint"
+    full_name = "SQL query endpoint"
     protocol    = "sql"
     role        = "provider"
     tags        = ["data"]
@@ -174,23 +174,23 @@ component "database" {
 }
 
 component "feed-service" {
-  description = "Feed assembly from recommendation + follow graph"
+  full_name = "Feed assembly from recommendation + follow graph"
   tags        = ["backend", "data"]
   leaf        = true
 }
 
 component "feed-ui" {
-  description = "Scrollable video feed (For-You / Following)"
+  full_name = "Scrollable video feed (For-You / Following)"
   tags        = ["client", "ui"]
   leaf        = true
 }
 
 component "mobile-app" {
-  description = "iOS/Android client application"
+  full_name = "iOS/Android client application"
   tags        = ["client", "mobile"]
 
   port "api" {
-    description = "Client-side API endpoint"
+    full_name = "Client-side API endpoint"
     protocol    = "https"
     role        = "consumer"
     tags        = ["network", "api"]
@@ -198,7 +198,7 @@ component "mobile-app" {
   }
 
   port "push-in" {
-    description = "Push notification receiver"
+    full_name = "Push notification receiver"
     protocol    = "push"
     role        = "consumer"
     tags        = ["notification"]
@@ -206,7 +206,7 @@ component "mobile-app" {
   }
 
   port "stream-in" {
-    description = "HLS/DASH video stream input"
+    full_name = "HLS/DASH video stream input"
     protocol    = "hls"
     role        = "consumer"
     tags        = ["video", "network"]
@@ -220,7 +220,7 @@ component "mobile-app" {
   instance "video-recorder" { source = "video-recorder" }
 
   connection "playback" {
-    description  = "Feed UI requests playback from player"
+    full_name  = "Feed UI requests playback from player"
     tags         = ["client"]
     from         = "feed-ui"
     to           = "video-player"
@@ -228,12 +228,12 @@ component "mobile-app" {
 }
 
 component "object-store" {
-  description = "S3-compatible blob storage for raw + transcoded video"
+  full_name = "S3-compatible blob storage for raw + transcoded video"
   tags        = ["infra", "video"]
   leaf        = true
 
   port "s3" {
-    description = "S3-compatible API"
+    full_name = "S3-compatible API"
     protocol    = "s3"
     role        = "provider"
     tags        = ["video", "data"]
@@ -241,36 +241,36 @@ component "object-store" {
 }
 
 component "recommendation-engine" {
-  description = "ML-based video ranking"
+  full_name = "ML-based video ranking"
   tags        = ["backend", "ml"]
 }
 
 component "user-service" {
-  description = "Accounts, profiles, follow graph"
+  full_name = "Accounts, profiles, follow graph"
   tags        = ["backend", "data"]
   leaf        = true
 }
 
 component "video-player" {
-  description = "Adaptive bitrate video player"
+  full_name = "Adaptive bitrate video player"
   tags        = ["client", "video"]
   leaf        = true
 }
 
 component "video-recorder" {
-  description = "Camera capture + filters + upload"
+  full_name = "Camera capture + filters + upload"
   tags        = ["client", "video"]
   leaf        = true
 }
 
 component "video-service" {
-  description = "Upload processing, transcoding, storage"
+  full_name = "Upload processing, transcoding, storage"
   tags        = ["backend", "video"]
   leaf        = true
 }
 
 system "buzzvid" {
-  description = "Short-video social media platform"
+  full_name = "Short-video social media platform"
   tags        = ["software", "web"]
 
   instance "api-gateway" { source = "api-gateway" }
@@ -286,49 +286,49 @@ system "buzzvid" {
   instance "object-store" { source = "object-store" }
 
   connection "backend-to-db" {
-    description  = "SQL queries: backend → database"
+    full_name  = "SQL queries: backend → database"
     tags         = ["data"]
     from         = "/buzzvid/backend/db"
     to           = "/buzzvid/database/sql"
   }
 
   connection "backend-to-storage" {
-    description  = "Object put/get: video service → blob store"
+    full_name  = "Object put/get: video service → blob store"
     tags         = ["video", "data"]
     from         = "/buzzvid/backend/storage"
     to           = "/buzzvid/object-store/s3"
   }
 
   connection "cdn-origin" {
-    description  = "CDN pulls transcoded segments from object store"
+    full_name  = "CDN pulls transcoded segments from object store"
     tags         = ["video", "infra"]
     from         = "/buzzvid/cdn/origin"
     to           = "/buzzvid/object-store/s3"
   }
 
   connection "client-api" {
-    description  = "HTTPS REST/gRPC: mobile app ↔ API gateway"
+    full_name  = "HTTPS REST/gRPC: mobile app ↔ API gateway"
     tags         = ["network", "api"]
     from         = "/buzzvid/mobile-app/api"
     to           = "/buzzvid/api-gateway/public"
   }
 
   connection "client-streaming" {
-    description  = "HLS/DASH video streaming: CDN → mobile app"
+    full_name  = "HLS/DASH video streaming: CDN → mobile app"
     tags         = ["video", "network"]
     from         = "/buzzvid/cdn/stream-out"
     to           = "/buzzvid/mobile-app/stream-in"
   }
 
   connection "gateway-to-backend" {
-    description  = "Internal RPC: gateway → backend services"
+    full_name  = "Internal RPC: gateway → backend services"
     tags         = ["network", "internal"]
     from         = "/buzzvid/api-gateway/internal"
     to           = "/buzzvid/backend/rpc"
   }
 
   connection "push-notify" {
-    description  = "Push notifications: backend → mobile app"
+    full_name  = "Push notifications: backend → mobile app"
     tags         = ["notification"]
     from         = "/buzzvid/backend/push-out"
     to           = "/buzzvid/mobile-app/push-in"

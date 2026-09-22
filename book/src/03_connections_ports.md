@@ -5,23 +5,23 @@ system. You've already seen the basic component-to-component connection schema:
 
 ```rhizz,level=architectural
 component "server" {
-  description = "Server in the cloud"
+  full_name = "Server in the cloud"
   leaf = true
 }
 
 component "client" {
-  description = "Client's computer"
+  full_name = "Client's computer"
   leaf = true
 }
 
 system "banking-application" {
-  description = "Internet-based access to your bank account"
+  full_name = "Internet-based access to your bank account"
 
   instance "server" { source = "server" }
   instance "client" { source = "client" }
 
   connection "api-access" {
-    description = "REST API with OAuth2"
+    full_name = "REST API with OAuth2"
     from = "server"
     to = "client"
   }
@@ -53,24 +53,24 @@ points us towards things to specify further:
 
 ```rhizz,level=architectural
 component "computer" {
-  description = "Personal Computer (PC)"
+  full_name = "Personal Computer (PC)"
   leaf = true
   port "usb-c" { }
 }
 
 component "mouse" {
-  description = "Computer Mouse"
+  full_name = "Computer Mouse"
   leaf = true
   port "usb-c" { }
 }
 
 system "work-computer" {
-  description = "My work computer"
+  full_name = "My work computer"
   instance "computer" { source = "computer" }
   instance "mouse" { source = "mouse" }
 
   connection "mouse-to-computer" {
-    description = "Mouse connected to the PC by a USB-C cable"
+    full_name = "Mouse connected to the PC by a USB-C cable"
     from = "computer/usb-c"
     to = "mouse/usb-c"
   }

@@ -1,5 +1,5 @@
 view "org-chart" {
-  description = "Full organizational overview"
+  full_name = "Full organizational overview"
   system      = "acme-software"
 
   filter {

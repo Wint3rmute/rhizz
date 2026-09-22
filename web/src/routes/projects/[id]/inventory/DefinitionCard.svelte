@@ -1,6 +1,6 @@
 <script lang="ts">
 // One entity card in the Inventory Browser sidebar: icon, label, completion
-// + level badges, and a short description. Purely presentational.
+// + level badges, and a short full name. Purely presentational.
 import { resolveIcon } from "../../../../iconHelper";
 import {
   completionBadge,
@@ -81,9 +81,9 @@ let badgeText = $derived(
         </span>
         <span class="badge badge-ghost badge-sm">L{depth}</span>
       </div>
-      {#if definition.description}
+      {#if definition.full_name}
         <p class="mt-1 text-xs text-base-content/60 line-clamp-2">
-          {definition.description}
+          {definition.full_name}
         </p>
       {/if}
     </div>

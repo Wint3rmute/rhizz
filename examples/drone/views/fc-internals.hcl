@@ -1,5 +1,5 @@
 view "fc-internals" {
-  description = "Flight controller internal breakdown"
+  full_name = "Flight controller internal breakdown"
   system      = "quadcopter"
 
   filter {

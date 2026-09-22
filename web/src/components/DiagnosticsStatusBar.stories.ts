@@ -10,8 +10,8 @@ const sampleDiagnostics = [
     code: "E002",
     message: 'connection "uart-link" references undefined component "gps"',
   },
-  { code: "W004", message: 'component "motor" is missing a description' },
-  { code: "W004", message: 'component "esc" is missing a description' },
+  { code: "W004", message: 'component "motor" is missing a full_name' },
+  { code: "W004", message: 'component "esc" is missing a full_name' },
 ] satisfies StoryDiagnostic[];
 
 const meta = {

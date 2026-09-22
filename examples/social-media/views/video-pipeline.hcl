@@ -1,5 +1,5 @@
 view "video-pipeline" {
-  description = "Video data flow: upload → storage → CDN → playback"
+  full_name = "Video data flow: upload → storage → CDN → playback"
   system      = "buzzvid"
 
   filter {

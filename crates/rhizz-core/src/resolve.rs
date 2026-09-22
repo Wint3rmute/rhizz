@@ -86,7 +86,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
         r.model.protocols.push(crate::model::Protocol {
             label: lp.label.clone(),
-            description: lp.inner.description.unwrap_or_default(),
+            full_name: lp.inner.full_name.unwrap_or_default(),
             tags: lp.inner.tags,
             roles,
             messages: msg_ids,
@@ -168,7 +168,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
         r.model.systems.push(System {
             label: ls.label.clone(),
-            description: ls.inner.description.clone().unwrap_or_default(),
+            full_name: ls.inner.full_name.clone().unwrap_or_default(),
             tags: ls.inner.tags.clone(),
             components: vec![],
             connections: vec![],
@@ -335,7 +335,7 @@ fn register_component_inner(
         label: label.to_owned(),
         source,
         kind,
-        description: body.description.clone().unwrap_or_default(),
+        full_name: body.full_name.clone().unwrap_or_default(),
         icon: body.icon.clone(),
         color: body.color.clone(),
         border: body.border,
@@ -560,7 +560,7 @@ fn process_ports(
 
         r.model.ports.push(Port {
             label: lp.label.clone(),
-            description: lp.inner.description.clone().unwrap_or_default(),
+            full_name: lp.inner.full_name.clone().unwrap_or_default(),
             protocol: lp.inner.protocol.clone().unwrap_or_default(),
             protocol_id: proto_id,
             role,
@@ -649,7 +649,7 @@ fn process_connections_in_scope(
 
         r.model.connections.push(Connection {
             label: lc.label.clone(),
-            description: lc.inner.description.clone().unwrap_or_default(),
+            full_name: lc.inner.full_name.clone().unwrap_or_default(),
             tags: lc.inner.tags.clone(),
             level,
             from: from_ep,
@@ -989,7 +989,7 @@ fn process_messages(
         let mid = MessageId(r.model.messages.len());
         r.model.messages.push(Message {
             label: lm.label.clone(),
-            description: lm.inner.description.clone().unwrap_or_default(),
+            full_name: lm.inner.full_name.clone().unwrap_or_default(),
             tags: lm.inner.tags.clone(),
             level,
             fields: field_ids,
@@ -1040,7 +1040,7 @@ fn process_fields(
         r.model.fields.push(Field {
             label: lf.label.clone(),
             field_type,
-            description: lf.inner.description.clone().unwrap_or_default(),
+            full_name: lf.inner.full_name.clone().unwrap_or_default(),
             unit: lf.inner.unit.clone().unwrap_or_default(),
             required: lf.inner.required.unwrap_or(false),
         });
@@ -1169,7 +1169,7 @@ mod tests {
         let gc = &model.systems[gc_sid.0];
         assert!(gc.components.len() >= 3);
 
-        // ground-station-pc: non-leaf, no children -> W001; no description -> W004
+        // ground-station-pc: non-leaf, no children -> W001; no full_name -> W004
         let gpc_cid = gc
             .components
             .iter()
@@ -1179,7 +1179,7 @@ mod tests {
         let gpc = &model.components[gpc_cid.0];
         assert!(!gpc.leaf);
         assert!(gpc.children.is_empty());
-        assert!(gpc.description.is_empty());
+        assert!(gpc.full_name.is_empty());
 
         // Warnings: W001 for ground-station-pc, W004 for ground-station-pc
         let w001_labels: Vec<&str> = warnings
@@ -1285,7 +1285,7 @@ mod tests {
         assert!(!eng.leaf);
         assert!(eng.children.len() >= 3);
 
-        // operations: non-leaf, no children -> W001; no description -> W004
+        // operations: non-leaf, no children -> W001; no full_name -> W004
         let ops_cid = acme
             .components
             .iter()
@@ -1295,7 +1295,7 @@ mod tests {
         let ops = &model.components[ops_cid.0];
         assert!(!ops.leaf);
         assert!(ops.children.is_empty());
-        assert!(ops.description.is_empty());
+        assert!(ops.full_name.is_empty());
 
         // sprint-planning connection: from=product:sprint-out, to=engineering:sprint-in
         let product_cid = acme
@@ -1516,9 +1516,9 @@ mod tests {
         // Default level: system implicitly 0, component=1, connection=1 (parent_level+1)
         assert_eq!(model.components[0].level, 1);
         assert_eq!(model.connections[0].level, 1);
-        // Default description = ""
-        assert_eq!(model.systems[0].description, "");
-        assert_eq!(model.components[0].description, "");
+        // Default full_name = ""
+        assert_eq!(model.systems[0].full_name, "");
+        assert_eq!(model.components[0].full_name, "");
     }
 
     // ── source resolution ──────────────────────────────────────────────────────
@@ -1527,7 +1527,7 @@ mod tests {
     fn source_basic_clones_body() {
         let src = r#"
 component "sensor" {
-    description = "a temperature sensor"
+    full_name = "a temperature sensor"
     leaf = true
     port "data-out" {
         role = "provider"
@@ -1546,7 +1546,7 @@ system "sys" {
         let tc = &model.components[tc_cid.0];
         assert_eq!(tc.label, "temp-sensor");
         assert_eq!(tc.source.as_deref(), Some("sensor"));
-        assert_eq!(tc.description, "a temperature sensor");
+        assert_eq!(tc.full_name, "a temperature sensor");
         assert!(tc.leaf);
         assert_eq!(tc.ports.len(), 1);
         assert_eq!(model.ports[tc.ports[0].0].label, "data-out");
@@ -1556,7 +1556,7 @@ system "sys" {
     fn source_exclusivity_e012() {
         let src = r#"
 component "sensor" {
-    description = "sensor"
+    full_name = "sensor"
     leaf = true
 }
 system "sys" {
@@ -1624,11 +1624,11 @@ system "sys" {
     fn source_nested_works() {
         let src = r#"
 component "c-comp" {
-    description = "component C"
+    full_name = "component C"
     leaf = true
 }
 component "b-comp" {
-    description = "component B"
+    full_name = "component B"
     instance "child" {
         source = "c-comp"
     }
@@ -1645,11 +1645,11 @@ system "sys" {
         let a_cid = model.systems[0].components[0];
         let a = &model.components[a_cid.0];
         assert_eq!(a.label, "a");
-        assert_eq!(a.description, "component B");
+        assert_eq!(a.full_name, "component B");
         assert_eq!(a.children.len(), 1);
         let child = &model.components[a.children[0].0];
         assert_eq!(child.label, "child");
-        assert_eq!(child.description, "component C");
+        assert_eq!(child.full_name, "component C");
         assert!(child.leaf);
     }
 
@@ -1657,7 +1657,7 @@ system "sys" {
     fn source_same_component_two_systems() {
         let src = r#"
 component "sensor" {
-    description = "sensor"
+    full_name = "sensor"
     leaf = true
 }
 system "sys1" {
@@ -1679,8 +1679,8 @@ system "sys2" {
         let s2 = &model.components[model.systems[1].components[0].0];
         assert_eq!(s1.source.as_deref(), Some("sensor"));
         assert_eq!(s2.source.as_deref(), Some("sensor"));
-        assert_eq!(s1.description, "sensor");
-        assert_eq!(s2.description, "sensor");
+        assert_eq!(s1.full_name, "sensor");
+        assert_eq!(s2.full_name, "sensor");
     }
 
     #[test]
@@ -1691,7 +1691,7 @@ system "sys2" {
         // contains one sourcing `c`) is preserved as a child-instance chain.
         let src = r#"
 component "c" {
-    description = "concrete"
+    full_name = "concrete"
     leaf = true
 }
 component "b" {
@@ -1720,7 +1720,7 @@ system "sys" {
         assert_eq!(b_child.source.as_deref(), Some("b"));
         let c_child = &model.components[b_child.children[0].0];
         assert_eq!(c_child.source.as_deref(), Some("c"));
-        assert_eq!(c_child.description, "concrete");
+        assert_eq!(c_child.full_name, "concrete");
     }
 
     #[test]
@@ -1729,7 +1729,7 @@ system "sys" {
         // source is None; definitions are not clones of anything.
         let src = r#"
 component "plain" {
-    description = "inline"
+    full_name = "inline"
     leaf = true
 }
 system "sys" {
@@ -1751,7 +1751,7 @@ system "sys" {
     fn w012_referenced_top_level_no_warning() {
         let src = r#"
 component "sensor" {
-    description = "sensor"
+    full_name = "sensor"
     leaf = true
 }
 system "sys" {
@@ -1777,7 +1777,7 @@ system "sys" {
         // must not emit W012.
         let src = r#"
 component "unused" {
-    description = "never referenced"
+    full_name = "never referenced"
     leaf = true
 }
 component "a" { leaf = true }
@@ -1798,7 +1798,7 @@ system "sys" {
     fn w012_referenced_multiple_times_no_warning() {
         let src = r#"
 component "sensor" {
-    description = "sensor"
+    full_name = "sensor"
     leaf = true
 }
 system "sys1" {
@@ -1825,7 +1825,7 @@ system "sys2" {
     fn w012_unreferenced_top_level_protocol_emits_warning() {
         let src = r#"
 protocol "unused-proto" {
-    description = "never referenced"
+    full_name = "never referenced"
 }
 component "a" { leaf = true }
 system "sys" {
@@ -1854,7 +1854,7 @@ system "sys" {
     fn w012_referenced_protocol_no_warning() {
         let src = r#"
 protocol "used-proto" {
-    description = "used by port"
+    full_name = "used by port"
 }
 component "a" {
     leaf = true
@@ -1986,12 +1986,12 @@ system "drone" {
     fn resolve_protocol_definition_and_linking() {
         let src = r#"
 protocol "spi" {
-  description = "SPI bus"
+  full_name = "SPI bus"
   tags        = ["serial"]
   roles       = ["provider", "consumer"]
 
   message "frame" {
-    description = "Data frame"
+    full_name = "Data frame"
     field "data" { type = "bytes" }
   }
 }
@@ -2014,7 +2014,7 @@ system "drone" {
         assert_eq!(model.protocols.len(), 1);
         let proto = &model.protocols[0];
         assert_eq!(proto.label, "spi");
-        assert_eq!(proto.description, "SPI bus");
+        assert_eq!(proto.full_name, "SPI bus");
         assert_eq!(proto.tags, vec!["serial"]);
         assert_eq!(
             proto.roles,

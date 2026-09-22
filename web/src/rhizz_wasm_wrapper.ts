@@ -42,7 +42,7 @@ export interface ViewFilterDefinition {
 
 export interface ViewDefinition {
   label: string;
-  description?: string;
+  full_name?: string;
   tags?: string[];
   system: string;
   filter?: ViewFilterDefinition;
@@ -124,7 +124,7 @@ export interface ExampleFile {
 export interface ExampleProject {
   id: string;
   name: string;
-  description: string;
+  full_name: string;
   files: ExampleFile[];
 }
 

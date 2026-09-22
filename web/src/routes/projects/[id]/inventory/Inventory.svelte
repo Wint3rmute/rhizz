@@ -99,7 +99,7 @@ let definitions = $derived.by<InventoryDefinition[]>(() => {
       if (!c) {
         return {
           label: `#${index}`,
-          description: "",
+          full_name: "",
           tags: [],
           level: 1,
           leaf: false,
@@ -109,7 +109,7 @@ let definitions = $derived.by<InventoryDefinition[]>(() => {
       }
       return {
         label: c.label,
-        description: c.description ?? "",
+        full_name: c.full_name ?? "",
         tags: c.tags ?? [],
         level: c.level ?? 1,
         leaf: c.leaf ?? false,
@@ -126,7 +126,7 @@ let definitions = $derived.by<InventoryDefinition[]>(() => {
             role: p?.role ?? "peer",
             external: p?.external ?? false,
             required: p?.required ?? true,
-            description: p?.description ?? "",
+            full_name: p?.full_name ?? "",
           };
         }),
       };

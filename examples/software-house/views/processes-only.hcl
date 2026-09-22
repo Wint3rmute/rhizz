@@ -1,5 +1,5 @@
 view "processes-only" {
-  description = "All cross-department processes"
+  full_name = "All cross-department processes"
   system      = "acme-software"
 
   filter {

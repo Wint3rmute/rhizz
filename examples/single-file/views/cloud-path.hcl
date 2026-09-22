@@ -1,5 +1,5 @@
 view "cloud-path" {
-  description = "Cloud-facing data path only"
+  full_name = "Cloud-facing data path only"
   system      = "home-monitor"
 
   filter {

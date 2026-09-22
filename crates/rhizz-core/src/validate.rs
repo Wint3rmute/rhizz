@@ -75,12 +75,12 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W004 -- entity is missing a description
+    // W004 -- entity is missing a full_name
     for sys in &model.systems {
-        if sys.description.is_empty() {
+        if sys.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("system '{}' is missing a description", sys.label),
+                format!("system '{}' is missing a full_name", sys.label),
             ));
         }
     }
@@ -88,26 +88,26 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if comp.kind == ComponentKind::Instance {
             continue;
         }
-        if comp.description.is_empty() {
+        if comp.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("component '{}' is missing a description", comp.label),
+                format!("component '{}' is missing a full_name", comp.label),
             ));
         }
     }
     for conn in &model.connections {
-        if conn.description.is_empty() {
+        if conn.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("connection '{}' is missing a description", conn.label),
+                format!("connection '{}' is missing a full_name", conn.label),
             ));
         }
     }
     for msg in &model.messages {
-        if msg.description.is_empty() {
+        if msg.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("message '{}' is missing a description", msg.label),
+                format!("message '{}' is missing a full_name", msg.label),
             ));
         }
     }
@@ -522,7 +522,7 @@ mod tests {
             warning_codes(&warnings)
         );
 
-        // Expected: W004 for ground-station-pc (missing description)
+        // Expected: W004 for ground-station-pc (missing full_name)
         assert!(
             warnings
                 .iter()
@@ -598,7 +598,7 @@ mod tests {
             warning_codes(&warnings)
         );
 
-        // W004 -- operations: missing description
+        // W004 -- operations: missing full_name
         assert!(
             warnings
                 .iter()
@@ -615,7 +615,7 @@ mod tests {
         let src = r#"
             protocol "proto" {
               message "empty-msg" {
-                description = "a message with no fields"
+                full_name = "a message with no fields"
               }
             }
 
@@ -856,7 +856,7 @@ mod tests {
     }
 
     fn model_with_definition(label: &str) -> Model {
-        let src = format!("component \"{label}\" {{\n  description = \"d\"\n  leaf = true\n}}");
+        let src = format!("component \"{label}\" {{\n  full_name = \"d\"\n  leaf = true\n}}");
         let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
         resolve(raw).unwrap().0
     }
@@ -909,7 +909,7 @@ mod tests {
     fn w018_not_emitted_for_instances() {
         let src = r#"
             component "motor" {
-              description = "d"
+              full_name = "d"
               leaf = true
             }
             system "s" {
@@ -945,7 +945,7 @@ mod tests {
     fn w003_not_emitted_for_definitions() {
         let src = r#"
             component "sensor" {
-              description = "Reusable definition"
+              full_name = "Reusable definition"
               leaf = true
               port "data" { protocol = "sig" }
             }
@@ -969,7 +969,7 @@ mod tests {
     fn w003_emitted_for_unconnected_instance_with_source_suffix() {
         let src = r#"
             component "sensor" {
-              description = "Reusable definition"
+              full_name = "Reusable definition"
               leaf = true
             }
             system "s" {
@@ -1002,7 +1002,7 @@ mod tests {
     fn w010_not_emitted_for_definition_ports() {
         let src = r#"
             component "sensor" {
-              description = "Reusable definition"
+              full_name = "Reusable definition"
               leaf = true
               port "data" { protocol = "sig" }
             }
@@ -1021,7 +1021,7 @@ mod tests {
     fn w001_and_w004_emitted_once_for_definition_not_per_instance() {
         let src = r#"
             component "motor" {
-              description = ""
+              full_name = ""
               leaf = false
             }
             system "s" {
@@ -1032,7 +1032,7 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let warnings = validate(&model);
-        // Structural and description warnings come from the definition only,
+        // Structural and full_name warnings come from the definition only,
         // once each, even though two instances clone the (empty) body.
         let w001: Vec<&Diagnostic> = warnings
             .iter()
@@ -1072,7 +1072,7 @@ mod tests {
     // ── validate_view ────────────────────────────────────────────────────
 
     fn model_with_system(label: &str) -> Model {
-        let src = format!(r#"system "{label}" {{ description = "d" }}"#);
+        let src = format!(r#"system "{label}" {{ full_name = "d" }}"#);
         let raw = crate::parse::parse_file(&src, Path::new("system.hcl")).expect("parse");
         resolve(raw).expect("resolve").0
     }

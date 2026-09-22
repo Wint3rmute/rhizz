@@ -25,7 +25,7 @@ import type { ComponentData, PortData } from "./modelView";
 export type ComponentPatch = Partial<
   Pick<
     ComponentData,
-    | "description"
+    | "full_name"
     | "icon"
     | "color"
     | "border"
@@ -37,12 +37,12 @@ export type ComponentPatch = Partial<
 >;
 
 export type ModelAction =
-  | { op: "add_system"; label: string; description: string }
+  | { op: "add_system"; label: string; full_name: string }
   | {
     op: "add_component_definition";
     label: string;
     leaf: boolean;
-    description: string;
+    full_name: string;
     tags: string[];
     icon?: string | undefined;
     color?: string | undefined;
@@ -127,12 +127,12 @@ function toMutationOp(action: ModelAction): unknown {
       return {
         kind: "add_system",
         label: action.label,
-        description: action.description,
+        full_name: action.full_name,
       };
     case "add_component_definition": {
       const options: {
         leaf: boolean;
-        description: string;
+        full_name: string;
         tags: string[];
         ports: PortData[];
         icon?: string;
@@ -141,7 +141,7 @@ function toMutationOp(action: ModelAction): unknown {
         font?: string;
       } = {
         leaf: action.leaf,
-        description: action.description,
+        full_name: action.full_name,
         tags: action.tags,
         ports: action.ports,
       };

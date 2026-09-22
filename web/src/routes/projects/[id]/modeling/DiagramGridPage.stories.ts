@@ -74,7 +74,7 @@ system "demo" {
 // (see persistence.ts's layoutToHcl): one view with two placed nodes.
 // Coordinates deliberately cross a 1000-unit graduation line (x/y = 1000).
 const GRID_VIEWS_HCL = `view "main" {
-  description = ""
+  full_name = ""
   system      = "demo"
 
   node "demo/gateway" {

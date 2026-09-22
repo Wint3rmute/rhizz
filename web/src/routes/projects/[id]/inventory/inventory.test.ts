@@ -15,7 +15,7 @@ function def(
 ): InventoryDefinition {
   return {
     label: "cm",
-    description: "Command module",
+    full_name: "Command module",
     tags: [],
     level: 1,
     leaf: false,
@@ -36,7 +36,7 @@ function port(overrides: Partial<PortInfo> = {}): PortInfo {
     role: "provider",
     external: false,
     required: true,
-    description: "",
+    full_name: "",
     ...overrides,
   };
 }
@@ -55,15 +55,15 @@ describe("definitionDepth", () => {
 });
 
 describe("completionBadge", () => {
-  it("returns 100% Specified for a complete leaf (description present)", () => {
+  it("returns 100% Specified for a complete leaf (full name present)", () => {
     expect(completionBadge(def({ leaf: true }))).toEqual({
       kind: "specified",
       percent: 100,
     });
   });
 
-  it("returns a partial percentage for a leaf without description", () => {
-    expect(completionBadge(def({ leaf: true, description: "" }))).toEqual({
+  it("returns a partial percentage for a leaf without full name", () => {
+    expect(completionBadge(def({ leaf: true, full_name: "" }))).toEqual({
       kind: "partial",
       percent: 50,
     });
@@ -80,7 +80,7 @@ describe("completionBadge", () => {
 
   it("returns a partial percentage when some children are incomplete", () => {
     const d = def({
-      children: [def({ leaf: true }), def({ leaf: true, description: "" })],
+      children: [def({ leaf: true }), def({ leaf: true, full_name: "" })],
     });
     const badge = completionBadge(d);
     expect(badge.kind).toBe("partial");
@@ -88,17 +88,17 @@ describe("completionBadge", () => {
     expect(badge.percent).toBeGreaterThan(0);
   });
 
-  it("ignores ports when scoring (leaf with description + no ports is complete)", () => {
+  it("ignores ports when scoring (leaf with full name + no ports is complete)", () => {
     const d = def({ leaf: true, ports: [port()] });
     expect(completionBadge(d)).toEqual({ kind: "specified", percent: 100 });
   });
 });
 
 describe("filterDefinitions", () => {
-  const cm = def({ label: "cm", description: "Command module" });
+  const cm = def({ label: "cm", full_name: "Command module" });
   const sm = def({
     label: "sm",
-    description: "Service module",
+    full_name: "Service module",
     tags: ["propulsion"],
   });
   const all = [cm, sm];
@@ -116,7 +116,7 @@ describe("filterDefinitions", () => {
     ).toEqual(all);
   });
 
-  it("filters by query across label and description", () => {
+  it("filters by query across label and full name", () => {
     expect(
       filterDefinitions(all, { tab: InventoryTab.All, query: "command" }),
     ).toEqual([cm]);

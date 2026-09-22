@@ -1,5 +1,5 @@
 view "drone-overview" {
-  description = "Top-level drone architecture"
+  full_name = "Top-level drone architecture"
   system      = "quadcopter"
 
   filter {

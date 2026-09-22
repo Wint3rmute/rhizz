@@ -8,7 +8,7 @@ const meta = {
     componentKey: "drone/flight-controller",
     component: {
       label: "flight-controller",
-      description: "Central processing unit for flight stabilization",
+      full_name: "Central processing unit for flight stabilization",
       tags: ["compute", "core"],
       color: "default",
       border: "solid",
@@ -17,7 +17,7 @@ const meta = {
       ports: [
         {
           label: "spi",
-          description: "High speed sensor bus",
+          full_name: "High speed sensor bus",
           protocol: "spi",
           role: "provider",
           external: true,
@@ -65,7 +65,7 @@ export const AtomicLeaf: Story = {
   args: {
     component: {
       label: "temp-sensor",
-      description: "BME280 temperature sensor",
+      full_name: "BME280 temperature sensor",
       tags: ["sensor"],
       color: "default",
       border: "solid",

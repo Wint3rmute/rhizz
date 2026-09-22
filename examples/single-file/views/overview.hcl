@@ -1,5 +1,5 @@
 view "overview" {
-  description = "Full home-monitor system architecture"
+  full_name = "Full home-monitor system architecture"
   system      = "home-monitor"
 
   filter {

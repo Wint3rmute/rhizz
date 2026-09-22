@@ -120,11 +120,11 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
 
     let indent = "  ";
 
-    if !sys.description.is_empty() {
+    if !sys.full_name.is_empty() {
         let _ = writeln!(
             out,
-            "{indent}description = {}",
-            escape_string(&sys.description)
+            "{indent}full_name = {}",
+            escape_string(&sys.full_name)
         );
     }
     if !sys.tags.is_empty() {
@@ -194,11 +194,11 @@ fn serialize_component_def(out: &mut String, comp: &Component, model: &Model) {
 
     let indent = "  ";
 
-    if !comp.description.is_empty() {
+    if !comp.full_name.is_empty() {
         let _ = writeln!(
             out,
-            "{indent}description = {}",
-            escape_string(&comp.description)
+            "{indent}full_name = {}",
+            escape_string(&comp.full_name)
         );
     }
     if let Some(icon) = comp.icon.as_deref().filter(|s| !s.is_empty()) {
@@ -333,11 +333,11 @@ fn serialize_port(out: &mut String, port: &Port, depth: usize) {
 
     let inner_indent = "  ".repeat(depth.saturating_add(1));
 
-    if !port.description.is_empty() {
+    if !port.full_name.is_empty() {
         let _ = writeln!(
             out,
-            "{inner_indent}description = {}",
-            escape_string(&port.description)
+            "{inner_indent}full_name = {}",
+            escape_string(&port.full_name)
         );
     }
     if !port.protocol.is_empty() {
@@ -375,8 +375,8 @@ fn serialize_port(out: &mut String, port: &Port, depth: usize) {
 fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
     let _ = writeln!(out, "protocol {} {{", escape_string(&proto.label));
 
-    if !proto.description.is_empty() {
-        let _ = writeln!(out, "  description = {}", escape_string(&proto.description));
+    if !proto.full_name.is_empty() {
+        let _ = writeln!(out, "  full_name = {}", escape_string(&proto.full_name));
     }
     if !proto.tags.is_empty() {
         let _ = writeln!(out, "  tags        = {}", format_string_list(&proto.tags));
@@ -412,11 +412,11 @@ fn serialize_message(
 
     let inner_indent = "  ".repeat(depth.saturating_add(1));
 
-    if !msg.description.is_empty() {
+    if !msg.full_name.is_empty() {
         let _ = writeln!(
             out,
-            "{inner_indent}description = {}",
-            escape_string(&msg.description)
+            "{inner_indent}full_name = {}",
+            escape_string(&msg.full_name)
         );
     }
     if !msg.tags.is_empty() {
@@ -457,11 +457,11 @@ fn serialize_field(out: &mut String, field: &Field, depth: usize) {
         "{inner_indent}type        = {}",
         escape_string(&field.field_type)
     );
-    if !field.description.is_empty() {
+    if !field.full_name.is_empty() {
         let _ = writeln!(
             out,
-            "{inner_indent}description = {}",
-            escape_string(&field.description)
+            "{inner_indent}full_name = {}",
+            escape_string(&field.full_name)
         );
     }
     if !field.unit.is_empty() {
@@ -490,11 +490,11 @@ fn serialize_connection(
 
     let inner_indent = "  ".repeat(depth.saturating_add(1));
 
-    if !conn.description.is_empty() {
+    if !conn.full_name.is_empty() {
         let _ = writeln!(
             out,
-            "{inner_indent}description  = {}",
-            escape_string(&conn.description)
+            "{inner_indent}full_name  = {}",
+            escape_string(&conn.full_name)
         );
     }
     if !conn.tags.is_empty() {
@@ -623,8 +623,8 @@ pub fn serialize_views(views: &[ViewDefinition]) -> String {
 fn serialize_single_view(out: &mut String, view: &ViewDefinition) {
     let _ = writeln!(out, "view {} {{", escape_string(&view.label));
 
-    if !view.description.is_empty() {
-        let _ = writeln!(out, "  description = {}", escape_string(&view.description));
+    if !view.full_name.is_empty() {
+        let _ = writeln!(out, "  full_name = {}", escape_string(&view.full_name));
     }
     if !view.tags.is_empty() {
         let _ = writeln!(out, "  tags        = {}", format_string_list(&view.tags));
@@ -765,7 +765,7 @@ fn format_number(n: f64) -> String {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct RawViewAttrs {
-    description: Option<String>,
+    full_name: Option<String>,
     tags: Option<Vec<String>>,
     system: Option<String>,
 }
@@ -918,7 +918,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
 
             views.push(ViewDefinition {
                 label,
-                description: attrs.description.unwrap_or_default(),
+                full_name: attrs.full_name.unwrap_or_default(),
                 tags: attrs.tags.unwrap_or_default(),
                 system: attrs.system.unwrap_or_default(),
                 filter,
@@ -989,14 +989,14 @@ mod tests {
 }
 
 protocol "proto" {
-  description = "A protocol"
+  full_name = "A protocol"
 
   message "m1" {
-    description = "Message 1"
+    full_name = "Message 1"
 
     field "f1" {
       type        = "uint32"
-      description = "Field 1"
+      full_name = "Field 1"
     }
   }
 }
@@ -1005,7 +1005,7 @@ component "comp-a" {
   leaf = true
 
   port "p1" {
-    description = "Port 1"
+    full_name = "Port 1"
     protocol    = "proto"
     role        = "provider"
   }
@@ -1021,7 +1021,7 @@ component "comp-b" {
 }
 
 system "demo" {
-  description = "A demo system"
+  full_name = "A demo system"
   tags        = ["demo"]
 
   instance "comp-a" {
@@ -1033,7 +1033,7 @@ system "demo" {
   }
 
   connection "c1" {
-    description = "Link"
+    full_name = "Link"
     from        = "comp-a/p1"
     to          = "comp-b/p2"
   }
@@ -1074,41 +1074,41 @@ system "demo" {
 }
 
 protocol "pcie" {
-  description = "PCIe protocol"
+  full_name = "PCIe protocol"
 
   message "telemetry" {
-    description = "Diagnostics & status"
+    full_name = "Diagnostics & status"
     level       = 3
 
     field "err_count" {
       type        = "uint32"
-      description = "Error count"
+      full_name = "Error count"
       required    = true
     }
 
     field "temperature" {
       type        = "float32"
-      description = "Die temperature"
+      full_name = "Die temperature"
       unit        = "degC"
     }
   }
 }
 
 system "root-sys" {
-  description = "A \"complex\" system with\nmultiple lines"
+  full_name = "A \"complex\" system with\nmultiple lines"
   tags        = ["tag-a", "tag-b"]
 
   component "sub-system" {
-    description = "Intermediate subsystem"
+    full_name = "Intermediate subsystem"
     level       = 2
 
     component "leaf-node" {
-      description = "Deep leaf"
+      full_name = "Deep leaf"
       tags        = ["hw"]
       leaf        = true
 
       port "data-port" {
-        description = "High-speed serial"
+        full_name = "High-speed serial"
         protocol    = "pcie"
         role        = "peer"
         tags        = ["bus"]
@@ -1125,7 +1125,7 @@ system "root-sys" {
     }
 
     connection "pcie-link" {
-      description  = "Internal PCIe bus"
+      full_name  = "Internal PCIe bus"
       from         = "leaf-node/data-port"
       to           = "peer-node/data-port"
     }
@@ -1167,22 +1167,22 @@ system "root-sys" {
     #[test]
     fn test_protocol_and_port_attributes_roundtrip() {
         let hcl = r#"protocol "telemetry" {
-  description = "Telemetry streaming protocol"
+  full_name = "Telemetry streaming protocol"
   tags        = ["data", "telemetry"]
   roles       = ["provider", "consumer"]
 
   message "status" {
-    description = "System status packet"
+    full_name = "System status packet"
 
     field "battery_mv" {
       type        = "uint32"
-      description = "Battery millivolts"
+      full_name = "Battery millivolts"
       unit        = "mV"
     }
 
     field "uptime_sec" {
       type        = "uint64"
-      description = "Uptime in seconds"
+      full_name = "Uptime in seconds"
       unit        = "s"
       required    = true
     }
@@ -1194,7 +1194,7 @@ system "monitored-device" {
     leaf        = true
 
     port "telem-in" {
-      description = "Telemetry input"
+      full_name = "Telemetry input"
       protocol    = "telemetry"
       role        = "consumer"
       external    = true
@@ -1412,7 +1412,7 @@ system "apollo" {
     #[test]
     fn test_views_roundtrip_with_nodes() {
         let hcl = r#"view "overview" {
-  description = "Full overview"
+  full_name = "Full overview"
   tags        = ["arch", "top"]
   system      = "quadcopter"
 
@@ -1504,7 +1504,7 @@ system "apollo" {
         // top-level definitions with `source` references, never inlined.
         let hcl = r#"
 component "engine" {
-    description = "shared engine"
+    full_name = "shared engine"
     leaf = true
 }
 system "airborne" {
@@ -1577,7 +1577,7 @@ system "hangar" {
         // path (`main/satellite`).
         let hcl = r#"
 component "satellite" {
-    description = "a satellite"
+    full_name = "a satellite"
     leaf = true
 }
 system "main" {
@@ -1635,7 +1635,7 @@ system "main" {
         // by path, and round-trip without inlining.
         let hcl = r#"
 component "avionics" {
-    description = "shared avionics"
+    full_name = "shared avionics"
     leaf = true
 }
 system "plane" {

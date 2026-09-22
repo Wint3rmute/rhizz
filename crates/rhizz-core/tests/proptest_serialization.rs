@@ -9,7 +9,7 @@ use rhizz_core::{
 #[derive(Debug)]
 struct ComponentInput {
     suffix: String,
-    description: String,
+    full_name: String,
     tags: Vec<String>,
     external: bool,
     required: bool,
@@ -19,7 +19,7 @@ struct ComponentInput {
 #[derive(Debug)]
 struct FieldInput {
     suffix: String,
-    description: String,
+    full_name: String,
     required: bool,
 }
 
@@ -28,7 +28,7 @@ struct ModelInput {
     project_name: String,
     system_suffix: String,
     protocol_suffix: String,
-    description: String,
+    full_name: String,
     tags: Vec<String>,
     components: Vec<ComponentInput>,
     fields: Vec<FieldInput>,
@@ -70,9 +70,9 @@ fn component_input() -> impl Strategy<Value = ComponentInput> {
         prop::option::of(prop_oneof![Just("solid"), Just("dashed"), Just("dotted")]),
     )
         .prop_map(
-            |(suffix, description, tags, external, required, border)| ComponentInput {
+            |(suffix, full_name, tags, external, required, border)| ComponentInput {
                 suffix,
-                description,
+                full_name,
                 tags,
                 external,
                 required,
@@ -82,10 +82,10 @@ fn component_input() -> impl Strategy<Value = ComponentInput> {
 }
 
 fn field_input() -> impl Strategy<Value = FieldInput> {
-    (identifier_suffix(), text(), any::<bool>()).prop_map(|(suffix, description, required)| {
+    (identifier_suffix(), text(), any::<bool>()).prop_map(|(suffix, full_name, required)| {
         FieldInput {
             suffix,
-            description,
+            full_name,
             required,
         }
     })
@@ -106,7 +106,7 @@ fn model_input() -> impl Strategy<Value = ModelInput> {
                 project_name,
                 system_suffix,
                 protocol_suffix,
-                description,
+                full_name,
                 tags,
                 components,
                 fields,
@@ -114,7 +114,7 @@ fn model_input() -> impl Strategy<Value = ModelInput> {
                 project_name,
                 system_suffix,
                 protocol_suffix,
-                description,
+                full_name,
                 tags,
                 components,
                 fields,
@@ -156,11 +156,11 @@ fn render_valid_model(input: &ModelInput) -> String {
     let _ = writeln!(hcl, "}}\n");
 
     let _ = writeln!(hcl, "protocol {} {{", quoted(&protocol_label));
-    let _ = writeln!(hcl, "  description = {}", quoted(&input.description));
+    let _ = writeln!(hcl, "  full_name = {}", quoted(&input.full_name));
     let _ = writeln!(hcl, "  tags = {}", string_list(&input.tags));
     let _ = writeln!(hcl, "  roles = [\"provider\", \"consumer\"]");
     let _ = writeln!(hcl, "  message \"message-generated\" {{");
-    let _ = writeln!(hcl, "    description = {}", quoted(&input.description));
+    let _ = writeln!(hcl, "    full_name = {}", quoted(&input.full_name));
     for (index, field) in input.fields.iter().enumerate() {
         let _ = writeln!(
             hcl,
@@ -168,7 +168,7 @@ fn render_valid_model(input: &ModelInput) -> String {
             quoted(&format!("field-{index}-{}", field.suffix))
         );
         let _ = writeln!(hcl, "      type = \"string\"");
-        let _ = writeln!(hcl, "      description = {}", quoted(&field.description));
+        let _ = writeln!(hcl, "      full_name = {}", quoted(&field.full_name));
         let _ = writeln!(hcl, "      unit = \"unit\"");
         let _ = writeln!(hcl, "      required = {}", field.required);
         let _ = writeln!(hcl, "    }}");
@@ -180,7 +180,7 @@ fn render_valid_model(input: &ModelInput) -> String {
     for (index, component) in input.components.iter().enumerate() {
         let component_label = format!("component-{index}-{}", component.suffix);
         let _ = writeln!(hcl, "component {} {{", quoted(&component_label));
-        let _ = writeln!(hcl, "  description = {}", quoted(&component.description));
+        let _ = writeln!(hcl, "  full_name = {}", quoted(&component.full_name));
         let _ = writeln!(hcl, "  tags = {}", string_list(&component.tags));
         if let Some(border) = component.border {
             let _ = writeln!(hcl, "  border = {}", quoted(border));
@@ -202,7 +202,7 @@ fn render_valid_model(input: &ModelInput) -> String {
 
     // The system references the definitions via `instance` blocks.
     let _ = writeln!(hcl, "system {} {{", quoted(&system_label));
-    let _ = writeln!(hcl, "  description = {}", quoted(&input.description));
+    let _ = writeln!(hcl, "  full_name = {}", quoted(&input.full_name));
     let _ = writeln!(hcl, "  tags = {}", string_list(&input.tags));
     for (index, component) in input.components.iter().enumerate() {
         let component_label = format!("component-{index}-{}", component.suffix);
@@ -282,7 +282,7 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
         .prop_map(
             |(
                 label,
-                description,
+                full_name,
                 tags,
                 system,
                 include_tags,
@@ -294,7 +294,7 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                 connections,
             )| ViewDefinition {
                 label: format!("view-{label}"),
-                description,
+                full_name,
                 tags,
                 system: format!("system-{system}"),
                 filter: ViewFilterDefinition {
