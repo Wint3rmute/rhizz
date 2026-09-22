@@ -2,13 +2,16 @@
 import {
   ANNOTATION_FONT_SIZE,
   ANNOTATION_LINE_HEIGHT,
-  annotationLines,
   type Box,
   computeRenderOrder,
   computeVisibleConnections,
   elbowPath,
   type TextAlign,
 } from "./geometry";
+import {
+  ANNOTATION_MD_INDENT_PX,
+  annotationSvgLines,
+} from "./annotationMarkdown";
 import { resolveIcon } from "../../../../iconHelper";
 import DiagramNodeBody from "./DiagramNodeBody.svelte";
 import type {
@@ -148,6 +151,7 @@ let visibleConnections = $derived(
 
 {#each annotations as ann (ann.text + ann.x + ann.y)}
   {@const annScale = ann.scale ?? 1}
+  {@const mdLines = annotationSvgLines(ann.text)}
   <text
   x={ann.x}
   y={ann.y}
@@ -156,9 +160,33 @@ let visibleConnections = $derived(
   text-anchor="start"
   style="pointer-events: none; user-select: none"
 >
-    {#each annotationLines(ann.text) as line, li (li)}
-      <tspan x={ann.x} dy={li === 0 ? 0 : ANNOTATION_LINE_HEIGHT * annScale}>
-        {line || "\u00a0"}
+    {#each mdLines as line, li (li)}
+      {@const lineSize = line.size ?? 1}
+      {@const lineX = ann.x + (line.indent ?? 0) * ANNOTATION_MD_INDENT_PX * annScale}
+      <tspan
+        x={lineX}
+        dy={li === 0 ? 0 : ANNOTATION_LINE_HEIGHT * annScale}
+        font-size={ANNOTATION_FONT_SIZE * lineSize * annScale}
+        font-weight={line.bold ? "bold" : undefined}
+        font-style={line.quote ? "italic" : undefined}
+      >
+        {#if line.spans.length === 0}
+          {"\u00a0"}
+        {:else}
+          {#each line.spans as span, si (si)}
+            <tspan
+            font-weight={span.bold || line.bold ? "bold" : undefined}
+            font-style={span.italic || line.quote ? "italic" : undefined}
+            text-decoration={span.strike
+              ? "line-through"
+              : span.link
+                ? "underline"
+                : undefined}
+            font-family={span.code || line.codeBlock ? "monospace" : undefined}
+            fill={span.link ? "var(--color-primary)" : undefined}
+          >{span.text}</tspan>
+          {/each}
+        {/if}
       </tspan>
     {/each}
   </text>

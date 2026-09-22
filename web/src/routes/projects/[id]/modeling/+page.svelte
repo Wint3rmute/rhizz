@@ -3417,8 +3417,8 @@ $effect(() => {
           }}
           class="absolute z-30 textarea textarea-sm textarea-bordered w-64"
           rows={Math.max(2, annotationLines(editingAnnotationObj.text).length)}
-          placeholder="Alt+Enter for a new line"
-          title="Enter commits, Alt+Enter inserts a newline"
+          placeholder="Markdown supported — blank line for a new paragraph"
+          title="Enter commits, Alt+Enter inserts a newline. Markdown: **bold**, *italic*, # heading, - list"
           style="left:{(editingAnnotationObj.x - editor_state.view.x) * editor_state.view.zoom}px; top:{(editingAnnotationObj.y - editor_state.view.y) * editor_state.view.zoom}px"
           data-testid="annotation-editor"
         ></textarea>

@@ -124,6 +124,38 @@ export const WithAnnotations: Story = {
   },
 };
 
+// The pipeline with Markdown annotations — headings, bold/italic/code/link,
+// lists, quote and fenced code render as styled SVG <tspan> runs (pure SVG,
+// no foreignObject), sharing the interactive canvas renderer.
+export const WithMarkdownAnnotations: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    annotations: [
+      { text: "# Ingest path\n\nCarries **raw** events", x: 10, y: 10 },
+      { text: "- fast\n- `durable`\n- [docs](https://example.com)", x: 230, y: 140 },
+      { text: "> watch the lag\n\n```\nqps > 9000\n```", x: 200, y: 260 },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Heading + bold body render as text runs.
+    await canvas.findByText("Ingest path");
+    await canvas.findByText("raw");
+    // List bullets, inline code and link labels render.
+    await canvas.findByText("•");
+    await canvas.findByText("durable");
+    await canvas.findByText("docs");
+    // Quote + code fence render.
+    await canvas.findByText("watch the lag");
+    await canvas.findByText("qps > 9000");
+    // Bold run carries a font-weight.
+    const bold = await canvas.findByText("raw");
+    await expect(bold.getAttribute("font-weight")).toBe("bold");
+  },
+};
+
 // The pipeline with an annotation placed far outside the node cluster's
 // bounding box and a scaled one — the auto-fit viewBox must extend to
 // include them, else the note would be clipped out of the Explore viewport.

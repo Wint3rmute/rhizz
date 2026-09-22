@@ -1,6 +1,12 @@
 // Pure geometry helpers for the diagrams canvas (web/src/routes/views/
 // +page.svelte). Deliberately has zero Svelte/DOM dependency, so it can be
 // unit tested directly (see geometry.test.ts) without mounting a component.
+// Markdown measuring comes from the equally DOM-free `annotationMarkdown`.
+import {
+  ANNOTATION_MD_INDENT_PX,
+  annotationSvgLineText,
+  annotationSvgLines,
+} from "./annotationMarkdown";
 
 // Where a node's label is positioned within its box.
 export type TextAlign = "center" | "top-center" | "top-left";
@@ -34,24 +40,30 @@ export interface AnnotationLike {
 export const ANNOTATION_FONT_SIZE = 12;
 export const ANNOTATION_LINE_HEIGHT = 16;
 
-// Split annotation text into renderable lines. SVG <text> collapses "\n",
-// so renderers must emit one <tspan> per line returned here. Empty lines
-// (including a trailing newline) are kept so vertical rhythm is preserved.
+// Split annotation text into renderable lines. Plain-text path kept for
+// callers that need raw rows (editor textarea sizing); SVG renderers use
+// `annotationSvgLines` (Markdown) instead.
 export function annotationLines(text: string): string[] {
   return text.split("\n");
 }
 
-// Extent box of a view annotation's text, using the same geometry constants
-// as the interactive canvas's hit-testing (see annotationHitBox in
-// +page.svelte): ~7.5px per char at 1x scale, 16px line height, 14px
-// horizontal / 8px vertical padding, 40px minimum width. "Zoom to fill" and
-// the static renderers use this so a far-away annotation is never clipped
-// out of the fitted viewport.
+// Extent box of a view annotation's text, measured from *rendered* Markdown
+// (syntax stripped via `annotationSvgLines`) so `**bold**` meters as 4 chars,
+// using the same geometry constants as the interactive canvas's hit-testing
+// (see annotationHitBox in +page.svelte): ~7.5px per char at 1x scale,
+// 16px line height, 14px horizontal / 8px vertical padding, 40px minimum
+// width. "Zoom to fill" and the static renderers use this so a far-away
+// annotation is never clipped out of the fitted viewport.
 export function annotationBounds(ann: AnnotationLike): Box {
   const scale = ann.scale ?? 1;
-  const lines = annotationLines(ann.text);
+  const lines = annotationSvgLines(ann.text);
   const width = Math.max(
-    ...lines.map((l) => l.length * 7.5 * scale + 14),
+    ...lines.map(
+      (l) =>
+        (l.indent ?? 0) * ANNOTATION_MD_INDENT_PX * scale +
+        annotationSvgLineText(l).length * 7.5 * (l.size ?? 1) * scale +
+        14,
+    ),
     40,
   );
   const height = lines.length * ANNOTATION_LINE_HEIGHT * scale + 8;
