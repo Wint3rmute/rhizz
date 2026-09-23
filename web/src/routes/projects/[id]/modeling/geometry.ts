@@ -40,13 +40,6 @@ export interface AnnotationLike {
 export const ANNOTATION_FONT_SIZE = 12;
 export const ANNOTATION_LINE_HEIGHT = 16;
 
-// Split annotation text into renderable lines. Plain-text path kept for
-// callers that need raw rows (editor textarea sizing); SVG renderers use
-// `annotationSvgLines` (Markdown) instead.
-export function annotationLines(text: string): string[] {
-  return text.split("\n");
-}
-
 // Extent box of a view annotation's text, measured from *rendered* Markdown
 // (syntax stripped via `annotationSvgLines`) so `**bold**` meters as 4 chars,
 // using the same geometry constants as the interactive canvas's hit-testing
