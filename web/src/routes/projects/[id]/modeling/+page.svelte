@@ -482,6 +482,23 @@ $effect(() => {
         await refreshDiagramEntries();
       }
       selectedDiagramPath = firstDiagramPath();
+      // Deep-link support (`?diagram=views/<label>.hcl`, e.g. from the
+      // Inventory's "Create a view for this component"): prefer the
+      // requested diagram when it names an existing entry.
+      if (typeof window !== "undefined") {
+        const requested = new URLSearchParams(window.location.search).get(
+          "diagram",
+        );
+        if (requested) {
+          const normalized = requested.startsWith(`${VIEW_LAYOUT_DIR}/`)
+            ? requested.slice(VIEW_LAYOUT_DIR.length + 1)
+            : requested;
+          const match = diagramEntries.find(
+            (e) => e.isFile() && e.path === normalized,
+          );
+          if (match) selectedDiagramPath = match.path;
+        }
+      }
     })
     .catch((err) => {
       console.error("Failed to initialize diagram entries:", err);

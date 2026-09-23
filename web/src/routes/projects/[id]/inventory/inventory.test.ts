@@ -5,6 +5,7 @@ import {
   defaultViewPath,
   definitionDepth,
   filterDefinitions,
+  preferredViewSystem,
   type InventoryDefinition,
   InventoryTab,
   type PortInfo,
@@ -146,5 +147,31 @@ describe("defaultViewPath", () => {
   it("builds the conventional views/<label>.hcl path", () => {
     expect(defaultViewPath("cm")).toBe("views/cm.hcl");
     expect(DEFAULT_VIEW_DIR).toBe("views");
+  });
+});
+
+describe("preferredViewSystem", () => {
+  it("returns the system containing an instance of the definition", () => {
+    const components = [
+      { source: undefined, parent: { System: 1 } },
+      { source: "motor", parent: { System: 1 } },
+    ];
+    expect(preferredViewSystem(components, ["a", "b"], "motor")).toBe("b");
+  });
+
+  it("follows nested component parents up to the system", () => {
+    const components = [
+      { source: "motor", parent: { Component: 1 } },
+      { source: undefined, parent: { System: 0 } },
+    ];
+    expect(preferredViewSystem(components, ["a"], "motor")).toBe("a");
+  });
+
+  it("falls back to the first system when the definition is never instantiated", () => {
+    expect(preferredViewSystem([], ["a", "b"], "motor")).toBe("a");
+  });
+
+  it("falls back to main when the model has no systems", () => {
+    expect(preferredViewSystem([], [], "motor")).toBe("main");
   });
 });

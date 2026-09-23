@@ -174,6 +174,12 @@ export const MissingDefaultDiagram: Story = {
     await expect(
       canvas.getByText(/views\/draft-module\.hcl/),
     ).toBeTruthy();
+    await expect(
+      canvas.getByTestId("inventory-create-view"),
+    ).toBeTruthy();
+    await expect(
+      canvas.getByRole("button", { name: "Create a view for this component" }),
+    ).toBeTruthy();
   },
 };
 
