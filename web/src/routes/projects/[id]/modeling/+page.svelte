@@ -3387,6 +3387,26 @@ $effect(() => {
       </svg>
 
       {#if editingAnnotationObj}
+        <!-- Editor docks to the right of the rendered note (never on top
+             of it): anchored to the note's hit-box right edge + a gap,
+             clamped into the viewport so far-right notes don't push it
+             off-screen. -->
+        {@const editHit = annotationHitBox(editingAnnotationObj)}
+        {@const editLeft = Math.max(
+          8,
+          Math.min(
+            (editHit.x + editHit.width + 12 - editor_state.view.x) *
+              editor_state.view.zoom,
+            Math.max(8, canvas_width - 264),
+          ),
+        )}
+        {@const editTop = Math.max(
+          8,
+          Math.min(
+            (editHit.y - editor_state.view.y) * editor_state.view.zoom,
+            Math.max(8, canvas_height - 120),
+          ),
+        )}
         <!-- Inline text editor for the annotation being edited. Positioned in
              screen space (world coords x zoom + view origin). Multiline:
              Enter inserts a newline; leaving commits the text — click
@@ -3409,7 +3429,7 @@ $effect(() => {
           rows={Math.max(2, annotationLines(editingAnnotationObj.text).length)}
           placeholder="Markdown supported — Enter for a new line"
           title="Enter inserts a newline. Click outside or press Escape to finish. Markdown: **bold**, *italic*, # heading, - list"
-          style="left:{(editingAnnotationObj.x - editor_state.view.x) * editor_state.view.zoom}px; top:{(editingAnnotationObj.y - editor_state.view.y) * editor_state.view.zoom}px"
+          style="left:{editLeft}px; top:{editTop}px"
           data-testid="annotation-editor"
         ></textarea>
       {/if}
