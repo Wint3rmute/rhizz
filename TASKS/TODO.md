@@ -14,15 +14,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Allow for jumping into a component-specific view from Inventory
-
-When in the inventory/ subpage, with a component without a component-specific
-view (view named the same as the component itself), the application tells the
-user that the view of that component is not available. Add a button "Create a
-view for this component", which will create a new view (named the same as the
-component) and switch the user into the modeling subpage with that very view
-open.
-
 ## Task <N> — Warn on view nodes outside the bound system (W017)
 
 Views are bound to one system (`view.system`, immutable in the Modeling UI),

@@ -4,6 +4,28 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Allow for jumping into a component-specific view from Inventory
+
+The Inventory empty-diagram state (`views/<label>.hcl` missing) gained a
+"Create a view for this component" button: it writes the view file (bound
+to the instantiating system via the pure, unit-tested `preferredViewSystem`
+helper — first system, else `"main"`) and opens Modeling with that very
+view selected through a new `?diagram=` deep-link (honored on init,
+both `views/x.hcl` and `x.hcl` forms, ignored when unknown).
+
+- **Web**: `Inventory.svelte` (button + `handleCreateView` with busy state),
+  `inventory.ts`/`inventory.test.ts` (`RawPlacement`, 4 tests), modeling
+  `+page.svelte` (`?diagram=` init override).
+- **Tests**: `MissingDefaultDiagram` story asserts the button; new
+  `inventory-create-view.spec.ts` e2e (create definition → Inventory →
+  click → Modeling with `?diagram=views/e2e-widget.hcl`, system bound,
+  empty state gone on return). Caught a real bug green-first-run:
+  `SystemJS.label` is a getter property, not a method.
+- **Validation**: full `just test` (cargo + 66 files / 622 web + 21 e2e),
+  `just lint`, `just build`, `just format` green.
+
+---
+
 ## Task — Extend the annotation/notes system - Markdown
 
 Markdown in view annotations, rendered as styled SVG `<text>`/`<tspan>` runs
