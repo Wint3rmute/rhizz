@@ -36,7 +36,9 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   await expect(noteText).toBeVisible();
   const textBox = await noteText.boundingBox();
   const editorBox = await editor.boundingBox();
-  expect(textBox && editorBox ? editorBox.x >= textBox.x + textBox.width - 5 : false).toBe(true);
+  expect(
+    textBox && editorBox ? editorBox.x >= textBox.x + textBox.width - 5 : false,
+  ).toBe(true);
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("# Ingest path\n\nCarries **raw** events");
   // Clicking outside the box commits the edit (Enter inserts a newline).
