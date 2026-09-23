@@ -29,7 +29,10 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   await page.getByRole("button", { name: "+ Note" }).click();
   const editor = page.getByTestId("annotation-editor");
   await expect(editor).toBeVisible();
-  await editor.fill("# Ingest path\n\nCarries **raw** events");
+  // The editor autofocuses on open: typing flows straight in, no extra click.
+  await expect(editor).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("# Ingest path\n\nCarries **raw** events");
   // Clicking outside the box commits the edit (Enter inserts a newline).
   await page.mouse.click(30, 400);
   await expect(editor).toBeHidden();
