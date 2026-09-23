@@ -26,6 +26,7 @@ import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import AnnotationText from "./AnnotationText.svelte";
+import { annotationSvgLines } from "./annotationMarkdown";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
 import NewViewModal from "./NewViewModal.svelte";
@@ -64,7 +65,6 @@ import {
 } from "./forceLayout";
 import {
   annotationBounds,
-  annotationLines,
   boxContains,
   clampWithin,
   computeDirectionalHandles,
@@ -3426,7 +3426,7 @@ $effect(() => {
             editingAnnotation = null;
           }}
           class="absolute z-30 textarea textarea-sm textarea-bordered w-64"
-          rows={Math.max(2, annotationLines(editingAnnotationObj.text).length)}
+          rows={Math.max(2, annotationSvgLines(editingAnnotationObj.text).length)}
           placeholder="Markdown supported — Enter for a new line"
           title="Enter inserts a newline. Click outside or press Escape to finish. Markdown: **bold**, *italic*, # heading, - list"
           style="left:{editLeft}px; top:{editTop}px"
