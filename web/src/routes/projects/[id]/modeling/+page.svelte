@@ -3387,16 +3387,16 @@ $effect(() => {
       </svg>
 
       {#if editingAnnotationObj}
-        <!-- Editor docks to the right of the rendered note (never on top
-             of it): anchored to the note's hit-box right edge + a gap,
-             clamped into the viewport so far-right notes don't push it
+        <!-- Editor docks to the left of the rendered note (never on top
+             of it): its right edge sits a gap left of the note's hit-box,
+             clamped into the viewport so far-left notes don't push it
              off-screen. -->
         {@const editHit = annotationHitBox(editingAnnotationObj)}
         {@const editLeft = Math.max(
           8,
           Math.min(
-            (editHit.x + editHit.width + 12 - editor_state.view.x) *
-              editor_state.view.zoom,
+            (editHit.x - 12 - editor_state.view.x) * editor_state.view.zoom -
+              256,
             Math.max(8, canvas_width - 264),
           ),
         )}

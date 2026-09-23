@@ -31,13 +31,15 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   await expect(editor).toBeVisible();
   // The editor autofocuses on open: typing flows straight in, no extra click.
   await expect(editor).toBeFocused();
-  // The editor docks right of the rendered note, never on top of it.
+  // The editor docks left of the rendered note, never on top of it.
   const noteText = canvas.getByText("New note");
   await expect(noteText).toBeVisible();
   const textBox = await noteText.boundingBox();
   const editorBox = await editor.boundingBox();
   expect(
-    textBox && editorBox ? editorBox.x >= textBox.x + textBox.width - 5 : false,
+    textBox && editorBox
+      ? editorBox.x + editorBox.width <= textBox.x + 5
+      : false,
   ).toBe(true);
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("# Ingest path\n\nCarries **raw** events");
