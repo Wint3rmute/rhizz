@@ -262,7 +262,9 @@ async function handleCreateView(): Promise<void> {
     const path = defaultViewPath(def.label);
     await writeDiagramLayoutFile(fs, path, emptyDiagramLayout(system), system);
     await goto(
-      `${resolve("/projects/[id]/modeling", { id })}?diagram=${encodeURIComponent(path)}`,
+      `${resolve("/projects/[id]/modeling", { id })}?diagram=${
+        encodeURIComponent(path)
+      }`,
     );
   } catch (error) {
     console.error("Failed to create component view:", error);

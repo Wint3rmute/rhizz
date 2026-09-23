@@ -123,13 +123,9 @@ export function preferredViewSystem(
       parent = components[next]?.parent;
     }
     const systemIndex = parent?.System;
-    if (
-      systemIndex !== undefined &&
-      systems[systemIndex] !== undefined
-    ) {
-      const label = systems[systemIndex];
-      if (label !== undefined) return label;
-    }
+    if (systemIndex === undefined) continue;
+    const label = systems[systemIndex];
+    if (label !== undefined) return label;
   }
   return systems[0] ?? "main";
 }
