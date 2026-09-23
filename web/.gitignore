@@ -35,3 +35,4 @@ chromatic.log
 /test-results
 /playwright-report
 /playwright/.cache
+/vrt-report
