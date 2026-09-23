@@ -127,14 +127,18 @@ jobs:
       - run: nix develop --command deno run test
         working-directory: ./web
 
-  # Full-app browser tests via @playwright/test (web/e2e). Chromium comes
-  # from the flake (PLAYWRIGHT_BROWSERS_PATH); the HTML report + traces
-  # are kept as an artifact for post-failure inspection.
+  # Full-app browser tests via @playwright/test (web/e2e), then visual
+  # regression tests over every Storybook story (web/vrt). Chromium comes
+  # from the flake (PLAYWRIGHT_BROWSERS_PATH); the HTML report + traces and
+  # the VRT diff gallery are kept as artifacts for post-failure inspection.
   e2e:
     needs: wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # VRT baselines (web/vrt/__screenshots__/*.png) live in Git LFS.
+          lfs: true
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
@@ -173,6 +177,21 @@ jobs:
         with:
           name: playwright-report
           path: web/playwright-report/
+
+      # Visual regression tests. The wasm pkg comes from the artifact above,
+      # so only Storybook is built here (`vrt-quick` skips the wasm rebuild).
+      - run: nix develop --command deno run build-storybook
+        working-directory: ./web
+
+      - run: nix develop --command just vrt-quick
+
+      # Static diff gallery: download, unzip, open index.html.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: vrt-report
+          path: web/vrt-report/
+          if-no-files-found: ignore
 
   # Build the frontend for Chromatic + GitHub Pages. Runs on every push to
   # main (to keep a Chromatic baseline), or for a "chromatic" push/PR title,
