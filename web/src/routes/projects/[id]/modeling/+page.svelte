@@ -881,6 +881,14 @@ function selectAnnotation(index: number) {
   selectedAnnotations.add(index);
 }
 
+// Svelte `use:` action: focus the annotation editor on mount and park
+// the caret at the end, so double-click (or + Note) flows straight into
+// typing — without it the box opens unfocused and blur/Escape go nowhere.
+function focusAnnotationEditor(node: HTMLTextAreaElement): void {
+  node.focus();
+  node.setSelectionRange(node.value.length, node.value.length);
+}
+
 function addAnnotationHandler(): void {
   recordUndoPoint();
   noteDiagramEdited();
@@ -3385,6 +3393,7 @@ $effect(() => {
              outside (blur) or press Escape. Ctrl+Z restores pre-edit
              text thanks to the undo point recorded below. -->
         <textarea
+          use:focusAnnotationEditor
           bind:value={editingAnnotationObj.text}
           onkeydown={(e) => {
             if (e.key === "Escape") {
