@@ -1,8 +1,8 @@
 # Visual regression tests (VRT)
 
-A local Chromatic replacement: a full-page screenshot of every Storybook
-story in dark and light, diffed against baselines in `__screenshots__/`
-(committed), with a static review gallery.
+A local Chromatic replacement: a full-page screenshot of every Storybook story
+in dark and light, diffed against baselines in `__screenshots__/` (committed),
+with a static review gallery.
 
 ```bash
 just vrt              # rebuild wasm + Storybook, screenshot, diff
@@ -11,13 +11,13 @@ just vrt -g navbar    # extra args go to Playwright (filter by story id)
 just vrt-accept       # re-baseline everything that changed / is new
 ```
 
-Every run writes `web/vrt-report/index.html` (gitignored). Open it straight
-from disk. It lists changed, new and broken stories with slider,
-side-by-side and diff views, a per-story "copy accept command" (`cp` of the
-new image over the baseline), and a grid of the unchanged baselines.
+Every run writes `web/vrt-report/index.html` (gitignored). Open it straight from
+disk. It lists changed, new and broken stories with slider, side-by-side and
+diff views, a per-story "copy accept command" (`cp` of the new image over the
+baseline), and a grid of the unchanged baselines.
 
-- **New story:** picked up automatically from `storybook-static/index.json`.
-  The first run shows it as "New" and writes its baseline.
+- **New story:** picked up automatically from `storybook-static/index.json`. The
+  first run shows it as "New" and writes its baseline.
 - **Opt out:** add `tags: ["no-vrt"]` to a story.
 - **Viewports:** stories using Storybook's `mobile1`/`mobile2`/`tablet`/
   `desktop` viewport are screenshotted at that size; everything else at
@@ -27,7 +27,21 @@ new image over the baseline), and a grid of the unchanged baselines.
 ## Git LFS
 
 Baselines (`__screenshots__/*.png`) are stored in Git LFS (see the repo-root
-`.gitattributes`). After cloning, run `git lfs install && git lfs pull`.
-Without LFS the PNGs are small text pointer files and every story shows as
-changed. A CI job running `just vrt` needs `lfs: true` on
-`actions/checkout`.
+`.gitattributes`). After cloning, run `git lfs install && git lfs pull`. Without
+LFS the PNGs are small text pointer files and every story shows as changed. A CI
+job running `just vrt` needs `lfs: true` on `actions/checkout`.
+
+## Deterministic rendering
+
+Baselines are only comparable if every machine rasterises identically, so
+`playwright.vrt.config.ts` refuses to run outside the Nix dev shell:
+
+- **Fonts:** the flake exports `RHIZZ_VRT_FONTCONFIG_FILE`, a fontconfig that
+  exposes only pinned DejaVu / Liberation / Noto Color Emoji fonts (every
+  family, including `system-ui`, falls back to DejaVu Sans) with fixed hinting
+  and antialiasing. Host fonts never leak in.
+- **Raster:** Chromium runs with software GL, no GPU compositing, sRGB colour
+  profile and no LCD / subpixel text.
+
+After bumping nixpkgs (new font or Chromium versions), expect a one-off
+re-baseline with `just vrt-accept`.
