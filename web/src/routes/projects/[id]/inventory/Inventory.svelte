@@ -9,6 +9,7 @@
 // Data is taken from the compiled model's raw payload (`model.to_js()`),
 // which — unlike the typed wasm wrappers — exposes children/ports/parent
 // indices needed to reconstruct definition trees and hierarchy paths.
+import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -27,6 +28,7 @@ import {
   emptyDiagramLayout,
   mapLayoutToBoxes,
   readDiagramLayoutFile,
+  writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import type {
   DiagramStaticComponent,
@@ -40,6 +42,7 @@ import {
   INVENTORY_TABS,
   type InventoryDefinition,
   InventoryTab,
+  preferredViewSystem,
 } from "./inventory";
 
 let {
@@ -241,6 +244,32 @@ let editHref = $derived(
     ? resolve("/projects/[id]/modeling", { id: projectId })
     : null,
 );
+
+// Creates the missing component-specific view (`views/<label>.hcl`, bound
+// to the system that instantiates the definition) and opens Modeling with
+// that very view selected via `?diagram=`.
+let creatingView = $state(false);
+
+async function handleCreateView(): Promise<void> {
+  const def = selectedDefinition;
+  const id = projectId;
+  if (!def || !id || creatingView) return;
+  creatingView = true;
+  try {
+    const fs = openProjectFs(projectStore, id);
+    const systems = model?.systems().map((s) => s.label()) ?? [];
+    const system = preferredViewSystem(comps, systems, def.label);
+    const path = defaultViewPath(def.label);
+    await writeDiagramLayoutFile(fs, path, emptyDiagramLayout(system), system);
+    await goto(
+      `${resolve("/projects/[id]/modeling", { id })}?diagram=${encodeURIComponent(path)}`,
+    );
+  } catch (error) {
+    console.error("Failed to create component view:", error);
+  } finally {
+    creatingView = false;
+  }
+}
 </script>
 
 <div class="flex flex-1 w-full h-screen overflow-hidden bg-base-300">
@@ -353,6 +382,15 @@ let editHref = $derived(
                     {emptyStatePath}
                   </code>
                 </p>
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm mt-3"
+                  disabled={creatingView}
+                  onclick={() => void handleCreateView()}
+                  data-testid="inventory-create-view"
+                >
+                  {creatingView ? "Creating…" : "Create a view for this component"}
+                </button>
               </div>
             </div>
           </div>

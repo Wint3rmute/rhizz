@@ -95,6 +95,45 @@ function completionScore(def: InventoryDefinition): number {
   return allComplete ? 1 : 0.5;
 }
 
+/** A placed component's identity/linkage, mirroring the `raw.components`
+ * entries of the compiled model payload (`source` names the reused
+ * definition for instances; `parent` climbs to the owning system). */
+export interface RawPlacement {
+  source?: string | undefined;
+  parent?: { Component?: number; System?: number } | undefined;
+}
+
+/** Picks the system a new component-specific view should bind to: the
+ * system containing an instance of the definition (first match, following
+ * nested component parents up to their system), else the first system,
+ * else `"main"` when the model has no systems yet. */
+export function preferredViewSystem(
+  components: RawPlacement[],
+  systems: string[],
+  definitionLabel: string,
+): string {
+  for (let i = 0; i < components.length; i++) {
+    if (components[i]?.source !== definitionLabel) continue;
+    const seen = new Set<number>([i]);
+    let parent = components[i]?.parent;
+    while (parent?.Component !== undefined) {
+      const next = parent.Component;
+      if (seen.has(next)) break;
+      seen.add(next);
+      parent = components[next]?.parent;
+    }
+    const systemIndex = parent?.System;
+    if (
+      systemIndex !== undefined &&
+      systems[systemIndex] !== undefined
+    ) {
+      const label = systems[systemIndex];
+      if (label !== undefined) return label;
+    }
+  }
+  return systems[0] ?? "main";
+}
+
 /** Case-insensitive substring match of `query` against a definition's label,
  * full_name, and tags. */
 function matchesQuery(def: InventoryDefinition, query: string): boolean {
