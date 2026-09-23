@@ -257,7 +257,7 @@ async function handleCreateView(): Promise<void> {
   creatingView = true;
   try {
     const fs = openProjectFs(projectStore, id);
-    const systems = model?.systems().map((s) => s.label()) ?? [];
+    const systems = model?.systems().map((s) => s.label) ?? [];
     const system = preferredViewSystem(comps, systems, def.label);
     const path = defaultViewPath(def.label);
     await writeDiagramLayoutFile(fs, path, emptyDiagramLayout(system), system);
