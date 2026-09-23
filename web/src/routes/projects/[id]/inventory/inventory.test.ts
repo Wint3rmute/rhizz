@@ -5,10 +5,10 @@ import {
   defaultViewPath,
   definitionDepth,
   filterDefinitions,
-  preferredViewSystem,
   type InventoryDefinition,
   InventoryTab,
   type PortInfo,
+  preferredViewSystem,
 } from "./inventory";
 
 function def(
