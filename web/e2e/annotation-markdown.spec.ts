@@ -30,8 +30,8 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   const editor = page.getByTestId("annotation-editor");
   await expect(editor).toBeVisible();
   await editor.fill("# Ingest path\n\nCarries **raw** events");
-  // Plain Enter commits the edit (Alt+Enter inserts a newline).
-  await page.keyboard.press("Enter");
+  // Clicking outside the box commits the edit (Enter inserts a newline).
+  await page.mouse.click(30, 400);
   await expect(editor).toBeHidden();
 
   // Heading renders without the `# ` marker, bold run carries font-weight.
@@ -47,7 +47,8 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   const editor2 = page.getByTestId("annotation-editor");
   await expect(editor2).toBeVisible();
   await editor2.fill("- fast\n- slow");
-  await page.keyboard.press("Enter");
+  // Escape also commits and closes the editor.
+  await page.keyboard.press("Escape");
   await expect(editor2).toBeHidden();
   await expect(canvas.getByText("fast")).toBeVisible();
   await expect(canvas.getByText("- fast")).toBeHidden();
