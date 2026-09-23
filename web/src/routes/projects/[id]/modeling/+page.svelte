@@ -3381,17 +3381,14 @@ $effect(() => {
       {#if editingAnnotationObj}
         <!-- Inline text editor for the annotation being edited. Positioned in
              screen space (world coords x zoom + view origin). Multiline:
-             plain Enter commits (matching the pre-multiline behavior),
-             Alt+Enter (or Shift/Ctrl+Enter) inserts a newline. -->
+             Enter inserts a newline; leaving commits the text — click
+             outside (blur) or press Escape. Ctrl+Z restores pre-edit
+             text thanks to the undo point recorded below. -->
         <textarea
           bind:value={editingAnnotationObj.text}
           onkeydown={(e) => {
-            if (e.key === "Enter" && !e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-              e.preventDefault();
-              noteDiagramEdited();
-              editingAnnotation = null;
-            }
             if (e.key === "Escape") {
+              noteDiagramEdited();
               editingAnnotation = null;
             }
           }}
@@ -3401,8 +3398,8 @@ $effect(() => {
           }}
           class="absolute z-30 textarea textarea-sm textarea-bordered w-64"
           rows={Math.max(2, annotationLines(editingAnnotationObj.text).length)}
-          placeholder="Markdown supported — blank line for a new paragraph"
-          title="Enter commits, Alt+Enter inserts a newline. Markdown: **bold**, *italic*, # heading, - list"
+          placeholder="Markdown supported — Enter for a new line"
+          title="Enter inserts a newline. Click outside or press Escape to finish. Markdown: **bold**, *italic*, # heading, - list"
           style="left:{(editingAnnotationObj.x - editor_state.view.x) * editor_state.view.zoom}px; top:{(editingAnnotationObj.y - editor_state.view.y) * editor_state.view.zoom}px"
           data-testid="annotation-editor"
         ></textarea>
