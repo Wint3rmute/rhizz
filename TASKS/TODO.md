@@ -14,22 +14,7 @@ How to work on this file:
 
 ---
 
-## Task <N> — Attributes inspector for annotations
-
-Currently, annotations are edited using double-clicking and a pop-up editor.
-While useful, this breaks the inspector-based flow for editing nodes.
-
-Make the inspector work with annotations - when an annotation is focused, the
-inspector shall allow editing annotations:
-- Text (as a multi-line editor, same as the current pop-up editor)
-- Annotation scale (as a number input)
-
-Remove the current double-click pop-up editor. Instead, when double-clicked, the focus
-shall jump to the editor inside the inspector.
-
-After finishing, do a cleanup pass, checking if no old logic from the previous
-double-click pop-up inspector remains, removing leftovers.
-
+## Task <N> — Detect isolated component trees in systems
 
 ## Task <N> - write documentation directly from the Inventory page.
 
@@ -42,6 +27,25 @@ markdown-based viewer to a plain multiline editor.
 
 Re-use the Markdown renderer from the /explore page, which already renders
 markdown. If needed, extract to a common renderer.
+
+## Task <N> - implement a righ-click context menu for the canvas in /modeling
+
+All components in the canvas shall have a right-click listener. The contents of the 
+context menu will vary depending on what's clicked.
+
+### General rules
+
+- For each item in the context menu, description of that action (e.g. delete) shall be on the left side of the item row
+- The keyboard shortcut for each item shall be displayed on the right side of the item row (e.g. a slightly greyed-out "D")
+- Suggest shortcuts based on first letters of the action description
+
+### Component context menu
+
+Component's context menu shall feature:
+
+- Delete
+- Jump to documentation
+- Jump to detailed view
 
 ## Task <N> — Detect isolated component trees in systems
 
