@@ -43,12 +43,18 @@ export const ANNOTATION_LINE_HEIGHT = 16;
 // Floor for annotation font scale: neither the corner-drag resize nor the
 // inspector number input may collapse a note to nothing.
 export const MIN_ANNOTATION_SCALE = 0.5;
+// Ceiling for annotation font scale: a shared sanity bound for both edit
+// paths so a stray input can't blow a note up to billboard size.
+export const MAX_ANNOTATION_SCALE = 100;
 
-// Clamp an annotation scale to the minimum and round to 2 decimals, so
+// Clamp an annotation scale to [0.5, 100] and round to 2 decimals, so
 // persisted `views/*.hcl` never accumulates float dust (e.g. 1.3333333 from
 // a fractional-zoom drag). Both edit paths (drag + inspector) funnel here.
 export function normalizeAnnotationScale(scale: number): number {
-  return Math.max(MIN_ANNOTATION_SCALE, Math.round(scale * 100) / 100);
+  return Math.min(
+    MAX_ANNOTATION_SCALE,
+    Math.max(MIN_ANNOTATION_SCALE, Math.round(scale * 100) / 100),
+  );
 }
 
 // Extent box of a view annotation's text, measured from *rendered* Markdown

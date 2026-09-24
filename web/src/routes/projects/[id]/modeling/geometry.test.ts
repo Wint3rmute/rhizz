@@ -45,6 +45,12 @@ describe("normalizeAnnotationScale", () => {
     expect(normalizeAnnotationScale(-3)).toBe(0.5);
     expect(normalizeAnnotationScale(0.499)).toBe(0.5);
   });
+
+  it("caps anything above the maximum at 100", () => {
+    expect(normalizeAnnotationScale(100)).toBe(100);
+    expect(normalizeAnnotationScale(250)).toBe(100);
+    expect(normalizeAnnotationScale(100.006)).toBe(100);
+  });
 });
 
 describe("boxCenter", () => {

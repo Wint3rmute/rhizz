@@ -42,8 +42,10 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   // The canvas re-renders live as the inspector text changes.
   await expect(canvas.getByText("Ingest path")).toBeVisible();
   await expect(canvas.getByText("# Ingest path")).toBeHidden();
-  // Clicking the canvas commits the edit; the inspector keeps showing it.
-  await page.mouse.click(30, 400);
+  // Tabbing out commits the edit; the inspector keeps showing it.
+  // (Tab, not a pointer click: empty-canvas clicks deselect the note and
+  // unmount the inspector, and fixed sidebar coordinates shift with scroll.)
+  await page.keyboard.press("Tab");
   await expect(editor).not.toBeFocused();
   await expect(inspector).toBeVisible();
 
@@ -74,7 +76,7 @@ test("double-clicking a note focuses the inspector editor", async ({ page }) => 
   const editor = page.getByTestId("annotation-text-input");
   await expect(editor).toBeFocused();
   // Leave the field so the double-click has somewhere to jump from.
-  await page.mouse.click(30, 400);
+  await page.keyboard.press("Tab");
   await expect(editor).not.toBeFocused();
 
   const noteText = canvas.getByText("New note");
@@ -101,7 +103,7 @@ test("annotation scale input resizes the rendered note", async ({ page }) => {
   await scaleInput.fill("2");
   // Live: the canvas updates on keypress, before the field loses focus.
   await expect(note).toHaveAttribute("font-size", "24");
-  await page.mouse.click(30, 400);
+  await page.keyboard.press("Tab");
   await expect(scaleInput).toHaveValue("2");
   await expect(note).toHaveAttribute("font-size", "24");
 
@@ -109,17 +111,24 @@ test("annotation scale input resizes the rendered note", async ({ page }) => {
   // typed until blur canonicalizes the field.
   await scaleInput.fill("1.237");
   await expect(scaleInput).toHaveValue("1.237");
-  await page.mouse.click(30, 400);
+  await page.keyboard.press("Tab");
   await expect(scaleInput).toHaveValue("1.24");
 
   // Below the 0.5 floor clamps; clearing the field floors too (empty
   // parses as 0, and number inputs only ever hold numeric text).
   await scaleInput.fill("0.1");
-  await page.mouse.click(30, 400);
+  await page.keyboard.press("Tab");
   await expect(scaleInput).toHaveValue("0.5");
   await expect(note).toHaveAttribute("font-size", "6");
   await scaleInput.fill("");
-  await page.mouse.click(30, 400);
+  await page.keyboard.press("Tab");
   await expect(scaleInput).toHaveValue("0.5");
   await expect(note).toHaveAttribute("font-size", "6");
+
+  // Above the 100 ceiling clamps.
+  await scaleInput.fill("250");
+  await expect(note).toHaveAttribute("font-size", "1200");
+  await page.keyboard.press("Tab");
+  await expect(scaleInput).toHaveValue("100");
+  await expect(note).toHaveAttribute("font-size", "1200");
 });

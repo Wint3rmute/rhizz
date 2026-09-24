@@ -1,7 +1,11 @@
 <script lang="ts">
 import type { Annotation } from "../../../../rhizz_wasm_wrapper";
 import { annotationSvgLines } from "./annotationMarkdown";
-import { MIN_ANNOTATION_SCALE, normalizeAnnotationScale } from "./geometry";
+import {
+  MAX_ANNOTATION_SCALE,
+  MIN_ANNOTATION_SCALE,
+  normalizeAnnotationScale,
+} from "./geometry";
 
 // Inspector panel for a single selected view annotation: multi-line text
 // plus the font-scale number input. Text binds directly to the annotation
@@ -143,6 +147,7 @@ function handleScaleBlur(): void {
       id="annotation-scale-input"
       type="number"
       min={MIN_ANNOTATION_SCALE}
+      max={MAX_ANNOTATION_SCALE}
       step="0.25"
       value={displayScale}
       onfocus={handleScaleFocus}
