@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Attributes inspector for annotations
+
+Annotations are now edited through the Inspector sidebar instead of the
+canvas double-click pop-up: selecting a note shows a Text multi-line editor
+(direct-bound, so the canvas re-renders Markdown live while typing) and a
+Scale number input (validated, floored at the 0.5 corner-drag minimum).
+Double-clicking a note jumps focus into the inspector's text editor
+(caret at end); `+ Note` selects the new note and autofocuses the same
+field. One undo point per text edit session (first keystroke) and per
+scale change, mirroring the old pop-up semantics.
+
+- **Web**: new `AnnotationInspector.svelte` (+ `focusText()` instance API
+  for the double-click jump) with `AnnotationInspector.stories.ts`
+  (Default + ScaledMarkdown, VRT baselined dark/light); `+page.svelte`
+  gained the `selectedAnnotation` inspector branch and
+  `handleAnnotationScaleChange`, and lost all pop-up logic
+  (`editingAnnotation` state, `focusAnnotationEditor` action, floating
+  docked textarea, in-editing canvas branch).
+- **Tests**: `e2e/annotation-markdown.spec.ts` rewritten around the
+  inspector (live Markdown render, dblclick-to-focus with zero
+  `annotation-editor` pop-ups, scale round-trip/clamp/empty-field) —
+  3 passed; neighboring undo/delete/diagnostics specs unaffected.
+- **Validation**: full `just test` (cargo + 66 files / 622 web + 23 e2e),
+  `just lint`, `just build`, `just format` green.
+
+---
+
 ## Task — Warn on view nodes outside the bound system (W017)
 
 `rhizz check` now emits `W017` when a `view` node names a component that

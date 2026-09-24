@@ -8,6 +8,7 @@ import {
 } from "../../../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
+import { tick } from "svelte";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
@@ -26,7 +27,7 @@ import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import AnnotationText from "./AnnotationText.svelte";
-import { annotationSvgLines } from "./annotationMarkdown";
+import AnnotationInspector from "./AnnotationInspector.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
 import NewViewModal from "./NewViewModal.svelte";
@@ -322,12 +323,22 @@ let annotations = $state<Annotation[]>([]);
 // SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
 // tracked and the outline re-renders — mirrors the node `selectedKeys`.
 let selectedAnnotations = new SvelteSet<number>();
-// When editing an annotation's text inline (index, or null when not editing).
-let editingAnnotation = $state<number | null>(null);
-// The annotation object currently being edited (undefined when not editing).
-let editingAnnotationObj = $derived(
-  editingAnnotation === null ? undefined : annotations[editingAnnotation],
+// The single selected annotation's index (null unless exactly one is
+// selected) and object (undefined when none, or when the index went stale).
+// The inspector edits exactly one annotation; multi-select stays canvas-only.
+let selectedAnnotationIndex = $derived(
+  selectedAnnotations.size === 1
+    ? (selectedAnnotations.values().next().value ?? null)
+    : null,
 );
+let selectedAnnotation = $derived(
+  selectedAnnotationIndex === null
+    ? undefined
+    : annotations[selectedAnnotationIndex],
+);
+// Ref to the mounted annotation inspector, so double-clicking a note can
+// move focus into its text editor (null while no annotation is selected).
+let annotationInspector = $state<AnnotationInspector | null>(null);
 
 // Which diagram (a `views/<name>.hcl` file) is currently open on the
 // canvas, relative to VIEW_LAYOUT_DIR — e.g. "main.hcl" — exactly like
@@ -898,14 +909,6 @@ function selectAnnotation(index: number) {
   selectedAnnotations.add(index);
 }
 
-// Svelte `use:` action: focus the annotation editor on mount and park
-// the caret at the end, so double-click (or + Note) flows straight into
-// typing — without it the box opens unfocused and blur/Escape go nowhere.
-function focusAnnotationEditor(node: HTMLTextAreaElement): void {
-  node.focus();
-  node.setSelectionRange(node.value.length, node.value.length);
-}
-
 function addAnnotationHandler(): void {
   recordUndoPoint();
   noteDiagramEdited();
@@ -915,7 +918,9 @@ function addAnnotationHandler(): void {
   const idx = annotations.length;
   annotations.push({ text: "New note", x, y });
   selectAnnotation(idx);
-  editingAnnotation = idx;
+  // The inspector mounts on selection; focus its text editor next tick so
+  // typing flows straight in, like the old pop-up editor's autofocus.
+  void tick().then(() => annotationInspector?.focusText());
 }
 
 function deleteSelectedAnnotations(): void {
@@ -925,6 +930,18 @@ function deleteSelectedAnnotations(): void {
   const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
   for (const idx of toDelete) annotations.splice(idx, 1);
   selectedAnnotations.clear();
+}
+
+// Commit a validated scale from the annotation inspector: one undo step
+// per change (no-op when unchanged), then persist like every other edit.
+function handleAnnotationScaleChange(scale: number): void {
+  if (selectedAnnotationIndex === null) return;
+  const idx = selectedAnnotationIndex;
+  const current = annotations[idx];
+  if (!current || (current.scale ?? 1) === scale) return;
+  recordUndoPoint();
+  annotations[idx] = { ...current, scale };
+  noteDiagramEdited();
 }
 
 function deselect(index: number) {
@@ -990,7 +1007,6 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
   annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
   clearSelection();
   selectedConnection = null;
-  editingAnnotation = null;
 }
 
 // Records the diagram's current state as an undo point, right *before* a
@@ -2882,6 +2898,14 @@ $effect(() => {
         onopendocumentation={() =>
           void handleOpenDocumentation().catch(reportDiagramError)}
       />
+    {:else if selectedAnnotation}
+      <AnnotationInspector
+        bind:this={annotationInspector}
+        annotation={selectedAnnotation}
+        ontexteditstart={() => recordUndoPoint()}
+        ontextcommitted={() => noteDiagramEdited()}
+        onscalechange={(scale) => handleAnnotationScaleChange(scale)}
+      />
     {:else if selectedConnectionData}
       <div class="space-y-4 text-sm" data-testid="connection-inspector">
         <div>
@@ -3282,10 +3306,11 @@ $effect(() => {
         {/each}
 
         <!-- Free-standing text annotations, rendered at absolute positions.
-             Selectable + draggable like nodes; double-click to edit text;
-             corner-drag to resize (changes the font scale). The text itself
-             is pointer-events: none; an invisible rect behind it is the hit
-             target (SVG <g> has no geometry of its own). -->
+             Selectable + draggable like nodes; double-click focuses the
+             inspector's text editor; corner-drag to resize (changes the
+             font scale, also editable as a number in the inspector).
+             The text itself is pointer-events: none; an invisible rect
+             behind it is the hit target (SVG <g> has no geometry of its own). -->
         {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}-${ann.scale}`)}
           {@const isAnnSelected = interaction.type === "marquee"
             ? marqueeAnnotationCandidates.has(i)
@@ -3302,10 +3327,9 @@ $effect(() => {
             ondblclick={(e) => {
               e.stopPropagation();
               selectAnnotation(i);
-              // Record BEFORE inline editing mutates the text (bind:value
-              // writes on every keystroke), so Ctrl+Z restores pre-edit text.
-              recordUndoPoint();
-              editingAnnotation = i;
+              // Jump focus to the inspector's text editor (already mounted
+              // when the note was selected by the first click).
+              annotationInspector?.focusText();
             }}
           >
             <rect
@@ -3346,26 +3370,15 @@ $effect(() => {
                 onmousedown={(e) => onAnnotationResizeMouseDown(e, i, "top-right")}
               />
             {/if}
-            {#if editingAnnotation === i}
-              <AnnotationText
-                text={ann.text}
-                x={ann.x}
-                y={ann.y}
-                scale={ann.scale ?? 1}
-                fill="var(--color-primary)"
-                pointerEventsNone={false}
-              />
-            {:else}
-              <AnnotationText
-                text={ann.text}
-                x={ann.x}
-                y={ann.y}
-                scale={ann.scale ?? 1}
-                fill={isAnnSelected
-                  ? "var(--color-primary)"
-                  : "var(--color-base-content)"}
-              />
-            {/if}
+            <AnnotationText
+              text={ann.text}
+              x={ann.x}
+              y={ann.y}
+              scale={ann.scale ?? 1}
+              fill={isAnnSelected
+                ? "var(--color-primary)"
+                : "var(--color-base-content)"}
+            />
           </g>
         {/each}
 
@@ -3402,54 +3415,6 @@ $effect(() => {
           />
         {/if}
       </svg>
-
-      {#if editingAnnotationObj}
-        <!-- Editor docks to the left of the rendered note (never on top
-             of it): its right edge sits a gap left of the note's hit-box,
-             clamped into the viewport so far-left notes don't push it
-             off-screen. -->
-        {@const editHit = annotationHitBox(editingAnnotationObj)}
-        {@const editLeft = Math.max(
-          8,
-          Math.min(
-            (editHit.x - 12 - editor_state.view.x) * editor_state.view.zoom -
-              256,
-            Math.max(8, canvas_width - 264),
-          ),
-        )}
-        {@const editTop = Math.max(
-          8,
-          Math.min(
-            (editHit.y - editor_state.view.y) * editor_state.view.zoom,
-            Math.max(8, canvas_height - 120),
-          ),
-        )}
-        <!-- Inline text editor for the annotation being edited. Positioned in
-             screen space (world coords x zoom + view origin). Multiline:
-             Enter inserts a newline; leaving commits the text — click
-             outside (blur) or press Escape. Ctrl+Z restores pre-edit
-             text thanks to the undo point recorded below. -->
-        <textarea
-          use:focusAnnotationEditor
-          bind:value={editingAnnotationObj.text}
-          onkeydown={(e) => {
-            if (e.key === "Escape") {
-              noteDiagramEdited();
-              editingAnnotation = null;
-            }
-          }}
-          onblur={() => {
-            noteDiagramEdited();
-            editingAnnotation = null;
-          }}
-          class="absolute z-30 textarea textarea-sm textarea-bordered w-64"
-          rows={Math.max(2, annotationSvgLines(editingAnnotationObj.text).length)}
-          placeholder="Markdown supported — Enter for a new line"
-          title="Enter inserts a newline. Click outside or press Escape to finish. Markdown: **bold**, *italic*, # heading, - list"
-          style="left:{editLeft}px; top:{editTop}px"
-          data-testid="annotation-editor"
-        ></textarea>
-      {/if}
 
       {#if !model && output.error_count() > 0}
         <div
