@@ -103,6 +103,12 @@ test("annotation scale input resizes the rendered note", async ({ page }) => {
   await expect(scaleInput).toHaveValue("2");
   await expect(note).toHaveAttribute("font-size", "24");
 
+  // Extra decimals round to 2 places on commit (the rendered font-size
+  // follows the rounded scale; exact float rendering is covered above).
+  await scaleInput.fill("1.237");
+  await page.mouse.click(30, 400);
+  await expect(scaleInput).toHaveValue("1.24");
+
   // Below the 0.5 floor clamps; clearing the field floors too (empty
   // parses as 0, and number inputs only ever hold numeric text).
   await scaleInput.fill("0.1");

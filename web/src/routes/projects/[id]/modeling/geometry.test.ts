@@ -19,11 +19,33 @@ import {
   elbowPath,
   findConnectTarget,
   findReparentTarget,
+  MIN_ANNOTATION_SCALE,
   nodeLabelLayout,
+  normalizeAnnotationScale,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
 } from "./geometry";
+
+describe("normalizeAnnotationScale", () => {
+  it("leaves clean scales untouched", () => {
+    expect(normalizeAnnotationScale(1)).toBe(1);
+    expect(normalizeAnnotationScale(2)).toBe(2);
+    expect(normalizeAnnotationScale(0.5)).toBe(MIN_ANNOTATION_SCALE);
+  });
+
+  it("rounds float dust from fractional-zoom drags to 2 decimals", () => {
+    expect(normalizeAnnotationScale(1.3333333333)).toBe(1.33);
+    expect(normalizeAnnotationScale(1.237)).toBe(1.24);
+    expect(normalizeAnnotationScale(0.125)).toBe(0.5);
+  });
+
+  it("floors anything below the minimum at 0.5", () => {
+    expect(normalizeAnnotationScale(0.1)).toBe(0.5);
+    expect(normalizeAnnotationScale(-3)).toBe(0.5);
+    expect(normalizeAnnotationScale(0.499)).toBe(0.5);
+  });
+});
 
 describe("boxCenter", () => {
   it("returns the midpoint of a box", () => {

@@ -1,15 +1,13 @@
 <script lang="ts">
 import type { Annotation } from "../../../../rhizz_wasm_wrapper";
 import { annotationSvgLines } from "./annotationMarkdown";
+import { MIN_ANNOTATION_SCALE, normalizeAnnotationScale } from "./geometry";
 
 // Inspector panel for a single selected view annotation: multi-line text
 // plus the font-scale number input. Text binds directly to the annotation
 // (like the old pop-up editor did) so the canvas re-renders live while
 // typing; the page records one undo point per edit session via
 // `ontexteditstart` and persists on `ontextcommitted`.
-
-/** Floor for the scale input, mirroring the corner-drag guard in +page.svelte. */
-export const MIN_ANNOTATION_SCALE = 0.5;
 
 interface Props {
   annotation: Annotation;
@@ -72,7 +70,7 @@ function commitScale(): void {
   if (raw === null) return;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return; // display falls back to the prop
-  onscalechange(Math.max(MIN_ANNOTATION_SCALE, parsed));
+  onscalechange(normalizeAnnotationScale(parsed));
 }
 </script>
 
