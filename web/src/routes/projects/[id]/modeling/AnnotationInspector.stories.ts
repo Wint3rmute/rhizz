@@ -13,7 +13,9 @@ const meta = {
     },
     ontexteditstart: () => {},
     ontextcommitted: () => {},
+    onscaleeditstart: () => {},
     onscalechange: () => {},
+    onscalecommitted: () => {},
   },
 } satisfies Meta<typeof AnnotationInspector>;
 
