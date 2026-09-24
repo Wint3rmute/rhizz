@@ -15,15 +15,21 @@ interface Props {
   ontexteditstart: () => void;
   /** Fired when text is committed (blur or Escape) so the diagram persists. */
   ontextcommitted: () => void;
-  /** Fired with the validated scale committed from the number input. */
+  /** Fired once per scale edit session (first value-changing keystroke). */
+  onscaleeditstart: () => void;
+  /** Fired with the normalized scale for every value-changing keystroke. */
   onscalechange: (scale: number) => void;
+  /** Fired when scale editing ends (blur) so the diagram persists. */
+  onscalecommitted: () => void;
 }
 
 let {
   annotation,
   ontexteditstart,
   ontextcommitted,
+  onscaleeditstart,
   onscalechange,
+  onscalecommitted,
 }: Props = $props();
 
 let textarea: HTMLTextAreaElement | null = $state(null);
@@ -57,20 +63,35 @@ function commitText(): void {
 // Draft scale text while the number input is being edited (null when idle).
 // Display falls back to the annotation's scale, so external changes (e.g.
 // the canvas corner-drag handle) show up immediately when not editing.
+// Valid keystrokes propagate live (canvas updates per keypress); the draft
+// keeps showing exactly what was typed until blur canonicalizes it.
 let scaleDraft: string | null = $state(null);
 const displayScale = $derived(scaleDraft ?? String(annotation.scale ?? 1));
+// True once the current focus session recorded its undo point.
+let scaleArmed = false;
 
-function handleScaleInput(e: Event): void {
-  scaleDraft = (e.target as HTMLInputElement).value;
+function handleScaleFocus(): void {
+  scaleArmed = false;
 }
 
-function commitScale(): void {
-  const raw = scaleDraft;
-  scaleDraft = null;
-  if (raw === null) return;
+function handleScaleInput(e: Event): void {
+  const raw = (e.target as HTMLInputElement).value;
+  scaleDraft = raw;
+  if (raw.trim() === "") return;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return; // display falls back to the prop
-  onscalechange(normalizeAnnotationScale(parsed));
+  if (!Number.isFinite(parsed)) return;
+  const next = normalizeAnnotationScale(parsed);
+  if (next === (annotation.scale ?? 1)) return;
+  if (!scaleArmed) {
+    scaleArmed = true;
+    onscaleeditstart();
+  }
+  onscalechange(next);
+}
+
+function handleScaleBlur(): void {
+  scaleDraft = null;
+  onscalecommitted();
 }
 </script>
 
@@ -124,9 +145,9 @@ function commitScale(): void {
       min={MIN_ANNOTATION_SCALE}
       step="0.25"
       value={displayScale}
+      onfocus={handleScaleFocus}
       oninput={handleScaleInput}
-      onchange={commitScale}
-      onblur={commitScale}
+      onblur={handleScaleBlur}
       class="input input-sm input-bordered w-full"
       data-testid="annotation-scale-input"
     />

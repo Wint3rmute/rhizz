@@ -99,13 +99,16 @@ test("annotation scale input resizes the rendered note", async ({ page }) => {
   await expect(note).toHaveAttribute("font-size", "12");
 
   await scaleInput.fill("2");
+  // Live: the canvas updates on keypress, before the field loses focus.
+  await expect(note).toHaveAttribute("font-size", "24");
   await page.mouse.click(30, 400);
   await expect(scaleInput).toHaveValue("2");
   await expect(note).toHaveAttribute("font-size", "24");
 
-  // Extra decimals round to 2 places on commit (the rendered font-size
-  // follows the rounded scale; exact float rendering is covered above).
+  // Extra decimals round to 2 places: the draft keeps showing what was
+  // typed until blur canonicalizes the field.
   await scaleInput.fill("1.237");
+  await expect(scaleInput).toHaveValue("1.237");
   await page.mouse.click(30, 400);
   await expect(scaleInput).toHaveValue("1.24");
 

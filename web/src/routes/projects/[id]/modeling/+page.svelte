@@ -933,16 +933,16 @@ function deleteSelectedAnnotations(): void {
   selectedAnnotations.clear();
 }
 
-// Commit a validated scale from the annotation inspector: one undo step
-// per change (no-op when unchanged), then persist like every other edit.
+// Apply a normalized scale from the annotation inspector: mutate only —
+// the undo point is recorded once per typing session (first value-changing
+// keystroke arms it, like the text editor), and persistence rides the
+// snapshot effect (blur stamps the edit).
 function handleAnnotationScaleChange(scale: number): void {
   if (selectedAnnotationIndex === null) return;
   const idx = selectedAnnotationIndex;
   const current = annotations[idx];
   if (!current || (current.scale ?? 1) === scale) return;
-  recordUndoPoint();
   annotations[idx] = { ...current, scale };
-  noteDiagramEdited();
 }
 
 function deselect(index: number) {
@@ -2907,7 +2907,9 @@ $effect(() => {
         annotation={selectedAnnotation}
         ontexteditstart={() => recordUndoPoint()}
         ontextcommitted={() => noteDiagramEdited()}
+        onscaleeditstart={() => recordUndoPoint()}
         onscalechange={(scale) => handleAnnotationScaleChange(scale)}
+        onscalecommitted={() => noteDiagramEdited()}
       />
     {:else if selectedConnectionData}
       <div class="space-y-4 text-sm" data-testid="connection-inspector">
