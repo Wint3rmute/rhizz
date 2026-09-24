@@ -14,6 +14,35 @@ How to work on this file:
 
 ---
 
+## Task <N> — Attributes inspector for annotations
+
+Currently, annotations are edited using double-clicking and a pop-up editor.
+While useful, this breaks the inspector-based flow for editing nodes.
+
+Make the inspector work with annotations - when an annotation is focused, the
+inspector shall allow editing annotations:
+- Text (as a multi-line editor, same as the current pop-up editor)
+- Annotation scale (as a number input)
+
+Remove the current double-click pop-up editor. Instead, when double-clicked, the focus
+shall jump to the editor inside the inspector.
+
+After finishing, do a cleanup pass, checking if no old logic from the previous
+double-click pop-up inspector remains, removing leftovers.
+
+
+## Task <N> - write documentation directly from the Inventory page.
+
+Currently, the inventory page displays a tabbed bottom section, with: "full name", "ports", "requirements" and "metadata".
+
+Change how "full name" works - instead of displaying the full_name field of the
+component, it should describe component's documentation - what's located in
+`docs/<component_name>.md`. There should be a button to switch from a
+markdown-based viewer to a plain multiline editor.
+
+Re-use the Markdown renderer from the /explore page, which already renders
+markdown. If needed, extract to a common renderer.
+
 ## Task <N> — Detect isolated component trees in systems
 
 It is possible to define a system with 2 completely independent component trees,
