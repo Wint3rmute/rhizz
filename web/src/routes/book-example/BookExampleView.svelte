@@ -419,7 +419,7 @@ $effect(() => {
     {/if}
   </div>
 
-  <div class="pb-3">
+  <div>
     <VerdictPanel
       status={verdictStatus}
       head={verdictHead}
