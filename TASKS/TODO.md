@@ -14,8 +14,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Detect isolated component trees in systems
-
 ## Task <N> - write documentation directly from the Inventory page.
 
 Currently, the inventory page displays a tabbed bottom section, with: "full name", "ports", "requirements" and "metadata".
@@ -67,6 +65,16 @@ Connection's context menu shall feature:
 - Zoom to fill
 - Reset view
 - Toggle grid
+
+## Task <N> - more advanced connection routing on canvas
+
+Currently, the connections are always routed using a "double-knee" approach,
+with 2 turning points on each connection. This does not always work.
+
+Think about existing well-thought solutions to structuring connections in such
+diagram editors and suggest a more flexible option, which will smartly figure
+out whether to use connections with 2 turning points or just a single turning
+point.
 
 ## Task <N> — Detect isolated component trees in systems
 
