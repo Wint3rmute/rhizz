@@ -46,6 +46,27 @@ Component's context menu shall feature:
 - Delete
 - Jump to documentation
 - Jump to detailed view
+- Hide
+
+### Annotation context menu
+
+Annotation's context menu shall feature:
+
+- Delete
+
+### Connection context menu
+
+Connection's context menu shall feature:
+
+- Delete
+
+### Context menu when clicked on an empty space
+
+- New component
+- New annotation
+- Zoom to fill
+- Reset view
+- Toggle grid
 
 ## Task <N> — Detect isolated component trees in systems
 
