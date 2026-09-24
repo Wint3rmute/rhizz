@@ -67,6 +67,22 @@ book-accept:
 book-serve:
     {{run}} mdbook serve book
 
+# Visual regression tests: full-page screenshot of every Storybook story in
+# dark + light, diffed against web/vrt/__screenshots__/. Always writes the
+# gallery to web/vrt-report/index.html (open it straight from disk).
+# Extra args go to Playwright, e.g. `just vrt -g navbar`.
+vrt *args: wasm
+    {{run}} sh -lc 'cd web && dx storybook build --quiet'
+    {{run}} sh -lc 'cd web && dx playwright test -c playwright.vrt.config.ts {{args}}'
+
+# Same as `vrt`, but skips the wasm + Storybook rebuild.
+vrt-quick *args:
+    {{run}} sh -lc 'cd web && dx playwright test -c playwright.vrt.config.ts {{args}}'
+
+# Re-baselines every changed/new screenshot (review the gallery first!).
+vrt-accept *args:
+    {{run}} sh -lc 'cd web && dx playwright test -c playwright.vrt.config.ts --update-snapshots=all {{args}}'
+
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
     {{run}} sh -lc 'cd web && deno run dev'
