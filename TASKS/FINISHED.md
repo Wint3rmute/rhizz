@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Warn on view nodes outside the bound system (W017)
+
+`rhizz check` now emits `W017` when a `view` node names a component that
+exists but belongs to a different system than the view's bound `system`
+(e.g. `view "overview" { system = "a" }` with `node "b/comp"`), matching
+what the Modeling editor already hides (`+N hidden from other systems`).
+Only runs when the view system is known (same gating as `W016`); unknown
+node paths keep reporting `W016`, never `W017`.
+
+- **Core** (`rhizz-core/src/validate.rs`): `validate_view_nodes` resolves each
+  node's component index, walks `parent` links via `system_label_of` to the
+  owning system, and emits one `W017` per foreign path (deduped through the
+  shared `reported` set). Bare top-level definition labels (parent-less,
+  global) are exempt; own-system paths (`"a"` / `"a/..."`) are clean.
+- **Spec**: `SPEC/diagnostics/W017.md` (Architectural level, edge cases
+  documented) + row in the `SPEC/warning-levels.md` mapping table;
+  `build.rs` auto-generates `DiagnosticCode::W017`.
+- **Tests**: exact-code assertions — fires once per foreign path, silent for
+  own-system nodes / bare labels / unknown-system (`E006`) views, `W016`
+  behavior unchanged.
+- **Validation**: full `just test` (cargo + 622 web + 21 e2e), `just lint`,
+  `just build`, `just format` green.
+
+---
+
 ## Task — Allow for jumping into a component-specific view from Inventory
 
 The Inventory empty-diagram state (`views/<label>.hcl` missing) gained a
