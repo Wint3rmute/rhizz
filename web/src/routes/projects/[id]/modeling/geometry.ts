@@ -40,6 +40,17 @@ export interface AnnotationLike {
 export const ANNOTATION_FONT_SIZE = 12;
 export const ANNOTATION_LINE_HEIGHT = 16;
 
+// Floor for annotation font scale: neither the corner-drag resize nor the
+// inspector number input may collapse a note to nothing.
+export const MIN_ANNOTATION_SCALE = 0.5;
+
+// Clamp an annotation scale to the minimum and round to 2 decimals, so
+// persisted `views/*.hcl` never accumulates float dust (e.g. 1.3333333 from
+// a fractional-zoom drag). Both edit paths (drag + inspector) funnel here.
+export function normalizeAnnotationScale(scale: number): number {
+  return Math.max(MIN_ANNOTATION_SCALE, Math.round(scale * 100) / 100);
+}
+
 // Extent box of a view annotation's text, measured from *rendered* Markdown
 // (syntax stripped via `annotationSvgLines`) so `**bold**` meters as 4 chars,
 // using the same geometry constants as the interactive canvas's hit-testing

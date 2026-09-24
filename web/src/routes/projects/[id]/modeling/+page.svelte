@@ -80,6 +80,7 @@ import {
   findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
+  normalizeAnnotationScale,
   type ResizeHandle,
   unionBox,
 } from "./geometry";
@@ -2224,15 +2225,17 @@ function onSvgMouseMove(event: MouseEvent) {
     case "resizing": {
       if (current.annotationResize) {
         // Annotation resize: the corner drag maps (deltaX, deltaY) to a new
-        // font scale — startScale + fractional distance. A minimum guard
-        // keeps the note from collapsing to nothing.
+        // font scale — startScale + fractional distance, normalized to the
+        // 0.5 floor and 2 decimals (same as the inspector input).
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
         const deltaX = svgCoords.x - current.startPointer.x;
         const deltaY = svgCoords.y - current.startPointer.y;
         const a = annotations[current.annotationResize.index];
         if (a) {
           const start = current.annotationResize.startScale;
-          const scale = Math.max(0.5, start + (deltaX + deltaY) / 100);
+          const scale = normalizeAnnotationScale(
+            start + (deltaX + deltaY) / 100,
+          );
           annotations[current.annotationResize.index] = {
             ...a,
             scale,
