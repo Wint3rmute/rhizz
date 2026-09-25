@@ -13,12 +13,20 @@ let {
   zoomToFillFraction = 0.85,
   content,
   toolbarExtra,
+  // Embed views are transient shares, not an editing session: no pan/zoom
+  // persistence (a stale localStorage entry from another diagram would
+  // misframe this one), and refit whenever this identity changes so each
+  // new diagram opens framed instead of inheriting the previous one's
+  // pan/zoom. Omit `stateKey` for a private in-memory view; pass
+  // `viewportIdentity` (e.g. the diagram path) to refit on navigation.
+  viewportIdentity = null,
 }: {
-  stateKey?: string;
+  stateKey?: string | undefined;
   bounds?: Box | null;
   zoomToFillFraction?: number;
   content?: Snippet;
   toolbarExtra?: Snippet;
+  viewportIdentity?: string | null;
 } = $props();
 
 let editor_state = $derived.by(() => create_editor_state(stateKey));
@@ -47,11 +55,18 @@ export function zoomToFill() {
     canvas_height / newZoom / 2;
 }
 
-let hasAutoFilled = false;
+// Which diagram the last auto-fit framed. Compared against
+// `viewportIdentity`: when the embed page navigates to another diagram,
+// the identity changes and the new content is fitted — while panning or
+// zooming within one diagram never re-triggers it. `null` identity (the
+// interactive canvas) keeps the old fit-once-per-mount behavior.
+let fittedIdentity: string | null | undefined = $state(undefined);
 $effect(() => {
-  if (bounds && !hasAutoFilled && canvas_width > 0 && canvas_height > 0) {
-    hasAutoFilled = true;
-    zoomToFill();
+  if (bounds && canvas_width > 0 && canvas_height > 0) {
+    if (fittedIdentity !== viewportIdentity) {
+      fittedIdentity = viewportIdentity;
+      zoomToFill();
+    }
   }
 });
 

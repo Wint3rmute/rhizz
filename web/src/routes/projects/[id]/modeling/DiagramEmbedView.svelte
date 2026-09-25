@@ -18,6 +18,8 @@ let {
   projectId = null,
   diagramPath = null,
   selected = new Set<number>(),
+  linked = new Set<number>(),
+  onnodeclick,
   onnodehover,
 }: {
   components: DiagramStaticComponent[];
@@ -28,6 +30,10 @@ let {
   diagramPath?: string | null;
   /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
   selected?: Set<number>;
+  /** Component indices with a linked detail view (dimmed otherwise, click navigates). */
+  linked?: Set<number>;
+  /** Optional node interaction — wired to drill-down navigation by the embed page. */
+  onnodeclick?: ((index: number) => void) | undefined;
   /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
   onnodehover?:
     | ((index: number | null, event?: MouseEvent) => void)
@@ -50,7 +56,7 @@ let fullDiagramUrl = $derived.by(() => {
 });
 </script>
 
-<DiagramViewport stateKey="DIAGRAM_EMBED" {bounds}>
+<DiagramViewport stateKey={undefined} {bounds} viewportIdentity={diagramPath}>
   {#snippet content()}
     <DiagramElements
       {components}
@@ -59,6 +65,8 @@ let fullDiagramUrl = $derived.by(() => {
       {annotations}
       markerId="embed-arrow"
       {selected}
+      {linked}
+      {onnodeclick}
       {onnodehover}
     />
   {/snippet}

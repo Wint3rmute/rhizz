@@ -1,11 +1,14 @@
 <script lang="ts">
-import { SvelteMap } from "svelte/reactivity";
+import { goto } from "$app/navigation";
+import { resolve } from "$app/paths";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { projectStore } from "../../../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../../../WarningLevelState.svelte";
+import { toastState } from "../../../../../../ToastState.svelte";
 import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";
-import { openProjectFs } from "../../../../../../vfs/fs";
-import { componentKeyIndex } from "../../../../../../modelKeys";
+import { type Dirent, openProjectFs } from "../../../../../../vfs/fs";
+import { componentKeyAt, componentKeyIndex } from "../../../../../../modelKeys";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import type { DiagramStaticBox } from "../../types";
 import {
@@ -16,6 +19,7 @@ import {
   VIEW_LAYOUT_DIR,
 } from "../../persistence";
 import { type ProjectDoc, readProjectDocs } from "../../../explore/docs";
+import { findComponentDiagram } from "../../../explore/navigation";
 import Markdown from "../../../../../../components/Markdown.svelte";
 import type { PageProps } from "./$types";
 
@@ -97,6 +101,75 @@ let connections = $derived(model ? model.connections() : []);
 
 let keyToIndex = $derived(componentKeyIndex(model));
 
+// Structurally-stable component keys, index-aligned with `components` —
+// needed to resolve each node's qualified path for detail-view matching
+// (same convention as Explore's `componentDiagrams`).
+let componentKeys = $derived(model ? model.component_keys() : []);
+
+// Every view file in the project: drill-down targets are resolved against
+// these with the shared `findComponentDiagram` helper (qualified path
+// first, bare label second), exactly like Explore.
+let diagramEntries = $state<Dirent[]>([]);
+
+$effect(() => {
+  const currentId = projectId;
+  if (!currentId) {
+    diagramEntries = [];
+    return;
+  }
+  let cancelled = false;
+  const fs = openProjectFs(projectStore, currentId);
+  fs.readdir(VIEW_LAYOUT_DIR, { recursive: true })
+    .then((entries) => {
+      if (cancelled) return;
+      diagramEntries = entries.filter(
+        (entry) => entry.isFile() && entry.name.endsWith(".hcl"),
+      );
+    })
+    .catch(() => {
+      if (cancelled) return;
+      diagramEntries = [];
+    });
+  return () => {
+    cancelled = true;
+  };
+});
+
+let componentDiagrams = $derived.by(() => {
+  const map = new SvelteMap<number, Dirent>();
+  components.forEach((component, index) => {
+    const diagram = findComponentDiagram(
+      diagramEntries,
+      component.label,
+      componentKeyAt(componentKeys, index),
+    );
+    if (diagram) map.set(index, diagram);
+  });
+  return map;
+});
+
+let linkedComponents = $derived.by(
+  () => new SvelteSet<number>(componentDiagrams.keys()),
+);
+
+// Clicking a node navigates within the embed route (back/forward friendly):
+// linked nodes swap the `[...diagram]` param, unlinked ones toast — the
+// same feedback Explore shows for a missing detail view.
+function handleNodeClick(index: number): void {
+  const component = components[index];
+  if (!component) return;
+  const diagram = componentDiagrams.get(index);
+  if (diagram) {
+    const base = resolve("/projects/[id]/modeling/embed/[...diagram]", {
+      id: projectId ?? "",
+      diagram: diagram.path,
+    });
+    void goto(base);
+    return;
+  }
+  toastState.show(`No detailed view for ${component.label} created`, "info");
+}
+
 let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
   return mapLayoutToBoxes(layout.checked, keyToIndex);
 });
@@ -155,6 +228,8 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
         annotations={layout.annotations ?? []}
         projectId={projectId}
         diagramPath={normalizedDiagramPath}
+        linked={linkedComponents}
+        onnodeclick={handleNodeClick}
         onnodehover={(index, event) => handleNodeHover(index, event)}
       />
       {#if hoveredDoc && hoverPos}
