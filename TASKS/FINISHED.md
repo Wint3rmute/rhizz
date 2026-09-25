@@ -4,6 +4,43 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Right-click context menu for the canvas in /modeling
+
+All canvas entities gained a right-click listener; each row shows the action
+label on the left and a greyed-out shortcut hint on the right.
+
+- **Component menu**: Hide from this view (`H`), Jump to documentation (`O`),
+  Jump to detailed view (`V`). Per operator decision there is no Delete row —
+  Hide reuses the existing view-only unplace (model kept, undoable via the
+  layout history), so no model delete can be triggered from the canvas.
+- **Annotation menu**: Delete (`Del`); **Connection menu**: Delete (`Del`);
+  **Empty-space menu**: New component (`C`), New annotation (`N`), Zoom to
+  fill (`F`), Reset view (`R`), Toggle grid (`G`).
+- **Detail jump**: switches `selectedDiagramPath` to the matching
+  `views/<label>.hcl` (nested paths matched by suffix), else toasts
+  `No detailed view for <label> created` — same copy as Explore. `C` opens
+  the create modal at the click point; `N` keeps the existing centering.
+- **Global shortcuts**: the same keys fire page-wide (not only with the menu
+  open or SVG focus). A follow-up replaced the `canvasFocused` gate with a
+  typing/modal/modifier guard, since node mousedown `preventDefault` kills
+  implicit SVG focus and left the keys silently dead. `C`/`F` keep their
+  color/font cycling meaning while a node is selected and only create/zoom
+  with an empty selection.
+- **Web** (`modeling/+page.svelte`, new `ContextMenu.svelte`): presentation-only
+  menu (viewport-clamped, Esc/backdrop closes, `dangerous` red rows); four
+  `open*ContextMenu` handlers reusing `handleDeleteSelectedComponent`,
+  `handleOpenDocumentation`, toolbar actions.
+- **Tests/stories**: new `e2e/context-menu.spec.ts` (right-click → rows +
+  hints → Hide removes node, definition row survives, Ctrl+Z restores;
+  empty-canvas rows → Esc closes); `ContextMenu.stories.ts` (component /
+  empty-canvas / annotation / click-closes, 4 passed). Neighbors green
+  (delete-from-view, undo-redo ×3, annotation ×3).
+- **Validation**: `svelte-check` 0 errors, `eslint` clean, `clippy` clean,
+  modeling storybook suite green. Full `deno run test` has 1 pre-existing
+  unhandled error in `Explore.stories.ts` iframe init (unrelated, 561 passed).
+
+---
+
 ## Task - write documentation directly from the Inventory page.
 
 The Inventory "Full name" tab now shows the definition's `docs/<label>.md`
