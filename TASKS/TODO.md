@@ -11,6 +11,8 @@ How to work on this file:
   until it's all working
 - Once all linters/builds/tests pass, run `cargo fmt`
 - Move the completed task to `FINISHED.md` and report that you're finished
+- Commit using conventional commits
+- Push your feature branch. **Never push directly to main**
 
 ---
 
