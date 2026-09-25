@@ -14,14 +14,27 @@ test("explore renders a drone diagram, toast, and embed modal", async ({ page })
     name: /goggles, no detailed view/i,
   });
   await expect(goggles).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Diagram breadcrumb" }))
-    .toBeVisible();
+
+  // No second navbar above the canvas: the diagrams sidebar carries the
+  // whole chrome (file tree + the open diagram + the embed button).
+  await expect(page.getByRole("navigation")).toHaveCount(0);
+  const sidebar = page.getByRole("complementary", { name: "Diagrams" });
+  await expect(sidebar).toBeVisible();
+  // The open diagram is marked in the tree itself (aria-current), so the
+  // breadcrumb that used to spell it out is redundant. The mobile chip row
+  // is hidden on this viewport, hence the row-scoped lookup.
+  const openRow = sidebar.locator("li button[aria-current='true']");
+  await expect(openRow).toHaveCount(1);
+  await expect(openRow).toHaveText(/^ground-station\.hcl$/);
 
   await goggles.click();
   await expect(page.getByText("No detailed view for goggles created"))
     .toBeVisible();
 
-  await page.getByRole("button", { name: /embed diagram/i }).click();
+  // The embed action lives at the bottom of that same sidebar.
+  const embed = sidebar.getByRole("button", { name: /embed diagram/i });
+  await expect(embed).toBeVisible();
+  await embed.click();
   await expect(page.getByText("Direct Embed URL")).toBeVisible();
   await expect(page.getByText("HTML <iframe> Embed Code")).toBeVisible();
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Dirent } from "../../../../vfs/fs";
-import { diagramTitle, findComponentDiagram } from "./navigation";
+import { findComponentDiagram } from "./navigation";
 
 function file(name: string): Dirent {
   return {
@@ -32,9 +32,5 @@ describe("Explore diagram navigation", () => {
       findComponentDiagram([file("overview.hcl")], "engine", "drone/engine"),
     )
       .toBeUndefined();
-  });
-
-  it("derives a readable title from a diagram path", () => {
-    expect(diagramTitle("subsystem/engine.hcl")).toBe("engine");
   });
 });

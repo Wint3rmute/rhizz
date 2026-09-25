@@ -254,6 +254,19 @@ export const MobileManyDiagrams: Story = {
   loaders: [ensureManyDiagramsProject],
 };
 
+// Same five diagrams on desktop: the tree is long enough to scroll, so this
+// story covers the embed button staying pinned to the sidebar's bottom edge
+// instead of scrolling away with the list.
+export const ManyDiagramsDesktop: Story = {
+  parameters: {
+    viewport: { defaultViewport: "responsive" },
+  },
+  args: {
+    projectId: MANY_DIAGRAMS_PROJECT_ID,
+  },
+  loaders: [ensureManyDiagramsProject],
+};
+
 export const CrossLevelConnections: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
@@ -289,5 +302,35 @@ export const HoverDocHeader: Story = {
       }),
     ).toBeTruthy();
     await expect(tooltipQueries.getByText("Stores charge.")).toBeTruthy();
+  },
+};
+
+export const EmbedButtonInSidebar: Story = {
+  parameters: {
+    viewport: { defaultViewport: "responsive" },
+  },
+  args: {
+    projectId: CROSS_LEVEL_PROJECT_ID,
+  },
+  loaders: [ensureCrossLevelProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The second navbar (breadcrumb + embed) is gone: the diagrams
+    // sidebar is the only chrome, and carries the embed button itself.
+    await expect(canvas.queryAllByRole("navigation")).toHaveLength(0);
+    const sidebar = canvas.getByRole("complementary", { name: "Diagrams" });
+    const sidebarQueries = within(sidebar);
+    // The open diagram is marked inside the sidebar (aria-current) — that
+    // is what the breadcrumb used to spell out above the canvas. Marked
+    // in whichever selector is on screen: chips (< md) or file tree.
+    const openDiagram = await sidebarQueries.findByRole("button", {
+      current: true,
+    });
+    await expect(openDiagram.textContent).toContain(".hcl");
+    const embed = sidebarQueries.getByRole("button", {
+      name: /embed diagram/i,
+    });
+    await userEvent.click(embed);
+    await expect(await canvas.findByText("Direct Embed URL")).toBeTruthy();
   },
 };
