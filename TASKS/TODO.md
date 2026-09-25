@@ -172,19 +172,6 @@ Definition of done:
 
 --
 
-## (For later brainstorming) Task <N> - visual regression testing
-
-As we now have a virtual filesystem hierarchy for the frontend, we can create
-end-to-end tests which load the project, render a diagram and verify that it
-matches the expected output.
-
-Vitest supports visual regression testing. The goal of this task is to implement
-infrastructure for visual regression testing in the frontend, then ask the
-developer to create diagrams, which can be saved as reference images for future
-comparisons.
-
----
-
 ## (For later) Task <N> — Multi-file workspace tabs and project import/export
 
 Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
@@ -199,6 +186,12 @@ Add a unified workspace view that lets users inspect the generated `system.hcl` 
 - Validate with `deno task check`, `deno task test`, `deno task build`.
 
 ---
+
+## Task <N> - exploring diagrams in embed mode
+
+When browsing system diagrams in Embed mode (/modeling/embed/), it's not
+possible to navigate defined system views, as it is possible in the explore/
+view. Please make it possible to navigate back and forth through linked views.
 
 ---
 
