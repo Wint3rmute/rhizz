@@ -3,9 +3,6 @@
 // in the compiled model, with a read-only preview of the definition's
 // default diagram (`views/<label>.hcl`) and a tabbed detail pane.
 //
-// Read-only by design: no model mutations are dispatched here; the Edit
-// button deep-links into the Modeling editor instead.
-//
 // Data is taken from the compiled model's raw payload (`model.to_js()`),
 // which — unlike the typed wasm wrappers — exposes children/ports/parent
 // indices needed to reconstruct definition trees and hierarchy paths.
@@ -239,12 +236,7 @@ let emptyStatePath = $derived(
   selectedDefinition ? defaultViewPath(selectedDefinition.label) : null,
 );
 
-let editHref = $derived(
-  projectId && selectedDefinition
-    ? resolve("/projects/[id]/modeling", { id: projectId })
-    : null,
-);
-
+// Creates the missing component-specific view (`views/<label>.hcl`, bound
 // ── Documentation loading ───────────────────────────────────────────────────
 // The selected definition's doc is the VFS file `docs/<label>.md` (same
 // convention as Modeling's "Open documentation"). `selectedDoc` holds the
@@ -457,7 +449,6 @@ async function handleCreateView(): Promise<void> {
 
       <DetailPane
         definition={selectedDefinition}
-        {editHref}
         docContent={docContent}
         ondocsave={handleSaveDoc}
       />
