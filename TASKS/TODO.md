@@ -14,46 +14,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - implement a righ-click context menu for the canvas in /modeling
-
-All components in the canvas shall have a right-click listener. The contents of the 
-context menu will vary depending on what's clicked.
-
-### General rules
-
-- For each item in the context menu, description of that action (e.g. delete) shall be on the left side of the item row
-- The keyboard shortcut for each item shall be displayed on the right side of the item row (e.g. a slightly greyed-out "D")
-- Suggest shortcuts based on first letters of the action description
-
-### Component context menu
-
-Component's context menu shall feature:
-
-- Delete
-- Jump to documentation
-- Jump to detailed view
-- Hide
-
-### Annotation context menu
-
-Annotation's context menu shall feature:
-
-- Delete
-
-### Connection context menu
-
-Connection's context menu shall feature:
-
-- Delete
-
-### Context menu when clicked on an empty space
-
-- New component
-- New annotation
-- Zoom to fill
-- Reset view
-- Toggle grid
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,
