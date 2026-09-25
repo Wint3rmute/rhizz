@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task - write documentation directly from the Inventory page.
+
+The Inventory "Full name" tab now shows the definition's `docs/<label>.md`
+documentation (rendered Markdown via the shared `Markdown.svelte` — no
+renderer extraction was needed, Explore/embed/Inventory already share it)
+with a viewer/editor toggle: Edit opens a plain multiline textarea
+(prefilled), Save writes `docs/<label>.md` back to the VFS (creating
+`docs/` when needed, which also satisfies W018), Cancel discards. Missing
+docs show an empty state with an "Add documentation" button; the viewer
+resets on selection change, and saves are guarded with a busy state.
+
+- **Web**: `Inventory.svelte` loads the selected definition's doc
+  (tri-state `string | null | undefined` — content/missing/loading, with
+a label guard against flashing stale docs); `DetailPane.svelte` gained
+the viewer/editor toggle with testids.
+- **Tests/stories**: new `e2e/inventory-documentation.spec.ts` (empty →
+write → rendered Markdown → persists across reload → edit-prefill →
+cancel-discards); `InventoryPage.stories.ts` seeds `docs/battery.md` +
+read-only `DocumentationTab` play story (viewer → editor → cancel).
+VRT inventory baselines re-accepted after review.
+- **Validation**: full `just test` (cargo + unit + storybook + 24 e2e),
+  `just lint`, `just build`, `just format` green.
+
+---
+
 ## Task — Attributes inspector for annotations
 
 Annotations are now edited through the Inspector sidebar instead of the
