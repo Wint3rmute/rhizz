@@ -16,6 +16,29 @@ How to work on this file:
 
 ---
 
+## Task <N> - when adding a new component/annotation with the "N" shortcut - place it under the mouse cursor
+
+UX change for power-users - when adding a new entity to the modeling view via
+a keyboad shortcut, they shall be added right under the mouse cursor. This will
+allow for effective, keyboard-driven workflows.
+
+## Task <N> - allow moving the selected entities with arrow keys
+
+Arrow keys currently don't do much. Add a functionality that allows the user
+to move the selected components using the keys, move in 10-unit intervals
+by default. Add end-to-end tests checking whether this works both for
+single-component selection and for multi-component selections.
+
+## Task <N> - remove unique project IDs from the filesystem
+
+Simplify the filesystem - the path to the project shall be just the slug of its name.
+
+For example, if the system name is "Drone System", the slug shall be "drone-system" and the
+path to an example page should be https://rhizz.fly.dev/projects/drone-system/overview (assuming the current fly.io deployment).
+
+Ensure there are tests which check that the UI will forbid creating 2 projects
+with the same slug, as this would cause path conflicts.
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,
