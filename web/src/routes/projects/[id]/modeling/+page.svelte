@@ -26,6 +26,7 @@ import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
+import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
 import AnnotationText from "./AnnotationText.svelte";
 import AnnotationInspector from "./AnnotationInspector.svelte";
 import NodeInspector from "./NodeInspector.svelte";
@@ -1234,6 +1235,68 @@ function onDiagramKeyDown(event: KeyboardEvent) {
       void handleDeleteSelectedComponent().catch(reportDiagramError);
     }
   }
+
+  // Context-menu shortcuts (global on canvas, same guard as above): H hides
+  // the node from this view, O opens docs, V jumps to the detailed view,
+  // N/C/F/R/G mirror the empty-space menu (note/component/zoom/reset/grid).
+  // C/F double as color/font cycling with a selection — the cycling branch
+  // above already preventDefaulted, so only fire the menu meaning here when
+  // nothing is selected (below, `selected.size === 0`).
+  if (canvasFocused && !event.altKey && !event.shiftKey) {
+    if (key === "h" || key === "d") {
+      event.preventDefault();
+      void hideSelectedFromView();
+    } else if (key === "o" || key === "j") {
+      event.preventDefault();
+      void handleOpenDocumentation().catch(reportDiagramError);
+    } else if (key === "v") {
+      event.preventDefault();
+      handleJumpToDetailedView();
+    } else if (key === "n") {
+      event.preventDefault();
+      addAnnotationHandler();
+    } else if (key === "c") {
+      // C also cycles color when a node is selected (see above) — only
+      // create a component when nothing is selected, so one keypress never
+      // fires both actions.
+      if (selected.size === 0) {
+        event.preventDefault();
+        openCreateComponentModal();
+      }
+    } else if (key === "f") {
+      // Same clash as C: F cycles font with a selection, zooms without one.
+      if (selected.size === 0) {
+        event.preventDefault();
+        zoomToFill();
+      }
+    } else if (key === "r") {
+      event.preventDefault();
+      reset_view(editor_state);
+    } else if (key === "g") {
+      event.preventDefault();
+      gridVisible = !gridVisible;
+    }
+  }
+}
+
+async function hideSelectedFromView(): Promise<void> {
+  if (!selectedKey) return;
+  await handleDeleteSelectedComponent();
+}
+
+function handleJumpToDetailedView(): void {
+  if (!selectedComponentData) return;
+  const label = selectedComponentData.label;
+  const match = diagramEntries.find(
+    (e) =>
+      e.isFile() &&
+      (e.path === `${label}.hcl` || e.path.endsWith(`/${label}.hcl`)),
+  );
+  if (match) {
+    selectedDiagramPath = match.path;
+  } else {
+    toastState.show(`No detailed view for ${label} created`, "info");
+  }
 }
 
 // The single selected node, or null if zero or more than one are selected.
@@ -1826,6 +1889,125 @@ async function handleCreateConnection(
       }
     },
   );
+}
+
+// Open context menu state: null when closed, otherwise the click position
+// (client coords) plus the item rows to show.
+let contextMenu = $state<
+  { x: number; y: number; items: ContextMenuItem[] } | null
+>(
+  null,
+);
+
+function closeContextMenu(): void {
+  contextMenu = null;
+}
+
+function openNodeContextMenu(event: MouseEvent, index: number): void {
+  event.stopPropagation();
+  event.preventDefault();
+  focusCanvas();
+  if (!selected.has(index)) selectOnly(index);
+  selectedConnection = null;
+  if (selectedAnnotations.size > 0) selectedAnnotations.clear();
+  contextMenu = {
+    x: event.clientX,
+    y: event.clientY,
+    items: [
+      {
+        label: "Hide from this view",
+        shortcut: "H",
+        action: () => void hideSelectedFromView(),
+      },
+      {
+        label: "Jump to documentation",
+        shortcut: "O",
+        action: () => void handleOpenDocumentation().catch(reportDiagramError),
+      },
+      {
+        label: "Jump to detailed view",
+        shortcut: "V",
+        action: () => handleJumpToDetailedView(),
+      },
+    ],
+  };
+}
+
+function openAnnotationContextMenu(event: MouseEvent, index: number): void {
+  event.stopPropagation();
+  event.preventDefault();
+  focusCanvas();
+  if (!selectedAnnotations.has(index)) selectAnnotation(index);
+  selectedConnection = null;
+  contextMenu = {
+    x: event.clientX,
+    y: event.clientY,
+    items: [
+      {
+        label: "Delete",
+        shortcut: "Del",
+        dangerous: true,
+        action: () => deleteSelectedAnnotations(),
+      },
+    ],
+  };
+}
+
+function openConnectionContextMenu(event: MouseEvent, label: string): void {
+  event.stopPropagation();
+  event.preventDefault();
+  focusCanvas();
+  selectedConnection = label;
+  clearSelection();
+  contextMenu = {
+    x: event.clientX,
+    y: event.clientY,
+    items: [
+      {
+        label: "Delete",
+        shortcut: "Del",
+        dangerous: true,
+        action: () =>
+          void handleDeleteSelectedConnection().catch(reportDiagramError),
+      },
+    ],
+  };
+}
+
+function openCanvasContextMenu(event: MouseEvent): void {
+  event.preventDefault();
+  focusCanvas();
+  const world = svgPoint(root_svg, event.clientX, event.clientY);
+  const worldPos = { x: world.x, y: world.y };
+  contextMenu = {
+    x: event.clientX,
+    y: event.clientY,
+    items: [
+      {
+        label: "New component",
+        shortcut: "C",
+        action: () => openCreateComponentModal(worldPos),
+      },
+      {
+        label: "New annotation",
+        shortcut: "N",
+        action: () => addAnnotationHandler(),
+      },
+      { label: "Zoom to fill", shortcut: "F", action: () => zoomToFill() },
+      {
+        label: "Reset view",
+        shortcut: "R",
+        action: () => reset_view(editor_state),
+      },
+      {
+        label: "Toggle grid",
+        shortcut: "G",
+        action: () => {
+          gridVisible = !gridVisible;
+        },
+      },
+    ],
+  };
 }
 
 // Middle mouse button, or the left button while Space is held, always
@@ -2998,6 +3180,7 @@ $effect(() => {
         onmouseup={onSvgMouseUp}
         onmouseleave={onSvgMouseUp}
         onwheel={onWheel}
+        oncontextmenu={openCanvasContextMenu}
         style="cursor: {autoLayoutRunning
           ? 'wait'
           : interaction.type === 'dragging' ||
@@ -3121,6 +3304,7 @@ $effect(() => {
             transform="translate({x}, {y})"
             onmousedown={(e) => onNodeMouseDown(e, index)}
             ondblclick={(e) => onNodeDblClick(e, index)}
+            oncontextmenu={(e) => openNodeContextMenu(e, index)}
             style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
           >
             <DiagramNodeBody
@@ -3275,6 +3459,7 @@ $effect(() => {
               selectedConnection = conn.label;
               clearSelection();
             }}
+            oncontextmenu={(e) => openConnectionContextMenu(e, conn.label)}
           >
             <!-- Thicker invisible hit target -->
             <path
@@ -3329,6 +3514,7 @@ $effect(() => {
           <g
             class="cursor-grab"
             onmousedown={(e) => onAnnotationMouseDown(e, i)}
+            oncontextmenu={(e) => openAnnotationContextMenu(e, i)}
             ondblclick={(e) => {
               e.stopPropagation();
               selectAnnotation(i);
@@ -3420,6 +3606,15 @@ $effect(() => {
           />
         {/if}
       </svg>
+
+      {#if contextMenu}
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onclose={closeContextMenu}
+        />
+      {/if}
 
       {#if !model && output.error_count() > 0}
         <div
