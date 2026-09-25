@@ -8,19 +8,20 @@ Completed tasks are listed here, most recent first.
 
 The second navbar above the Explore canvas (breadcrumb `Explore / <diagram>` +
 Embed Diagram button) is gone at every viewport: the diagrams sidebar on the
-left is now the page's only chrome and carries the embed action at its bottom.
-The open diagram stays discoverable without the breadcrumb because both
-selectors already mark it (file-tree row / chip carries `aria-current`).
+left is now the page's only chrome and carries the embed action at its bottom
+(desktop only — copying a snippet is an authoring aid, not a phone task). The
+open diagram stays discoverable without the breadcrumb because both selectors
+already mark it (file-tree row / chip carries `aria-current`).
 
 - **Web** (`Explore.svelte`): deleted the `<nav>` and the wrapper div it
   needed, so the canvas is a single flex child again; `<aside>` gained
   `aria-label="Diagrams"` and the tour anchor, and hosts
-  `EmbedDiagramButton` below the tree (only while a diagram is open, as
-  before). Desktop overflow moved from the aside onto the tree container
-  (`flex-1 min-h-0 md:overflow-y-auto`) so the button stays pinned when the
-  list is long — same pattern as Inventory's list. The mobile chip row now
-  marks the open diagram with `aria-current` too (it previously signalled
-  selection by color only, which the breadcrumb used to spell out).
+  `EmbedDiagramButton` below the tree (`hidden md:block`, only while a diagram
+  is open, as before). Desktop overflow moved from the aside onto the tree
+  container (`flex-1 min-h-0 md:overflow-y-auto`) so the button stays pinned
+  when the list is long — same pattern as Inventory's list. The mobile chip
+  row now marks the open diagram with `aria-current` too (it previously
+  signalled selection by color only, which the breadcrumb used to spell out).
 - **Tour**: `TOUR_TARGETS.explore` moved off the removed breadcrumb onto the
   diagrams sidebar (`explore-docs` → `explore-diagrams`), step placement
   `right` (a full-height sidebar, like Modeling's).
@@ -29,11 +30,14 @@ selectors already mark it (file-tree row / chip carries `aria-current`).
 - **Tests/stories**: `e2e/explore.spec.ts` asserts zero `navigation`
   landmarks, the `Diagrams` complementary landmark, exactly one
   `aria-current` tree row (`ground-station.hcl`), and the embed modal opened
-  *from that sidebar*; new `EmbedButtonInSidebar` play story (no navbar →
-  marked open diagram → embed modal) and a `ManyDiagramsDesktop` story
-  covering the pinned button under a longer list. 8 Explore VRT baselines
-  re-accepted after review (dark + light, incl. the mobile one).
-- **Validation**: full `just test` (cargo + 40 unit files / 566 web + 27
+  *from that sidebar* — plus a 390px test that the embed action is gone on
+  mobile while the diagram stays reachable. The play runner sits at phone
+  width, so the `MobileNoEmbed` story covers the mobile chrome (no navbar →
+  marked open diagram → no embed button); the desktop embed modal is covered
+  by the e2e run at its default 1280×720. `ManyDiagramsDesktop` covers the
+  pinned button under a longer list. Explore VRT baselines re-accepted after
+  review (dark + light, incl. both mobile ones).
+- **Validation**: full `just test` (cargo + 40 unit files / 566 web + 28
   e2e), `just lint`, `just build`, `just format` green; full VRT suite green
   (one unrelated `diagramembedview--with-distant-annotations` flake passed
   on re-run).

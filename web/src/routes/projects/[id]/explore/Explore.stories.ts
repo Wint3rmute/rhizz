@@ -305,9 +305,16 @@ export const HoverDocHeader: Story = {
   },
 };
 
-export const EmbedButtonInSidebar: Story = {
+// Runs at the vitest browser's phone-sized viewport (Storybook's viewport
+// params only size the manager UI), which is what makes this the mobile
+// counterpart of the desktop e2e run: no second navbar, the open diagram
+// marked in the chip row, and no embed action to waste strip height on.
+export const MobileNoEmbed: Story = {
+  globals: {
+    viewport: { value: "mobile1" },
+  },
   parameters: {
-    viewport: { defaultViewport: "responsive" },
+    viewport: { defaultViewport: "mobile1" },
   },
   args: {
     projectId: CROSS_LEVEL_PROJECT_ID,
@@ -315,22 +322,18 @@ export const EmbedButtonInSidebar: Story = {
   loaders: [ensureCrossLevelProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // The second navbar (breadcrumb + embed) is gone: the diagrams
-    // sidebar is the only chrome, and carries the embed button itself.
     await expect(canvas.queryAllByRole("navigation")).toHaveLength(0);
     const sidebar = canvas.getByRole("complementary", { name: "Diagrams" });
     const sidebarQueries = within(sidebar);
     // The open diagram is marked inside the sidebar (aria-current) — that
-    // is what the breadcrumb used to spell out above the canvas. Marked
-    // in whichever selector is on screen: chips (< md) or file tree.
+    // is what the breadcrumb used to spell out above the canvas. Marked in
+    // whichever selector is on screen: chips (< md) or file tree.
     const openDiagram = await sidebarQueries.findByRole("button", {
       current: true,
     });
     await expect(openDiagram.textContent).toContain(".hcl");
-    const embed = sidebarQueries.getByRole("button", {
-      name: /embed diagram/i,
-    });
-    await userEvent.click(embed);
-    await expect(await canvas.findByText("Direct Embed URL")).toBeTruthy();
+    await expect(
+      sidebarQueries.queryByRole("button", { name: /embed diagram/i }),
+    ).toBeNull();
   },
 };
