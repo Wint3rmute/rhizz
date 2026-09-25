@@ -20,8 +20,3 @@ export function findComponentDiagram(
     (entry) => withoutHclSuffix(entry.name) === componentLabel,
   );
 }
-
-export function diagramTitle(path: string): string {
-  const name = path.split("/").at(-1) ?? path;
-  return name.endsWith(".hcl") ? name.slice(0, -4) : name;
-}

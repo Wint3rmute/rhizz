@@ -14,16 +14,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Remove unnecessary top bar in /explore
-
-When in /explore view, the name of the opened diagram and the "embed diagram"
-button are visible on a separate bar, below the navbar. This is a waste of
-space. Move the "embed diagram" button to the bottom of the diagrams file tree
-(left side of /explore) and remove the "second navbar".
-
-If this second navbar is important for mobile-specific view - keep it, but only
-for mobile views. Don't how it on desktop.
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,

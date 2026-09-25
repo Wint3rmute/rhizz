@@ -110,6 +110,7 @@ export function tourSteps(projectId: string): OnboardingStep[] {
       description: `Read the component documentation and click through
         diagrams interactively — each click brings the next diagram.`,
       target: "explore",
+      placement: "right",
       href: page(projectId, "explore"),
     },
     {
