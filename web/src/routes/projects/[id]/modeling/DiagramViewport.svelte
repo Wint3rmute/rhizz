@@ -1,157 +1,172 @@
 <script lang="ts">
-import type { Snippet } from "svelte";
-import {
-  clamp_zoom,
-  create_editor_state,
-  reset_view,
-} from "../../../../ViewEditorState.svelte";
-import type { Box } from "./geometry";
+  import type { Snippet } from "svelte";
+  import {
+    clamp_zoom,
+    create_editor_state,
+    reset_view,
+  } from "../../../../ViewEditorState.svelte";
+  import type { Box } from "./geometry";
 
-let {
-  stateKey = "DIAGRAM_VIEWPORT",
-  bounds = null,
-  zoomToFillFraction = 0.85,
-  content,
-  toolbarExtra,
-}: {
-  stateKey?: string;
-  bounds?: Box | null;
-  zoomToFillFraction?: number;
-  content?: Snippet;
-  toolbarExtra?: Snippet;
-} = $props();
+  let {
+    stateKey = "DIAGRAM_VIEWPORT",
+    bounds = null,
+    zoomToFillFraction = 0.85,
+    content,
+    toolbarExtra,
+    // Embed views are transient shares, not an editing session: no pan/zoom
+    // persistence (a stale localStorage entry from another diagram would
+    // misframe this one), and refit whenever this identity changes so each
+    // new diagram opens framed instead of inheriting the previous one's
+    // pan/zoom. Omit `stateKey` for a private in-memory view; pass
+    // `viewportIdentity` (e.g. the diagram path) to refit on navigation.
+    viewportIdentity = null,
+  }: {
+    stateKey?: string | undefined;
+    bounds?: Box | null;
+    zoomToFillFraction?: number;
+    content?: Snippet;
+    toolbarExtra?: Snippet;
+    viewportIdentity?: string | null;
+  } = $props();
 
-let editor_state = $derived.by(() => create_editor_state(stateKey));
-let root_svg: SVGElement;
+  let editor_state = $derived.by(() => create_editor_state(stateKey));
+  let root_svg: SVGElement;
 
-let canvas_width = $state(800);
-let canvas_height = $state(600);
+  let canvas_width = $state(800);
+  let canvas_height = $state(600);
 
-type InteractionState =
-  | { type: "idle" }
-  | { type: "panning"; lastX: number; lastY: number };
+  type InteractionState =
+    | { type: "idle" }
+    | { type: "panning"; lastX: number; lastY: number };
 
-let interaction = $state<InteractionState>({ type: "idle" });
+  let interaction = $state<InteractionState>({ type: "idle" });
 
-export function zoomToFill() {
-  if (!bounds || bounds.width === 0 || bounds.height === 0) return;
+  export function zoomToFill() {
+    if (!bounds || bounds.width === 0 || bounds.height === 0) return;
 
-  const zoomX = (canvas_width * zoomToFillFraction) / bounds.width;
-  const zoomY = (canvas_height * zoomToFillFraction) / bounds.height;
-  const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
+    const zoomX = (canvas_width * zoomToFillFraction) / bounds.width;
+    const zoomY = (canvas_height * zoomToFillFraction) / bounds.height;
+    const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
 
-  editor_state.view.zoom = newZoom;
-  editor_state.view.x = bounds.x + bounds.width / 2 -
-    canvas_width / newZoom / 2;
-  editor_state.view.y = bounds.y + bounds.height / 2 -
-    canvas_height / newZoom / 2;
-}
-
-let hasAutoFilled = false;
-$effect(() => {
-  if (bounds && !hasAutoFilled && canvas_width > 0 && canvas_height > 0) {
-    hasAutoFilled = true;
-    zoomToFill();
+    editor_state.view.zoom = newZoom;
+    editor_state.view.x = bounds.x + bounds.width / 2 -
+      canvas_width / newZoom / 2;
+    editor_state.view.y = bounds.y + bounds.height / 2 -
+      canvas_height / newZoom / 2;
   }
-});
 
-function onCanvasMouseDown(event: MouseEvent) {
-  if (event.button !== 0 && event.button !== 1) return;
-  event.preventDefault();
-  interaction = {
-    type: "panning",
-    lastX: event.clientX,
-    lastY: event.clientY,
-  };
-}
+  // Which diagram the last auto-fit framed. Compared against
+  // `viewportIdentity`: when the embed page navigates to another diagram,
+  // the identity changes and the new content is fitted — while panning or
+  // zooming within one diagram never re-triggers it. `null` identity (the
+  // interactive canvas) keeps the old fit-once-per-mount behavior.
+  let fittedIdentity: string | null | undefined = $state(undefined);
+  $effect(() => {
+    if (bounds && canvas_width > 0 && canvas_height > 0) {
+      if (fittedIdentity !== viewportIdentity) {
+        fittedIdentity = viewportIdentity;
+        zoomToFill();
+      }
+    }
+  });
 
-function onSvgMouseMove(event: MouseEvent) {
-  if (interaction.type === "panning") {
-    const dx = (event.clientX - interaction.lastX) / editor_state.view.zoom;
-    const dy = (event.clientY - interaction.lastY) / editor_state.view.zoom;
-    editor_state.view.x -= dx;
-    editor_state.view.y -= dy;
+  function onCanvasMouseDown(event: MouseEvent) {
+    if (event.button !== 0 && event.button !== 1) return;
+    event.preventDefault();
     interaction = {
       type: "panning",
       lastX: event.clientX,
       lastY: event.clientY,
     };
   }
-}
 
-function onSvgMouseUp() {
-  interaction = { type: "idle" };
-}
-
-function onWheel(event: WheelEvent) {
-  event.preventDefault();
-  const zoom = editor_state.view.zoom;
-  const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
-  const newZoom = clamp_zoom(zoom * factor);
-  if (newZoom === zoom) return;
-
-  const rect = root_svg.getBoundingClientRect();
-  const mouseX = event.clientX - rect.left;
-  const mouseY = event.clientY - rect.top;
-
-  const oldWidth = canvas_width / zoom;
-  const oldHeight = canvas_height / zoom;
-  const fracX = mouseX / canvas_width;
-  const fracY = mouseY / canvas_height;
-
-  const newWidth = canvas_width / newZoom;
-  const newHeight = canvas_height / newZoom;
-
-  editor_state.view.zoom = newZoom;
-  editor_state.view.x += (oldWidth - newWidth) * fracX;
-  editor_state.view.y += (oldHeight - newHeight) * fracY;
-}
-
-let touchStartDist: number | null = null;
-let lastTouchX = 0;
-let lastTouchY = 0;
-
-function onTouchStart(event: TouchEvent) {
-  const first = event.touches[0];
-  const second = event.touches[1];
-  if (event.touches.length === 1 && first) {
-    lastTouchX = first.clientX;
-    lastTouchY = first.clientY;
-  } else if (event.touches.length === 2 && first && second) {
-    const dx = first.clientX - second.clientX;
-    const dy = first.clientY - second.clientY;
-    touchStartDist = Math.hypot(dx, dy);
+  function onSvgMouseMove(event: MouseEvent) {
+    if (interaction.type === "panning") {
+      const dx = (event.clientX - interaction.lastX) / editor_state.view.zoom;
+      const dy = (event.clientY - interaction.lastY) / editor_state.view.zoom;
+      editor_state.view.x -= dx;
+      editor_state.view.y -= dy;
+      interaction = {
+        type: "panning",
+        lastX: event.clientX,
+        lastY: event.clientY,
+      };
+    }
   }
-}
 
-function onTouchMove(event: TouchEvent) {
-  event.preventDefault();
-  const first = event.touches[0];
-  const second = event.touches[1];
-  if (event.touches.length === 1 && first) {
-    const dx = (first.clientX - lastTouchX) /
-      editor_state.view.zoom;
-    const dy = (first.clientY - lastTouchY) /
-      editor_state.view.zoom;
-    editor_state.view.x -= dx;
-    editor_state.view.y -= dy;
-    lastTouchX = first.clientX;
-    lastTouchY = first.clientY;
-  } else if (
-    event.touches.length === 2 && touchStartDist !== null && first && second
-  ) {
-    const dx = first.clientX - second.clientX;
-    const dy = first.clientY - second.clientY;
-    const newDist = Math.hypot(dx, dy);
-    const factor = newDist / touchStartDist;
-    editor_state.view.zoom = clamp_zoom(editor_state.view.zoom * factor);
-    touchStartDist = newDist;
+  function onSvgMouseUp() {
+    interaction = { type: "idle" };
   }
-}
 
-function onTouchEnd() {
-  touchStartDist = null;
-}
+  function onWheel(event: WheelEvent) {
+    event.preventDefault();
+    const zoom = editor_state.view.zoom;
+    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = clamp_zoom(zoom * factor);
+    if (newZoom === zoom) return;
+
+    const rect = root_svg.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    const oldWidth = canvas_width / zoom;
+    const oldHeight = canvas_height / zoom;
+    const fracX = mouseX / canvas_width;
+    const fracY = mouseY / canvas_height;
+
+    const newWidth = canvas_width / newZoom;
+    const newHeight = canvas_height / newZoom;
+
+    editor_state.view.zoom = newZoom;
+    editor_state.view.x += (oldWidth - newWidth) * fracX;
+    editor_state.view.y += (oldHeight - newHeight) * fracY;
+  }
+
+  let touchStartDist: number | null = null;
+  let lastTouchX = 0;
+  let lastTouchY = 0;
+
+  function onTouchStart(event: TouchEvent) {
+    const first = event.touches[0];
+    const second = event.touches[1];
+    if (event.touches.length === 1 && first) {
+      lastTouchX = first.clientX;
+      lastTouchY = first.clientY;
+    } else if (event.touches.length === 2 && first && second) {
+      const dx = first.clientX - second.clientX;
+      const dy = first.clientY - second.clientY;
+      touchStartDist = Math.hypot(dx, dy);
+    }
+  }
+
+  function onTouchMove(event: TouchEvent) {
+    event.preventDefault();
+    const first = event.touches[0];
+    const second = event.touches[1];
+    if (event.touches.length === 1 && first) {
+      const dx = (first.clientX - lastTouchX) /
+        editor_state.view.zoom;
+      const dy = (first.clientY - lastTouchY) /
+        editor_state.view.zoom;
+      editor_state.view.x -= dx;
+      editor_state.view.y -= dy;
+      lastTouchX = first.clientX;
+      lastTouchY = first.clientY;
+    } else if (
+      event.touches.length === 2 && touchStartDist !== null && first && second
+    ) {
+      const dx = first.clientX - second.clientX;
+      const dy = first.clientY - second.clientY;
+      const newDist = Math.hypot(dx, dy);
+      const factor = newDist / touchStartDist;
+      editor_state.view.zoom = clamp_zoom(editor_state.view.zoom * factor);
+      touchStartDist = newDist;
+    }
+  }
+
+  function onTouchEnd() {
+    touchStartDist = null;
+  }
 </script>
 
 <div
@@ -175,7 +190,7 @@ function onTouchEnd() {
     ontouchstart={onTouchStart}
     ontouchmove={onTouchMove}
     ontouchend={onTouchEnd}
-    style="cursor: {interaction.type === 'panning' ? 'grabbing' : 'grab'}"
+    style="cursor: {interaction.type === "panning" ? "grabbing" : "grab"}"
   >
     <!-- Transparent hit target for canvas drag -->
     <rect
