@@ -15,8 +15,8 @@
     "test": "vitest run --coverage",
     "test:e2e": "playwright test",
     "build-storybook": "storybook build --config-dir .storybook --output-dir storybook-static",
-    "lint": "svelte-kit sync && eslint . --cache --cache-location .eslintcache",
-    "eslint": "eslint . --cache --cache-location .eslintcache",
+    "lint": "svelte-kit sync && eslint . --cache --cache-location .eslintcache --cache-strategy content",
+    "eslint": "eslint . --cache --cache-location .eslintcache --cache-strategy content",
     "chromatic": "dx chromatic"
   },
   "dependencies": {

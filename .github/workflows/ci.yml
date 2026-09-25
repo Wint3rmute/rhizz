@@ -113,6 +113,21 @@ jobs:
       - run: nix develop --command deno install
         working-directory: ./web
 
+      # web/.eslintcache (written by `deno run lint`) is pure derived state:
+      # a function of file contents + eslint config + version. It is only
+      # reusable across runs with `--cache-strategy content` (the default
+      # `metadata` keys on mtime, which a fresh checkout invalidates
+      # wholesale) — hence the strategy in the `lint` script. Cold lint of
+      # this tree is ~7 min, so restoring it is the difference between that
+      # and seconds. Keyed on the inputs that make a restored cache useless:
+      # the eslint config plus the Deno lockfile / package.json pinning
+      # eslint's version. Linted sources are deliberately NOT part of the key
+      # — a PR that edits one file should still reuse the other ~170.
+      - uses: actions/cache@v4
+        with:
+          path: web/.eslintcache
+          key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/deno.lock', 'web/package.json') }}
+
       - run: nix develop --command deno fmt --check
         working-directory: ./web
 
