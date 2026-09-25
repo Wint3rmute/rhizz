@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
 import { openProjectFs } from "../../../../vfs/fs";
-import { DOCS_DIR, readProjectDocs } from "./docs";
+import { DOCS_DIR, readProjectDocs, withFullNameHeader } from "./docs";
 
 async function makeFs() {
   const store = new InMemoryProjectStore();
@@ -39,5 +39,19 @@ describe("readProjectDocs", () => {
 
     const docs = await readProjectDocs(fs);
     expect(docs).toEqual([{ key: "readme", content: "# Readme" }]);
+  });
+});
+
+describe("withFullNameHeader", () => {
+  it("prepends the full name as an L1 header", () => {
+    expect(withFullNameHeader("Stores charge.", "Main power source"))
+      .toBe("# Main power source\n\nStores charge.");
+  });
+
+  it("leaves content without a full name untouched", () => {
+    expect(withFullNameHeader("Stores charge.", "")).toBe("Stores charge.");
+    expect(withFullNameHeader("Stores charge.", "   ")).toBe(
+      "Stores charge.",
+    );
   });
 });

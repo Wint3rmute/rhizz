@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
 import {
@@ -205,12 +206,17 @@ async function ensureManyDiagramsProject(): Promise<Project> {
 }
 
 async function ensureCrossLevelProject(): Promise<Project> {
-  return ensureProjectWithDiagrams(
+  const project = await ensureProjectWithDiagrams(
     CROSS_LEVEL_PROJECT_ID,
     "Cross level connections story",
     CROSS_LEVEL_SYSTEM_DIAGRAMS,
     CROSS_LEVEL_SYSTEM_HCL,
   );
+  // Seeded doc for battery (whose full_name is "Main power source").
+  const fs = openProjectFs(projectStore, project.id);
+  await fs.mkdir("docs", { recursive: true });
+  await fs.writeFile("docs/battery.md", "Stores charge.\n");
+  return project;
 }
 
 const meta = {
@@ -256,4 +262,32 @@ export const CrossLevelConnections: Story = {
     projectId: CROSS_LEVEL_PROJECT_ID,
   },
   loaders: [ensureCrossLevelProject],
+};
+
+export const HoverDocHeader: Story = {
+  parameters: {
+    viewport: { defaultViewport: "responsive" },
+  },
+  args: {
+    projectId: CROSS_LEVEL_PROJECT_ID,
+  },
+  loaders: [ensureCrossLevelProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Hovering the battery node shows its doc tooltip headed by the
+    // component's full_name as an L1 header (read-only — no save here).
+    // Hover the node's <a> anchor: the SVG label itself is
+    // pointer-events-none, so userEvent refuses to target it directly.
+    const anchor = canvas.getByText("battery").closest("a");
+    if (!anchor) throw new Error("battery node has no hover anchor");
+    await userEvent.hover(anchor);
+    const tooltip = await canvas.findByTestId("explore-doc-tooltip");
+    const tooltipQueries = within(tooltip);
+    await expect(
+      tooltipQueries.getByRole("heading", {
+        name: "Main power source",
+      }),
+    ).toBeTruthy();
+    await expect(tooltipQueries.getByText("Stores charge.")).toBeTruthy();
+  },
 };
