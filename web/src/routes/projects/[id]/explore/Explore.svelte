@@ -347,9 +347,15 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
         {/if}
       </div>
 
-      <!-- Embed action for the open diagram (tree selection marks it). -->
+      <!--
+        Embed action for the open diagram, pinned below the tree. Desktop
+        only: copying an embed snippet is an authoring aid, not a phone
+        task, and on mobile that strip is precious vertical space.
+      -->
       {#if selectedDiagramPath}
-        <div class="mt-2 shrink-0 md:mt-0 md:pt-3 md:border-t md:border-base-300">
+        <div
+          class="hidden md:block shrink-0 pt-3 border-t border-base-300"
+        >
           <EmbedDiagramButton
             projectId={effectiveProjectId}
             diagramPath={selectedDiagramPath}

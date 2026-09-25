@@ -39,6 +39,29 @@ test("explore renders a drone diagram, toast, and embed modal", async ({ page })
   await expect(page.getByText("HTML <iframe> Embed Code")).toBeVisible();
 });
 
+test("explore hides the embed action on mobile", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E explore mobile",
+  );
+  // Narrow enough to fall below the md breakpoint, where the chip row
+  // replaces the file tree.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/projects/${id}/explore`);
+
+  const sidebar = page.getByRole("complementary", { name: "Diagrams" });
+  await expect(sidebar).toBeVisible();
+  // Copying an embed snippet is an authoring aid, not a phone task, and
+  // the strip is precious vertical space there.
+  await expect(sidebar.getByRole("button", { name: /embed diagram/i }))
+    .toHaveCount(0);
+  // The diagram is still reachable: chips pick it, the canvas renders it.
+  await expect(
+    page.getByRole("link", { name: /goggles, no detailed view/i }),
+  ).toBeVisible();
+});
+
 test("explore opens a layout-bearing view, not a filter-only one", async ({ page }) => {
   const id = await createFromExample(
     page,
