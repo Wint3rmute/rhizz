@@ -31,8 +31,8 @@ export const TOUR_TARGETS = {
   diagramSidebar: "diagrams-sidebar",
   /** Inventory filter tabs (above the list). */
   inventory: "inventory-list",
-  /** Explore diagram breadcrumb. */
-  explore: "explore-docs",
+  /** Explore diagrams sidebar (file tree + embed button). */
+  explore: "explore-diagrams",
   /** Editor pane header (shows the open file). */
   editor: "editor-pane",
 } as const;

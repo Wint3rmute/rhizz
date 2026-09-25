@@ -26,7 +26,7 @@ import Markdown from "../../../../components/Markdown.svelte";
 import { type ProjectDoc, readProjectDocs, withFullNameHeader } from "./docs";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import { diagramTitle, findComponentDiagram } from "./navigation";
+import { findComponentDiagram } from "./navigation";
 
 let {
   projectId = null,
@@ -287,9 +287,17 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
       </div>
     </div>
   {:else}
-    <!-- Diagrams selector: horizontal scrollable bar on mobile (< md), vertical sidebar on desktop (>= md) -->
+    <!--
+      Diagrams selector: horizontal scrollable bar on mobile (< md), vertical
+      sidebar on desktop (>= md). This sidebar is the page's only chrome — the
+      embed action sits pinned at its bottom, so the canvas needs no second
+      navbar of its own. Desktop overflow lives on the tree (not the aside) so
+      that button stays put when the list is long.
+    -->
     <aside
-      class="w-full shrink-0 bg-base-100 text-base-content border-b border-base-300 p-2 md:w-64 md:border-b-0 md:border-r md:p-4 md:overflow-y-auto flex flex-col"
+      aria-label="Diagrams"
+      data-tour={TOUR_TARGETS.explore}
+      class="w-full shrink-0 bg-base-100 text-base-content border-b border-base-300 p-2 md:w-64 md:border-b-0 md:border-r md:p-4 flex flex-col"
     >
       <!-- Mobile: horizontal scrollable diagrams selection -->
       <div class="flex md:hidden items-center gap-2 overflow-x-auto py-1 scroll-smooth">
@@ -306,6 +314,9 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
               <button
                 type="button"
                 class="btn btn-xs shrink-0 whitespace-nowrap {selectedDiagramPath === entry.path ? 'btn-primary' : 'btn-ghost'}"
+                aria-current={selectedDiagramPath === entry.path
+                  ? "true"
+                  : undefined}
                 onclick={() => navigateToDiagram(entry.path)}
               >
                 {entry.name}
@@ -316,7 +327,7 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
       </div>
 
       <!-- Desktop: vertical FileTree sidebar -->
-      <div class="hidden md:flex flex-col flex-1">
+      <div class="hidden md:flex flex-col flex-1 min-h-0 md:overflow-y-auto">
         <h3
           class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
         >
@@ -335,66 +346,54 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
           />
         {/if}
       </div>
+
+      <!-- Embed action for the open diagram (tree selection marks it). -->
+      {#if selectedDiagramPath}
+        <div class="mt-2 shrink-0 md:mt-0 md:pt-3 md:border-t md:border-base-300">
+          <EmbedDiagramButton
+            projectId={effectiveProjectId}
+            diagramPath={selectedDiagramPath}
+            baseUrl={embedBaseUrl}
+          />
+        </div>
+      {/if}
     </aside>
 
-    <!-- Main canvas: full-width on mobile (< md), flex-1 on desktop (>= md) -->
+    <!-- Canvas -->
     <div
-      class="flex flex-col flex-1 min-w-0 min-h-0 h-full"
+      bind:this={canvasContainer}
+      class="relative flex-1 min-w-0 min-h-0 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden"
     >
       {#if selectedDiagramPath}
-        <nav
-          class="flex items-center justify-between px-4 py-2 text-sm border-b border-base-300 bg-base-100"
-          aria-label="Diagram breadcrumb"
-          data-tour={TOUR_TARGETS.explore}
-        >
-          <ul class="breadcrumbs">
-            <li><span class="text-base-content/60">Explore</span></li>
-            <li><span>{diagramTitle(selectedDiagramPath)}</span></li>
-          </ul>
-          <div class="shrink-0 w-40">
-            <EmbedDiagramButton
-              projectId={effectiveProjectId}
-              diagramPath={selectedDiagramPath}
-              baseUrl={embedBaseUrl}
-            />
-          </div>
-        </nav>
-      {/if}
-      <div
-        bind:this={canvasContainer}
-        class="relative flex-1 w-full h-full bg-base-300 flex items-center justify-center overflow-hidden"
-      >
-        {#if selectedDiagramPath}
-          <div class="w-full h-full">
-            <DiagramStaticView
-              components={components}
-              connections={connections}
-              boxes={boxes}
-              annotations={selectedLayout.annotations ?? []}
-              linked={linkedComponents}
-              onnodeclick={handleNodeClick}
-              onnodehover={(index, event) => handleNodeHover(index, event)}
-            />
-            {#if hoveredDoc && hoverPos}
+        <div class="w-full h-full">
+          <DiagramStaticView
+            components={components}
+            connections={connections}
+            boxes={boxes}
+            annotations={selectedLayout.annotations ?? []}
+            linked={linkedComponents}
+            onnodeclick={handleNodeClick}
+            onnodehover={(index, event) => handleNodeHover(index, event)}
+          />
+          {#if hoveredDoc && hoverPos}
+            <div
+              class="absolute z-30 max-w-sm pointer-events-none"
+              style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
+            >
               <div
-                class="absolute z-30 max-w-sm pointer-events-none"
-                style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
+                class="card bg-base-100 border border-base-content/40 shadow-xl p-3"
+                data-testid="explore-doc-tooltip"
               >
-                <div
-                  class="card bg-base-100 border border-base-content/40 shadow-xl p-3"
-                  data-testid="explore-doc-tooltip"
-                >
-                  <Markdown content={hoveredDoc} />
-                </div>
+                <Markdown content={hoveredDoc} />
               </div>
-            {/if}
-          </div>
-        {:else}
-          <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">
-            Select a diagram to explore it.
-          </div>
-        {/if}
-      </div>
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">
+          Select a diagram to explore it.
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
