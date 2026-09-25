@@ -1,7 +1,6 @@
 <script lang="ts">
 // Bottom detail pane for the selected definition: tabbed
-// Full name / Ports (N) / Requirements (placeholder) / Metadata views,
-// plus an Edit button that deep-links into the Modeling editor.
+// Full name / Ports (N) / Requirements (placeholder) / Metadata views.
 //
 // The Full name tab shows the definition's `docs/<label>.md` documentation
 // (rendered Markdown) with a viewer/editor toggle; saving writes the file
@@ -13,13 +12,10 @@ import { definitionDepth } from "./inventory";
 
 let {
   definition,
-  editHref,
   docContent,
   ondocsave,
 }: {
   definition: InventoryDefinition | null;
-  /** Navigate-to URL for the Edit button (deep-link into Modeling). */
-  editHref: string | null;
   /** `docs/<label>.md` content: null when missing, undefined while loading. */
   docContent: string | null | undefined;
   /** Persist edited documentation back to the VFS. */
@@ -87,47 +83,25 @@ function flattenTags(def: InventoryDefinition): string[] {
     </div>
   {:else}
     <div
-      class="flex items-center justify-between border-b border-base-300 px-2"
+      class="flex items-center border-b border-base-300 px-2"
       role="tablist"
       aria-label="Entity details"
     >
-      <div class="flex items-center">
-        {#each TABS as tab (tab)}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab}
-            class="px-3 py-2 text-sm border-b-2 -mb-px transition-colors {
-              activeTab === tab
-                ? 'border-primary text-primary font-medium'
-                : 'border-transparent text-base-content/60 hover:text-base-content'
-            }"
-            onclick={() => (activeTab = tab)}
-          >
-            {tab}{#if tab === "Ports"} ({portCount}){/if}
-          </button>
-        {/each}
-      </div>
-      {#if editHref}
-        <a
-          href={editHref}
-          class="btn btn-ghost btn-sm gap-1.5"
-          aria-label="Edit {definition.label} in the Modeling editor"
+      {#each TABS as tab (tab)}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === tab}
+          class="px-3 py-2 text-sm border-b-2 -mb-px transition-colors {
+            activeTab === tab
+              ? 'border-primary text-primary font-medium'
+              : 'border-transparent text-base-content/60 hover:text-base-content'
+          }"
+          onclick={() => (activeTab = tab)}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 512 512"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              d="M362.7 19.3L314.3 67.7 444.3 197.7l48.4-48.4c25-25 25-65.5 0-90.5L453.3 19.3c-25-25-65.5-25-90.5 0zm-71 71L58.6 323.5c-10.4 10.4-18 23.3-22.2 37.4L1 481.7C-1.5 490.4 5.6 498.6 14.7 497.5l120.8-15.4c14.1-1.8 27-8.1 37.4-18.5L405.3 130.5 291.7 19.3zM112 480c0-8.8-7.2-16-16-16H80c-8.8 0-16 7.2-16 16s7.2 16 16 16h16c8.8 0 16-7.2 16-16z"
-            />
-          </svg>
-          Edit
-        </a>
-      {/if}
+          {tab}{#if tab === "Ports"} ({portCount}){/if}
+        </button>
+      {/each}
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 text-sm">
