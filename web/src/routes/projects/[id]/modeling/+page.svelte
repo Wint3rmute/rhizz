@@ -1198,6 +1198,31 @@ async function runModelLayoutTransaction(
 // The t/b/c/f attribute-cycling shortcuts only fire while the canvas has
 // focus (canvasFocused) and no modifier is held, so they never trigger
 // while typing in the inspector or the HCL editor.
+// Typing guard: canvas shortcuts must not fire while the user is editing
+// text (inspector inputs, modal fields, search boxes) — otherwise typing
+// "h" in a component name would hide the node.
+function isEditableTarget(event: KeyboardEvent): boolean {
+  const el = event.target as HTMLElement | null;
+  if (!el || typeof el.closest !== "function") return false;
+  return el.closest('input, textarea, select, [contenteditable="true"]') !==
+    null;
+}
+
+// Page-level guard for all canvas shortcuts. The old `canvasFocused` (SVG
+// DOM focus) requirement made shortcuts silently dead unless the SVG itself
+// held focus — in practice they only worked right after opening the context
+// menu, which focuses the canvas. Typing, open modals, and modifiers still
+// opt out.
+function shortcutsArmed(event: KeyboardEvent): boolean {
+  return (
+    !event.altKey &&
+    !event.shiftKey &&
+    !isCreateModalOpen &&
+    !isNewViewModalOpen &&
+    !isEditableTarget(event)
+  );
+}
+
 function onDiagramKeyDown(event: KeyboardEvent) {
   const primary = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
@@ -1213,8 +1238,9 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     return;
   }
 
-  // Attribute cycling: only when the canvas is focused and no modifier held.
-  if (canvasFocused && !event.altKey && !event.shiftKey) {
+  // Attribute cycling: fires anywhere on this page except while typing,
+  // in a modal, or with a modifier held (see shortcutsArmed above).
+  if (shortcutsArmed(event)) {
     if (key === "t" || key === "b" || key === "c" || key === "f") {
       event.preventDefault();
       cycleSelectedAttribute(key);
@@ -1223,9 +1249,11 @@ function onDiagramKeyDown(event: KeyboardEvent) {
 
   // Delete key: delete the selected connection or annotation, or remove
   // the selected component from the current view (the model keeps it).
-  // Only fires when the canvas is focused (so it never
-  // triggers while typing in the inspector or HCL editor).
-  if (canvasFocused && (event.key === "Delete" || event.key === "Backspace")) {
+  // Never fires while typing in the inspector or HCL editor.
+  if (
+    !isEditableTarget(event) &&
+    (event.key === "Delete" || event.key === "Backspace")
+  ) {
     event.preventDefault();
     if (selectedAnnotations.size > 0) {
       deleteSelectedAnnotations();
@@ -1236,13 +1264,13 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     }
   }
 
-  // Context-menu shortcuts (global on canvas, same guard as above): H hides
+  // Context-menu shortcuts (global on this page, same guard as above): H hides
   // the node from this view, O opens docs, V jumps to the detailed view,
   // N/C/F/R/G mirror the empty-space menu (note/component/zoom/reset/grid).
   // C/F double as color/font cycling with a selection — the cycling branch
   // above already preventDefaulted, so only fire the menu meaning here when
   // nothing is selected (below, `selected.size === 0`).
-  if (canvasFocused && !event.altKey && !event.shiftKey) {
+  if (shortcutsArmed(event)) {
     if (key === "h" || key === "d") {
       event.preventDefault();
       void hideSelectedFromView();
