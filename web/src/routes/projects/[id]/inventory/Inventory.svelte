@@ -245,6 +245,56 @@ let editHref = $derived(
     : null,
 );
 
+// ── Documentation loading ───────────────────────────────────────────────────
+// The selected definition's doc is the VFS file `docs/<label>.md` (same
+// convention as Modeling's "Open documentation"). `selectedDoc` holds the
+// file content, or null when the file is missing; `selectedDocLabel` guards
+// against flashing the previous definition's doc while the new one loads.
+let selectedDoc = $state<string | null>(null);
+let selectedDocLabel = $state<string | null>(null);
+
+$effect(() => {
+  const id = projectId;
+  const label = selectedDefinition?.label;
+  if (!id || !label) {
+    selectedDoc = null;
+    selectedDocLabel = label ?? null;
+    return;
+  }
+  let cancelled = false;
+  const fs = openProjectFs(projectStore, id);
+  fs.readFile(`docs/${label}.md`)
+    .then((content) => {
+      if (cancelled) return;
+      selectedDoc = content;
+      selectedDocLabel = label;
+    })
+    .catch(() => {
+      if (cancelled) return;
+      selectedDoc = null;
+      selectedDocLabel = label;
+    });
+  return () => {
+    cancelled = true;
+  };
+});
+
+// undefined while the newly-selected definition's doc is still loading.
+let docContent = $derived(
+  selectedDocLabel === selectedDefinition?.label ? selectedDoc : undefined,
+);
+
+async function handleSaveDoc(content: string): Promise<void> {
+  const id = projectId;
+  const label = selectedDefinition?.label;
+  if (!id || !label) return;
+  const fs = openProjectFs(projectStore, id);
+  await fs.mkdir("docs", { recursive: true });
+  await fs.writeFile(`docs/${label}.md`, content);
+  selectedDoc = content;
+  selectedDocLabel = label;
+}
+
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
 // to the system that instantiates the definition) and opens Modeling with
 // that very view selected via `?diagram=`.
@@ -405,7 +455,12 @@ async function handleCreateView(): Promise<void> {
         {/if}
       </div>
 
-      <DetailPane definition={selectedDefinition} {editHref} />
+      <DetailPane
+        definition={selectedDefinition}
+        {editHref}
+        docContent={docContent}
+        ondocsave={handleSaveDoc}
+      />
     </div>
   {/if}
 </div>

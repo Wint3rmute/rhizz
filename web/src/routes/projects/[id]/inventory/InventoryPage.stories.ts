@@ -126,6 +126,9 @@ async function ensureInventoryProject(): Promise<Project> {
   for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
     await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
   }
+  // Seeded documentation for battery (controller/mcu/draft-module have none).
+  await fs.mkdir("docs", { recursive: true });
+  await fs.writeFile("docs/battery.md", "# Battery\n\nMain power source.\n");
   return project;
 }
 
@@ -179,6 +182,29 @@ export const MissingDefaultDiagram: Story = {
     ).toBeTruthy();
     await expect(
       canvas.getByRole("button", { name: "Create a view for this component" }),
+    ).toBeTruthy();
+  },
+};
+
+export const DocumentationTab: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // battery is selected by default; its seeded docs/battery.md renders
+    // as Markdown in the Full name tab (read-only here — e2e covers save).
+    await canvas.findByTestId("inventory-doc-viewer");
+    await expect(
+      canvas.getByRole("heading", { name: "Battery" }),
+    ).toBeTruthy();
+    await userEvent.click(canvas.getByTestId("inventory-doc-edit-button"));
+    const editor = canvas.getByTestId("inventory-doc-textarea");
+    await expect(editor).toBeTruthy();
+    await expect((editor as HTMLTextAreaElement).value).toContain(
+      "# Battery",
+    );
+    await userEvent.click(canvas.getByTestId("inventory-doc-cancel-button"));
+    await expect(
+      canvas.getByRole("heading", { name: "Battery" }),
     ).toBeTruthy();
   },
 };

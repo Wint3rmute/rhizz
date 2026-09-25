@@ -14,18 +14,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - write documentation directly from the Inventory page.
-
-Currently, the inventory page displays a tabbed bottom section, with: "full name", "ports", "requirements" and "metadata".
-
-Change how "full name" works - instead of displaying the full_name field of the
-component, it should describe component's documentation - what's located in
-`docs/<component_name>.md`. There should be a button to switch from a
-markdown-based viewer to a plain multiline editor.
-
-Re-use the Markdown renderer from the /explore page, which already renders
-markdown. If needed, extract to a common renderer.
-
 ## Task <N> - implement a righ-click context menu for the canvas in /modeling
 
 All components in the canvas shall have a right-click listener. The contents of the 

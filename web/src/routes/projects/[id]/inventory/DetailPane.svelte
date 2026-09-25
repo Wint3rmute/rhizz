@@ -2,6 +2,10 @@
 // Bottom detail pane for the selected definition: tabbed
 // Full name / Ports (N) / Requirements (placeholder) / Metadata views,
 // plus an Edit button that deep-links into the Modeling editor.
+//
+// The Full name tab shows the definition's `docs/<label>.md` documentation
+// (rendered Markdown) with a viewer/editor toggle; saving writes the file
+// back to the project's VFS (creating `docs/` when needed).
 import Markdown from "../../../../components/Markdown.svelte";
 import { SvelteSet } from "svelte/reactivity";
 import type { InventoryDefinition } from "./inventory";
@@ -10,10 +14,16 @@ import { definitionDepth } from "./inventory";
 let {
   definition,
   editHref,
+  docContent,
+  ondocsave,
 }: {
   definition: InventoryDefinition | null;
   /** Navigate-to URL for the Edit button (deep-link into Modeling). */
   editHref: string | null;
+  /** `docs/<label>.md` content: null when missing, undefined while loading. */
+  docContent: string | null | undefined;
+  /** Persist edited documentation back to the VFS. */
+  ondocsave: (content: string) => Promise<void>;
 } = $props();
 
 const TABS = ["Full name", "Ports", "Requirements", "Metadata"] as const;
@@ -21,20 +31,39 @@ type Tab = (typeof TABS)[number];
 
 let activeTab = $state<Tab>("Full name");
 
-// Reset to the first tab when switching between definitions so stale tab
-// state doesn't leak across selections.
+// Reset to the first tab (and the doc viewer) when switching between
+// definitions so stale tab/editor state doesn't leak across selections.
 let lastLabel = $state<string | null>(null);
+let docMode = $state<"view" | "edit">("view");
+let editText = $state("");
+let savingDoc = $state(false);
 $effect(() => {
   const label = definition?.label ?? null;
   if (label !== lastLabel) {
     lastLabel = label;
     activeTab = "Full name";
+    docMode = "view";
   }
 });
 
 let portCount = $derived(definition?.ports.length ?? 0);
 let depth = $derived(definition ? definitionDepth(definition) : 0);
 
+function startDocEdit(): void {
+  editText = docContent ?? "";
+  docMode = "edit";
+}
+
+async function saveDocEdit(): Promise<void> {
+  if (savingDoc) return;
+  savingDoc = true;
+  try {
+    await ondocsave(editText);
+    docMode = "view";
+  } finally {
+    savingDoc = false;
+  }
+}
 function flattenTags(def: InventoryDefinition): string[] {
   const tags = new SvelteSet<string>(def.tags);
   const walk = (d: InventoryDefinition) => {
@@ -103,13 +132,71 @@ function flattenTags(def: InventoryDefinition): string[] {
 
     <div class="flex-1 overflow-y-auto p-4 text-sm">
       {#if activeTab === "Full name"}
-        {#if definition.full_name.trim().length > 0}
-          <Markdown content={definition.full_name} />
+        {#if docMode === "edit"}
+          <textarea
+            data-testid="inventory-doc-textarea"
+            bind:value={editText}
+            rows={10}
+            class="textarea textarea-sm textarea-bordered w-full font-mono"
+            placeholder="# {definition.label}\n\nDescribe this component..."
+          ></textarea>
+          <div class="flex gap-2 mt-2">
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              data-testid="inventory-doc-save-button"
+              disabled={savingDoc}
+              onclick={() => void saveDocEdit()}
+            >
+              {savingDoc ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              data-testid="inventory-doc-cancel-button"
+              disabled={savingDoc}
+              onclick={() => (docMode = "view")}
+            >
+              Cancel
+            </button>
+          </div>
         {:else}
-          <p class="text-base-content/50 italic">
-            No full name yet — add a <code>full_name</code> attribute to
-            this component definition.
-          </p>
+          <div data-testid="inventory-doc-viewer">
+            {#if docContent === undefined}
+              <p class="text-base-content/50 italic">
+                Loading documentation…
+              </p>
+            {:else if docContent === null}
+              <p class="text-base-content/50 italic">
+                No documentation yet — write it here; it is stored as
+                <code>docs/{definition.label}.md</code>.
+              </p>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm btn-primary mt-2"
+                data-testid="inventory-doc-edit-button"
+                onclick={startDocEdit}
+              >
+                Add documentation
+              </button>
+            {:else}
+              <div class="flex items-center justify-between mb-2">
+                <span
+                  class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+                  Documentation
+                </span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  data-testid="inventory-doc-edit-button"
+                  onclick={startDocEdit}
+                >
+                  Edit
+                </button>
+              </div>
+              <Markdown content={docContent} />
+            {/if}
+          </div>
         {/if}
       {:else if activeTab === "Ports"}
         {#if definition.ports.length === 0}
