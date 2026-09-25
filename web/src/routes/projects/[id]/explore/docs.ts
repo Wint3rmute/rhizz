@@ -14,6 +14,13 @@ export interface ProjectDoc {
   content: string;
 }
 
+// Prepend a component's `full_name` as an L1 header on top of its doc
+// content for display. Blank full names leave the content untouched.
+export function withFullNameHeader(content: string, fullName: string): string {
+  const trimmed = fullName.trim();
+  return trimmed.length > 0 ? `# ${trimmed}\n\n${content}` : content;
+}
+
 // Reads every ".md" file under `docs/` (recursively) into a list of docs,
 // keyed by path minus the ".md" suffix. Missing docs directory yields an empty
 // list rather than erroring.

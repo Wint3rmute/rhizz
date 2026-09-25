@@ -23,7 +23,7 @@ import {
   VIEW_LAYOUT_DIR,
 } from "../modeling/persistence";
 import Markdown from "../../../../components/Markdown.svelte";
-import { type ProjectDoc, readProjectDocs } from "./docs";
+import { type ProjectDoc, readProjectDocs, withFullNameHeader } from "./docs";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { diagramTitle, findComponentDiagram } from "./navigation";
@@ -247,12 +247,15 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
 }
 
 // The doc content for the hovered component, if one exists. Matched by the
-// component's unique label rather than its full qualified path.
-let hoveredDoc = $derived(
-  hoveredIndex === null
-    ? null
-    : docsByLabel.get(components[hoveredIndex]?.label ?? "") ?? null,
-);
+// component's unique label rather than its full qualified path. When the
+// component declares a `full_name`, it heads the tooltip as an L1 header.
+let hoveredDoc = $derived.by(() => {
+  if (hoveredIndex === null) return null;
+  const component = components[hoveredIndex];
+  const doc = docsByLabel.get(component?.label ?? "") ?? null;
+  if (doc === null) return null;
+  return withFullNameHeader(doc, component?.full_name ?? "");
+});
 
 function handleNodeClick(index: number) {
   const component: ComponentJS | undefined = components[index];
@@ -377,7 +380,10 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
                 class="absolute z-30 max-w-sm pointer-events-none"
                 style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
               >
-                <div class="card bg-base-100 border border-base-content/40 shadow-xl p-3">
+                <div
+                  class="card bg-base-100 border border-base-content/40 shadow-xl p-3"
+                  data-testid="explore-doc-tooltip"
+                >
                   <Markdown content={hoveredDoc} />
                 </div>
               </div>
