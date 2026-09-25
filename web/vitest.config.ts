@@ -26,7 +26,7 @@ export default defineConfig({
   },
   test: {
     coverage: {
-      provider: 'v8',
+      provider: "v8",
       thresholds: {
         // Requires 70% function coverage
         functions: 70,
