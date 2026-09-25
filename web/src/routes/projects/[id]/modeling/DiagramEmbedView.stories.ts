@@ -59,6 +59,30 @@ export const Selected: Story = {
   },
 };
 
+// Linked nodes (with a detail view) vs unlinked ones: clicking a linked
+// node fires onnodeclick, unlinked nodes stay inert — the embed page wires
+// this to in-embed drill-down navigation with a toast fallback.
+export const LinkedNavigation: Story = {
+  args: {
+    components: sampleComponents,
+    connections: sampleConnections,
+    boxes: sampleBoxes,
+    projectId: "demo-project",
+    diagramPath: "overview.hcl",
+    linked: new Set([1]),
+    onnodeclick: () => {},
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("link", { name: /controller, open detailed view/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: /sensor, no detailed view/i }),
+    ).toBeInTheDocument();
+  },
+};
+
 // Annotations far outside the node cluster: the zoom-to-fill bounds must
 // extend to cover them (and they must actually be rendered), mirroring
 // DiagramStaticView's fitted viewport behavior in the interactive embed.
