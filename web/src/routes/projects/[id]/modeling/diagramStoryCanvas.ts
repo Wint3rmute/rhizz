@@ -157,6 +157,16 @@ export function nodeOrigin(node: SVGGElement): { x: number; y: number } {
   return { x: Number(match[1]), y: Number(match[2]) };
 }
 
+// Every label rendered on the canvas itself. Stories assert against this
+// rather than a `within()` over the SVG (testing-library's queries are typed
+// for HTMLElement) because the sidebar tree shows component labels too — a
+// story-scoped query would match the node *and* its tree row.
+export function canvasTexts(canvasElement: HTMLElement): string[] {
+  return [...canvasElement.querySelectorAll<SVGTextElement>("text")].map((t) =>
+    t.textContent.trim()
+  );
+}
+
 // A button by its trimmed label — the toolbar's actions ("Snap to Grid", …)
 // and the sidebar tree's rows are all plain buttons with no accessible name
 // beyond their own text.
