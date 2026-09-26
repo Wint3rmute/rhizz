@@ -7,6 +7,7 @@ import { InMemoryProjectStore } from "./vfsStore";
 import { LocalStorageProjectStore, type StorageLike } from "./vfsStore";
 import { ServerProjectStore } from "./vfsStore";
 import type { ProjectStore } from "./store";
+import { DuplicateProjectError, InvalidProjectNameError } from "./slug";
 
 export function runProjectStoreContractTests(
   label: string,
@@ -28,19 +29,33 @@ export function runProjectStoreContractTests(
         expect(await store.listProjects()).toEqual([project]);
       });
 
-      it("honours a caller-supplied deterministic id", async () => {
+      it("addresses a project by the slug of its name", async () => {
         const store = makeStore();
-        const project = await store.createProject(
-          "viewer story",
-          "story-viewer",
-        );
-        expect(project.id).toBe("story-viewer");
-        expect(project.name).toBe("viewer story");
-        // Repeated seeding with the same id + name stays single: the id is
-        // stable, so a caller can derive it synchronously at module scope
-        // while the async "ensure exists" seeding runs later.
-        const [listed] = await store.listProjects();
-        expect(listed?.id).toBe("story-viewer");
+        // The id *is* the address: /projects/drone-system, drone-system.json
+        // server-side. The human name is kept verbatim for display.
+        const project = await store.createProject("Drone System");
+        expect(project.id).toBe("drone-system");
+        expect(project.name).toBe("Drone System");
+        expect(await store.listProjects()).toEqual([project]);
+      });
+
+      it("rejects a second project claiming the same address", async () => {
+        const store = makeStore();
+        await store.createProject("Drone System");
+        // Same slug, different name — a second project here would collide on
+        // the URL and the server-side file, so it is refused outright.
+        await expect(
+          store.createProject("drone system!"),
+        ).rejects.toThrow(DuplicateProjectError);
+        expect(await store.listProjects()).toHaveLength(1);
+      });
+
+      it("rejects a name with no characters usable in an address", async () => {
+        const store = makeStore();
+        await expect(
+          store.createProject("???"),
+        ).rejects.toThrow(InvalidProjectNameError);
+        expect(await store.listProjects()).toEqual([]);
       });
 
       it("deletes a project", async () => {
@@ -62,6 +77,42 @@ export function runProjectStoreContractTests(
         const [renamed] = await store.listProjects();
         expect(renamed?.name).toBe("new-name");
         expect(renamed?.updatedAt).not.toBe(project.updatedAt);
+      });
+
+      it("re-addresses a renamed project and carries its files along", async () => {
+        const store = makeStore();
+        const project = await store.createProject("Old Name");
+        await store.createFile(project.id, null, "main.hcl", "");
+        // The address is derived from the name, so a rename changes it — the
+        // project's files move with it rather than being orphaned.
+        const renamed = await store.renameProject(project.id, "New Name");
+        expect(renamed.id).toBe("new-name");
+        expect(await store.listNodes(project.id)).toEqual([]);
+        const moved = await store.listNodes(renamed.id);
+        expect(moved.map((n) => n.name)).toEqual(["main.hcl"]);
+        expect(moved.every((n) => n.projectId === "new-name")).toBe(true);
+      });
+
+      it("rejects a rename that would take another project's address", async () => {
+        const store = makeStore();
+        await store.createProject("Drone System");
+        const social = await store.createProject("Social Media");
+        await expect(
+          store.renameProject(social.id, "Drone System!"),
+        ).rejects.toThrow(DuplicateProjectError);
+        // The refused rename changed nothing.
+        const [drone, untouched] = await store.listProjects();
+        expect(drone?.name).toBe("Drone System");
+        expect(untouched?.id).toBe(social.id);
+      });
+
+      it("rejects a rename to a name with no usable address", async () => {
+        const store = makeStore();
+        const project = await store.createProject("Drone System");
+        await expect(
+          store.renameProject(project.id, "***"),
+        ).rejects.toThrow(InvalidProjectNameError);
+        expect(await store.listProjects()).toEqual([project]);
       });
 
       it("rejects renaming an unknown project", async () => {

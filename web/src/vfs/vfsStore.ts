@@ -156,23 +156,18 @@ export class VfsProjectStore implements ProjectStore {
     return this.query((data) => ops.listProjects(data));
   }
 
-  createProject(name: string, id?: string): Promise<Project> {
+  createProject(name: string): Promise<Project> {
     return this.mutate((data) => {
-      const result = ops.createProject(
-        data,
-        id ?? this.newId(),
-        name,
-        this.now(),
-      );
+      const result = ops.createProject(data, name, this.now());
       return { data: result.data, value: result.project };
     });
   }
 
-  renameProject(id: string, name: string): Promise<void> {
-    return this.mutate((data) => ({
-      data: ops.renameProject(data, id, name, this.now()),
-      value: undefined,
-    }));
+  renameProject(id: string, name: string): Promise<Project> {
+    return this.mutate((data) => {
+      const result = ops.renameProject(data, id, name, this.now());
+      return { data: result.data, value: result.project };
+    });
   }
 
   deleteProject(id: string): Promise<void> {

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
+import { projectSlug } from "../../../../vfs/slug";
 import {
   createProjectWithMainFile,
   projectStore,
@@ -12,8 +13,13 @@ import DiagramPage from "./+page.svelte";
 // module scope while the async seeding runs lazily from loaders (top-level
 // await in story files races the vitest-addon's test registration — see
 // Explore.stories.ts).
-const BROKEN_PROJECT_ID = "story-diagrams-broken";
-const LONG_ERROR_PROJECT_ID = "story-diagrams-long-error";
+const BROKEN_PROJECT_NAME = "Broken diagram story";
+const LONG_ERROR_PROJECT_NAME = "Long error diagram story";
+// A project's id is the slug of its name (see vfs/slug), so a story derives
+// its fixture ids the same way the app does — synchronously, because the meta
+// args below need them at module scope.
+const BROKEN_PROJECT_ID = projectSlug(BROKEN_PROJECT_NAME);
+const LONG_ERROR_PROJECT_ID = projectSlug(LONG_ERROR_PROJECT_NAME);
 
 const INVALID_SYSTEM_HCL = `project {
   name = "broken-project"
@@ -71,9 +77,8 @@ async function ensureBrokenProject(): Promise<Project> {
     await projectStore.deleteProject(stale.id);
   }
   return await createProjectWithMainFile(
-    "Broken diagram story",
+    BROKEN_PROJECT_NAME,
     INVALID_SYSTEM_HCL,
-    BROKEN_PROJECT_ID,
   );
 }
 
@@ -88,9 +93,8 @@ async function ensureLongErrorProject(): Promise<Project> {
     await projectStore.deleteProject(stale.id);
   }
   return await createProjectWithMainFile(
-    "Long error diagram story",
+    LONG_ERROR_PROJECT_NAME,
     LONG_ERROR_HCL,
-    LONG_ERROR_PROJECT_ID,
   );
 }
 

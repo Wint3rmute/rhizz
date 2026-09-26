@@ -16,16 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - remove unique project IDs from the filesystem
-
-Simplify the filesystem - the path to the project shall be just the slug of its name.
-
-For example, if the system name is "Drone System", the slug shall be "drone-system" and the
-path to an example page should be https://rhizz.fly.dev/projects/drone-system/overview (assuming the current fly.io deployment).
-
-Ensure there are tests which check that the UI will forbid creating 2 projects
-with the same slug, as this would cause path conflicts.
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,

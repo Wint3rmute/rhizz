@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
+import { projectSlug } from "../../../../vfs/slug";
 import {
   createProjectWithMainFile,
   projectStore,
@@ -24,7 +25,11 @@ import DiagramPage from "./+page.svelte";
 // Deterministic project id so the meta args can be built synchronously at
 // module scope while the async seeding runs lazily from loaders (same
 // reasoning as DiagramPage.stories.ts).
-const PROJECT_ID = "story-arrow-nudge";
+const PROJECT_NAME = "Arrow nudge story";
+// A project's id is the slug of its name (see vfs/slug), so a story derives
+// its fixture id the same way the app does — synchronously, because the meta
+// args below need it at module scope.
+const PROJECT_ID = projectSlug(PROJECT_NAME);
 
 /** The default snap grid — one arrow press, in world units. */
 const STEP = 10;
@@ -63,9 +68,8 @@ async function ensureProject(): Promise<Project> {
     await projectStore.deleteProject(stale.id);
   }
   return await createProjectWithMainFile(
-    "Arrow nudge story",
+    PROJECT_NAME,
     DEMO_HCL,
-    PROJECT_ID,
   );
 }
 

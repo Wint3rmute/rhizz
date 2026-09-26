@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
+import { projectSlug } from "../../../../vfs/slug";
 import {
   createProjectWithFiles,
   projectStore,
@@ -18,8 +19,16 @@ import Inventory from "./Inventory.svelte";
 // module scope while the async seeding runs lazily from loaders (top-level
 // await in story files races the vitest-addon's test registration — see
 // Explore.stories.ts).
-const SEEDED_PROJECT_ID = "story-inventory-main";
-const EMPTY_PROJECT_ID = "story-inventory-empty";
+const SEEDED_PROJECT_NAME = "Inventory story";
+// A project's id is the slug of its name (see vfs/slug), so a story derives
+// its fixture id the same way the app does — synchronously, because the meta
+// args below need it at module scope.
+const SEEDED_PROJECT_ID = projectSlug(SEEDED_PROJECT_NAME);
+const EMPTY_PROJECT_NAME = "Inventory empty story";
+// A project's id is the slug of its name (see vfs/slug), so a story derives
+// its fixture id the same way the app does — synchronously, because the meta
+// args below need it at module scope.
+const EMPTY_PROJECT_ID = projectSlug(EMPTY_PROJECT_NAME);
 
 // A small definitions-first model: three top-level definitions with mixed
 // completion, plus a system that instantiates two of them.
@@ -118,9 +127,8 @@ async function ensureInventoryProject(): Promise<Project> {
   const existing = await projectStore.listProjects();
   const project = existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
     await createProjectWithFiles(
-      "Inventory story",
+      SEEDED_PROJECT_NAME,
       [{ path: "main.hcl", content: INVENTORY_HCL }],
-      SEEDED_PROJECT_ID,
     );
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
@@ -137,9 +145,8 @@ async function ensureEmptyProject(): Promise<Project> {
   const existing = await projectStore.listProjects();
   return existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
     await createProjectWithFiles(
-      "Inventory empty story",
+      EMPTY_PROJECT_NAME,
       [{ path: "main.hcl", content: 'project {\n  name    = "empty"\n}\n' }],
-      EMPTY_PROJECT_ID,
     );
 }
 
