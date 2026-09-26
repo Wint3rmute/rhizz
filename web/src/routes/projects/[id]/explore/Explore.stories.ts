@@ -216,6 +216,7 @@ async function ensureCrossLevelProject(): Promise<Project> {
   const fs = openProjectFs(projectStore, project.id);
   await fs.mkdir("docs", { recursive: true });
   await fs.writeFile("docs/battery.md", "Stores charge.\n");
+  await fs.writeFile("docs/mcu.md", "STM Microcontroller.\n");
   return project;
 }
 
@@ -293,7 +294,8 @@ export const HoverDocHeader: Story = {
     // pointer-events-none, so userEvent refuses to target it directly.
     const anchor = canvas.getByText("battery").closest("a");
     if (!anchor) throw new Error("battery node has no hover anchor");
-    await userEvent.hover(anchor);
+    await userEvent.pointer({ target: anchor, coords: { x: 300, y: 170 } });
+
     const tooltip = await canvas.findByTestId("explore-doc-tooltip");
     const tooltipQueries = within(tooltip);
     await expect(
