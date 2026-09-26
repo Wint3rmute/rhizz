@@ -114,6 +114,8 @@ export default ts.config(
       "**/modeling/ComponentHierarchyTree.stories.ts",
       "**/modeling/DiagramPage.stories.ts",
       "**/modeling/DiagramGridPage.stories.ts",
+      "**/modeling/ArrowNudge.stories.ts",
+      "**/modeling/MixedSelection.stories.ts",
       "**/modeling/SpawnAtCursor.stories.ts",
       "src/example_system.ts",
     ],
