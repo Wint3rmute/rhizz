@@ -4,6 +4,61 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Move the selected entities with the arrow keys
+
+The arrow keys move whatever is selected on the Modeling canvas, one step per
+press: the whole selection moves together, a selected note moves too, and each
+press is a single undo point. One step is the active snap grid (10 world units
+by default), so a keyboard move lands on exactly the same grid a mouse move
+does; with "Snap to Grid" off it is a plain 10-unit interval. With nothing
+selected, or while the focus is in a text field (the arrows belong to the text
+caret there), the keys do what they always did — nothing.
+
+- **Web** (`+page.svelte`): `NUDGE_DIRECTIONS` maps each arrow to a unit
+  direction (`ArrowUp` is -y — the canvas' y axis points down), `nudgeStep()`
+  derives the interval from `snapActive`/`snapGridSize` (mirroring `snap()`'s
+  fallback for a hand-edited persisted size), and `nudgeSelection()` moves
+  everything selected. The arrow branch joins the existing
+  `shortcutsArmed(event)` block next to the t/b/c/f cycling, so it inherits
+  the "not while typing / not in a modal / no modifier" guard — and a
+  modifier is a free escape hatch for finer steps later.
+- **Reuses the drag path**: nodes go through `applyGroupDelta` with a snapshot
+  of their current (snapped) positions, so a nudge is indistinguishable from a
+  one-frame drag — rigid across the selection, clamped into each node's active
+  parent via `writeClampedToActiveParent`, cascading containment to
+  descendants, and persisted. Snapping the snapshot up front is what makes the
+  press *land on the grid*: a node that was never snapped (a sidebar-checkbox
+  placement sits on the raw viewport center) joins the grid on its first
+  press, exactly as a snapped drag would leave it. Notes carry an absolute
+  position, so they move directly — which is also what makes the arrows work
+  for the other selectable kind, mirroring how `Delete` already handles both.
+- **Tests/stories**: new `e2e/arrow-key-nudge.spec.ts` (5 tests: one step per
+  press on a single node, a two-node selection moving rigidly, one undo point
+  per press, a selected note, and no movement while the inspector's name field
+  has focus). Two traps the setup has to dodge, both now commented: creating a
+  component while a node is selected *nests* it (a child is clamped to its
+  parent, so it can't show a rigid move), and `page.mouse.click` has no
+  `modifiers` option — only the high-level click APIs do, so a shift-click has
+  to hold the key around the raw click.
+- **Stories**: new `ArrowNudge.stories.ts` (`SingleNode`,
+  `MultiSelectionMovesRigidly`, `SelectedNote`, tagged `no-vrt`), asserting
+  world positions read straight off the node's `transform` and the note's text
+  anchor. The canvas setup those stories share with `SpawnAtCursor.stories.ts`
+  now lives in one place (`diagramStoryCanvas.ts`) and had to grow three
+  fixes, each a real story flake: the view state is persisted per origin (a
+  story that zooms-to-fit leaves a zoomed view behind for the next one, so
+  each story starts from "Reset View"), the runner's viewport is phone-sized so
+  the oversized story root overflows it (clicking *anything* focuses it and
+  scrolls the canvas out from under every screen coordinate measured
+  afterwards — the scroll is rewound and the position pinned), and the canvas
+  only settles once the page's bound `clientWidth` reaches the viewBox.
+- **Validation**: full `just test` (cargo + 71 web files / 651 tests + 36 e2e),
+  `just lint`, `just build`, `just format` green; full VRT suite green (156
+  unchanged — one diagrams story flaked once on the first run and passed on
+  re-run, an unrelated pre-existing flake).
+
+---
+
 ## Task — Spawn canvas entities under the mouse cursor
 
 Every shortcut that puts an entity on the Modeling canvas now places it right
