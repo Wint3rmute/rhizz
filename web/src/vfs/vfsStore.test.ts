@@ -97,6 +97,39 @@ describe("ServerProjectStore HTTP behavior", () => {
     expect(fake.calls[0]?.url).toBe("http://rhizz-server/api/vfs");
   });
 
+  it("keeps one project when a loaded blob has two at the same address", async () => {
+    // A hand-edited or half-migrated blob can hold two projects whose id (the
+    // address) is the same. Refusing the whole blob would brick the app, so
+    // the later one is dropped with a warning — the store can never produce
+    // such a blob, this is purely about reading a broken one.
+    const fake = makeFakeFetch({
+      blob: {
+        version: 1,
+        projects: [
+          {
+            id: "drone-system",
+            name: "Drone System",
+            createdAt: "2024-01-01T00:00:00Z",
+            updatedAt: "2024-01-01T00:00:00Z",
+          },
+          {
+            id: "drone-system",
+            name: "drone system!",
+            createdAt: "2024-01-02T00:00:00Z",
+            updatedAt: "2024-01-02T00:00:00Z",
+          },
+        ],
+        nodes: [],
+      },
+    });
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+    });
+    expect((await store.listProjects()).map((p) => p.name)).toEqual([
+      "Drone System",
+    ]);
+  });
+
   it("rejects when the server is unreachable", async () => {
     const store = new ServerProjectStore("http://rhizz-server", {
       fetch: makeFakeFetch({ networkDown: true }).fetch,

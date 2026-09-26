@@ -19,9 +19,20 @@ import type { FsDirectory, FsFile, FsNode, Project } from "./types";
 
 export interface ProjectStore {
   listProjects(): Promise<Project[]>;
-  createProject(name: string, id?: string): Promise<Project>;
-  /** Rejects if `id` doesn't exist. */
-  renameProject(id: string, name: string): Promise<void>;
+  /**
+   * Creates a project whose id is the slug of `name` (see ./slug), so the
+   * address is derived, never supplied. Rejects with `DuplicateProjectError`
+   * when that address is taken, or `InvalidProjectNameError` when the name
+   * has nothing usable in it.
+   */
+  createProject(name: string): Promise<Project>;
+  /**
+   * Renames a project, re-deriving its id from the new name and carrying
+   * every one of its nodes to the new id. Returns the project under its new
+   * address. Rejects if `id` doesn't exist, or if the new address is taken
+   * (`DuplicateProjectError`) or unusable (`InvalidProjectNameError`).
+   */
+  renameProject(id: string, name: string): Promise<Project>;
   /** Also deletes every node belonging to the project. Rejects if `id` doesn't exist. */
   deleteProject(id: string): Promise<void>;
 

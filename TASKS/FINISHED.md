@@ -4,6 +4,65 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Address projects by the slug of their name
+
+A project's identity is now the slug of its name: "Drone System" is created at
+`/projects/drone-system` and stored server-side as `drone-system.json`. No
+uuids, no separate id — the address *is* the name, folded. Since the address is
+the identity, two names that fold to the same slug cannot both exist: the
+refusal lives in the store (so no UI can create one), not in a form check. No
+migration — a blank slate is assumed.
+
+- **`vfs/slug.ts`** (new, pure): `projectSlug(name)` lower-cases, collapses
+  every run of non-alphanumerics to one hyphen, and trims; it throws
+  `InvalidProjectNameError` when nothing usable is left ("???" is not an
+  address). `DuplicateProjectError` lives beside it — the contested address is
+  the interesting part of both failures, and both carry the name so the UI can
+  echo what the user typed. Non-ASCII is folded away rather than
+  transliterated ("Übung" → "bung"): predictable beats clever, and a user can
+  always pick a name that spells itself out.
+- **Store** (`operations.ts` / `vfsStore.ts` / `store.ts`): `createProject`
+  derives the id and refuses a taken one; the caller-supplied `id` parameter is
+  gone — an address is derived, never supplied. `renameProject` re-derives the
+  id and **carries every node to it** (returning the project under its new
+  address), so a rename can't orphan a project's files; a rename that would
+  take another project's address is refused and changes nothing. The id is the
+  one thing that changed shape here: the *slug* rules replace "identity is
+  independent of the name", which the old code relied on for stable ids across
+  renames.
+- **Backend collision handling** lands in the two places that can enforce it,
+  neither of which is the form: the store refuses to *produce* a duplicate
+  (above), and `sanitizeVfsData` — the load path shared by the localStorage and
+  HTTP backends — drops a duplicate id and warns, repairing a hand-edited or
+  half-migrated blob rather than bricking on it. `rhizz-server` already refused
+  a *payload* with two projects at one id (`save_vfs`: "duplicate project id"),
+  which with slugs is what keeps two projects out of one `<slug>.json`; it had
+  nothing to add beyond the doc note that the id is now an address.
+- **UI** (`ProjectsPage.svelte`): create-from-empty, create-from-example and
+  rename all run through `tryProjectChange`, which turns a refusal into a toast
+  (with the contested address) and returns null so the caller skips the
+  navigation that would have followed. Previously these awaited an
+  un-caught rejection, i.e. a silent no-op.
+- **Tests**: `vfs/slug.test.ts` (9 cases, incl. case-folding producing the
+  *same* slug — that collision is the point). The `ProjectStore` contract grew
+  6 cases, run against all three store implementations: address-is-the-slug,
+  duplicate refused, unusable name refused, rename re-addresses and moves the
+  files, rename collision refused, rename to an unusable name refused. One
+  "caller-supplied deterministic id" case was *replaced* rather than kept.
+  New `e2e/project-slug-paths.spec.ts`: the URL is the slug, a second project
+  claiming it is refused with the address in the toast and nothing created, a
+  rename re-addresses the project and its files come along.
+- **Fallout worth knowing**: every story fixture that passed an explicit id now
+  derives it from its name with `projectSlug` (the same rule the app uses), and
+  a unit test that created "apollo-test" in the app-wide store became
+  hermetic — with derived ids, re-creating the same name in a shared store is
+  now a duplicate-address error, which is precisely the rule this task adds.
+- **Validation**: full `just test` (cargo + 73 web files / 676 tests + 44 e2e),
+  `just lint`, `just build`, `just format` green; full VRT suite green (156
+  unchanged).
+
+---
+
 ## Task — Move the selected entities with the arrow keys
 
 The arrow keys move whatever is selected on the Modeling canvas, one step per
