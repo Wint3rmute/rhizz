@@ -1271,9 +1271,15 @@ function onDiagramKeyDown(event: KeyboardEvent) {
   }
 
   // Attribute cycling: fires anywhere on this page except while typing,
-  // in a modal, or with a modifier held (see shortcutsArmed above).
+  // in a modal, or with a modifier held (see shortcutsArmed above). The
+  // arrow-key nudge shares that guard, so the arrows belong to the text
+  // caret (or an open autocomplete) whenever the focus is in a text field.
   if (shortcutsArmed(event)) {
-    if (key === "t" || key === "b" || key === "c" || key === "f") {
+    const nudge = NUDGE_DIRECTIONS[key];
+    if (nudge) {
+      event.preventDefault();
+      nudgeSelection(nudge[0], nudge[1]);
+    } else if (key === "t" || key === "b" || key === "c" || key === "f") {
       event.preventDefault();
       cycleSelectedAttribute(key);
     }
@@ -1445,6 +1451,56 @@ function cycleSelectedAttribute(key: string) {
       }).catch(reportDiagramError);
       break;
     }
+  }
+}
+
+// Which way each arrow key nudges the selection, as a unit direction in
+// world coordinates. ArrowUp decreases y: the canvas' y axis points down.
+const NUDGE_DIRECTIONS: Record<string, [number, number]> = {
+  arrowleft: [-1, 0],
+  arrowright: [1, 0],
+  arrowup: [0, -1],
+  arrowdown: [0, 1],
+};
+
+// How far one arrow press moves the selection, in world units: the active
+// snap grid while snapping is on (so a keyboard move lands on the same grid
+// a mouse move does), and the default 10-unit interval when it's off —
+// mirroring snap()'s fallback for a hand-edited/invalid persisted size.
+function nudgeStep(): number {
+  if (!snapActive) return DEFAULT_SNAP_GRID_SIZE;
+  return snapGridSize.value > 0 ? snapGridSize.value : DEFAULT_SNAP_GRID_SIZE;
+}
+
+// Moves the whole selection one step in the given direction, as a single
+// undo point. Nodes go through the drag's delta path, so a keyboard move is
+// indistinguishable from a one-frame drag: rigid across the selection, clamped
+// into each node's active parent, and persisted. Notes — the other
+// selectable kind — carry an absolute position of their own, so they move
+// directly (no containment involved).
+function nudgeSelection(dx: number, dy: number): void {
+  if (selected.size === 0 && selectedAnnotations.size === 0) return;
+  recordUndoPoint();
+  const step = nudgeStep();
+  if (selected.size > 0) {
+    const startPositions: Record<number, { x: number; y: number }> = {};
+    for (const index of selected) {
+      const box = nodeBox(index);
+      // Snapped up front, so each press ends on the grid while snapping is
+      // on — where a snapped drag would have left the node.
+      if (box) startPositions[index] = { x: snap(box.x), y: snap(box.y) };
+    }
+    applyGroupDelta(startPositions, dx * step, dy * step);
+  }
+  for (const index of selectedAnnotations) {
+    const note = annotations[index];
+    if (!note) continue;
+    annotations[index] = {
+      ...note,
+      x: snap(note.x) + dx * step,
+      y: snap(note.y) + dy * step,
+    };
+    noteDiagramEdited();
   }
 }
 
