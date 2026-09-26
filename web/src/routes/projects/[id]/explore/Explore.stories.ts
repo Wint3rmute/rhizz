@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
+import { projectSlug } from "../../../../vfs/slug";
 import {
   createProjectWithMainFile,
   projectStore,
@@ -21,9 +22,15 @@ import Explore from "./Explore.svelte";
 // Deterministic project ids so story args can be built synchronously at
 // module scope while async seeding runs from loaders (top-level await in
 // story files races the vitest-addon's test registration).
-const SEEDED_PROJECT_ID = "story-explore-viewer";
-const MANY_DIAGRAMS_PROJECT_ID = "story-explore-many-diagrams";
-const CROSS_LEVEL_PROJECT_ID = "story-explore-cross-level";
+const SEEDED_PROJECT_NAME = "Viewer story";
+const MANY_DIAGRAMS_PROJECT_NAME = "Many diagrams story";
+const CROSS_LEVEL_PROJECT_NAME = "Cross level connections story";
+// A project's id is the slug of its name (see vfs/slug), so a story derives
+// its fixture ids the same way the app does — synchronously, because the meta
+// args below need them at module scope.
+const SEEDED_PROJECT_ID = projectSlug(SEEDED_PROJECT_NAME);
+const MANY_DIAGRAMS_PROJECT_ID = projectSlug(MANY_DIAGRAMS_PROJECT_NAME);
+const CROSS_LEVEL_PROJECT_ID = projectSlug(CROSS_LEVEL_PROJECT_NAME);
 
 const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
 const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.hcl"];
@@ -173,15 +180,17 @@ const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
 };
 
 async function ensureProjectWithDiagrams(
-  id: string,
   name: string,
   diagrams: Record<string, DiagramLayout>,
   hclContent: string = EXAMPLE_SYSTEM_HCL,
 ): Promise<Project> {
   await init();
+  // The id follows from the name (vfs/slug) — the store derives it, so this
+  // only has to look the project up by the same rule to stay idempotent.
+  const id = projectSlug(name);
   const existing = await projectStore.listProjects();
   const project = existing.find((p) => p.id === id) ??
-    await createProjectWithMainFile(name, hclContent, id);
+    await createProjectWithMainFile(name, hclContent);
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(diagrams)) {
     await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
@@ -191,24 +200,21 @@ async function ensureProjectWithDiagrams(
 
 async function ensureSeededProject(): Promise<Project> {
   return ensureProjectWithDiagrams(
-    SEEDED_PROJECT_ID,
-    "Viewer story",
+    SEEDED_PROJECT_NAME,
     EXAMPLE_SYSTEM_DIAGRAMS,
   );
 }
 
 async function ensureManyDiagramsProject(): Promise<Project> {
   return ensureProjectWithDiagrams(
-    MANY_DIAGRAMS_PROJECT_ID,
-    "Many diagrams story",
+    MANY_DIAGRAMS_PROJECT_NAME,
     manyDiagramsMap,
   );
 }
 
 async function ensureCrossLevelProject(): Promise<Project> {
   const project = await ensureProjectWithDiagrams(
-    CROSS_LEVEL_PROJECT_ID,
-    "Cross level connections story",
+    CROSS_LEVEL_PROJECT_NAME,
     CROSS_LEVEL_SYSTEM_DIAGRAMS,
     CROSS_LEVEL_SYSTEM_HCL,
   );

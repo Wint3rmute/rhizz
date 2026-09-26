@@ -3,7 +3,7 @@ import { InMemoryProjectStore } from "./vfsStore";
 import { openProjectFs, type ProjectFs } from "./fs";
 import { primaryHclPath, readProjectSources } from "./compile";
 import type { Dirent } from "./fs";
-import { createProjectWithFiles, projectStore } from "../ProjectState.svelte";
+import { populateProjectFiles } from "../ProjectState.svelte";
 
 let store: InMemoryProjectStore;
 let fs: ProjectFs;
@@ -96,8 +96,13 @@ describe("readProjectSources", () => {
       },
     ];
 
-    const project = await createProjectWithFiles("apollo-test", files);
-    const projFs = openProjectFs(projectStore, project.id);
+    // Built on this file's own store, not the app-wide `projectStore`: a
+    // project's id is the slug of its name, so creating the same name twice
+    // in a shared store is now a duplicate-address error (which is exactly
+    // what a test that runs repeatedly would hit).
+    const project = await store.createProject("apollo-test");
+    const projFs = openProjectFs(store, project.id);
+    await populateProjectFiles(projFs, files);
 
     // Root entries should contain project.hcl, components, and views
     const rootEntries = await projFs.readdir(".");

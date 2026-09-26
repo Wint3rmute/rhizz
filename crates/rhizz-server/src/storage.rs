@@ -3,8 +3,10 @@
 //! The server is a dumb store: it persists exactly what the frontend
 //! dumps, with no schema interpretation of its own (the frontend's zod
 //! validation owns correctness). Disk layout is one JSON file per
-//! project — `<data_dir>/<project-id>.json` — holding `{ "project": …,
-//! "nodes": […] }`; `load_vfs` merges every file into the whole-VFS shape
+//! project — `<data_dir>/<project-id>.json`, where the id is the project's
+//! address, i.e. the slug of its name (the frontend's `vfs/slug`) — holding
+//! `{ "project": …, "nodes": […] }`; `load_vfs` merges every file into the
+//! whole-VFS shape
 //! `{ "version": 1, "projects": […], "nodes": […] }` and `save_vfs`
 //! splits a whole-VFS payload back into per-project files, deleting files
 //! for projects absent from the payload.

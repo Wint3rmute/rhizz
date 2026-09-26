@@ -16,6 +16,7 @@ import {
 } from "./types";
 import { descendantsOf, wouldCreateCycle } from "./tree";
 import { z } from "zod";
+import { DuplicateProjectError, projectSlug } from "./slug";
 
 export interface VfsData {
   version: 1;
@@ -51,9 +52,20 @@ export function sanitizeVfsData(
   }
 
   const projects: Project[] = [];
+  const seenProjectIds = new Set<string>();
   for (const candidate of shape.data.projects) {
     const result = ProjectSchema.safeParse(candidate);
-    if (result.success) projects.push(result.data);
+    if (!result.success) continue;
+    // A project's id is its address, so a duplicate would make two projects
+    // answer to one URL / one server-side dump. The store can never write
+    // one, so this only guards a hand-edited blob: keep the first, drop the
+    // rest (with the same "start from what is usable" spirit as above).
+    if (seenProjectIds.has(result.data.id)) {
+      warn(`duplicate project id "${result.data.id}"; dropped`);
+      continue;
+    }
+    seenProjectIds.add(result.data.id);
+    projects.push(result.data);
   }
 
   const nodes: FsNode[] = [];
@@ -148,12 +160,19 @@ export function listProjects(data: VfsData): Project[] {
   return [...data.projects];
 }
 
+// The project's id IS its address (see ./slug), so it is derived from the
+// name here rather than generated. Rejects rather than disambiguating: a
+// second project at the same address would collide in the URL and in the
+// server-side `<slug>.json` dump.
 export function createProject(
   data: VfsData,
-  id: string,
   name: string,
   now: string,
 ): { data: VfsData; project: Project } {
+  const id = projectSlug(name);
+  if (data.projects.some((p) => p.id === id)) {
+    throw new DuplicateProjectError(id, name);
+  }
   const project: Project = { id, name, createdAt: now, updatedAt: now };
   return {
     data: { ...data, projects: [...data.projects, project] },
@@ -170,18 +189,31 @@ export function deleteProject(data: VfsData, id: string): VfsData {
   };
 }
 
+// Renaming re-derives the address, so the id moves with the name and every
+// node follows it. Returns the project under its new address. Rejects when
+// the new address is already taken (by *another* project — a rename that keeps
+// the same slug is a plain rename).
 export function renameProject(
   data: VfsData,
   id: string,
   name: string,
   now: string,
-): VfsData {
-  findProject(data, id); // throws if missing
+): { data: VfsData; project: Project } {
+  const project = findProject(data, id); // throws if missing
+  const nextId = projectSlug(name);
+  if (data.projects.some((p) => p.id === nextId && p.id !== id)) {
+    throw new DuplicateProjectError(nextId, name);
+  }
+  const renamed: Project = { ...project, id: nextId, name, updatedAt: now };
   return {
-    ...data,
-    projects: data.projects.map((p) =>
-      p.id === id ? { ...p, name, updatedAt: now } : p
-    ),
+    data: {
+      ...data,
+      projects: data.projects.map((p) => (p.id === id ? renamed : p)),
+      nodes: data.nodes.map((n) =>
+        n.projectId === id ? { ...n, projectId: nextId } : n
+      ),
+    },
+    project: renamed,
   };
 }
 
