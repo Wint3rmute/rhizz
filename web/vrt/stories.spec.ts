@@ -65,6 +65,52 @@ async function waitForStory(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+// Gives the story a definite, viewport-sized height — the same box the app
+// shell hands a page. Without it the whole ancestor chain above a story is
+// auto-height, and a canvas SVG sized `width:100%; height:100%` falls back to
+// its *intrinsic aspect ratio* (an `h-full` with no definite parent means
+// `auto`), so the document grows to the SVG's ratio-driven height instead of
+// the viewport's.
+//
+// That made `fullPage: true` self-referential: capturing resizes the viewport
+// to the document height, the page re-lays out, and the document height
+// changes again — so the same story settled on a different size depending on
+// timing (1280×960 vs the 1280×1280 the baselines happened to capture) and
+// failed with "expected 1280×1280, received 1280×960". With a definite height
+// the document is exactly the viewport, `fullPage` is the viewport, and a
+// genuinely long page still expands and is captured in full.
+//
+// `!important` because this has to win against Storybook's own preview CSS,
+// not because the value is contentious.
+async function pinViewportHeight(page: Page): Promise<void> {
+  await page.addStyleTag({
+    content: "html, body, #storybook-root { height: 100% !important; }",
+  });
+}
+
+// Waits until the page's scrollable size *and* the canvas box stop changing.
+// Pinning the height re-lays out the page, and a canvas story refits itself
+// (`zoomToFill`) to the new box, so capturing straight away would race that —
+// two consecutive identical samples, a frame apart, is enough; the loop is
+// bounded so a permanently animating story still gets captured.
+async function waitForStableLayout(page: Page): Promise<void> {
+  let previous = "";
+  let stable = 0;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const current = await page.evaluate(() => {
+      const root = document.documentElement;
+      const svg = document.querySelector("svg");
+      const box = svg?.getBoundingClientRect();
+      return `${root.scrollWidth}x${root.scrollHeight}:` +
+        `${box?.width ?? 0}x${box?.height ?? 0}`;
+    });
+    stable = current === previous ? stable + 1 : 0;
+    if (stable >= 2) return;
+    previous = current;
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  }
+}
+
 async function storyViewport(page: Page): Promise<string | undefined> {
   return page.evaluate(() => {
     const story = (window as unknown as {
@@ -113,6 +159,9 @@ for (const story of loadStories()) {
           ? `${viewport ?? ""} ${size.width}×${size.height}`
           : "default 1280×800",
       });
+
+      await pinViewportHeight(page);
+      await waitForStableLayout(page);
 
       await expect(page).toHaveScreenshot(`${story.id}--${theme}.png`, {
         fullPage: true,
