@@ -143,8 +143,10 @@ export const MultiSelectionMovesRigidly: Story = {
     // Select alpha, then shift-click beta into the same selection. This needs
     // a `setup()` session: user-event's direct API starts each call from a
     // clean keyboard state, so a held modifier would not survive into the
-    // click (and a modifier descriptor inside `pointer` never reaches the
-    // keyboard state the mouse events read their modifiers from).
+    // click. The modifier is also pressed and released through the *keyboard*
+    // API — inside `pointer` it only reaches that call's own pointer state,
+    // so it would still be held for the next key (and the page's shortcuts
+    // are, correctly, disarmed while a modifier is down).
     const user = userEvent.setup();
     await user.click(alpha);
     await user.keyboard("{Shift>}");

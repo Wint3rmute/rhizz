@@ -960,10 +960,36 @@ function addAnnotationHandler(pos?: { x: number; y: number }): void {
 function deleteSelectedAnnotations(): void {
   if (selectedAnnotations.size === 0) return;
   recordUndoPoint();
+  removeSelectedAnnotations();
+}
+
+// The deletion itself, without the undo point — so deleteSelection() can
+// remove a note and a node together as a single undo point.
+function removeSelectedAnnotations(): void {
+  if (selectedAnnotations.size === 0) return;
   noteDiagramEdited();
   const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
   for (const idx of toDelete) annotations.splice(idx, 1);
   selectedAnnotations.clear();
+}
+
+// Delete/Backspace on the canvas: removes whatever is selected, whatever
+// kinds it holds. A note and a component can be selected together
+// (shift-click), and both removals are layout-only changes on the same
+// history stack — so they go as one undo point. A connection is only ever
+// selected on its own, and keeps its own path.
+function deleteSelection(): void {
+  const deletingNotes = selectedAnnotations.size > 0;
+  const deletingNode = selectedKey !== null;
+  if (!deletingNotes && !deletingNode) {
+    if (selectedConnection !== null) {
+      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
+    }
+    return;
+  }
+  recordUndoPoint();
+  if (deletingNotes) removeSelectedAnnotations();
+  if (deletingNode) removeSelectedComponent();
 }
 
 // Apply a normalized scale from the annotation inspector: mutate only —
@@ -983,9 +1009,10 @@ function deselect(index: number) {
 }
 
 function select(index: number) {
-  // Selecting a node drops annotation selection: the two selection modes
-  // are mutually exclusive (mirrors selectAnnotation clearing node keys).
-  selectedAnnotations.clear();
+  // Extends the selection with a node (shift-click): the note selection is
+  // kept, so a component and a note can be selected together and the canvas
+  // operations that act on "the selection" — the arrow-key nudge, a drag,
+  // Delete — cover both kinds.
   selectedKeys.add(getComponentKey(index));
 }
 
@@ -1285,21 +1312,15 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     }
   }
 
-  // Delete key: delete the selected connection or annotation, or remove
-  // the selected component from the current view (the model keeps it).
-  // Never fires while typing in the inspector or HCL editor.
+  // Delete key: delete the selection — the selected notes and/or component,
+  // or the selected connection (never part of a mixed selection). Never
+  // fires while typing in the inspector or HCL editor.
   if (
     !isEditableTarget(event) &&
     (event.key === "Delete" || event.key === "Backspace")
   ) {
     event.preventDefault();
-    if (selectedAnnotations.size > 0) {
-      deleteSelectedAnnotations();
-    } else if (selectedConnection) {
-      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
-    } else if (selectedKey) {
-      void handleDeleteSelectedComponent().catch(reportDiagramError);
-    }
+    deleteSelection();
   }
 
   // Context-menu shortcuts (global on this page, same guard as above): H hides
@@ -1880,12 +1901,19 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
 
 async function handleDeleteSelectedComponent(): Promise<void> {
   if (!selectedKey) return;
-  const keyToRemove = selectedKey;
   // View-only removal: the model keeps the component, so re-checking its
   // sidebar row restores the node where it was (savedLayout is preserved,
   // exactly like unchecking). Recorded on the layout history, so Ctrl+Z
   // brings the node back.
   recordUndoPoint();
+  removeSelectedComponent();
+}
+
+// The removal itself, without the undo point — so deleteSelection() can
+// remove a component and a note together as a single undo point.
+function removeSelectedComponent(): void {
+  if (!selectedKey) return;
+  const keyToRemove = selectedKey;
   delete checked[keyToRemove];
   const index = keyToIndex.get(keyToRemove);
   if (index !== undefined) deselect(index);
@@ -2027,7 +2055,6 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
   focusCanvas();
   if (!selected.has(index)) selectOnly(index);
   selectedConnection = null;
-  if (selectedAnnotations.size > 0) selectedAnnotations.clear();
   contextMenu = {
     x: event.clientX,
     y: event.clientY,
@@ -2222,9 +2249,10 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
     if (selectedAnnotations.has(index)) {
       selectedAnnotations.delete(index);
     } else {
+      // Extends the selection with a note (shift-click); the component
+      // selection is kept — see select().
       selectedAnnotations.add(index);
     }
-    selectedKeys.clear();
   } else if (!selectedAnnotations.has(index)) {
     selectAnnotation(index);
   }
