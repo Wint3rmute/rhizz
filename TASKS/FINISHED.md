@@ -4,6 +4,49 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Make the VRT suite deterministic
+
+Visual-regression runs failed intermittently (~1 in 3 locally, and in CI with
+`Expected an image 1280px by 1280px, received 1280px by 960px`). One cause:
+canvas stories sized their `<svg>` by *intrinsic aspect ratio*, which made
+`fullPage: true` self-referential.
+
+- **Root cause**: in a Storybook story every ancestor above the component is
+  auto-height, so a canvas SVG sized `width:100%; height:100%` resolves `height`
+  to `auto` and falls back to the viewBox's aspect ratio — the document grows to
+  the SVG's ratio-driven height instead of the viewport's (measured: 960 for a
+  1280×800 viewport, 1200 for 1280×1200). Playwright's `fullPage` capture then
+  *resizes the viewport to the document height*, the page re-lays out, and the
+  document height changes again. The same story settled on 960 or on the
+  amplified 1280 depending on timing, so the committed baselines (all
+  1280×1280) matched only sometimes — and a canvas story that refits itself to
+  its box can be captured mid-refit, which is where the large pixel ratios
+  came from.
+- **Fix** (`vrt/stories.spec.ts`): `pinViewportHeight()` injects
+  `html, body, #storybook-root { height: 100% }` before the capture, giving the
+  story the same definite box the app shell gives a page. The document is then
+  exactly the viewport, `fullPage` is the viewport, and a genuinely long page
+  still expands (the one 1280×880 story is still captured in full). The
+  `!important` is to win against Storybook's own preview CSS.
+- **Settle wait**: `waitForStableLayout()` requires the scrollable size *and*
+  the canvas box to be unchanged across three samples a frame apart before the
+  capture, so the re-layout (and any self-refit it triggers) is never caught
+  mid-flight. Bounded at 20 attempts so an animating story still gets captured.
+- **Baselines**: re-accepted. 52 of 156 changed — every previously-1280×1280
+  canvas story is now 1280×800, plus small shifts on a few inspector stories; the
+  320×568 and 851×1112 viewport-parameterised stories are untouched. All long
+  pages unchanged.
+- **Evidence of stability**: 3 consecutive full runs (156/156, 0 changed) plus 5
+  consecutive runs of the previously-flaky `diagram` family (90/90 each). Before
+  the fix that family failed roughly every third run, on a different story each
+  time.
+- **Known gap, deliberately not addressed here**: `waitForStory` waits for the
+  render phase and `document.fonts.ready`, but not for post-mount async work (a
+  page story's VFS read + WASM compile), so a page story can in principle be
+  captured while still loading. Worth its own change if it ever bites.
+
+---
+
 ## Task — Address projects by the slug of their name
 
 A project's identity is now the slug of its name: "Drone System" is created at
