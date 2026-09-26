@@ -10,6 +10,7 @@ import {
 import { EMPTY_PROJECT_HCL } from "../emptyProject";
 import { seedExampleProjectDiagrams } from "../example_system";
 import { pendTourStart } from "../tour/tourRequest.svelte";
+import { toastState } from "../ToastState.svelte";
 import {
   type ExampleProject,
   get_example_projects,
@@ -69,7 +70,13 @@ async function createEmpty() {
   if (!name) return;
   // First project ever: arm the guided tour to open on arrival.
   const firstEver = effectiveProjects.length === 0;
-  const project = await createProjectWithMainFile(name, EMPTY_PROJECT_HCL);
+  // A project's address is the slug of its name, so a name whose slug is
+  // taken (or unusable) is refused by the store — report it and stay here
+  // rather than navigating to a project that doesn't exist.
+  const project = await tryProjectChange(() =>
+    createProjectWithMainFile(name, EMPTY_PROJECT_HCL)
+  );
+  if (!project) return;
   if (firstEver) pendTourStart();
   await refresh();
   await openProject(project);
@@ -85,7 +92,10 @@ async function selectExample(example: ExampleProject) {
   const name = prompt("Project name?", example.name);
   if (!name) return;
   const firstEver = effectiveProjects.length === 0;
-  const project = await createProjectWithFiles(name, example.files);
+  const project = await tryProjectChange(() =>
+    createProjectWithFiles(name, example.files)
+  );
+  if (!project) return;
   if (firstEver) pendTourStart();
   if (example.id === "single-file") {
     await seedExampleProjectDiagrams(project.id);
@@ -97,8 +107,28 @@ async function selectExample(example: ExampleProject) {
 async function renameProject(project: Project) {
   const name = prompt("New name?", project.name);
   if (!name || name === project.name) return;
-  await projectStore.renameProject(project.id, name);
+  // Renaming re-derives the address, so it can collide exactly like a
+  // create does — and the project keeps its old address when it does.
+  await tryProjectChange(() => projectStore.renameProject(project.id, name));
   await refresh();
+}
+
+// Runs a project create/rename, turning the store's refusal (a taken or
+// unusable address) into a toast the user can act on. Returns the project as
+// it now stands, or null when the action was refused — so a caller can skip
+// the navigation that would have followed.
+async function tryProjectChange(
+  action: () => Promise<Project | void>,
+): Promise<Project | null> {
+  try {
+    return (await action()) ?? null;
+  } catch (error) {
+    toastState.show(
+      error instanceof Error ? error.message : String(error),
+      "error",
+    );
+    return null;
+  }
 }
 
 async function deleteProject(project: Project) {

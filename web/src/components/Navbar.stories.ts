@@ -6,13 +6,18 @@ import {
   setCurrentProject,
   setCurrentScore,
 } from "../ProjectState.svelte";
+import { projectSlug } from "../vfs/slug";
 import Navbar from "./Navbar.svelte";
 
 // Deterministic project id so seeding can stay lazy (and out of module
 // scope — top-level await in story files races the vitest-addon's test
 // registration; see Explore.stories.ts), while staying idempotent across
 // module re-evaluations.
-const NAVBAR_PROJECT_ID = "story-navbar";
+const NAVBAR_PROJECT_NAME = "Navbar Story Project";
+// A project's id is the slug of its name (see vfs/slug), so a story derives
+// its fixture id the same way the app does — synchronously, because the meta
+// args below need it at module scope.
+const NAVBAR_PROJECT_ID = projectSlug(NAVBAR_PROJECT_NAME);
 
 // The Navbar reads everything from the shared ProjectState singleton (the app
 // renders `<Navbar />` with no props), so the stories drive that singleton
@@ -22,9 +27,8 @@ async function ensureNavbarProject(): Promise<void> {
   const existing = await projectStore.listProjects();
   if (!existing.some((p) => p.id === NAVBAR_PROJECT_ID)) {
     await createProjectWithMainFile(
-      "Navbar Story Project",
+      NAVBAR_PROJECT_NAME,
       `project { name = "Navbar Story Project" }`,
-      NAVBAR_PROJECT_ID,
     );
   }
   await setCurrentProject(NAVBAR_PROJECT_ID);

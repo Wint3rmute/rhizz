@@ -960,10 +960,36 @@ function addAnnotationHandler(pos?: { x: number; y: number }): void {
 function deleteSelectedAnnotations(): void {
   if (selectedAnnotations.size === 0) return;
   recordUndoPoint();
+  removeSelectedAnnotations();
+}
+
+// The deletion itself, without the undo point — so deleteSelection() can
+// remove a note and a node together as a single undo point.
+function removeSelectedAnnotations(): void {
+  if (selectedAnnotations.size === 0) return;
   noteDiagramEdited();
   const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
   for (const idx of toDelete) annotations.splice(idx, 1);
   selectedAnnotations.clear();
+}
+
+// Delete/Backspace on the canvas: removes whatever is selected, whatever
+// kinds it holds. A note and a component can be selected together
+// (shift-click), and both removals are layout-only changes on the same
+// history stack — so they go as one undo point. A connection is only ever
+// selected on its own, and keeps its own path.
+function deleteSelection(): void {
+  const deletingNotes = selectedAnnotations.size > 0;
+  const deletingNode = selectedKey !== null;
+  if (!deletingNotes && !deletingNode) {
+    if (selectedConnection !== null) {
+      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
+    }
+    return;
+  }
+  recordUndoPoint();
+  if (deletingNotes) removeSelectedAnnotations();
+  if (deletingNode) removeSelectedComponent();
 }
 
 // Apply a normalized scale from the annotation inspector: mutate only —
@@ -983,9 +1009,10 @@ function deselect(index: number) {
 }
 
 function select(index: number) {
-  // Selecting a node drops annotation selection: the two selection modes
-  // are mutually exclusive (mirrors selectAnnotation clearing node keys).
-  selectedAnnotations.clear();
+  // Extends the selection with a node (shift-click): the note selection is
+  // kept, so a component and a note can be selected together and the canvas
+  // operations that act on "the selection" — the arrow-key nudge, a drag,
+  // Delete — cover both kinds.
   selectedKeys.add(getComponentKey(index));
 }
 
@@ -1285,21 +1312,15 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     }
   }
 
-  // Delete key: delete the selected connection or annotation, or remove
-  // the selected component from the current view (the model keeps it).
-  // Never fires while typing in the inspector or HCL editor.
+  // Delete key: delete the selection — the selected notes and/or component,
+  // or the selected connection (never part of a mixed selection). Never
+  // fires while typing in the inspector or HCL editor.
   if (
     !isEditableTarget(event) &&
     (event.key === "Delete" || event.key === "Backspace")
   ) {
     event.preventDefault();
-    if (selectedAnnotations.size > 0) {
-      deleteSelectedAnnotations();
-    } else if (selectedConnection) {
-      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
-    } else if (selectedKey) {
-      void handleDeleteSelectedComponent().catch(reportDiagramError);
-    }
+    deleteSelection();
   }
 
   // Context-menu shortcuts (global on this page, same guard as above): H hides
@@ -1880,12 +1901,19 @@ async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
 
 async function handleDeleteSelectedComponent(): Promise<void> {
   if (!selectedKey) return;
-  const keyToRemove = selectedKey;
   // View-only removal: the model keeps the component, so re-checking its
   // sidebar row restores the node where it was (savedLayout is preserved,
   // exactly like unchecking). Recorded on the layout history, so Ctrl+Z
   // brings the node back.
   recordUndoPoint();
+  removeSelectedComponent();
+}
+
+// The removal itself, without the undo point — so deleteSelection() can
+// remove a component and a note together as a single undo point.
+function removeSelectedComponent(): void {
+  if (!selectedKey) return;
+  const keyToRemove = selectedKey;
   delete checked[keyToRemove];
   const index = keyToIndex.get(keyToRemove);
   if (index !== undefined) deselect(index);
@@ -2027,7 +2055,6 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
   focusCanvas();
   if (!selected.has(index)) selectOnly(index);
   selectedConnection = null;
-  if (selectedAnnotations.size > 0) selectedAnnotations.clear();
   contextMenu = {
     x: event.clientX,
     y: event.clientY,
@@ -2177,11 +2204,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   }
 
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  const startPositions: Record<number, { x: number; y: number }> = {};
-  for (const i of selected) {
-    const box = checked[getComponentKey(i)];
-    if (box) startPositions[i] = { x: box.x, y: box.y };
-  }
+  const startPositions = snapshotNodePositions();
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
   interaction = {
     type: "dragging",
@@ -2222,9 +2245,10 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
     if (selectedAnnotations.has(index)) {
       selectedAnnotations.delete(index);
     } else {
+      // Extends the selection with a note (shift-click); the component
+      // selection is kept — see select().
       selectedAnnotations.add(index);
     }
-    selectedKeys.clear();
   } else if (!selectedAnnotations.has(index)) {
     selectAnnotation(index);
   }
@@ -2236,12 +2260,29 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
     anchorIndex: -1, // no node anchor
     offsetX: svgCoords.x - anchor.x,
     offsetY: svgCoords.y - anchor.y,
-    startPositions: {},
+    // The selected components' positions, like a node drag snapshots. A
+    // component and a note can be selected together, and the selection
+    // drags as a group whichever kind is grabbed — the note is the delta
+    // base, but the components ride along (see the annotation branch of
+    // onSvgMouseMove).
+    startPositions: snapshotNodePositions(),
     // The dragged annotation's index (delta base) + the snapshot of the
     // whole annotation selection at drag start.
     annotationAnchor: index,
     annotationStartPositions: snapshotAnnotationPositions(),
   };
+}
+
+// Snapshot of the selected components' positions for a group drag, keyed by
+// index. Shared by both mousedown handlers: a drag moves the whole selection,
+// so whichever kind starts it needs the other's positions too.
+function snapshotNodePositions(): Record<number, { x: number; y: number }> {
+  const map: Record<number, { x: number; y: number }> = {};
+  for (const i of selected) {
+    const box = checked[getComponentKey(i)];
+    if (box) map[i] = { x: box.x, y: box.y };
+  }
+  return map;
 }
 
 // Move every selected annotation by the same (deltaX, deltaY) from its own
@@ -2515,8 +2556,8 @@ function onSvgMouseMove(event: MouseEvent) {
       } else if (
         current.anchorIndex === -1 && current.annotationStartPositions
       ) {
-        // Annotation-only drag (no node anchor): compute the delta from the
-        // grabbed anchor annotation's DRAG-START snapshot (like nodes do),
+        // Annotation-anchored drag (a note was grabbed): compute the delta
+        // from the grabbed note's DRAG-START snapshot (like nodes do),
         // never from its live position, so each move is a clean delta off a
         // fixed base — no feedback, no runaway/flicker, cursor-accurate.
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
@@ -2527,6 +2568,10 @@ function onSvgMouseMove(event: MouseEvent) {
           const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
           const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
           applyAnnotationDelta(deltaX, deltaY);
+          // A mixed selection drags as a group whichever kind was grabbed:
+          // the same delta moves the selected components too, each clamped
+          // into its own active parent just as in a node-anchored drag.
+          applyGroupDelta(current.startPositions, deltaX, deltaY);
         }
       }
       return;
