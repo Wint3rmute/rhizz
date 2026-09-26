@@ -4,6 +4,52 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Spawn canvas entities under the mouse cursor
+
+Every shortcut that puts an entity on the Modeling canvas now places it right
+under the pointer, so a keyboard-driven workflow is one continuous flow: aim
+once, then keep pressing `N` (note) and `C` (component). The rule is generic —
+it lives in one `spawnAnchor()` the spawn paths share, not in the `N` handler.
+With the pointer off the canvas there is nothing to place under, so the
+viewport center is kept as the fallback (unchanged from before).
+
+- **Placement policy** (new pure `spawnPlacement.ts`): `pickSpawnAnchor(cursor,
+  viewportCenter)` picks the anchor, `nodeTopLeftAt(point, w, h)` centers a node
+  box on it. The page converts the pointer lazily, so wheel-zooming under a
+  motionless pointer still spawns where the pointer *is*.
+- **Web** (`+page.svelte`): `cursorClient` records the last pointer position
+  over the canvas (`onSvgMouseMove`, so a spawn right after a drag lands where
+  the node was dropped) and `onSvgMouseLeave` clears it, wrapping the existing
+  `onSvgMouseUp`. `addAnnotationHandler` and `openCreateComponentModal` take an
+  optional position and fall back to `spawnAnchor()`; the viewport-center math
+  split into `viewportCenter()` + `viewportCenterBox()`. The mouse-driven paths
+  keep their explicit click point, and now share the one convention: the
+  right-click "New component" used to put the node's *top-left* under the
+  cursor while double-click centered it — both center it now, and the
+  right-click "New annotation" spawns at the right-click point instead of
+  jumping to the viewport center.
+- **Tests/stories**: new `spawnPlacement.test.ts` (5 unit tests, incl. a cursor
+  legitimately at the canvas origin not being mistaken for "no cursor");
+  new `e2e/spawn-at-cursor.spec.ts` (N under the pointer, C centered on it,
+  pointer off-canvas → viewport center, all asserted in screen space with the
+  10-unit snap grid as the tolerance); new `SpawnAtCursor.stories.ts`
+  (`AnnotationUnderPointer`, `AnnotationFallsBackToCenter`, tagged `no-vrt` —
+  a screenshot cannot show where the pointer was). Rendering the Modeling page
+  in a story also lifted the frontend function-coverage gate from 70.08% to
+  72.49% (the page's keyboard/pointer handlers had no story coverage at all).
+- **Storybook geometry**: the story runner's viewport is phone-sized, where the
+  page's two `w-64` sidebars squeeze the canvas to zero width; the story pins
+  its own root size (a flex row of a definite size, like the app shell) and
+  waits for the page's bound `clientWidth` to reach the viewBox. Both
+  dimensions have to be pinned — otherwise mounting the note's inspector grows
+  the canvas *after* the note was placed and the fallback story's center moves
+  under it (this flaked until the height was pinned).
+- **Validation**: full `just test` (cargo + 70 web files / 646 tests + 31 e2e),
+  `just lint`, `just build`, `just format` green; VRT green (86 diagrams
+  stories unchanged, new stories opted out via `no-vrt`).
+
+---
+
 ## Task — Remove unnecessary top bar in /explore
 
 The second navbar above the Explore canvas (breadcrumb `Explore / <diagram>` +

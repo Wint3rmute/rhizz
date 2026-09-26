@@ -103,6 +103,7 @@ import {
   GRID_BASE_SPACING,
   GRID_GRADUATIONS,
 } from "./grid";
+import { nodeTopLeftAt, pickSpawnAnchor } from "./spawnPlacement";
 import { asTestScript, createActionLog } from "../../../../actionLog";
 import { copyToClipboard } from "../../../../clipboard";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
@@ -264,17 +265,47 @@ let snapEnabled = $state(true);
 // not just the persistent toggle.
 let snapActive = $derived(snapEnabled && !isModifierHeld());
 
-// Center of the current viewport in world (SVG) coordinates — where newly
-// added nodes land when they have no remembered or explicitly requested
-// position, so they appear where the user is looking instead of a fixed
-// point that may be off-screen. Mirrors the annotation placement below.
-function viewportCenterBox(): { x: number; y: number } {
+// Center of the current viewport in world (SVG) coordinates — the fallback
+// spawn point whenever there is no canvas pointer to spawn under, so an
+// entity appears where the user is looking instead of a fixed point that may
+// be off-screen.
+function viewportCenter(): { x: number; y: number } {
   return {
-    x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom -
-      DEFAULT_NODE_WIDTH / 2,
-    y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom -
-      DEFAULT_NODE_HEIGHT / 2,
+    x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom,
+    y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom,
   };
+}
+
+// Top-left corner of a default-sized node box centered on the viewport
+// center. Used as the fallback placement for a component that has no
+// remembered or explicitly requested position.
+function viewportCenterBox(): { x: number; y: number } {
+  return nodeTopLeftAt(
+    viewportCenter(),
+    DEFAULT_NODE_WIDTH,
+    DEFAULT_NODE_HEIGHT,
+  );
+}
+
+// Last pointer position while it is over the canvas, in client (screen)
+// coordinates — null as soon as it leaves (a shortcut pressed with the
+// pointer over a sidebar has no canvas position to place under). Tracked in
+// client rather than world coordinates on purpose: it is converted on demand
+// (see spawnAnchor below), so wheel-zooming the view under a motionless
+// pointer still spawns where the pointer *is* on screen.
+let cursorClient = $state<{ x: number; y: number } | null>(null);
+
+// Where an entity spawned without a position of its own lands: under the
+// pointer while it is over the canvas, else the viewport center. Shared by
+// every such spawn path (the `C`/`N` shortcuts, the toolbar buttons), so a
+// keyboard-driven workflow can aim once and keep spawning in place.
+function spawnAnchor(): { x: number; y: number } {
+  return pickSpawnAnchor(
+    cursorClient === null
+      ? null
+      : svgPoint(root_svg, cursorClient.x, cursorClient.y),
+    viewportCenter(),
+  );
 }
 
 // Rounds `value` to the nearest multiple of snapGridSize, or returns it
@@ -911,14 +942,15 @@ function selectAnnotation(index: number) {
   selectedAnnotations.add(index);
 }
 
-function addAnnotationHandler(): void {
+// Adds a note. `pos` is the world-coordinate anchor of its text (the mouse
+// paths pass the click/right-click point); without one it spawns under the
+// pointer, or on the viewport center when the pointer is off-canvas.
+function addAnnotationHandler(pos?: { x: number; y: number }): void {
   recordUndoPoint();
   noteDiagramEdited();
-  // Place at the canvas center (world coords) if we can, else 0,0.
-  const x = editor_state.view.x + canvas_width / 2 / editor_state.view.zoom;
-  const y = editor_state.view.y + canvas_height / 2 / editor_state.view.zoom;
+  const at = pos ?? spawnAnchor();
   const idx = annotations.length;
-  annotations.push({ text: "New note", x, y });
+  annotations.push({ text: "New note", x: at.x, y: at.y });
   selectAnnotation(idx);
   // The inspector mounts on selection; focus its text editor next tick so
   // typing flows straight in, like the old pop-up editor's autofocus.
@@ -1612,6 +1644,11 @@ let createModalPosition = $state<{ x: number; y: number } | undefined>(
 );
 let createModalDefaultParent = $state<string | undefined>(undefined);
 
+// Opens the create-component modal. `pos` is the world-coordinate top-left
+// of the node to create (the double-click and right-click paths pass their
+// click point, centered on it); without one the node is placed under the
+// pointer, or on the viewport center when the pointer is off-canvas — which
+// is what the `C` shortcut and the toolbar button want.
 function openCreateComponentModal(
   pos?: { x: number; y: number },
   parentKey?: string,
@@ -1627,7 +1664,8 @@ function openCreateComponentModal(
     targetParent = effectiveSystem || systems[0]?.label || "main";
   }
 
-  createModalPosition = pos;
+  createModalPosition = pos ??
+    nodeTopLeftAt(spawnAnchor(), DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT);
   createModalDefaultParent = targetParent;
   isCreateModalOpen = true;
 }
@@ -1638,10 +1676,7 @@ function onNodeDblClick(event: MouseEvent, index: number) {
   const parentKey = getComponentKey(index);
   const coords = svgPoint(root_svg, event.clientX, event.clientY);
   openCreateComponentModal(
-    {
-      x: coords.x - DEFAULT_NODE_WIDTH / 2,
-      y: coords.y - DEFAULT_NODE_HEIGHT / 2,
-    },
+    nodeTopLeftAt(coords, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
     parentKey,
   );
 }
@@ -1714,10 +1749,9 @@ function onCanvasDblClick(event: MouseEvent) {
   const target = event.target as HTMLElement | SVGElement;
   if (target === root_svg || target.tagName === "rect") {
     const coords = svgPoint(root_svg, event.clientX, event.clientY);
-    openCreateComponentModal({
-      x: coords.x - DEFAULT_NODE_WIDTH / 2,
-      y: coords.y - DEFAULT_NODE_HEIGHT / 2,
-    });
+    openCreateComponentModal(
+      nodeTopLeftAt(coords, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+    );
   }
 }
 
@@ -2005,8 +2039,10 @@ function openConnectionContextMenu(event: MouseEvent, label: string): void {
 function openCanvasContextMenu(event: MouseEvent): void {
   event.preventDefault();
   focusCanvas();
+  // Both "New …" rows spawn at the right-click point itself (explicitly,
+  // rather than through the tracked pointer, which the menu may already be
+  // covering) — the same placement as the `C`/`N` keys they advertise.
   const world = svgPoint(root_svg, event.clientX, event.clientY);
-  const worldPos = { x: world.x, y: world.y };
   contextMenu = {
     x: event.clientX,
     y: event.clientY,
@@ -2014,12 +2050,15 @@ function openCanvasContextMenu(event: MouseEvent): void {
       {
         label: "New component",
         shortcut: "C",
-        action: () => openCreateComponentModal(worldPos),
+        action: () =>
+          openCreateComponentModal(
+            nodeTopLeftAt(world, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+          ),
       },
       {
         label: "New annotation",
         shortcut: "N",
-        action: () => addAnnotationHandler(),
+        action: () => addAnnotationHandler(world),
       },
       { label: "Zoom to fill", shortcut: "F", action: () => zoomToFill() },
       {
@@ -2354,6 +2393,10 @@ function applyGroupScale(
 }
 
 function onSvgMouseMove(event: MouseEvent) {
+  // Remember where the pointer is, for the next keyboard-spawned entity
+  // (spawnAnchor). Updated on every move — including mid-drag, so an entity
+  // spawned right after a drag lands where it was dropped.
+  cursorClient = { x: event.clientX, y: event.clientY };
   // Captured to a local const so TypeScript can narrow `current.type` per
   // switch case below — narrowing directly on the live `interaction`
   // $state binding doesn't work reliably across these branches.
@@ -2518,6 +2561,14 @@ function onSvgMouseMove(event: MouseEvent) {
     case "idle":
       return;
   }
+}
+
+function onSvgMouseLeave() {
+  // The pointer left the canvas: drop the spawn anchor, so a shortcut
+  // pressed from a sidebar falls back to the viewport center instead of
+  // dropping an entity where the pointer used to be.
+  cursorClient = null;
+  onSvgMouseUp();
 }
 
 function onSvgMouseUp() {
@@ -3206,7 +3257,7 @@ $effect(() => {
         onblur={() => (canvasFocused = false)}
         onmousemove={onSvgMouseMove}
         onmouseup={onSvgMouseUp}
-        onmouseleave={onSvgMouseUp}
+        onmouseleave={onSvgMouseLeave}
         onwheel={onWheel}
         oncontextmenu={openCanvasContextMenu}
         style="cursor: {autoLayoutRunning

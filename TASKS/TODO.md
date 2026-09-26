@@ -16,12 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - when adding a new component/annotation with the "N" shortcut - place it under the mouse cursor
-
-UX change for power-users - when adding a new entity to the modeling view via
-a keyboad shortcut, they shall be added right under the mouse cursor. This will
-allow for effective, keyboard-driven workflows.
-
 ## Task <N> - allow moving the selected entities with arrow keys
 
 Arrow keys currently don't do much. Add a functionality that allows the user
