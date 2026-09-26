@@ -2204,11 +2204,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   }
 
   const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  const startPositions: Record<number, { x: number; y: number }> = {};
-  for (const i of selected) {
-    const box = checked[getComponentKey(i)];
-    if (box) startPositions[i] = { x: box.x, y: box.y };
-  }
+  const startPositions = snapshotNodePositions();
   const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
   interaction = {
     type: "dragging",
@@ -2264,12 +2260,29 @@ function onAnnotationMouseDown(event: MouseEvent, index: number): void {
     anchorIndex: -1, // no node anchor
     offsetX: svgCoords.x - anchor.x,
     offsetY: svgCoords.y - anchor.y,
-    startPositions: {},
+    // The selected components' positions, like a node drag snapshots. A
+    // component and a note can be selected together, and the selection
+    // drags as a group whichever kind is grabbed — the note is the delta
+    // base, but the components ride along (see the annotation branch of
+    // onSvgMouseMove).
+    startPositions: snapshotNodePositions(),
     // The dragged annotation's index (delta base) + the snapshot of the
     // whole annotation selection at drag start.
     annotationAnchor: index,
     annotationStartPositions: snapshotAnnotationPositions(),
   };
+}
+
+// Snapshot of the selected components' positions for a group drag, keyed by
+// index. Shared by both mousedown handlers: a drag moves the whole selection,
+// so whichever kind starts it needs the other's positions too.
+function snapshotNodePositions(): Record<number, { x: number; y: number }> {
+  const map: Record<number, { x: number; y: number }> = {};
+  for (const i of selected) {
+    const box = checked[getComponentKey(i)];
+    if (box) map[i] = { x: box.x, y: box.y };
+  }
+  return map;
 }
 
 // Move every selected annotation by the same (deltaX, deltaY) from its own
@@ -2543,8 +2556,8 @@ function onSvgMouseMove(event: MouseEvent) {
       } else if (
         current.anchorIndex === -1 && current.annotationStartPositions
       ) {
-        // Annotation-only drag (no node anchor): compute the delta from the
-        // grabbed anchor annotation's DRAG-START snapshot (like nodes do),
+        // Annotation-anchored drag (a note was grabbed): compute the delta
+        // from the grabbed note's DRAG-START snapshot (like nodes do),
         // never from its live position, so each move is a clean delta off a
         // fixed base — no feedback, no runaway/flicker, cursor-accurate.
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
@@ -2555,6 +2568,10 @@ function onSvgMouseMove(event: MouseEvent) {
           const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
           const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
           applyAnnotationDelta(deltaX, deltaY);
+          // A mixed selection drags as a group whichever kind was grabbed:
+          // the same delta moves the selected components too, each clamped
+          // into its own active parent just as in a node-anchored drag.
+          applyGroupDelta(current.startPositions, deltaX, deltaY);
         }
       }
       return;

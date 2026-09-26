@@ -7,10 +7,15 @@ import {
   projectStore,
 } from "../../../../ProjectState.svelte";
 import {
+  buttonByLabel,
+  canvasOf,
   canvasTexts,
+  centerOf,
+  nodeOrigin,
   pinCanvasSize,
   placeCheckbox,
   placedNode,
+  rectOf,
 } from "./diagramStoryCanvas";
 import DiagramPage from "./+page.svelte";
 
@@ -159,5 +164,44 @@ export const ArrowsMoveBoth: Story = {
         "NaN",
     );
     await expect(after - grid(before)).toBe(10);
+  },
+};
+
+export const DraggingTheNoteMovesBoth: Story = {
+  play: async ({ canvasElement }) => {
+    const { note, user } = await nodeWithSelectedNote(canvasElement);
+    // Snapping off: the note path snaps its own position, the node path does
+    // not, so with snapping on the two would land a few units apart and the
+    // "same delta" assertion below would be measuring the grid, not the drag.
+    await user.click(buttonByLabel(canvasElement, "Snap to Grid"));
+    const canvas = canvasOf(canvasElement);
+    const node = placedNode(canvasElement, "alpha");
+    const nodeBefore = nodeOrigin(node);
+    const noteBefore = rectOf(note);
+    const DELTA = { x: 80, y: 40 };
+
+    // Grab the *note*: the selection drags as a group whichever kind is
+    // grabbed, and the note is the delta base here. Both the grab and the
+    // move need explicit coordinates — user-event's default for a target
+    // with no position yet is (0, 0), and the drag's offset is measured
+    // against the grab point.
+    const grab = centerOf(rectOf(noteHitBox(note)));
+    await user.pointer([
+      { target: noteHitBox(note), coords: grab },
+      "[MouseLeft>]",
+      {
+        target: canvas,
+        coords: { clientX: grab.x + DELTA.x, clientY: grab.y + DELTA.y },
+      },
+      "[/MouseLeft]",
+    ]);
+
+    // The canvas keys its notes by position, so a moved note is a brand new
+    // <text> — re-query instead of holding on to the old element.
+    const noteAfter = rectOf(
+      within(canvasElement).getByText("New note"),
+    );
+    await expect(nodeOrigin(node).x - nodeBefore.x).toBe(DELTA.x);
+    await expect(noteAfter.x - noteBefore.x).toBe(DELTA.x);
   },
 };

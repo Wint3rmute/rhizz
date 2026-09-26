@@ -130,3 +130,51 @@ test("right-clicking a selected component keeps the note in the selection", asyn
   expect((await boxOf(note)).x - noteBefore.x).toBeCloseTo(10, 0);
   await expect(canvas.getByText("e2e-mixed").first()).toBeVisible();
 });
+
+test("dragging the note moves the whole mixed selection", async ({ page }) => {
+  const { node, note } = await selectMixed(page);
+  const nodeBefore = await boxOf(node);
+  const noteBefore = await boxOf(note);
+
+  // Grab the *note* — the selection is dragged as a group whichever kind is
+  // grabbed, and the note is the delta base here.
+  const grab = centerOf(noteBefore);
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  await page.mouse.move(grab.x + 80, grab.y + 40, { steps: 5 });
+  await page.mouse.up();
+
+  const nodeMoved = await boxOf(node);
+  const noteMoved = await boxOf(note);
+  expect(noteMoved.x - noteBefore.x).toBeCloseTo(80, 0);
+  expect(noteMoved.y - noteBefore.y).toBeCloseTo(40, 0);
+  // The component comes along for the ride…
+  expect(nodeMoved.x - nodeBefore.x).toBeCloseTo(80, 0);
+  expect(nodeMoved.y - nodeBefore.y).toBeCloseTo(40, 0);
+  // …rigidly.
+  expect(
+    (nodeMoved.x - nodeBefore.x) - (noteMoved.x - noteBefore.x),
+  ).toBeCloseTo(0, 0);
+  expect(
+    (nodeMoved.y - nodeBefore.y) - (noteMoved.y - noteBefore.y),
+  ).toBeCloseTo(0, 0);
+});
+
+test("dragging the component moves the whole mixed selection", async ({ page }) => {
+  const { node, note } = await selectMixed(page);
+  const nodeBefore = await boxOf(node);
+  const noteBefore = await boxOf(note);
+
+  const grab = centerOf(nodeBefore);
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  await page.mouse.move(grab.x - 60, grab.y + 30, { steps: 5 });
+  await page.mouse.up();
+
+  const nodeMoved = await boxOf(node);
+  const noteMoved = await boxOf(note);
+  expect(nodeMoved.x - nodeBefore.x).toBeCloseTo(-60, 0);
+  expect(nodeMoved.y - nodeBefore.y).toBeCloseTo(30, 0);
+  expect(noteMoved.x - noteBefore.x).toBeCloseTo(-60, 0);
+  expect(noteMoved.y - noteBefore.y).toBeCloseTo(30, 0);
+});
