@@ -16,13 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - allow moving the selected entities with arrow keys
-
-Arrow keys currently don't do much. Add a functionality that allows the user
-to move the selected components using the keys, move in 10-unit intervals
-by default. Add end-to-end tests checking whether this works both for
-single-component selection and for multi-component selections.
-
 ## Task <N> - remove unique project IDs from the filesystem
 
 Simplify the filesystem - the path to the project shall be just the slug of its name.
