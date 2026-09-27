@@ -1,5 +1,5 @@
 <script lang="ts">
-// The floating toolbar at the bottom-centre of the diagrams canvas.
+// The floating toolbar at the top-centre of the diagrams canvas.
 // Deliberately has zero dependency on ViewEditorState/KeyboardState/
 // Persisted.svelte — every bit of state it needs is passed in as a prop
 // (bindable where the toolbar itself can change it) and every action is
@@ -46,7 +46,7 @@ let {
 <div
   data-testid="diagram-toolbar"
   data-tour={TOUR_TARGETS.diagramToolbar}
-  class="absolute bottom-2 left-1/2 w-max -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
+  class="absolute top-2 left-1/2 w-max -translate-x-1/2 z-10 flex gap-2 bg-base-100 border border-base-300 rounded-box shadow-lg p-2"
 >
   <div class="join">
     <button
