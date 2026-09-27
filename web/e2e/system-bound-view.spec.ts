@@ -1,53 +1,38 @@
 import { expect, test } from "@playwright/test";
+import { createFromExample } from "./helpers";
 
 // System-bound views: each diagram is bound to one system at creation and
 // the binding is immutable — the header shows it read-only and the
 // Components explorer only shows that system's tree.
-async function openDiagram(page, name = "E2E system view") {
-  await page.goto("/");
-  const create = page.getByRole("button", { name: "New project" }).first();
-  await expect(create).toBeVisible();
-  page.once("dialog", (dialog) => void dialog.accept(name));
-  await create.click();
-  await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
-  const tourDialog = page.getByRole("alertdialog");
-  await expect(tourDialog).toBeVisible();
-  await tourDialog.getByRole("button", { name: "skip tour" }).click();
-  await expect(tourDialog).toBeHidden();
-  const id = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`/projects/${id}/modeling`);
-  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
-  await expect(page.getByTestId("diagram-canvas")).toBeVisible();
-  if (!id) throw new Error("project id missing from URL");
-  return id;
-}
+test("view stays bound to its system when the model holds several", async ({ page }) => {
+  // The drone example ships two systems ("quadcopter" and "ground-control")
+  // with views/main.hcl bound to "quadcopter", so the multi-system case
+  // comes from a fixture rather than from a UI action.
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E system view",
+  );
+  await page.goto(`/projects/${id}/modeling?diagram=views%2Fmain.hcl`);
 
-test("view stays bound to its system after a second system is added", async ({ page }) => {
-  await openDiagram(page);
-
-  // Fresh project seeds views/main.hcl bound to the auto-created main system.
   const header = page.getByTestId("diagram-system-label");
-  await expect(header).toContainText("system: main");
+  await expect(header).toContainText("system: quadcopter");
 
-  // Add a component (default parent is the bound system root).
-  await page.getByRole("button", { name: "+ Component" }).click();
-  const modal = page.getByTestId("create-component-modal");
-  await expect(modal).toBeVisible();
-  await modal.locator("#new-comp-name").fill("in-main");
-  await modal.getByRole("button", { name: "Create Definition" }).click();
-  await expect(modal).toBeHidden();
-  await expect(page.getByTestId("diagram-canvas").getByText("in-main").first())
-    .toBeVisible();
-
-  // Add a second system via the toolbar. The view must stay bound to main.
-  const seen: string[] = [];
-  page.on("dialog", (dialog) => {
-    seen.push(dialog.message());
-    void dialog.accept("second");
+  // The explorer shows the bound system's own instances, and the other
+  // system's root never shows up (the bound system's root row is hidden).
+  const sidebar = page.locator("aside").filter({
+    has: page.getByRole("heading", { name: "Components" }),
   });
-  await page.getByRole("button", { name: "+ System" }).click();
-  await expect(header).toContainText("system: main");
-  // Explorer still shows main's tree, not an empty second-system tree.
-  await expect(page.getByText("in-main").first()).toBeVisible();
-  expect(seen.join("\n")).toContain("New system name?");
+  await expect(sidebar.getByText("flight-controller").first()).toBeVisible();
+  await expect(sidebar.getByText("ground-control")).toHaveCount(0);
+
+  // The toolbar used to offer "+ System". A view is bound to exactly one
+  // system, so adding another from here could never change what this
+  // diagram shows. The model op behind the button is still reachable from
+  // the code editor.
+  await expect(
+    page.getByTestId("diagram-toolbar").getByRole("button", {
+      name: "+ System",
+    }),
+  ).toHaveCount(0);
 });
