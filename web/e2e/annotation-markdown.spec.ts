@@ -60,6 +60,14 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   await page.getByRole("button", { name: "+ Note" }).click();
   const editor2 = page.getByTestId("annotation-text-input");
   await expect(editor2).toBeVisible();
+  // Waiting on focus (not just visibility) is what keeps this deterministic:
+  // the inspector is already mounted from the note above, so `toBeVisible`
+  // passes without waiting for anything. `+ Note` defers its autofocus by a
+  // tick (`addAnnotationHandler` -> `tick().then(focusText)`), and under load
+  // that tick can resolve *after* the Escape below — re-focusing the field and
+  // failing the `not.toBeFocused` assertion. Asserting the documented autofocus
+  // synchronises on it, exactly as the first note does above.
+  await expect(editor2).toBeFocused();
   await editor2.fill("- fast\n- slow");
   // Escape commits the edit and leaves the field.
   await page.keyboard.press("Escape");
