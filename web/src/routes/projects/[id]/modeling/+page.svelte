@@ -2956,9 +2956,16 @@ let editorScene = $derived.by(() => {
 // Drags and auto-layout cut, otherwise the picture would lag the cursor.
 $effect(() => {
   const scene = editorScene;
+  if (!diagramLayoutLoaded) return;
+  // Layout keys are in, but the model has not mapped them to nodes yet.
+  // Fitting now would aim the camera at an empty (or annotation-only) scene.
+  if (
+    presentMode === "view" &&
+    Object.keys(checked).length > 0 &&
+    scene.nodes.length === 0
+  ) return;
   const mode = presentMode;
   presentMode = "cut";
-  if (!diagramLayoutLoaded) return;
   const bounds = sceneBounds(scene);
   const fit = bounds && canvas_width > 0 && canvas_height > 0
     ? fitCamera(bounds, { width: canvas_width, height: canvas_height })
@@ -2972,7 +2979,17 @@ $effect(() => {
     stage.show(
       scene,
       fit,
-      { transition: mode !== "cut", moveCamera: mode === "view" },
+      {
+        transition: mode !== "cut",
+        moveCamera: mode === "view",
+        // zoomToFill and pan write editor_state directly. The stage camera
+        // stays at the origin until the first tween, which is the jump.
+        fromCamera: {
+          x: editor_state.view.x,
+          y: editor_state.view.y,
+          zoom: editor_state.view.zoom,
+        },
+      },
       (next) => {
         if (
           editor_state.view.x === next.x &&

@@ -275,6 +275,11 @@ $effect(() => {
   if (!ready || !diagramPath) return;
   const scene = desiredScene;
   const path = diagramPath;
+  // The layout can arrive before its keys resolve onto the model. Fitting
+  // then aims the camera at nothing; wait until the nodes are actually there.
+  if (Object.keys(layout.checked).length > 0 && scene.nodes.length === 0) {
+    return;
+  }
   const bounds = sceneBounds(scene);
   const fit = bounds
     ? fitCamera(bounds, { width: viewportWidth, height: viewportHeight })
