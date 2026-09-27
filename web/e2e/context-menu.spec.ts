@@ -72,7 +72,9 @@ test("component right-click shows menu; Hide removes from view, keeps model", as
 test("empty canvas right-click shows canvas menu with shortcuts", async ({ page }) => {
   await openDiagram(page);
   const canvas = page.getByTestId("diagram-canvas");
-  await canvas.click({ button: "right", position: { x: 30, y: 30 } });
+  // Low on the canvas, clear of the top-anchored floating toolbar — a
+  // right-click up there would land on the bar and open no menu.
+  await canvas.click({ button: "right", position: { x: 30, y: 300 } });
 
   const menu = page.getByTestId("context-menu");
   await expect(menu).toBeVisible();

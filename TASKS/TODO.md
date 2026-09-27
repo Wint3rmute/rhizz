@@ -16,13 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Move the /modeling toolbar to the top
-
-Currently, the toolbar for the modeling view (containing buttons like + System
-+ Component, + Note) is located at the bottom of the page. Move it to the top.
-Maintain the same margin/pagination as currently. Don't add any new code, the
-target is net zero changes.
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,
