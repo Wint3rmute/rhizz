@@ -40,6 +40,30 @@ canvas stories sized their `<svg>` by *intrinsic aspect ratio*, which made
   consecutive runs of the previously-flaky `diagram` family (90/90 each). Before
   the fix that family failed roughly every third run, on a different story each
   time.
+- **Second, independent flake (`pages-explore--hover-doc-header`, CI only)**:
+  a 4-5% diff that was the *doc popup* moving, not a font difference. Measured
+  it out rather than guessing: a simulated cross-machine font-metric drift
+  (letter-spacing 0.01-0.2px) only moves 0.07-0.52% of pixels, well under the
+  2% threshold, and the CI diff's bounding box was exactly the popup's
+  footprint (297x110 = 32.7k px vs the 36.6k/43.8k reported) — offset by
+  precisely (+56, +170) while the diagram stayed *pixel-identical*.
+  - Real bug behind it (`Explore.svelte`): the popup's anchor is computed once,
+    at hover time, from a live `getBoundingClientRect()`. Any scroll between
+    the hover and the paint leaves it at a stale offset — the container moves
+    under a stationary cursor. The cursor position is now kept in viewport
+    coordinates and the anchor re-derived from it, including on any scroll in
+    the subtree (a capture-phase document listener, since `scroll` does not
+    bubble). Scroll-invariant and self-healing.
+  - The story made it visible: it hovered with `coords: { x: 300, y: 170 }`,
+    which user-event does *not* turn into `clientX/clientY` — the event
+    arrived at (0, 0), so the popup was parked at `left: -244px` and only
+    visible because the container clips it, i.e. positioned by an accident of
+    layout that a scroll (or another machine's layout) moves. It now hovers
+    the node's measured client centre, so the popup lands next to the node at a
+    positive, in-container offset.
+  - Baseline re-accepted for that story alone (the popup moved, the diagram did
+    not — the diff was exactly the popup's old footprint). Two further full
+    VRT runs clean.
 - **Known gap, deliberately not addressed here**: `waitForStory` waits for the
   render phase and `document.fonts.ready`, but not for post-mount async work (a
   page story's VFS read + WASM compile), so a page story can in principle be
