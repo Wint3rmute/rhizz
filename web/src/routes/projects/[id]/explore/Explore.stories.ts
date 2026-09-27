@@ -300,7 +300,21 @@ export const HoverDocHeader: Story = {
     // pointer-events-none, so userEvent refuses to target it directly.
     const anchor = canvas.getByText("battery").closest("a");
     if (!anchor) throw new Error("battery node has no hover anchor");
-    await userEvent.pointer({ target: anchor, coords: { x: 300, y: 170 } });
+    // Explicit *client* coordinates at the node's centre, measured here
+    // rather than passed as an offset: the popup anchors itself to the
+    // cursor, and a relative `coords: {x, y}` does not become clientX/Y —
+    // it left the event at (0, 0), parking the popup at a negative offset
+    // clipped to the container's corner, i.e. positioned by an accident of
+    // layout that a scroll (or another machine's layout) moves.
+    const node = anchor.getBoundingClientRect();
+    if (node.width === 0) throw new Error("battery node has no box");
+    await userEvent.pointer({
+      target: anchor,
+      coords: {
+        clientX: node.left + node.width / 2,
+        clientY: node.top + node.height / 2,
+      },
+    });
 
     const tooltip = await canvas.findByTestId("explore-doc-tooltip");
     const tooltipQueries = within(tooltip);

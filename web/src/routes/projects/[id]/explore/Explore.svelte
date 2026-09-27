@@ -233,18 +233,47 @@ let hoverPos = $state<{ x: number; y: number } | null>(null);
 // ones so the popup sits right next to the cursor.
 let canvasContainer: HTMLDivElement | undefined = $state();
 
-function handleNodeHover(index: number | null, event?: MouseEvent) {
-  hoveredIndex = index;
-  if (index === null || !event || !canvasContainer) {
+// The hovered node's *cursor* position, kept in viewport coordinates. The
+// container-relative anchor is derived from it (see handleNodeHover) and
+// re-derived on scroll, because a popup positioned once from a rect measured
+// mid-scroll detaches from the cursor and stays detached — the container can
+// scroll under a stationary cursor (small screens, keyboard scrolling), and
+// a stale offset is also what makes a screenshot of an open popup
+// unreproducible.
+let hoverClient = $state<{ x: number; y: number } | null>(null);
+
+function positionPopup(): void {
+  if (hoveredIndex === null || hoverClient === null || !canvasContainer) {
     hoverPos = null;
     return;
   }
   const rect = canvasContainer.getBoundingClientRect();
   hoverPos = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
+    x: hoverClient.x - rect.left,
+    y: hoverClient.y - rect.top,
   };
 }
+
+function handleNodeHover(index: number | null, event?: MouseEvent) {
+  hoveredIndex = index;
+  if (index === null || !event) {
+    hoverClient = null;
+    positionPopup();
+    return;
+  }
+  hoverClient = { x: event.clientX, y: event.clientY };
+  positionPopup();
+}
+
+// Any scroll in the subtree (the diagram canvas, a sidebar) moves the
+// container under a stationary cursor, so re-anchor the popup to it. Capture
+// phase, because `scroll` does not bubble: a document-level capture listener
+// sees a scroll of anything below it, a window-level one would not.
+$effect(() => {
+  const onScroll = () => positionPopup();
+  document.addEventListener("scroll", onScroll, true);
+  return () => document.removeEventListener("scroll", onScroll, true);
+});
 
 // The doc content for the hovered component, if one exists. Matched by the
 // component's unique label rather than its full qualified path. When the
