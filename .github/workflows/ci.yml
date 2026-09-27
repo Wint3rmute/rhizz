@@ -208,23 +208,17 @@ jobs:
           path: web/vrt-report/
           if-no-files-found: ignore
 
-  # Build the frontend for Chromatic + GitHub Pages. Runs on every push to
-  # main (to keep a Chromatic baseline), or for a "chromatic" push/PR title,
-  # or on manual dispatch.
+  # Build the frontend + Storybook for GitHub Pages. Runs on every push to
+  # main, or on manual dispatch.
   publish:
     needs: wasm
     if: ${{ github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, 'chromatic')) ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.title, 'chromatic')) }}
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     env:
       BASE_PATH: "/${{ github.event.repository.name }}"
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
 
       - uses: DeterminateSystems/nix-installer-action@main
 
@@ -243,11 +237,6 @@ jobs:
 
       - run: nix develop --command deno run build-storybook
         working-directory: ./web
-
-      - run: nix develop --command deno run chromatic
-        working-directory: ./web
-        env:
-          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
       - run: |
           rm -rf pages
@@ -291,9 +280,9 @@ jobs:
 
   deploy-pages:
     needs: [publish, docs, book]
-    # Publish is skipped unless the "chromatic" trigger fires; deploy still
-    # runs (docs & book are always deployed) but never after a failed publish
-    # or a failed book/docs build.
+    # Publish is skipped on pull requests; deploy still runs (docs & book are
+    # always deployed) but never after a failed publish or a failed book/docs
+    # build.
     if: ${{ github.event_name != 'pull_request' && !cancelled() &&
       needs.publish.result != 'failure' && needs.docs.result == 'success' &&
       needs.book.result == 'success' }}

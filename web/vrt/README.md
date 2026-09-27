@@ -1,8 +1,8 @@
 # Visual regression tests (VRT)
 
-A local Chromatic replacement: a full-page screenshot of every Storybook story
-in dark and light, diffed against baselines in `__screenshots__/` (committed),
-with a static review gallery.
+A full-page screenshot of every Storybook story in dark and light, diffed
+against baselines in `__screenshots__/` (committed), with a static review
+gallery.
 
 ```bash
 just vrt              # rebuild wasm + Storybook, screenshot, diff

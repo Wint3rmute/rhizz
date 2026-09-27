@@ -1,17 +1,6 @@
-// GitHub Actions sets this to "true" for every workflow run (see
-// https://docs.github.com/en/actions/reference/variables-reference).
-// Only that specific CI job nests this build under /storybook/ on the
-// same GitHub Pages deployment as the main app (see .github/workflows/ci.yml) —
-// everywhere else (local builds, Chromatic, ...) the static output gets
-// served from an arbitrary/unknown root, so a relative base is what
-// actually works there: it resolves against wherever iframe.html/
-// index.html themselves end up, instead of assuming a fixed path.
-// const isGitHubActionsCI = process.env.GITHUB_ACTIONS === "true";
-// const appBase = process.env.BASE_PATH?.trim() || "";
-// const storybookBase = isGitHubActionsCI
-//   ? (appBase ? `${appBase.replace(/\/$/, "")}/storybook/` : "/storybook/")
-//   : "./";
-
+// Storybook is served from the root of whatever host embeds it, and the
+// static build resolves its own assets against wherever `iframe.html`/
+// `index.html` themselves land.
 const storybookBase = "/";
 
 export default {
