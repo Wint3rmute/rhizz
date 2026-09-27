@@ -1,8 +1,7 @@
 <script lang="ts">
 // One annotation's Markdown text as SVG <text>/<tspan> runs (pure SVG, no
-// foreignObject). Shared by the interactive canvas (+page.svelte, both the
-// idle and the in-editing states) and DiagramElements (static/embed/book),
-// so all four render paths can never drift apart.
+// foreignObject). DiagramCanvas is the only caller, so the modeling page,
+// static, embed, and book views cannot drift apart.
 import { ANNOTATION_FONT_SIZE, ANNOTATION_LINE_HEIGHT } from "./geometry";
 import {
   ANNOTATION_MD_INDENT_PX,

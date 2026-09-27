@@ -202,8 +202,8 @@ export const IconsAndTextAlignments: Story = {
     boxes: iconBoxes,
   },
   play: async ({ canvasElement }) => {
-    // DiagramStaticView -> DiagramElements -> DiagramNodeBody, whose root is
-    // the <g> holding the body rect, the icon glyph and the label.
+    // DiagramStaticView -> DiagramElements -> DiagramCanvas -> DiagramNodeBody,
+    // whose root is the <g> holding the body rect, the icon glyph and the label.
     const bodies = canvasElement.querySelectorAll("a > g > g");
     await expect(bodies.length).toBe(6);
 
