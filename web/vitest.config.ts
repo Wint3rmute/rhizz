@@ -58,6 +58,11 @@ export default defineConfig({
           provider: playwright(),
           instances: [{
             browser: "chromium",
+            // Play functions assert settled geometry. Transitions honor this
+            // and cut instead of fading, same as the e2e browser.
+            context: {
+              reducedMotion: "reduce",
+            },
           }],
         },
       },

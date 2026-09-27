@@ -3,7 +3,7 @@
 // Loads the project, compiles it, reads one layout, and draws the doc card.
 // Callers own chrome and, when a node click should navigate, onOpenDiagram.
 import type { ComponentJS, ConnectionJS } from "rhizz";
-import type { Snippet } from "svelte";
+import { type Snippet, untrack } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -31,7 +31,10 @@ import {
   VIEW_LAYOUT_DIR,
 } from "./persistence";
 import type { DiagramStaticBox } from "./types";
-import DiagramStaticView from "./DiagramStaticView.svelte";
+import { fitCamera, sceneBounds } from "./blend";
+import { buildReadOnlyScene } from "./scene";
+import { createDiagramTransition } from "./transition.svelte";
+import DiagramCanvas from "./DiagramCanvas.svelte";
 
 export interface DiagramView {
   components: ComponentJS[];
@@ -68,7 +71,12 @@ let {
 } = $props();
 
 let sources = $state<Source[]>([]);
+let sourcesLoaded = $state(false);
 let docs = $state<ProjectDoc[]>([]);
+let viewportWidth = $state(0);
+let viewportHeight = $state(0);
+const stage = createDiagramTransition();
+let presentedPath: string | null = null;
 let layout = $state<DiagramLayout>(emptyDiagramLayout());
 let layoutLoaded = $state(false);
 let layoutMissing = $state(false);
@@ -78,18 +86,24 @@ $effect(() => {
   const id = projectId;
   if (!id) {
     sources = [];
+    sourcesLoaded = true;
     docs = [];
     diagramEntries = [];
     return;
   }
+  sourcesLoaded = false;
   let cancelled = false;
   const fs = openProjectFs(projectStore, id);
   readProjectSources(fs)
     .then((loaded) => {
-      if (!cancelled) sources = loaded;
+      if (cancelled) return;
+      sources = loaded;
+      sourcesLoaded = true;
     })
     .catch(() => {
-      if (!cancelled) sources = [];
+      if (cancelled) return;
+      sources = [];
+      sourcesLoaded = true;
     });
   readProjectDocs(fs)
     .then((loaded) => {
@@ -239,10 +253,55 @@ let vacant = $derived(
     Object.keys(boxes).length === 0 &&
     annotations.length === 0,
 );
+
+let desiredScene = $derived(
+  buildReadOnlyScene({
+    components,
+    connections,
+    boxes,
+    annotations,
+    linked,
+    ids: componentKeys,
+    dimUnlinked: onOpenDiagram !== undefined,
+  }),
+);
+
+let ready = $derived(
+  layoutLoaded && sourcesLoaded && !layoutMissing && diagramPath !== null &&
+    viewportWidth > 0 && viewportHeight > 0,
+);
+
+$effect(() => {
+  if (!ready || !diagramPath) return;
+  const scene = desiredScene;
+  const path = diagramPath;
+  const bounds = sceneBounds(scene);
+  const fit = bounds
+    ? fitCamera(bounds, { width: viewportWidth, height: viewportHeight })
+    : null;
+  // show() writes the stage. Don't let that write resubscribe this effect.
+  // A scene update for the path already on screen must not cancel a tween
+  // that started because the path changed.
+  untrack(() => {
+    if (stage.settling && presentedPath === path) return;
+    const switching = presentedPath !== null && presentedPath !== path;
+    stage.show(scene, fit, {
+      transition: switching,
+      moveCamera: presentedPath === null || switching,
+    });
+    presentedPath = path;
+  });
+});
+
+$effect(() => () => stage.destroy());
 </script>
 
-<div bind:this={container}
-  class="relative flex h-full min-h-0 w-full flex-1 flex-col">
+<div
+  bind:this={container}
+  bind:clientWidth={viewportWidth}
+  bind:clientHeight={viewportHeight}
+  class="relative flex h-full min-h-0 w-full flex-1 flex-col"
+>
   {#if !layoutLoaded && pending}
     {@render pending()}
   {:else if layoutMissing && whenMissing}
@@ -260,15 +319,20 @@ let vacant = $derived(
       onnodehover,
     })}
   {:else}
-    <DiagramStaticView
-      {components}
-      {connections}
-      {boxes}
-      {annotations}
-      {linked}
-      onnodeclick={onOpenDiagram ? onnodeclick : undefined}
-      {onnodehover}
-    />
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="{stage.camera.x} {stage.camera.y} {Math.max(viewportWidth, 1) /
+        stage.camera.zoom} {Math.max(viewportHeight, 1) / stage.camera.zoom}"
+    >
+      <DiagramCanvas
+        scene={stage.shown ? stage.scene : desiredScene}
+        linkNodes={onOpenDiagram !== undefined}
+        frozen={stage.settling}
+        onNodeClick={onOpenDiagram ? onnodeclick : undefined}
+        onNodeHover={onnodehover}
+      />
+    </svg>
   {/if}
   {#if hoveredDoc && hoverPos}
     <div

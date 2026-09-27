@@ -8,7 +8,7 @@ import {
 } from "../../../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
-import { tick } from "svelte";
+import { tick, untrack } from "svelte";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
@@ -82,7 +82,9 @@ import {
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
 import DiagramCanvas from "./DiagramCanvas.svelte";
+import { fitCamera, sceneBounds } from "./blend";
 import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
+import { createDiagramTransition } from "./transition.svelte";
 import {
   type BorderStyle,
   COLOR_OPTIONS,
@@ -104,6 +106,12 @@ import { subscribeToMutations } from "../../../../mutationObserver";
 
 const editor_state = create_editor_state("DIAGRAM_VIEW");
 let root_svg: SVGElement;
+const stage = createDiagramTransition();
+// Set immediately before a layout load or undo applies, consumed by the
+// effect that presents editorScene. Not reactive: the scene change is what
+// re-runs that effect.
+let presentMode: "cut" | "nodes" | "view" = "cut";
+let seenDiagram = false;
 
 // Records every durable model mutation the user makes on this canvas (see
 // actionLog.ts). Mutations are captured through the opt-in module-level
@@ -585,7 +593,10 @@ $effect(() => {
     // still mark the diagram as loaded so the save effect is armed and can
     // persist the user's edits.
     const editedDuringLoad = diagramEditStamp !== loadStartStamp;
+    const mode = seenDiagram ? "view" : "cut";
+    seenDiagram = true;
     if (!editedDuringLoad) {
+      presentMode = mode;
       checked = layout.checked;
       // `DiagramLayout` no longer persists the editor's remembered layout;
       // seed the page-local memory from the placed nodes.
@@ -595,12 +606,9 @@ $effect(() => {
       selectedSystem = layout.system ?? "";
     }
     diagramLayoutLoaded = true;
-    // Frames the newly-opened diagram's content immediately, rather than
-    // leaving the view wherever the previously-open diagram (or the
-    // default pan/zoom) happened to leave it — renderOrder/nodeBox()
-    // already reflect the `checked` assignment above by the time this
-    // runs, since they're plain $derived reads, not effects.
-    zoomToFill();
+    // First open cuts to a fit. Later switches let the transition glide
+    // the camera from wherever the user left it.
+    if (mode === "cut") zoomToFill();
   });
 });
 
@@ -1051,6 +1059,7 @@ function snapshotDiagram(): DiagramSnapshot {
 }
 
 function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
+  presentMode = "nodes";
   checked = { ...snapshot.checked };
   savedLayout = { ...snapshot.savedLayout };
   savedConnections = { ...(snapshot.connections || {}) };
@@ -1084,7 +1093,9 @@ async function undoUnifiedEntry(): Promise<boolean> {
         unifiedRedoSeqs.shift();
       }
     }
-    sources = await readProjectSources(fs);
+    const loaded = await readProjectSources(fs);
+    presentMode = "nodes";
+    sources = loaded;
     flashActivity("Undo");
     return true;
   }
@@ -1124,7 +1135,9 @@ async function redoUnifiedEntry(): Promise<boolean> {
         unifiedUndoSeqs.shift();
       }
     }
-    sources = await readProjectSources(fs);
+    const loaded = await readProjectSources(fs);
+    presentMode = "nodes";
+    sources = loaded;
     flashActivity("Redo");
     return true;
   }
@@ -2907,6 +2920,8 @@ let editorScene = $derived.by(() => {
         from: conn.from,
         to: conn.to,
         label: conn.label,
+        fromKey: getComponentKey(conn.from),
+        toKey: getComponentKey(conn.to),
       };
       const saved = savedConnections[conn.label];
       if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
@@ -2936,6 +2951,43 @@ let editorScene = $derived.by(() => {
       : null,
   });
 });
+
+// View switches tween nodes and the camera. Undo/redo tween nodes only.
+// Drags and auto-layout cut, otherwise the picture would lag the cursor.
+$effect(() => {
+  const scene = editorScene;
+  const mode = presentMode;
+  presentMode = "cut";
+  if (!diagramLayoutLoaded) return;
+  const bounds = sceneBounds(scene);
+  const fit = bounds && canvas_width > 0 && canvas_height > 0
+    ? fitCamera(bounds, { width: canvas_width, height: canvas_height })
+    : null;
+  // show() writes the stage. Untrack so that write is not a dependency of
+  // this effect — otherwise opening the page retriggers it until Svelte stops.
+  untrack(() => {
+    // A later derived update (compile, selection) must not cut an in-flight
+    // view or undo tween. The next explicit edit still cuts once it settles.
+    if (mode === "cut" && stage.settling) return;
+    stage.show(
+      scene,
+      fit,
+      { transition: mode !== "cut", moveCamera: mode === "view" },
+      (next) => {
+        if (
+          editor_state.view.x === next.x &&
+          editor_state.view.y === next.y &&
+          editor_state.view.zoom === next.zoom
+        ) return;
+        editor_state.view.x = next.x;
+        editor_state.view.y = next.y;
+        editor_state.view.zoom = next.zoom;
+      },
+    );
+  });
+});
+
+$effect(() => () => stage.destroy());
 
 // Fraction of the viewport the diagram's bounding box should fill (in
 // whichever axis is more constraining, so it fits fully in both) when
@@ -3455,9 +3507,10 @@ $effect(() => {
         />
 
         <DiagramCanvas
-          scene={editorScene}
+          scene={stage.settling ? stage.scene : editorScene}
           markerId="arrow"
           busy={autoLayoutRunning}
+          frozen={stage.settling}
           onNodePointerDown={onNodeMouseDown}
           onNodeDblClick={onNodeDblClick}
           onNodeContextMenu={openNodeContextMenu}

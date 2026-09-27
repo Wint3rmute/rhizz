@@ -11,6 +11,9 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:5199",
     trace: "on-first-retry",
+    // Diagram transitions honor this and cut. Without it, an undo assertion
+    // can read a node that is still fading out.
+    reducedMotion: "reduce",
   },
   webServer: {
     command: "dx vite dev --port 5199",
