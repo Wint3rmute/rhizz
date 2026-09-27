@@ -54,6 +54,8 @@ export interface SceneComponentInput {
   label: string;
   /** Qualified path of the parent component, if any. Drives depth + order. */
   parentKey?: string | undefined;
+  /** A leaf is atomic and cannot contain children, so it is not a valid drop target. */
+  leaf?: boolean | undefined;
   icon?: string | undefined;
   color?: string | undefined;
   border?: string | undefined;
@@ -95,6 +97,8 @@ export interface SceneNode {
   box: Box & { textAlign: TextAlign };
   /** Hops to the root. Parents always have a lower depth than their children. */
   depth: number;
+  /** A leaf cannot contain children, so it is never a reparent drop target. */
+  leaf: boolean;
   icon?: string | undefined;
   color?: string | undefined;
   border?: string | undefined;
@@ -213,6 +217,7 @@ export function buildDiagramScene(options: BuildSceneOptions): DiagramScene {
       parentKey: component.parentKey,
       box,
       depth: depthOf(component.key, parentOf),
+      leaf: component.leaf ?? false,
       icon: component.icon,
       color: component.color,
       border: component.border,
@@ -436,6 +441,8 @@ export function pickReparentTarget(
   let maxDepth = -1;
   for (const node of scene.nodes) {
     if (blocked.has(node.key)) continue;
+    // A leaf is atomic — it cannot become the parent of a dropped node.
+    if (node.leaf) continue;
     if (
       center.x < node.box.x ||
       center.x > node.box.x + node.box.width ||

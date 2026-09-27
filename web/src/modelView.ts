@@ -210,8 +210,8 @@ export function definitionOptions(
 
 /** Per-connection routing overrides, as persisted in `views/*.hcl`. */
 export interface SceneRouting {
-  startSide?: ConnectionSide;
-  endSide?: ConnectionSide;
+  startSide?: ConnectionSide | undefined;
+  endSide?: ConnectionSide | undefined;
 }
 
 /**
@@ -258,6 +258,7 @@ export function sceneFromModel(
         key,
         label: component.label,
         ...(parentIndex === undefined ? {} : { parentKey: keyAt(parentIndex) }),
+        leaf: component.leaf ?? false,
         // An empty icon string means "no icon" — consumers test for `undefined`.
         ...(view?.icon ? { icon: view.icon } : {}),
         ...(view

@@ -20,6 +20,8 @@ export interface StoryComponent {
   key?: string;
   /** Key of the parent component, for a nested diagram. */
   parent?: string;
+  /** A leaf is atomic, so it is never a reparent drop target. */
+  leaf?: boolean;
   icon?: string;
   color?: string;
   border?: string;
@@ -43,6 +45,7 @@ export function storyScene(
       key: component.key ?? component.label,
       label: component.label,
       ...(component.parent ? { parentKey: component.parent } : {}),
+      ...(component.leaf ? { leaf: true } : {}),
       ...(component.icon ? { icon: component.icon } : {}),
       ...(component.color ? { color: component.color } : {}),
       ...(component.border ? { border: component.border } : {}),

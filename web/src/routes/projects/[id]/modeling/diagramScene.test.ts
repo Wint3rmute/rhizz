@@ -340,6 +340,26 @@ describe("pickReparentTarget", () => {
     );
     expect(hit).toBeNull();
   });
+
+  it("never targets a leaf — an atomic component cannot contain a child", () => {
+    const s = buildDiagramScene({
+      components: [
+        { key: "box", label: "box" },
+        { key: "box/inner", label: "inner", parentKey: "box", leaf: true },
+      ],
+      connections: [],
+      boxes: {
+        box: { x: 0, y: 0, width: 100, height: 100 },
+        "box/inner": { x: 40, y: 40, width: 20, height: 20 },
+      },
+    });
+    // (50,50) is inside both box and its leaf child; the leaf is not eligible.
+    expect(
+      pickReparentTarget(s, { x: 45, y: 45, width: 10, height: 10 }, {
+        dragKey: "drone",
+      }),
+    ).toBe("box");
+  });
 });
 
 describe("descendantsOf", () => {
