@@ -596,7 +596,7 @@ export interface PortGeometry {
 export function computePortPositions(
   width: number,
   height: number,
-  ports: {
+  ports: readonly {
     label: string;
     role: "provider" | "consumer" | "peer";
     protocol?: string;
