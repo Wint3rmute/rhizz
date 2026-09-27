@@ -2,11 +2,8 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import DiagramStaticView from "./DiagramStaticView.svelte";
 import { nodeLabelLayout } from "./geometry";
-import type {
-  DiagramStaticBox,
-  DiagramStaticComponent,
-  DiagramStaticConnection,
-} from "./types";
+import { storyScene } from "./storyScene";
+import type { SceneBoxInput } from "./diagramScene";
 
 // Renders "fullscreen" so the auto-fit viewBox has real room to work
 // with, matching how the real canvas fills its own flex-1 column.
@@ -24,28 +21,25 @@ type Story = StoryObj<typeof meta>;
 
 // A small, flat pipeline: three top-level components, two connections.
 // No WASM/compile_system involved — this is exactly the plain-object
-// shape ComponentJS/ConnectionJS instances already satisfy, hand-written
-// here instead.
-const pipelineComponents: DiagramStaticComponent[] = [
+// shape the scene builder takes, hand-written here instead.
+const pipelineComponents = [
   { label: "Ingest API" },
   { label: "Message Queue" },
   { label: "Worker" },
 ];
-const pipelineConnections: DiagramStaticConnection[] = [
-  { from: 0, to: 1, label: "publish" },
-  { from: 1, to: 2, label: "consume" },
+const pipelineConnections = [
+  { from: "Ingest API", to: "Message Queue", label: "publish" },
+  { from: "Message Queue", to: "Worker", label: "consume" },
 ];
-const pipelineBoxes: Record<number, DiagramStaticBox> = {
-  0: { x: 0, y: 40, width: 140, height: 80 },
-  1: { x: 220, y: 40, width: 140, height: 80 },
-  2: { x: 440, y: 40, width: 140, height: 80 },
+const pipelineBoxes: Record<string, SceneBoxInput> = {
+  "Ingest API": { x: 0, y: 40, width: 140, height: 80 },
+  "Message Queue": { x: 220, y: 40, width: 140, height: 80 },
+  Worker: { x: 440, y: 40, width: 140, height: 80 },
 };
 
 export const Pipeline: Story = {
   args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
+    scene: storyScene(pipelineComponents, pipelineBoxes, pipelineConnections),
   },
 };
 
@@ -53,39 +47,35 @@ export const Pipeline: Story = {
 // the selection outline drawn on top of the node's own border.
 export const SingleSelected: Story = {
   args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
-    selected: new Set([1]),
+    scene: storyScene(pipelineComponents, pipelineBoxes, pipelineConnections),
+    selected: new Set(["Message Queue"]),
   },
 };
 
 // A nested composite: "Drone" contains "Flight Controller" and "Motor",
-// which are drawn on top of (rendered after) their parent thanks to
-// DiagramStaticView's depth-based render order — exercising
-// `parent_component_index` without any WASM-resolved model behind it.
-const nestedComponents: DiagramStaticComponent[] = [
+// which are drawn on top of (rendered after) their parent thanks to the
+// scene's depth-based render order — exercising nesting without any
+// WASM-resolved model behind it.
+const nestedComponents = [
   { label: "Drone" },
-  { label: "Flight Controller", parent_component_index: 0 },
-  { label: "Motor", parent_component_index: 0 },
+  { label: "Flight Controller", parent: "Drone" },
+  { label: "Motor", parent: "Drone" },
   { label: "Ground Station" },
 ];
-const nestedConnections: DiagramStaticConnection[] = [
-  { from: 1, to: 2, label: "PWM" },
-  { from: 3, to: 1, label: "telemetry" },
+const nestedConnections = [
+  { from: "Flight Controller", to: "Motor", label: "PWM" },
+  { from: "Ground Station", to: "Flight Controller", label: "telemetry" },
 ];
-const nestedBoxes: Record<number, DiagramStaticBox> = {
-  0: { x: 0, y: 0, width: 320, height: 220, textAlign: "top-left" },
-  1: { x: 30, y: 50, width: 120, height: 70 },
-  2: { x: 180, y: 50, width: 100, height: 70 },
-  3: { x: 420, y: 90, width: 140, height: 80 },
+const nestedBoxes: Record<string, SceneBoxInput> = {
+  Drone: { x: 0, y: 0, width: 320, height: 220, textAlign: "top-left" },
+  "Flight Controller": { x: 30, y: 50, width: 120, height: 70 },
+  Motor: { x: 180, y: 50, width: 100, height: 70 },
+  "Ground Station": { x: 420, y: 90, width: 140, height: 80 },
 };
 
 export const NestedComponents: Story = {
   args: {
-    components: nestedComponents,
-    connections: nestedConnections,
-    boxes: nestedBoxes,
+    scene: storyScene(nestedComponents, nestedBoxes, nestedConnections),
   },
 };
 
@@ -93,9 +83,7 @@ export const NestedComponents: Story = {
 // fixed default instead of collapsing/erroring on an empty bounding box.
 export const Empty: Story = {
   args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: {},
+    scene: storyScene(pipelineComponents, {}, pipelineConnections),
   },
 };
 
@@ -106,14 +94,11 @@ export const Empty: Story = {
 // a grandparent <text>.
 export const WithAnnotations: Story = {
   args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
-    annotations: [
+    scene: storyScene(pipelineComponents, pipelineBoxes, pipelineConnections, [
       { text: "Ingest path", x: 10, y: 10 },
       { text: "Processed here\n(2 workers)", x: 230, y: 140 },
       { text: "**Note** on queue", x: 200, y: 160 },
-    ],
+    ]),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -138,13 +123,10 @@ export const WithAnnotations: Story = {
 // include them, else the note would be clipped out of the Explore viewport.
 export const AnnotationsExtendTheFittedViewport: Story = {
   args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
-    annotations: [
+    scene: storyScene(pipelineComponents, pipelineBoxes, pipelineConnections, [
       { text: "Distant note", x: 1200, y: -300, scale: 1.5 },
       { text: "Below the cluster", x: 100, y: 900 },
-    ],
+    ]),
   },
 };
 
@@ -152,10 +134,9 @@ export const AnnotationsExtendTheFittedViewport: Story = {
 // (previously fell back to the fixed "0 0 100 100" default).
 export const AnnotationsOnly: Story = {
   args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: {},
-    annotations: [{ text: "Just a note", x: 0, y: 0 }],
+    scene: storyScene(pipelineComponents, {}, pipelineConnections, [
+      { text: "Just a note", x: 0, y: 0 },
+    ]),
   },
 };
 
@@ -167,7 +148,7 @@ export const AnnotationsOnly: Story = {
 // renderers can never drift apart again.
 // ---------------------------------------------------------------------------
 
-const iconComponents: DiagramStaticComponent[] = [
+const iconComponents = [
   { label: "top-left", icon: "microchip" },
   { label: "top-center", icon: "server" },
   { label: "center", icon: "wifi" },
@@ -175,14 +156,38 @@ const iconComponents: DiagramStaticComponent[] = [
   { label: "plain top-center" },
   { label: "plain center" },
 ];
-// `textAlign` lives on the *box*, not the component — see DiagramStaticBox.
-const iconBoxes: Record<number, DiagramStaticBox> = {
-  0: { x: 0, y: 0, width: 200, height: 120, textAlign: "top-left" },
-  1: { x: 240, y: 0, width: 200, height: 120, textAlign: "top-center" },
-  2: { x: 480, y: 0, width: 200, height: 120, textAlign: "center" },
-  3: { x: 0, y: 160, width: 200, height: 120, textAlign: "top-left" },
-  4: { x: 240, y: 160, width: 200, height: 120, textAlign: "top-center" },
-  5: { x: 480, y: 160, width: 200, height: 120, textAlign: "center" },
+// `textAlign` lives on the *box*, not the component.
+const iconBoxes: Record<string, SceneBoxInput> = {
+  "top-left": { x: 0, y: 0, width: 200, height: 120, textAlign: "top-left" },
+  "top-center": {
+    x: 240,
+    y: 0,
+    width: 200,
+    height: 120,
+    textAlign: "top-center",
+  },
+  center: { x: 480, y: 0, width: 200, height: 120, textAlign: "center" },
+  "plain top-left": {
+    x: 0,
+    y: 160,
+    width: 200,
+    height: 120,
+    textAlign: "top-left",
+  },
+  "plain top-center": {
+    x: 240,
+    y: 160,
+    width: 200,
+    height: 120,
+    textAlign: "top-center",
+  },
+  "plain center": {
+    x: 480,
+    y: 160,
+    width: 200,
+    height: 120,
+    textAlign: "center",
+  },
 };
 
 // The three icon-bearing nodes, in render order, with the placement
@@ -197,9 +202,7 @@ const expectedIconNodes = [
 
 export const IconsAndTextAlignments: Story = {
   args: {
-    components: iconComponents,
-    connections: [],
-    boxes: iconBoxes,
+    scene: storyScene(iconComponents, iconBoxes),
   },
   play: async ({ canvasElement }) => {
     // DiagramStaticView -> DiagramElements -> DiagramNodeBody, whose root is
@@ -248,18 +251,19 @@ export const IconsAndTextAlignments: Story = {
 // node body: a dashed error-colored border and a bold italic label.
 export const NodeVisualStyles: Story = {
   args: {
-    components: [
-      { label: "styled", color: "error", border: "dashed", font: "bold" },
-      { label: "dotted", color: "primary", border: "dotted", font: "italic" },
-      { label: "plain" },
-    ],
-    connections: [],
-    boxes: {
-      0: { x: 0, y: 0, width: 160, height: 90 },
-      1: { x: 200, y: 0, width: 160, height: 90 },
-      2: { x: 400, y: 0, width: 160, height: 90 },
-    },
-    selected: new Set([1]),
+    scene: storyScene(
+      [
+        { label: "styled", color: "error", border: "dashed", font: "bold" },
+        { label: "dotted", color: "primary", border: "dotted", font: "italic" },
+        { label: "plain" },
+      ],
+      {
+        styled: { x: 0, y: 0, width: 160, height: 90 },
+        dotted: { x: 200, y: 0, width: 160, height: 90 },
+        plain: { x: 400, y: 0, width: 160, height: 90 },
+      },
+    ),
+    selected: new Set(["dotted"]),
   },
   play: async ({ canvasElement }) => {
     const bodies = Array.from(canvasElement.querySelectorAll("a > g > g"));

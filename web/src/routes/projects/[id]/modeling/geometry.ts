@@ -205,13 +205,6 @@ export function unionBox(boxes: Box[]): Box {
   return { x, y, width: right - x, height: bottom - y };
 }
 
-export interface VisibleConnection<T> {
-  conn: T;
-  a: { x: number; y: number };
-  b: { x: number; y: number };
-  orientation: ConnectionOrientation;
-}
-
 // Computes the anchor point on a specific border side of `box`.
 export function boxSidePoint(
   box: Box,
@@ -227,66 +220,6 @@ export function boxSidePoint(
     case "right":
       return { x: box.x + box.width, y: box.y + box.height / 2 };
   }
-}
-
-// Computes boundary connection points and orientation for visible connections
-// between placed node boxes.
-export function computeVisibleConnections<
-  T extends {
-    from: number;
-    to: number;
-    startSide?: ConnectionSide;
-    endSide?: ConnectionSide;
-  },
->(
-  connections: T[],
-  getBox: (index: number) => Box | null | undefined,
-): VisibleConnection<T>[] {
-  return connections.flatMap((conn) => {
-    const boxA = getBox(conn.from);
-    const boxB = getBox(conn.to);
-    if (!boxA || !boxB) return [];
-
-    if (conn.startSide && conn.endSide) {
-      const a = boxSidePoint(boxA, conn.startSide);
-      const b = boxSidePoint(boxB, conn.endSide);
-      const orientation: ConnectionOrientation =
-        conn.startSide === "left" || conn.startSide === "right"
-          ? "horizontal"
-          : "vertical";
-      return [{ conn, a, b, orientation }];
-    }
-
-    if (conn.startSide) {
-      const a = boxSidePoint(boxA, conn.startSide);
-      const orientation: ConnectionOrientation =
-        conn.startSide === "left" || conn.startSide === "right"
-          ? "horizontal"
-          : "vertical";
-      const b = boxBoundaryPoint(boxB, a, orientation);
-      return [{ conn, a, b, orientation }];
-    }
-
-    if (conn.endSide) {
-      const b = boxSidePoint(boxB, conn.endSide);
-      const orientation: ConnectionOrientation =
-        conn.endSide === "left" || conn.endSide === "right"
-          ? "horizontal"
-          : "vertical";
-      const a = boxBoundaryPoint(boxA, b, orientation);
-      return [{ conn, a, b, orientation }];
-    }
-
-    const centerA = boxCenter(boxA);
-    const centerB = boxCenter(boxB);
-    const orientation: ConnectionOrientation =
-      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
-        ? "horizontal"
-        : "vertical";
-    const a = boxBoundaryPoint(boxA, centerB, orientation);
-    const b = boxBoundaryPoint(boxB, centerA, orientation);
-    return [{ conn, a, b, orientation }];
-  });
 }
 
 // Whether `inner` lies fully inside `outer`. Used for marquee-select: a
@@ -527,60 +460,6 @@ export function elbowPath(
   ].join(" ");
 }
 
-// Number of parent hops from the model root to `index`, following
-// `parentOf` (typically `(i) => components[i]?.parent_component_index`).
-// Takes a lookup function rather than the component array directly so this
-// stays independent of the reactive `components` derived value.
-export function depthOf(
-  index: number,
-  parentOf: (index: number) => number | undefined,
-): number {
-  let depth = 0;
-  let current = parentOf(index);
-  while (current !== undefined) {
-    depth += 1;
-    current = parentOf(current);
-  }
-  return depth;
-}
-
-// Orders placed component indices shallowest-first so parents are painted
-// before their children.
-export function computeRenderOrder(
-  placedIndices: number[],
-  parentOf: (index: number) => number | undefined,
-): number[] {
-  return [...placedIndices].sort(
-    (a, b) => depthOf(a, parentOf) - depthOf(b, parentOf),
-  );
-}
-
-// Determines which candidate container box (if any) the dragged node should be reparented into.
-// Returns the candidate index with the highest depth that contains the dragged box's center,
-// or null if none match.
-export function findReparentTarget(
-  draggedBox: Box,
-  candidates: { index: number; box: Box; depth: number }[],
-): number | null {
-  const center = boxCenter(draggedBox);
-  let bestIndex: number | null = null;
-  let maxDepth = -1;
-
-  for (const { index, box, depth } of candidates) {
-    const containsCenter = center.x >= box.x &&
-      center.x <= box.x + box.width &&
-      center.y >= box.y &&
-      center.y <= box.y + box.height;
-
-    if (containsCenter && depth > maxDepth) {
-      maxDepth = depth;
-      bestIndex = index;
-    }
-  }
-
-  return bestIndex;
-}
-
 export interface PortGeometry {
   label: string;
   role: "provider" | "consumer" | "peer";
@@ -596,7 +475,7 @@ export interface PortGeometry {
 export function computePortPositions(
   width: number,
   height: number,
-  ports: {
+  ports: readonly {
     label: string;
     role: "provider" | "consumer" | "peer";
     protocol?: string;
@@ -750,84 +629,6 @@ export function computeResizeHandles(
       height: cornerSize,
     },
   ];
-}
-
-export interface ConnectTargetCandidate {
-  index: number;
-  box: Box;
-  depth: number;
-  ports: { label: string; x: number; y: number }[];
-}
-
-// Determines the target component and optional port under the cursor when dropping a connection.
-// Prioritizes specific port handles first, followed by the deepest (topmost nested) component box.
-export function findConnectTarget(
-  point: { x: number; y: number },
-  sourceIndex: number,
-  candidates: ConnectTargetCandidate[],
-  portSnapRadius = 15,
-): { compIndex: number; portLabel: string | null } | null {
-  // Pass 1: Check if cursor is directly over a specific port
-  let bestPortHit: {
-    compIndex: number;
-    portLabel: string;
-    distance: number;
-    depth: number;
-  } | null = null;
-
-  for (const candidate of candidates) {
-    if (candidate.index === sourceIndex) continue;
-    for (const port of candidate.ports) {
-      const worldX = candidate.box.x + port.x;
-      const worldY = candidate.box.y + port.y;
-      const dist = Math.hypot(point.x - worldX, point.y - worldY);
-      if (dist <= portSnapRadius) {
-        if (
-          !bestPortHit ||
-          dist < bestPortHit.distance ||
-          candidate.depth > bestPortHit.depth
-        ) {
-          bestPortHit = {
-            compIndex: candidate.index,
-            portLabel: port.label,
-            distance: dist,
-            depth: candidate.depth,
-          };
-        }
-      }
-    }
-  }
-
-  if (bestPortHit) {
-    return {
-      compIndex: bestPortHit.compIndex,
-      portLabel: bestPortHit.portLabel,
-    };
-  }
-
-  // Pass 2: Check which component box contains the point, picking the deepest (topmost) component
-  let bestBoxHit: { compIndex: number; depth: number } | null = null;
-
-  for (const candidate of candidates) {
-    if (candidate.index === sourceIndex) continue;
-    const { box, depth, index } = candidate;
-    if (
-      point.x >= box.x &&
-      point.x <= box.x + box.width &&
-      point.y >= box.y &&
-      point.y <= box.y + box.height
-    ) {
-      if (!bestBoxHit || depth > bestBoxHit.depth) {
-        bestBoxHit = { compIndex: index, depth };
-      }
-    }
-  }
-
-  if (bestBoxHit) {
-    return { compIndex: bestBoxHit.compIndex, portLabel: null };
-  }
-
-  return null;
 }
 
 export interface LcaConnectionEndpoints {

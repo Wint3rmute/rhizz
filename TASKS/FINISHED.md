@@ -4,6 +4,124 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Single diagram rendering engine
+
+Five pages rendered diagrams and only four of them shared a renderer. The
+modeler (`+page.svelte`, 3,977 lines) had its own inline copy of the node /
+edge / annotation rendering, already diverged from the shared one, and
+Explore and the chromeless embed each carried their own copy of the hover-doc
+/ drill-down host logic. All of it now runs through one scene and one
+renderer.
+
+### The duplication had already shipped a bug
+
+`Explore.svelte` and `embed/[...diagram]/+page.svelte` had the same hover-popup
+handler at two different versions. Explore had the scroll-invariant fix
+(`hoverClient` + `positionPopup()` + a capture-phase `scroll` listener);
+embed still ran the pre-fix one-shot `getBoundingClientRect()` version, so
+its popup detached from the cursor on scroll. The VRT suite caught it in
+Explore; embed has no hover baseline, so nobody noticed. The same drift is
+visible in the renderer, where `DiagramStaticView.svelte` opens by admitting
+it is *"a smaller, first-cut extraction of +page.svelte's canvas rendering,
+deliberately stripped of…"*.
+
+### What shipped
+
+- **`diagramScene.ts`** — pure, WASM-free, Svelte-free. `buildDiagramScene()`
+  resolves render-ordered nodes (with `depth`, `leaf` and precomputed port
+  positions), routed edges (with the SVG path `d` precomputed), annotations
+  and bounds. Hit-testing lives here too: `pickConnectionTarget`, `queryRect`,
+  `pickReparentTarget`, `descendantsOf`. Addressed by the stable component
+  key, never an arena index.
+- **`sceneFromModel`** in `modelView.ts` — the model+layout → scene bridge,
+  so the scene stays WASM-free. Visual attributes and ports come from
+  `componentDataByKey`, the same projection the inspector edits.
+- **`DiagramElements` / `DiagramStaticView` / `DiagramEmbedView`** now take a
+  scene; `+page.svelte` derives one and reads all geometry from it.
+- **`web/src/docs/`** — `docs.ts` moved out of the explore route (embed
+  already imported it across a route boundary), plus `DocPopup.svelte` and a
+  shared, unit-tested logic module for anchor math, doc resolution and
+  drill-down. The hosts inject only their navigation policy.
+
+Deleted: `mapLayoutToBoxes` (4 call sites), the whole `types.ts`, Inventory's
+hand-rolled raw-model → components projection, and from `geometry.ts`:
+`computeVisibleConnections`, `VisibleConnection`, `depthOf`,
+`computeRenderOrder`, `findReparentTarget`, `findConnectTarget`,
+`ConnectTargetCandidate` (−199 lines, plus −190 of tests).
+
+### The scene owned a rule the modeler had inline
+
+`pickReparentTarget` skips leaves and blocks the dragged node's own subtree,
+because "a leaf cannot become a parent" and "a node cannot be its own parent"
+are scene-level facts. The modeler had been filtering those inline. Writing
+the test for it caught a real bug in the new function: it returned the
+dragged node as its own parent.
+
+### Two regressions, both caught by VRT and now unit-tested
+
+- The doc popup **stopped appearing**. `linkedKeys` and `doc` were `$derived`
+  inside a factory in a `.svelte.ts` module, reading host state through
+  option closures — the derived latched its first (empty) evaluation and
+  never observed the VFS listing that arrives a tick later. Svelte 5 tracks
+  signals globally, but a derived in a module scope does not follow reads
+  made through a closure created in another component's scope. Fixed by
+  keeping all reactive derivation in the host's own component scope and
+  moving the shared logic to plain functions.
+- `linkedKeys` initially marked **no** node as having a detail view, so
+  `controller` rendered dimmed where it should have been lit.
+
+Neither showed up in a type error or a unit test. The VRT baselines were the
+only thing that caught them — worth remembering before treating "type-clean
+and unit-green" as done on a UI refactor.
+
+### The LoC constraint was set at net-zero and was not met
+
+| | Δ vs `main` (web only) |
+| --- | --- |
+| Production | **+246** |
+| Tests | +483 |
+| Net | +729 |
+
+The task was specified at "production net zero, tests excluded". It landed at
++246 production. The projection was wrong twice in the same direction:
+"~−260 lines of inline SVG" became −73, and "−130 for the drill-down
+collapse" became +54. Both over-estimates were the same mistake — counting
+lines that were already shared, or counting code that had to *move* rather
+than disappear.
+
+`+page.svelte` is 3,977 → 3,904 lines. That is **−1.8%**, and it is the honest
+headline: unifying rendering only reached the ~186 lines that were actually
+duplicated, which is 5% of the file. The other ~2,900 lines are ten
+subsystems that exist nowhere else. The follow-up task in `TODO.md` covers
+those.
+
+What the change did buy, none of which is a line count: one geometry
+implementation instead of three defaulting rules and five hit-test loops;
+two renderers instead of a drifting third; the embed popup regression made
+structurally impossible; `+page.svelte`'s node snippet down to 129 lines of
+which ~90 is affordance markup (resize rects, directional and port handles)
+that only the modeler renders and that a shared component could only move,
+not delete.
+
+### Validation
+
+`just test` (Rust + 631 Vitest + 45 e2e), `just lint`, `just build`,
+`just format` all pass. **All 156 VRT baselines unchanged at every step**,
+including the modeler's own `Pages/Diagrams/*` stories — the canvas is
+pixel-identical, which is what makes the extraction safe to have done this
+way.
+
+### Deliberately not done
+
+`DiagramViewport` was not folded into the modeler. The modeler's pan/zoom is
+entangled with its drag state machine (59 references to `editor_state` /
+`canvas_width` / `root_svg`), and the embed's viewport owns its own `<svg>`
+while the modeler must own its own for node event binding. Unifying them
+means adding a `panPolicy` *and* a bring-your-own-SVG escape hatch to the
+shared component, to save ~20 lines in one page.
+
+---
+
 ## Task — Move the /modeling toolbar to the top
 
 The floating diagram toolbar (Snap to Grid, + System, + Component, + Note, Auto

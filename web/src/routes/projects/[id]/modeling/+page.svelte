@@ -58,7 +58,7 @@ import {
 } from "./history";
 import { applyModelMutation } from "../../../../history/applyMutation";
 import type { ModelMutationOp } from "../../../../history/applyMutation";
-import { TransactionManager } from "../../../../history/TransactionManager";
+import { MergedHistory } from "../../../../history/MergedHistory";
 import {
   createForceLayout,
   groupBySiblings,
@@ -71,21 +71,20 @@ import {
   clampWithin,
   computeDirectionalHandles,
   computeLcaConnection,
-  computePortPositions,
-  computeRenderOrder,
   computeResizedBox,
   computeResizeHandles,
-  computeVisibleConnections,
-  depthOf,
   elbowPath,
-  findConnectTarget,
-  findReparentTarget,
   MIN_NODE_SIZE,
   normalizeAnnotationScale,
   type ResizeHandle,
   unionBox,
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
+import {
+  pickConnectionTarget,
+  pickReparentTarget,
+  queryRect,
+} from "./diagramScene";
 import { resolveIcon } from "../../../../iconHelper";
 import DiagramNodeBody from "./DiagramNodeBody.svelte";
 import {
@@ -103,6 +102,7 @@ import {
   GRID_BASE_SPACING,
   GRID_GRADUATIONS,
 } from "./grid";
+import { sceneFromModel } from "../../../../modelView";
 import { nodeTopLeftAt, pickSpawnAnchor } from "./spawnPlacement";
 import { asTestScript, createActionLog } from "../../../../actionLog";
 import { copyToClipboard } from "../../../../clipboard";
@@ -429,6 +429,43 @@ let systemConnections = $derived.by(() => {
     systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to)
   );
 });
+
+// The resolved scene: everything about *what to draw*, built once from the
+// compiled model + this view's layout. Scoped to the view's system, so a
+// placed node from another system (legacy mixed diagrams) never reaches the
+// renderer. Every geometry consumer below reads from here — no host re-derives
+// render order, edge routing, port positions or defaulting.
+let scene = $derived(
+  sceneFromModel(
+    model,
+    checked,
+    annotations,
+    savedConnections,
+    selectedSystemIndex === -1
+      ? undefined
+      : (key: string) => systemComponentIndices.has(keyToIndex.get(key) ?? -1),
+  ),
+);
+
+// Arena indices of the scene's placed nodes, in the scene's paint order
+// (parents before children). The interaction code addresses nodes by index
+// because that is what the DOM handlers hand it; the scene addresses them by
+// stable key. This derived is the one place the two meet.
+let renderOrder = $derived.by(() => {
+  const out: number[] = [];
+  for (const node of scene.nodes) {
+    const index = keyToIndex.get(node.key);
+    if (index !== undefined) out.push(index);
+  }
+  return out;
+});
+
+// The placed node's scene entry, or null when it isn't on the canvas. Every
+// render, drag and hit-test resolves geometry through here, so the canvas
+// cannot disagree with the hit-testing about where a node is.
+function sceneNode(index: number) {
+  return scene.byKey.get(getComponentKey(index)) ?? null;
+}
 
 let fullDiagramPath = $derived(
   selectedDiagramPath === null
@@ -783,9 +820,9 @@ function setNodeBox(index: number, box: Partial<StoredBox>) {
 }
 
 // Returns the placed node's box (position + size + text alignment), or null
-// if the component isn't currently checked. Backfills width/height/
-// textAlign with defaults for entries persisted before those features were
-// introduced.
+// if the component isn't currently checked. Fully defaulted by the scene, so
+// backfilling entries persisted before per-node sizing/alignment existed is
+// handled once in the scene builder rather than here.
 function nodeBox(index: number): {
   x: number;
   y: number;
@@ -793,15 +830,7 @@ function nodeBox(index: number): {
   height: number;
   textAlign: TextAlign;
 } | null {
-  const pos = checked[getComponentKey(index)];
-  if (!pos) return null;
-  return {
-    x: pos.x,
-    y: pos.y,
-    width: pos.width ?? DEFAULT_NODE_WIDTH,
-    height: pos.height ?? DEFAULT_NODE_HEIGHT,
-    textAlign: pos.textAlign ?? DEFAULT_TEXT_ALIGN,
-  };
+  return sceneNode(index)?.box ?? null;
 }
 
 // Sets the text alignment of the currently selected node. Only meaningful
@@ -1032,25 +1061,6 @@ type DiagramSnapshot = {
 
 // How many undo steps (and, independently, redo steps) are kept.
 const UNDO_HISTORY_LIMIT = 100;
-const diagramHistory = createHistoryStack<DiagramSnapshot>();
-
-// Unified model+layout history. Each entry covers one `applyModelMutation`
-// HCL write *and* its canvas placement, so Ctrl+Z undoes both. Layout-only
-// gestures (drag/resize) stay on `diagramHistory` — the migration source.
-// Both stacks share one monotonic sequence so interleaved undo (drag after
-// create) reverts in true last-first order instead of preferring one stack.
-// There is no second TypeScript model on this path; all model writes go through
-// `applyModelMutation` inside the transaction.
-const unifiedHistory = new TransactionManager(UNDO_HISTORY_LIMIT);
-let historySeq = 0;
-const diagramUndoSeqs: number[] = [];
-const diagramRedoSeqs: number[] = [];
-const unifiedUndoSeqs: number[] = [];
-const unifiedRedoSeqs: number[] = [];
-
-function top(values: number[]): number | undefined {
-  return values[values.length - 1];
-}
 
 function snapshotDiagram(): DiagramSnapshot {
   return {
@@ -1070,6 +1080,18 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
   selectedConnection = null;
 }
 
+// One Ctrl+Z across both edit domains. Layout entries are snapshots of the
+// canvas; model entries are transactions that also cover the placement of
+// whatever they created, so undoing a create takes the node with it. The two
+// interleave on one timeline — a drag after a create undoes the drag first.
+//
+// There is no second TypeScript model on the model path: every write goes
+// through `applyModelMutation` inside the transaction.
+const history = new MergedHistory<DiagramSnapshot>({
+  limit: UNDO_HISTORY_LIMIT,
+  layout: { snapshot: snapshotDiagram, apply: applyDiagramSnapshot },
+});
+
 // Records the diagram's current state as an undo point, right *before* a
 // discrete edit is about to change it — a drag/resize gesture starting, a
 // component being checked/unchecked, a text-alignment change, or an
@@ -1077,132 +1099,21 @@ function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
 // underlying setNodeBox() write: a whole drag, from mousedown to mouseup,
 // is one undo step, not one per mousemove event (see call sites).
 function recordUndoPoint() {
-  pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
-  diagramUndoSeqs.push(++historySeq);
-  while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-    diagramUndoSeqs.shift();
-  }
-  diagramRedoSeqs.length = 0;
-}
-
-async function undoUnifiedEntry(): Promise<boolean> {
-  if (!unifiedHistory.canUndo) return false;
-  if (await unifiedHistory.undo()) {
-    const seq = unifiedUndoSeqs.pop();
-    if (seq !== undefined) {
-      unifiedRedoSeqs.push(seq);
-      while (unifiedRedoSeqs.length > UNDO_HISTORY_LIMIT) {
-        unifiedRedoSeqs.shift();
-      }
-    }
-    sources = await readProjectSources(fs);
-    flashActivity("Undo");
-    return true;
-  }
-  unifiedUndoSeqs.pop();
-  return false;
-}
-
-function undoDiagramEntry(): boolean {
-  const previous = undoHistory(
-    diagramHistory,
-    snapshotDiagram(),
-    UNDO_HISTORY_LIMIT,
-  );
-  if (previous) {
-    applyDiagramSnapshot(previous);
-    const seq = diagramUndoSeqs.pop();
-    if (seq !== undefined) {
-      diagramRedoSeqs.push(seq);
-      while (diagramRedoSeqs.length > UNDO_HISTORY_LIMIT) {
-        diagramRedoSeqs.shift();
-      }
-    }
-    flashActivity("Undo");
-    return true;
-  }
-  diagramUndoSeqs.pop();
-  return false;
-}
-
-async function redoUnifiedEntry(): Promise<boolean> {
-  if (!unifiedHistory.canRedo) return false;
-  if (await unifiedHistory.redo()) {
-    const seq = unifiedRedoSeqs.pop();
-    if (seq !== undefined) {
-      unifiedUndoSeqs.push(seq);
-      while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-        unifiedUndoSeqs.shift();
-      }
-    }
-    sources = await readProjectSources(fs);
-    flashActivity("Redo");
-    return true;
-  }
-  return false;
-}
-
-function redoDiagramEntry(): boolean {
-  const next = redoHistory(
-    diagramHistory,
-    snapshotDiagram(),
-    UNDO_HISTORY_LIMIT,
-  );
-  if (next) {
-    applyDiagramSnapshot(next);
-    const seq = diagramRedoSeqs.pop();
-    if (seq !== undefined) {
-      diagramUndoSeqs.push(seq);
-      while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-        diagramUndoSeqs.shift();
-      }
-    }
-    flashActivity("Redo");
-    return true;
-  }
-  return false;
+  history.recordLayoutPoint();
 }
 
 // Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
-// diagram-mutating interactions — restoring a snapshot while the
-// animation loop is still writing every frame would just get immediately
-// overwritten. Picks the most recent entry across both stacks by sequence,
-// so a drag after a create reverts the drag first.
+// diagram-mutating interactions — restoring a snapshot while the animation
+// loop is still writing every frame would just get immediately overwritten.
 async function undoDiagramEdit() {
   if (autoLayoutRunning) return;
-  const unifiedTop = top(unifiedUndoSeqs);
-  const diagramTop = top(diagramUndoSeqs);
-  if (
-    unifiedTop !== undefined &&
-    (diagramTop === undefined || unifiedTop > diagramTop)
-  ) {
-    if (await undoUnifiedEntry()) return;
-    undoDiagramEntry();
-    return;
-  }
-  if (diagramTop !== undefined) {
-    if (undoDiagramEntry()) return;
-  }
-  await undoUnifiedEntry();
+  if (await history.undo()) flashActivity("Undo");
 }
 
 // Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
 async function redoDiagramEdit() {
   if (autoLayoutRunning) return;
-  const unifiedTop = top(unifiedRedoSeqs);
-  const diagramTop = top(diagramRedoSeqs);
-  if (
-    unifiedTop !== undefined &&
-    (diagramTop === undefined || unifiedTop > diagramTop)
-  ) {
-    if (await redoUnifiedEntry()) return;
-    redoDiagramEntry();
-    return;
-  }
-  if (diagramTop !== undefined) {
-    if (redoDiagramEntry()) return;
-  }
-  await redoUnifiedEntry();
+  if (await history.redo()) flashActivity("Redo");
 }
 
 // Runs one model mutation plus its canvas placement as a single undoable
@@ -1235,15 +1146,7 @@ async function runModelLayoutTransaction(
       noteDiagramEdited();
     },
   };
-  const applied = await unifiedHistory.execute(tx);
-  if (applied) {
-    unifiedUndoSeqs.push(++historySeq);
-    while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-      unifiedUndoSeqs.shift();
-    }
-    unifiedRedoSeqs.length = 0;
-  }
-  return applied;
+  return history.runModelTransaction(tx);
 }
 
 // Handles the diagram keyboard shortcuts. Scoped to this page (via the
@@ -1620,15 +1523,6 @@ function svgPoint(
 
 let reparentTargetIndex = $state<number | null>(null);
 
-function isDescendantOf(index: number, possibleAncestor: number): boolean {
-  let cur = parentOf(index);
-  while (cur !== undefined) {
-    if (cur === possibleAncestor) return true;
-    cur = parentOf(cur);
-  }
-  return false;
-}
-
 async function getPrimaryHclPath(): Promise<string> {
   try {
     return primaryHclPath(await fs.readdir(".", { recursive: true }));
@@ -1949,30 +1843,11 @@ function findHoveredTarget(
   point: { x: number; y: number },
   sourceIndex: number,
 ): { compIndex: number; portLabel: string | null } | null {
-  const candidates = renderOrder.flatMap((i) => {
-    if (i === sourceIndex) return [];
-    const box = nodeBox(i);
-    if (!box) return [];
-    const key = getComponentKey(i);
-    const compData = componentData.get(key);
-    const ports = compData && compData.ports.length > 0
-      ? computePortPositions(box.width, box.height, compData.ports).map((
-        p,
-      ) => ({
-        label: p.label,
-        x: p.x,
-        y: p.y,
-      }))
-      : [];
-    return [{
-      index: i,
-      box,
-      depth: depthOf(i, parentOf),
-      ports,
-    }];
-  });
-
-  return findConnectTarget(point, sourceIndex, candidates);
+  const hit = pickConnectionTarget(scene, point, getComponentKey(sourceIndex));
+  if (hit === null) return null;
+  const compIndex = keyToIndex.get(hit.key);
+  if (compIndex === undefined) return null;
+  return { compIndex, portLabel: hit.port };
 }
 
 async function handleCreateConnection(
@@ -2517,24 +2392,16 @@ function onSvgMouseMove(event: MouseEvent) {
 
         // Check potential drop/reparent target candidate only if Alt is held
         if (event.altKey) {
-          const candidateBoxes: { index: number; box: Box; depth: number }[] =
-            [];
-          for (const i of renderOrder) {
-            if (i === current.anchorIndex || selected.has(i)) continue;
-            if (components[i]?.leaf) continue;
-            if (isDescendantOf(i, current.anchorIndex)) continue;
-            const b = nodeBox(i);
-            if (b) {
-              candidateBoxes.push({
-                index: i,
-                box: b,
-                depth: depthOf(i, parentOf),
-              });
-            }
-          }
-          const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
-          const currentParent = parentOf(current.anchorIndex);
-          if (foundTarget !== null && foundTarget !== currentParent) {
+          const dragKey = getComponentKey(current.anchorIndex);
+          const foundKey = pickReparentTarget(scene, anchorNext, {
+            dragKey,
+            exclude: [...selectedKeys],
+          });
+          const foundTarget = foundKey === null
+            ? null
+            : (keyToIndex.get(foundKey) ?? null);
+          const currentParentKey = sceneNode(current.anchorIndex)?.parentKey;
+          if (foundTarget !== null && foundKey !== currentParentKey) {
             reparentTargetIndex = foundTarget;
           } else {
             reparentTargetIndex = null;
@@ -2820,65 +2687,27 @@ async function handleDeleteSelectedConnection(
 }
 
 // Only connections where both endpoints are currently on the canvas AND in
-// this view's bound system.
-let visibleConnections = $derived(
-  computeVisibleConnections(
-    connections.filter((c) =>
-      selectedSystemIndex === -1 ||
-      (systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to))
-    ).map((conn) => {
-      const entry: {
-        from: number;
-        to: number;
-        label: string;
-        startSide?: ConnectionSide;
-        endSide?: ConnectionSide;
-      } = { from: conn.from, to: conn.to, label: conn.label };
-      const saved = savedConnections[conn.label];
-      if (saved?.startSide !== undefined) entry.startSide = saved.startSide;
-      if (saved?.endSide !== undefined) entry.endSide = saved.endSide;
-      return entry;
-    }),
-    (i) => nodeBox(i),
-  ),
-);
-
-// Looks up a component's direct parent index, for depthOf below.
-function parentOf(index: number): number | undefined {
-  return components[index]?.parent_component_index;
-}
-
-// Indices of currently-placed nodes, ordered shallowest-first so parents
-// are always painted before their children — otherwise a child could end
-// up visually hidden behind its parent's fill, depending on arbitrary
-// arena order.
-let renderOrder = $derived(
-  computeRenderOrder(
-    Object.keys(checked)
-      .map((key) => keyToIndex.get(key))
-      .filter((index): index is number => index !== undefined)
-      .filter((index) =>
-        selectedSystemIndex === -1 || systemComponentIndices.has(index)
-      ),
-    parentOf,
-  ),
-);
+// this view's bound system — which is exactly what `scene.edges` holds, since
+// the scene drops edges with an unplaced or out-of-system endpoint and already
+// resolved each one's route and path.
+let visibleConnections = $derived(scene.edges);
 
 // Nodes that would be selected if the marquee were released right now —
 // i.e. nodes whose full bounding box is enclosed by the marquee rectangle.
 // Drives the live selection preview while dragging; committed as-is by
-// onSvgMouseUp once the mouse is released.
+// onSvgMouseUp once the mouse is released. The scene owns the enclosure rule
+// (and the annotation equivalent) so it matches the hit-boxes exactly.
 let marqueeCandidates: Set<number> = $derived.by(() => {
   if (!marqueeBox) return new Set();
-  const box = marqueeBox;
+  const found = queryRect(scene, marqueeBox);
   // Built fresh and returned as-is on every recomputation; reactivity
   // already comes from the surrounding $derived.by, not from mutating
   // this Set later.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const candidates = new Set<number>();
-  for (const index of renderOrder) {
-    const box2 = nodeBox(index);
-    if (box2 && boxContains(box, box2)) candidates.add(index);
+  for (const key of found.nodes) {
+    const index = keyToIndex.get(key);
+    if (index !== undefined) candidates.add(index);
   }
   return candidates;
 });
@@ -2897,13 +2726,8 @@ function annotationHitBox(
 // marqueeCandidates for nodes.
 let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
   if (!marqueeBox) return new Set();
-  const box = marqueeBox;
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const candidates = new Set<number>();
-  annotations.forEach((ann, i) => {
-    if (boxContains(box, annotationHitBox(ann))) candidates.add(i);
-  });
-  return candidates;
+
+  return new Set<number>(queryRect(scene, marqueeBox).annotations);
 });
 
 // Fraction of the viewport the diagram's bounding box should fill (in
@@ -2911,20 +2735,15 @@ let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
 // "Zoom to Fill" is used.
 const ZOOM_TO_FILL_FRACTION = 0.8;
 
-// Zooms and pans so every currently-placed node's AND annotation's combined
-// bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
-// annotations far from the node cluster are never panned out of view.
+// Zooms and pans so the scene's combined node + annotation bounding box fills
+// ZOOM_TO_FILL_FRACTION of the viewport, centered — annotations far from the
+// node cluster are never panned out of view. The scene already carries the
+// bounds, computed from exactly the boxes and annotation hit-boxes the
+// renderer draws, so this cannot drift from what is on screen.
 // No-op if nothing is placed on canvas.
 function zoomToFill() {
-  const nodeBoxes = renderOrder
-    .map((index) => nodeBox(index))
-    .filter(
-      (box): box is NonNullable<ReturnType<typeof nodeBox>> => box !== null,
-    );
-  const annotationBoxes = annotations.map(annotationBounds);
-  const boxes = [...nodeBoxes, ...annotationBoxes];
-  if (boxes.length === 0) return;
-  const bounds = unionBox(boxes);
+  const bounds = scene.bounds;
+  if (bounds === null) return;
 
   const zoomX = (canvas_width * ZOOM_TO_FILL_FRACTION) / bounds.width;
   const zoomY = (canvas_height * ZOOM_TO_FILL_FRACTION) / bounds.height;
@@ -2958,6 +2777,13 @@ const AUTO_LAYOUT_MIN_MOVEMENT = 0.5;
 // strength, instead of applying at full strength from frame 1 — avoids
 // the sharp jump an instant full-strength start would otherwise cause.
 const AUTO_LAYOUT_WARMUP_FRACTION = 0.1;
+// A component's direct parent index. The auto-layout partitions nodes into
+// sibling groups by immediate parent, which is a model relationship rather
+// than a placement one, so it reads the model rather than the scene.
+function parentOf(index: number): number | undefined {
+  return components[index]?.parent_component_index;
+}
+
 const AUTO_LAYOUT_WARMUP_TICKS = Math.round(
   AUTO_LAYOUT_MAX_FRAMES * AUTO_LAYOUT_WARMUP_FRACTION,
 );
@@ -3450,49 +3276,37 @@ $effect(() => {
           ondblclick={onCanvasDblClick}
         />
 
-        {#snippet ViewNode(
-          label: string,
-          index: number,
-          x: number,
-          y: number,
-          width: number,
-          height: number,
-          textAlign: TextAlign,
-        )}
+        {#snippet ViewNode(index: number)}
           {@const highlighted = interaction.type === "marquee"
             ? marqueeCandidates.has(index)
             : selected.has(index)}
-          {@const compKey = getComponentKey(index)}
-          {@const compData = componentData.get(compKey)}
-          {@const modelComp = components[index]}
-          {@const icon = resolveIcon(compData?.icon ?? modelComp?.icon)}
-          {@const portPositions = compData && compData.ports.length > 0
-            ? computePortPositions(width, height, compData.ports)
-            : []}
-          <g
-            transform="translate({x}, {y})"
-            onmousedown={(e) => onNodeMouseDown(e, index)}
-            ondblclick={(e) => onNodeDblClick(e, index)}
-            oncontextmenu={(e) => openNodeContextMenu(e, index)}
-            style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
-          >
-            <DiagramNodeBody
-              {label}
-              {width}
-              {height}
-              {textAlign}
-              {icon}
-              color={compData?.color || modelComp?.color}
-              border={compData?.border ?? modelComp?.border}
-              font={compData?.font ?? modelComp?.font}
-              selected={highlighted}
-            />
+          {@const node = sceneNode(index)}
+          {#if node}
+            {@const portPositions = node.ports}
+            <g
+              transform="translate({node.box.x}, {node.box.y})"
+              onmousedown={(e) => onNodeMouseDown(e, index)}
+              ondblclick={(e) => onNodeDblClick(e, index)}
+              oncontextmenu={(e) => openNodeContextMenu(e, index)}
+              style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
+            >
+              <DiagramNodeBody
+                label={node.label}
+                width={node.box.width}
+                height={node.box.height}
+                textAlign={node.box.textAlign}
+                icon={resolveIcon(node.icon)}
+                color={node.color}
+                border={node.border}
+                font={node.font}
+                selected={highlighted}
+              />
             {#if reparentTargetIndex === index}
               <rect
                 x={-4}
                 y={-4}
-                width={width + 8}
-                height={height + 8}
+                width={node.box.width + 8}
+                height={node.box.height + 8}
                 rx="8"
                 fill="none"
                 stroke="var(--color-primary)"
@@ -3506,8 +3320,8 @@ $effect(() => {
             <!-- 8 transparent resize hit-areas (4 edge strips + 4 corners),
                  geometry computed by computeResizeHandles in geometry.ts -->
             {#each computeResizeHandles(
-              width,
-              height,
+              node.box.width,
+              node.box.height,
               CORNER_HANDLE_SIZE,
               EDGE_HANDLE_THICKNESS,
             ) as handle (handle.handle)}
@@ -3528,7 +3342,7 @@ $effect(() => {
             <!-- Port & Directional handles (visible when selected or actively dragging a connection) -->
             {#if selected.has(index) || interaction.type === "connecting"}
               <!-- 4 Directional handles for starting connection from any border side -->
-              {#each computeDirectionalHandles(width, height) as handle (handle.side)}
+              {#each computeDirectionalHandles(node.box.width, node.box.height) as handle (handle.side)}
                 <g transform="translate({handle.x}, {handle.y})">
                   <!-- svelte-ignore a11y_no_static_element_interactions -->
                   <circle
@@ -3537,8 +3351,8 @@ $effect(() => {
                     class="cursor-crosshair"
                     onmousedown={(e) =>
                       onPortMouseDown(e, index, null, {
-                        x: x + handle.x,
-                        y: y + handle.y,
+                        x: node.box.x + handle.x,
+                        y: node.box.y + handle.y,
                       }, handle.side)}
                   >
                     <title>Drag connection from {handle.side}</title>
@@ -3569,8 +3383,8 @@ $effect(() => {
                       class="cursor-crosshair"
                       onmousedown={(e) =>
                         onPortMouseDown(e, index, port.label, {
-                          x: x + port.x,
-                          y: y + port.y,
+                          x: node.box.x + port.x,
+                          y: node.box.y + port.y,
                         })}
                     >
                       <title
@@ -3588,25 +3402,12 @@ $effect(() => {
                 {/each}
               {/if}
             {/if}
-
-
           </g>
+          {/if}
         {/snippet}
 
         {#each renderOrder as index (index)}
-          {@const box = nodeBox(index)}
-          {@const component = components[index]}
-          {#if box && component}
-            {@render ViewNode(
-              component.label,
-              index,
-              box.x,
-              box.y,
-              box.width,
-              box.height,
-              box.textAlign,
-            )}
-          {/if}
+          {@render ViewNode(index)}
         {/each}
 
         <!--
@@ -3617,28 +3418,28 @@ $effect(() => {
           trade-off for now (proper edge routing that dodges nodes entirely
           is a bigger feature, not needed at this stage).
         -->
-        {#each visibleConnections as { conn, a, b, orientation } (`${conn.label}-${conn.from}-${conn.to}`)}
-          {@const isConnSelected = selectedConnection === conn.label}
+        {#each visibleConnections as edge (`${edge.label}-${edge.fromKey}-${edge.toKey}`)}
+          {@const isConnSelected = selectedConnection === edge.label}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <g
             class="cursor-pointer"
             onclick={(e) => {
               e.stopPropagation();
-              selectedConnection = conn.label;
+              selectedConnection = edge.label;
               clearSelection();
             }}
-            oncontextmenu={(e) => openConnectionContextMenu(e, conn.label)}
+            oncontextmenu={(e) => openConnectionContextMenu(e, edge.label)}
           >
             <!-- Thicker invisible hit target -->
             <path
-              d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+              d={edge.d}
               stroke="transparent"
               stroke-width="14"
               fill="none"
             />
             <path
-              d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+              d={edge.d}
               stroke={isConnSelected
                 ? "var(--color-primary)"
                 : "var(--color-base-content)"}
@@ -3648,8 +3449,8 @@ $effect(() => {
               marker-end="url(#{isConnSelected ? 'arrow-selected' : 'arrow'})"
             />
             <text
-              x={(a.x + b.x) / 2}
-              y={(a.y + b.y) / 2 - 6}
+              x={(edge.a.x + edge.b.x) / 2}
+              y={(edge.a.y + edge.b.y) / 2 - 6}
               fill={isConnSelected
                 ? "var(--color-primary)"
                 : "var(--color-base-content)"}
@@ -3659,7 +3460,7 @@ $effect(() => {
               text-anchor="middle"
               style="user-select: none"
             >
-              {conn.label}
+              {edge.label}
             </text>
           </g>
         {/each}

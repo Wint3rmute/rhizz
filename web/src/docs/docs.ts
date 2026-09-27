@@ -3,7 +3,10 @@
 // `views/`). Each `.md` file's path (minus the `.md` suffix) is the key
 // that associates it with a component's label, e.g. `docs/product.md` ↔
 // component label `product`.
-import { type ProjectFs } from "../../../../vfs/fs";
+//
+// Lives here, not under a route, because the doc popup is shared by every
+// diagram page: Explore, the embed and the modeler all read the same docs.
+import { type ProjectFs } from "../vfs/fs";
 
 // Conventional location for Markdown docs inside a project's VFS.
 export const DOCS_DIR = "docs";

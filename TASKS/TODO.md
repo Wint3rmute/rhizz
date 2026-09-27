@@ -16,6 +16,82 @@ How to work on this file:
 
 ---
 
+## Task <N> — Decompose the Modeling page
+
+`web/src/routes/projects/[id]/modeling/+page.svelte` is 3,904 lines: 3,132 of
+`<script>` and 772 of template. It is not huge because of duplication — the
+single-rendering-engine task removed what duplication there was, for −73
+lines. It is huge because it is *ten subsystems in one component scope*.
+
+This is the follow-up that task's own write-up pointed at. It is a different
+kind of work: that task removed duplicated *computation*, this one extracts
+*state machines and controllers* that have no second implementation to merge
+with. The payoff is a legible page and testable units — not a line count,
+which was never the problem.
+
+### Where the lines are
+
+| Area | Lines | Notes |
+| --- | --- | --- |
+| Template (sidebars, toolbar, error card, modals) | 772 | 4 of the 5 panels are already components |
+| `views/*.hcl` file manager | 325 | CRUD + first-run seeding + `?diagram=` deep-link |
+| Model mutations (create/rename/delete/connect/reparent) | 281 | all funnel through `runModelLayoutTransaction` |
+| Undo/redo stacks + transactions | 234 | 4 near-identical fns, 4 parallel seq arrays |
+| Pointer machine (`onSvgMouseMove`) | 166 | 5-variant `Interaction` union |
+| Auto-layout (grouped d3 sim + rAF driver) | 162 | policy; `forceLayout.ts` already owns the sim |
+| Layout store + load/save race guards | 127 | 4 flags guarding one async read |
+| Keyboard shortcut chain | 105 | 82-line `if`/`else` on `event.key` |
+| 4 context-menu builders | 114 | |
+| `ViewNode` snippet | 129 | ~90 is modeler-only affordance markup |
+
+### Targets, highest value first
+
+1. **Undo/redo (234).** `history/TransactionManager.ts` and `history.ts` are
+   already clean modules; the page wraps them in four near-identical
+   undo/redo functions plus four parallel `number[]` sequence arrays, each
+   hand-trimmed at `UNDO_HISTORY_LIMIT`. The merge policy — one monotonic
+   clock across the model and layout stacks, so a drag after a create undoes
+   the drag first — is a real requirement, and it belongs *in* the history
+   module rather than in the page.
+2. **Keyboard shortcuts (105).** An 82-line `if`/`else` on
+   `event.key.toLowerCase()`, mixing view chrome (R, G) with model mutations
+   (C, N) with attribute cycling (t/b/c/f), plus a documented key-collision
+   rule (C and F mean two different things depending on whether a node is
+   selected). Express it as data, not as a chain.
+3. **Layout store (127).** `checked` / `savedLayout` / `savedConnections` /
+   `annotations` are four bare `$state` records enumerated in five separate
+   places, and four flags (`diagramLayoutLoaded`, `loadedDiagramPath`,
+   `diagramEditStamp`, `loadStartStamp`) guard one async read against both a
+   stale path and a concurrent edit.
+4. **`views/*.hcl` file manager (325).** create / rename / delete / folder /
+   first-run seeding / deep-link. Mostly plumbing over `persistence.ts` and
+   `FileTree`.
+5. **Pointer machine (166).** The `Interaction` union and its handlers move
+   wholesale. The pure maths inside (`applyGroupDelta`, `applyGroupScale`,
+   `computeResizedBox`) is already testable and belongs in a
+   `diagramTransform.ts`.
+
+### Constraints
+
+- **Net line reduction again**, as with the previous task. Moving a 166-line
+  function into a 166-line module is not a decomposition, it is a file move.
+  Each extraction must collapse duplication *inside* the moved unit, shrink
+  the caller's interface, or delete code outright.
+- **Keep reactive state in the component scope** unless the extracted unit is
+  a pure function. The single-rendering-engine task learned this the hard
+  way: a factory in a `.svelte.ts` that read host state through option
+  closures silently latched its first value, and only the VRT baselines
+  caught it. Prefer plain functions that take their inputs over factories
+  that hold state.
+- **VRT is the safety net, not the arbiter.** A baseline that moves without
+  an intended visual change is a bug, not a re-accept. And re-run `just vrt`,
+  never `vrt-quick`, after anything structural — `vrt-quick` silently tests
+  the previous Storybook build.
+- Don't re-litigate the diagram scene; that task is closed and its findings
+  are recorded in `FINISHED.md`.
+
+---
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,

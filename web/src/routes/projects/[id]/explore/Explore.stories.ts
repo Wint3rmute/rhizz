@@ -316,7 +316,7 @@ export const HoverDocHeader: Story = {
       },
     });
 
-    const tooltip = await canvas.findByTestId("explore-doc-tooltip");
+    const tooltip = await canvas.findByTestId("doc-popup");
     const tooltipQueries = within(tooltip);
     await expect(
       tooltipQueries.getByRole("heading", {

@@ -2,50 +2,29 @@
 import { resolve } from "$app/paths";
 import DiagramViewport from "./DiagramViewport.svelte";
 import DiagramElements from "./DiagramElements.svelte";
-import { annotationBounds, unionBox } from "./geometry";
-import type {
-  DiagramStaticAnnotation,
-  DiagramStaticBox,
-  DiagramStaticComponent,
-  DiagramStaticConnection,
-} from "./types";
+import type { DiagramScene } from "./diagramScene";
 
 let {
-  components = [],
-  connections = [],
-  boxes = {},
-  annotations = [],
+  scene,
   projectId = null,
   diagramPath = null,
-  selected = new Set<number>(),
-  linked = new Set<number>(),
+  selected = new Set<string>(),
+  linked = new Set<string>(),
   onnodeclick,
   onnodehover,
 }: {
-  components: DiagramStaticComponent[];
-  connections: DiagramStaticConnection[];
-  boxes: Record<number, DiagramStaticBox>;
-  annotations?: DiagramStaticAnnotation[];
+  /** The resolved diagram. */
+  scene: DiagramScene;
   projectId?: string | null;
   diagramPath?: string | null;
-  /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
-  selected?: Set<number>;
-  /** Component indices with a linked detail view (dimmed otherwise, click navigates). */
-  linked?: Set<number>;
+  /** Node keys drawn with the selection outline. */
+  selected?: Set<string>;
+  /** Node keys with a linked detail view (dimmed otherwise, click navigates). */
+  linked?: Set<string>;
   /** Optional node interaction — wired to drill-down navigation by the embed page. */
-  onnodeclick?: ((index: number) => void) | undefined;
-  /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
-  onnodehover?:
-    | ((index: number | null, event?: MouseEvent) => void)
-    | undefined;
+  onnodeclick?: ((key: string) => void) | undefined;
+  onnodehover?: ((key: string | null, event?: MouseEvent) => void) | undefined;
 } = $props();
-
-let bounds = $derived.by(() => {
-  const placed = Object.values(boxes);
-  const all = [...placed, ...annotations.map(annotationBounds)];
-  if (all.length === 0) return null;
-  return unionBox(all);
-});
 
 let fullDiagramUrl = $derived.by(() => {
   if (!projectId) return null;
@@ -56,13 +35,11 @@ let fullDiagramUrl = $derived.by(() => {
 });
 </script>
 
-<DiagramViewport stateKey={undefined} {bounds} viewportIdentity={diagramPath}>
+<DiagramViewport stateKey={undefined} bounds={scene.bounds}
+  viewportIdentity={diagramPath}>
   {#snippet content()}
     <DiagramElements
-      {components}
-      {connections}
-      {boxes}
-      {annotations}
+      {scene}
       markerId="embed-arrow"
       {selected}
       {linked}

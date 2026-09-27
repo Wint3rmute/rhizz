@@ -11,11 +11,9 @@ import {
 } from "../../rhizz_wasm_wrapper";
 import { isDocsSource } from "../../vfs/compile";
 import DiagramStaticView from "../projects/[id]/modeling/DiagramStaticView.svelte";
-import {
-  mapLayoutToBoxes,
-  viewsToLayout,
-} from "../projects/[id]/modeling/persistence";
-import type { DiagramStaticAnnotation } from "../projects/[id]/modeling/types";
+import { viewsToLayout } from "../projects/[id]/modeling/persistence";
+import { sceneFromModel } from "../../modelView";
+import type { SceneAnnotationInput } from "../projects/[id]/modeling/diagramScene";
 import { postExampleHeight } from "./autosize";
 import { copyToClipboard } from "../../clipboard";
 import { highlightHcl } from "./hclHighlight";
@@ -211,24 +209,22 @@ let showDiagram = $derived(
   !singleFile && diagramView && isDiagram(selectedFile),
 );
 
-let keyToIndex = $derived(componentKeyIndex(model));
-let boxes = $derived(
-  mapLayoutToBoxes(viewsToLayout(selectedViews).checked, keyToIndex),
-);
-let annotations = $derived.by((): DiagramStaticAnnotation[] => {
-  const out: DiagramStaticAnnotation[] = [];
+// The book's diagram is the same scene every other page renders; the view
+// definitions supply the layout and annotations.
+let diagramScene = $derived.by(() => {
+  const layout = viewsToLayout(selectedViews);
+  const notes: SceneAnnotationInput[] = [];
   for (const view of selectedViews) {
     for (const annotation of view.annotations ?? []) {
-      const entry: DiagramStaticAnnotation = {
+      notes.push({
         text: annotation.text,
         x: annotation.x,
         y: annotation.y,
-      };
-      if (annotation.scale !== undefined) entry.scale = annotation.scale;
-      out.push(entry);
+        ...(annotation.scale !== undefined ? { scale: annotation.scale } : {}),
+      });
     }
   }
-  return out;
+  return sceneFromModel(model, layout.checked, notes);
 });
 
 let codeContent = $derived(
@@ -368,13 +364,13 @@ $effect(() => {
         <div role="alert" class="alert alert-error">
           The project failed to compile in the browser — details below.
         </div>
-      {:else if Object.keys(boxes).length === 0}
+      {:else if diagramScene.nodes.length === 0}
         <div class="py-6 text-center text-sm text-base-content/60">
           No placed components in this diagram.
         </div>
       {:else}
         <div class="h-[420px]">
-          <DiagramStaticView {components} {connections} {boxes} {annotations} />
+          <DiagramStaticView scene={diagramScene} />
         </div>
       {/if}
     {:else}

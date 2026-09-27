@@ -14,7 +14,7 @@ import {
   serialize_views,
   type ViewDefinition,
 } from "../../../../rhizz_wasm_wrapper";
-import type { Box, ConnectionSide, TextAlign } from "./geometry";
+import type { ConnectionSide, TextAlign } from "./geometry";
 
 // Re-export the canvas's alignment/side unions so persistence consumers share
 // one definition (`geometry.ts` remains the source of truth).
@@ -75,30 +75,6 @@ export interface DiagramLayout {
 
 export function emptyDiagramLayout(system = ""): DiagramLayout {
   return { system, checked: {}, connections: {}, annotations: [] };
-}
-
-/**
- * Maps layout checked records to placed node bounding boxes keyed by arena index.
- */
-export function mapLayoutToBoxes(
-  checked: Record<string, StoredBox>,
-  keyToIndex: Map<string, number>,
-  defaultWidth = 100,
-  defaultHeight = 100,
-): Record<number, Box & { textAlign: TextAlign }> {
-  const result: Record<number, Box & { textAlign: TextAlign }> = {};
-  for (const [key, box] of Object.entries(checked)) {
-    const index = keyToIndex.get(key);
-    if (index === undefined) continue;
-    result[index] = {
-      x: box.x,
-      y: box.y,
-      width: box.width ?? defaultWidth,
-      height: box.height ?? defaultHeight,
-      textAlign: box.textAlign ?? "center",
-    };
-  }
-  return result;
 }
 
 /**

@@ -18,15 +18,21 @@ import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
 import {
   type DiagramLayout,
   emptyDiagramLayout,
-  mapLayoutToBoxes,
   readDiagramLayoutFile,
   VIEW_LAYOUT_DIR,
 } from "../modeling/persistence";
-import Markdown from "../../../../components/Markdown.svelte";
-import { type ProjectDoc, readProjectDocs, withFullNameHeader } from "./docs";
-import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
+import { componentDataByKey, sceneFromModel } from "../../../../modelView";
+import { type ProjectDoc, readProjectDocs } from "../../../../docs/docs";
+import {
+  anchorAt,
+  detailViewFor,
+  docFor,
+  linkedKeys as linkedKeysOf,
+  trackPopupAnchor,
+} from "../../../../docs/useDiagramDrilldown.svelte";
+import DocPopup from "../../../../docs/DocPopup.svelte";
+import { componentKeyAt } from "../../../../modelKeys";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import { findComponentDiagram } from "./navigation";
 
 let {
   projectId = null,
@@ -195,109 +201,66 @@ let connections = $derived(model ? model.connections() : []);
 // (`Model::component_keys`) and index-aligned with `components`.
 let componentKeys = $derived(model ? model.component_keys() : []);
 
-let keyToIndex = $derived(componentKeyIndex(model));
-
-let componentDiagrams = $derived.by(() => {
-  const map = new SvelteMap<number, Dirent>();
-  components.forEach((component: ComponentJS, index: number) => {
-    const diagram = findComponentDiagram(
-      diagramEntries,
-      component.label,
-      componentKeyAt(componentKeys, index),
-    );
-    if (diagram) map.set(index, diagram);
-  });
-  return map;
-});
-
-let linkedComponents = $derived.by(() =>
-  new SvelteSet<number>(componentDiagrams.keys())
+// The rendered diagram. Everything below addresses components by this key
+// rather than by arena index, so a rename or an edit earlier in the source
+// cannot silently reattach a node's detail view to a different component.
+let diagramScene = $derived(
+  sceneFromModel(
+    model,
+    selectedLayout.checked,
+    selectedLayout.annotations ?? [],
+  ),
 );
 
-// Docs keyed by component label. A component is matched by its unique name
-// (its `label`), not its full qualified path — a component may be re-used
-// under different parents, so the path is not a stable identifier.
-let docsByLabel = $derived.by(() => {
-  const map = new SvelteMap<string, string>();
-  for (const doc of docs) map.set(doc.key, doc.content);
-  return map;
-});
+let componentData = $derived(componentDataByKey(model));
 
-// The component index currently hovered (if any) and the cursor position at
-// which the popup should be anchored.
-let hoveredIndex = $state<number | null>(null);
-let hoverPos = $state<{ x: number; y: number } | null>(null);
-
-// The container the popup is positioned against (the `relative` canvas
-// wrapper). Viewport cursor coordinates are converted to container-relative
-// ones so the popup sits right next to the cursor.
+// The container the doc popup is positioned against (the `relative` canvas
+// wrapper). Read lazily by the controller so it can re-anchor on scroll.
 let canvasContainer: HTMLDivElement | undefined = $state();
 
-// The hovered node's *cursor* position, kept in viewport coordinates. The
-// container-relative anchor is derived from it (see handleNodeHover) and
-// re-derived on scroll, because a popup positioned once from a rect measured
-// mid-scroll detaches from the cursor and stays detached — the container can
-// scroll under a stationary cursor (small screens, keyboard scrolling), and
-// a stale offset is also what makes a screenshot of an open popup
-// unreproducible.
+// Hover-to-show-docs and click-to-drill-down, shared with the chromeless
+// embed. The only thing Explore decides for itself is *how* it navigates.
+// Hover-to-show-docs and click-to-drill-down, shared with the chromeless
+// embed. The only thing Explore decides for itself is *how* it navigates.
+const navigateToDetailView = (path: string): void => {
+  navigateToDiagram(path);
+};
+const reportMissingView = (label: string): void => {
+  toastState.show(`No detailed view for ${label} created`, "info");
+};
+
+let hoveredKey = $state<string | null>(null);
 let hoverClient = $state<{ x: number; y: number } | null>(null);
+let hoverPos = $state<{ x: number; y: number } | null>(null);
 
-function positionPopup(): void {
-  if (hoveredIndex === null || hoverClient === null || !canvasContainer) {
-    hoverPos = null;
-    return;
-  }
-  const rect = canvasContainer.getBoundingClientRect();
-  hoverPos = {
-    x: hoverClient.x - rect.left,
-    y: hoverClient.y - rect.top,
-  };
+function onNodeHover(key: string | null, event?: MouseEvent): void {
+  hoveredKey = key;
+  hoverClient = event === undefined
+    ? null
+    : { x: event.clientX, y: event.clientY };
+  hoverPos = anchorAt(canvasContainer, hoverClient);
 }
 
-function handleNodeHover(index: number | null, event?: MouseEvent) {
-  hoveredIndex = index;
-  if (index === null || !event) {
-    hoverClient = null;
-    positionPopup();
+function onNodeActivate(key: string): void {
+  const diagram = detailViewFor(diagramEntries, diagramScene, key);
+  if (diagram !== undefined) {
+    navigateToDetailView(diagram.path);
     return;
   }
-  hoverClient = { x: event.clientX, y: event.clientY };
-  positionPopup();
+  reportMissingView(diagramScene.byKey.get(key)?.label ?? key);
 }
 
-// Any scroll in the subtree (the diagram canvas, a sidebar) moves the
-// container under a stationary cursor, so re-anchor the popup to it. Capture
-// phase, because `scroll` does not bubble: a document-level capture listener
-// sees a scroll of anything below it, a window-level one would not.
-$effect(() => {
-  const onScroll = () => positionPopup();
-  document.addEventListener("scroll", onScroll, true);
-  return () => document.removeEventListener("scroll", onScroll, true);
-});
+// Any scroll moves the container under a stationary cursor, so re-anchor.
+$effect(() =>
+  trackPopupAnchor(() => {
+    hoverPos = anchorAt(canvasContainer, hoverClient);
+  })
+);
 
-// The doc content for the hovered component, if one exists. Matched by the
-// component's unique label rather than its full qualified path. When the
-// component declares a `full_name`, it heads the tooltip as an L1 header.
-let hoveredDoc = $derived.by(() => {
-  if (hoveredIndex === null) return null;
-  const component = components[hoveredIndex];
-  const doc = docsByLabel.get(component?.label ?? "") ?? null;
-  if (doc === null) return null;
-  return withFullNameHeader(doc, component?.full_name ?? "");
-});
-
-function handleNodeClick(index: number) {
-  const component: ComponentJS | undefined = components[index];
-  if (!component) return;
-  const diagram = componentDiagrams.get(index);
-  if (diagram) {
-    navigateToDiagram(diagram.path);
-    return;
-  }
-  toastState.show(`No detailed view for ${component.label} created`, "info");
-}
-
-let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
+let linkedComponents = $derived(
+  new SvelteSet<string>(linkedKeysOf(diagramEntries, diagramScene)),
+);
+let hoveredDoc = $derived(docFor(docs, diagramScene, hoveredKey));
 </script>
 
 <div class="flex flex-col md:flex-row flex-1 w-full h-full overflow-hidden">
@@ -402,27 +365,12 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
       {#if selectedDiagramPath}
         <div class="w-full h-full">
           <DiagramStaticView
-            components={components}
-            connections={connections}
-            boxes={boxes}
-            annotations={selectedLayout.annotations ?? []}
+            scene={diagramScene}
             linked={linkedComponents}
-            onnodeclick={handleNodeClick}
-            onnodehover={(index, event) => handleNodeHover(index, event)}
+            onnodeclick={onNodeActivate}
+            onnodehover={onNodeHover}
           />
-          {#if hoveredDoc && hoverPos}
-            <div
-              class="absolute z-30 max-w-sm pointer-events-none"
-              style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
-            >
-              <div
-                class="card bg-base-100 border border-base-content/40 shadow-xl p-3"
-                data-testid="explore-doc-tooltip"
-              >
-                <Markdown content={hoveredDoc} />
-              </div>
-            </div>
-          {/if}
+          <DocPopup doc={hoveredDoc} position={hoverPos} />
         </div>
       {:else}
         <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">

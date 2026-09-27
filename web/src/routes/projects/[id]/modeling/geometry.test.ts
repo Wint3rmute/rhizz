@@ -10,15 +10,9 @@ import {
   computeDirectionalHandles,
   computeLcaConnection,
   computePortPositions,
-  computeRenderOrder,
   computeResizedBox,
   computeResizeHandles,
-  computeVisibleConnections,
-  type ConnectionSide,
-  depthOf,
   elbowPath,
-  findConnectTarget,
-  findReparentTarget,
   MIN_ANNOTATION_SCALE,
   nodeLabelLayout,
   normalizeAnnotationScale,
@@ -386,140 +380,6 @@ describe("elbowPath", () => {
   });
 });
 
-describe("depthOf", () => {
-  // A small parent chain for testing: 0 and 3 are roots; 1's parent is 0;
-  // 2's parent is 1.
-  const parents: Record<number, number | undefined> = {
-    0: undefined,
-    1: 0,
-    2: 1,
-    3: undefined,
-  };
-  const parentOf = (index: number) => parents[index];
-
-  it("is 0 for a component with no parent", () => {
-    expect(depthOf(0, parentOf)).toBe(0);
-    expect(depthOf(3, parentOf)).toBe(0);
-  });
-
-  it("counts hops up the parent chain", () => {
-    expect(depthOf(1, parentOf)).toBe(1);
-    expect(depthOf(2, parentOf)).toBe(2);
-  });
-});
-
-describe("findReparentTarget", () => {
-  const containerA: Box = { x: 0, y: 0, width: 300, height: 300 };
-  const containerB: Box = { x: 50, y: 50, width: 200, height: 200 }; // inside containerA
-  const candidates = [
-    { index: 0, box: containerA, depth: 0 },
-    { index: 1, box: containerB, depth: 1 },
-  ];
-
-  it("finds deepest container enclosing the center of the dragged node", () => {
-    const dragged: Box = { x: 60, y: 60, width: 50, height: 50 }; // center at (85, 85)
-    expect(findReparentTarget(dragged, candidates)).toBe(1);
-  });
-
-  it("finds outer container when outside the inner container", () => {
-    const dragged: Box = { x: 10, y: 10, width: 30, height: 30 }; // center at (25, 25)
-    expect(findReparentTarget(dragged, candidates)).toBe(0);
-  });
-
-  it("returns null when center is outside all containers", () => {
-    const dragged: Box = { x: 400, y: 400, width: 50, height: 50 };
-    expect(findReparentTarget(dragged, candidates)).toBeNull();
-  });
-});
-
-describe("computeRenderOrder", () => {
-  const parents: Record<number, number | undefined> = {
-    0: undefined,
-    1: 0,
-    2: 1,
-    3: undefined,
-  };
-  const parentOf = (index: number) => parents[index];
-
-  it("sorts indices shallowest first", () => {
-    expect(computeRenderOrder([2, 1, 0, 3], parentOf)).toEqual([0, 3, 1, 2]);
-  });
-});
-
-describe("computeVisibleConnections", () => {
-  const boxes: Record<number, Box> = {
-    0: { x: 0, y: 0, width: 100, height: 50 },
-    1: { x: 200, y: 0, width: 100, height: 50 },
-    2: { x: 0, y: 200, width: 100, height: 50 },
-  };
-
-  it("computes horizontal connection endpoints between side-by-side boxes", () => {
-    const connections = [{ from: 0, to: 1, label: "bus" }];
-    const visible = computeVisibleConnections(connections, (i) => boxes[i]);
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.orientation).toBe("horizontal");
-    expect(visible[0]?.a).toEqual({ x: 100, y: 25 });
-    expect(visible[0]?.b).toEqual({ x: 200, y: 25 });
-  });
-
-  it("computes vertical connection endpoints between vertically stacked boxes", () => {
-    const connections = [{ from: 0, to: 2, label: "power" }];
-    const visible = computeVisibleConnections(connections, (i) => boxes[i]);
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.orientation).toBe("vertical");
-    expect(visible[0]?.a).toEqual({ x: 50, y: 50 });
-    expect(visible[0]?.b).toEqual({ x: 50, y: 200 });
-  });
-
-  it("filters out connections when either endpoint box is not placed", () => {
-    const connections = [
-      { from: 0, to: 99, label: "missing" },
-      { from: 0, to: 1, label: "valid" },
-    ];
-    const visible = computeVisibleConnections(connections, (i) => boxes[i]);
-
-    expect(visible).toHaveLength(1);
-    expect(visible[0]?.conn.label).toBe("valid");
-  });
-
-  it("respects custom startSide on connection routing", () => {
-    const connTop = [{
-      from: 0,
-      to: 1,
-      label: "top-link",
-      startSide: "top" as ConnectionSide,
-    }];
-    const visTop = computeVisibleConnections(connTop, (i) => boxes[i]);
-    expect(visTop[0]?.orientation).toBe("vertical");
-    expect(visTop[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visTop[0]?.b).toEqual({ x: 250, y: 0 }); // box 1 top midpoint (auto-oriented facing top)
-
-    const connBottom = [{
-      from: 0,
-      to: 1,
-      label: "bottom-link",
-      startSide: "bottom" as ConnectionSide,
-    }];
-    const visBottom = computeVisibleConnections(connBottom, (i) => boxes[i]);
-    expect(visBottom[0]?.orientation).toBe("vertical");
-    expect(visBottom[0]?.a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
-    expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
-
-    const connBoth = [{
-      from: 0,
-      to: 1,
-      label: "both-link",
-      startSide: "top" as ConnectionSide,
-      endSide: "right" as ConnectionSide,
-    }];
-    const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
-    expect(visBoth[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
-  });
-});
-
 describe("computeResizedBox", () => {
   const start: Box = { x: 100, y: 100, width: 120, height: 80 };
 
@@ -703,56 +563,6 @@ describe("computePortPositions", () => {
     const peer = positions.find((p) => p.label === "bus");
     expect(peer?.x).toBe(60);
     expect(peer?.y).toBe(80);
-  });
-});
-
-describe("findConnectTarget", () => {
-  const parentBox: Box = { x: 0, y: 0, width: 400, height: 400 };
-  const child1Box: Box = { x: 20, y: 50, width: 100, height: 80 };
-  const child2Box: Box = { x: 200, y: 50, width: 100, height: 80 };
-
-  const candidates = [
-    {
-      index: 0, // Parent
-      box: parentBox,
-      depth: 0,
-      ports: [],
-    },
-    {
-      index: 1, // Child 1 (Source)
-      box: child1Box,
-      depth: 1,
-      ports: [{ label: "out", x: 100, y: 40 }],
-    },
-    {
-      index: 2, // Child 2 (Target)
-      box: child2Box,
-      depth: 1,
-      ports: [{ label: "in", x: 0, y: 40 }],
-    },
-  ];
-
-  it("prioritizes child component over parent container when hovering inside child", () => {
-    // Point at (250, 90) is inside both Parent (index 0, depth 0) and Child 2 (index 2, depth 1)
-    const target = findConnectTarget({ x: 250, y: 90 }, 1, candidates);
-    expect(target).toEqual({ compIndex: 2, portLabel: null });
-  });
-
-  it("snaps to port when hovering near port handle of child", () => {
-    // Child 2 port "in" is at world (200 + 0, 50 + 40) = (200, 90)
-    const target = findConnectTarget({ x: 205, y: 92 }, 1, candidates);
-    expect(target).toEqual({ compIndex: 2, portLabel: "in" });
-  });
-
-  it("targets parent only when hovering outside all children", () => {
-    // Point at (350, 350) is inside Parent but outside both children
-    const target = findConnectTarget({ x: 350, y: 350 }, 1, candidates);
-    expect(target).toEqual({ compIndex: 0, portLabel: null });
-  });
-
-  it("returns null when hovering outside all nodes", () => {
-    const target = findConnectTarget({ x: 500, y: 500 }, 1, candidates);
-    expect(target).toBeNull();
   });
 });
 
