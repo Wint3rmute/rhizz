@@ -49,6 +49,7 @@ let {
   onNoteDblClick,
   onNoteContextMenu,
   onNoteResizePointerDown,
+  frozen = false,
 }: {
   scene: DiagramScene;
   /** Prefix for the arrow markers, so two canvases on one page do not share an id. */
@@ -105,7 +106,13 @@ let {
       handle: ResizeHandle,
     ) => void)
     | undefined;
+  /** Ignore hits while a transition is moving nodes out from under the cursor. */
+  frozen?: boolean | undefined;
 } = $props();
+
+function fade(opacity: number | undefined): number | undefined {
+  return opacity !== undefined && opacity < 1 ? opacity : undefined;
+}
 
 let selectedMarkerId = $derived(`${markerId}-selected`);
 let edgeInteractive = $derived(
@@ -188,6 +195,10 @@ function detailLabel(node: DiagramNode): string {
   transform="translate({node.box.x}, {node.box.y})"
   class:cursor-pointer={onNodeClick !== undefined}
   class:opacity-90={node.dimmed}
+  opacity={fade(node.opacity)}
+  style:pointer-events={frozen || fade(node.opacity) !== undefined
+      ? "none"
+      : undefined}
   style:cursor={onNodePointerDown !== undefined
       ? busy
         ? "wait"
@@ -338,6 +349,7 @@ function detailLabel(node: DiagramNode): string {
     <g>
   <a
     href={onNodeClick ? "#" : undefined}
+    style:pointer-events={frozen ? "none" : undefined}
     aria-label={onNodeClick ? detailLabel(node) : undefined}
     onclick={onNodeClick
           ? (event) => {
@@ -373,6 +385,10 @@ function detailLabel(node: DiagramNode): string {
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <g
   data-testid="diagram-edge"
+  opacity={fade(conn.opacity)}
+  style:pointer-events={frozen || fade(conn.opacity) !== undefined
+      ? "none"
+      : undefined}
   class:cursor-pointer={edgeInteractive}
   onclick={onEdgeClick
       ? (event) => onEdgeClick?.(event, conn)
@@ -423,6 +439,10 @@ function detailLabel(node: DiagramNode): string {
   {@const hit = annotationBounds(note)}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <g
+  opacity={fade(note.opacity)}
+  style:pointer-events={frozen || fade(note.opacity) !== undefined
+      ? "none"
+      : undefined}
   class:cursor-grab={notesInteractive}
   onmousedown={onNotePointerDown
       ? (event) => onNotePointerDown?.(event, note.index)
