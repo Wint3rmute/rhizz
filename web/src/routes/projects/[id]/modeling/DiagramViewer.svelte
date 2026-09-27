@@ -1,7 +1,7 @@
 <script lang="ts">
-// Shared read-only diagram session for Explore and the embed page. Loads
-// the project, compiles it, reads one layout, and draws the doc card.
-// Callers own chrome (sidebar, route) and which picture component to use.
+// Shared read-only diagram session for Explore, embed, and Inventory.
+// Loads the project, compiles it, reads one layout, and draws the doc card.
+// Callers own chrome and, when a node click should navigate, onOpenDiagram.
 import type { ComponentJS, ConnectionJS } from "rhizz";
 import type { Snippet } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
@@ -49,16 +49,20 @@ let {
   onOpenDiagram,
   pending,
   whenEmpty,
+  whenMissing,
   children,
 }: {
   projectId?: string | null;
+  /** Path relative to `views/`, e.g. `overview.hcl`. */
   diagramPath?: string | null;
-  /** Navigate to a component's detail diagram. Missing views toast instead. */
-  onOpenDiagram: (path: string) => void;
+  /** Navigate to a component's detail diagram. Omit for a preview that does not navigate; missing views then do not toast. */
+  onOpenDiagram?: ((path: string) => void) | undefined;
   /** Shown until the layout file has loaded. Omit to render the picture immediately. */
   pending?: Snippet | undefined;
   /** Shown when the loaded layout has nothing placed. Omit to render an empty picture. */
   whenEmpty?: Snippet | undefined;
+  /** Shown when `views/<diagramPath>` does not exist. Omit to treat that as an empty layout. */
+  whenMissing?: Snippet | undefined;
   /** Picture to draw. Omit for the read-only static view (Explore). */
   children?: Snippet<[DiagramView]> | undefined;
 } = $props();
@@ -67,6 +71,7 @@ let sources = $state<Source[]>([]);
 let docs = $state<ProjectDoc[]>([]);
 let layout = $state<DiagramLayout>(emptyDiagramLayout());
 let layoutLoaded = $state(false);
+let layoutMissing = $state(false);
 let diagramEntries = $state<Dirent[]>([]);
 
 $effect(() => {
@@ -113,21 +118,29 @@ $effect(() => {
   const path = diagramPath;
   if (!id || !path) {
     layout = emptyDiagramLayout();
+    layoutMissing = false;
     layoutLoaded = true;
     return;
   }
   layoutLoaded = false;
+  layoutMissing = false;
   let cancelled = false;
   const fs = openProjectFs(projectStore, id);
-  readDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${path}`)
+  const fullPath = `${VIEW_LAYOUT_DIR}/${path}`;
+  // Probe first: readDiagramLayoutFile turns a missing file into an empty
+  // layout, and Inventory must tell "no file yet" from "file, nothing placed".
+  fs.readFile(fullPath)
+    .then(() => readDiagramLayoutFile(fs, fullPath))
     .then((loaded) => {
       if (cancelled) return;
       layout = loaded;
+      layoutMissing = false;
       layoutLoaded = true;
     })
     .catch(() => {
       if (cancelled) return;
       layout = emptyDiagramLayout();
+      layoutMissing = true;
       layoutLoaded = true;
     });
   return () => {
@@ -206,6 +219,7 @@ let hoveredDoc = $derived.by(() => {
 });
 
 function onnodeclick(index: number) {
+  if (!onOpenDiagram) return;
   const component = components[index];
   if (!component) return;
   const diagram = findComponentDiagram(
@@ -231,6 +245,8 @@ let vacant = $derived(
   class="relative flex h-full min-h-0 w-full flex-1 flex-col">
   {#if !layoutLoaded && pending}
     {@render pending()}
+  {:else if layoutMissing && whenMissing}
+    {@render whenMissing()}
   {:else if vacant && whenEmpty}
     {@render whenEmpty()}
   {:else if children}
@@ -250,7 +266,7 @@ let vacant = $derived(
       {boxes}
       {annotations}
       {linked}
-      {onnodeclick}
+      onnodeclick={onOpenDiagram ? onnodeclick : undefined}
       {onnodehover}
     />
   {/if}
