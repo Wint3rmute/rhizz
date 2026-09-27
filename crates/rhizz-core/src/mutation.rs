@@ -5,7 +5,7 @@
 //! re-emit HCL", frontends send a [`ModelOp`] and get back canonical HCL.
 //!
 //! Execution model (single-file, mirroring what the web editor always did):
-//! parse the primary file into a [`RawFile`](crate::parse::RawFile), apply
+//! parse the primary file into a [`RawFile`], apply
 //! the op to the label-based raw tree (no arena-index surgery — consistency
 //! is re-established by the existing resolver), resolve, and serialize with
 //! [`serialize_model`](crate::serialize::serialize_model). Anything the
