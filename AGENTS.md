@@ -9,23 +9,24 @@ start chatting with you to discuss something project-related.
 ## Project Overview
 
 **Rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in
-Rust, with a frontend in Svelt. Systems are described in `.hcl` files (HCL
+Rust, with a frontend in Svelte. Systems are described in `.hcl` files (HCL
 syntax, same as Terraform) that can be version-controlled, diffed, and reviewed
 with or without a GUI. Read `SPEC.md` (and `SPEC/` if needed) for the full
 specification.
 
-Read the last 3 finished tasks in `TASKS/FINISHED.md` to get current
-project context.
+Read the 3 most recent finished tasks in `TASKS/FINISHED.md` (newest first) to
+get current project context.
 
 ## Repository Layout
 
 ```
 crates/              – source, split into subcrates
+web/                 – SvelteKit web application (the graphical frontend)
 examples/            – example systems
 SPEC.md              – full specification (single file)
 SPEC/                – specification split by topic (cli.md, models.md, …)
-TASKS.md             – ordered implementation tasks
-FINISHED_TASKS.md    – completed tasks (most recent first)
+TASKS/TODO.md        – ordered implementation tasks
+TASKS/FINISHED.md    – completed tasks (most recent first)
 book/                – the Rhizz book
 ```
 
@@ -43,11 +44,11 @@ book/                – the Rhizz book
 
 1. Follow the instructions from `TODO.md`.
 2. Get extra context from recently finished tasks (read the first 50 lines of
-   `FINISHED_TASKS.md`).
+   `TASKS/FINISHED.md`).
 3. Implement it using red/green TDD.
 4. Run `just test`, `just lint`, and `just build` until everything passes.
 5. Run `just format` to format the code.
-6. Move the completed task to `FINISHED_TASKS.md` and report that you are
+6. Move the completed task to `TASKS/FINISHED.md` and report that you are
    finished.
 
 ## Build, Test & Lint Commands

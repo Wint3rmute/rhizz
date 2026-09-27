@@ -334,13 +334,13 @@ const DEFAULT_TEXT_ALIGN: TextAlign = "center";
 // parent scope (SPEC.md §2.3), so a bare label can't be used as a key once
 // components are nested, but arena indices shift whenever components are
 // reordered or inserted earlier in the HCL source, silently reattaching persisted
-// positions to the wrong component (see TASKS.md Task 39). If a component
+// positions to the wrong component (see TASKS/FINISHED.md Task 39). If a component
 // is unchecked, it's not present here — but its last-known box is kept in
 // savedLayout below, so re-checking it later restores it to where it was
 // instead of resetting to the default position. Persisted into the active
 // project's VFS (see the load/save $effects below), so the diagram layout
 // travels with the project instead of being shared across every project
-// in the browser (TASKS.md Task 60).
+// in the browser (TASKS/FINISHED.md Task 60).
 let checked = $state<Record<string, StoredBox>>({});
 
 // Remembers every component's last-known box, even after it's unchecked
@@ -2986,7 +2986,7 @@ let autoLayoutRunning = $state(false);
 // box (or its own combined bounding box, for a top-level group or an
 // orphaned nested group whose parent isn't itself placed) — rather than
 // one flat simulation mixing unrelated hierarchy levels together. See
-// TASKS.md Task 50 for why: a node shouldn't be repelled by/attracted to
+// TASKS/FINISHED.md Task 50 for why: a node shouldn't be repelled by/attracted to
 // a node it isn't actually a sibling of. Every result is still written
 // through the same clamp-to-active-parent-and-cascade path a live drag
 // uses, regardless of grouping, as a containment safety net. All groups'

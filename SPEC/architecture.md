@@ -11,10 +11,15 @@ rhizz/
     rhizz-core/       # model compiler — pure library, no I/O
     rhizz-cli/        # CLI frontend
     rhizz-wasm/       # WebAssembly bindings (browser / Node.js frontend)
+    rhizz-server/     # HTTP backend serving the VFS for the web app
+    rhizz-book/       # mdBook preprocessor
     …                 # additional frontends (LSP, …) may be added here
+  web/                # SvelteKit web application (the graphical frontend)
   examples/
   SPEC.md
-  TASKS.md
+  TASKS/
+    TODO.md           # ordered implementation tasks
+    FINISHED.md       # completed tasks (most recent first)
 ```
 
 ---
@@ -54,7 +59,7 @@ pub fn score(model: &Model) -> ScoreReport;
   all related structs derive `Serialize` and `Deserialize` so frontends can
   serialise results (JSON output, IPC, storage) without extra conversion.
 - **`Clone` on all public types** — frontends may need to hold multiple
-  snapshots of the model simultaneously (e.g. the GUI keeping the last valid
+  snapshots of the model simultaneously (e.g. the web app keeping the last valid
   model while the current edit contains errors).
 - **Stable error codes** — `Diagnostic.code` strings (`E001`–`E016`,
   `W001`–`W016`) are part of the public API. Changing or renumbering them is a
@@ -70,7 +75,7 @@ or automated process.
 **Required behaviour:**
 
 1. **Own all I/O** — discover, read, and (optionally) watch source files; write
-   any generated output; manage stdin/stdout/stderr or a GUI window.
+   any generated output; manage stdin/stdout/stderr or the browser DOM.
 2. **Supply sources** — assemble `Vec<Source>` and call `rhizz_core::compile`.
    Do not parse or validate HCL independently.
 3. **Render diagnostics** — present `Vec<Diagnostic>` in a medium-appropriate
@@ -92,7 +97,8 @@ or automated process.
 - All model logic is delegated; `rhizz-cli` contains no parsing, validation,
   or scoring logic of its own.
 
-See [gui.md](gui.md) for GUI-frontend-specific notes.
+See [frontend.md](frontend.md) for the web-frontend-specific notes
+(`rhizz-wasm` + the SvelteKit app in `web/`).
 
 **Wasm-specific notes** (`rhizz-wasm`):
 
