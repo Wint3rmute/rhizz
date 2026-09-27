@@ -257,6 +257,7 @@ export function sceneFromModel(
       return {
         key,
         label: component.label,
+        fullName: view?.full_name ?? "",
         ...(parentIndex === undefined ? {} : { parentKey: keyAt(parentIndex) }),
         leaf: component.leaf ?? false,
         // An empty icon string means "no icon" — consumers test for `undefined`.

@@ -11,13 +11,21 @@ import { type Dirent, openProjectFs } from "../../../../../../vfs/fs";
 import { componentKeyAt } from "../../../../../../modelKeys";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
 import { sceneFromModel } from "../../../../../../modelView";
+import { type ProjectDoc, readProjectDocs } from "../../../../../../docs/docs";
+import {
+  anchorAt,
+  detailViewFor,
+  docFor,
+  linkedKeys as linkedKeysOf,
+  trackPopupAnchor,
+} from "../../../../../../docs/useDiagramDrilldown.svelte";
+import DocPopup from "../../../../../../docs/DocPopup.svelte";
 import {
   type DiagramLayout,
   emptyDiagramLayout,
   readDiagramLayoutFile,
   VIEW_LAYOUT_DIR,
 } from "../../persistence";
-import { type ProjectDoc, readProjectDocs } from "../../../explore/docs";
 import { findComponentDiagram } from "../../../explore/navigation";
 import Markdown from "../../../../../../components/Markdown.svelte";
 import type { PageProps } from "./$types";
@@ -42,8 +50,6 @@ let warningLevel = $derived(getWarningLevel());
 let layout = $state<DiagramLayout>(emptyDiagramLayout());
 let layoutLoaded = $state(false);
 let docs = $state<ProjectDoc[]>([]);
-let hoveredKey = $state<string | null>(null);
-let hoverPos = $state<{ x: number; y: number } | null>(null);
 let canvasContainer: HTMLDivElement | undefined = $state();
 
 $effect(() => {
@@ -129,69 +135,54 @@ $effect(() => {
   };
 });
 
-let componentDiagrams = $derived.by(() => {
-  const map = new SvelteMap<string, Dirent>();
-  components.forEach((component, index) => {
-    const key = componentKeyAt(componentKeys, index);
-    const diagram = findComponentDiagram(diagramEntries, component.label, key);
-    if (diagram) map.set(key, diagram);
-  });
-  return map;
-});
-
-let linkedComponents = $derived.by(
-  () => new SvelteSet<string>(componentDiagrams.keys()),
+let scene = $derived(
+  sceneFromModel(model, layout.checked, layout.annotations ?? []),
 );
 
-// Clicking a node navigates within the embed route (back/forward friendly):
-// linked nodes swap the `[...diagram]` param, unlinked ones toast — the
-// same feedback Explore shows for a missing detail view.
-function handleNodeClick(key: string): void {
-  const diagram = componentDiagrams.get(key);
-  if (diagram) {
-    const base = resolve("/projects/[id]/modeling/embed/[...diagram]", {
-      id: projectId ?? "",
-      diagram: diagram.path,
-    });
-    void goto(base);
+// Hover-to-show-docs and click-to-drill-down, shared with Explore. The embed
+// navigates by swapping the `[...diagram]` route param, which is the only
+// thing it decides for itself — and it now inherits the scroll-invariant popup
+// anchoring it previously lacked.
+function navigateToDetailView(path: string): void {
+  const base = resolve("/projects/[id]/modeling/embed/[...diagram]", {
+    id: projectId ?? "",
+    diagram: path,
+  });
+  void goto(base);
+}
+
+let hoveredKey = $state<string | null>(null);
+let hoverClient = $state<{ x: number; y: number } | null>(null);
+let hoverPos = $state<{ x: number; y: number } | null>(null);
+
+function onNodeHover(key: string | null, event?: MouseEvent): void {
+  hoveredKey = key;
+  hoverClient = event === undefined
+    ? null
+    : { x: event.clientX, y: event.clientY };
+  hoverPos = anchorAt(canvasContainer, hoverClient);
+}
+
+function onNodeActivate(key: string): void {
+  const diagram = detailViewFor(diagramEntries, scene, key);
+  if (diagram !== undefined) {
+    navigateToDetailView(diagram.path);
     return;
   }
   const label = scene.byKey.get(key)?.label ?? key;
   toastState.show(`No detailed view for ${label} created`, "info");
 }
 
-let scene = $derived(
-  sceneFromModel(model, layout.checked, layout.annotations ?? []),
+$effect(() =>
+  trackPopupAnchor(() => {
+    hoverPos = anchorAt(canvasContainer, hoverClient);
+  })
 );
 
-// Docs keyed by component label, matching how the Explore view associates a
-// doc with a component (by its unique label, not its full qualified path).
-let docsByLabel = $derived.by(() => {
-  const map = new SvelteMap<string, string>();
-  for (const doc of docs) map.set(doc.key, doc.content);
-  return map;
-});
-
-// The doc content for the hovered component, if one exists.
-let hoveredDoc = $derived(
-  hoveredKey === null ? null : (() => {
-    const label = scene.byKey.get(hoveredKey)?.label;
-    return label === undefined ? undefined : docsByLabel.get(label);
-  })() ?? null,
+let linkedComponents = $derived(
+  new SvelteSet<string>(linkedKeysOf(diagramEntries, scene)),
 );
-
-function handleNodeHover(key: string | null, event?: MouseEvent) {
-  hoveredKey = key;
-  if (key === null || !event || !canvasContainer) {
-    hoverPos = null;
-    return;
-  }
-  const rect = canvasContainer.getBoundingClientRect();
-  hoverPos = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
-  };
-}
+let hoveredDoc = $derived(docFor(docs, scene, hoveredKey));
 </script>
 
 <!-- Chromeless standalone embed takeover container -->
@@ -215,19 +206,10 @@ function handleNodeHover(key: string | null, event?: MouseEvent) {
         projectId={projectId}
         diagramPath={normalizedDiagramPath}
         linked={linkedComponents}
-        onnodeclick={handleNodeClick}
-        onnodehover={handleNodeHover}
+        onnodeclick={onNodeActivate}
+        onnodehover={onNodeHover}
       />
-      {#if hoveredDoc && hoverPos}
-        <div
-          class="absolute z-30 max-w-sm pointer-events-none"
-          style="left: {hoverPos.x + 12}px; top: {hoverPos.y + 12}px;"
-        >
-          <div class="card bg-base-100 border border-base-content/40 shadow-xl p-3">
-            <Markdown content={hoveredDoc} />
-          </div>
-        </div>
-      {/if}
+      <DocPopup doc={hoveredDoc} position={hoverPos} />
     </div>
   {/if}
 </div>

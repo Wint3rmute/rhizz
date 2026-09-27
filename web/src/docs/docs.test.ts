@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
-import { openProjectFs } from "../../../../vfs/fs";
+import { InMemoryProjectStore } from "../vfs/vfsStore";
+import { openProjectFs } from "../vfs/fs";
 import { DOCS_DIR, readProjectDocs, withFullNameHeader } from "./docs";
 
 async function makeFs() {

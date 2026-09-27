@@ -54,6 +54,8 @@ export interface SceneComponentInput {
   label: string;
   /** Qualified path of the parent component, if any. Drives depth + order. */
   parentKey?: string | undefined;
+  /** Human-readable name; heads the doc popup and reads better than `label`. */
+  fullName?: string | undefined;
   /** A leaf is atomic and cannot contain children, so it is not a valid drop target. */
   leaf?: boolean | undefined;
   icon?: string | undefined;
@@ -91,6 +93,8 @@ export interface SceneAnnotationInput {
 export interface SceneNode {
   key: string;
   label: string;
+  /** The component's `full_name`, or "" when unset. */
+  fullName: string;
   /** Qualified path of the parent, or undefined at the top level. */
   parentKey: string | undefined;
   /** Fully defaulted — no consumer needs to re-apply size/align defaults. */
@@ -214,6 +218,7 @@ export function buildDiagramScene(options: BuildSceneOptions): DiagramScene {
     placed.push({
       key: component.key,
       label: component.label,
+      fullName: component.fullName ?? "",
       parentKey: component.parentKey,
       box,
       depth: depthOf(component.key, parentOf),
