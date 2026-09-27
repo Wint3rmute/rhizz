@@ -16,7 +16,7 @@ Browser-based system model explorer. Pure SPA — no API, no external backend.
 ## Architecture
 
 The frontend follows the same
-[frontend contract](architecture.md#frontend-contract) as the CLI and GUI: all
+[frontend contract](architecture.md#frontend-contract) as the CLI: all
 model logic lives in `rhizz-core`, the frontend owns only I/O and presentation.
 
 ```
