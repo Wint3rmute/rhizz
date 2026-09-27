@@ -1,6 +1,6 @@
-# Web Frontend (`rhizz-web`)
+# Web Frontend (`web/` directory)
 
-Browser-based system model explorer. Pure SPA — no API, no external backend.
+Browser-based system modeler & explorer. Pure SPA — no API, no external backend.
 
 ## Stack
 
