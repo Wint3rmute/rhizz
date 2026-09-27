@@ -1,3 +1,4 @@
+import { componentKeyAt } from "../../../../modelKeys";
 import type { Dirent } from "../../../../vfs/fs";
 
 function withoutHclSuffix(value: string): string {
@@ -19,4 +20,22 @@ export function findComponentDiagram(
   ) ?? entries.find(
     (entry) => withoutHclSuffix(entry.name) === componentLabel,
   );
+}
+
+/** Indexes of components that have a detail diagram in `entries`. */
+export function linkedComponentIndexes(
+  components: { label: string }[],
+  componentKeys: string[],
+  entries: Dirent[],
+): Set<number> {
+  const linked = new Set<number>();
+  components.forEach((component, index) => {
+    const diagram = findComponentDiagram(
+      entries,
+      component.label,
+      componentKeyAt(componentKeys, index),
+    );
+    if (diagram) linked.add(index);
+  });
+  return linked;
 }

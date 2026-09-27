@@ -117,6 +117,7 @@ export default ts.config(
       "**/modeling/ArrowNudge.stories.ts",
       "**/modeling/MixedSelection.stories.ts",
       "**/modeling/SpawnAtCursor.stories.ts",
+      "**/modeling/DiagramViewer.stories.ts",
       "src/example_system.ts",
     ],
     rules: {
