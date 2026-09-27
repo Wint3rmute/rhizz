@@ -5,7 +5,7 @@
 // -50% translate loops seamlessly.
 // Import the screenshots directly so Vite processes them into hashed URLs
 // that work regardless of the app's base path (local, GitHub Pages, and
-// Storybook/Chromatic all resolve them correctly).
+// Storybook all resolve them correctly).
 import bg1 from "../screenshots/background_1.png";
 import bg2 from "../screenshots/background_2.png";
 import bg3 from "../screenshots/background_3.png";
