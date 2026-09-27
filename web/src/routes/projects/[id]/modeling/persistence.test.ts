@@ -7,7 +7,6 @@ import { openProjectFs } from "../../../../vfs/fs";
 import {
   emptyDiagramLayout,
   layoutToHcl,
-  mapLayoutToBoxes,
   parse_views,
   readDiagramLayoutFile,
   VIEW_LAYOUT_DIR,
@@ -244,43 +243,5 @@ describe("HCL View conversion and persistence", () => {
     expect(await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH)).toEqual(
       emptyDiagramLayout(),
     );
-  });
-});
-
-describe("mapLayoutToBoxes", () => {
-  const keyToIndex = new Map<string, number>([
-    ["drone/fc", 0],
-    ["drone/fc/mcu", 1],
-  ]);
-
-  it("maps layout checked records to placed node boxes", () => {
-    const checked = {
-      "drone/fc": {
-        x: 50,
-        y: 60,
-        width: 200,
-        height: 150,
-        textAlign: "top-left" as const,
-      },
-      "drone/fc/mcu": { x: 80, y: 100 },
-      "drone/unknown": { x: 10, y: 10 },
-    };
-
-    const boxes = mapLayoutToBoxes(checked, keyToIndex);
-    expect(boxes[0]).toEqual({
-      x: 50,
-      y: 60,
-      width: 200,
-      height: 150,
-      textAlign: "top-left",
-    });
-    expect(boxes[1]).toEqual({
-      x: 80,
-      y: 100,
-      width: 100,
-      height: 100,
-      textAlign: "center",
-    });
-    expect(boxes[2]).toBeUndefined();
   });
 });

@@ -18,13 +18,13 @@ import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
 import {
   type DiagramLayout,
   emptyDiagramLayout,
-  mapLayoutToBoxes,
   readDiagramLayoutFile,
   VIEW_LAYOUT_DIR,
 } from "../modeling/persistence";
+import { componentDataByKey, sceneFromModel } from "../../../../modelView";
 import Markdown from "../../../../components/Markdown.svelte";
 import { type ProjectDoc, readProjectDocs, withFullNameHeader } from "./docs";
-import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
+import { componentKeyAt } from "../../../../modelKeys";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { findComponentDiagram } from "./navigation";
 
@@ -195,23 +195,31 @@ let connections = $derived(model ? model.connections() : []);
 // (`Model::component_keys`) and index-aligned with `components`.
 let componentKeys = $derived(model ? model.component_keys() : []);
 
-let keyToIndex = $derived(componentKeyIndex(model));
+// The rendered diagram. Everything below addresses components by this key
+// rather than by arena index, so a rename or an edit earlier in the source
+// cannot silently reattach a node's detail view to a different component.
+let diagramScene = $derived(
+  sceneFromModel(
+    model,
+    selectedLayout.checked,
+    selectedLayout.annotations ?? [],
+  ),
+);
+
+let componentData = $derived(componentDataByKey(model));
 
 let componentDiagrams = $derived.by(() => {
-  const map = new SvelteMap<number, Dirent>();
+  const map = new SvelteMap<string, Dirent>();
   components.forEach((component: ComponentJS, index: number) => {
-    const diagram = findComponentDiagram(
-      diagramEntries,
-      component.label,
-      componentKeyAt(componentKeys, index),
-    );
-    if (diagram) map.set(index, diagram);
+    const key = componentKeyAt(componentKeys, index);
+    const diagram = findComponentDiagram(diagramEntries, component.label, key);
+    if (diagram) map.set(key, diagram);
   });
   return map;
 });
 
-let linkedComponents = $derived.by(() =>
-  new SvelteSet<number>(componentDiagrams.keys())
+let linkedComponents = $derived.by(
+  () => new SvelteSet<string>(componentDiagrams.keys()),
 );
 
 // Docs keyed by component label. A component is matched by its unique name
@@ -225,7 +233,7 @@ let docsByLabel = $derived.by(() => {
 
 // The component index currently hovered (if any) and the cursor position at
 // which the popup should be anchored.
-let hoveredIndex = $state<number | null>(null);
+let hoveredKey = $state<string | null>(null);
 let hoverPos = $state<{ x: number; y: number } | null>(null);
 
 // The container the popup is positioned against (the `relative` canvas
@@ -243,7 +251,7 @@ let canvasContainer: HTMLDivElement | undefined = $state();
 let hoverClient = $state<{ x: number; y: number } | null>(null);
 
 function positionPopup(): void {
-  if (hoveredIndex === null || hoverClient === null || !canvasContainer) {
+  if (hoveredKey === null || hoverClient === null || !canvasContainer) {
     hoverPos = null;
     return;
   }
@@ -254,9 +262,9 @@ function positionPopup(): void {
   };
 }
 
-function handleNodeHover(index: number | null, event?: MouseEvent) {
-  hoveredIndex = index;
-  if (index === null || !event) {
+function handleNodeHover(key: string | null, event?: MouseEvent) {
+  hoveredKey = key;
+  if (key === null || !event) {
     hoverClient = null;
     positionPopup();
     return;
@@ -279,25 +287,24 @@ $effect(() => {
 // component's unique label rather than its full qualified path. When the
 // component declares a `full_name`, it heads the tooltip as an L1 header.
 let hoveredDoc = $derived.by(() => {
-  if (hoveredIndex === null) return null;
-  const component = components[hoveredIndex];
-  const doc = docsByLabel.get(component?.label ?? "") ?? null;
+  if (hoveredKey === null) return null;
+  const component = componentData.get(hoveredKey);
+  if (component === undefined) return null;
+  const doc = docsByLabel.get(component.label) ?? null;
   if (doc === null) return null;
-  return withFullNameHeader(doc, component?.full_name ?? "");
+  return withFullNameHeader(doc, component.full_name ?? "");
 });
 
-function handleNodeClick(index: number) {
-  const component: ComponentJS | undefined = components[index];
-  if (!component) return;
-  const diagram = componentDiagrams.get(index);
+function handleNodeClick(key: string) {
+  const component = componentData.get(key);
+  if (component === undefined) return;
+  const diagram = componentDiagrams.get(key);
   if (diagram) {
     navigateToDiagram(diagram.path);
     return;
   }
   toastState.show(`No detailed view for ${component.label} created`, "info");
 }
-
-let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
 </script>
 
 <div class="flex flex-col md:flex-row flex-1 w-full h-full overflow-hidden">
@@ -402,13 +409,10 @@ let boxes = $derived(mapLayoutToBoxes(selectedLayout.checked, keyToIndex));
       {#if selectedDiagramPath}
         <div class="w-full h-full">
           <DiagramStaticView
-            components={components}
-            connections={connections}
-            boxes={boxes}
-            annotations={selectedLayout.annotations ?? []}
+            scene={diagramScene}
             linked={linkedComponents}
             onnodeclick={handleNodeClick}
-            onnodehover={(index, event) => handleNodeHover(index, event)}
+            onnodehover={handleNodeHover}
           />
           {#if hoveredDoc && hoverPos}
             <div

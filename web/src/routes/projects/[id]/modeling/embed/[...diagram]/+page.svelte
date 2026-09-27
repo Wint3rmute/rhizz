@@ -8,13 +8,12 @@ import { toastState } from "../../../../../../ToastState.svelte";
 import { compile_system } from "../../../../../../rhizz_wasm_wrapper";
 import { readProjectSources, type Source } from "../../../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../../../vfs/fs";
-import { componentKeyAt, componentKeyIndex } from "../../../../../../modelKeys";
+import { componentKeyAt } from "../../../../../../modelKeys";
 import DiagramEmbedView from "../../DiagramEmbedView.svelte";
-import type { DiagramStaticBox } from "../../types";
+import { sceneFromModel } from "../../../../../../modelView";
 import {
   type DiagramLayout,
   emptyDiagramLayout,
-  mapLayoutToBoxes,
   readDiagramLayoutFile,
   VIEW_LAYOUT_DIR,
 } from "../../persistence";
@@ -43,7 +42,7 @@ let warningLevel = $derived(getWarningLevel());
 let layout = $state<DiagramLayout>(emptyDiagramLayout());
 let layoutLoaded = $state(false);
 let docs = $state<ProjectDoc[]>([]);
-let hoveredIndex = $state<number | null>(null);
+let hoveredKey = $state<string | null>(null);
 let hoverPos = $state<{ x: number; y: number } | null>(null);
 let canvasContainer: HTMLDivElement | undefined = $state();
 
@@ -99,11 +98,6 @@ let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
-let keyToIndex = $derived(componentKeyIndex(model));
-
-// Structurally-stable component keys, index-aligned with `components` —
-// needed to resolve each node's qualified path for detail-view matching
-// (same convention as Explore's `componentDiagrams`).
 let componentKeys = $derived(model ? model.component_keys() : []);
 
 // Every view file in the project: drill-down targets are resolved against
@@ -136,29 +130,24 @@ $effect(() => {
 });
 
 let componentDiagrams = $derived.by(() => {
-  const map = new SvelteMap<number, Dirent>();
+  const map = new SvelteMap<string, Dirent>();
   components.forEach((component, index) => {
-    const diagram = findComponentDiagram(
-      diagramEntries,
-      component.label,
-      componentKeyAt(componentKeys, index),
-    );
-    if (diagram) map.set(index, diagram);
+    const key = componentKeyAt(componentKeys, index);
+    const diagram = findComponentDiagram(diagramEntries, component.label, key);
+    if (diagram) map.set(key, diagram);
   });
   return map;
 });
 
 let linkedComponents = $derived.by(
-  () => new SvelteSet<number>(componentDiagrams.keys()),
+  () => new SvelteSet<string>(componentDiagrams.keys()),
 );
 
 // Clicking a node navigates within the embed route (back/forward friendly):
 // linked nodes swap the `[...diagram]` param, unlinked ones toast — the
 // same feedback Explore shows for a missing detail view.
-function handleNodeClick(index: number): void {
-  const component = components[index];
-  if (!component) return;
-  const diagram = componentDiagrams.get(index);
+function handleNodeClick(key: string): void {
+  const diagram = componentDiagrams.get(key);
   if (diagram) {
     const base = resolve("/projects/[id]/modeling/embed/[...diagram]", {
       id: projectId ?? "",
@@ -167,12 +156,13 @@ function handleNodeClick(index: number): void {
     void goto(base);
     return;
   }
-  toastState.show(`No detailed view for ${component.label} created`, "info");
+  const label = scene.byKey.get(key)?.label ?? key;
+  toastState.show(`No detailed view for ${label} created`, "info");
 }
 
-let boxes = $derived.by<Record<number, DiagramStaticBox>>(() => {
-  return mapLayoutToBoxes(layout.checked, keyToIndex);
-});
+let scene = $derived(
+  sceneFromModel(model, layout.checked, layout.annotations ?? []),
+);
 
 // Docs keyed by component label, matching how the Explore view associates a
 // doc with a component (by its unique label, not its full qualified path).
@@ -184,16 +174,15 @@ let docsByLabel = $derived.by(() => {
 
 // The doc content for the hovered component, if one exists.
 let hoveredDoc = $derived(
-  hoveredIndex === null ? null : (() => {
-    const component = components[hoveredIndex];
-    const label = component?.label;
+  hoveredKey === null ? null : (() => {
+    const label = scene.byKey.get(hoveredKey)?.label;
     return label === undefined ? undefined : docsByLabel.get(label);
   })() ?? null,
 );
 
-function handleNodeHover(index: number | null, event?: MouseEvent) {
-  hoveredIndex = index;
-  if (index === null || !event || !canvasContainer) {
+function handleNodeHover(key: string | null, event?: MouseEvent) {
+  hoveredKey = key;
+  if (key === null || !event || !canvasContainer) {
     hoverPos = null;
     return;
   }
@@ -212,7 +201,7 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
     <div class="flex-1 flex items-center justify-center text-sm text-base-content/60">
       Loading diagram…
     </div>
-  {:else if Object.keys(boxes).length === 0 && (layout.annotations ?? []).length === 0}
+  {:else if scene.nodes.length === 0 && scene.annotations.length === 0}
     <div class="flex-1 flex items-center justify-center text-sm text-base-content/60 p-4 text-center">
       Diagram "{normalizedDiagramPath}" has no placed components or annotations.
     </div>
@@ -222,15 +211,12 @@ function handleNodeHover(index: number | null, event?: MouseEvent) {
       class="relative flex-1 w-full h-full overflow-hidden"
     >
       <DiagramEmbedView
-        components={components}
-        connections={connections}
-        boxes={boxes}
-        annotations={layout.annotations ?? []}
+        scene={scene}
         projectId={projectId}
         diagramPath={normalizedDiagramPath}
         linked={linkedComponents}
         onnodeclick={handleNodeClick}
-        onnodehover={(index, event) => handleNodeHover(index, event)}
+        onnodehover={handleNodeHover}
       />
       {#if hoveredDoc && hoverPos}
         <div

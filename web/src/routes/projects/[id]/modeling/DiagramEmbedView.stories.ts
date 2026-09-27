@@ -1,11 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import DiagramEmbedView from "./DiagramEmbedView.svelte";
-import type {
-  DiagramStaticBox,
-  DiagramStaticComponent,
-  DiagramStaticConnection,
-} from "./types";
+import { storyScene } from "./storyScene";
+import type { SceneBoxInput } from "./diagramScene";
 
 const meta = {
   title: "Diagrams/DiagramEmbedView",
@@ -19,28 +16,32 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const sampleComponents: DiagramStaticComponent[] = [
+const sampleComponents = [
   { label: "sensor" },
   { label: "controller" },
   { label: "broker" },
 ];
 
-const sampleConnections: DiagramStaticConnection[] = [
-  { from: 0, to: 1, label: "i2c" },
-  { from: 1, to: 2, label: "mqtt" },
+const sampleConnections = [
+  { from: "sensor", to: "controller", label: "i2c" },
+  { from: "controller", to: "broker", label: "mqtt" },
 ];
 
-const sampleBoxes: Record<number, DiagramStaticBox> = {
-  0: { x: 40, y: 60, width: 150, height: 90 },
-  1: { x: 260, y: 40, width: 220, height: 160, textAlign: "top-left" },
-  2: { x: 560, y: 60, width: 180, height: 90 },
+const sampleBoxes: Record<string, SceneBoxInput> = {
+  sensor: { x: 40, y: 60, width: 150, height: 90 },
+  controller: { x: 260, y: 40, width: 220, height: 160, textAlign: "top-left" },
+  broker: { x: 560, y: 60, width: 180, height: 90 },
 };
+
+const sampleScene = storyScene(
+  sampleComponents,
+  sampleBoxes,
+  sampleConnections,
+);
 
 export const Default: Story = {
   args: {
-    components: sampleComponents,
-    connections: sampleConnections,
-    boxes: sampleBoxes,
+    scene: sampleScene,
     projectId: "demo-project",
     diagramPath: "overview.hcl",
   },
@@ -50,12 +51,10 @@ export const Default: Story = {
 // outline in the embed viewport.
 export const Selected: Story = {
   args: {
-    components: sampleComponents,
-    connections: sampleConnections,
-    boxes: sampleBoxes,
+    scene: sampleScene,
     projectId: "demo-project",
     diagramPath: "overview.hcl",
-    selected: new Set([0, 2]),
+    selected: new Set(["sensor", "broker"]),
   },
 };
 
@@ -64,12 +63,10 @@ export const Selected: Story = {
 // this to in-embed drill-down navigation with a toast fallback.
 export const LinkedNavigation: Story = {
   args: {
-    components: sampleComponents,
-    connections: sampleConnections,
-    boxes: sampleBoxes,
+    scene: sampleScene,
     projectId: "demo-project",
     diagramPath: "overview.hcl",
-    linked: new Set([1]),
+    linked: new Set(["controller"]),
     onnodeclick: () => {},
   },
   play: async ({ canvasElement }) => {
@@ -90,13 +87,10 @@ export const LinkedNavigation: Story = {
 // exercises styled annotation runs.
 export const WithDistantAnnotations: Story = {
   args: {
-    components: sampleComponents,
-    connections: sampleConnections,
-    boxes: sampleBoxes,
-    annotations: [
+    scene: storyScene(sampleComponents, sampleBoxes, sampleConnections, [
       { text: "**far above**", x: 300, y: -400, scale: 2 },
       { text: "far below", x: 300, y: 700 },
-    ],
+    ]),
     projectId: "demo-project",
     diagramPath: "overview.hcl",
   },
