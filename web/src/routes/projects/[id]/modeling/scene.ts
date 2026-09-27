@@ -44,6 +44,8 @@ export interface DiagramNode {
   reparentTarget: boolean;
   ports: DiagramPort[];
   handles: DiagramNodeHandles;
+  /** 1 while resting. Below 1 only while a transition is fading this node. */
+  opacity?: number | undefined;
 }
 
 export interface DiagramEdge {
@@ -54,6 +56,7 @@ export interface DiagramEdge {
   startSide?: ConnectionSide;
   endSide?: ConnectionSide;
   selected: boolean;
+  opacity?: number | undefined;
 }
 
 export interface DiagramNote {
@@ -64,6 +67,7 @@ export interface DiagramNote {
   y: number;
   scale: number;
   selected: boolean;
+  opacity?: number | undefined;
 }
 
 export type DiagramOverlay =
@@ -84,8 +88,8 @@ export interface DiagramScene {
 
 export function diagramEdgeId(
   label: string,
-  from: number,
-  to: number,
+  from: number | string,
+  to: number | string,
 ): string {
   return `${label}:${String(from)}:${String(to)}`;
 }
@@ -123,6 +127,8 @@ export function buildReadOnlyScene(input: {
   linked?: ReadonlySet<number>;
   /** When set, nodes absent from `linked` are dimmed. Explore/embed pass this only when a click handler exists, matching the old opacity rule. */
   dimUnlinked?: boolean;
+  /** Stable component keys, index-aligned. View transitions match on these, not arena indexes. */
+  ids?: readonly string[];
 }): DiagramScene {
   const selected = input.selected ?? new Set<number>();
   const linked = input.linked ?? new Set<number>();
@@ -139,7 +145,7 @@ export function buildReadOnlyScene(input: {
     const placedBox = input.boxes[index];
     if (!component || !placedBox) return [];
     const node: DiagramNode = {
-      id: String(index),
+      id: input.ids?.[index] ?? String(index),
       index,
       label: component.label,
       box: { ...placedBox, textAlign: textAlignOf(placedBox.textAlign) },
@@ -162,8 +168,10 @@ export function buildReadOnlyScene(input: {
   return {
     nodes,
     edges: input.connections.map((conn) => {
+      const fromKey = input.ids?.[conn.from] ?? String(conn.from);
+      const toKey = input.ids?.[conn.to] ?? String(conn.to);
       const edge: DiagramEdge = {
-        id: diagramEdgeId(conn.label, conn.from, conn.to),
+        id: diagramEdgeId(conn.label, fromKey, toKey),
         label: conn.label,
         from: conn.from,
         to: conn.to,
@@ -197,6 +205,9 @@ export interface EditorSceneEdgeInput {
   label: string;
   from: number;
   to: number;
+  /** Stable endpoint keys. View transitions match edges on these, not arena indexes. */
+  fromKey?: string | undefined;
+  toKey?: string | undefined;
   startSide?: ConnectionSide | undefined;
   endSide?: ConnectionSide | undefined;
 }
@@ -257,7 +268,11 @@ export function buildEditorScene(input: {
     }),
     edges: input.edges.map((edge) => {
       const built: DiagramEdge = {
-        id: diagramEdgeId(edge.label, edge.from, edge.to),
+        id: diagramEdgeId(
+          edge.label,
+          edge.fromKey ?? edge.from,
+          edge.toKey ?? edge.to,
+        ),
         label: edge.label,
         from: edge.from,
         to: edge.to,
