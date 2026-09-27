@@ -54,6 +54,29 @@ L2871, `marqueeAnnotationCandidates` L2898), in three different shapes.
 `computePortPositions` is called in the template (L3469) *and* again in
 `findHoveredTarget` (L1959).
 
+### Five read-only consumers already share a renderer. The modeler is the lone holdout.
+
+`DiagramStaticView` (and `DiagramEmbedView` for the pannable case) is already
+the single funnel for:
+
+| Consumer | Uses |
+| --- | --- |
+| `Explore.svelte` L404 | `DiagramStaticView` (click-to-change-diagram + doc popup) |
+| `Inventory.svelte` L409 | `DiagramStaticView` (definition preview) |
+| `book-example/BookExampleView.svelte` | `DiagramStaticView` (worked examples) |
+| `embed/[...diagram]/+page.svelte` L224 | `DiagramEmbedView` (chromeless embed) |
+| `+page.svelte` L3335–3777 | **its own inline `<svg>` — the outlier** |
+
+So the modeler is not "one of several duplicates" — it is the single page that
+never adopted the shared renderer, and it did so by copying the older version
+and extending it. Folding it in is therefore mostly *subtraction*.
+
+Each consumer also adapts to the renderer's shape independently:
+`mapLayoutToBoxes` has **four** call sites (`Explore` L298, `Inventory` L210,
+`BookExampleView` L215, plus its own home), and `BookExampleView` L218–229
+hand-rolls an annotation adapter because it reads `ViewDefinition[]` rather
+than a `DiagramLayout`.
+
 ### The abstraction
 
 Four layers. The governing rule:
@@ -110,11 +133,14 @@ would be a false unification.
 
 - [ ] `diagramScene.ts` extracted from the existing `+page.svelte` logic, with
       the hit index. Both `DiagramElements.svelte` and `+page.svelte` call it;
-      `mapLayoutToBoxes` and the four inline candidate loops are gone.
+      `mapLayoutToBoxes` (4 call sites) and the four inline candidate loops are
+      gone.
 - [ ] `<DiagramScene>` takes `(scene, affordances, presentation)` + snippets.
       `DiagramElements.svelte` and `DiagramStaticView.svelte` point at it.
 - [ ] Modeler adopts it; ~260 lines of inline SVG deleted from `+page.svelte`;
       `Interaction` union + move/resize math move to a named module.
+- [ ] The four `mapLayoutToBoxes` call sites and the ad-hoc annotation adapter
+      are replaced by one scene builder.
 - [ ] `DiagramViewport` folded in as the single pan/zoom host.
 - [ ] Explore and embed use `useDiagramDrilldown()`; the scroll-invariant
       popup fix reaches **both**.
