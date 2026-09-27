@@ -16,6 +16,27 @@ How to work on this file:
 
 ---
 
+## Task <N> - Inventory and Modeling views - idiomatic URL path
+
+The Inventory and Modeling views should use an idiomatic URL path to show what
+entity/view is currently opened. This will allow to:
+
+- use Next/previous browser actions to navigate
+- share URLs to specific entities in the inventory and specific views in the modeling with other users
+
+## Task <N> - Make bottom bar a single entity and not transparent
+
+1. Bottom bar is currently a bit transparent - make it solid
+2. The bottom bar is currently made out of 2 parts: the bottom bar, it's always there and the expandable part that is shown when the user clicks on the bottom bar. Those parts have different colors - unify them.
+
+## Task <N> - During view transitions, connection arrows don't fade out
+
+It appears that connection arrows don't fade out when the component to which the
+arrow points to is not supposed to exist in the target view. They stay fully
+visible until the transition completes, then disappear abruptly.
+
+## Task <N> - 
+
 ## Task <N> - smarter "jump to detailed view"
 
 The context menu under the modeling/ page has a "jump to detailed view" option.
