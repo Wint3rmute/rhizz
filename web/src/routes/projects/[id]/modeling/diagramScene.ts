@@ -33,6 +33,10 @@ import {
   unionBox,
 } from "./geometry";
 
+// Re-exported so a host needs one import to describe a whole scene, and so
+// there is a single definition of each vocabulary in play.
+export type { Box, ConnectionSide, TextAlign };
+
 /** Default box size for a placed node that predates per-node sizing. */
 export const DEFAULT_NODE_WIDTH = 100;
 export const DEFAULT_NODE_HEIGHT = 100;

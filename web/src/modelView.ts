@@ -11,6 +11,16 @@
 // Node (see modelView.test.ts).
 import type { ModelJS } from "rhizz";
 import { componentKeyAt } from "./modelKeys";
+import {
+  buildDiagramScene,
+  type ConnectionSide,
+  type DiagramScene,
+  type SceneAnnotationInput,
+  type SceneBoxInput,
+  type SceneComponentInput,
+  type SceneConnectionInput,
+  type ScenePortInput,
+} from "./routes/projects/[id]/modeling/diagramScene";
 import type { BorderStyle } from "./routes/projects/[id]/modeling/visuals";
 import {
   type ComponentColor,
@@ -196,4 +206,86 @@ export function definitionOptions(
       icon: component.icon === "" ? undefined : component.icon,
     }))
     .sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel));
+}
+
+/** Per-connection routing overrides, as persisted in `views/*.hcl`. */
+export interface SceneRouting {
+  startSide?: ConnectionSide;
+  endSide?: ConnectionSide;
+}
+
+/**
+ * Projects the compiled model + a view's layout into a {@link DiagramScene} —
+ * the single input every diagram renderer consumes.
+ *
+ * Visual attributes and ports come from {@link componentDataByKey}, the same
+ * projection the inspector edits, so the canvas and the inspector can never
+ * disagree about a component's icon, colour or ports. Layout is keyed by the
+ * canonical component key, so renaming a component moves its box with it
+ * instead of silently reattaching the box to whatever now sits at that arena
+ * index.
+ */
+export function sceneFromModel(
+  model: ModelJS | undefined,
+  boxes: Readonly<Record<string, SceneBoxInput>>,
+  annotations: readonly SceneAnnotationInput[] = [],
+  routing: Readonly<Record<string, SceneRouting>> = {},
+  include?: (key: string) => boolean,
+): DiagramScene {
+  if (model === undefined) {
+    return buildDiagramScene({ components: [], connections: [], boxes: {} });
+  }
+
+  const raw = model.to_js() as RawModelPayload;
+  const components = raw.components ?? [];
+  const keys = model.component_keys();
+  const data = componentDataByKey(model);
+  const keyAt = (index: number): string => componentKeyAt(keys, index);
+
+  const sceneComponents: SceneComponentInput[] = components.map(
+    (component, index) => {
+      const key = keyAt(index);
+      const view = data.get(key);
+      const parentIndex = component.parent?.Component;
+      const ports: ScenePortInput[] | undefined = view?.ports.map((port) => ({
+        label: port.label,
+        role: port.role,
+        // `componentDataByKey` normalises an absent protocol to ""; the scene
+        // distinguishes "no protocol" (absent) from an empty one.
+        ...(port.protocol ? { protocol: port.protocol } : {}),
+      }));
+      return {
+        key,
+        label: component.label,
+        ...(parentIndex === undefined ? {} : { parentKey: keyAt(parentIndex) }),
+        // An empty icon string means "no icon" — consumers test for `undefined`.
+        ...(view?.icon ? { icon: view.icon } : {}),
+        ...(view
+          ? { color: view.color, border: view.border, font: view.font }
+          : {}),
+        ...(ports && ports.length > 0 ? { ports } : {}),
+      };
+    },
+  );
+
+  const sceneConnections: SceneConnectionInput[] = (raw.connections ?? []).map(
+    (connection) => {
+      const route = routing[connection.label];
+      return {
+        label: connection.label,
+        fromKey: keyAt(connection.from.component),
+        toKey: keyAt(connection.to.component),
+        ...(route?.startSide ? { startSide: route.startSide } : {}),
+        ...(route?.endSide ? { endSide: route.endSide } : {}),
+      };
+    },
+  );
+
+  return buildDiagramScene({
+    components: sceneComponents,
+    connections: sceneConnections,
+    boxes,
+    annotations,
+    include,
+  });
 }
