@@ -22,7 +22,6 @@ const meta = {
     onautolayout: () => {},
     onzoomtofill: () => {},
     onresetview: () => {},
-    onaddsystem: () => {},
     onaddcomponent: () => {},
     onaddannotation: () => {},
   },

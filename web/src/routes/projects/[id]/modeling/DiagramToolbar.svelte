@@ -22,7 +22,6 @@ interface Props {
   onautolayout: () => void;
   onzoomtofill: () => void;
   onresetview: () => void;
-  onaddsystem?: () => void;
   onaddcomponent?: () => void;
   onaddannotation?: () => void;
 }
@@ -37,7 +36,6 @@ let {
   onautolayout,
   onzoomtofill,
   onresetview,
-  onaddsystem,
   onaddcomponent,
   onaddannotation,
 }: Props = $props();
@@ -66,16 +64,7 @@ let {
       {/each}
     </select>
   </div>
-  {#if onaddsystem || onaddcomponent || onaddannotation}
-      {#if onaddsystem}
-        <button
-          onclick={onaddsystem}
-          class="btn btn-ghost btn-sm"
-          title="Add a new system to the model"
-        >
-          + System
-        </button>
-      {/if}
+  {#if onaddcomponent || onaddannotation}
       {#if onaddcomponent}
         <button
           onclick={onaddcomponent}

@@ -1669,17 +1669,6 @@ async function executeReparent(
   );
 }
 
-async function handleAddSystem(): Promise<void> {
-  const name = prompt("New system name?", `system-${systems.length + 1}`)
-    ?.trim();
-  if (!name) return;
-
-  await runModelLayoutTransaction(`add system ${name}`, {
-    kind: "add_system",
-    label: name,
-  });
-}
-
 let availableParents = $derived.by(() => {
   const options: {
     key: string;
@@ -3841,7 +3830,6 @@ $effect(() => {
         onautolayout={runAutoLayout}
         onzoomtofill={zoomToFill}
         onresetview={() => reset_view(editor_state)}
-        onaddsystem={() => void handleAddSystem().catch(reportDiagramError)}
         onaddcomponent={() => openCreateComponentModal()}
         onaddannotation={() => addAnnotationHandler()}
       />
