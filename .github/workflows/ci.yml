@@ -193,27 +193,8 @@ jobs:
           name: playwright-report
           path: web/playwright-report/
 
-      # Visual regression tests. The wasm pkg comes from the artifact above,
-      # so only Storybook is built here (`vrt-quick` skips the wasm rebuild).
-      - run: nix develop --command deno run build-storybook
-        working-directory: ./web
-
-      - run: nix develop --command just vrt-quick
-
-      # Static diff gallery: download, unzip, open index.html.
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: vrt-report
-          path: web/vrt-report/
-          if-no-files-found: ignore
-
-  # Build the frontend + Storybook for GitHub Pages. Runs on every push to
-  # main, or on manual dispatch.
-  publish:
+  visual-regressions:
     needs: wasm
-    if: ${{ github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     env:
       BASE_PATH: "/${{ github.event.repository.name }}"
@@ -235,19 +216,20 @@ jobs:
       - run: nix develop --command deno run build
         working-directory: ./web
 
+      # Visual regression tests. The wasm pkg comes from the artifact above,
+      # so only Storybook is built here (`vrt-quick` skips the wasm rebuild).
       - run: nix develop --command deno run build-storybook
         working-directory: ./web
 
-      - run: |
-          rm -rf pages
-          mkdir -p pages/storybook
-          cp -a web/build/. pages/
-          cp -a web/storybook-static/. pages/storybook/
+      - run: nix develop --command just vrt-quick
 
+      # Static diff gallery: download, unzip, open index.html.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
-          name: rhizz-web
-          path: pages/
+          name: vrt-report
+          path: web/vrt-report/
+          if-no-files-found: ignore
 
   # Docs are only for Pages, not a PR check.
   docs:
