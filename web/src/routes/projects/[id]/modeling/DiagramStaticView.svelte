@@ -1,10 +1,11 @@
 <script lang="ts">
 // A read-only, non-interactive rendering of a diagram's placed nodes and
-// connections — a smaller, first-cut extraction of +page.svelte's canvas
-// rendering, deliberately stripped of everything that makes the real
-// canvas heavy to mount standalone: no drag/resize/marquee/pan/zoom
-// interaction, no undo history, no auto-layout, and critically, no
-// dependency on rhizz_wasm_wrapper/"rhizz" at all.
+// connections. Drawing goes through DiagramCanvas (via DiagramElements);
+// this shell only owns the auto-fit viewBox. Deliberately stripped of
+// everything that makes the real canvas heavy to mount standalone: no
+// drag/resize/marquee/pan/zoom interaction, no undo history, no
+// auto-layout, and critically, no dependency on rhizz_wasm_wrapper/"rhizz"
+// at all.
 import { annotationBounds, unionBox } from "./geometry";
 import DiagramElements from "./DiagramElements.svelte";
 import type {

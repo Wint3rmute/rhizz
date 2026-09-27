@@ -27,7 +27,6 @@ import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
-import AnnotationText from "./AnnotationText.svelte";
 import AnnotationInspector from "./AnnotationInspector.svelte";
 import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
@@ -69,15 +68,11 @@ import {
   annotationBounds,
   boxContains,
   clampWithin,
-  computeDirectionalHandles,
   computeLcaConnection,
   computePortPositions,
   computeRenderOrder,
   computeResizedBox,
-  computeResizeHandles,
-  computeVisibleConnections,
   depthOf,
-  elbowPath,
   findConnectTarget,
   findReparentTarget,
   MIN_NODE_SIZE,
@@ -86,8 +81,8 @@ import {
   unionBox,
 } from "./geometry";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
-import { resolveIcon } from "../../../../iconHelper";
-import DiagramNodeBody from "./DiagramNodeBody.svelte";
+import DiagramCanvas from "./DiagramCanvas.svelte";
+import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
 import {
   type BorderStyle,
   COLOR_OPTIONS,
@@ -95,8 +90,6 @@ import {
   type ComponentFont,
   DEFAULT_COLOR,
   DEFAULT_FONT,
-  SELECTION_OUTLINE_DASHARRAY,
-  SELECTION_OUTLINE_OPACITY,
 } from "./visuals";
 import {
   buildGraduatedGridPatterns,
@@ -319,10 +312,6 @@ function snap(value: number): number {
     : DEFAULT_SNAP_GRID_SIZE;
   return Math.round(value / gridSize) * gridSize;
 }
-
-// Hit area dimensions for edge and corner resize handles
-const CORNER_HANDLE_SIZE = 10;
-const EDGE_HANDLE_THICKNESS = 6;
 
 // Default text alignment for newly-placed nodes and for backfilling
 // entries persisted before per-node text alignment existed.
@@ -2819,30 +2808,6 @@ async function handleDeleteSelectedConnection(
   );
 }
 
-// Only connections where both endpoints are currently on the canvas AND in
-// this view's bound system.
-let visibleConnections = $derived(
-  computeVisibleConnections(
-    connections.filter((c) =>
-      selectedSystemIndex === -1 ||
-      (systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to))
-    ).map((conn) => {
-      const entry: {
-        from: number;
-        to: number;
-        label: string;
-        startSide?: ConnectionSide;
-        endSide?: ConnectionSide;
-      } = { from: conn.from, to: conn.to, label: conn.label };
-      const saved = savedConnections[conn.label];
-      if (saved?.startSide !== undefined) entry.startSide = saved.startSide;
-      if (saved?.endSide !== undefined) entry.endSide = saved.endSide;
-      return entry;
-    }),
-    (i) => nodeBox(i),
-  ),
-);
-
 // Looks up a component's direct parent index, for depthOf below.
 function parentOf(index: number): number | undefined {
   return components[index]?.parent_component_index;
@@ -2904,6 +2869,72 @@ let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
     if (boxContains(box, annotationHitBox(ann))) candidates.add(i);
   });
   return candidates;
+});
+
+// The scene DiagramCanvas draws. Highlighted sets include the live marquee
+// preview; connect handles follow the committed selection, or every node
+// while a connection drag is active. Paths are not stored here — the canvas
+// recomputes them from these boxes.
+let editorScene = $derived.by(() => {
+  const current = interaction;
+  const nodes = renderOrder.flatMap((index) => {
+    const box = nodeBox(index);
+    const component = components[index];
+    if (!box || !component) return [];
+    const compKey = getComponentKey(index);
+    const compData = componentData.get(compKey);
+    return [{
+      id: compKey,
+      index,
+      label: component.label,
+      box,
+      parentIndex: component.parent_component_index,
+      icon: compData?.icon ?? component.icon,
+      color: compData?.color || component.color,
+      border: compData?.border ?? component.border,
+      font: compData?.font ?? component.font,
+      ports: compData && compData.ports.length > 0 ? compData.ports : [],
+    }];
+  });
+  const edges: EditorSceneEdgeInput[] = connections
+    .filter((conn) =>
+      selectedSystemIndex === -1 ||
+      (systemComponentIndices.has(conn.from) &&
+        systemComponentIndices.has(conn.to))
+    )
+    .map((conn) => {
+      const edge: EditorSceneEdgeInput = {
+        from: conn.from,
+        to: conn.to,
+        label: conn.label,
+      };
+      const saved = savedConnections[conn.label];
+      if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
+      if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
+      return edge;
+    });
+  return buildEditorScene({
+    nodes,
+    edges,
+    notes: annotations,
+    selectedNodeIndexes: current.type === "marquee"
+      ? marqueeCandidates
+      : selected,
+    connectHandles: current.type === "connecting" ? "all" : selected,
+    selectedNoteIndexes: current.type === "marquee"
+      ? marqueeAnnotationCandidates
+      : selectedAnnotations,
+    reparentTargetIndex,
+    selectedEdgeLabel: selectedConnection,
+    marquee: marqueeBox,
+    rubberBand: current.type === "connecting"
+      ? {
+        from: current.sourcePoint,
+        to: current.currentPoint,
+        orientation: "horizontal",
+      }
+      : null,
+  });
 });
 
 // Fraction of the viewport the diagram's bounding box should fill (in
@@ -3412,33 +3443,6 @@ $effect(() => {
               />
             </pattern>
           {/each}
-          <marker
-            id="arrow"
-            markerWidth="8"
-            markerHeight="6"
-            refX="8"
-            refY="3"
-            orient="auto"
-          >
-            <polygon
-              points="0 0, 8 3, 0 6"
-              fill="var(--color-base-content)"
-              fill-opacity="0.5"
-            />
-          </marker>
-          <marker
-            id="arrow-selected"
-            markerWidth="8"
-            markerHeight="6"
-            refX="8"
-            refY="3"
-            orient="auto"
-          >
-            <polygon
-              points="0 0, 8 3, 0 6"
-              fill="var(--color-primary)"
-            />
-          </marker>
         </defs>
         <rect
           fill={gridVisible ? `url(#${gridFillId})` : "transparent"}
@@ -3450,330 +3454,30 @@ $effect(() => {
           ondblclick={onCanvasDblClick}
         />
 
-        {#snippet ViewNode(
-          label: string,
-          index: number,
-          x: number,
-          y: number,
-          width: number,
-          height: number,
-          textAlign: TextAlign,
-        )}
-          {@const highlighted = interaction.type === "marquee"
-            ? marqueeCandidates.has(index)
-            : selected.has(index)}
-          {@const compKey = getComponentKey(index)}
-          {@const compData = componentData.get(compKey)}
-          {@const modelComp = components[index]}
-          {@const icon = resolveIcon(compData?.icon ?? modelComp?.icon)}
-          {@const portPositions = compData && compData.ports.length > 0
-            ? computePortPositions(width, height, compData.ports)
-            : []}
-          <g
-            transform="translate({x}, {y})"
-            onmousedown={(e) => onNodeMouseDown(e, index)}
-            ondblclick={(e) => onNodeDblClick(e, index)}
-            oncontextmenu={(e) => openNodeContextMenu(e, index)}
-            style="cursor: {autoLayoutRunning ? 'wait' : 'grab'}"
-          >
-            <DiagramNodeBody
-              {label}
-              {width}
-              {height}
-              {textAlign}
-              {icon}
-              color={compData?.color || modelComp?.color}
-              border={compData?.border ?? modelComp?.border}
-              font={compData?.font ?? modelComp?.font}
-              selected={highlighted}
-            />
-            {#if reparentTargetIndex === index}
-              <rect
-                x={-4}
-                y={-4}
-                width={width + 8}
-                height={height + 8}
-                rx="8"
-                fill="none"
-                stroke="var(--color-primary)"
-                stroke-width="2"
-                stroke-dasharray="4 4"
-                class="animate-pulse"
-                style="pointer-events: none"
-              />
-            {/if}
-
-            <!-- 8 transparent resize hit-areas (4 edge strips + 4 corners),
-                 geometry computed by computeResizeHandles in geometry.ts -->
-            {#each computeResizeHandles(
-              width,
-              height,
-              CORNER_HANDLE_SIZE,
-              EDGE_HANDLE_THICKNESS,
-            ) as handle (handle.handle)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <rect
-                x={handle.x}
-                y={handle.y}
-                width={handle.width}
-                height={handle.height}
-                fill="transparent"
-                style="cursor: {autoLayoutRunning ? 'wait' : handle.cursor}"
-                onmousedown={(e) =>
-                  onResizeHandleMouseDown(e, index, handle.handle)}
-              />
-            {/each}
-
-
-            <!-- Port & Directional handles (visible when selected or actively dragging a connection) -->
-            {#if selected.has(index) || interaction.type === "connecting"}
-              <!-- 4 Directional handles for starting connection from any border side -->
-              {#each computeDirectionalHandles(width, height) as handle (handle.side)}
-                <g transform="translate({handle.x}, {handle.y})">
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <circle
-                    r="8"
-                    fill="transparent"
-                    class="cursor-crosshair"
-                    onmousedown={(e) =>
-                      onPortMouseDown(e, index, null, {
-                        x: x + handle.x,
-                        y: y + handle.y,
-                      }, handle.side)}
-                  >
-                    <title>Drag connection from {handle.side}</title>
-                  </circle>
-                  <circle
-                    r="3.5"
-                    fill="var(--color-primary)"
-                    fill-opacity="0.85"
-                    stroke="var(--color-base-100)"
-                    stroke-width="1"
-                    style="pointer-events: none"
-                  />
-                </g>
-              {/each}
-
-              {#if portPositions.length > 0}
-                {#each portPositions as port (port.label)}
-                  {@const portFill = port.role === "provider"
-                    ? "var(--color-success)"
-                    : port.role === "consumer"
-                    ? "var(--color-warning)"
-                    : "var(--color-info)"}
-                  <g transform="translate({port.x}, {port.y})">
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <circle
-                      r="8"
-                      fill="transparent"
-                      class="cursor-crosshair"
-                      onmousedown={(e) =>
-                        onPortMouseDown(e, index, port.label, {
-                          x: x + port.x,
-                          y: y + port.y,
-                        })}
-                    >
-                      <title
-                      >{port.label} ({port.role}, {port.protocol ||
-                          "untyped"})</title>
-                    </circle>
-                    <circle
-                      r="4"
-                      fill={portFill}
-                      stroke="var(--color-base-100)"
-                      stroke-width="1.5"
-                      style="pointer-events: none"
-                    />
-                  </g>
-                {/each}
-              {/if}
-            {/if}
-
-
-          </g>
-        {/snippet}
-
-        {#each renderOrder as index (index)}
-          {@const box = nodeBox(index)}
-          {@const component = components[index]}
-          {#if box && component}
-            {@render ViewNode(
-              component.label,
-              index,
-              box.x,
-              box.y,
-              box.width,
-              box.height,
-              box.textAlign,
-            )}
-          {/if}
-        {/each}
-
-        <!--
-          Connections are drawn after (on top of) nodes so arrows/labels are
-          never hidden behind an opaque node fill — this can occasionally
-          mean a connection line visually crosses over an unrelated node if
-          its route happens to pass through it, which is an accepted
-          trade-off for now (proper edge routing that dodges nodes entirely
-          is a bigger feature, not needed at this stage).
-        -->
-        {#each visibleConnections as { conn, a, b, orientation } (`${conn.label}-${conn.from}-${conn.to}`)}
-          {@const isConnSelected = selectedConnection === conn.label}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <g
-            class="cursor-pointer"
-            onclick={(e) => {
-              e.stopPropagation();
-              selectedConnection = conn.label;
-              clearSelection();
-            }}
-            oncontextmenu={(e) => openConnectionContextMenu(e, conn.label)}
-          >
-            <!-- Thicker invisible hit target -->
-            <path
-              d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
-              stroke="transparent"
-              stroke-width="14"
-              fill="none"
-            />
-            <path
-              d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
-              stroke={isConnSelected
-                ? "var(--color-primary)"
-                : "var(--color-base-content)"}
-              stroke-opacity={isConnSelected ? 1 : 0.35}
-              stroke-width={isConnSelected ? 2.5 : 1.5}
-              fill="none"
-              marker-end="url(#{isConnSelected ? 'arrow-selected' : 'arrow'})"
-            />
-            <text
-              x={(a.x + b.x) / 2}
-              y={(a.y + b.y) / 2 - 6}
-              fill={isConnSelected
-                ? "var(--color-primary)"
-                : "var(--color-base-content)"}
-              fill-opacity={isConnSelected ? 1 : 0.5}
-              font-size="10"
-              font-weight={isConnSelected ? "bold" : "normal"}
-              text-anchor="middle"
-              style="user-select: none"
-            >
-              {conn.label}
-            </text>
-          </g>
-        {/each}
-
-        <!-- Free-standing text annotations, rendered at absolute positions.
-             Selectable + draggable like nodes; double-click focuses the
-             inspector's text editor; corner-drag to resize (changes the
-             font scale, also editable as a number in the inspector).
-             The text itself is pointer-events: none; an invisible rect
-             behind it is the hit target (SVG <g> has no geometry of its own). -->
-        {#each annotations as ann, i (`${i}-${ann.text}-${ann.x}-${ann.y}-${ann.scale}`)}
-          {@const isAnnSelected = interaction.type === "marquee"
-            ? marqueeAnnotationCandidates.has(i)
-            : selectedAnnotations.has(i)}
-          {@const annHit = annotationHitBox(ann)}
-          {@const annX = annHit.x}
-          {@const annY = annHit.y}
-          {@const annWidth = annHit.width}
-          {@const annHeight = annHit.height}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <g
-            class="cursor-grab"
-            onmousedown={(e) => onAnnotationMouseDown(e, i)}
-            oncontextmenu={(e) => openAnnotationContextMenu(e, i)}
-            ondblclick={(e) => {
-              e.stopPropagation();
-              selectAnnotation(i);
-              // Jump focus to the inspector's text editor (already mounted
-              // when the note was selected by the first click).
-              annotationInspector?.focusText();
-            }}
-          >
-            <rect
-              x={annX}
-              y={annY}
-              width={annWidth}
-              height={annHeight}
-              fill="transparent"
-              style="cursor: grab"
-            />
-            {#if isAnnSelected}
-              <!-- Selection frame identical in style to components: a dotted
-                   primary outline around the annotation's hit box. -->
-              <rect
-                x={annX}
-                y={annY}
-                width={annWidth}
-                height={annHeight}
-                rx="3"
-                fill="none"
-                stroke="var(--color-primary)"
-                stroke-opacity={SELECTION_OUTLINE_OPACITY}
-                stroke-width="1.5"
-                stroke-dasharray={SELECTION_OUTLINE_DASHARRAY}
-                style="pointer-events: none"
-              />
-              <!-- Top-right corner resize handle (font scale), tucked INSIDE
-                   the selection box (x/y within annX..annX+annWidth). -->
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <rect
-                x={annX + annWidth - CORNER_HANDLE_SIZE}
-                y={annY}
-                width={CORNER_HANDLE_SIZE}
-                height={CORNER_HANDLE_SIZE}
-                fill="var(--color-primary)"
-                fill-opacity="0.9"
-                style="cursor: nesw-resize"
-                onmousedown={(e) => onAnnotationResizeMouseDown(e, i, "top-right")}
-              />
-            {/if}
-            <AnnotationText
-              text={ann.text}
-              x={ann.x}
-              y={ann.y}
-              scale={ann.scale ?? 1}
-              fill={isAnnSelected
-                ? "var(--color-primary)"
-                : "var(--color-base-content)"}
-            />
-          </g>
-        {/each}
-
-        {#if interaction.type === "connecting"}
-          <path
-            d={elbowPath(
-              interaction.sourcePoint.x,
-              interaction.sourcePoint.y,
-              interaction.currentPoint.x,
-              interaction.currentPoint.y,
-              "horizontal",
-            )}
-            fill="none"
-            stroke="var(--color-primary)"
-            stroke-width="2"
-            stroke-dasharray="4 4"
-            marker-end="url(#arrow)"
-            class="animate-pulse"
-            style="pointer-events: none"
-          />
-        {/if}
-
-        {#if marqueeBox}
-          <rect
-            x={marqueeBox.x}
-            y={marqueeBox.y}
-            width={marqueeBox.width}
-            height={marqueeBox.height}
-            fill="var(--color-primary)"
-            fill-opacity="0.15"
-            stroke="var(--color-primary)"
-            stroke-width="1"
-            style="pointer-events: none"
-          />
-        {/if}
+        <DiagramCanvas
+          scene={editorScene}
+          markerId="arrow"
+          busy={autoLayoutRunning}
+          onNodePointerDown={onNodeMouseDown}
+          onNodeDblClick={onNodeDblClick}
+          onNodeContextMenu={openNodeContextMenu}
+          onPortPointerDown={onPortMouseDown}
+          onResizePointerDown={onResizeHandleMouseDown}
+          onEdgeClick={(event, edge) => {
+            event.stopPropagation();
+            selectedConnection = edge.label;
+            clearSelection();
+          }}
+          onEdgeContextMenu={openConnectionContextMenu}
+          onNotePointerDown={onAnnotationMouseDown}
+          onNoteDblClick={(event, index) => {
+            event.stopPropagation();
+            selectAnnotation(index);
+            annotationInspector?.focusText();
+          }}
+          onNoteContextMenu={openAnnotationContextMenu}
+          onNoteResizePointerDown={onAnnotationResizeMouseDown}
+        />
       </svg>
 
       {#if contextMenu}
