@@ -12,25 +12,13 @@ import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
-import { componentKeyIndex } from "../../../../modelKeys";
-import type {
-  RawComponent,
-  RawConnection,
-  RawModelPayload,
-} from "../../../../modelView";
+import type { RawModelPayload } from "../../../../modelView";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import DiagramStaticView from "../modeling/DiagramStaticView.svelte";
+import DiagramViewer from "../modeling/DiagramViewer.svelte";
 import {
-  type DiagramLayout,
   emptyDiagramLayout,
-  mapLayoutToBoxes,
-  readDiagramLayoutFile,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
-import type {
-  DiagramStaticComponent,
-  DiagramStaticConnection,
-} from "../modeling/types";
 import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
 import {
@@ -85,7 +73,6 @@ let raw = $derived(
 );
 let comps = $derived(raw?.components ?? []);
 let rawPorts = $derived(raw?.ports ?? []);
-let rawConnections = $derived(raw?.connections ?? []);
 
 // ── Definitions extracted from the compiled model ──────────────────────────
 // `raw.definitions` holds the arena indices of the top-level reusable
@@ -162,75 +149,6 @@ $effect(() => {
 let selectedDefinition = $derived(
   filtered.find((d) => d.label === selectedLabel) ?? null,
 );
-
-// ── Default diagram loading ─────────────────────────────────────────────────
-// The selected definition's default diagram is the VFS file
-// `views/<label>.hcl`. Missing file → empty state (display-only).
-let selectedLayout = $state<DiagramLayout>(emptyDiagramLayout());
-let diagramExists = $state(false);
-
-$effect(() => {
-  const id = projectId;
-  const label = selectedDefinition?.label;
-  if (!id || !label) {
-    selectedLayout = emptyDiagramLayout();
-    diagramExists = false;
-    return;
-  }
-
-  let cancelled = false;
-  const path = defaultViewPath(label);
-  const fs = openProjectFs(projectStore, id);
-  // Probe existence first: `readDiagramLayoutFile` silently returns an
-  // empty layout for ENOENT, but we must distinguish "empty diagram"
-  // from "no default diagram file yet" (empty state).
-  fs.readFile(path)
-    .then(() => readDiagramLayoutFile(fs, path))
-    .then((layout) => {
-      if (cancelled) return;
-      selectedLayout = layout;
-      diagramExists = true;
-    })
-    .catch(() => {
-      if (cancelled) return;
-      selectedLayout = emptyDiagramLayout();
-      diagramExists = false;
-    });
-
-  return () => {
-    cancelled = true;
-  };
-});
-
-// ── Preview rendering ───────────────────────────────────────────────────────
-// Map layout component keys to indices via rhizz-core's canonical keys
-// (`Model::component_keys`), index-aligned with `comps`/`model.components()`.
-let keyToIndex = $derived(componentKeyIndex(model));
-
-let previewBoxes = $derived(
-  mapLayoutToBoxes(selectedLayout.checked, keyToIndex),
-);
-
-// The definition (or one of its placed instances) that the preview
-// emphasizes, plus its whole subtree.
-let staticComponents = $derived.by<DiagramStaticComponent[]>(() => {
-  return comps.map((c: RawComponent) => ({
-    label: c.label,
-    icon: c.icon,
-    color: c.color,
-    border: c.border,
-    font: c.font,
-    parent_component_index: c.parent?.Component,
-  }));
-});
-
-let staticConnections = $derived.by<DiagramStaticConnection[]>(() => {
-  return rawConnections.map((c: RawConnection) => ({
-    from: c.from.component,
-    to: c.to.component,
-    label: c.label,
-  }));
-});
 
 let emptyStatePath = $derived(
   selectedDefinition ? defaultViewPath(selectedDefinition.label) : null,
@@ -404,40 +322,40 @@ async function handleCreateView(): Promise<void> {
       <div
         class="relative flex-1 min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
       >
-        {#if selectedDefinition && diagramExists}
-          <div class="w-full h-full">
-            <DiagramStaticView
-              components={staticComponents}
-              connections={staticConnections}
-              boxes={previewBoxes}
-            />
-          </div>
-        {:else if selectedDefinition}
-          <!-- Empty state: no default view diagram for this component -->
-          <div
-            class="flex h-full w-full items-center justify-center p-6 text-center"
-            data-testid="inventory-empty-diagram"
+        {#if selectedDefinition}
+          <DiagramViewer
+            {projectId}
+            diagramPath={`${selectedDefinition.label}.hcl`}
           >
-            <div class="card bg-base-200/80 border border-base-content/10">
-              <div class="card-body items-center max-w-md">
-                <p class="text-sm text-base-content/70">
-                  Please create a default view diagram under
-                  <code class="text-base-content bg-base-300 rounded px-1 py-0.5">
-                    {emptyStatePath}
-                  </code>
-                </p>
-                <button
-                  type="button"
-                  class="btn btn-primary btn-sm mt-3"
-                  disabled={creatingView}
-                  onclick={() => void handleCreateView()}
-                  data-testid="inventory-create-view"
-                >
-                  {creatingView ? "Creating…" : "Create a view for this component"}
-                </button>
+            {#snippet whenMissing()}
+              <div
+                class="flex h-full w-full items-center justify-center p-6 text-center"
+                data-testid="inventory-empty-diagram"
+              >
+                <div class="card bg-base-200/80 border border-base-content/10">
+                  <div class="card-body items-center max-w-md">
+                    <p class="text-sm text-base-content/70">
+                      Please create a default view diagram under
+                      <code class="text-base-content bg-base-300 rounded px-1 py-0.5">
+                        {emptyStatePath}
+                      </code>
+                    </p>
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm mt-3"
+                      disabled={creatingView}
+                      onclick={() => void handleCreateView()}
+                      data-testid="inventory-create-view"
+                    >
+                      {creatingView
+                        ? "Creating…"
+                        : "Create a view for this component"}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            {/snippet}
+          </DiagramViewer>
         {:else}
           <div
             class="flex h-full w-full items-center justify-center text-sm text-base-content/60 p-4 text-center"
