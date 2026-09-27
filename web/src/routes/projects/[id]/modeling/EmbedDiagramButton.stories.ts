@@ -41,7 +41,7 @@ export const PinnedBaseUrl: Story = {
     // URL). The prefix is optional: without `BASE_PATH` (local dev) the URL is
     // `https://<origin>/projects/...`, with one it is
     // `https://<origin>/<base>/projects/...`. Anchoring on the deterministic
-    // origin — the thing under test, not the Chromatic runner's
+    // origin — the thing under test, not the test runner's
     // `window.location.origin` — keeps the lookup specific to the Direct URL
     // <input>, since the iframe <textarea> value starts with `<iframe`
     // instead. `getByDisplayValue` throws if absent.
