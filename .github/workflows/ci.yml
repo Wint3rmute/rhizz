@@ -142,18 +142,14 @@ jobs:
       - run: nix develop --command deno run test
         working-directory: ./web
 
-  # Full-app browser tests via @playwright/test (web/e2e), then visual
-  # regression tests over every Storybook story (web/vrt). Chromium comes
-  # from the flake (PLAYWRIGHT_BROWSERS_PATH); the HTML report + traces and
-  # the VRT diff gallery are kept as artifacts for post-failure inspection.
+  # Full-app browser tests via @playwright/test (web/e2e). Chromium comes
+  # from the flake (PLAYWRIGHT_BROWSERS_PATH); the HTML report + traces are
+  # kept as an artifact for post-failure inspection.
   e2e:
     needs: wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          # VRT baselines (web/vrt/__screenshots__/*.png) live in Git LFS.
-          lfs: true
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
@@ -193,13 +189,17 @@ jobs:
           name: playwright-report
           path: web/playwright-report/
 
+  # Visual regression tests over every Storybook story (web/vrt). Split out
+  # of `e2e` so a story diff doesn't queue behind the full browser suite. The
+  # static diff gallery is kept as an artifact for post-failure inspection.
   visual-regressions:
     needs: wasm
     runs-on: ubuntu-latest
-    env:
-      BASE_PATH: "/${{ github.event.repository.name }}"
     steps:
       - uses: actions/checkout@v6
+        with:
+          # VRT baselines (web/vrt/__screenshots__/*.png) live in Git LFS.
+          lfs: true
 
       - uses: DeterminateSystems/nix-installer-action@main
 
@@ -213,11 +213,9 @@ jobs:
       - run: nix develop --command deno install
         working-directory: ./web
 
-      - run: nix develop --command deno run build
-        working-directory: ./web
-
-      # Visual regression tests. The wasm pkg comes from the artifact above,
-      # so only Storybook is built here (`vrt-quick` skips the wasm rebuild).
+      # The wasm pkg comes from the artifact above, so only Storybook is built
+      # here (`vrt-quick` skips the wasm rebuild). No app build: VRT serves
+      # storybook-static/ alone (see vrt/serve.ts).
       - run: nix develop --command deno run build-storybook
         working-directory: ./web
 
@@ -260,25 +258,17 @@ jobs:
           name: rhizz-docs
           path: docs-artifact/
 
+  # Pages carries the book and the API docs only. The app is no longer
+  # published here — only `docs`/`book` produce artifacts to deploy.
   deploy-pages:
-    needs: [publish, docs, book]
-    # Publish is skipped on pull requests; deploy still runs (docs & book are
-    # always deployed) but never after a failed publish or a failed book/docs
-    # build.
+    needs: [docs, book]
     if: ${{ github.event_name != 'pull_request' && !cancelled() &&
-      needs.publish.result != 'failure' && needs.docs.result == 'success' &&
-      needs.book.result == 'success' }}
+      needs.docs.result == 'success' && needs.book.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: rhizz-web
-          path: pages/
-        continue-on-error: true
-
       - uses: actions/download-artifact@v8
         with:
           name: rhizz-docs
