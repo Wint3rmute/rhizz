@@ -4,6 +4,59 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task — Move the /modeling toolbar to the top
+
+The floating diagram toolbar (Snap to Grid, + System, + Component, + Note, Auto
+Layout, Toggle Grid, Zoom to Fill, Reset View) was anchored to the bottom edge
+of the canvas. It is now anchored to the top.
+
+- **The move is one class token.** The toolbar is `absolute` inside the canvas
+  column (`relative flex-1 w-full h-full` in `+page.svelte`), so the whole
+  mechanism was `bottom-2` → `top-2`. `top-2` and `bottom-2` are both 0.5rem,
+  so the inset is unchanged, and the `left-1/2 -translate-x-1/2` centring was
+  left alone. Implementation diff is 3 insertions / 3 deletions: the class
+  token plus two comments in `DiagramToolbar.svelte` and
+  `DiagramToolbar.stories.ts` that said "bottom-centre".
+- **Nothing else was top-anchored**, so there was no collision to resolve: the
+  canvas overlays that exist are the context menu, the compile-error card
+  (`inset-0`, centred) and the activity hint, which stays at `bottom-2 right-2`.
+- **New e2e test** (`e2e/diagram-toolbar-placement.spec.ts`) pins the bar's top
+  edge to the canvas top (≤16px, covering the 8px inset), asserts it is
+  *below* the canvas top rather than level with it, and pins the horizontal
+  centring to ≤2px. It failed red first with a 568px offset — the canvas is
+  ~570px tall, i.e. the bar really was at the far edge.
+- **Two existing e2e tests were implicitly coupled to the old position** and
+  had to move: `arrow-key-nudge` deselects by clicking the canvas at (10,10) and
+  `context-menu` right-clicks empty canvas at (30,30). Both of those points now
+  fall under the top-anchored bar, so the clicks landed on the toolbar, no
+  context menu opened / the selection was never cleared, and both timed out at
+  30s. Confirmed as caused by this change by re-running them with the toolbar
+  stashed back to the bottom (7/7 pass), then moved to (20,300)/(30,300) with a
+  comment recording *why* the point has to stay low.
+- **VRT: 16 of 156 baselines re-accepted** — the 8 `Diagrams/DiagramToolbar`
+  stories, plus `Pages/Diagrams/Compilation Error` and
+  `Pages/Diagrams/Grid Graduations` (4 stories), which render the real
+  `+page.svelte` and so contain the toolbar. Verified these 16 were caused by
+  the change rather than pre-existing drift: with the toolbar stashed back to
+  the bottom, all 16 match their old baselines exactly. Two consecutive full
+  runs clean afterwards (156/156).
+  - Note `just vrt-accept` does **not** rebuild Storybook (unlike `just vrt`,
+  it depends on `wasm` only), so it re-baselines against a stale
+  `storybook-static` and silently reports "0 changed". Rebuild Storybook
+  first, or the accept is a no-op.
+- **Pre-existing, not addressed here:** the toolbar is `w-max` and ~861px wide
+  against a ~769px canvas column, so it overflows onto both sidebars. That is
+  independent of the vertical anchor — confirmed by capturing the same story
+  with the bar at the bottom, where it overlaps the sidebar action buttons
+  instead. The move changes *which* sidebar content it covers (the "INSPECTOR"
+  and "SYSTEM" headers rather than the bottom buttons), which is more
+  noticeable. Worth a follow-up: wrapping, a narrower set, or collapsing into an
+  overflow menu.
+- `just test` (322 Rust / 676 Vitest / 45 e2e), `just lint`, `just build` and
+  `just format` all pass.
+
+---
+
 ## Task — Make the VRT suite deterministic
 
 Visual-regression runs failed intermittently (~1 in 3 locally, and in CI with

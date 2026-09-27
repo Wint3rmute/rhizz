@@ -3,7 +3,7 @@ import DiagramToolbar from "./DiagramToolbar.svelte";
 
 const SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
-// The toolbar is absolutely positioned (bottom-centre) — "fullscreen"
+// The toolbar is absolutely positioned (top-centre) — "fullscreen"
 // gives it the whole preview iframe to anchor against, same as how
 // Navbar.stories.ts uses it for a similarly viewport-anchored component.
 const meta = {

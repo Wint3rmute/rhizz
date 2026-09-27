@@ -91,8 +91,10 @@ test("arrow keys move a multi-component selection rigidly", async ({ page }) => 
   await createComponent(page, "e2e-first");
   // Creating while a node is selected would nest the new one inside it, and a
   // child's moves are clamped to its parent — deselect first so the two are
-  // siblings, then create the second.
-  await canvas.click({ position: { x: 10, y: 10 } });
+  // siblings, then create the second. The click has to land low on the
+  // canvas: the floating toolbar is anchored to the top edge and spans most
+  // of its width, so a click near the top would hit the toolbar instead.
+  await canvas.click({ position: { x: 20, y: 300 } });
   await createComponent(page, "e2e-second");
 
   // Both land on the viewport center, stacked. Drag the freshly created one
