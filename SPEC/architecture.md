@@ -14,8 +14,8 @@ rhizz/
     rhizz-server/     # HTTP backend serving the VFS for the web app
     rhizz-book/       # mdBook preprocessor
     …                 # additional frontends (LSP, …) may be added here
-  web/                # SvelteKit web application (the graphical frontend)
-  examples/
+  web/                # Rhizz Web application
+  examples/           # example system used for demoing and internal tests
   SPEC.md
   TASKS/
     TODO.md           # ordered implementation tasks
@@ -58,9 +58,8 @@ pub fn score(model: &Model) -> ScoreReport;
 - **`serde` on all public types** — `Model`, `Diagnostic`, `ScoreReport`, and
   all related structs derive `Serialize` and `Deserialize` so frontends can
   serialise results (JSON output, IPC, storage) without extra conversion.
-- **`Clone` on all public types** — frontends may need to hold multiple
-  snapshots of the model simultaneously (e.g. the web app keeping the last valid
-  model while the current edit contains errors).
+- **`Clone`, `Debug` on all public types** — frontends may need to hold multiple
+  snapshots of the model simultaneously (e.g. the Frontend keeping the last valid)
 - **Stable error codes** — `Diagnostic.code` strings (`E001`–`E016`,
   `W001`–`W016`) are part of the public API. Changing or renumbering them is a
   breaking change.
