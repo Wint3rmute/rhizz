@@ -114,6 +114,25 @@ function fade(opacity: number | undefined): number | undefined {
   return opacity !== undefined && opacity < 1 ? opacity : undefined;
 }
 
+// Marker heads are painted in their own viewport and ignore the path's
+// opacity, so a fading connection would leave a solid arrow behind. The
+// head is drawn in the same group as the line; the last elbow segment
+// always arrives along the orientation axis.
+function arrowHead(
+  tipX: number,
+  tipY: number,
+  dirX: number,
+  dirY: number,
+): string {
+  const backX = tipX - dirX * 8;
+  const backY = tipY - dirY * 8;
+  const sideX = -dirY * 3;
+  const sideY = dirX * 3;
+  return `${tipX},${tipY} ${backX + sideX},${backY + sideY} ${backX - sideX},${
+    backY - sideY
+  }`;
+}
+
 let selectedMarkerId = $derived(`${markerId}-selected`);
 let edgeInteractive = $derived(
   onEdgeClick !== undefined || onEdgeContextMenu !== undefined,
@@ -413,8 +432,20 @@ function detailLabel(node: DiagramNode): string {
       stroke-opacity={conn.selected ? 1 : 0.35}
       stroke-width={conn.selected ? 2.5 : 1.5}
       fill="none"
-      marker-end="url(#{conn.selected ? selectedMarkerId : markerId})"
       style={edgeInteractive ? undefined : "pointer-events: none"}
+    />
+    <polygon
+      points={arrowHead(
+        b.x,
+        b.y,
+        orientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
+        orientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
+      )}
+      fill={conn.selected
+        ? "var(--color-primary)"
+        : "var(--color-base-content)"}
+      fill-opacity={conn.selected ? 1 : 0.5}
+      style="pointer-events: none"
     />
     <text
       x={(a.x + b.x) / 2}
