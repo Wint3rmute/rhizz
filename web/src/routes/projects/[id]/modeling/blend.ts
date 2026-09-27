@@ -162,26 +162,23 @@ export function blendScenes(
     edges.push({ ...edge, selected: false, opacity: t });
   }
 
-  const incomingNotes = [...to.notes];
-  const notes: DiagramNote[] = [];
-  for (const note of from.notes) {
-    const match = takeMatch(incomingNotes, (item) => item.text, note.text);
-    if (match) {
-      notes.push({
-        ...match,
-        x: lerp(note.x, match.x, t),
-        y: lerp(note.y, match.y, t),
-        scale: lerp(note.scale, match.scale, t),
-        selected: false,
-        opacity: 1,
-      });
-    } else {
-      notes.push({ ...note, selected: false, opacity: 1 - t });
-    }
-  }
-  for (const note of incomingNotes) {
-    notes.push({ ...note, selected: false, opacity: t });
-  }
+  // Notes are not matched. Both views key them by index (`note-0`), so a
+  // crossfade would put two notes under one Svelte key. Fade every outgoing
+  // note out and every incoming note in, and prefix the ids so they cannot collide.
+  const notes: DiagramNote[] = [
+    ...from.notes.map((note) => ({
+      ...note,
+      id: `out:${note.id}`,
+      selected: false,
+      opacity: 1 - t,
+    })),
+    ...to.notes.map((note) => ({
+      ...note,
+      id: `in:${note.id}`,
+      selected: false,
+      opacity: t,
+    })),
+  ];
 
   return { nodes, edges, notes, overlays: [] };
 }

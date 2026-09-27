@@ -103,61 +103,36 @@ describe("blendScenes", () => {
     expect(mid.overlays).toEqual([]);
   });
 
-  it("matches notes by text, in order when the text repeats", () => {
+  it("fades every note out and in, even when both views use note-0", () => {
     const from = scene({
-      notes: [
-        {
-          id: "n0",
-          index: 0,
-          text: "same",
-          x: 0,
-          y: 0,
-          scale: 1,
-          selected: false,
-        },
-        {
-          id: "n1",
-          index: 1,
-          text: "same",
-          x: 0,
-          y: 10,
-          scale: 1,
-          selected: false,
-        },
-      ],
+      notes: [{
+        id: "note-0",
+        index: 0,
+        text: "old",
+        x: 0,
+        y: 0,
+        scale: 1,
+        selected: false,
+      }],
     });
     const to = scene({
-      notes: [
-        {
-          id: "m0",
-          index: 0,
-          text: "same",
-          x: 100,
-          y: 0,
-          scale: 1,
-          selected: false,
-        },
-        {
-          id: "m1",
-          index: 1,
-          text: "gone",
-          x: 5,
-          y: 5,
-          scale: 1,
-          selected: false,
-        },
-      ],
+      notes: [{
+        id: "note-0",
+        index: 0,
+        text: "new",
+        x: 40,
+        y: 10,
+        scale: 1,
+        selected: false,
+      }],
     });
     const mid = blendScenes(from, to, 0.5);
-    const staying = mid.notes.find((note) => note.x === 50);
-    const leaving = mid.notes.find((note) =>
-      note.text === "same" && note.y === 10
-    );
-    const entering = mid.notes.find((note) => note.text === "gone");
-    expect(staying?.opacity).toBe(1);
-    expect(leaving?.opacity).toBe(0.5);
-    expect(entering?.opacity).toBe(0.5);
-    expect(entering).toMatchObject({ x: 5, y: 5 });
+    expect(mid.notes.map((note) => note.id)).toEqual([
+      "out:note-0",
+      "in:note-0",
+    ]);
+    expect(mid.notes[0]).toMatchObject({ text: "old", x: 0, opacity: 0.5 });
+    expect(mid.notes[1]).toMatchObject({ text: "new", x: 40, opacity: 0.5 });
   });
 });
 
