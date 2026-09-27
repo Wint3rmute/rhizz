@@ -52,13 +52,20 @@ export function createDiagramTransition() {
   function show(
     next: DiagramScene,
     nextCamera: Camera | null,
-    opts: { transition: boolean; moveCamera: boolean },
+    opts: {
+      transition: boolean;
+      moveCamera: boolean;
+      /** Camera actually on screen. The stage's own camera is stale if the host panned or fitted without going through `show`. */
+      fromCamera?: Camera;
+    },
     applyCamera?: (nextCamera: Camera) => void,
   ): void {
     onCamera = opts.moveCamera ? applyCamera : undefined;
     const now = typeof performance === "undefined" ? 0 : performance.now();
     const displayed = untrack(() =>
-      tween ? frameAt(tween, now) : { scene, camera }
+      tween
+        ? frameAt(tween, now)
+        : { scene, camera: opts.fromCamera ?? camera }
     );
     const result = advance(
       displayed,
