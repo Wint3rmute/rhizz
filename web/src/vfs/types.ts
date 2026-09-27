@@ -1,7 +1,7 @@
 // Domain types for the frontend's virtual filesystem: multiple projects,
 // each holding a tree of files/directories. Deliberately has zero
 // Svelte/DOM/storage dependency — see ./tree.ts for the pure tree helpers
-// built on top of these types, and TASKS.md (Task 56) for the storage
+// built on top of these types, and TASKS/FINISHED.md (Task 56) for the storage
 // layer that will read/write them.
 //
 // Two kinds of id, deliberately different: a *project*'s id is derived from

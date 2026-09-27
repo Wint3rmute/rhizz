@@ -1,6 +1,6 @@
 // Force-directed auto-layout for the diagrams canvas (web/src/routes/
 // views/+page.svelte). Deliberately has zero Svelte/DOM dependency —
-// and, per TASKS.md Task 50's explicit constraint, zero dependency on
+// and, per TASKS/FINISHED.md Task 50's explicit constraint, zero dependency on
 // `rhizz-wasm`/`rhizz-core` types — so it can be unit tested directly
 // (see forceLayout.test.ts) and stays a pure "diagram data model"
 // concern, not a domain-model one. Named forceLayout.ts rather than
@@ -24,7 +24,7 @@ import type { Box } from "./geometry";
 // index (opaque to this module — never interpreted, only round-tripped
 // back out in LayoutResult). `fixed` pins the node in place (via d3-force's
 // fx/fy): used for "only lay out newly-added nodes, don't disturb
-// everything else" (see TASKS.md Task 50's "new nodes added" use-case).
+// everything else" (see TASKS/FINISHED.md Task 50's "new nodes added" use-case).
 export interface LayoutNode {
   index: number;
   box: Box;
@@ -245,7 +245,7 @@ export function createForceLayout(
 // resulting group contains only nodes that share the same immediate
 // parent, preserving input order within a group. Used to run one
 // independent force simulation per group rather than one flat simulation
-// mixing unrelated hierarchy levels together (see TASKS.md Task 50: a
+// mixing unrelated hierarchy levels together (see TASKS/FINISHED.md Task 50: a
 // node shouldn't be repelled by/attracted to a node it's not actually a
 // sibling of, just because both happen to be in the same auto-layout
 // invocation).
