@@ -1,8 +1,8 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
-import DiagramEmbedView from "../../DiagramEmbedView.svelte";
-import DiagramViewer from "../../DiagramViewer.svelte";
+import DiagramEmbedView from "../../../projects/[id]/modeling/DiagramEmbedView.svelte";
+import DiagramViewer from "../../../projects/[id]/modeling/DiagramViewer.svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -19,7 +19,7 @@ let normalizedDiagramPath = $derived.by(() => {
 });
 
 function openDiagram(path: string): void {
-  const base = resolve("/projects/[id]/modeling/embed/[...diagram]", {
+  const base = resolve("/embed/[id]/[...diagram]", {
     id: projectId ?? "",
     diagram: path,
   });
@@ -27,7 +27,10 @@ function openDiagram(path: string): void {
 }
 </script>
 
-<!-- Chromeless standalone embed takeover container -->
+<!-- Chromeless takeover like the book embed: covers the root layout's
+     navbar so the iframe shows only the diagram. This route deliberately
+     sits outside /projects/[id] so the project layout (diagnostics bar,
+     tour, VFS read) never mounts behind it at all. -->
 <div
   class="fixed inset-0 z-40 w-screen h-screen bg-base-300 flex flex-col overflow-hidden"
 >
