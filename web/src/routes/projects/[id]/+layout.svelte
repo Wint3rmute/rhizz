@@ -1,5 +1,6 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import { onDestroy } from "svelte";
 import DiagnosticsStatusBar from "../../../components/DiagnosticsStatusBar.svelte";
 import { compile_system } from "../../../rhizz_wasm_wrapper";
@@ -47,6 +48,11 @@ $effect(() => {
   });
 });
 
+// Diagram embeds are project-scoped, so they sit under this layout like
+// every other project route — but they are chromeless iframe surfaces, not
+// pages you navigate around in, so they drop the status bar.
+let isEmbed = $derived(page.url.pathname.includes("/embed/"));
+
 let layoutSources = $state<Source[]>([]);
 
 // The project-wide warning preset (navbar select); reading it inside the
@@ -81,7 +87,9 @@ let project = $derived(getCurrentProject());
 {:else}
   <div class="flex-1 flex flex-col min-h-0">
     {@render children()}
-    <DiagnosticsStatusBar diagnostics={layoutDiagnostics} />
+    {#if !isEmbed}
+      <DiagnosticsStatusBar diagnostics={layoutDiagnostics} />
+    {/if}
   </div>
   <!-- Workspace guided tour: mounted here (not per-page) so it
        survives the cross-page navigation its steps perform. -->

@@ -1,8 +1,8 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
-import DiagramEmbedView from "../../../projects/[id]/modeling/DiagramEmbedView.svelte";
-import DiagramViewer from "../../../projects/[id]/modeling/DiagramViewer.svelte";
+import DiagramEmbedView from "../../modeling/DiagramEmbedView.svelte";
+import DiagramViewer from "../../modeling/DiagramViewer.svelte";
 import type { PageProps } from "./$types";
 
 let { data }: PageProps = $props();
@@ -19,7 +19,7 @@ let normalizedDiagramPath = $derived.by(() => {
 });
 
 function openDiagram(path: string): void {
-  const base = resolve("/embed/[id]/[...diagram]", {
+  const base = resolve("/projects/[id]/embed/[...diagram]", {
     id: projectId ?? "",
     diagram: path,
   });
@@ -28,9 +28,12 @@ function openDiagram(path: string): void {
 </script>
 
 <!-- Chromeless takeover like the book embed: covers the root layout's
-     navbar so the iframe shows only the diagram. This route deliberately
-     sits outside /projects/[id] so the project layout (diagnostics bar,
-     tour, VFS read) never mounts behind it at all. -->
+     navbar so the iframe shows only the diagram. The project layout still
+     supplies project loading and the not-found card; it only drops its
+     status bar here. Embed is project-scoped (it reads this project's VFS),
+     so it lives under /projects/[id] like every other project route — but
+     it is not an *endpoint* beside code/explore/inventory, which is why it
+     has no navbar entry of its own. -->
 <div
   class="fixed inset-0 z-40 w-screen h-screen bg-base-300 flex flex-col overflow-hidden"
 >
