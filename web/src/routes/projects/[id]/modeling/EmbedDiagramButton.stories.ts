@@ -39,14 +39,14 @@ export const PinnedBaseUrl: Story = {
     // SvelteKit's `resolve()` output can carry a base-path prefix between the
     // origin and the route (and on main no story asserts an exact resolved
     // URL). The prefix is optional: without `BASE_PATH` (local dev) the URL is
-    // `https://<origin>/projects/...`, with one it is
-    // `https://<origin>/<base>/projects/...`. Anchoring on the deterministic
+    // `https://<origin>/embed/...`, with one it is
+    // `https://<origin>/<base>/embed/...`. Anchoring on the deterministic
     // origin — the thing under test, not the test runner's
     // `window.location.origin` — keeps the lookup specific to the Direct URL
     // <input>, since the iframe <textarea> value starts with `<iframe`
     // instead. `getByDisplayValue` throws if absent.
     canvas.getByDisplayValue(
-      /^https:\/\/rhizz\.example\.dev\/(?:.*\/)?projects\/demo-project\/modeling\/embed\/overview\.hcl$/,
+      /^https:\/\/rhizz\.example\.dev\/(?:.*\/)?embed\/demo-project\/overview\.hcl$/,
     );
   },
 };

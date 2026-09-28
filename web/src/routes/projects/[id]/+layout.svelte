@@ -1,6 +1,5 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
-import { page } from "$app/state";
 import { onDestroy } from "svelte";
 import DiagnosticsStatusBar from "../../../components/DiagnosticsStatusBar.svelte";
 import { compile_system } from "../../../rhizz_wasm_wrapper";
@@ -48,9 +47,6 @@ $effect(() => {
   });
 });
 
-// Embedded diagram views (iframe embeds) stay chrome-free: no bar.
-let isEmbed = $derived(page.url.pathname.includes("/embed/"));
-
 let layoutSources = $state<Source[]>([]);
 
 // The project-wide warning preset (navbar select); reading it inside the
@@ -85,9 +81,7 @@ let project = $derived(getCurrentProject());
 {:else}
   <div class="flex-1 flex flex-col min-h-0">
     {@render children()}
-    {#if !isEmbed}
-      <DiagnosticsStatusBar diagnostics={layoutDiagnostics} />
-    {/if}
+    <DiagnosticsStatusBar diagnostics={layoutDiagnostics} />
   </div>
   <!-- Workspace guided tour: mounted here (not per-page) so it
        survives the cross-page navigation its steps perform. -->

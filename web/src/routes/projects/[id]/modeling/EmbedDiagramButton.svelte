@@ -24,7 +24,7 @@ function normalizeDiagramName(path: string | null): string {
 
 let embedPath = $derived.by(() => {
   const norm = normalizeDiagramName(diagramPath);
-  return resolve("/projects/[id]/modeling/embed/[...diagram]", {
+  return resolve("/embed/[id]/[...diagram]", {
     id: projectId,
     diagram: norm,
   });

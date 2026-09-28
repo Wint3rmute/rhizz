@@ -69,7 +69,7 @@ test("embed navigates back and forth through linked views", async ({ page }) => 
   );
 
   // Open the main diagram in embed mode: both nodes are placed there.
-  await page.goto(`/projects/${id}/modeling/embed/main.hcl`);
+  await page.goto(`/embed/${id}/main.hcl`);
   const canvas = page.locator("svg").first();
   await expect(canvas).toBeVisible();
 
@@ -88,11 +88,11 @@ test("embed navigates back and forth through linked views", async ({ page }) => 
   await linked.evaluate((el: SVGElement) =>
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }))
   );
-  await expect(page).toHaveURL(/\/modeling\/embed\/e2e-nav-widget\.hcl/);
+  await expect(page).toHaveURL(/\/embed\/[^/]+\/e2e-nav-widget\.hcl/);
 
   // ...and browser back returns to the previous diagram.
   await page.goBack();
-  await expect(page).toHaveURL(/\/modeling\/embed\/main\.hcl/);
+  await expect(page).toHaveURL(/\/embed\/[^/]+\/main\.hcl/);
 
   // An unlinked node toasts instead of navigating (JS click, same
   // overlap reason as above).

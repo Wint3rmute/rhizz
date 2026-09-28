@@ -4,6 +4,82 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 105 — Move the diagram embed route out of `/modeling` to a top-level path
+
+The diagram embed is now at `/embed/[id]/[...diagram]`, parallel to the
+existing `/book-example` embed, instead of
+`/projects/[id]/modeling/embed/[...diagram]`. It is a read-only,
+chrome-free viewer, not a sub-page of the editor: its own "Open in Rhizz"
+link points *back up* to `/projects/[id]/modeling`, and the embed modal
+says "Embeds are read-only with pan/zoom".
+
+- **The nesting was inherited, never decided.** The route was created
+  inside `diagrams/` in Task 75 purely so its files sat next to the
+  diagram module it imports (SvelteKit routes are files), and it was
+  carried through the `diagrams/` → `modeling/` rename verbatim —
+  `3127a50` changed 0 lines in the embed page. The directory was never
+  re-opened.
+- **`modeling/` is a module, not a page.** Its sibling route already
+  imports from it: `explore/Explore.svelte` takes `DiagramViewer` and
+  `EmbedDiagramButton` from `../modeling/`, and Inventory previews
+  diagrams through the same component. The directory boundary already
+  stopped meaning anything; the URL segment was the only thing still
+  implying it did.
+- **What the nesting actually cost** — three concrete things, all
+  deleted by this change:
+  - `projects/[id]/+layout.svelte` had to string-match its own child's
+    URL (`page.url.pathname.includes("/embed/")`) to suppress the
+    diagnostics status bar. A layout reaching into a descendant's URL
+    was the clearest symptom that the nesting was wrong.
+  - "Chrome-free" was faked with a `fixed inset-0 z-40` overlay rather
+    than achieved by routing, so the root `Navbar`, `ProjectTour` and
+    the project layout's full `readProjectSources()` VFS read all still
+    ran underneath every iframe load. Three of those four are gone with
+    the move; the overlay itself stays, because it is what covers the
+    *root* layout's navbar — the same trick `/book-example` already
+    documents, and the only one of the four that routing cannot fix.
+  - The path is a published contract: `EmbedDiagramButton` prints it
+    into copy-paste `<iframe>` snippets, and `diagrams/` → `modeling/`
+    already broke every previously-published embed URL. Per the task's
+    blank-slate constraint the old URLs are simply gone, following the
+    precedent set when projects moved to slugs ("No migration — a blank
+    slate is assumed").
+- **Net -3 LoC of code**, inside the task's no-new-code budget. The
+  route move itself is 2 files and 0 lines (`+page.ts` survives verbatim
+  — the params are already named `id` and `diagram`, which is what made
+  net zero reachable at all), and the three `resolve()` call sites are
+  in-place edits. The budget went the right way: `+layout.svelte` is
+  **-6** (the `isEmbed` derived, its comment, the `{#if !isEmbed}`
+  guard and the now-unused `$app/state` import), the moved page is +3,
+  which is entirely the comment recording why the route is top-level.
+- **Red/green**: `e2e/embed-navigation.spec.ts` and the
+  `EmbedDiagramButton` `PinnedBaseUrl` story were pointed at the new
+  URL first. The e2e went red for the right reason — `/embed/<id>/…`
+  resolved to nothing, so the linked-view links never rendered — and
+  went green on the move.
+- **Tests**: `e2e/embed-navigation.spec.ts` asserts the new URL and
+  still proves back/forward navigation between linked views; the
+  `PinnedBaseUrl` story asserts the generated Direct URL against the
+  pinned origin (its comment updated for the shorter path, and its
+  optional base-path prefix with it).
+- **VRT: 2 of 156 baselines re-accepted** — `PinnedBaseUrl` in both
+  themes, which render the URL as text. Reviewed the capture before
+  accepting: the Direct URL reads
+  `https://rhizz.example.dev/embed/demo-project/overview.hcl` and the
+  iframe snippet wraps one line shorter; nothing else in the dialog
+  moved. The other 154 are untouched, and a full follow-up run is
+  156/156, 0 changed.
+- **Validation**: `just test` (cargo + 676 Vitest + 45 e2e), `just
+  lint` (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings),
+  `just build` and `just format` all pass; full VRT suite green.
+  One note for whoever runs this next: the first full `just test` after
+  the move failed 3 unrelated e2e (`arrow-key-nudge`, `color-reset`,
+  `embed-navigation`) on the 30 s timeout — cold Vite dev transform for
+  the new route module. All 11 tests in those three specs pass in 4.3 s
+  on re-run, and a clean full `just test` is 45/45.
+
+---
+
 ## Task — Move the /modeling toolbar to the top
 
 The floating diagram toolbar (Snap to Grid, + System, + Component, + Note, Auto
