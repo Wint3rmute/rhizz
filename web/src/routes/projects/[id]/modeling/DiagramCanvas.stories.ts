@@ -85,12 +85,19 @@ export const EditorChrome: Story = {
     );
     const edge = visible[0];
     if (!edge) throw new Error("expected a visible edge");
-    const selectedPath = canvasElement.querySelector(
-      'path[marker-end="url(#arrow-selected)"]',
+    // The arrowhead is a polygon in the edge group, not an SVG marker, so it
+    // fades with the line. The selected edge is the primary stroke.
+    const selectedEdge = canvasElement.querySelector(
+      "[data-testid='diagram-edge']",
+    );
+    const selectedPath = selectedEdge?.querySelector(
+      'path[stroke-width="2.5"]',
     );
     await expect(selectedPath?.getAttribute("d")).toBe(
       elbowPath(edge.a.x, edge.a.y, edge.b.x, edge.b.y, edge.orientation),
     );
+    await expect(selectedEdge?.querySelector("polygon")?.getAttribute("fill"))
+      .toBe("var(--color-primary)");
 
     const rubber = canvasElement.querySelector(
       "[data-testid='diagram-rubber-band']",
