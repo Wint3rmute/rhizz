@@ -10,5 +10,11 @@ web/package-lock.json
 # macos temporaries
 .DS_Store
 
+# Local build-time config: holds the Sentry auth token (web/.env.example
+# documents the variables). The .example file itself is tracked.
+web/.env
+web/.env.*
+!web/.env.example
+
 # Python bytecode (book preprocessor + tests)
 __pycache__/
