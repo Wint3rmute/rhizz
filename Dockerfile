@@ -44,10 +44,27 @@ RUN wasm-pack build crates/rhizz-wasm --target web --release
 # Build the frontend with the VFS-sync env var set. Uses Deno (same as CI),
 # with `deno.lock` as the source of truth — not `npm install`, whose strict
 # peer resolution breaks on `@storybook/addon-vitest` / vitest mismatches.
+#
+# VITE_SENTRY_DSN is baked in the same way and defaults to empty: without it
+# the Sentry SDK is never initialized, so the image ships an app that reports
+# nothing. Set it to send errors to a Sentry project.
+# SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT are build args for the
+# source-map upload (see web/vite.config.ts); without them the build still
+# emits no .map files. Keep the token out of the image and the git history —
+# pass it as a secret, not an ARG in a committed Dockerfile.
 COPY web web
+ARG VITE_SENTRY_DSN=""
+ARG SENTRY_AUTH_TOKEN=""
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
 RUN cd web \
     && deno install \
-    && VITE_RHIZZ_SERVER_URL=/ deno run build
+    && VITE_RHIZZ_SERVER_URL=/ \
+       VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+       SENTRY_AUTH_TOKEN="$SENTRY_AUTH_TOKEN" \
+       SENTRY_ORG="$SENTRY_ORG" \
+       SENTRY_PROJECT="$SENTRY_PROJECT" \
+       deno run build
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — build the backend, embedding the frontend artifacts.
