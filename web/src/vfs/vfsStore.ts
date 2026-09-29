@@ -128,6 +128,34 @@ export class VfsProjectStore implements ProjectStore {
   private readonly now: () => string;
   private readonly newId: () => string;
 
+  // ── Session read cache ──────────────────────────────────────────────────
+  //
+  // Every call below hands the backend the *whole* VFS, so without a cache
+  // one transfer happens per store call — and the path-based facade makes
+  // several calls per user-visible operation (a `readdir` plus one
+  // `readFile` per file, each of them first calling `listNodes`). Reading a
+  // project's sources therefore cost one full VFS transfer per source file,
+  // and every later read (a view switch, a stat, a re-read after undo) cost
+  // one more.
+  //
+  // The cached blob is the store's own state: it is filled on first use,
+  // updated by every mutation, and never invalidated. Its lifetime is the
+  // store instance's, i.e. the page's — a reload builds a new store and
+  // reads the truth again. The trade-off is deliberate: a mutation writes
+  // this copy out without re-reading first, so this tab is the sole writer
+  // of the data it has seen. Two tabs on one project already raced on the
+  // whole-blob save; this widens that window rather than adding a new kind
+  // of race.
+  private cached: VfsData | null = null;
+  // The read currently in flight, so concurrent first reads (readProjectSources
+  // fans one readFile out per file at once) share one transfer instead of
+  // each missing the cache and fetching for itself.
+  private pending: Promise<VfsData> | null = null;
+  // Mutations run one at a time, each deriving from the previous one's
+  // result. Without this, two overlapping mutations both read the same
+  // snapshot and the second save erases the first one's change.
+  private writeChain: Promise<unknown> = Promise.resolve();
+
   constructor(
     backend: VfsBackend,
     now: () => string = () => new Date().toISOString(),
@@ -138,18 +166,56 @@ export class VfsProjectStore implements ProjectStore {
     this.newId = newId;
   }
 
-  /** Read-only op: load the blob, project from it, never write back. */
-  private async query<T>(op: (data: VfsData) => T): Promise<T> {
-    return op(await this.backend.read());
+  /** The VFS blob, read from the backend on first use and cached after. */
+  private async load(): Promise<VfsData> {
+    if (this.cached !== null) return this.cached;
+    this.pending ??= this.backend.read();
+    try {
+      const data = await this.pending;
+      this.cached = data;
+      return data;
+    } finally {
+      // Cleared by whichever caller settles first; anyone else already
+      // awaiting the same read gets the same result, and the next caller
+      // finds `cached` set.
+      this.pending = null;
+    }
   }
 
-  /** Mutating op: load the blob, derive the next one, persist it, return a result. */
-  private async mutate<T>(
+  /** Read-only op: project the cached blob, never write back. */
+  private async query<T>(op: (data: VfsData) => T): Promise<T> {
+    return op(await this.load());
+  }
+
+  /**
+   * Mutating op: derive the next blob from the cached one, persist it, and
+   * keep it as the cache. Queued behind any mutation still running, so each
+   * one builds on the state the previous one left.
+   */
+  private mutate<T>(
     op: (data: VfsData) => { data: VfsData; value: T },
   ): Promise<T> {
-    const { data, value } = op(await this.backend.read());
-    await this.backend.write(data);
-    return value;
+    const result = this.writeChain.then(async () => {
+      const { data, value } = op(await this.load());
+      this.cached = data;
+      try {
+        await this.backend.write(data);
+      } catch (error) {
+        // The backend never took this state, so the cache no longer
+        // describes what is stored: drop it and let the next read start
+        // from the truth rather than from a write that failed.
+        this.cached = null;
+        throw error;
+      }
+      return value;
+    });
+    // Keep the queue alive when this mutation rejects, so one failure
+    // doesn't wedge every later one behind it.
+    this.writeChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   listProjects(): Promise<Project[]> {
