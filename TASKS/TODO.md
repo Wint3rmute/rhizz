@@ -22,8 +22,6 @@ It appears that connection arrows don't fade out when the component to which the
 arrow points to is not supposed to exist in the target view. They stay fully
 visible until the transition completes, then disappear abruptly.
 
-## Task <N> - 
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,
