@@ -4,6 +4,56 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 107 — The diagnostics status bar is one solid surface
+
+The bar at the bottom of every project page is no longer translucent, and its
+two halves no longer look like two different colours: both are a solid
+`bg-base-100`.
+
+- **The two parts were never given different colours — they were given the
+  same translucent one.** `DiagnosticsStatusBar.svelte` is the only two-part
+  bar in the app (a strip that's always there, and a panel that pops over the
+  page when you click it), and both surfaces read
+  `bg-base-100/95 backdrop-blur-xs`. Same class, so the same *declared*
+  colour — but 95% opaque means each shows 5% of whatever is behind it, and
+  they sit on different backdrops: the panel floats over the page
+  (`base-300`) while the strip sits on the app shell's own `base-100`. That
+  translucency *was* the colour difference, so "unify the colours" is
+  "stop being translucent" — one opaque fill, blur dropped (behind an opaque
+  fill a backdrop blur costs a compositing pass and renders nothing).
+- **The drop shadow stays.** It is not a colour difference: it is the only
+  thing that keeps the panel reading as *over* the page rather than as more
+  page, and without it a solid panel on a solid strip would merge into one
+  undifferentiated slab.
+- **Red/green**: a new `Overview/DiagnosticsStatusBar → Expanded` story goes
+  red first, on `backdropFilter` being `blur(4px)`, and green on the fix. It
+  also asserts the two surfaces resolve to the same background — the literal
+  statement of "one colour" — which is what would catch the two class lists
+  drifting apart again.
+- **The story had to reproduce the app's layout for the baseline to be worth
+  anything.** The panel pops *above* the strip, and in Storybook's default
+  story layout the bar sits at the top of the frame, so every existing
+  baseline of this bar shows a clipped sliver of the panel — the exact
+  surface the task is about, invisible. The story now anchors itself to the
+  bottom of the frame and puts a `base-300` block above the bar standing in
+  for the page, which is what makes the seam visible: a translucent fill now
+  shows up in the screenshot as the panel reading greyer than the strip, in
+  both themes. Without the stand-in both surfaces sit on the same backdrop
+  and the baseline would pass either way.
+- **VRT: 3 of 162 baselines changed** (the bar's own fill — the diffs are the
+  strip's rectangle and nothing else) **plus 2 new** for the `Expanded`
+  story. The other three status-bar baselines were within tolerance and are
+  unchanged in content. A full follow-up run is 164/164, 0 changed.
+- **Not addressed**: `DiagramViewport`'s floating pill toolbar
+  (`bg-base-100/90 backdrop-blur`) is the same recipe, but it is a single
+  floating element rather than a two-part bar, and there the glass is the
+  point — it sits over a busy canvas, where an opaque pill would be a slab.
+- **Validation**: `just test` (cargo + 704 Vitest + 50 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 106 — Inventory and Modeling name the open view / entity in the URL path
 
 Modeling's open view and Inventory's inspected entity are now part of the URL
