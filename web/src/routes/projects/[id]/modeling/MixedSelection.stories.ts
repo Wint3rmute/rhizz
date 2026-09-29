@@ -18,7 +18,7 @@ import {
   placedNode,
   rectOf,
 } from "./diagramStoryCanvas";
-import DiagramPage from "./+page.svelte";
+import DiagramPage from "./ModelingPage.svelte";
 
 // A component and a note can be selected together — shift-click extends the
 // selection across both kinds — and the operations that act on "the
@@ -74,12 +74,7 @@ const meta = {
   },
   tags: ["no-vrt"],
   args: {
-    params: {
-      id: PROJECT_ID,
-    },
-    data: {
-      projectId: PROJECT_ID,
-    },
+    projectId: PROJECT_ID,
   },
   loaders: [ensureProject],
 } satisfies Meta<typeof DiagramPage>;

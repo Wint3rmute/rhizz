@@ -13,7 +13,7 @@ test("view stays bound to its system when the model holds several", async ({ pag
     /Quadcopter Drone/,
     "E2E system view",
   );
-  await page.goto(`/projects/${id}/modeling?diagram=views%2Fmain.hcl`);
+  await page.goto(`/projects/${id}/modeling/main.hcl`);
 
   const header = page.getByTestId("diagram-system-label");
   await expect(header).toContainText("system: quadcopter");

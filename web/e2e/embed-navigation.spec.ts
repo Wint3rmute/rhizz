@@ -65,7 +65,7 @@ test("embed navigates back and forth through linked views", async ({ page }) => 
     .getByRole("button", { name: "Create a view for this component" })
     .click();
   await expect(page).toHaveURL(
-    /\/modeling\?diagram=views%2Fe2e-nav-widget\.hcl/,
+    `/projects/${id}/modeling/e2e-nav-widget.hcl`,
   );
 
   // Open the main diagram in embed mode: both nodes are placed there.

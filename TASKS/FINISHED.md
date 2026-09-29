@@ -4,6 +4,109 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 106 — Inventory and Modeling name the open view / entity in the URL path
+
+Modeling's open view and Inventory's inspected entity are now part of the URL
+path — `modeling/<view path relative to views/>` and `inventory/<label>` — so
+the address bar can be shared for either, and the browser's back/forward buttons
+move between views and entities like they move between pages.
+
+- **Both are a `[...rest]` param, and that is what makes it one route, not
+  two.** A rest param matches the empty string, so `modeling/[...view]/`
+  serves the bare `/modeling` *and* `/modeling/main.hcl` — and being a single
+  route id is the load-bearing part: SvelteKit keeps the page component
+  mounted across a param change, so switching views reloads the layout file
+  into the existing canvas instead of tearing the editor down. The obvious
+  alternative (keep `+page.svelte` for the bare page, add `[view]/` beside it)
+  remounts `ModelingPage` on every crossing between the two, and the very
+  first thing that happens on a fresh visit is a bare → `main.hcl`
+  canonicalisation, so the editor would remount on *every* visit. A single
+  segment (`[view]`) was rejected for the same reason as a two-route design:
+  views nest in folders (`views/sub/x.hcl`). The route ends up a 13-line
+  `load` plus a shell that forwards `data.view` as a prop, and the real
+  components (`ModelingPage.svelte`, `Inventory.svelte`) stay renderable from
+  Storybook. `modeling/+page.svelte` is now `modeling/ModelingPage.svelte` —
+  renamed rather than moved, so all 40 sibling imports still resolve — and
+  every comment in the module that named the file was updated with it.
+- **`selectedDiagramPath` / `selectedLabel` stay the rendering source of truth
+  and the URL mirrors them.** Making the URL a derived value instead would be
+  tidier in the abstract, but `goto` is a no-op under Storybook, so a
+  click-driven story (`Pages/Inventory/MissingDefaultDiagram`) would stop
+  selecting anything. Two directions instead: every user action goes through
+  `selectView`/`selectLabel` (state first, then `goto`), and one effect adopts
+  the URL. A non-reactive `lastHandled*` latch keeps those two from fighting:
+  a navigation the page performed itself lands a tick after the state write,
+  and without the latch the adopting effect reads that as "the user pressed
+  back" and undoes the click that caused it.
+- **Neither effect may touch the URL before its list is loaded.** A real bug
+  in the first cut of this: a cold deep link (`/modeling/sub/x.hcl`) mounted
+  with an empty view list, the effect couldn't match it, and it
+  "canonicalised" to the bare page — deleting the deep link the user had
+  followed. It passed the e2e only because that rewrite and the list load
+  raced, and the canonicalisation happened to land last. `viewListReady` /
+  `modelReady` (flipped by the per-project init effect and by the sources
+  read) now gate both effects, and that same gating is what lets the latch
+  stay that simple.
+- **Push vs. replace is decided by whether the user moved or the world
+  changed.** Creating a view, picking one in the sidebar, and "jump to detailed
+  view" push, so back returns where you came from; the bare-page
+  canonicalisation, a rename of the open view, and the fallback after
+  deleting the open one replace — in those three the URL being replaced names
+  a view that no longer exists, and a history entry pointing at it is worse
+  than no entry.
+- **`?diagram=` is still read, as a legacy input only.** "Open in Rhizz" is
+  how views actually got shared before this change, and it handed out
+  `?diagram=views/<name>.hcl`; those links are redirected to the path form on
+  arrival. `DiagramEmbedView` produces the path form itself now.
+- **Explore deliberately still uses `?diagram=`.** The task named two views,
+  and Explore already had both behaviours (sharing *and* back/forward) through
+  that query param, so it was left alone — with the trade-off written down
+  rather than left silent: one view file is now addressed two different ways
+  depending on which page you are on. Worth a follow-up if they are ever
+  unified.
+- **A pre-existing race was fixed on the way, because the VRT caught it.**
+  Four graduated-grid baselines changed, which turned out to be no accident:
+  the first open's cut-to-fit ran while the compiled model was still arriving
+  (two independent async reads, and the layout won by **0.4 ms** — measured),
+  so `zoomToFill` found no boxes and left the canvas at 1:1. Any change to
+  that page could flip it. The cut is now armed when the load happened with
+  keys but no renderable nodes, and performed by the effect that first sees
+  them — microseconds later, and *never* armed for a genuinely empty view, so
+  placing a first node later can't make the camera jump. A first attempt
+  armed on every load; `Pages/Diagrams/Mixed Selection` caught that by failing
+  its drag-delta assertion (20 units instead of 80), and the arming is now
+  conditional on the model genuinely being late. All 156 pre-existing
+  baselines match unchanged with that.
+- **Red/green**: `e2e/view-url-paths.spec.ts` (5 tests) went red first — view
+  switching, back/forward, a nested `sub/nested.hcl` view, the legacy
+  `?diagram=` redirect, Inventory selection + reload, and "deleting another
+  view leaves the open one alone" (that last one exists because the delete
+  handler is exactly the code this work touched; it goes red on the obvious
+  simplification and green on the version that checks whether the deleted path
+  was the open one). `inventory-create-view`, `embed-navigation` and
+  `system-bound-view` now assert the path form.
+- **New stories**: `Pages/Diagrams/Open View URL` (a deep-linked view opens;
+  an unknown one falls back to the first) and `Pages/Inventory/Deep Linked
+  Entity` (the requested entity opens, and the first card is *not* it — so it
+  can't pass by accident on the entity a bare page would have opened). The
+  latter needed the documented `no-unsafe-*` allowlist entry in
+  `eslint.config.js` — the same false positive every other story file that
+  imports a first-party `.svelte` module is already listed for.
+- **VRT: 6 of 162 baselines new**, all from those stories (two new views plus
+  one new inventory story, in both themes). The captures were reviewed before
+  accepting: they show `actuator.hcl` marked open, `main.hcl` marked open, and
+  `draft-module` selected with its empty-diagram state. A full follow-up run
+  is 162/162, 0 changed.
+- **Validation**: `just test` (cargo + 703 Vitest + 50 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`
+  and `just format` all pass; full VRT suite green.
+- **Not addressed**: the Code page's `?file=` deep link is still
+  read-once-never-written, and the navbar's project links still point at the
+  bare Modeling/Inventory pages (both views canonicalise on arrival, so the
+  links are correct — just not to a specific view).
+
+---
+
 ## Task 105 — Move the diagram embed out of `/modeling` to its own project endpoint
 
 The diagram embed is now at `/projects/[id]/embed/[...diagram]` — a sibling

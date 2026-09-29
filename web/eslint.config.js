@@ -118,6 +118,7 @@ export default ts.config(
       "**/modeling/MixedSelection.stories.ts",
       "**/modeling/SpawnAtCursor.stories.ts",
       "**/modeling/DiagramViewer.stories.ts",
+      "**/modeling/OpenViewUrl.stories.ts",
       "src/example_system.ts",
     ],
     rules: {

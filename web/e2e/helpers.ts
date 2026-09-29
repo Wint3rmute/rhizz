@@ -14,6 +14,20 @@ function projectIdFromUrl(page: Page): string {
   return id;
 }
 
+export async function createNewProject(
+  page: Page,
+  projectName: string,
+): Promise<string> {
+  await page.goto("/");
+  const create = page.getByRole("button", { name: "New project" }).first();
+  await expect(create).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept(projectName));
+  await create.click();
+  await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
+  await skipTourIfPresent(page);
+  return projectIdFromUrl(page);
+}
+
 export async function createFromExample(
   page: Page,
   exampleName: RegExp | string,

@@ -7,7 +7,7 @@ import {
   createProjectWithMainFile,
   projectStore,
 } from "../../../../ProjectState.svelte";
-import DiagramPage from "./+page.svelte";
+import DiagramPage from "./ModelingPage.svelte";
 
 // Deterministic project ids so story args can be built synchronously at
 // module scope while the async seeding runs lazily from loaders (top-level
@@ -105,9 +105,7 @@ const meta = {
     layout: "fullscreen",
   },
   args: {
-    data: {
-      projectId: BROKEN_PROJECT_ID,
-    },
+    projectId: BROKEN_PROJECT_ID,
   },
 } satisfies Meta<typeof DiagramPage>;
 
@@ -116,12 +114,7 @@ type Story = StoryObj<typeof meta>;
 
 export const DuplicateProjectBlock: Story = {
   args: {
-    params: {
-      id: BROKEN_PROJECT_ID,
-    },
-    data: {
-      projectId: BROKEN_PROJECT_ID,
-    },
+    projectId: BROKEN_PROJECT_ID,
   },
   loaders: [ensureBrokenProject],
   play: async ({ canvasElement }) => {
@@ -145,12 +138,7 @@ export const DuplicateProjectBlock: Story = {
 
 export const LongErrorMessageWraps: Story = {
   args: {
-    params: {
-      id: LONG_ERROR_PROJECT_ID,
-    },
-    data: {
-      projectId: LONG_ERROR_PROJECT_ID,
-    },
+    projectId: LONG_ERROR_PROJECT_ID,
   },
   loaders: [ensureLongErrorProject],
   play: async ({ canvasElement }) => {

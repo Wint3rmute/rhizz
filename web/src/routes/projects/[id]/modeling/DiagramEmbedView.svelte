@@ -47,12 +47,15 @@ let bounds = $derived.by(() => {
   return unionBox(all);
 });
 
+// The interactive editor, opened on this very diagram. `diagramPath` is the
+// path relative to `views/`, which is exactly what the modeling route's rest
+// param takes — so it goes in the URL as a path, not a query parameter.
 let fullDiagramUrl = $derived.by(() => {
   if (!projectId) return null;
-  const base = resolve("/projects/[id]/modeling", { id: projectId });
-  return diagramPath
-    ? `${base}?diagram=${encodeURIComponent(diagramPath)}`
-    : base;
+  return resolve("/projects/[id]/modeling/[...view]", {
+    id: projectId,
+    view: diagramPath ?? "",
+  });
 });
 </script>
 

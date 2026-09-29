@@ -44,13 +44,19 @@ const NAV_LINKS = [
     label: "Modeling",
     emoji: "📐",
     tour: TOUR_TARGETS.navModeling,
-    href: (id: string) => resolve("/projects/[id]/modeling", { id }),
+    // Modeling and Inventory name the open view / entity in their path (a rest
+    // param that also matches the empty string), so the workspace links point
+    // at the bare page and let each view canonicalise itself to its first
+    // view / entity on arrival.
+    href: (id: string) =>
+      resolve("/projects/[id]/modeling/[...view]", { id, view: "" }),
   },
   {
     label: "Inventory",
     emoji: "📦",
     tour: TOUR_TARGETS.navInventory,
-    href: (id: string) => resolve("/projects/[id]/inventory", { id }),
+    href: (id: string) =>
+      resolve("/projects/[id]/inventory/[...label]", { id, label: "" }),
   },
   {
     label: "Explore",

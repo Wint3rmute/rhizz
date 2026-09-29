@@ -16,14 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Inventory and Modeling views - idiomatic URL path
-
-The Inventory and Modeling views should use an idiomatic URL path to show what
-entity/view is currently opened. This will allow to:
-
-- use Next/previous browser actions to navigate
-- share URLs to specific entities in the inventory and specific views in the modeling with other users
-
 ## Task <N> - Make bottom bar a single entity and not transparent
 
 1. Bottom bar is currently a bit transparent - make it solid

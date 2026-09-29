@@ -21,7 +21,7 @@ import {
 } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import type { PageProps } from "./$types";
+import { page } from "$app/state";
 import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
@@ -170,9 +170,16 @@ const gridPatterns = buildGraduatedGridPatterns(
 // draws every finer level beneath it.
 const gridFillId = gridPatterns[gridPatterns.length - 1]?.id ?? "Grid";
 
-let { data }: PageProps = $props();
+let {
+  projectId,
+  requestedView = "",
+}: {
+  projectId: string;
+  /** The view named by the route path, relative to `views/` ("" = none). */
+  requestedView?: string;
+} = $props();
 
-let fs = $derived(openProjectFs(projectStore, data.projectId));
+let fs = $derived(openProjectFs(projectStore, projectId));
 
 let sources = $state<Source[]>([]);
 $effect(() => {
@@ -457,15 +464,101 @@ function firstDiagramPath(): string | null {
   );
 }
 
+// ── The open view lives in the URL path ────────────────────────────────────
+//
+// `/projects/<id>/modeling/<view path relative to views/>`, so the address bar
+// always names what the canvas shows: it can be shared, bookmarked, and the
+// browser's back/forward buttons move between views. `selectedDiagramPath`
+// stays the source of truth for rendering and the URL mirrors it in both
+// directions — user actions go through selectView, the URL is only ever
+// *adopted* (see the effect below), so the two can never fight.
+
+// `?diagram=` links handed out before the view moved into the path carry the
+// `views/` prefix and sometimes don't; the rest param never does. Both are
+// normalized to a path relative to VIEW_LAYOUT_DIR.
+function normalizeViewPath(raw: string | null | undefined): string {
+  const value = raw ?? "";
+  return value.startsWith(`${VIEW_LAYOUT_DIR}/`)
+    ? value.slice(VIEW_LAYOUT_DIR.length + 1)
+    : value;
+}
+
+// The view the route asks for: the path segment, or — for a link shared by an
+// older build — the legacy query parameter. `""` when neither is present.
+function requestedViewPath(): string {
+  return normalizeViewPath(requestedView) ||
+    normalizeViewPath(page.url.searchParams.get("diagram"));
+}
+
+function viewUrl(path: string | null): string {
+  return resolve("/projects/[id]/modeling/[...view]", {
+    id: projectId,
+    view: path ?? "",
+  });
+}
+
+// Opens `path` (or nothing, for the bare page) and makes the URL name it.
+// `replace` rewrites the current history entry instead of pushing a new one —
+// used when the URL is being canonicalised (a bare page, a renamed or deleted
+// view) rather than moved to by the user.
+function selectView(path: string | null, replace = false): void {
+  selectedDiagramPath = path;
+  const target = viewUrl(path);
+  // Canonicalising a URL that already says this (the common case: the effect
+  // below runs on every entry load) must not push a duplicate history entry.
+  if (target === page.url.pathname) return;
+  void goto(target, {
+    replaceState: replace,
+    noScroll: true,
+    keepFocus: true,
+  });
+}
+
+// The project's view list has been read, so a path in the URL can finally be
+// resolved against it. Until then nothing may rewrite the URL — otherwise a
+// cold deep link would be replaced by the bare page before its own view was
+// even known to exist. Set by the per-project init effect below.
+let viewListReady = $state(false);
+
+// The last view path this page settled on. Non-reactive, like the load guards
+// around it: it exists so a navigation this page performed itself (selectView
+// writes the state first, the URL a tick later) is not mistaken for the user
+// pressing back — which would undo the very click that caused it.
+let lastHandledView: string | null = null;
+
+$effect(() => {
+  if (!viewListReady) return;
+  const requested = requestedViewPath();
+  // Already settled — this is our own navigation echoing back (or a filter of
+  // state changes re-running the effect), not a new place to go.
+  if (requested === lastHandledView) return;
+  lastHandledView = requested;
+  const isOpenable = requested !== "" &&
+    diagramEntries.some((e) => e.isFile() && e.path === requested);
+  if (isOpenable) {
+    // A shared link opens that view. Rewriting (rather than only setting the
+    // state) is what turns a legacy `?diagram=` link into its path form.
+    selectView(requested, true);
+    return;
+  }
+  // Nothing openable in the path — a bare page, or a view that has since been
+  // renamed or deleted. Keep whatever is open and state it in the URL, so the
+  // address bar keeps naming the canvas.
+  selectView(selectedDiagramPath ?? firstDiagramPath(), true);
+});
+
 // (Re)loads the diagram file list once per project, when the project
 // first becomes available or changes identity (e.g. after switching
 // projects).
 let loadedDiagramProjectId: string | null = null;
 $effect(() => {
-  const id = data.projectId;
+  const id = projectId;
   if (id === loadedDiagramProjectId) return;
   loadedDiagramProjectId = id;
   selectedDiagramPath = null;
+  // The next project's list has to be read before its URL can be resolved
+  // (see viewListReady), so the URL is off-limits until then.
+  viewListReady = false;
   actionLog.clear();
   // Snapshot the pre-session content of the primary system HCL file so the
   // debug replay seeds from the state before any of this session's mutations.
@@ -522,27 +615,15 @@ $effect(() => {
         );
         await refreshDiagramEntries();
       }
-      selectedDiagramPath = firstDiagramPath();
-      // Deep-link support (`?diagram=views/<label>.hcl`, e.g. from the
-      // Inventory's "Create a view for this component"): prefer the
-      // requested diagram when it names an existing entry.
-      if (typeof window !== "undefined") {
-        const requested = new URLSearchParams(window.location.search).get(
-          "diagram",
-        );
-        if (requested) {
-          const normalized = requested.startsWith(`${VIEW_LAYOUT_DIR}/`)
-            ? requested.slice(VIEW_LAYOUT_DIR.length + 1)
-            : requested;
-          const match = diagramEntries.find(
-            (e) => e.isFile() && e.path === normalized,
-          );
-          if (match) selectedDiagramPath = match.path;
-        }
-      }
     })
     .catch((err) => {
       console.error("Failed to initialize diagram entries:", err);
+    })
+    .finally(() => {
+      // The list is known (or known to have failed) either way, so the URL
+      // can be resolved against it: the effect above opens the view the path
+      // asks for, else the first one, and writes that into the URL.
+      viewListReady = true;
     });
 });
 
@@ -566,6 +647,10 @@ let loadStartStamp = 0;
 function noteDiagramEdited(): void {
   diagramEditStamp += 1;
 }
+
+// Set by the load effect when its cut-to-fit had to wait for the model (see
+// there), consumed by the effect right after it.
+let cutToFitArmed = false;
 
 $effect(() => {
   const path = fullDiagramPath;
@@ -608,8 +693,30 @@ $effect(() => {
     diagramLayoutLoaded = true;
     // First open cuts to a fit. Later switches let the transition glide
     // the camera from wherever the user left it.
-    if (mode === "cut") zoomToFill();
+    if (mode !== "cut") return;
+    // …unless there is nothing to fit *yet*. The layout file and the compiled
+    // model are two independent async reads, and the layout usually wins by a
+    // few hundred microseconds: the model's key→component map is what makes a
+    // placed node measurable, so a cut taken that early would fit nothing and
+    // silently leave the canvas at 1:1. Arm the cut instead and let the effect
+    // below perform it as soon as the nodes are there — a few hundred
+    // microseconds later, long before any user interaction. A view that really
+    // is empty carries no keys, so it never arms and later placements can't
+    // make the camera jump.
+    if (Object.keys(checked).length > 0 && renderOrder.length === 0) {
+      cutToFitArmed = true;
+    } else {
+      zoomToFill();
+    }
   });
+});
+
+// Performs the cut the load effect had to arm — see the comment there.
+$effect(() => {
+  const placed = renderOrder;
+  if (!cutToFitArmed || placed.length === 0) return;
+  cutToFitArmed = false;
+  zoomToFill();
 });
 
 $effect(() => {
@@ -695,7 +802,9 @@ async function handleNewViewCreate(data: {
       systemChoice,
     );
     await refreshDiagramEntries();
-    selectedDiagramPath = path;
+    // A new view is a place the user moved to, so it pushes a history entry
+    // (back returns to the view they came from).
+    selectView(path);
   } catch (error) {
     reportDiagramError(error);
   }
@@ -729,7 +838,10 @@ async function handleRenameDiagram(path: string): Promise<void> {
       `${VIEW_LAYOUT_DIR}/${path}`,
       `${VIEW_LAYOUT_DIR}/${newPath}`,
     );
-    if (selectedDiagramPath === path) selectedDiagramPath = newPath;
+    // Renaming the open view rewrites its URL in place rather than pushing:
+    // the old path names nothing now, so leaving it in the history would only
+    // hand the user a dead link on back.
+    if (selectedDiagramPath === path) selectView(newPath, true);
     await refreshDiagramEntries();
   } catch (error) {
     reportDiagramError(error);
@@ -740,14 +852,17 @@ async function handleDeleteDiagram(path: string): Promise<void> {
   if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
   try {
     await fs.rm(`${VIEW_LAYOUT_DIR}/${path}`, { recursive: true });
-    if (
-      selectedDiagramPath === path ||
-      selectedDiagramPath?.startsWith(`${path}/`)
-    ) {
-      selectedDiagramPath = null;
+    const wasOpen = selectedDiagramPath === path ||
+      selectedDiagramPath?.startsWith(`${path}/`);
+    if (!wasOpen) {
+      await refreshDiagramEntries();
+      return;
     }
+    selectedDiagramPath = null;
     await refreshDiagramEntries();
-    if (selectedDiagramPath === null) selectedDiagramPath = firstDiagramPath();
+    // Same reasoning as the rename: the open view is gone, so the URL is
+    // rewritten to the fallback rather than pushed as a dead entry.
+    selectView(firstDiagramPath(), true);
   } catch (error) {
     reportDiagramError(error);
   }
@@ -1382,7 +1497,7 @@ function handleJumpToDetailedView(): void {
       (e.path === `${label}.hcl` || e.path.endsWith(`/${label}.hcl`)),
   );
   if (match) {
-    selectedDiagramPath = match.path;
+    selectView(match.path);
   } else {
     toastState.show(`No detailed view for ${label} created`, "info");
   }
@@ -1922,7 +2037,7 @@ async function handleOpenDocumentation(): Promise<void> {
     await fs.writeFile(docPath, `# ${label}\n`);
   }
   await goto(
-    `${resolve("/projects/[id]/code", { id: data.projectId })}?file=${
+    `${resolve("/projects/[id]/code", { id: projectId })}?file=${
       encodeURIComponent(docPath)
     }`,
   );
@@ -3415,7 +3530,12 @@ $effect(() => {
     </h3>
     <FileTree
       entries={diagramEntries}
-      bind:selectedPath={selectedDiagramPath}
+      bind:selectedPath={() => selectedDiagramPath, (path) => {
+        // Picking a view is a navigation (see the URL section above), not just
+        // a local selection — hence the function binding rather than a plain
+        // `bind:selectedPath`.
+        if (path) selectView(path);
+      }}
       oncreatefile={handleCreateDiagram}
       oncreatedirectory={handleCreateDiagramFolder}
       onrename={handleRenameDiagram}
@@ -3585,7 +3705,7 @@ $effect(() => {
               </div>
             {/if}
             <a
-              href={resolve("/projects/[id]/code", { id: data.projectId })}
+              href={resolve("/projects/[id]/code", { id: projectId })}
               class="btn btn-sm btn-error"
             >
               Open Code to Fix
@@ -3725,7 +3845,7 @@ $effect(() => {
         <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
       </button>
       <EmbedDiagramButton
-        projectId={data.projectId}
+        projectId={projectId}
         diagramPath={selectedDiagramPath}
       />
     </div>

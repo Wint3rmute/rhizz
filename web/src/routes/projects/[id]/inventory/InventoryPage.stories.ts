@@ -222,3 +222,32 @@ export const EmptyModel: Story = {
   },
   loaders: [ensureEmptyProject],
 };
+
+// A shared link to an entity opens exactly that entity. The requested one is
+// deliberately not the first card, so this can't pass by accident on the same
+// entity a bare /inventory would have opened.
+export const DeepLinkedEntity: Story = {
+  args: {
+    requestedLabel: "draft-module",
+  },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const cards = await canvas.findAllByTestId("inventory-card");
+    const pressed = cards.filter((card) =>
+      card.getAttribute("aria-pressed") === "true"
+    );
+    await expect(pressed).toHaveLength(1);
+    await expect(pressed[0]).toHaveTextContent("draft-module");
+    // "battery" is the first definition — what a bare /inventory opens.
+    const batteryIsOpen = cards.some(
+      (card) =>
+        card.getAttribute("aria-pressed") === "true" &&
+        card.textContent.includes("battery"),
+    );
+    await expect(batteryIsOpen).toBe(false);
+    // ...and the detail pane follows: draft-module is the definition without a
+    // default view, so its preview shows the empty state.
+    await expect(canvas.getByTestId("inventory-empty-diagram")).toBeTruthy();
+  },
+};

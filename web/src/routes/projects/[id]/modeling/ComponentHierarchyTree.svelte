@@ -9,7 +9,7 @@
 //     NodeInspector, synced through the `selected` SvelteSet),
 //   - a component icon when one is provided.
 // It does no I/O and owns no model state — everything is passed in, so all
-// readProjectSources/compile/write logic stays in +page.svelte.
+// readProjectSources/compile/write logic stays in ModelingPage.svelte.
 import type { SvelteSet } from "svelte/reactivity";
 import Tree from "../../../../components/Tree.svelte";
 import type { TreeNode } from "../../../../components/treeTypes";
@@ -37,7 +37,7 @@ let {
   filterSystemLabel?: string | null;
   /** True when the given arena index is currently placed on the canvas. */
   isChecked: (index: number) => boolean;
-  /** Fired when a row's checkbox is toggled; +page.svelte places/unplaces it. */
+  /** Fired when a row's checkbox is toggled; ModelingPage.svelte places/unplaces it. */
   onToggleChecked: (index: number) => void;
 } = $props();
 

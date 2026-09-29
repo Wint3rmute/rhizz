@@ -14,7 +14,7 @@ import {
   placeCheckbox,
   placedNode,
 } from "./diagramStoryCanvas";
-import DiagramPage from "./+page.svelte";
+import DiagramPage from "./ModelingPage.svelte";
 
 // The arrow keys move the selection one step (the active snap grid) per
 // press, rigidly across a multi-selection. A screenshot cannot show *where*
@@ -81,12 +81,7 @@ const meta = {
   },
   tags: ["no-vrt"],
   args: {
-    params: {
-      id: PROJECT_ID,
-    },
-    data: {
-      projectId: PROJECT_ID,
-    },
+    projectId: PROJECT_ID,
   },
   loaders: [ensureProject],
 } satisfies Meta<typeof DiagramPage>;

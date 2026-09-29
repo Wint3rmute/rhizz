@@ -8,6 +8,7 @@
 // indices needed to reconstruct definition trees and hierarchy paths.
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
@@ -17,6 +18,7 @@ import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import DiagramViewer from "../modeling/DiagramViewer.svelte";
 import {
   emptyDiagramLayout,
+  VIEW_LAYOUT_DIR,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import DefinitionCard from "./DefinitionCard.svelte";
@@ -32,17 +34,25 @@ import {
 
 let {
   projectId = null,
+  requestedLabel = "",
 }: {
   projectId?: string | null;
+  /** The entity named by the route path ("" = none requested). */
+  requestedLabel?: string;
 } = $props();
 
 // ── Model state (compiled from the project's HCL sources) ──────────────────
 let sources = $state<Source[]>([]);
+// Whether the model has been read (or found unreadable) — see `modelReady`
+// under the URL section below, which waits for this before resolving the URL.
+let modelReady = $state(false);
 
 $effect(() => {
   const id = projectId;
+  modelReady = false;
   if (!id) {
     sources = [];
+    modelReady = true;
     return;
   }
   let cancelled = false;
@@ -53,6 +63,9 @@ $effect(() => {
     })
     .catch(() => {
       if (!cancelled) sources = [];
+    })
+    .finally(() => {
+      if (!cancelled) modelReady = true;
     });
   return () => {
     cancelled = true;
@@ -132,18 +145,67 @@ let filtered = $derived(
   filterDefinitions(definitions, { tab: activeTab, query }),
 );
 
-// Keep a valid selection when the filter results change.
+// ── The inspected entity lives in the URL path ─────────────────────────────
+//
+// `/projects/<id>/inventory/<label>`, so the address bar always names what the
+// detail pane shows: it can be shared, bookmarked, and the browser's
+// back/forward buttons move between entities. `selectedLabel` stays the source
+// of truth for rendering and the URL mirrors it in both directions — clicks go
+// through selectLabel, the URL is only ever *adopted* (see the effect below),
+// so the two can never fight. Same shape as Modeling's open view.
+function labelUrl(label: string | null): string {
+  return resolve("/projects/[id]/inventory/[...label]", {
+    id: projectId ?? "",
+    label: label ?? "",
+  });
+}
+
+// Opens `label` (or nothing, for the bare page) and makes the URL name it.
+// `replace` rewrites the current history entry instead of pushing a new one —
+// used when the URL is being canonicalised (a bare page, a search that hides
+// the open entity) rather than moved to by the user.
+function selectLabel(label: string | null, replace = false): void {
+  selectedLabel = label;
+  const target = labelUrl(label);
+  if (target === page.url.pathname) return;
+  void goto(target, {
+    replaceState: replace,
+    noScroll: true,
+    keepFocus: true,
+  });
+}
+
+// The last entity this page settled on. Non-reactive: it exists so a
+// navigation this page performed itself (selectLabel writes the state first,
+// the URL a tick later) is not mistaken for the user pressing back, which
+// would undo the very click that caused it.
+let lastHandledLabel: string | null = null;
+
 $effect(() => {
-  if (filtered.length === 0) {
-    if (selectedLabel !== null) selectedLabel = null;
+  // Before the model is read there is nothing to resolve the path against —
+  // and a cold deep link would be rewritten to the bare page if we tried.
+  if (!modelReady) return;
+  const requested = requestedLabel;
+  // Already settled — this is our own navigation echoing back (or a filter
+  // change re-running the effect), not a new entity to open.
+  if (requested === lastHandledLabel) return;
+  lastHandledLabel = requested;
+  const isOpenable = requested !== "" &&
+    definitions.some((d) => d.label === requested);
+  if (isOpenable) {
+    selectedLabel = requested;
     return;
   }
-  if (
-    selectedLabel === null ||
-    !filtered.some((d) => d.label === selectedLabel)
-  ) {
-    selectedLabel ??= filtered[0]?.label ?? null;
+  // Nothing openable in the path — a bare page, or an entity that has since
+  // been renamed or deleted. The open entity has to be one the current filter
+  // still shows, so fall back to the first match and take the URL with it:
+  // the address bar must keep naming what the detail pane is showing.
+  if (filtered.length === 0) {
+    if (selectedLabel !== null) selectLabel(null, true);
+    return;
   }
+  if (filtered.some((d) => d.label === selectedLabel)) return;
+  selectLabel(filtered[0]?.label ?? null, true);
 });
 
 let selectedDefinition = $derived(
@@ -206,8 +268,8 @@ async function handleSaveDoc(content: string): Promise<void> {
 }
 
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
-// to the system that instantiates the definition) and opens Modeling with
-// that very view selected via `?diagram=`.
+// to the system that instantiates the definition) and opens Modeling on that
+// very view, addressed by its path.
 let creatingView = $state(false);
 
 async function handleCreateView(): Promise<void> {
@@ -221,10 +283,13 @@ async function handleCreateView(): Promise<void> {
     const system = preferredViewSystem(comps, systems, def.label);
     const path = defaultViewPath(def.label);
     await writeDiagramLayoutFile(fs, path, emptyDiagramLayout(system), system);
+    // The view's own path relative to `views/` — the modeling route is a rest
+    // param, so this is a plain path suffix, `views/` already being implied.
     await goto(
-      `${resolve("/projects/[id]/modeling", { id })}?diagram=${
-        encodeURIComponent(path)
-      }`,
+      resolve("/projects/[id]/modeling/[...view]", {
+        id,
+        view: path.slice(`${VIEW_LAYOUT_DIR}/`.length),
+      }),
     );
   } catch (error) {
     console.error("Failed to create component view:", error);
@@ -310,7 +375,7 @@ async function handleCreateView(): Promise<void> {
             <DefinitionCard
               {definition}
               selected={definition.label === selectedLabel}
-              onselect={(label) => (selectedLabel = label)}
+              onselect={(label) => selectLabel(label)}
             />
           {/each}
         {/if}
