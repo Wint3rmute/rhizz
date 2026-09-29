@@ -4,6 +4,81 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 108 — The node context menu creates a detail view when there isn't one
+
+Right-clicking a node in Modeling now offers "Create a detailed view" when the
+component has no detail view, and "Jump to detailed view" when it does — and
+the row does whichever it says.
+
+- **The old else-branch toasted a lie.** `handleJumpToDetailedView` looked for
+  a view and, finding none, showed `No detailed view for <label> created` —
+  a toast claiming a creation that never happened. That is the bug the task
+  names: the menu had one row that could only ever jump, so the honest move
+  was to give it the other half of the behaviour, not to reword the toast.
+- **One lookup drives the label *and* the action.** `detailTarget(index)` is
+  called when the menu opens (to pick the label) and again when the row is
+  clicked (to decide), so the promise the menu makes and the action behind it
+  cannot drift apart. It returns a `DetailViewTarget` — `{kind: "jump", path}`
+  or `{kind: "create", path}` — from a new pure helper next to
+  `findComponentDiagram`, which the read-only viewer already used for the same
+  "is this node linked?" question. Modeling's own inline lookup is gone, and
+  with it a blind spot: it matched only `<label>.hcl`, so a *qualified* detail
+  view (`views/drone/engine.hcl`) was invisible to `V` even though Explore and
+  the embed viewer both found it and marked the node "linked".
+- **Creation lands on the path every other reader of the convention already
+  looks for**: `views/<label>.hcl`, the bare-label path that Inventory's
+  per-definition preview previews and `findComponentDiagram` match by name. A
+  view created on the canvas is therefore immediately live everywhere else —
+  the node becomes "linked" in Explore and the embed viewer, with no second
+  step.
+- **The system binding is immutable, so it is decided once, carefully.** The
+  view is bound to the system the node itself lives in — the tree the user is
+  standing in, and one that instantiates it — resolved with Modeling's own
+  `systemIndexOfComponent`, falling back to the open view's system, then the
+  first, then `"main"`. Inventory's `preferredViewSystem` answers the same
+  question (and reaches the same system, since it looks for the system that
+  instantiates the definition) but from the raw `to_js()` payload, which
+  Modeling does not load; reusing the local helper avoided pulling the whole
+  raw payload in for one lookup.
+- **The new canvas opens with the node on it, at the viewport centre, keeping
+  its size and alignment.** The user asked for this *from a node they were
+  looking at*; an empty view reads as "my node was deleted" and is a
+  plausible source of exactly that bug report. Inventory's equivalent button
+  still creates an empty layout, and that asymmetry is deliberate rather than
+  an oversight: from Inventory you are browsing definitions, not standing on
+  one, so there is no node to keep.
+- **`V` shares the handler**, so the shortcut means what the menu offers. Its
+  guard also tightened: the old code fell back to `selectedComponentData`
+  (whichever single key was selected), and now it acts on
+  `primarySelected` — so `V` with a multi-node selection is a no-op instead of
+  doing something to an arbitrary member of the selection.
+- **Red/green**: four unit tests on `detailViewTarget` went red first (the
+  export did not exist) and cover the qualified-path preference, the
+  create-path, a project with no views at all, and directories / non-HCL
+  files not counting as a view. Two new stories
+  (`Pages/Diagrams/Detail View Menu`) drive the real page: `Offers To Create`
+  went red on the label and `Offers To Jump` was green from the start — it is
+  a characterisation test for the half that already worked, which is why both
+  are here. `e2e/context-menu.spec.ts`'s existing row assertion was updated
+  (a brand-new definition has no detail view, so it now says *create*), and a
+  new case in the same spec walks the whole cycle: create → the view is
+  written, opened, addressed by its own URL, and still shows the node → the
+  same row now says *jump* → jumping is a no-op.
+- **VRT: 4 of 164 baselines new** (the two stories in both themes). Unlike
+  most menu coverage, these captures render the menu itself, so the row's
+  wording is pinned visually in both themes rather than only by a query. A full
+  follow-up run is 168/168, 0 changed.
+- **Not addressed**: `DiagramViewer` — the read-only viewer behind Explore and
+  the embed — toasts the same untrue `No detailed view for <label> created`
+  when an unlinked node is clicked. Creating is impossible on that surface, so
+  some feedback is needed and the wording is a separate (small) fix; left
+  alone rather than half-changing it here.
+- **Validation**: `just test` (cargo + 710 Vitest + 51 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 107 — The diagnostics status bar is one solid surface
 
 The bar at the bottom of every project page is no longer translucent, and its

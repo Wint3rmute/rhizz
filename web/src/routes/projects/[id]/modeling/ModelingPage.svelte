@@ -25,6 +25,7 @@ import { page } from "$app/state";
 import FileTree from "../code/FileTree.svelte";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 import { componentInSystem, systemIndexOfComponent } from "./componentTree";
+import { type DetailViewTarget, detailViewTarget } from "../explore/navigation";
 import DiagramToolbar from "./DiagramToolbar.svelte";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
 import AnnotationInspector from "./AnnotationInspector.svelte";
@@ -1441,8 +1442,9 @@ function onDiagramKeyDown(event: KeyboardEvent) {
   }
 
   // Context-menu shortcuts (global on this page, same guard as above): H hides
-  // the node from this view, O opens docs, V jumps to the detailed view,
-  // N/C/F/R/G mirror the empty-space menu (note/component/zoom/reset/grid).
+  // the node from this view, O opens docs, V opens (or creates) the node's
+  // detail view, N/C/F/R/G mirror the empty-space menu (note/component/zoom/
+  // reset/grid).
   // C/F double as color/font cycling with a selection — the cycling branch
   // above already preventDefaulted, so only fire the menu meaning here when
   // nothing is selected (below, `selected.size === 0`).
@@ -1453,9 +1455,15 @@ function onDiagramKeyDown(event: KeyboardEvent) {
     } else if (key === "o" || key === "j") {
       event.preventDefault();
       void handleOpenDocumentation().catch(reportDiagramError);
-    } else if (key === "v") {
+    } else if (
+      key === "v" &&
+      primarySelected !== null &&
+      primarySelected !== undefined
+    ) {
+      // The detail view is a per-node thing, so with an empty or multi-node
+      // selection there is nothing for the key to mean.
       event.preventDefault();
-      handleJumpToDetailedView();
+      void handleDetailView(primarySelected).catch(reportDiagramError);
     } else if (key === "n") {
       event.preventDefault();
       addAnnotationHandler();
@@ -1488,19 +1496,70 @@ async function hideSelectedFromView(): Promise<void> {
   await handleDeleteSelectedComponent();
 }
 
-function handleJumpToDetailedView(): void {
-  if (!selectedComponentData) return;
-  const label = selectedComponentData.label;
-  const match = diagramEntries.find(
-    (e) =>
-      e.isFile() &&
-      (e.path === `${label}.hcl` || e.path.endsWith(`/${label}.hcl`)),
+// The selected node's detail view: the one that already exists, or the
+// conventional path to create. One lookup drives both the context menu's row
+// label and what that row (and the `V` shortcut) does, so the promise the menu
+// makes and the action behind it can never disagree.
+function detailTarget(index: number): DetailViewTarget {
+  return detailViewTarget(
+    diagramEntries,
+    components[index]?.label ?? "",
+    getComponentKey(index),
   );
-  if (match) {
-    selectView(match.path);
-  } else {
-    toastState.show(`No detailed view for ${label} created`, "info");
+}
+
+// The detail view of the component at `index`: opens the existing one, or
+// creates it when there is none. `V` and the context-menu row share this, so
+// the shortcut means the same thing the menu offers.
+async function handleDetailView(index: number): Promise<void> {
+  const target = detailTarget(index);
+  if (target.kind === "jump") {
+    selectView(target.path);
+    return;
   }
+  await createDetailedView(index, target.path);
+}
+
+// Creates `views/<path>` — the conventional detail view of the component at
+// `index` — and opens it.
+//
+// The component is placed on the new canvas, because the user asked for this
+// from a node they were looking at, and an empty view reads as "my node was
+// deleted". (Inventory's equivalent starts empty: there you are browsing
+// definitions rather than standing on one.)
+async function createDetailedView(
+  index: number,
+  path: string,
+): Promise<void> {
+  // A view's system binding is immutable after creation, so it has to be right
+  // the first time: the system the node itself lives in — the tree the user is
+  // looking at, and one that instantiates it — else whatever the open view is
+  // bound to.
+  const systemIndex = systemIndexOfComponent(components, index);
+  const ownSystem = systemIndex === undefined ? "" : (
+    systems[systemIndex]?.label ?? ""
+  );
+  const system = ownSystem || effectiveSystem || systems[0]?.label || "main";
+
+  const box = nodeBox(index);
+  const width = box?.width ?? DEFAULT_NODE_WIDTH;
+  const height = box?.height ?? DEFAULT_NODE_HEIGHT;
+  const layout = emptyDiagramLayout(system);
+  layout.checked[getComponentKey(index)] = {
+    ...nodeTopLeftAt(viewportCenter(), width, height),
+    width,
+    height,
+    textAlign: box?.textAlign ?? DEFAULT_TEXT_ALIGN,
+  };
+
+  await writeDiagramLayoutFile(
+    fs,
+    `${VIEW_LAYOUT_DIR}/${path}`,
+    layout,
+    system,
+  );
+  await refreshDiagramEntries();
+  selectView(path);
 }
 
 // The single selected node, or null if zero or more than one are selected.
@@ -2161,6 +2220,7 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
   focusCanvas();
   if (!selected.has(index)) selectOnly(index);
   selectedConnection = null;
+  const target = detailTarget(index);
   contextMenu = {
     x: event.clientX,
     y: event.clientY,
@@ -2176,9 +2236,11 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
         action: () => void handleOpenDocumentation().catch(reportDiagramError),
       },
       {
-        label: "Jump to detailed view",
+        label: target.kind === "create"
+          ? "Create a detailed view"
+          : "Jump to detailed view",
         shortcut: "V",
-        action: () => handleJumpToDetailedView(),
+        action: () => void handleDetailView(index).catch(reportDiagramError),
       },
     ],
   };
