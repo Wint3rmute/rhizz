@@ -24,13 +24,6 @@ visible until the transition completes, then disappear abruptly.
 
 ## Task <N> - 
 
-## Task <N> - smarter "jump to detailed view"
-
-The context menu under the modeling/ page has a "jump to detailed view" option.
-Add additional logic so that this context menu item displays either the current
-"jump to detailed view" option or "create a detailed view" option, depending on
-whether the component has a detailed view already.
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,

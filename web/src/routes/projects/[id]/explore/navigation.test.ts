@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Dirent } from "../../../../vfs/fs";
-import { findComponentDiagram, linkedComponentIndexes } from "./navigation";
+import {
+  detailViewTarget,
+  findComponentDiagram,
+  linkedComponentIndexes,
+} from "./navigation";
 
 function file(name: string): Dirent {
   return {
@@ -53,5 +57,40 @@ describe("linkedComponentIndexes", () => {
       [file("drone/engine.hcl")],
     );
     expect([...linked]).toEqual([0]);
+  });
+});
+
+describe("detailViewTarget", () => {
+  it("jumps to the existing detail diagram, bare label or qualified path", () => {
+    expect(
+      detailViewTarget([file("engine.hcl")], "engine", "drone/engine"),
+    ).toEqual({ kind: "jump", path: "engine.hcl" });
+    expect(
+      detailViewTarget(
+        [file("engine.hcl"), file("drone/engine.hcl")],
+        "engine",
+        "drone/engine",
+      ),
+    ).toEqual({ kind: "jump", path: "drone/engine.hcl" });
+  });
+
+  it("offers to create the conventional path when none exists", () => {
+    expect(
+      detailViewTarget([file("overview.hcl")], "engine", "drone/engine"),
+    ).toEqual({ kind: "create", path: "engine.hcl" });
+  });
+
+  it("creates into a project that has no views at all", () => {
+    expect(detailViewTarget([], "engine", "drone/engine")).toEqual({
+      kind: "create",
+      path: "engine.hcl",
+    });
+  });
+
+  it("ignores directories and non-HCL files", () => {
+    const folder = { ...file("engine"), isFile: () => false };
+    expect(
+      detailViewTarget([folder, file("engine.png")], "engine", "drone/engine"),
+    ).toEqual({ kind: "create", path: "engine.hcl" });
   });
 });

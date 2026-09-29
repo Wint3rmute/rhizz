@@ -51,8 +51,10 @@ test("component right-click shows menu; Hide removes from view, keeps model", as
   await expect(
     menu.getByRole("menuitem", { name: /jump to documentation/i }),
   ).toBeVisible();
+  // A brand-new definition has no detail view yet, so the row offers to make
+  // one rather than to jump to it.
   await expect(
-    menu.getByRole("menuitem", { name: /jump to detailed view/i }),
+    menu.getByRole("menuitem", { name: /create a detailed view/i }),
   ).toBeVisible();
   await expect(menu.locator("kbd", { hasText: "H" })).toBeVisible();
 
@@ -67,6 +69,53 @@ test("component right-click shows menu; Hide removes from view, keeps model", as
   await page.getByTestId("diagram-canvas").click({ position: { x: 5, y: 5 } });
   await page.keyboard.press("Control+z");
   await expect(canvas.getByText("e2e-ctx").first()).toBeVisible();
+});
+
+// The detail-view row is the same row either way — it opens the view if the
+// component has one and creates it if not, and says which before you click.
+test("the detail-view row creates a view once, then jumps to it", async ({ page }) => {
+  const id = await openDiagram(page, "E2E detail view menu");
+  await createComponent(page, "e2e-detail");
+
+  const canvas = page.getByTestId("diagram-canvas");
+  const menu = page.getByTestId("context-menu");
+  const rightClick = async (label: string) => {
+    const box = await canvas.getByText(label).first().boundingBox();
+    if (!box) throw new Error(`${label} has no bounding box`);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
+      button: "right",
+    });
+    await expect(menu).toBeVisible();
+  };
+
+  await rightClick("e2e-detail");
+  await menu.getByRole("menuitem", { name: /create a detailed view/i }).click();
+
+  // The new view is written, opened, and addressed by its own path.
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-detail.hcl`);
+  await expect(canvas.getByText("e2e-detail").first()).toBeVisible();
+  await expect(page.getByTestId("diagram-system-label")).toContainText(
+    "system: main",
+  );
+  const tree = page.locator("aside").filter({
+    has: page.getByRole("heading", { name: "Diagrams" }),
+  });
+  await expect(
+    tree.getByRole("button", { name: "e2e-detail.hcl", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+
+  // The view now exists, so the same row offers to jump instead of create —
+  // and jumping is a no-op, because this *is* the component's detail view.
+  await rightClick("e2e-detail");
+  await expect(
+    menu.getByRole("menuitem", { name: /jump to detailed view/i }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /create a detailed view/i }),
+  ).toHaveCount(0);
+  await menu.getByRole("menuitem", { name: /jump to detailed view/i }).click();
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-detail.hcl`);
+  await expect(canvas.getByText("e2e-detail").first()).toBeVisible();
 });
 
 test("empty canvas right-click shows canvas menu with shortcuts", async ({ page }) => {
