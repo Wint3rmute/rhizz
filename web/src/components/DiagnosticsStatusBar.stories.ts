@@ -26,6 +26,13 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** One of the bar's rendered surfaces (the panel, when expanded). */
+function surface(root: Element, index: number): HTMLElement {
+  const el = root.children.item(index);
+  if (!el) throw new Error("status bar has no such surface");
+  return el as HTMLElement;
+}
+
 export const Collapsed: Story = {
   args: {},
   play: async ({ canvasElement }) => {
@@ -84,5 +91,48 @@ export const Clean: Story = {
     // Expanding a clean run shows the well-done message.
     await userEvent.click(await bar.findByRole("button"));
     await expect(await bar.findByText(/Well Done/)).toBeInTheDocument();
+  },
+};
+
+// The bar's two surfaces — the always-visible strip and the panel that pops
+// over the page when it is clicked — are one component, so they are one
+// colour. They used to differ: both were `bg-base-100/95` + a backdrop blur,
+// so each showed 5% of whatever sat behind it, and the panel (over the page's
+// canvas) read a shade greyer than the strip (over the app's own background).
+export const Expanded: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = canvas.getByTestId("diagnostics-status-bar");
+    const bar = within(root);
+    await expect(await bar.findByText("1 error")).toBeInTheDocument();
+
+    // Reproduce the two backdrops the surfaces really sit on, so the baseline
+    // shows the seam: in the app the panel floats over the page (base-300)
+    // while the strip sits on the shell's own background (base-100). The panel
+    // also pops *above* the bar, so anchor the story root to the bottom of
+    // the frame — otherwise it renders off-screen and the VRT captures a
+    // clipped sliver.
+    canvasElement.style.display = "flex";
+    canvasElement.style.flexDirection = "column";
+    canvasElement.style.justifyContent = "flex-end";
+    canvasElement.style.height = "100vh";
+    canvasElement.style.background = "var(--color-base-100)";
+    const page = document.createElement("div");
+    page.style.flex = "1";
+    page.style.background = "var(--color-base-300)";
+    canvasElement.prepend(page);
+
+    await userEvent.click(await bar.findByRole("button"));
+    // One row per diagnostic; the collapsed strip's plain-text preview of the
+    // first message matches the panel's text, so assert the rows, not the text.
+    await expect(await bar.findAllByRole("alert")).toHaveLength(3);
+
+    const panel = surface(root, 0);
+    const background = (el: Element) => getComputedStyle(el).backgroundColor;
+    await expect(background(panel)).toBe(background(root));
+    // A backdrop blur on an opaque surface is dead weight, and it is the tell
+    // that a surface is meant to be glass.
+    await expect(getComputedStyle(panel).backdropFilter).toBe("none");
+    await expect(getComputedStyle(root).backdropFilter).toBe("none");
   },
 };

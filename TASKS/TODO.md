@@ -16,11 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Make bottom bar a single entity and not transparent
-
-1. Bottom bar is currently a bit transparent - make it solid
-2. The bottom bar is currently made out of 2 parts: the bottom bar, it's always there and the expandable part that is shown when the user clicks on the bottom bar. Those parts have different colors - unify them.
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the

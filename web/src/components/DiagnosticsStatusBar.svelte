@@ -4,6 +4,13 @@ import type { DiagnosticJS } from "rhizz";
 // Bottom status bar replacing the Overview page's diagnostics sidebar.
 // Collapsed it shows only the counts (or a clean bill of health); clicking
 // expands the full diagnostics list above the bar.
+//
+// Both surfaces are one opaque `bg-base-100`. They used to be `bg-base-100/95`
+// + a backdrop blur, which is why the panel and the strip looked like two
+// different colours: each showed 5% of whatever sat behind it, and they sit
+// on different backdrops (the panel over the page, the strip over the app
+// shell). One solid colour makes the bar a single surface, and a blur behind
+// an opaque fill costs a compositing pass for nothing.
 let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
 
 let expanded = $state(false);
@@ -17,14 +24,16 @@ function specUrl(code: string): string {
 </script>
 
 <div
-  class="relative z-20 border-t border-base-300 bg-base-100/95 backdrop-blur-xs"
+  class="relative z-20 border-t border-base-300 bg-base-100"
   data-testid="diagnostics-status-bar"
 >
   {#if expanded}
     <!-- Overlay: floats above the page instead of pushing content up,
-         so expanding never shifts the layout. -->
+         so expanding never shifts the layout. Same background as the bar
+         below (see the note above); the shadow is what keeps it reading as
+         a panel over the page rather than as more page. -->
     <div
-      class="absolute inset-x-0 bottom-full max-h-64 overflow-y-auto px-4 sm:px-6 lg:px-8 py-3 bg-base-100/95 backdrop-blur-xs border-t border-base-300 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]"
+      class="absolute inset-x-0 bottom-full max-h-64 overflow-y-auto px-4 sm:px-6 lg:px-8 py-3 bg-base-100 border-t border-base-300 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]"
     >
       <div class="max-w-7xl mx-auto space-y-2 text-sm">
         {#if diagnostics.length === 0}
