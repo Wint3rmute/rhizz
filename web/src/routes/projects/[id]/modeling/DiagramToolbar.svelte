@@ -4,7 +4,7 @@
 // Persisted.svelte — every bit of state it needs is passed in as a prop
 // (bindable where the toolbar itself can change it) and every action is
 // a callback prop, so it can be rendered standalone (e.g. in a Storybook
-// story) without any of +page.svelte's canvas/persistence machinery.
+// story) without any of ModelingPage.svelte's canvas/persistence machinery.
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 interface Props {
   /** Whether "Snap to Grid" is toggled on. */

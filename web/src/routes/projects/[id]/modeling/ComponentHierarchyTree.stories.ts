@@ -27,7 +27,7 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-// Exercises the hierarchy tree entirely on its own — no +page.svelte, no
+// Exercises the hierarchy tree entirely on its own — no ModelingPage.svelte, no
 // model. Verifies nesting, expand/collapse, checkbox toggling, and selection
 // syncing through callback props + the selected SvelteSet.
 export const Default: Story = {

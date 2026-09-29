@@ -13,7 +13,7 @@ import {
   toWorld,
   viewBoxOf,
 } from "./diagramStoryCanvas";
-import DiagramPage from "./+page.svelte";
+import DiagramPage from "./ModelingPage.svelte";
 
 // Entities spawned without a position of their own — the `C`/`N` keyboard
 // shortcuts — land under the pointer while it is over the canvas, and on the
@@ -71,12 +71,7 @@ const meta = {
   },
   tags: ["no-vrt"],
   args: {
-    params: {
-      id: PROJECT_ID,
-    },
-    data: {
-      projectId: PROJECT_ID,
-    },
+    projectId: PROJECT_ID,
   },
   loaders: [ensureProject],
 } satisfies Meta<typeof DiagramPage>;

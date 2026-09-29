@@ -41,8 +41,8 @@ test("inventory creates and opens a component-specific view", async ({ page }) =
     .getByRole("button", { name: "Create a view for this component" })
     .click();
 
-  // Lands in Modeling with the new view selected via ?diagram=.
-  await expect(page).toHaveURL(/\/modeling\?diagram=views%2Fe2e-widget\.hcl/);
+  // Lands in Modeling on the new view's own path.
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-widget.hcl`);
   await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
   await expect(page.getByTestId("diagram-canvas")).toBeVisible();
   await expect(page.getByTestId("diagram-system-label")).toContainText(

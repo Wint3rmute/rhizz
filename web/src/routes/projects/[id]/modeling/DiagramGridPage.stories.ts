@@ -6,7 +6,7 @@ import {
   createProjectWithFiles,
   projectStore,
 } from "../../../../ProjectState.svelte";
-import DiagramPage from "./+page.svelte";
+import DiagramPage from "./ModelingPage.svelte";
 
 // Deterministic project id so story args can be built synchronously at
 // module scope while the async (re)seeding runs lazily from loaders —
@@ -152,12 +152,7 @@ function patternIds(canvasElement: HTMLElement): string[] {
 /** Editor window with the Grid option enabled (it is on by default). */
 export const GridGraduationsEnabled: Story = {
   args: {
-    params: {
-      id: GRID_PROJECT_ID,
-    },
-    data: {
-      projectId: GRID_PROJECT_ID,
-    },
+    projectId: GRID_PROJECT_ID,
   },
   loaders: [ensureGridProject],
   play: async ({ canvasElement }) => {
@@ -192,12 +187,7 @@ export const GridGraduationsEnabled: Story = {
 /** Same editor window with the grid toggled off — background goes transparent. */
 export const GridToggledOff: Story = {
   args: {
-    params: {
-      id: GRID_PROJECT_ID,
-    },
-    data: {
-      projectId: GRID_PROJECT_ID,
-    },
+    projectId: GRID_PROJECT_ID,
   },
   loaders: [ensureGridProject],
   play: async ({ canvasElement }) => {

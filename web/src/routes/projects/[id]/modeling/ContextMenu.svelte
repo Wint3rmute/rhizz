@@ -1,7 +1,7 @@
 <script lang="ts">
 // Right-click context menu for the Modeling canvas. Presentation-only: every
 // row is a label (left) plus an optional keyboard shortcut hint (right,
-// greyed). All behavior lives in +page.svelte — this component only reports
+// greyed). All behavior lives in ModelingPage.svelte — this component only reports
 // which item was picked (or that the menu should close).
 export interface ContextMenuItem {
   label: string;

@@ -1,5 +1,5 @@
 // Schema + projection for the diagram data persisted into the active
-// project's VFS (web/src/routes/projects/[id]/modeling/+page.svelte's
+// project's VFS (web/src/routes/projects/[id]/modeling/ModelingPage.svelte's
 // `checked`).
 // Converts views to/from canonical HCL using rhizz-core's `serialize_views`
 // and `parse_views` (backed by hcl-rs). rhizz-core owns parsing and view
@@ -64,7 +64,7 @@ export const VIEW_LAYOUT_DIR = "views";
 // free-standing text annotations. `system` is immutable after creation — the
 // Modeling UI never offers to change it, only the Code editor can (or delete
 // + recreate). The editor's "remembered layout" for unchecked nodes is
-// transient UI state and is deliberately not persisted (see `+page.svelte`).
+// transient UI state and is deliberately not persisted (see `ModelingPage.svelte`).
 export interface DiagramLayout {
   /** Label of the system this view shows. `""` means unlinked/legacy. */
   system?: string;

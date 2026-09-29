@@ -1,5 +1,5 @@
 // Pure geometry helpers for the diagrams canvas (web/src/routes/views/
-// +page.svelte). Deliberately has zero Svelte/DOM dependency, so it can be
+// ModelingPage.svelte). Deliberately has zero Svelte/DOM dependency, so it can be
 // unit tested directly (see geometry.test.ts) without mounting a component.
 // Markdown measuring comes from the equally DOM-free `annotationMarkdown`.
 import {
@@ -60,7 +60,7 @@ export function normalizeAnnotationScale(scale: number): number {
 // Extent box of a view annotation's text, measured from *rendered* Markdown
 // (syntax stripped via `annotationSvgLines`) so `**bold**` meters as 4 chars,
 // using the same geometry constants as the interactive canvas's hit-testing
-// (see annotationHitBox in +page.svelte): ~7.5px per char at 1x scale,
+// (see annotationHitBox in ModelingPage.svelte): ~7.5px per char at 1x scale,
 // 16px line height, 14px horizontal / 8px vertical padding, 40px minimum
 // width. "Zoom to fill" and the static renderers use this so a far-away
 // annotation is never clipped out of the fitted viewport.
