@@ -1,8 +1,18 @@
 // HTTP-backend-specific behavior: what it sends to the server, how it reacts
 // to failures, and how it treats server responses — the storage-agnostic
-// behavioral suite lives in store.contract.test.ts.
+// behavioral suite lives in store.contract.test.ts, and the session read
+// cache's own behavior (how often the backend is actually touched) is in the
+// "VfsProjectStore read cache" suite at the bottom of this file.
 import { describe, expect, it } from "vitest";
-import { ServerProjectStore } from "./vfsStore";
+import {
+  ServerProjectStore,
+  type VfsBackend,
+  VfsProjectStore,
+} from "./vfsStore";
+import { openProjectFs } from "./fs";
+import { readProjectSources } from "./compile";
+import type { VfsData } from "./operations";
+import { emptyVfsData } from "./operations";
 
 interface FakeFetchOptions {
   /** In-memory blob the fake server serves; undefined = empty VFS. */
@@ -200,5 +210,177 @@ describe("ServerProjectStore HTTP behavior", () => {
     });
     const projects = await store.listProjects();
     expect(projects.map((p) => p.id)).toEqual(["ok"]);
+  });
+});
+
+describe("VfsProjectStore read cache", () => {
+  // The store hands every backend the *whole* VFS on every call, so a
+  // read-mostly workload — the modeling editor reads the project's files on
+  // open, then again on every view switch, and the file facade calls
+  // listNodes once per readdir/readFile/stat — pays for one full transfer
+  // per filesystem call. These tests pin how often the backend is reached
+  // for real; "what the store does with the data" is store.contract.test.ts's
+  // job.
+  interface CountingBackend {
+    backend: VfsBackend;
+    reads: () => number;
+    writes: () => number;
+    setFailingWrites: (failing: boolean) => void;
+  }
+
+  function makeCountingBackend(): CountingBackend {
+    let data: VfsData = emptyVfsData();
+    let reads = 0;
+    let writes = 0;
+    let failingWrites = false;
+    return {
+      backend: {
+        read: () => {
+          reads += 1;
+          return Promise.resolve(data);
+        },
+        write: (next) => {
+          writes += 1;
+          if (failingWrites) return Promise.reject(new Error("disk full"));
+          data = next;
+          return Promise.resolve();
+        },
+      },
+      reads: () => reads,
+      writes: () => writes,
+      setFailingWrites: (failing) => {
+        failingWrites = failing;
+      },
+    };
+  }
+
+  // A deterministic clock, so revision/updatedAt assertions never depend on
+  // wall-clock resolution.
+  function makeStore(backend: VfsBackend): VfsProjectStore {
+    let tick = 0;
+    return new VfsProjectStore(backend, () => `t${String(tick++)}`);
+  }
+
+  it("reads the backend once, however many reads follow", async () => {
+    const counting = makeCountingBackend();
+    const store = makeStore(counting.backend);
+    const project = await store.createProject("drone");
+    // The create read the backend once (nothing was cached yet) and wrote
+    // the result back; everything after it must be free.
+    expect(counting.reads()).toBe(1);
+    expect(counting.writes()).toBe(1);
+
+    await store.listProjects();
+    await store.listNodes(project.id);
+    await store.listProjects();
+
+    expect(counting.reads()).toBe(1);
+    expect(counting.writes()).toBe(1);
+  });
+
+  it("coalesces reads that start before the first one has landed", async () => {
+    // readProjectSources fans one readFile out per project file, all at
+    // once, on a page that has not read anything yet — without
+    // single-flight, every one of them would miss the cache and fetch.
+    const counting = makeCountingBackend();
+    const store = makeStore(counting.backend);
+    const project = await store.createProject("drone");
+    const readsBefore = counting.reads();
+
+    await Promise.all([
+      store.listNodes(project.id),
+      store.listNodes(project.id),
+      store.listProjects(),
+    ]);
+
+    expect(counting.reads()).toBe(readsBefore);
+  });
+
+  it("serves a mutation's result to later reads without reaching the backend", async () => {
+    const counting = makeCountingBackend();
+    const store = makeStore(counting.backend);
+    const project = await store.createProject("drone");
+    const file = await store.createFile(
+      project.id,
+      null,
+      "system.hcl",
+      'system "drone" {}',
+    );
+    expect(counting.reads()).toBe(1);
+    expect(counting.writes()).toBe(2);
+
+    const [node] = await store.listNodes(project.id);
+    expect(node?.id).toBe(file.id);
+    expect(counting.reads()).toBe(1);
+  });
+
+  it("keeps both writes when two mutations overlap", async () => {
+    // Without ordering, both mutations derive from the same snapshot and
+    // the second save erases the first one's file.
+    const counting = makeCountingBackend();
+    const store = makeStore(counting.backend);
+    const project = await store.createProject("p");
+
+    await Promise.all([
+      store.createFile(project.id, null, "a.hcl", ""),
+      store.createFile(project.id, null, "b.hcl", ""),
+    ]);
+
+    const names = (await store.listNodes(project.id)).map((n) => n.name)
+      .toSorted();
+    expect(names).toEqual(["a.hcl", "b.hcl"]);
+  });
+
+  it("re-reads from the backend after a save that failed", async () => {
+    // The cache would otherwise keep state the backend never accepted.
+    const counting = makeCountingBackend();
+    const store = makeStore(counting.backend);
+    const project = await store.createProject("drone");
+    const readsBefore = counting.reads();
+
+    counting.setFailingWrites(true);
+    await expect(
+      store.createFile(project.id, null, "a.hcl", ""),
+    ).rejects.toThrow("disk full");
+    counting.setFailingWrites(false);
+
+    await store.listProjects();
+    expect(counting.reads()).toBe(readsBefore + 1);
+  });
+
+  it("reads a project's sources through the file facade in one pass", async () => {
+    // The page-open path: mkdir, two writes, then readProjectSources — which
+    // is a readdir plus one readFile per source file.
+    const counting = makeCountingBackend();
+    const store = makeStore(counting.backend);
+    const project = await store.createProject("drone");
+    const fs = openProjectFs(store, project.id);
+    await fs.mkdir("docs", { recursive: true });
+    await fs.writeFile("main.hcl", 'system "drone" {}');
+    await fs.writeFile("docs/motor.md", "# motor");
+    const readsBefore = counting.reads();
+
+    const sources = await readProjectSources(fs);
+
+    expect(sources.map((s) => s.filename).toSorted()).toEqual([
+      "docs/motor.md",
+      "main.hcl",
+    ]);
+    expect(counting.reads()).toBe(readsBefore);
+  });
+
+  it("starts empty in a new store, so a reload re-reads the backend", async () => {
+    // The cache is per store instance and never persisted: a page reload
+    // builds a new one, which is the only invalidation this design has.
+    const counting = makeCountingBackend();
+    const first = makeStore(counting.backend);
+    const project = await first.createProject("drone");
+    await first.createFile(project.id, null, "a.hcl", "");
+
+    const second = makeStore(counting.backend);
+    expect((await second.listNodes(project.id)).map((n) => n.name)).toEqual([
+      "a.hcl",
+    ]);
+    expect(counting.reads()).toBe(2);
   });
 });
