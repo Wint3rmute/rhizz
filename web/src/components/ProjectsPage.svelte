@@ -172,9 +172,15 @@ async function deleteProject(project: Project) {
               Detect missing pieces, improve your systems completion metrics.
               All open source, all owned by you.
             </p>
-            <div class="grid gap-4 sm:grid-cols-3 w-full max-w-2xl">
+            <!-- Two columns, not three: New project spans both (`col-span-2`)
+                 and takes the row on its own, because it is the one action
+                 most visitors want. The two secondary ways in — an example
+                 system and the book — split the row beneath it, which also
+                 reads better than a row of three equal cards where the
+                 primary was the same size as the alternatives to it. -->
+            <div class="grid gap-4 sm:grid-cols-2 w-full max-w-2xl">
               <button
-                class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20"
+                class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20 sm:col-span-2"
                 onclick={createEmpty}
               >
                 <div class="text-2xl mb-2">✨</div>

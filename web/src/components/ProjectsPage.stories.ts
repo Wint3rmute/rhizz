@@ -38,7 +38,7 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-// The hero's three cards are a `grid-cols-1 sm:grid-cols-3` grid, so below `sm`
+// The hero's cards are a `grid-cols-1 sm:grid-cols-2` grid, so below `sm`
 // they become one column. Nothing pinned that, and it is easy to undo by
 // lowering the breakpoint at which the row starts — three cards side by side
 // at phone width is unreadable. `mobile1` is the same viewport the sibling
@@ -104,6 +104,13 @@ export const EmptyLanding: Story = {
   // With no projects the hero *is* the landing page, so this is the only place
   // its three cards are rendered. Previously this story asserted nothing,
   // which is why the set of entry points could change unnoticed.
+  //
+  // Content only. The two-column layout above `sm` — primary spanning both
+  // columns, the two secondaries sharing the row beneath — cannot be measured
+  // here: the viewport addon fills the preview area, which is ~414px under
+  // Vitest, so `sm` never applies. It is pinned by this story's VRT baseline
+  // instead (1280 wide), the same way MobileLandingStacks pins the stacked
+  // layout's pixels.
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // A regex, not the sentence: the hero paragraph continues past this
