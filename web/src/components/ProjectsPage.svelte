@@ -20,7 +20,7 @@ import type { Project } from "../vfs/types";
 // The unified projects/landing page. Rendered both at `/` (the landing
 // page) and at `/projects` (the classic route the navbar links to) — a
 // single source of truth for project listing, creation, rename/delete and
-// the "start from an example" flow.
+// the "learn by example" flow.
 //
 // `projects`/`loading` are an optional injection seam for Storybook (and
 // future component tests): when supplied they fully take over the
@@ -35,8 +35,8 @@ interface Props {
 
 let { projects = null, loading = null }: Props = $props();
 
-// Where the "Learn" card sends you: the mdBook build of `book/`, published
-// via GitHub Pages.
+// Where the "Read the book" card sends you: the mdBook build of `book/`,
+// published via GitHub Pages.
 const BOOK_URL = "https://wint3rmute.github.io/rhizz/book/";
 
 let localProjects = $state<Project[]>([]);
@@ -191,11 +191,11 @@ async function deleteProject(project: Project) {
               >
                 <div class="text-2xl mb-2">🚀</div>
                 <div class="font-semibold text-base-content">
-                  Start from an example
+                  Learn by example
                 </div>
                 <p class="text-xs text-base-content/70 mt-1">
-                  Explore a bundled template system — drone, socia
-                  software house and more.
+                  Explore example systems - moon rocket, a drone, web app and
+                  more.
                 </p>
               </button>
               <!-- Third way in: the book. An <a> rather than a <button> — it
@@ -210,10 +210,9 @@ async function deleteProject(project: Project) {
                 rel="noopener noreferrer"
               >
                 <div class="text-2xl mb-2">📖</div>
-                <div class="font-semibold text-base-content">Learn</div>
+                <div class="font-semibold text-base-content">Read the book</div>
                 <p class="text-xs text-base-content/70 mt-1">
-                  A guided tour of modeling in Rhizz — syntax, views,
-                  connections, warnings, right through to the CLI.
+                  A guided tour of modeling in Rhizz - from basic to advanced concepts.
                 </p>
               </a>
             </div>
