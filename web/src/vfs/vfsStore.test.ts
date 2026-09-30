@@ -1,10 +1,12 @@
 // HTTP-backend-specific behavior: what it sends to the server, how it reacts
 // to failures, and how it treats server responses — the storage-agnostic
-// behavioral suite lives in store.contract.test.ts, and the session read
-// cache's own behavior (how often the backend is actually touched) is in the
-// "VfsProjectStore read cache" suite at the bottom of this file.
-import { describe, expect, it } from "vitest";
+// behavioral suite lives in store.contract.test.ts, the session read cache's
+// own behavior (how often the backend is actually touched) is in the
+// "VfsProjectStore read cache" suite at the bottom of this file, and the
+// create/delete console announcements are in the suite after it.
+import { describe, expect, it, vi } from "vitest";
 import {
+  memoryBackend,
   ServerProjectStore,
   type VfsBackend,
   VfsProjectStore,
@@ -382,5 +384,85 @@ describe("VfsProjectStore read cache", () => {
       "a.hcl",
     ]);
     expect(counting.reads()).toBe(2);
+  });
+});
+
+describe("VfsProjectStore lifecycle logging", () => {
+  // Creating and deleting a project are the two moments worth seeing in the
+  // browser console, and the store is where every backend and every caller
+  // (the /projects page, the navbar's tour flow, Storybook's seeds) funnels
+  // through — so one line here covers all of them. Each message carries the
+  // name *and* the id, because the id is the project's address (the slug in
+  // /projects/<id>/…), which is what a reader needs to find it again.
+
+  // Captures console.log for the duration of one test and returns the lines a
+  // developer would have seen. Set up per test rather than once for the suite
+  // so the real console is untouched for every other test in this file.
+  async function captureLogs(run: () => Promise<void>): Promise<string[]> {
+    const lines: string[] = [];
+    const spy = vi
+      .spyOn(console, "log")
+      .mockImplementation((...args: unknown[]) => {
+        lines.push(args.map(String).join(" "));
+      });
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return lines;
+  }
+
+  it("logs the name and address of a created project", async () => {
+    const store = new VfsProjectStore(memoryBackend(), () => "t0");
+    const lines = await captureLogs(async () => {
+      await store.createProject("Drone System");
+    });
+    expect(lines).toEqual([
+      'VfsProjectStore: created project "Drone System" (drone-system)',
+    ]);
+  });
+
+  it("logs the name and address of a deleted project", async () => {
+    const store = new VfsProjectStore(memoryBackend(), () => "t0");
+    // Created outside the capture, so the assertion below is exactly the one
+    // delete line and not the create line before it.
+    const project = await store.createProject("Drone System");
+    const lines = await captureLogs(async () => {
+      await store.deleteProject(project.id);
+    });
+    expect(lines).toEqual([
+      'VfsProjectStore: deleted project "Drone System" (drone-system)',
+    ]);
+  });
+
+  it("logs nothing when the store refuses the operation", async () => {
+    // A refusal is not a lifecycle event: a line saying "created" or "deleted"
+    // for work that never happened is the one thing this log must not print.
+    const store = new VfsProjectStore(memoryBackend(), () => "t0");
+    await store.createProject("Drone System");
+    const lines = await captureLogs(async () => {
+      await expect(store.createProject("Drone System")).rejects.toThrow();
+      await expect(store.deleteProject("does-not-exist")).rejects.toThrow();
+    });
+    expect(lines).toEqual([]);
+  });
+
+  it("logs nothing when the backend rejects the write", async () => {
+    // The mutation itself succeeded — the data was built and the cache already
+    // holds it — but nothing was persisted, so the project does not exist.
+    // This is why the log waits for the write to settle rather than sitting
+    // next to ops.createProject, where it would have already fired.
+    const failing: VfsBackend = {
+      read: () => Promise.resolve(emptyVfsData()),
+      write: () => Promise.reject(new Error("disk full")),
+    };
+    const store = new VfsProjectStore(failing, () => "t0");
+    const lines = await captureLogs(async () => {
+      await expect(store.createProject("Drone System")).rejects.toThrow(
+        "disk full",
+      );
+    });
+    expect(lines).toEqual([]);
   });
 });
