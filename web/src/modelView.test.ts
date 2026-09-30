@@ -95,6 +95,24 @@ component "plain" {
     expect(view.get("weird")?.border).toBe("solid");
   });
 
+  it("carries the sourced definition on instances but not on definitions", () => {
+    const view = viewOf(`component "sensor" {
+  leaf = true
+}
+system "demo" {
+  instance "s1" {
+    source = "sensor"
+  }
+}
+`);
+    // The instance remembers the definition it was cloned from, so the UI can
+    // link back to it. The label differs from the source, which is exactly the
+    // case that makes the distinction worth surfacing.
+    expect(view.get("demo/s1")?.source).toBe("sensor");
+    // A definition is not an instance of anything, so it has no source.
+    expect(view.get("sensor")?.source).toBeUndefined();
+  });
+
   it("preserves lowercase port roles, without E009", () => {
     const systemHcl = `protocol "i2c" {
   full_name = "I2C bus"

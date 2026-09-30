@@ -3518,6 +3518,7 @@ $effect(() => {
       <NodeInspector
         componentKey={selectedKey}
         component={selectedComponentData}
+        {projectId}
         textAlign={selectedBox?.textAlign ?? DEFAULT_TEXT_ALIGN}
         onupdate={(patch) =>
           void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}

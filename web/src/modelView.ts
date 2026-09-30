@@ -39,6 +39,16 @@ export interface PortData {
  */
 export interface ComponentData {
   label: string;
+  /**
+   * The top-level definition this component was instantiated from (`source` in
+   * the HCL), when it is an instance. Absent on definitions and on components
+   * that carry their body inline.
+   *
+   * Read-only: `source` is what makes an instance a placement of a shared
+   * definition, so changing it is a re-source, not an attribute edit. The
+   * mutable subset is `ComponentPatch` (see `actionLog.ts`), which excludes it.
+   */
+  source?: string | undefined;
   full_name?: string;
   icon?: string | undefined;
   color: ComponentColor;
@@ -145,6 +155,10 @@ export function componentDataByKey(
     if (result.has(key)) return;
     result.set(key, {
       label: component.label,
+      // Instances only: `source` is the definition label they were cloned
+      // from, which can differ from the usage-site `label` (that difference is
+      // the whole point of the definition/instance split).
+      source: component.source === "" ? undefined : component.source,
       full_name: component.full_name ?? "",
       icon: component.icon ?? "",
       color: component.color === "" || component.color === undefined
