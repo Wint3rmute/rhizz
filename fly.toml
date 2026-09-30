@@ -9,6 +9,27 @@ primary_region = 'fra'
 [build]
   dockerfile = 'Dockerfile'
 
+  # Build-time arguments for the frontend build inside the image.
+  #
+  # VITE_SENTRY_DSN must be here, not in `fly secrets`. Vite inlines
+  # `VITE_*` variables when it bundles, and the bundle is compiled into
+  # rhizz-server by build.rs — all of which happens while the image is being
+  # built, before any runtime secret exists. A `fly secrets` value lands in
+  # the container's environment when the machine starts, long after the JS
+  # that would have read it was frozen, so it cannot reach it.
+  #
+  # Committing it is deliberate: a Sentry DSN is public by design — it ships
+  # in every browser bundle and is visible in devtools. It is an ingest
+  # identifier, not a credential. The credential is SENTRY_AUTH_TOKEN (see
+  # the Dockerfile), which is for the source-map upload and must stay out of
+  # git; that one needs a real build-secret mechanism, and is currently not
+  # passed on deploy, so prod stack traces arrive minified.
+  #
+  # Note: changing this invalidates the frontend build layer's cache, so the
+  # next deploy rebuilds it rather than reusing it.
+  [build.args]
+    VITE_SENTRY_DSN = 'https://c5757f769377fa9b99d42e5956213cbb@o4512171156045824.ingest.de.sentry.io/4512175383314512'
+
 [env]
   RHIZZ_ADDR = '0.0.0.0:8080'
   RUST_LOG = 'info'
