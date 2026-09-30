@@ -29,6 +29,10 @@ if (dsn !== undefined && dsn !== "") {
     // injects `window.SENTRY_RELEASE` into the build (from SENTRY_RELEASE, or
     // the git sha), which is the same release its source maps are uploaded
     // under. Setting it independently could tag the two differently.
+    integrations: [
+      // send console.log, console.warn, and console.error calls as logs to Sentry
+      Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
+    ],
   });
 }
 
