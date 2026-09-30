@@ -38,8 +38,8 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-// The hero's three cards are a `grid-cols-1 sm:grid-cols-3` grid, so below
-// `sm` they become one column. Nothing pinned that, and it is easy to undo by
+// The hero's three cards are a `grid-cols-1 sm:grid-cols-3` grid, so below `sm`
+// they become one column. Nothing pinned that, and it is easy to undo by
 // lowering the breakpoint at which the row starts — three cards side by side
 // at phone width is unreadable. `mobile1` is the same viewport the sibling
 // MobileHeaderStacks story uses; VRT captures at 1280 wide, so without this
@@ -58,13 +58,13 @@ export const MobileLandingStacks: Story = {
     const canvas = within(canvasElement);
     const newProject = canvas.getByRole("button", { name: /New project/ });
     const fromExample = canvas.getByRole("button", {
-      name: /Start from an example/,
+      name: /Learn by example/,
     });
-    const learn = canvas.getByRole("link", { name: /Learn/ });
+    const book = canvas.getByRole("link", { name: /Read the book/ });
 
     await expect(newProject).toBeInTheDocument();
     await expect(fromExample).toBeInTheDocument();
-    await expect(learn).toBeInTheDocument();
+    await expect(book).toBeInTheDocument();
 
     // One column, not one row: each card starts below the previous card's
     // bottom edge. Comparing rects rather than reading the class list, so a
@@ -73,7 +73,7 @@ export const MobileLandingStacks: Story = {
     await expect(
       fromExample.getBoundingClientRect().top,
     ).toBeGreaterThanOrEqual(newProject.getBoundingClientRect().bottom);
-    await expect(learn.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    await expect(book.getBoundingClientRect().top).toBeGreaterThanOrEqual(
       fromExample.getBoundingClientRect().bottom,
     );
   },
@@ -116,15 +116,15 @@ export const EmptyLanding: Story = {
       canvas.getByRole("button", { name: /New project/ }),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByRole("button", { name: /Start from an example/ }),
+      canvas.getByRole("button", { name: /Learn by example/ }),
     ).toBeInTheDocument();
 
     // The book is the third way in. It leaves the app, so it is a link and
     // not a button — "link" is the honest role, and it is what makes
     // middle-click, focus order and the browser's own affordances work.
-    const learn = canvas.getByRole("link", { name: /Learn/ });
-    await expect(learn).toBeInTheDocument();
-    await expect(learn).toHaveAttribute("href");
+    const book = canvas.getByRole("link", { name: /Read the book/ });
+    await expect(book).toBeInTheDocument();
+    await expect(book).toHaveAttribute("href");
   },
 };
 

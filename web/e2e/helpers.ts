@@ -34,7 +34,7 @@ export async function createFromExample(
   projectName: string,
 ): Promise<string> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start from an example" }).click();
+  await page.getByRole("button", { name: "Learn by example" }).click();
   page.once("dialog", (dialog) => void dialog.accept(projectName));
   await page.getByRole("button", { name: exampleName }).click();
   await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);

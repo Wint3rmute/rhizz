@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
 // cross-page wiring — mount, per-step navigation, spotlight, advance.
 test("first project auto-opens the tour; Next walks all pages to Done", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start from an example" }).click();
+  await page.getByRole("button", { name: "Learn by example" }).click();
   // The example card prompts for the project name — arm the handler
   // before clicking it (same pattern as smoke.spec.ts).
   page.on("dialog", (dialog) => void dialog.accept("E2E tour"));
