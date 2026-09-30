@@ -34,6 +34,31 @@ if (dsn !== undefined && dsn !== "") {
       Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
     ],
   });
+
+  // Announced *after* init, never before: the consoleLoggingIntegration above
+  // is installed by init, so only a line printed after it can be forwarded.
+  // Printed earlier this would be the one startup message that cannot reach
+  // Sentry — invisible precisely when someone is asking why nothing arrives.
+  // So this line both reports the decision and demonstrates it: seeing it in
+  // Sentry's Logs tab is the end-to-end proof that forwarding is live.
+  //
+  // `environment` is included because it is one of the two ways a correctly
+  // initialized SDK still shows nothing — Sentry filters by it. The DSN is
+  // deliberately not logged.
+  console.log(
+    "Sentry: initialized, console logs are forwarded as Sentry logs",
+    {
+      environment: import.meta.env.MODE,
+    },
+  );
+} else {
+  // No DSN means no SDK at all, so unlike the line above this one can only
+  // ever be read in the browser console. That is the whole point: a build with
+  // no DSN explains "nothing shows up in Sentry" completely, and it is the
+  // first thing to check.
+  console.log("Sentry: not initialized, this build has no VITE_SENTRY_DSN", {
+    environment: import.meta.env.MODE,
+  });
 }
 
 // SvelteKit's `handleError` covers what never reaches a component: a rejected
