@@ -180,12 +180,21 @@ export function createProject(
   };
 }
 
-export function deleteProject(data: VfsData, id: string): VfsData {
-  findProject(data, id); // throws if missing
+// Returns the project that was removed, as createProject/renameProject do:
+// the caller logs the deletion by name, and the id it has is only a slug,
+// which says nothing about what the user called the thing.
+export function deleteProject(
+  data: VfsData,
+  id: string,
+): { data: VfsData; project: Project } {
+  const project = findProject(data, id); // throws if missing
   return {
-    ...data,
-    projects: data.projects.filter((p) => p.id !== id),
-    nodes: data.nodes.filter((n) => n.projectId !== id),
+    data: {
+      ...data,
+      projects: data.projects.filter((p) => p.id !== id),
+      nodes: data.nodes.filter((n) => n.projectId !== id),
+    },
+    project,
   };
 }
 

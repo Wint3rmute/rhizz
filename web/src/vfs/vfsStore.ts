@@ -222,11 +222,28 @@ export class VfsProjectStore implements ProjectStore {
     return this.query((data) => ops.listProjects(data));
   }
 
-  createProject(name: string): Promise<Project> {
-    return this.mutate((data) => {
+  // Creating and deleting a project announce themselves on the console: those
+  // are the two moments where the user's data changes shape, and they are the
+  // ones you want to see when a project seems to have vanished. The store is
+  // the one place all of it passes through — the /projects page, the navbar's
+  // tour flow and Storybook's seeds each take a different route to get here,
+  // so logging any higher up would miss some of them.
+  //
+  // Both logs sit *after* the mutation settles rather than inside the op
+  // passed to mutate(). The op runs before the write, so a line emitted there
+  // would claim a project that the backend then refused to store — a log that
+  // lies about the only thing it exists to report. Naming the project means
+  // looking the name up, which the op cannot do without re-deriving what
+  // ops.createProject/ops.deleteProject already resolved.
+  async createProject(name: string): Promise<Project> {
+    const project = await this.mutate((data) => {
       const result = ops.createProject(data, name, this.now());
       return { data: result.data, value: result.project };
     });
+    console.log(
+      `VfsProjectStore: created project "${project.name}" (${project.id})`,
+    );
+    return project;
   }
 
   renameProject(id: string, name: string): Promise<Project> {
@@ -236,11 +253,14 @@ export class VfsProjectStore implements ProjectStore {
     });
   }
 
-  deleteProject(id: string): Promise<void> {
-    return this.mutate((data) => ({
-      data: ops.deleteProject(data, id),
-      value: undefined,
-    }));
+  async deleteProject(id: string): Promise<void> {
+    const project = await this.mutate((data) => {
+      const result = ops.deleteProject(data, id);
+      return { data: result.data, value: result.project };
+    });
+    console.log(
+      `VfsProjectStore: deleted project "${project.name}" (${project.id})`,
+    );
   }
 
   listNodes(projectId: string): Promise<FsNode[]> {
