@@ -38,6 +38,47 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+// The hero's three cards are a `grid-cols-1 sm:grid-cols-3` grid, so below
+// `sm` they become one column. Nothing pinned that, and it is easy to undo by
+// lowering the breakpoint at which the row starts — three cards side by side
+// at phone width is unreadable. `mobile1` is the same viewport the sibling
+// MobileHeaderStacks story uses; VRT captures at 1280 wide, so without this
+// story the stacked layout had no screenshot at all.
+export const MobileLandingStacks: Story = {
+  args: {
+    projects: [],
+  },
+  globals: {
+    viewport: { value: "mobile1" },
+  },
+  parameters: {
+    viewport: { defaultViewport: "mobile1" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const newProject = canvas.getByRole("button", { name: /New project/ });
+    const fromExample = canvas.getByRole("button", {
+      name: /Start from an example/,
+    });
+    const learn = canvas.getByRole("link", { name: /Learn/ });
+
+    await expect(newProject).toBeInTheDocument();
+    await expect(fromExample).toBeInTheDocument();
+    await expect(learn).toBeInTheDocument();
+
+    // One column, not one row: each card starts below the previous card's
+    // bottom edge. Comparing rects rather than reading the class list, so a
+    // change that keeps `grid-cols-1` on the element but restructures the
+    // grid still gets caught.
+    await expect(
+      fromExample.getBoundingClientRect().top,
+    ).toBeGreaterThanOrEqual(newProject.getBoundingClientRect().bottom);
+    await expect(learn.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      fromExample.getBoundingClientRect().bottom,
+    );
+  },
+};
+
 export const WithProjects: Story = {
   args: {
     projects,
