@@ -1,4 +1,6 @@
 <script lang="ts">
+import { resolve } from "$app/paths";
+import type { ComponentPatch } from "../../../../actionLog";
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../modelView";
 import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
@@ -13,7 +15,13 @@ interface Props {
   componentKey: string;
   component: ComponentData;
   textAlign: TextAlign;
-  onupdate: (patch: Partial<ComponentData>) => void;
+  /**
+   * The attributes the inspector can edit. Deliberately `ComponentPatch` and
+   * not `Partial<ComponentData>`: `source` is part of the component's
+   * read-model but is not an editable attribute (re-sourcing an instance is a
+   * different operation), and this is the boundary that keeps the two apart.
+   */
+  onupdate: (patch: ComponentPatch) => void;
   onrename: (newLabel: string) => void;
   onsettextalign: (align: TextAlign) => void;
   ondelete?: () => void;
@@ -21,6 +29,12 @@ interface Props {
   onopendocumentation?: () => void;
   /** Hide the name field (the creation modal already has its own). */
   showName?: boolean;
+  /**
+   * Project the component lives in, used to address the Inventory page of the
+   * definition this instance was sourced from. Omit it and an instance shows
+   * no source row at all — a link with nowhere to point is worse than none.
+   */
+  projectId?: string | undefined;
 }
 
 let {
@@ -33,7 +47,17 @@ let {
   ondelete,
   onopendocumentation,
   showName = true,
+  projectId = undefined,
 }: Props = $props();
+
+// Where "Source" goes. Inventory addresses a definition by its bare label, so
+// this is the definition's own label rather than this instance's path.
+let sourceHref = $derived(
+  component.source === undefined || projectId === undefined ? null : resolve(
+    "/projects/[id]/inventory/[...label]",
+    { id: projectId, label: component.source },
+  ),
+);
 
 let editLabel = $state("");
 let editFullName = $state("");
@@ -161,6 +185,21 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
         placeholder="Full official name, expanding abbreviations..."
       ></textarea>
     </div>
+
+    {#if sourceHref !== null}
+      <div
+        class="text-[11px] font-mono truncate"
+        data-testid="component-source"
+      >
+        <span class="text-base-content/50">Source:</span>
+        <a
+          href={sourceHref}
+          class="link link-primary"
+          title="Open the definition '{component.source}' in Inventory">
+          {component.source}
+        </a>
+      </div>
+    {/if}
 
     <IconAutocompleteInput
       id="comp-icon-input"
