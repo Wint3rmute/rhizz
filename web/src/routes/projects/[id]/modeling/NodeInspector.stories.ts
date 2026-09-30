@@ -106,6 +106,10 @@ export const Sourced: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // The editable name is the *instance's* name within its parent scope, not
+    // the definition's — the same vocabulary CreateComponentModal already uses
+    // ("Definition Name" vs "Instance Name") for this exact field.
+    await expect(canvas.getByLabelText(/instance name/i)).toBeInTheDocument();
     // The source row sits under the full name box, not up by the component
     // path: it is part of the identity block (name -> full name -> what this
     // was instantiated from), read top to bottom like the fields above it.

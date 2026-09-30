@@ -157,7 +157,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       <label class="label py-1" for="comp-name-input">
         <span
           class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Component Name
+          Instance Name
         </span>
       </label>
       <input
