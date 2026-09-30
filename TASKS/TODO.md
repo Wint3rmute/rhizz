@@ -16,6 +16,43 @@ How to work on this file:
 
 ---
 
+## Task <N> - Add a global command palette
+
+Multiple applications have a command palette for quick operation, aimed at power
+users. I want to add the same thing to rhizz.
+
+I want to have a generic palette implementation and then 2 implementations:
+
+(Note: on macos, Cmd instead of Ctrl)
+
+- Ctrl-P (a file switcher)
+- Ctrl-Shift-P (a command pallete)
+
+The command palette shall allow for dynamic generation of available options
+based on the current context (e.g. it can be passed a list of available commands
+and call a callback when an option is selected).
+
+The command palette shall be searchable via fuzzy matching, with matching
+letters highlighted live. Use Fuse.js.
+
+It shall be possible to close the opened command palette via Escape.
+
+Command palette shall only be possible to activate when a project is open.
+
+The command palette shall be implemented as a generic component that can be
+reused across the application, no tight coupling is allowed.
+
+### File switcher
+
+File switcher shall allow navigating via files which are valid in the current context. E.g. when in modeling/,
+it shall allow navigation through all defined views. When in code/, it shall allow navigation through all defined files. The search shall always be project-scoped.
+
+### Command palette
+
+Command palette shall allow for:
+
+1. Switching between subpages (Open Overview, Open Modeling, Open Inventory, etc)
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
