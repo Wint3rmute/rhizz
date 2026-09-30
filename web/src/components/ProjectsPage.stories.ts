@@ -60,6 +60,31 @@ export const EmptyLanding: Story = {
   args: {
     projects: [],
   },
+  // With no projects the hero *is* the landing page, so this is the only place
+  // its three cards are rendered. Previously this story asserted nothing,
+  // which is why the set of entry points could change unnoticed.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // A regex, not the sentence: the hero paragraph continues past this
+    // clause, so an exact string match would never match the element.
+    await expect(
+      canvas.getByText(/Model your system architecture and verify it\./),
+    ).toBeInTheDocument();
+
+    await expect(
+      canvas.getByRole("button", { name: /New project/ }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: /Start from an example/ }),
+    ).toBeInTheDocument();
+
+    // The book is the third way in. It leaves the app, so it is a link and
+    // not a button — "link" is the honest role, and it is what makes
+    // middle-click, focus order and the browser's own affordances work.
+    const learn = canvas.getByRole("link", { name: /Learn/ });
+    await expect(learn).toBeInTheDocument();
+    await expect(learn).toHaveAttribute("href");
+  },
 };
 
 // The header stacks below the `sm` breakpoint so both actions sit under the

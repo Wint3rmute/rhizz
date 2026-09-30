@@ -35,6 +35,10 @@ interface Props {
 
 let { projects = null, loading = null }: Props = $props();
 
+// Where the "Learn" card sends you: the mdBook build of `book/`, published
+// via GitHub Pages.
+const BOOK_URL = "https://wint3rmute.github.io/rhizz/book/";
+
 let localProjects = $state<Project[]>([]);
 let localLoading = $state(true);
 let showExampleModal = $state(false);
@@ -168,7 +172,7 @@ async function deleteProject(project: Project) {
               Detect missing pieces, improve your systems completion metrics.
               All open source, all owned by you.
             </p>
-            <div class="grid gap-4 sm:grid-cols-2 w-full max-w-xl">
+            <div class="grid gap-4 sm:grid-cols-3 w-full max-w-2xl">
               <button
                 class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20"
                 onclick={createEmpty}
@@ -194,6 +198,24 @@ async function deleteProject(project: Project) {
                   software house and more.
                 </p>
               </button>
+              <!-- Third way in: the book. An <a> rather than a <button> — it
+                   leaves the app, and only a link gets middle-click, a sane
+                   focus order and the browser's own "open in new tab". Styled
+                   from the example card above so the two secondary cards read
+                   as one set. -->
+              <a
+                class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
+                href={BOOK_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div class="text-2xl mb-2">📖</div>
+                <div class="font-semibold text-base-content">Learn</div>
+                <p class="text-xs text-base-content/70 mt-1">
+                  A guided tour of modeling in Rhizz — syntax, views,
+                  connections, warnings, right through to the CLI.
+                </p>
+              </a>
             </div>
           </div>
         </div>
