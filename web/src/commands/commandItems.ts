@@ -6,7 +6,7 @@
 // Rows are built here and *navigated* by the host — `paletteCommands` takes
 // the callbacks, because building a URL is the one thing that needs
 // `$app` and the open project id.
-import type { PaletteItem } from "../components/commandPalette";
+import type { PaletteItem } from "../components/palette/commandPalette";
 import { VIEW_LAYOUT_DIR } from "../routes/projects/[id]/modeling/persistence";
 import { WORKSPACE_PAGES } from "./workspacePages";
 

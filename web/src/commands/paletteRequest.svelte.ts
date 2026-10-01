@@ -8,7 +8,7 @@
 // The host only exists inside a project, so this deliberately carries no
 // project id: with no project open there is nothing to open, and the button
 // that can raise a request is only rendered when there is one.
-import type { PaletteKind } from "../components/commandPalette";
+import type { PaletteKind } from "../components/palette/commandPalette";
 
 const request = $state({
   generation: 0,

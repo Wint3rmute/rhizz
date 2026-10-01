@@ -10,7 +10,7 @@
 // split is what keeps this module testable without `$app`, and it keeps the
 // two questions — "what is offered?" and "where does it go?" — from
 // tangling.
-import type { PaletteItem } from "../components/commandPalette";
+import type { PaletteItem } from "../components/palette/commandPalette";
 import { VIEW_LAYOUT_DIR } from "../routes/projects/[id]/modeling/persistence";
 import type { Dirent, ProjectFs } from "../vfs/fs";
 

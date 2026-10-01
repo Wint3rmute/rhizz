@@ -38,7 +38,7 @@ const ITEMS: PaletteItem[] = [
 // otherwise the backdrop is clipped to the canvas' default padding and the
 // baselines say nothing about how the dialog reads as *over* a page.
 const meta = {
-  title: "Components/CommandPalette",
+  title: "Components/Palette/CommandPalette",
   component: CommandPalette,
   parameters: { layout: "fullscreen" },
   args: {

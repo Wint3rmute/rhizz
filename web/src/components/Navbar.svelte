@@ -26,10 +26,7 @@ import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
 import { WORKSPACE_PAGES } from "../commands/workspacePages";
 import { requestPalette } from "../commands/paletteRequest.svelte";
-import {
-  isApplePlatform,
-  paletteShortcutHint,
-} from "../components/commandPalette";
+import { isApplePlatform, paletteShortcutHint } from "./palette/commandPalette";
 
 // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
 // renders `<Navbar />` with no props and reads everything from the shared
