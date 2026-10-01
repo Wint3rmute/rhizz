@@ -25,6 +25,11 @@ import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
 import { WORKSPACE_PAGES } from "../commands/workspacePages";
+import { requestPalette } from "../commands/paletteRequest.svelte";
+import {
+  isApplePlatform,
+  paletteShortcutHint,
+} from "../components/commandPalette";
 
 // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
 // renders `<Navbar />` with no props and reads everything from the shared
@@ -44,6 +49,9 @@ let warningLevel = $derived(getWarningLevel());
 
 // Plain FontAwesome question mark for the guided-tour button.
 let tourIcon = $derived(resolveIcon("question"));
+
+// Magnifier for the command palette button, same treatment.
+let searchIcon = $derived(resolveIcon("magnifying-glass"));
 
 function toggleMenu() {
   isOpen = !isOpen;
@@ -184,6 +192,34 @@ async function startTourFlow(): Promise<void> {
             >
               <path d={tourIcon.svgPath} />
             </svg>
+          </button>
+        {/if}
+        <!-- The palettes' other way in. A shortcut nobody can discover is
+             only a shortcut for the people who wrote it, so the navbar
+             offers the same thing — but only inside a project, which is the
+             only place the palettes exist. -->
+        {#if activeProjectId}
+          <button
+            onclick={() => activeProjectId && requestPalette("commands", activeProjectId)}
+            class="btn btn-ghost btn-sm btn-square"
+            title="Command palette ({paletteShortcutHint(
+              "commands",
+              isApplePlatform(
+                typeof navigator === "undefined" ? "" : navigator.userAgent,
+              ),
+            )})"
+            aria-label="Open the command palette"
+            type="button"
+          >
+            {#if searchIcon}
+              <svg
+                viewBox={`0 0 ${searchIcon.width} ${searchIcon.height}`}
+                class="w-4 h-4 fill-current"
+                aria-hidden="true"
+              >
+                <path d={searchIcon.svgPath} />
+              </svg>
+            {/if}
           </button>
         {/if}
         <button

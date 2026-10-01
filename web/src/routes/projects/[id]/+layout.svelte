@@ -14,6 +14,7 @@ import { getWarningLevel } from "../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../vfs/compile";
 import { openProjectFs } from "../../../vfs/fs";
 import ProjectTour from "../../../tour/ProjectTour.svelte";
+import PaletteHost from "../../../commands/PaletteHost.svelte";
 import type { LayoutProps } from "./$types";
 
 let { data, children }: LayoutProps = $props();
@@ -94,4 +95,12 @@ let project = $derived(getCurrentProject());
   <!-- Workspace guided tour: mounted here (not per-page) so it
        survives the cross-page navigation its steps perform. -->
   <ProjectTour projectId={data.projectId} />
+  <!-- Ctrl-P / Ctrl-Shift-P palettes. Mounted here for the same reason,
+       and skipped on embeds because those are chromeless iframe surfaces
+       (the status bar above makes the same call). Mounting inside the
+       project layout is also what confines the palettes to a project being
+       open, with no check of its own. -->
+  {#if !isEmbed}
+    <PaletteHost projectId={data.projectId} />
+  {/if}
 {/if}
