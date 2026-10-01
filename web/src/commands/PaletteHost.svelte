@@ -6,18 +6,18 @@
 //
 // This is the only layer that knows about routes. It reads the project
 // listing, turns it into rows with ../commands, and turns a chosen row back
-// into a URL. The shell it renders (../components/CommandPalette) knows
-// none of that.
+// into a URL. The shell it renders (../components/palette/CommandPalette)
+// knows none of that.
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
 import { onMount } from "svelte";
-import CommandPalette from "../components/CommandPalette.svelte";
+import CommandPalette from "../components/palette/CommandPalette.svelte";
 import {
   isPaletteShortcut,
   type PaletteItem,
   type PaletteKind,
-} from "../components/commandPalette";
+} from "../components/palette/commandPalette";
 import { projectStore } from "../ProjectState.svelte";
 import { openProjectFs } from "../vfs/fs";
 import type { Dirent } from "../vfs/fs";

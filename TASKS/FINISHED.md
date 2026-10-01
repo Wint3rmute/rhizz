@@ -11,7 +11,7 @@ about projects, files or routes: Ctrl-P switches files, Ctrl-Shift-P runs
 commands, both with fuzzy search and live-highlighted matches.
 
 - **The shell is generic by construction, and that was the constraint.**
-  `components/CommandPalette.svelte` takes a `PaletteItem[]` and calls
+  `components/palette/CommandPalette.svelte` takes a `PaletteItem[]` and calls
   `item.action?.()` on the chosen one — it never imports `ProjectState`,
   the VFS or `$app`, which is what the repo's "components never touch the
   domain" rule asks for. All the app knowledge lives one layer down, in
