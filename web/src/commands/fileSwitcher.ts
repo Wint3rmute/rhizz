@@ -47,45 +47,53 @@ export function switcherTargetFor(
 }
 
 /**
- * Turns a recursive listing into palette rows. A view's label drops the
- * `views/` prefix and keeps its nested path — the prefix is on every row
- * alike, so it carries no information, while "drone/engine.hcl" does.
+ * The project's view files, as paths relative to `views/` — the same shape
+ * the modeling route's rest param takes. Sorted, because readdir's order is
+ * a store implementation detail and both palettes list these unfiltered.
+ */
+export function viewPaths(entries: readonly Dirent[]): string[] {
+  const prefix = `${VIEW_LAYOUT_DIR}/`;
+  return entries
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        entry.path.startsWith(prefix) &&
+        entry.name.endsWith(".hcl"),
+    )
+    .map((entry) => entry.path.slice(prefix.length))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Turns a recursive listing into palette rows. A row's `label` is exactly
+ * the path `switcherTargetFor` addresses it by — a view's without the
+ * `views/` prefix (that prefix is on every row alike, so it carries no
+ * information) and a file's project-relative path — so a host can navigate
+ * from a chosen row by handing that label straight back.
+ *
  * Directories never appear: you switch to a file, not to a folder.
  */
 export function fileSwitcherItems(
   entries: readonly Dirent[],
   scope: SwitcherScope,
 ): PaletteItem[] {
-  const prefix = `${VIEW_LAYOUT_DIR}/`;
-  const items: PaletteItem[] = [];
+  if (scope === "views") {
+    return viewPaths(entries).map<PaletteItem>((view) => ({
+      id: `view:${view}`,
+      label: view,
+      detail: VIEW_LAYOUT_DIR,
+      hint: `${VIEW_LAYOUT_DIR} view`,
+    }));
+  }
 
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    if (scope === "views") {
-      if (!entry.path.startsWith(prefix) || !entry.name.endsWith(".hcl")) {
-        continue;
-      }
-      const view = entry.path.slice(prefix.length);
-      items.push({
-        id: `view:${view}`,
-        label: view,
-        detail: VIEW_LAYOUT_DIR,
-        hint: `${VIEW_LAYOUT_DIR} view`,
-      });
-      continue;
-    }
-    items.push({
+  return entries
+    .filter((entry) => entry.isFile())
+    .map<PaletteItem>((entry) => ({
       id: `file:${entry.path}`,
       label: entry.path,
       hint: "file",
-    });
-  }
-
-  // Sorted rather than left in readdir order: the untyped list is the one a
-  // user reads top to bottom, and directory order is an implementation
-  // detail of the store rather than anything meaningful.
-  items.sort((a, b) => a.label.localeCompare(b.label));
-  return items;
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /**

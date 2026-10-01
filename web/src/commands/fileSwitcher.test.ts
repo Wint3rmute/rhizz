@@ -7,7 +7,41 @@ import {
   readProjectEntries,
   switcherScopeForPath,
   switcherTargetFor,
+  viewPaths,
 } from "./fileSwitcher";
+
+const ENTRIES = [
+  {
+    name: "views",
+    path: "views",
+    isFile: () => false,
+    isDirectory: () => true,
+  },
+  {
+    name: "main.hcl",
+    path: "views/main.hcl",
+    isFile: () => true,
+    isDirectory: () => false,
+  },
+  {
+    name: "engine.hcl",
+    path: "views/drone/engine.hcl",
+    isFile: () => true,
+    isDirectory: () => false,
+  },
+  {
+    name: "notes.md",
+    path: "views/notes.md",
+    isFile: () => true,
+    isDirectory: () => false,
+  },
+  {
+    name: "system.hcl",
+    path: "system.hcl",
+    isFile: () => true,
+    isDirectory: () => false,
+  },
+];
 
 describe("switcherScopeForPath", () => {
   it("offers views on the pages that draw diagrams", () => {
@@ -55,41 +89,37 @@ describe("switcherTargetFor", () => {
       path: "docs/engine.md",
     });
   });
+
+  it("round-trips a row's own label, which is the only thing a host has", () => {
+    for (const scope of ["views", "files"] as const) {
+      for (const item of fileSwitcherItems(ENTRIES, scope)) {
+        expect(switcherTargetFor(item.label, scope)).toEqual(
+          scope === "views"
+            ? { kind: "view", view: item.label }
+            : { kind: "file", path: item.label },
+        );
+      }
+    }
+  });
+});
+
+describe("viewPaths", () => {
+  it("lists the project's view files without their folder, sorted", () => {
+    expect(viewPaths([...ENTRIES].reverse())).toEqual([
+      "drone/engine.hcl",
+      "main.hcl",
+    ]);
+  });
+
+  it("is what the views scope offers, one-for-one", () => {
+    expect(fileSwitcherItems(ENTRIES, "views").map((i) => i.label)).toEqual(
+      viewPaths(ENTRIES),
+    );
+  });
 });
 
 describe("fileSwitcherItems", () => {
-  const entries = [
-    {
-      name: "views",
-      path: "views",
-      isFile: () => false,
-      isDirectory: () => true,
-    },
-    {
-      name: "main.hcl",
-      path: "views/main.hcl",
-      isFile: () => true,
-      isDirectory: () => false,
-    },
-    {
-      name: "engine.hcl",
-      path: "views/drone/engine.hcl",
-      isFile: () => true,
-      isDirectory: () => false,
-    },
-    {
-      name: "notes.md",
-      path: "views/notes.md",
-      isFile: () => true,
-      isDirectory: () => false,
-    },
-    {
-      name: "system.hcl",
-      path: "system.hcl",
-      isFile: () => true,
-      isDirectory: () => false,
-    },
-  ];
+  const entries = ENTRIES;
 
   it("shows views without their folder, and says where they live", () => {
     const items = fileSwitcherItems(entries, "views");
