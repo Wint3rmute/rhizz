@@ -4,6 +4,108 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 109 — Ctrl-P and Ctrl-Shift-P, from one generic palette
+
+Two palettes for power users, built on a single shell that knows nothing
+about projects, files or routes: Ctrl-P switches files, Ctrl-Shift-P runs
+commands, both with fuzzy search and live-highlighted matches.
+
+- **The shell is generic by construction, and that was the constraint.**
+  `components/CommandPalette.svelte` takes a `PaletteItem[]` and calls
+  `item.action?.()` on the chosen one — it never imports `ProjectState`,
+  the VFS or `$app`, which is what the repo's "components never touch the
+  domain" rule asks for. All the app knowledge lives one layer down, in
+  `commands/PaletteHost.svelte`: it reads the project listing, builds rows
+  with `commands/`, and turns a chosen row back into a URL. The two
+  item builders (`fileSwitcher.ts`, `commandItems.ts`) are pure and
+  unit-tested; the host is the only place that knows a route exists.
+- **`PaletteItem` carries its own `action` rather than being looked up by
+  id on selection.** `id` is the `#each` key, not a wire format — parsing
+  `view:drone/engine.hcl` back into a path would have been a second,
+  untyped copy of the same knowledge.
+- **"Only with a project open" is true for free.** The host mounts in the
+  project layout, so there is no check of its own: outside a project there
+  is nothing to switch files within. The same placement is why it survives
+  the cross-page navigation a palette causes, and why embeds skip it (the
+  status bar makes the same call about chromeless surfaces).
+- **The chord is registered on the *capture* phase, and that is
+  load-bearing.** Monaco binds Ctrl/Cmd-P to its own quick-open and stops
+  the event bubbling out of the editor, so a window listener in the bubble
+  phase would silently not fire whenever the HCL editor has focus — exactly
+  where a file switcher is most wanted. The app-level palette takes the
+  chord; Monaco keeps its symbol search on Ctrl-Shift-O. The e2e asserts
+  Monaco's widget does *not* open over the palette, so a move back to the
+  bubble phase fails there instead of quietly leaving Ctrl-P dead on Code.
+- **Two fuse options were decided by measuring, not by reading the docs.**
+  `ignoreLocation` reads like the obvious knob for "a needle should match
+  anywhere in a path", but it scores every candidate identically, which
+  flattens the ranking users depend on: typing "m" led to `system.hcl`
+  (whatever the index listed first) instead of `main.hcl`. A test pins
+  that ordering. `findAllMatches` is on because the highlighting needs
+  *every* matched character — the default reports only the first run.
+  Fuse's Bitap search also matches within an edit-distance window rather
+  than as a free-floating subsequence, so "mh" never matches "main.hcl" at
+  any threshold; that is noted in the options' doc comment and covered by a
+  test that says so rather than leaving it to be rediscovered.
+- **Which files are valid depends on the page, and the switcher says
+  which.** Modeling and Explore draw diagrams, so there it offers views and
+  calls itself "Go to view"; everywhere else it offers the whole project.
+  The e2e pins both — and pins the consequence, that the same row opened
+  from Overview goes to Code *as a file*, because scope is the page you
+  are on.
+- **One readdir call for both scopes.** `readdir` reports each entry's path
+  relative to the directory it was called with, so reading `views/`
+  directly would hand back `main.hcl` where the files scope hands back
+  `views/main.hcl` — two path conventions for the same rows, and an item
+  builder that had to know which one it got.
+- **The navbar's `NAV_LINKS` moved to `commands/workspacePages`**, so the
+  navbar and the palette's "Go to …" rows are rendered from one list. The
+  same reasoning the navbar already had for its own desktop/mobile
+  duplication.
+- **Opening is not the same as toggling.** The chord toggles, because
+  pressing it again is how you dismiss a palette you opened by muscle
+  memory; a button press does not, because clicking the button that opened
+  the palette should not be a second way to close it. The request signal
+  also names its target project, as the tour's already does — otherwise a
+  request raised in one project follows you into the next one you open.
+- **A shortcut nobody can discover is a shortcut only for the people who
+  wrote it**, so the navbar gains a magnifier button, visible only inside a
+  project. Its tooltip spells the chord the way the platform writes it
+  (`⌘⇧P` on a Mac, `Ctrl+Shift+P` elsewhere) — a button that says "Ctrl"
+  on a Mac teaches the wrong keystroke.
+- **The VRT caught a legibility bug before anyone else would have.** Marks
+  were `text-primary`, which on the *highlighted* row is the row's own
+  background: blue on blue. Unhighlighted rows keep the tint; the
+  highlighted one uses weight plus an underline in the colour the row
+  already sets.
+- **Red/green**: 33 unit tests on the pure logic (range maths for the
+  highlight, Fuse ranking, the chord test, the scope table, the item
+  builders) and 13 Storybook stories across the two components — 9 on the
+  shell, 4 driving the real host over a real seeded project. Nine e2e
+  cases over real projects cover the chords, the search, Enter, arrow-key
+  wrap-around, Escape, the editor case above, and "no project, no palette".
+  Two of my own test expectations were wrong about Fuse's inclusive range
+  semantics and one caught a real bug (a range wholly past a label's end
+  was clamped onto its last character instead of dropped); all three are
+  fixed and the behaviour is pinned.
+- **Not addressed**: the palettes are skipped on `/embed/`, since an embed
+  is a chromeless iframe rather than a surface you navigate around in —
+  the same call the status bar already makes. And `PaletteItem.icon` /
+  `shortcut` have no current user beyond the navbar emoji; they are part of
+  the shell's vocabulary, not dead code, but nothing needs them yet.
+- **VRT: 28 of 172 baselines new** (the 13 new stories in both themes, plus
+  two Navbar ones that were re-shot for the mark fix). The Navbar story
+  that needs a project open is tagged `no-vrt`: the static build has no
+  `beforeEach`, and a loader writes the state *after* the story renders
+  (measured), so a baseline there would read as "the project-scoped
+  controls are invisible" — the opposite of what the component does. The
+  tour button has always been in that position.
+- **Validation**: `just test` (cargo + 805 Vitest + 60 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just
+  build`, `just format` and the full VRT suite (198/198) all pass.
+
+---
+
 ## Task 108 — The node context menu creates a detail view when there isn't one
 
 Right-clicking a node in Modeling now offers "Create a detailed view" when the
