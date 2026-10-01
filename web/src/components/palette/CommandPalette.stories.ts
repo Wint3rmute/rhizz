@@ -73,6 +73,26 @@ export const BrowseAll: Story = {
   },
 };
 
+// The palette is drawn over the page it was summoned from, and it must not
+// change how that page looks: no dimming scrim, no backdrop blur. A modal
+// you can still read the page through is a quick overlay; one that greys the
+// page out says "you are somewhere else now", which is a lie — the editor
+// and the canvas are right there, and dismissing the palette puts you back
+// exactly where you were.
+//
+// Asserted as computed styles rather than as class names, because the class
+// is the *intent* and the computed value is what the eye actually gets
+// (daisyUI's `.modal` sets its own background, which a `bg-transparent`
+// override has to beat).
+export const NoScrim: Story = {
+  play: async ({ canvasElement }) => {
+    const backdrop = within(canvasElement).getByTestId("command-palette");
+    const style = getComputedStyle(backdrop);
+    await expect(style.backdropFilter).toBe("none");
+    await expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  },
+};
+
 export const FuzzyFiltered: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
