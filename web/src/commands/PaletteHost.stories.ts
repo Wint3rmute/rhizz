@@ -145,6 +145,12 @@ export const CommandPalette: Story = {
   },
 };
 
+// Stories share one module instance, so a request raised by an earlier story
+// is still live when a later one mounts — which would open a palette on
+// mount. Every play therefore opens the palette it asserts about, so
+// whatever state it starts in, it ends in the right one. (There is
+// consequently no "closed by default" story here: the shell's own stories
+// cover the closed state.)
 export const EscapeCloses: Story = {
   play: async ({ canvasElement }) => {
     await openVia("commands");
