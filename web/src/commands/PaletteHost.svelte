@@ -25,6 +25,7 @@ import { paletteCommands } from "./commandItems";
 import {
   fileSwitcherItems,
   readProjectEntries,
+  type SwitcherScope,
   switcherScopeForPath,
   switcherTargetFor,
   viewPaths,
@@ -156,30 +157,45 @@ onMount(() => {
   };
 });
 
-const COPY: Record<
-  PaletteKind,
-  { title: string; placeholder: string; empty: string }
-> = {
-  files: {
-    title: "Go to file",
-    placeholder: "Search this project's views and files…",
-    empty: "No matching files",
-  },
-  commands: {
-    title: "Commands",
-    placeholder: "Type a command…",
-    empty: "No matching commands",
-  },
+interface PaletteCopy {
+  title: string;
+  placeholder: string;
+  empty: string;
+}
+
+// The file switcher says what it is offering, because on Modeling and
+// Explore the rows are views while the chord is still "Go to file" — a
+// palette titled with the wrong noun reads as broken.
+function fileCopy(currentScope: SwitcherScope): PaletteCopy {
+  return currentScope === "views"
+    ? {
+      title: "Go to view",
+      placeholder: "Search this project's views…",
+      empty: "No matching views",
+    }
+    : {
+      title: "Go to file",
+      placeholder: "Search this project's views and files…",
+      empty: "No matching files",
+    };
+}
+
+const COMMAND_COPY: PaletteCopy = {
+  title: "Commands",
+  placeholder: "Type a command…",
+  empty: "No matching commands",
 };
+
+let copy = $derived(openKind === "commands" ? COMMAND_COPY : fileCopy(scope));
 </script>
 
 <CommandPalette
   isOpen={openKind !== null}
   items={openKind === "commands" ? commandItems : fileItems}
   kind={openKind ?? "commands"}
-  title={openKind === null ? "" : COPY[openKind].title}
-  placeholder={openKind === null ? "" : COPY[openKind].placeholder}
-  emptyMessage={openKind === null ? "" : COPY[openKind].empty}
+  title={openKind === null ? "" : copy.title}
+  placeholder={openKind === null ? "" : copy.placeholder}
+  emptyMessage={openKind === null ? "" : copy.empty}
   {loading}
   onselect={handleSelect}
   onclose={closePalette}
