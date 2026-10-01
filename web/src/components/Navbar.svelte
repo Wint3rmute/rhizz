@@ -24,53 +24,18 @@ import { toastState } from "../ToastState.svelte";
 import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
+import { WORKSPACE_PAGES } from "../commands/workspacePages";
 
 // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
 // renders `<Navbar />` with no props and reads everything from the shared
 // ProjectState/WarningLevelState singletons below.
 let { isOpen = $bindable(false) }: { isOpen?: boolean } = $props();
 
-// The project-scoped workspace links, in navbar order. One list drives both
-// the desktop row and the mobile menu, so the two can never drift. `href` is
-// a thunk so `resolve` still sees a literal route id (typed routes).
-const NAV_LINKS = [
-  {
-    label: "Overview",
-    emoji: "🔍",
-    tour: TOUR_TARGETS.navOverview,
-    href: (id: string) => resolve("/projects/[id]/overview", { id }),
-  },
-  {
-    label: "Modeling",
-    emoji: "📐",
-    tour: TOUR_TARGETS.navModeling,
-    // Modeling and Inventory name the open view / entity in their path (a rest
-    // param that also matches the empty string), so the workspace links point
-    // at the bare page and let each view canonicalise itself to its first
-    // view / entity on arrival.
-    href: (id: string) =>
-      resolve("/projects/[id]/modeling/[...view]", { id, view: "" }),
-  },
-  {
-    label: "Inventory",
-    emoji: "📦",
-    tour: TOUR_TARGETS.navInventory,
-    href: (id: string) =>
-      resolve("/projects/[id]/inventory/[...label]", { id, label: "" }),
-  },
-  {
-    label: "Explore",
-    emoji: "🧭",
-    tour: TOUR_TARGETS.navExplore,
-    href: (id: string) => resolve("/projects/[id]/explore", { id }),
-  },
-  {
-    label: "Code",
-    emoji: "📝",
-    tour: TOUR_TARGETS.navCode,
-    href: (id: string) => resolve("/projects/[id]/code", { id }),
-  },
-] as const;
+// The project-scoped workspace links live in ../commands/workspacePages, so
+// this navbar and the command palette's "Go to …" rows are rendered from
+// one list and cannot drift apart. `href` is a thunk so `resolve` still sees
+// a literal route id (typed routes).
+const NAV_LINKS = WORKSPACE_PAGES;
 
 let activeProjectId = $derived(getCurrentProjectId());
 let activeProject = $derived(getCurrentProject());
@@ -257,7 +222,7 @@ async function startTourFlow(): Promise<void> {
               class="btn btn-ghost btn-sm justify-start w-full text-left"
               onclick={closeMenu}
             >
-              {link.emoji} {link.label}
+              {link.icon} {link.label}
             </a>
           {/each}
         </div>

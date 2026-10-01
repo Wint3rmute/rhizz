@@ -28,6 +28,13 @@ export interface PaletteItem {
   shortcut?: string;
   /** Leading glyph shown before the label (usually an emoji). */
   icon?: string;
+  /**
+   * What picking this row does. Optional, so a palette may also be a
+   * read-only list (and so a story can drive the shell without navigating
+   * anywhere). It rides on the row rather than being looked up by id
+   * because the shell must not know what any particular row means.
+   */
+  action?: () => void;
 }
 
 /** One run of a label: either inside a fuzzy match or outside it. */
