@@ -102,6 +102,10 @@ function scrollToHighlighted(): void {
 
 function handleSelect(row: PaletteItem | undefined): void {
   if (row === undefined) return;
+  // The row's own action first: a host that navigates on select will tear
+  // this component down, and `onselect` may well be the callback that told
+  // it to.
+  row.action?.();
   onselect(row);
 }
 
