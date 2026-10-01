@@ -248,7 +248,15 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
             <span class="shrink-0 truncate font-mono">
               {#each row.segments as segment, j (j)}
                 {#if segment.matched}
-                  <mark class="bg-transparent font-bold text-primary">{segment.text}</mark>
+                  <!-- `text-primary` would be the obvious way to mark a
+                    match, but on the highlighted row that is the row's own
+                    background — blue on blue. There the weight plus an
+                    underline carries the highlight instead, in the colour the
+                    row already sets. -->
+                  <mark
+                    class="bg-transparent font-bold {highlightedIndex === i
+                      ? 'underline decoration-2 underline-offset-2'
+                      : 'text-primary'}">{segment.text}</mark>
                 {:else}{segment.text}{/if}
               {/each}
             </span>
