@@ -162,8 +162,15 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
 <svelte:window onkeydown={handleWindowKeyDown} />
 
 {#if isOpen}
+  <!-- No scrim and no backdrop blur, on purpose: the palette is drawn over
+       the page you summoned it from and leaves that page exactly as it was.
+       Dimming it would claim you had gone somewhere else, when the editor
+       and the canvas are still right there. The full-bleed wrapper is kept
+       only so a click outside the box still dismisses, and
+       `bg-transparent`/`backdrop-blur-none` beat daisyUI's `.modal`
+       defaults rather than relying on not declaring anything. -->
   <div
-  class="modal modal-open z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center pt-[12vh] cursor-pointer"
+  class="modal modal-open z-50 bg-transparent backdrop-blur-none flex items-start justify-center pt-[12vh] cursor-pointer"
   role="dialog"
   aria-modal="true"
   aria-label={title}
