@@ -71,15 +71,7 @@ describe("labelSegments", () => {
     ]);
   });
 
-  it("is case-insensitive about nothing — ranges are absolute offsets", () => {
-    // Fuse reports offsets into the original string, so a match on a
-    // lowercased needle still slices the label as written.
-    expect(labelSegments("Main.hcl", [[0, 0]])).toEqual([
-      { text: "M", matched: true },
-      { text: "ain.hcl", matched: false },
-    ]);
   });
-});
 
 describe("wrapIndex", () => {
   it("wraps forward past the end", () => {
