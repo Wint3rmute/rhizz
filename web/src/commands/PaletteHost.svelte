@@ -25,7 +25,7 @@ import { readProjectSources, type Source } from "../vfs/compile";
 import { openProjectFs } from "../vfs/fs";
 import type { Dirent } from "../vfs/fs";
 import { commandItems } from "./commandItems";
-import { fileItems, fileTargetFor, readProjectEntries } from "./fileSwitcher";
+import { fileItems, fileTargetFor } from "./fileSwitcher";
 import { inventoryEntities, inventoryItems } from "./inventoryItems";
 import { getPaletteRequest } from "./paletteRequest.svelte";
 import { paletteScopeForPath } from "./paletteScope";
@@ -133,7 +133,7 @@ async function show(
   open = true;
   try {
     const fs = openProjectFs(projectStore, projectId);
-    entries = await readProjectEntries(fs);
+    entries = await fs.readdir(".", { recursive: true });
     // Compiling is the expensive half, and only the inventory section needs
     // it — so it is read only when that section is on offer, and kept for
     // afterwards so reopening the palette on the same page is instant. This

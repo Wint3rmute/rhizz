@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { VIEW_LAYOUT_DIR } from "../routes/projects/[id]/modeling/persistence";
 import { InMemoryProjectStore } from "../vfs/vfsStore";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
-import { fileItems, fileTargetFor, readProjectEntries } from "./fileSwitcher";
+import { fileItems, fileTargetFor } from "./fileSwitcher";
 
 const ENTRIES = [
   {
@@ -150,7 +150,7 @@ describe("fileItems", () => {
   });
 });
 
-describe("readProjectEntries", () => {
+describe("readdir", () => {
   let fs: ProjectFs;
 
   beforeEach(async () => {
@@ -170,14 +170,14 @@ describe("readProjectEntries", () => {
   });
 
   it("hands back project-relative paths, so labels are openable as they read", async () => {
-    const entries = await readProjectEntries(fs);
+    const entries = await fs.readdir(".", { recursive: true });
     expect(entries.filter((e) => e.isFile()).map((e) => e.path)).toContain(
       `${VIEW_LAYOUT_DIR}/main.hcl`,
     );
   });
 
   it("lists every file of a real project", async () => {
-    const entries = await readProjectEntries(fs);
+    const entries = await fs.readdir(".", { recursive: true });
     expect(fileItems(entries, ALL).map((i) => i.label)).toEqual([
       "docs/engine.md",
       "system.hcl",
