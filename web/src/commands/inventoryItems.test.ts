@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  createPaletteIndex,
+  paletteRows,
+} from "../components/palette/commandPalette";
 import type { RawModelPayload } from "../modelView";
 import {
   INVENTORY_GROUP,
@@ -75,14 +79,27 @@ describe("inventoryEntities", () => {
 describe("inventoryItems", () => {
   const entities = inventoryEntities(MODEL);
 
-  it("offers one row per entity, labelled by its name in Inventory", () => {
+  it("offers one row per entity, labelled the way the command rows read", () => {
+    // "Go to component <name>", so an entity row answers the same question
+    // as "Go to Overview" does: the section heading says which list you are
+    // in, and the row says what choosing it does.
     const items = inventoryItems(entities, () => {});
     expect(items.map((i) => i.label)).toEqual([
-      "battery",
-      "flight-controller",
-      "barometer",
+      "Go to component battery",
+      "Go to component flight-controller",
+      "Go to component barometer",
     ]);
     expect(items[0]?.detail).toBe("Stores power");
+  });
+
+  it("keeps the bare label as the row's identity, since the label is drawn text", () => {
+    // The label is what a screenshot and an accessible name read, so the
+    // prefix cannot go into the id too — the id stays the addressable name.
+    expect(inventoryItems(entities, () => {}).map((i) => i.id)).toEqual([
+      "inventory:battery",
+      "inventory:flight-controller",
+      "inventory:barometer",
+    ]);
   });
 
   it("puts them in their own section, alongside the other two", () => {
@@ -113,7 +130,25 @@ describe("inventoryItems", () => {
     expect(battery?.hint).toContain("power");
   });
 
-  it("calls the host back with the label, which is what the route addresses", () => {
+  it("is still found by the bare name, now that the prefix is drawn", () => {
+    // The prefix pushes the name 17 characters to the right, so this runs
+    // through the real Fuse index rather than asserting the label by hand:
+    // the risk being pinned is that the drawn wording quietly stops being
+    // searchable, which no assertion on `label` alone would catch.
+    const index = createPaletteIndex(inventoryItems(entities, () => {}));
+    for (const query of ["barometer", "battery", "flight-controller"]) {
+      expect(paletteRows(index, query).map((row) => row.item.id)).toContain(
+        `inventory:${query}`,
+      );
+    }
+    // And the prefix itself is a way in, the same as "Go to Overview" is.
+    expect(paletteRows(index, "go to component")).toHaveLength(3);
+  });
+
+  it("calls the host back with the bare label, which is what the route addresses", () => {
+    // The drawn label and the addressed label are deliberately not the same
+    // string any more. This is the guard on that: the prefix is text, and the
+    // route still gets the name Inventory matches.
     const seen: string[] = [];
     for (const item of inventoryItems(entities, (l) => seen.push(l))) {
       item.action?.();

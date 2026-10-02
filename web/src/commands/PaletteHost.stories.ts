@@ -188,10 +188,11 @@ export const InventorySectionOnInventory: Story = {
     await openVia();
     const canvas = within(canvasElement);
     // The fixture declares one top-level definition. Anchored, because the
-    // row's accessible name includes its full name ("sensor Reads the
-    // world") and "docs/sensor.md" in the files section also holds "sensor".
+    // row's accessible name includes its full name ("Go to component sensor
+    // Reads the world") and "docs/sensor.md" in the files section also holds
+    // "sensor".
     await expect(
-      await canvas.findByRole("option", { name: /^sensor\b/ }),
+      await canvas.findByRole("option", { name: /^go to component sensor\b/i }),
     ).toBeInTheDocument();
     await expect(canvas.getByText("Inventory")).toBeInTheDocument();
     // All three sections at once: the commands, the files, and the
@@ -211,7 +212,9 @@ export const InventoryFindsByFullName: Story = {
     // is the whole reason the row carries a `hint` for it.
     await userEvent.type(input, "reads the world");
     await expect(
-      await canvas.findByRole("option", { name: /^sensor\b/ }),
+      await canvas.findByRole("option", {
+        name: /^go to component sensor\b/i,
+      }),
     ).toBeInTheDocument();
     await expect(canvas.getAllByRole("option")).toHaveLength(1);
   },
