@@ -9,6 +9,7 @@ use anyhow::{Context, Result, bail};
 use rhizz_core::WarningLevel;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 /// Identity of one compiled embed: (block body digest or project `src`,
 /// warning level). The same source at two levels compiles to two verdicts,
@@ -194,17 +195,32 @@ pub fn parse_blocks(lines: &[String]) -> Vec<Segment> {
     segments
 }
 
+/// Lowercase hex encoding of `bytes`, two characters per byte.
+///
+/// SHA-256 digests are rendered with this rather than `{:x}`: `sha2` 0.11
+/// returns an `Array<u8, _>` from `finalize`, and that type has no
+/// `LowerHex` impl (its `generic-array` predecessor did). Output is
+/// identical to the old formatting, so digests already recorded in
+/// `book.lock` keep matching.
+#[must_use]
+pub fn hex_encode(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
+    for byte in bytes {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
+}
+
 /// SHA-256 hex digest of a block body (the `book.lock` input key).
 #[must_use]
 pub fn body_hash(body: &str) -> String {
-    let digest = Sha256::digest(body.as_bytes());
-    format!("{digest:x}")
+    hex_encode(&Sha256::digest(body.as_bytes()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        Segment, block_warning_level, body_hash, fence_open_attrs, fence_project_attrs,
+        Segment, block_warning_level, body_hash, fence_open_attrs, fence_project_attrs, hex_encode,
         is_fence_close, parse_attrs, parse_blocks, split_lines,
     };
     use rhizz_core::WarningLevel;
@@ -334,6 +350,25 @@ mod tests {
         assert_eq!(body_hash("project {}"), body_hash("project {}"));
         assert_ne!(body_hash("project {}"), body_hash("project { }"));
         assert_eq!(body_hash("project {}").len(), 64);
+    }
+
+    #[test]
+    fn body_hash_matches_the_nist_sha256_vector() {
+        // The book.lock keys in the repo were produced by the pre-0.11
+        // `{:x}` formatting of the same SHA-256 bytes, so this pins the
+        // encoding: a different one invalidates every recorded digest.
+        assert_eq!(
+            body_hash("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn hex_encode_zero_pads_every_byte() {
+        // 0x0f and 0xa0 both start with a zero nibble, and the leading 0x00
+        // byte must not vanish: unpadded formatting would yield "fa0ff".
+        assert_eq!(hex_encode(&[0x00, 0x0f, 0xa0, 0xff]), "000fa0ff");
+        assert_eq!(hex_encode(&[]), "");
     }
 
     #[test]

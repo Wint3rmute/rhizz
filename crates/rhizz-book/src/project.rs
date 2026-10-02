@@ -10,7 +10,7 @@
 //! project carried in the URL hash (`#p=`). The hash payload uses exactly the
 //! codec the web route decodes: JSON → zlib deflate → base64url (no padding).
 
-use crate::blocks::{BlockKey, body_hash};
+use crate::blocks::{BlockKey, body_hash, hex_encode};
 use crate::compile::{Verdict, normalize_result};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -269,7 +269,7 @@ pub fn load_project(src_root: &Path, src: &str) -> Result<LoadedProject> {
     }
     Ok(LoadedProject {
         files,
-        input_sha256: format!("{:x}", hasher.finalize()),
+        input_sha256: hex_encode(&hasher.finalize()),
     })
 }
 
