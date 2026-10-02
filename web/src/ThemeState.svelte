@@ -15,6 +15,7 @@
 // data-theme>, localStorage) only.
 
 import {
+  chromeColorFor,
   loadSelection,
   nextSelectionOnToggle,
   type ResolvedTheme,
@@ -59,10 +60,27 @@ if (typeof window !== "undefined") {
   // setting them once for the initial value on load.
   $effect.root(() => {
     $effect(() => {
-      document.documentElement.dataset.theme = resolve();
+      const resolved = resolve();
+      document.documentElement.dataset.theme = resolved;
+      applyChromeColor(resolved);
       localStorage.setItem(THEME_STORAGE_KEY, selection);
     });
   });
+}
+
+// Pins the browser's own chrome (toolbar, address bar) to the page's
+// background. Without it the browser infers that colour from painted content
+// and re-infers on every repaint, so anything that repaints the viewport —
+// opening the palette, for one — visibly shifts the toolbar. A `<meta>` has
+// to be a literal colour string, so the value comes from chromeColorFor
+// rather than from the CSS custom property.
+function applyChromeColor(resolved: ResolvedTheme): void {
+  const meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="theme-color"]',
+  );
+  if (meta === null) return;
+  const next = chromeColorFor(resolved);
+  if (meta.content !== next) meta.content = next;
 }
 
 /** The theme currently applied to the page ("light" | "dark"). */

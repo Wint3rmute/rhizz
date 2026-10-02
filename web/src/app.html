@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <!-- Before the theme script below, which has to be able to find and
+         rewrite the theme-color tag to avoid a wrong-colour first paint. -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1D232A" />
     <script>
       // Apply the theme before first paint to avoid flashing the wrong
       // colors. Mirrors the logic in web/src/theme.ts (kept deliberately
@@ -43,13 +48,24 @@
                 ? "dark"
                 : "light";
           document.documentElement.dataset.theme = theme;
+          // Pin the browser's chrome to the page background right here,
+          // before first paint: without it the browser infers that colour
+          // from painted content and re-infers on every repaint, so the
+          // toolbar visibly jumps whenever the viewport repaints. The values
+          // are daisyUI's --color-base-100 per theme (see theme.ts's
+          // chromeColorFor, which keeps this tag in sync afterwards).
+          var chrome = document.querySelector('meta[name="theme-color"]');
+          if (chrome) {
+            chrome.setAttribute(
+              "content",
+              theme === "dark" ? "#1D232A" : "#FFFFFF",
+            );
+          }
         } catch (e) {
           document.documentElement.dataset.theme = "dark";
         }
       })();
     </script>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rhizz</title>
     %sveltekit.head%
   </head>
