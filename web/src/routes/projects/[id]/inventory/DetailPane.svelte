@@ -148,7 +148,7 @@ function flattenTags(def: InventoryDefinition): string[] {
       {/each}
     </div>
 
-    <div class="flex-1 min-h-0 p-4 text-sm flex flex-col">
+    <div class="flex-1 min-h-0 overflow-auto p-4 text-sm flex flex-col">
       {#if activeTab === "Full name"}
         {#if docMode === "edit"}
           <div class="flex-1 min-h-0 flex flex-col gap-2">
@@ -190,10 +190,7 @@ function flattenTags(def: InventoryDefinition): string[] {
             </div>
           </div>
         {:else}
-          <div
-            data-testid="inventory-doc-viewer"
-            class="flex-1 min-h-0 overflow-auto"
-          >
+          <div data-testid="inventory-doc-viewer">
             {#if docContent === undefined}
               <p class="text-base-content/50 italic">
                 Loading documentation…
@@ -231,84 +228,80 @@ function flattenTags(def: InventoryDefinition): string[] {
           </div>
         {/if}
       {:else if activeTab === "Ports"}
-        <div class="flex-1 min-h-0 overflow-auto">
-          {#if definition.ports.length === 0}
-            <p class="text-base-content/50 italic">
-              This definition has no ports.
-            </p>
-          {:else}
-            <table class="table table-sm">
-              <thead>
+        {#if definition.ports.length === 0}
+          <p class="text-base-content/50 italic">
+            This definition has no ports.
+          </p>
+        {:else}
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Port</th>
+                <th>Protocol</th>
+                <th>Role</th>
+                <th>External</th>
+                <th>Required</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each definition.ports as port (port.label)}
                 <tr>
-                  <th>Port</th>
-                  <th>Protocol</th>
-                  <th>Role</th>
-                  <th>External</th>
-                  <th>Required</th>
+                  <td class="font-medium">{port.label}</td>
+                  <td>{port.protocol || "—"}</td>
+                  <td>{port.role}</td>
+                  <td>{port.external ? "yes" : "no"}</td>
+                  <td>{port.required ? "yes" : "no"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {#each definition.ports as port (port.label)}
-                  <tr>
-                    <td class="font-medium">{port.label}</td>
-                    <td>{port.protocol || "—"}</td>
-                    <td>{port.role}</td>
-                    <td>{port.external ? "yes" : "no"}</td>
-                    <td>{port.required ? "yes" : "no"}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          {/if}
-        </div>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
       {:else if activeTab === "Requirements"}
         <p class="text-base-content/50 italic">
           Requirements tracing is not available yet — this tab is a placeholder
           for future requirement links.
         </p>
       {:else if activeTab === "Metadata"}
-        <div class="flex-1 min-h-0 overflow-auto">
-          <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
-            <dt class="text-base-content/60">Label</dt>
-            <dd class="font-medium">{definition.label}</dd>
-            <dt class="text-base-content/60">Kind</dt>
-            <dd>definition</dd>
-            <dt class="text-base-content/60">Hierarchy level</dt>
-            <dd>L{depth}</dd>
-            <dt class="text-base-content/60">Leaf</dt>
-            <dd>{definition.leaf ? "yes" : "no"}</dd>
-            {#if definition.icon}
-              <dt class="text-base-content/60">Icon</dt>
-              <dd>{definition.icon}</dd>
+        <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
+          <dt class="text-base-content/60">Label</dt>
+          <dd class="font-medium">{definition.label}</dd>
+          <dt class="text-base-content/60">Kind</dt>
+          <dd>definition</dd>
+          <dt class="text-base-content/60">Hierarchy level</dt>
+          <dd>L{depth}</dd>
+          <dt class="text-base-content/60">Leaf</dt>
+          <dd>{definition.leaf ? "yes" : "no"}</dd>
+          {#if definition.icon}
+            <dt class="text-base-content/60">Icon</dt>
+            <dd>{definition.icon}</dd>
+          {/if}
+          {#if definition.color}
+            <dt class="text-base-content/60">Color</dt>
+            <dd>{definition.color}</dd>
+          {/if}
+          {#if definition.border}
+            <dt class="text-base-content/60">Border</dt>
+            <dd>{definition.border}</dd>
+          {/if}
+          {#if definition.font}
+            <dt class="text-base-content/60">Font</dt>
+            <dd>{definition.font}</dd>
+          {/if}
+          <dt class="text-base-content/60">Tags</dt>
+          <dd>
+            {#if flattenTags(definition).length === 0}
+              <span class="text-base-content/50">none</span>
+            {:else}
+              <div class="flex flex-wrap gap-1">
+                {#each flattenTags(definition) as tag (tag)}
+                  <span class="badge badge-ghost badge-sm">{tag}</span>
+                {/each}
+              </div>
             {/if}
-            {#if definition.color}
-              <dt class="text-base-content/60">Color</dt>
-              <dd>{definition.color}</dd>
-            {/if}
-            {#if definition.border}
-              <dt class="text-base-content/60">Border</dt>
-              <dd>{definition.border}</dd>
-            {/if}
-            {#if definition.font}
-              <dt class="text-base-content/60">Font</dt>
-              <dd>{definition.font}</dd>
-            {/if}
-            <dt class="text-base-content/60">Tags</dt>
-            <dd>
-              {#if flattenTags(definition).length === 0}
-                <span class="text-base-content/50">none</span>
-              {:else}
-                <div class="flex flex-wrap gap-1">
-                  {#each flattenTags(definition) as tag (tag)}
-                    <span class="badge badge-ghost badge-sm">{tag}</span>
-                  {/each}
-                </div>
-              {/if}
-            </dd>
-            <dt class="text-base-content/60">Child components</dt>
-            <dd>{definition.children.length}</dd>
-          </dl>
-        </div>
+          </dd>
+          <dt class="text-base-content/60">Child components</dt>
+          <dd>{definition.children.length}</dd>
+        </dl>
       {/if}
     </div>
   {/if}
