@@ -62,15 +62,11 @@ test("inventory writes documentation from the Full name tab", async ({ page }) =
   await expect(viewer).toContainText("No documentation yet");
   await page.getByTestId("inventory-doc-edit-button").click();
 
-  // The editor opens empty and takes the focus, so typing starts immediately —
-  // Monaco's hidden input textarea is what carries it.
+  // The editor opens empty and takes the focus, so typing starts immediately.
   const { host, lines, input } = docEditor(page);
   await expect(host).toBeVisible();
   await expect(input).toBeFocused();
-  await page.keyboard.type("# E2E widget");
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("Does **things**.");
+  await page.keyboard.type("# E2E widget\n\nDoes **things**.");
   await expect(lines).toContainText("# E2E widget");
 
   // Saving renders the Markdown in the viewer: the heading becomes a heading
@@ -83,15 +79,13 @@ test("inventory writes documentation from the Full name tab", async ({ page }) =
   await expect(viewer).toContainText("Does things.");
   await expect(page.getByText("**things**")).toBeHidden();
 
-  // Persisted to the VFS: still rendered after a reload.
+  // Persisted to the VFS: still rendered after a reload. Locators are lazy, so
+  // `viewer` survives the reload.
   await page.reload();
   await page.getByText("e2e-docs").first().click();
-  await expect(page.getByTestId("inventory-doc-viewer")).toBeVisible();
-  await expect(
-    page.getByTestId("inventory-doc-viewer").getByRole("heading", {
-      name: "E2E widget",
-    }),
-  ).toBeVisible();
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
+    .toBeVisible();
 
   // Edit reopens prefilled with what was saved — asserted on the rendered
   // lines, which is the only place the content exists in Monaco's DOM.
@@ -106,13 +100,8 @@ test("inventory writes documentation from the Full name tab", async ({ page }) =
   await page.keyboard.type("discarded draft");
   await page.getByTestId("inventory-doc-cancel-button").click();
   await expect(reopened.host).toBeHidden();
-  await expect(
-    page.getByTestId("inventory-doc-viewer").getByRole("heading", {
-      name: "E2E widget",
-    }),
-  ).toBeVisible();
-  await expect(page.getByTestId("inventory-doc-viewer")).toContainText(
-    "Does things.",
-  );
+  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
+    .toBeVisible();
+  await expect(viewer).toContainText("Does things.");
   await expect(page.getByText("discarded draft")).toBeHidden();
 });
