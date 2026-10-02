@@ -21,6 +21,12 @@ How to work on this file:
 When using the command palette in inventory/ only the usual "Go to <subpage>" +
 "Go to component <name>" should be displayed, no other search options.
 
+## Task <N> - Display component icons when searching in inventory
+
+The "Go to component <name>" option should display the component icon at the
+start, if a component has an icon assigned. Use the same style as the current
+"<ruler icon> Go to Modeling".
+
 ## Task <N> - Fuzzy search should be more permissive
 
 I have a component named "MPS". I navigate to inventory/ open the command palette and type in "comp MPS",
