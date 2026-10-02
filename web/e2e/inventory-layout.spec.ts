@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // Inventory's workspace arrangement: the detail pane stands to the *right* of
-// the diagram preview, and the two split the main column about evenly.
+// the diagram preview, and the row splits 60/40 in the diagram's favour.
 //
 // This lives in e2e rather than in a story because it needs the desktop
 // arrangement: the pane only sits beside the diagram from the `md` breakpoint
@@ -55,9 +55,12 @@ test("inventory puts the detail pane beside the diagram preview", async ({ page 
   expect(detail.x).toBeGreaterThanOrEqual(chart.x + chart.width - 1);
   expect(detail.y).toBeLessThan(chart.y + chart.height);
 
-  // "About the same space": the split is even to within 10%, so the pane
-  // neither squeezes the canvas nor swallows the workspace.
-  expect(Math.abs(chart.width - detail.width)).toBeLessThanOrEqual(
-    chart.width * 0.1,
-  );
+  // 60/40 in the diagram's favour, as a share of the row the two split.
+  // Stated as a ratio rather than two absolute widths so it says what the
+  // layout is for, and so it holds at whatever window width this runs at — a
+  // half-and-half split, or a fixed pixel width, fails here instead of
+  // passing unnoticed.
+  const share = detail.width / (chart.width + detail.width);
+  expect(share).toBeGreaterThan(0.38);
+  expect(share).toBeLessThan(0.42);
 });
