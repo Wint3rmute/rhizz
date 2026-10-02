@@ -383,8 +383,10 @@ async function handleCreateView(): Promise<void> {
     </aside>
 
     <!-- Main row: the diagram preview and the detail pane share it, the pane
-         to the right of the diagram and about as wide (DetailPane takes half
-         the row; the diagram absorbs the rest). Below `md` they stack, since
+         to the right of the diagram. The split is 60/40 in the diagram's
+         favour — a canvas is what you look at, the pane is what you consult —
+         expressed as the pane taking two fifths and the diagram absorbing the
+         rest, so it holds at any window width. Below `md` they stack, since
          three side-by-side columns have nowhere to go on a phone. -->
     <div class="flex flex-col md:flex-row flex-1 min-w-0 min-h-0">
       <div
