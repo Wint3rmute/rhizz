@@ -24,53 +24,20 @@ import { toastState } from "../ToastState.svelte";
 import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
+import { WORKSPACE_PAGES } from "../commands/workspacePages";
+import { requestPalette } from "../commands/paletteRequest.svelte";
+import { paletteShortcutHint } from "./palette/commandPalette";
 
 // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
 // renders `<Navbar />` with no props and reads everything from the shared
 // ProjectState/WarningLevelState singletons below.
 let { isOpen = $bindable(false) }: { isOpen?: boolean } = $props();
 
-// The project-scoped workspace links, in navbar order. One list drives both
-// the desktop row and the mobile menu, so the two can never drift. `href` is
-// a thunk so `resolve` still sees a literal route id (typed routes).
-const NAV_LINKS = [
-  {
-    label: "Overview",
-    emoji: "🔍",
-    tour: TOUR_TARGETS.navOverview,
-    href: (id: string) => resolve("/projects/[id]/overview", { id }),
-  },
-  {
-    label: "Modeling",
-    emoji: "📐",
-    tour: TOUR_TARGETS.navModeling,
-    // Modeling and Inventory name the open view / entity in their path (a rest
-    // param that also matches the empty string), so the workspace links point
-    // at the bare page and let each view canonicalise itself to its first
-    // view / entity on arrival.
-    href: (id: string) =>
-      resolve("/projects/[id]/modeling/[...view]", { id, view: "" }),
-  },
-  {
-    label: "Inventory",
-    emoji: "📦",
-    tour: TOUR_TARGETS.navInventory,
-    href: (id: string) =>
-      resolve("/projects/[id]/inventory/[...label]", { id, label: "" }),
-  },
-  {
-    label: "Explore",
-    emoji: "🧭",
-    tour: TOUR_TARGETS.navExplore,
-    href: (id: string) => resolve("/projects/[id]/explore", { id }),
-  },
-  {
-    label: "Code",
-    emoji: "📝",
-    tour: TOUR_TARGETS.navCode,
-    href: (id: string) => resolve("/projects/[id]/code", { id }),
-  },
-] as const;
+// The project-scoped workspace links live in ../commands/workspacePages, so
+// this navbar and the command palette's "Go to …" rows are rendered from
+// one list and cannot drift apart. `href` is a thunk so `resolve` still sees
+// a literal route id (typed routes).
+const NAV_LINKS = WORKSPACE_PAGES;
 
 let activeProjectId = $derived(getCurrentProjectId());
 let activeProject = $derived(getCurrentProject());
@@ -79,6 +46,9 @@ let warningLevel = $derived(getWarningLevel());
 
 // Plain FontAwesome question mark for the guided-tour button.
 let tourIcon = $derived(resolveIcon("question"));
+
+// Magnifier for the command palette button, same treatment.
+let searchIcon = $derived(resolveIcon("magnifying-glass"));
 
 function toggleMenu() {
   isOpen = !isOpen;
@@ -221,6 +191,31 @@ async function startTourFlow(): Promise<void> {
             </svg>
           </button>
         {/if}
+        <!-- The palette's other way in. A shortcut nobody can discover is
+             only a shortcut for the people who wrote it, so the navbar
+             offers the same thing — but only inside a project, which is the
+             only place the palette exists. -->
+        {#if activeProjectId}
+          <button
+            onclick={() => activeProjectId && requestPalette(activeProjectId)}
+            class="btn btn-ghost btn-sm btn-square"
+            title="Go to file or command ({paletteShortcutHint(
+              typeof navigator === "undefined" ? "" : navigator.userAgent,
+            )})"
+            aria-label="Open the go-to palette"
+            type="button"
+          >
+            {#if searchIcon}
+              <svg
+                viewBox={`0 0 ${searchIcon.width} ${searchIcon.height}`}
+                class="w-4 h-4 fill-current"
+                aria-hidden="true"
+              >
+                <path d={searchIcon.svgPath} />
+              </svg>
+            {/if}
+          </button>
+        {/if}
         <button
           onclick={toggleTheme}
           class="btn btn-ghost btn-sm"
@@ -257,7 +252,7 @@ async function startTourFlow(): Promise<void> {
               class="btn btn-ghost btn-sm justify-start w-full text-left"
               onclick={closeMenu}
             >
-              {link.emoji} {link.label}
+              {link.icon} {link.label}
             </a>
           {/each}
         </div>

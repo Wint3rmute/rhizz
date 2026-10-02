@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
+import { expect, within } from "storybook/test";
 import {
   clearCurrentProject,
   createProjectWithMainFile,
@@ -57,6 +58,41 @@ type Story = StoryObj<typeof meta>;
 export const Desktop: Story = {
   parameters: {
     viewport: { defaultViewport: "responsive" },
+  },
+};
+
+// The navbar only renders its workspace links, the project title, the tour
+// button and the palette button when a project is open — all of it reads the
+// ProjectState singleton, which no `args` can supply. `beforeEach` seeds it
+// for the test runner.
+//
+// Opted out of VRT: the static Storybook build VRT screenshots has no
+// `beforeEach`, and the loader that would stand in for it writes the state
+// *after* the story has already rendered — measured, the capture shows a
+// navbar with no project at all. A baseline like that would look like
+// "the project-scoped controls are invisible", which is the opposite of
+// what the component does. (The tour button has always been in the same
+// position; the palette button joins it.)
+export const ProjectOpen: Story = {
+  tags: ["no-vrt"],
+  parameters: {
+    viewport: { defaultViewport: "responsive" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Queried by label rather than by role: the button lives in the
+    // `hidden md:flex` row and the test browser's viewport is narrower
+    // than that breakpoint, so it is in the document but not in the
+    // accessibility tree here. VRT honours the `viewport` parameter above
+    // and captures it where it is visible.
+    const button = canvas.getByLabelText("Open the go-to palette");
+    await expect(button).toBeInTheDocument();
+    // Its tooltip spells the chord the way this platform writes it — a
+    // button that says "Ctrl" on a Mac teaches the wrong keystroke.
+    await expect(button).toHaveAttribute(
+      "title",
+      "Go to file or command (Ctrl+P)",
+    );
   },
 };
 
