@@ -16,6 +16,42 @@ How to work on this file:
 
 ---
 
+## Task <N> - Add a middle click functionality to modeling/
+
+When a middle mouse button is clicked on a component, the editor shall open or
+create a default view for that component - same as the "V" shortcut.
+
+## Task <N> - Migrate some navbar components to the diagnostics bar
+
+I want to migrate some components to the diagnostics bar:
+
+- Score badge
+- Strictness settings
+
+The score shall be displayed on the far-left side of the bar. The strictness
+switched should be displayed on the far-right side of the bar. Run a
+style/consistency pass after initial implementation to ensure that the bottom
+bar will have a consistent look after the changes, both when closed and when
+expanded.
+
+## Task <N> - Migrate to SvelteKit 3.0
+
+https://svelte.dev/blog/sveltekit-3-is-here
+
+> npx sv migrate sveltekit-3 --tasks all --confirm
+
+For Deno I believe it should be `dx sv migrate sveltekit-3 --tasks all --confirm`
+
+## Task <N> - Add add a modeling/ context menu option "create new view from selection"
+
+With 1 or more components selected, a context menu option "create new view from selection" should be available.
+When selected, this context option shall:
+
+1. Prompt the user for the name of the view (simplest possible way).
+2. Create a new view of the existing system.
+3. Copy over just the selected components, their positions etc.
+4. Move the modeling/ page into the new view.
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
