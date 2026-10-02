@@ -49,9 +49,6 @@ export interface PaletteRow {
   segments: PaletteSegment[];
 }
 
-/** The two palettes the app ships; the chord decides which one opens. */
-export type PaletteKind = "files" | "commands";
-
 /** The subset of a KeyboardEvent the chord test needs. */
 export interface PaletteKeyEvent {
   key: string;
@@ -204,32 +201,24 @@ export function wrapIndex(index: number, length: number): number {
 }
 
 /**
- * Whether a keydown opens the given palette: Ctrl/Cmd-P for the file
- * switcher, adding Shift for the command palette. Alt is excluded — it is
- * how Alt-P types a ¶ on several layouts, and a palette that swallows
- * typed characters is worse than one extra keystroke. Both Ctrl and Cmd
- * are accepted rather than sniffing the platform (see isModifierHeld in
- * KeyboardState.svelte for why).
+ * Whether a keydown opens the palette. One chord, Ctrl/Cmd-P — the file
+ * switcher and the commands live in the same list now, so there is no
+ * second chord to tell apart. Alt is excluded — it is how Alt-P types a ¶
+ * on several layouts, and a palette that swallows typed characters is
+ * worse than one extra keystroke. Both Ctrl and Cmd are accepted rather
+ * than sniffing the platform (see isModifierHeld in KeyboardState.svelte
+ * for why).
  */
-export function isPaletteShortcut(
-  event: PaletteKeyEvent,
-  kind: PaletteKind,
-): boolean {
+export function isPaletteShortcut(event: PaletteKeyEvent): boolean {
   if (event.key.toLowerCase() !== "p") return false;
   if (event.altKey === true) return false;
-  if (!event.ctrlKey && !event.metaKey) return false;
-  return event.shiftKey === (kind === "commands");
+  if (event.shiftKey) return false;
+  return event.ctrlKey || event.metaKey;
 }
 
-/** How to print a palette's chord for the given platform. */
-export function paletteShortcutHint(
-  kind: PaletteKind,
-  apple: boolean,
-): string {
-  const parts = [apple ? "⌘" : "Ctrl"];
-  if (kind === "commands") parts.push(apple ? "⇧" : "Shift");
-  parts.push("P");
-  return parts.join(apple ? "" : "+");
+/** How to print the chord for the given platform. */
+export function paletteShortcutHint(apple: boolean): string {
+  return apple ? "⌘P" : "Ctrl+P";
 }
 
 /**

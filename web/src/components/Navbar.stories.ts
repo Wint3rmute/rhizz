@@ -85,13 +85,13 @@ export const ProjectOpen: Story = {
     // than that breakpoint, so it is in the document but not in the
     // accessibility tree here. VRT honours the `viewport` parameter above
     // and captures it where it is visible.
-    const button = canvas.getByLabelText("Open the command palette");
+    const button = canvas.getByLabelText("Open the go-to palette");
     await expect(button).toBeInTheDocument();
     // Its tooltip spells the chord the way this platform writes it — a
     // button that says "Ctrl" on a Mac teaches the wrong keystroke.
     await expect(button).toHaveAttribute(
       "title",
-      "Command palette (Ctrl+Shift+P)",
+      "Go to file or command (Ctrl+P)",
     );
   },
 };

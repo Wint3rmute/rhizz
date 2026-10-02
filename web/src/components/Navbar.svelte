@@ -191,21 +191,20 @@ async function startTourFlow(): Promise<void> {
             </svg>
           </button>
         {/if}
-        <!-- The palettes' other way in. A shortcut nobody can discover is
+        <!-- The palette's other way in. A shortcut nobody can discover is
              only a shortcut for the people who wrote it, so the navbar
              offers the same thing — but only inside a project, which is the
-             only place the palettes exist. -->
+             only place the palette exists. -->
         {#if activeProjectId}
           <button
-            onclick={() => activeProjectId && requestPalette("commands", activeProjectId)}
+            onclick={() => activeProjectId && requestPalette(activeProjectId)}
             class="btn btn-ghost btn-sm btn-square"
-            title="Command palette ({paletteShortcutHint(
-              "commands",
+            title="Go to file or command ({paletteShortcutHint(
               isApplePlatform(
                 typeof navigator === "undefined" ? "" : navigator.userAgent,
               ),
             )})"
-            aria-label="Open the command palette"
+            aria-label="Open the go-to palette"
             type="button"
           >
             {#if searchIcon}

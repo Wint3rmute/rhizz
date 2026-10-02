@@ -46,9 +46,8 @@ const meta = {
     items: ITEMS,
     onselect: fn(),
     onclose: fn(),
-    title: "Commands",
-    placeholder: "Type a command…",
-    kind: "files",
+    title: "Go to",
+    placeholder: "Search files and commands…",
   },
 } satisfies Meta<typeof CommandPalette>;
 
@@ -59,7 +58,7 @@ export const BrowseAll: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.getByRole("dialog", { name: "Commands" }),
+      canvas.getByRole("dialog", { name: "Go to" }),
     ).toBeInTheDocument();
     await expect(canvas.getAllByRole("option")).toHaveLength(ITEMS.length);
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();

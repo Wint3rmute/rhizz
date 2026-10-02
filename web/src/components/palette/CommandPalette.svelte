@@ -14,7 +14,6 @@ import {
   createPaletteIndex,
   isApplePlatform,
   type PaletteItem,
-  type PaletteKind,
   paletteRows,
   paletteShortcutHint,
   wrapIndex,
@@ -31,8 +30,6 @@ interface Props {
   emptyMessage?: string;
   /** Shows a "loading" row instead of the empty message while items load. */
   loading?: boolean;
-  /** The palette this instance is, used only to label its own chord hints. */
-  kind?: PaletteKind;
   /** id prefix for the input and listbox, so two palettes never collide. */
   id?: string;
 }
@@ -46,7 +43,6 @@ let {
   placeholder = "Type a command…",
   emptyMessage = "No matches",
   loading = false,
-  kind = "commands",
   id = "command-palette",
 }: Props = $props();
 
@@ -301,7 +297,6 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
         <span>esc close</span>
         <span class="ml-auto font-mono"
           >{paletteShortcutHint(
-            kind,
             isApplePlatform(
               typeof navigator === "undefined" ? "" : navigator.userAgent,
             ),

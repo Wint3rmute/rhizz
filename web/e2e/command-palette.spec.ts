@@ -1,10 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import { createFromExample, createNewProject } from "./helpers";
 
-// The two palettes, driven the way a person drives them: the chord, a
-// search, and Enter. What they promise is about a live project — which
-// files and views exist, and where choosing one lands — so nothing here is
-// asserted against fixtures, only against a project this spec opened.
+// The palette, driven the way a person drives it: the chord, a search, and
+// Enter. What it promises is about a live project — which files and views
+// exist, and where choosing one lands — so nothing here is asserted against
+// fixtures, only against a project this spec opened.
 
 const PALETTE = "command-palette";
 
@@ -26,8 +26,12 @@ function options(page: Page, text: string) {
     .filter({ hasText: text });
 }
 
-test("Ctrl-P switches to a project file from a page that is about neither", async ({ page }) => {
-  const id = await createNewProject(page, "E2E palette file");
+test("Ctrl-P offers the commands and the files in one list", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette one list",
+  );
   await gotoProject(page, id, "overview");
 
   await page.keyboard.press("Control+p");
@@ -35,57 +39,65 @@ test("Ctrl-P switches to a project file from a page that is about neither", asyn
   await expect(palette).toBeVisible();
   await expect(palette.getByTestId("command-palette-input")).toBeFocused();
 
-  // Off Modeling/Explore the switcher is project-scoped, so it offers the
-  // whole project rather than only the views — including the `docs/`
-  // placeholder the project store creates.
-  await expect(options(page, "main.hcl")).toHaveCount(1);
-  await expect(options(page, "docs/")).toHaveCount(1);
+  // One search box, both kinds of row — no chord to choose between.
+  await expect(
+    palette.getByRole("option", { name: /go to inventory/i }),
+  ).toBeVisible();
+  await expect(options(page, "system.hcl")).toHaveCount(1);
+  await expect(options(page, "views/main.hcl")).toHaveCount(1);
+  // Exact, because the footer carries an "↑↓ navigate" hint too.
+  await expect(
+    palette.getByText("Navigate", { exact: true }),
+  ).toBeVisible();
+  await expect(palette.getByText("Files", { exact: true })).toBeVisible();
+});
+
+test("the same rows are offered on every page", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette everywhere",
+  );
+
+  // What the palette offers does not depend on which page summoned it: one
+  // chord, one list, the whole project from anywhere. This used to narrow to
+  // views on Modeling/Explore, which meant the same key offered different
+  // things depending on where you were standing.
+  for (const path of ["code", "modeling/main.hcl", "explore", "inventory"]) {
+    await gotoProject(page, id, path);
+    await page.keyboard.press("Control+p");
+    await expect(options(page, "system.hcl")).toHaveCount(1);
+    await expect(options(page, "views/main.hcl")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId(PALETTE)).toHaveCount(0);
+  }
+});
+
+test("choosing a file opens it in the editor", async ({ page }) => {
+  const id = await createNewProject(page, "E2E palette file");
+  await gotoProject(page, id, "overview");
+
+  await page.keyboard.press("Control+p");
   await page.keyboard.type("main");
   await page.keyboard.press("Enter");
 
   // A file is addressed by its project-relative path, which is what the code
   // page reads off `?file=`.
   await expect(page).toHaveURL(`/projects/${id}/code?file=main.hcl`);
-  await expect(palette).toHaveCount(0);
+  await expect(page.getByTestId(PALETTE)).toHaveCount(0);
 });
 
-test("Ctrl-P narrows to the views when Modeling is the page you are on", async ({ page }) => {
-  const id = await createFromExample(
-    page,
-    /Quadcopter Drone/,
-    "E2E palette scope",
-  );
-
-  // The whole project, on a page that is about files: the drone example has
-  // both a root system.hcl and five views.
-  await gotoProject(page, id, "code");
-  await page.keyboard.press("Control+p");
-  await expect(options(page, "system.hcl")).toHaveCount(1);
-  await page.keyboard.press("Escape");
-
-  // Only the views, on a page that draws diagrams.
-  await gotoProject(page, id, "modeling");
-  await expect(page.getByTestId("diagram-canvas")).toBeVisible();
-  await page.keyboard.press("Control+p");
-  const rows = page.getByTestId(PALETTE).getByTestId("command-palette-option");
-  // Five views, and no root file among them.
-  await expect(rows).toHaveCount(5);
-  await expect(options(page, "system.hcl")).toHaveCount(0);
-});
-
-test("choosing a view switches to it on the view's own path", async ({ page }) => {
+test("choosing a view opens the canvas, not the text", async ({ page }) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
     "E2E palette view",
   );
+  await gotoProject(page, id, "overview");
 
-  // From a page that is about files the same row would open the view *as a
-  // file*, in Code — the switcher's scope is the page you are on, so this
-  // has to start where views are what is on offer.
-  await gotoProject(page, id, "explore");
   await page.keyboard.press("Control+p");
   await page.keyboard.type("power");
+  // The view is found by its project path, the same as any other file.
   await expect(options(page, "power-paths.hcl")).toHaveCount(1);
   // The matched letters are drawn as <mark>, which is the point of the
   // search while typing.
@@ -94,22 +106,19 @@ test("choosing a view switches to it on the view's own path", async ({ page }) =
   ).toHaveText("power");
   await page.keyboard.press("Enter");
 
-  // A view is addressed by its path relative to views/ — exactly what the
-  // modeling route's rest param takes.
+  // But it opens where a diagram belongs, addressed by its path within
+  // views/ — exactly what the modeling route's rest param takes.
   await expect(page).toHaveURL(`/projects/${id}/modeling/power-paths.hcl`);
   await expect(page.getByTestId("diagram-canvas")).toBeVisible();
 });
 
-test("Ctrl-Shift-P switches page and choosing one navigates", async ({ page }) => {
+test("choosing a command switches page", async ({ page }) => {
   const id = await createNewProject(page, "E2E palette command");
   await gotoProject(page, id, "overview");
 
-  await page.keyboard.press("Control+Shift+p");
+  await page.keyboard.press("Control+p");
   const palette = page.getByTestId(PALETTE);
   await expect(palette).toBeVisible();
-  await expect(
-    palette.getByRole("option", { name: /go to inventory/i }),
-  ).toBeVisible();
 
   await page.keyboard.type("inventory");
   await page.keyboard.press("Enter");
@@ -117,6 +126,17 @@ test("Ctrl-Shift-P switches page and choosing one navigates", async ({ page }) =
   // Selecting a row closes the palette — otherwise it would still be up on
   // the page it just navigated to.
   await expect(palette).toHaveCount(0);
+});
+
+test("Ctrl-Shift-P no longer opens a palette", async ({ page }) => {
+  const id = await createNewProject(page, "E2E palette shift");
+  await gotoProject(page, id, "overview");
+  // There is one palette now, so nothing else may claim a second chord:
+  // Ctrl-Shift-P is left to the browser.
+  await page.keyboard.press("Control+Shift+p");
+  await expect(page.getByTestId(PALETTE)).toHaveCount(0);
+  await page.keyboard.press("Control+p");
+  await expect(page.getByTestId(PALETTE)).toBeVisible();
 });
 
 test("Escape closes the palette and leaves the page as it was", async ({ page }) => {
@@ -148,10 +168,10 @@ test("the chord opens the palette over the HCL editor too", async ({ page }) => 
   await expect(page.locator(".quick-input-widget")).toHaveCount(0);
 });
 
-test("the navbar's button opens the command palette", async ({ page }) => {
+test("the navbar's button opens the palette", async ({ page }) => {
   const id = await createNewProject(page, "E2E palette button");
   await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
-  await page.getByRole("button", { name: "Open the command palette" }).click();
+  await page.getByRole("button", { name: "Open the go-to palette" }).click();
   await expect(page.getByTestId(PALETTE)).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId(PALETTE)).toHaveCount(0);

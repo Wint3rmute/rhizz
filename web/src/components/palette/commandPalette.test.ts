@@ -208,65 +208,43 @@ describe("isPaletteShortcut", () => {
     ...mods,
   });
 
-  it("opens the file switcher on Ctrl-P", () => {
-    expect(isPaletteShortcut(press("p", { ctrlKey: true }), "files")).toBe(
-      true,
-    );
-  });
-
-  it("opens the command palette on Ctrl-Shift-P", () => {
-    expect(
-      isPaletteShortcut(
-        press("p", { ctrlKey: true, shiftKey: true }),
-        "commands",
-      ),
-    ).toBe(true);
+  it("opens on Ctrl-P", () => {
+    expect(isPaletteShortcut(press("p", { ctrlKey: true }))).toBe(true);
   });
 
   it("treats Cmd as the same primary modifier as Ctrl", () => {
-    expect(isPaletteShortcut(press("p", { metaKey: true }), "files")).toBe(
-      true,
-    );
-    expect(
-      isPaletteShortcut(
-        press("P", { metaKey: true, shiftKey: true }),
-        "commands",
-      ),
-    ).toBe(true);
+    expect(isPaletteShortcut(press("p", { metaKey: true }))).toBe(true);
+    // Uppercase, as a shifted keypress reports it.
+    expect(isPaletteShortcut(press("P", { metaKey: true }))).toBe(true);
   });
 
-  it("keeps the two palettes on distinct chords", () => {
+  it("is not the chord any more once Shift is added", () => {
+    // Ctrl-Shift-P used to open a second palette. There is one now, and this
+    // says so: the chord is exactly Ctrl-P, so nothing else may claim it.
     expect(
-      isPaletteShortcut(press("p", { ctrlKey: true, shiftKey: true }), "files"),
+      isPaletteShortcut(press("p", { ctrlKey: true, shiftKey: true })),
     ).toBe(false);
-    expect(isPaletteShortcut(press("p", { ctrlKey: true }), "commands")).toBe(
-      false,
-    );
   });
 
   it("ignores the chord without a modifier, or with Alt held", () => {
-    expect(isPaletteShortcut(press("p"), "files")).toBe(false);
+    expect(isPaletteShortcut(press("p"))).toBe(false);
     expect(
-      isPaletteShortcut(press("p", { ctrlKey: true, altKey: true }), "files"),
+      isPaletteShortcut(press("p", { ctrlKey: true, altKey: true })),
     ).toBe(false);
   });
 
   it("ignores any other key", () => {
-    expect(
-      isPaletteShortcut(press("k", { ctrlKey: true }), "commands"),
-    ).toBe(false);
+    expect(isPaletteShortcut(press("k", { ctrlKey: true }))).toBe(false);
   });
 });
 
 describe("paletteShortcutHint", () => {
   it("spells the mac chord with symbols", () => {
-    expect(paletteShortcutHint("files", true)).toBe("⌘P");
-    expect(paletteShortcutHint("commands", true)).toBe("⌘⇧P");
+    expect(paletteShortcutHint(true)).toBe("⌘P");
   });
 
   it("spells the other platforms' chord with words", () => {
-    expect(paletteShortcutHint("files", false)).toBe("Ctrl+P");
-    expect(paletteShortcutHint("commands", false)).toBe("Ctrl+Shift+P");
+    expect(paletteShortcutHint(false)).toBe("Ctrl+P");
   });
 });
 
