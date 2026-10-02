@@ -13,7 +13,7 @@
 // chosen label into a URL without this module ever touching `$app`.
 import type { PaletteItem } from "../components/palette/commandPalette";
 import { VIEW_LAYOUT_DIR } from "../routes/projects/[id]/modeling/persistence";
-import type { Dirent, ProjectFs } from "../vfs/fs";
+import type { Dirent } from "../vfs/fs";
 import type { PaletteScope } from "./paletteScope";
 
 /**
@@ -65,9 +65,4 @@ export function fileItems(
       hint: isViewPath(entry.path) ? `${VIEW_LAYOUT_DIR} view diagram` : "file",
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-/** Reads the whole project, recursively, as the listing every row is built from. */
-export async function readProjectEntries(fs: ProjectFs): Promise<Dirent[]> {
-  return fs.readdir(".", { recursive: true });
 }
