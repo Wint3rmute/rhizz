@@ -26,7 +26,7 @@ import { TOUR_TARGETS } from "../tour/tourTargets";
 import { requestTourStart } from "../tour/tourRequest.svelte";
 import { WORKSPACE_PAGES } from "../commands/workspacePages";
 import { requestPalette } from "../commands/paletteRequest.svelte";
-import { isApplePlatform, paletteShortcutHint } from "./palette/commandPalette";
+import { paletteShortcutHint } from "./palette/commandPalette";
 
 // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
 // renders `<Navbar />` with no props and reads everything from the shared
@@ -200,9 +200,7 @@ async function startTourFlow(): Promise<void> {
             onclick={() => activeProjectId && requestPalette(activeProjectId)}
             class="btn btn-ghost btn-sm btn-square"
             title="Go to file or command ({paletteShortcutHint(
-              isApplePlatform(
-                typeof navigator === "undefined" ? "" : navigator.userAgent,
-              ),
+              typeof navigator === "undefined" ? "" : navigator.userAgent,
             )})"
             aria-label="Open the go-to palette"
             type="button"

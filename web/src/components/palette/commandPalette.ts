@@ -196,18 +196,14 @@ export function isPaletteShortcut(event: PaletteKeyEvent): boolean {
   return event.ctrlKey || event.metaKey;
 }
 
-/** How to print the chord for the given platform. */
-export function paletteShortcutHint(apple: boolean): string {
-  return apple ? "⌘P" : "Ctrl+P";
-}
-
 /**
- * Whether this browser is on an Apple platform, i.e. whether to print the
- * chord with ⌘ rather than with the word Ctrl. Sniffed from the user agent
- * on purpose: the shortcut itself accepts both modifiers (see
- * `isPaletteShortcut`), so this only decides how the chord is *written*
- * down, and never what actually fires.
+ * How to print the chord for the platform `userAgent` names: with ⌘ on
+ * Apple's, with the word Ctrl everywhere else. Sniffed on purpose — the
+ * shortcut itself accepts both modifiers (see `isPaletteShortcut`), so this
+ * only decides how the chord is *written* down, never what actually fires.
  */
-export function isApplePlatform(userAgent: string): boolean {
-  return /mac os x|macintosh|iphone|ipad|ipod/i.test(userAgent);
+export function paletteShortcutHint(userAgent: string): string {
+  return /mac os x|macintosh|iphone|ipad|ipod/i.test(userAgent)
+    ? "⌘P"
+    : "Ctrl+P";
 }

@@ -12,7 +12,6 @@
 import { tick } from "svelte";
 import {
   createPaletteIndex,
-  isApplePlatform,
   type PaletteItem,
   paletteRows,
   paletteShortcutHint,
@@ -314,9 +313,7 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
         <span>esc close</span>
         <span class="ml-auto font-mono"
           >{paletteShortcutHint(
-            isApplePlatform(
-              typeof navigator === "undefined" ? "" : navigator.userAgent,
-            ),
+            typeof navigator === "undefined" ? "" : navigator.userAgent,
           )}</span
         >
       </div>

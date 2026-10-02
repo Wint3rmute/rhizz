@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createPaletteIndex,
-  isApplePlatform,
   isPaletteShortcut,
   labelSegments,
   type PaletteItem,
@@ -231,35 +230,27 @@ describe("isPaletteShortcut", () => {
 });
 
 describe("paletteShortcutHint", () => {
-  it("spells the mac chord with symbols", () => {
-    expect(paletteShortcutHint(true)).toBe("⌘P");
+  it("spells the Apple platforms' chord with symbols", () => {
+    for (
+      const ua of [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+        "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)",
+      ]
+    ) {
+      expect(paletteShortcutHint(ua)).toBe("⌘P");
+    }
   });
 
-  it("spells the other platforms' chord with words", () => {
-    expect(paletteShortcutHint(false)).toBe("Ctrl+P");
-  });
-});
-
-describe("isApplePlatform", () => {
-  it("recognises the platforms that write the chord with ⌘", () => {
-    expect(isApplePlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"))
-      .toBe(true);
-    expect(
-      isApplePlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"),
-    ).toBe(true);
-    expect(isApplePlatform("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)"))
-      .toBe(
-        true,
-      );
-  });
-
-  it("treats everything else as Ctrl", () => {
-    expect(
-      isApplePlatform("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"),
-    ).toBe(false);
-    expect(isApplePlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe(
-      false,
-    );
-    expect(isApplePlatform("")).toBe(false);
+  it("spells everything else's chord with words", () => {
+    for (
+      const ua of [
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "",
+      ]
+    ) {
+      expect(paletteShortcutHint(ua)).toBe("Ctrl+P");
+    }
   });
 });
