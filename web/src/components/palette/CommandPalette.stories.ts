@@ -214,3 +214,81 @@ export const EscapeCloses: Story = {
     await expect(args.onclose).toHaveBeenCalled();
   },
 };
+
+// Long enough to overflow the list's `max-h-[70vh]`, in three groups so
+// headings are interleaved with the rows.
+const LONG_ITEMS: PaletteItem[] = [
+  ...["Navigate", "Files", "Inventory"].flatMap((group) =>
+    Array.from({ length: 15 }, (_, i) => ({
+      id: `${group}:${String(i)}`,
+      label: `${group} row ${String(i)}`,
+      group,
+    }))
+  ),
+];
+
+// The highlight has to be *visible*, not merely selected: the list scrolls,
+// and walking into the last group has to bring the highlighted row with it.
+export const ScrollsHighlightIntoView: Story = {
+  args: { items: LONG_ITEMS },
+  // No baseline: this story is about scroll geometry, and a pinned
+  // screenshot of "Navigate row 12" says nothing about which row is in view.
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByTestId("command-palette-input");
+    const list = canvas.getByTestId("command-palette-list");
+
+    // Precondition: the list really does overflow, or nothing is tested.
+    if (list.scrollHeight <= list.clientHeight) {
+      throw new Error(
+        `list does not overflow: scrollHeight ${
+          String(list.scrollHeight)
+        } <= clientHeight ${String(list.clientHeight)}`,
+      );
+    }
+
+    // Walks down to `target` and reports why the highlighted row is not
+    // inside the list's visible window — or null when it is.
+    const walkTo = async (target: number): Promise<string | null> => {
+      await userEvent.click(input);
+      for (let i = 0; i < target; i += 1) {
+        await userEvent.keyboard("{ArrowDown}");
+      }
+      const options = canvas.getAllByRole("option");
+      const index = options.findIndex(
+        (el) => el.getAttribute("aria-selected") === "true",
+      );
+      const highlighted = options[index];
+      if (highlighted === undefined) return "no highlighted option";
+      const view = list.getBoundingClientRect();
+      const row = highlighted.getBoundingClientRect();
+      if (row.top >= view.top - 1 && row.bottom <= view.bottom + 1) return null;
+      return (
+        `row ${String(index)} "${highlighted.textContent.trim()}" sits at ` +
+        `${row.top.toFixed(0)}..${row.bottom.toFixed(0)}, outside the window ` +
+        `${view.top.toFixed(0)}..${view.bottom.toFixed(0)} (scrollTop ${
+          String(list.scrollTop)
+        })`
+      );
+    };
+
+    // Grouped, on an empty query: the headings are siblings of the rows.
+    const grouped = await walkTo(40);
+
+    // Control: the identical walk with the headings hidden, which is what
+    // typing does. Same list, same code path, only the headings differ — so
+    // if this one is in view and the other is not, the headings are the cause.
+    await userEvent.clear(input);
+    await userEvent.type(input, "row");
+    await expect(canvas.queryByText("Navigate")).not.toBeInTheDocument();
+    const searched = await walkTo(40);
+
+    if (grouped !== null || searched !== null) {
+      throw new Error(
+        `grouped (headings on screen): ${grouped ?? "in view"}\n` +
+          `searched (headings hidden): ${searched ?? "in view"}`,
+      );
+    }
+  },
+};

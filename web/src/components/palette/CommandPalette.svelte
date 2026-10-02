@@ -91,9 +91,18 @@ $effect(() => {
 });
 
 function scrollToHighlighted(): void {
-  listElement?.children.item(highlightedIndex)?.scrollIntoView({
-    block: "nearest",
-  });
+  // By row index, never by child position. The group headings are siblings of
+  // the rows in this `<ul>`, so `children[n]` counts them too — which scrolls
+  // whichever row sits one heading higher than the highlighted one, and leaves
+  // the highlight itself below the fold once the list is scrolled to the end.
+  // Addressing the row by the index it is rendered under skips the headings
+  // entirely, whatever they are or however many there are.
+  //
+  // A negative index (an empty list) matches nothing, so this is a no-op
+  // rather than a lookup of the last row.
+  listElement
+    ?.querySelector(`[data-row="${highlightedIndex}"]`)
+    ?.scrollIntoView({ block: "nearest" });
 }
 
 function handleSelect(row: PaletteItem | undefined): void {
@@ -236,6 +245,7 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
           <li
             id="{id}-option-{i}"
             role="option"
+            data-row={i}
             aria-selected={highlightedIndex === i}
             class="flex cursor-pointer items-center gap-2 rounded px-3 py-1.5 scroll-mt-1 {highlightedIndex ===
             i
