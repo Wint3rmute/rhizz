@@ -170,7 +170,7 @@ describe("paletteRows", () => {
     ]);
   });
 
-  it("carries detail, group and shortcut through untouched", () => {
+  it("carries detail and group through untouched", () => {
     const index = createPaletteIndex(ITEMS);
     const row = paletteRows(index, "system")[0];
     expect(row?.item).toMatchObject({
