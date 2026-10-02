@@ -120,7 +120,9 @@ test("Inventory adds the model's definitions, and opens one", async ({ page }) =
   // the label, only searchable, and drawn as the row's subtitle. The drone
   // example calls it "BMP390 barometric pressure sensor".
   await page.keyboard.type("barometric pressure");
-  const row = palette.getByRole("option", { name: /^barometer\b/ });
+  const row = palette.getByRole("option", {
+    name: /^go to component barometer\b/i,
+  });
   await expect(row).toBeVisible();
   await page.keyboard.press("Enter");
 

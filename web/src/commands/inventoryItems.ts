@@ -44,7 +44,16 @@ export function inventoryItems(
 ): PaletteItem[] {
   return entities.map<PaletteItem>((entity) => ({
     id: `inventory:${entity.label}`,
-    label: entity.label,
+    // "Go to component <name>", matching how the command rows read ("Go to
+    // Overview"). The section heading already says which list this is; the
+    // row says what choosing it does, and a row that is only a bare noun
+    // gives the reader nothing to do with it.
+    //
+    // The drawn label is *not* the addressable name — Inventory's route
+    // matches the bare label, so `action` still hands that back and the id
+    // stays it too. Searching is unaffected: the name is still inside the
+    // label, just further along it.
+    label: `Go to component ${entity.label}`,
     // The full name reads as the row's subtitle; an empty one is left out
     // rather than drawn blank. Spread rather than assigned, because
     // `exactOptionalPropertyTypes` distinguishes "absent" from "undefined".
