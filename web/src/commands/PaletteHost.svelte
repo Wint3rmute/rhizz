@@ -10,44 +10,95 @@
 // knows none of that.
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
+import { page } from "$app/state";
 import { onMount } from "svelte";
 import CommandPalette from "../components/palette/CommandPalette.svelte";
 import {
   isPaletteShortcut,
   type PaletteItem,
 } from "../components/palette/commandPalette";
+import type { RawModelPayload } from "../modelView";
 import { projectStore } from "../ProjectState.svelte";
+import { getWarningLevel } from "../WarningLevelState.svelte";
+import { compile_system } from "../rhizz_wasm_wrapper";
+import { readProjectSources, type Source } from "../vfs/compile";
 import { openProjectFs } from "../vfs/fs";
 import type { Dirent } from "../vfs/fs";
 import { commandItems } from "./commandItems";
 import { fileItems, fileTargetFor, readProjectEntries } from "./fileSwitcher";
+import { inventoryEntities, inventoryItems } from "./inventoryItems";
 import { getPaletteRequest } from "./paletteRequest.svelte";
+import { paletteScopeForPath } from "./paletteScope";
 import { WORKSPACE_PAGES } from "./workspacePages";
 
-let { projectId }: { projectId: string } = $props();
+// `pathname` defaults to the live route and is never passed by the app. It
+// exists because what the palette offers depends on which page you are on,
+// and a story is not on one: without this the scoped sections (diagrams on
+// Modeling, entities on Inventory) would be unreachable outside a browser
+// driving real routes. Same kind of seam as Navbar's `isOpen`.
+let {
+  projectId,
+  pathname = page.url.pathname,
+}: { projectId: string; pathname?: string } = $props();
 
 let open = $state(false);
 let entries = $state<Dirent[]>([]);
+// The compiled model, held only once the palette has actually needed it —
+// see `loadInventory`. Null means "not loaded yet", which is also the state
+// on every page that does not offer the inventory section at all.
+let modelSources = $state<Source[] | null>(null);
 let loading = $state(false);
 
-// Commands first, then the project's files. That order is the reading order
-// of the two questions the palette answers — "where can I go?" and "where
-// is that thing I was told about?" — and it means Enter on an untouched
-// palette does the most common thing rather than opening whichever file
-// happens to sort first.
-const FILES_GROUP = "Files";
+// Which page you are on decides what is worth offering — the diagrams on
+// Modeling, every file on Code, and the model's own definitions alongside the
+// files on Inventory. Re-read on every navigation rather than captured at
+// mount, because the host outlives every page inside it.
+let scope = $derived(paletteScopeForPath(pathname));
 
+// Commands first, then the page's files, then (on Inventory) its entities.
+// That is the order of the questions the palette answers — "where can I
+// go?", "where is that file?", "where is that thing?" — and it means Enter
+// on an untouched palette does the most common thing rather than opening
+// whichever row happens to sort first.
 let items = $derived([
   ...commandItems((pageId) => {
     close();
     const target = WORKSPACE_PAGES.find((page) => page.id === pageId);
     if (target !== undefined) void goto(target.href(projectId));
   }),
-  ...fileItems(entries).map<PaletteItem>((item) => ({
+  ...fileItems(entries, scope).map<PaletteItem>((item) => ({
     ...item,
-    group: FILES_GROUP,
+    // Named for what is actually listed, since on Modeling and Explore that
+    // is diagrams and nothing else.
+    group: scope.files === "views" ? VIEWS_GROUP : FILES_GROUP,
   })),
+  ...(scope.inventory && modelSources !== null
+    ? inventoryItems(inventoryEntities(model(modelSources)), (label) => {
+      close();
+      void goto(
+        resolve("/projects/[id]/inventory/[...label]", {
+          id: projectId,
+          label,
+        }),
+      );
+    })
+    : []),
 ]);
+
+const FILES_GROUP = "Files";
+const VIEWS_GROUP = "Views";
+
+// The model, compiled the same way every page compiles it (see
+// readProjectSources / compile_system) and read as the same raw payload
+// Inventory reads, so the two can never disagree about what a definition is.
+// Only ever reached on Inventory, and undefined when the project does not
+// compile — which leaves the section empty rather than wrong.
+function model(sources: Source[]): RawModelPayload | undefined {
+  const compiled = compile_system(sources, getWarningLevel()).model();
+  return compiled === undefined
+    ? undefined
+    : (compiled.to_js() as RawModelPayload);
+}
 
 // The listing is read fresh on every open rather than kept in step with the
 // filesystem: a file created on the Code page and the palette opened on the
@@ -68,7 +119,16 @@ async function show(
   open = true;
   loading = true;
   try {
-    entries = await readProjectEntries(openProjectFs(projectStore, projectId));
+    const fs = openProjectFs(projectStore, projectId);
+    entries = await readProjectEntries(fs);
+    // Compiling is the expensive half, and only the inventory section needs
+    // it — so it is read only when that section is on offer, and kept for
+    // afterwards so reopening the palette on the same page is instant. This
+    // is a second compile on top of the status bar's; both are per-open and
+    // neither blocks anything the user is waiting on.
+    if (scope.inventory && modelSources === null) {
+      modelSources = await readProjectSources(fs);
+    }
   } catch {
     // An unreadable project still opens its palette; an empty list is a
     // truthful answer and beats a dialog that never appears.

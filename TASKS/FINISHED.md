@@ -110,10 +110,32 @@ matched letters highlighted live.
   background: blue on blue. Unhighlighted rows keep the tint; the
   highlighted one uses weight plus an underline in the colour the row
   already sets.
+- **What it offers depends on the page — the one deliberate exception to
+  "one list everywhere".** Modeling and Explore are both "which diagram?",
+  so there the file section lists only the diagrams: a row for `system.hcl`
+  would open text where the user asked for a canvas. Code lists every file.
+  Inventory adds the model's own definitions as a third section beside the
+  two. This was tried the other way round first (one fixed list, on the
+  argument that a "go to" should not care where you are standing) and it is
+  worse: the palette is a shortcut *for the page you are on*, and the page
+  commands are always there as the way out, so nothing is trapped.
+- **The Inventory section carries only the definitions, and that is
+  measured, not assumed.** Inventory matches `/inventory/<label>` against
+  the model's `definitions` and falls back to the first row for anything it
+  does not recognise — so a row for a system or a protocol would navigate
+  and then silently open a *different* entity. Checked against the drone
+  example before writing any of it: 13 definitions are addressable, while
+  `systems()` returns 2 and `protocols()` 7 that are not. Its "Interfaces"
+  tab is also still a stub. Adding systems and protocols means Inventory
+  learning to address them first, which is a separate change.
+- **The model is compiled only when the section that needs it is on
+  offer**, and then kept — reopening the palette on the same page is
+  instant. That is a second compile alongside the status bar's, but it
+  happens on open and blocks nothing.
 - **Red/green**: 30 unit tests on the pure logic (range maths for the
   highlight, Fuse ranking, the chord test, the view-or-file rule, the item
-  builders) and 13 Storybook stories — 9 on the shell, 4 driving the real
-  host over a real seeded project. Eleven e2e cases over real projects
+  builders) and 16 Storybook stories — 9 on the shell, 7 driving the real
+  host over a real seeded project across all three page scopes. Eleven e2e cases over real projects
   cover the chord, the search, Enter, arrow-key wrap-around, Escape, the
   Monaco case, "the same rows on every page", "Ctrl-Shift-P opens
   nothing", and "no project, no palette". Two of my own test expectations
