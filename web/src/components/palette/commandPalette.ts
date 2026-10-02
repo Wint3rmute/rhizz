@@ -5,7 +5,6 @@
 // app-specific halves (which files exist, which commands are on offer)
 // live in ../commands/.
 import Fuse from "fuse.js";
-import type { IFuseOptions } from "fuse.js";
 
 /** One selectable row. Everything the shell renders is declared here. */
 export interface PaletteItem {
@@ -54,33 +53,6 @@ export interface PaletteKeyEvent {
   metaKey: boolean;
   shiftKey: boolean;
   altKey?: boolean;
-}
-
-/**
- * Fuse tuned for a palette. Two deliberate departures from the defaults:
- * a tighter `threshold`, so one stray letter doesn't drag in half the list,
- * and `findAllMatches`, because the live highlighting needs *every* matched
- * character — without it Fuse reports only the first run it finds.
- *
- * `ignoreLocation` is deliberately left off. It reads like the obvious
- * knob for "a needle should match anywhere in a file path", but it makes
- * Fuse score every candidate the same, which drops the ranking users rely
- * on: typing "m" then "ma" should walk *towards* "main.hcl", not keep
- * whatever the index happened to list first. (Fuse's Bitap search also
- * matches within an edit-distance window, not as a free-floating
- * subsequence — "mh" never matches "main.hcl" — so no threshold setting
- * rescues that one; the palette lists everything on an empty query, which
- * is where browsing happens anyway.)
- */
-export function paletteFuseOptions(): IFuseOptions<PaletteItem> {
-  return {
-    keys: ["label", "hint"],
-    threshold: 0.35,
-    findAllMatches: true,
-    includeMatches: true,
-    includeScore: true,
-    minMatchCharLength: 1,
-  };
 }
 
 /**
@@ -153,7 +125,17 @@ export interface PaletteIndex {
 }
 
 export function createPaletteIndex(items: PaletteItem[]): PaletteIndex {
-  return { items, fuse: new Fuse(items, paletteFuseOptions()) };
+  return {
+    items,
+    fuse: new Fuse(items, {
+      keys: ["label", "hint"],
+      threshold: 0.35,
+      findAllMatches: true,
+      includeMatches: true,
+      includeScore: true,
+      minMatchCharLength: 1,
+    }),
+  };
 }
 
 /**
