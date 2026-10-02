@@ -28,7 +28,14 @@ interface Props {
   title?: string;
   placeholder?: string;
   emptyMessage?: string;
-  /** Shows a "loading" row instead of the empty message while items load. */
+  /**
+   * Shows a "loading" row instead of the empty message while items load.
+   *
+   * Only reachable for a palette that can be empty: the row replaces the
+   * empty message, so a host that always offers at least one row (this app's
+   * does — the page commands are on offer everywhere) can never show it, and
+   * should not pass it.
+   */
   loading?: boolean;
   /** id prefix for the input and listbox, so two palettes never collide. */
   id?: string;
