@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
 import { projectSlug } from "../../../../vfs/slug";
@@ -203,12 +203,21 @@ export const DocumentationTab: Story = {
     await expect(
       canvas.getByRole("heading", { name: "Battery" }),
     ).toBeTruthy();
+
+    // "Edit" swaps the rendered doc for the app's editor — the same Monaco
+    // component the Code page uses for these very files.
     await userEvent.click(canvas.getByTestId("inventory-doc-edit-button"));
-    const editor = canvas.getByTestId("inventory-doc-textarea");
-    await expect(editor).toBeTruthy();
-    await expect((editor as HTMLTextAreaElement).value).toContain(
-      "# Battery",
-    );
+    const host = canvas.getByTestId("inventory-doc-editor");
+    // Monaco's own hidden textarea is the editor's focus target; its presence
+    // is what says the editor was created at all.
+    await waitFor(() => {
+      void expect(host.querySelector("textarea")).toBeTruthy();
+    });
+
+    // What it *shows* is asserted in e2e instead: this story's browser is
+    // ~414px wide, where the sidebar takes the whole row and the editor box
+    // collapses to zero — and Monaco only paints lines inside its viewport, so
+    // any content assertion here would pass on an editor showing nothing.
     await userEvent.click(canvas.getByTestId("inventory-doc-cancel-button"));
     await expect(
       canvas.getByRole("heading", { name: "Battery" }),
@@ -279,5 +288,33 @@ export const DetailPaneStacksBelowTheDiagram: Story = {
     await expect(pane.getBoundingClientRect().top).toBeGreaterThanOrEqual(
       diagram.getBoundingClientRect().bottom - 1,
     );
+  },
+};
+
+// The documentation editor, open. Every other documentation story cancels back
+// to the viewer, so without this one the editor's own layout inside the pane —
+// its height, its border, where the Save/Cancel row sits — has no picture of it
+// at all: a story that ends in edit mode is the only place the pane as a whole
+// can be compared.
+export const DocumentationEditorOpen: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      await canvas.findByTestId("inventory-doc-edit-button"),
+    );
+    const host = canvas.getByTestId("inventory-doc-editor");
+    // Monaco's input element, by the aria label it gives itself (the default
+    // of its `ariaLabel` option) — this version also keeps a hidden IME
+    // textarea that is not it.
+    await waitFor(() => {
+      void expect(
+        host.querySelector('[aria-label="Editor content"]'),
+      ).toBeTruthy();
+    });
+    // Save and Cancel stay reachable below it.
+    await expect(canvas.getByTestId("inventory-doc-save-button")).toBeTruthy();
+    await expect(canvas.getByTestId("inventory-doc-cancel-button"))
+      .toBeTruthy();
   },
 };
