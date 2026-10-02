@@ -104,35 +104,22 @@ describe("chromeColorFor", () => {
 
   // app.html's pre-paint script cannot import from this module — it runs
   // before any bundle exists — so the two copies of the colour can only be
-  // tied together by a test. Without it, changing a theme's colour here would
-  // leave the first paint (and therefore the toolbar, on a cold load) a
-  // different colour from every paint after hydration, which is the exact
-  // wrong-colour flash the script exists to prevent.
+  // tied together by a test.
   describe("agrees with the literals app.html has to hard-code", () => {
     const appHtml = readFileSync(
       fileURLToPath(new URL("./app.html", import.meta.url)),
       "utf8",
     );
 
-    it.each(["light", "dark"] as const)(
-      "uses the same %s colour in the pre-paint script",
-      (theme) => {
-        // The script's own ternary is `theme === "dark" ? … : …`, so the
-        // dark colour is the first literal and light the second.
-        const [dark, light] =
-          /theme === "dark" \? "(#[0-9A-F]{6})" : "(#[0-9A-F]{6})"/.exec(
-            appHtml,
-          )?.slice(1) ?? [];
-        expect(dark).toBe(chromeColorFor("dark"));
-        expect(light).toBe(chromeColorFor("light"));
-        expect([dark, light]).toContain(chromeColorFor(theme));
-      },
-    );
+    it("uses the same two colours in the pre-paint script's ternary", () => {
+      expect(appHtml).toContain(
+        `theme === "dark" ? "${chromeColorFor("dark")}" : "${
+          chromeColorFor("light")
+        }"`,
+      );
+    });
 
-    it("gives the static tag the dark colour, so a cold load is never light", () => {
-      // The tag's static value is what a browser reads before the script
-      // runs. Dark, because that is the fallback the script itself applies
-      // when it cannot resolve a stored selection.
+    it("gives the static tag the dark colour", () => {
       expect(appHtml).toContain(
         `<meta name="theme-color" content="${chromeColorFor("dark")}" />`,
       );
