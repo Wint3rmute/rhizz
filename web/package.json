@@ -29,6 +29,7 @@
     "@zag-js/tour": "^1.44.0",
     "d3-force": "^3.0.0",
     "daisyui": "^5.7.7",
+    "fuse.js": "^7.1.0",
     "marked": "^14.0.0",
     "rhizz": "file:../crates/rhizz-wasm/pkg/",
     "tailwindcss": "^4.3.3",

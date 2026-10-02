@@ -4,6 +4,165 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 109 — One Ctrl-P palette, for files and commands
+
+A single fuzzy-searchable palette for power users, built on a shell that
+knows nothing about projects, files or routes. Ctrl-P offers every
+workspace page *and* every file in the open project, in one list, with
+matched letters highlighted live.
+
+- **One chord, one list.** There were two palettes (Ctrl-P for files,
+  Ctrl-Shift-P for commands) and the split bought nothing: both are "go
+  somewhere in this project", and the user has to remember which of two
+  chords answers which question. `PaletteKind` is gone, so
+  `isPaletteShortcut` is a straight `Ctrl/Cmd-P` test and the shift branch
+  it needed is gone with it — a test pins that Ctrl-Shift-P now opens
+  nothing, so it is left to the browser rather than quietly claimed.
+
+- **A row's destination follows from what the file is, not from where you
+  are standing.** This is the part the cut forced, and it is a real
+  improvement rather than a compromise: a `.hcl` under `views/` is a
+  diagram and opens on the canvas; everything else opens in the editor.
+  One rule, applied anywhere. The old scope-by-page rule (`switcherScopeForPath`
+  reading the pathname's third segment) meant the same key offered views on
+  Modeling and files everywhere else — so what Ctrl-P did depended on
+  which page you were on, which is exactly the thing a "go to" is supposed
+  to make irrelevant. An e2e walks four pages and asserts the same rows are
+  offered on all of them.
+
+- **Views stopped being a second kind of thing.** They were listed twice:
+  once as files (`views/main.hcl`) and once as their own folder-qualified
+  command group (`main.hcl`). Now a view is a file, its destination is
+  computed from its path, and it appears exactly once. That took
+  `VIEWS_GROUP` and `viewPaths` out of existence.
+
+- **Commands come first**, so Enter on an untouched palette does the most
+  likely thing rather than opening whichever file sorts first — there is a
+  story (`CommandsComeFirst`) that exists only to say so.
+
+- **The shell is generic by construction, and that was the constraint.**
+  `components/palette/CommandPalette.svelte` takes a `PaletteItem[]` and
+  calls `item.action?.()` on the chosen one — it never imports `ProjectState`,
+  the VFS or `$app`, which is what the repo's "components never touch the
+  domain" rule asks for. All the app knowledge lives one layer down, in
+  `commands/PaletteHost.svelte`: it reads the project listing, builds rows
+  with `commands/`, and turns a chosen row back into a URL. The two
+  item builders (`fileSwitcher.ts`, `commandItems.ts`) are pure and
+  unit-tested; the host is the only place that knows a route exists.
+- **`PaletteItem` carries its own `action` rather than being looked up by
+  id on selection.** `id` is the `#each` key, not a wire format — parsing
+  `view:drone/engine.hcl` back into a path would have been a second,
+  untyped copy of the same knowledge.
+- **"Only with a project open" is true for free.** The host mounts in the
+  project layout, so there is no check of its own: outside a project there
+  is nothing to switch files within. The same placement is why it survives
+  the cross-page navigation a palette causes, and why embeds skip it (the
+  status bar makes the same call about chromeless surfaces).
+- **The chord is registered on the *capture* phase, and that is
+  load-bearing.** Monaco binds Ctrl/Cmd-P to its own quick-open and stops
+  the event bubbling out of the editor, so a window listener in the bubble
+  phase would silently not fire whenever the HCL editor has focus — exactly
+  where a file switcher is most wanted. The app-level palette takes the
+  chord; Monaco keeps its symbol search on Ctrl-Shift-O. The e2e asserts
+  Monaco's widget does *not* open over the palette, so a move back to the
+  bubble phase fails there instead of quietly leaving Ctrl-P dead on Code.
+- **Two fuse options were decided by measuring, not by reading the docs.**
+  `ignoreLocation` reads like the obvious knob for "a needle should match
+  anywhere in a path", but it scores every candidate identically, which
+  flattens the ranking users depend on: typing "m" led to `system.hcl`
+  (whatever the index listed first) instead of `main.hcl`. A test pins
+  that ordering. `findAllMatches` is on because the highlighting needs
+  *every* matched character — the default reports only the first run.
+  Fuse's Bitap search also matches within an edit-distance window rather
+  than as a free-floating subsequence, so "mh" never matches "main.hcl" at
+  any threshold; that is noted in the options' doc comment and covered by a
+  test that says so rather than leaving it to be rediscovered.
+- **One readdir call, and one path convention.** `readdir` reports each
+  entry's path relative to the directory it was called with, so reading
+  `views/` directly would hand back `main.hcl` where the files list hands
+  back `views/main.hcl` — two path conventions for the same rows, and an
+  item builder that had to know which one it got. Everything is read from
+  the project root and a row's label is the path that opens it, so the host
+  navigates from a chosen row with nothing but the label.
+- **The navbar's `NAV_LINKS` moved to `commands/workspacePages`**, so the
+  navbar and the palette's "Go to …" rows are rendered from one list. The
+  same reasoning the navbar already had for its own desktop/mobile
+  duplication.
+- **Opening is not the same as toggling.** The chord toggles, because
+  pressing it again is how you dismiss a palette you opened by muscle
+  memory; a button press does not, because clicking the button that opened
+  the palette should not be a second way to close it. The request signal
+  also names its target project, as the tour's already does — otherwise a
+  request raised in one project follows you into the next one you open.
+- **A shortcut nobody can discover is a shortcut only for the people who
+  wrote it**, so the navbar gains a magnifier button, visible only inside a
+  project. Its tooltip spells the chord the way the platform writes it
+  (`⌘P` on a Mac, `Ctrl+P` elsewhere) — a button that says "Ctrl" on a
+  Mac teaches the wrong keystroke.
+- **The palette does not dim or blur the page behind it.** It is summoned
+  from the editor and the canvas and dismissed back to exactly those, so a
+  scrim claims you have gone somewhere else — and costs a compositing pass
+  to draw. A `NoScrim` story asserts the *computed* styles, because the
+  class is the intent while daisyUI's own `.modal` background is what the
+  eye actually gets.
+- **The VRT caught a legibility bug before anyone else would have.** Marks
+  were `text-primary`, which on the *highlighted* row is the row's own
+  background: blue on blue. Unhighlighted rows keep the tint; the
+  highlighted one uses weight plus an underline in the colour the row
+  already sets.
+- **What it offers depends on the page — the one deliberate exception to
+  "one list everywhere".** Modeling and Explore are both "which diagram?",
+  so there the file section lists only the diagrams: a row for `system.hcl`
+  would open text where the user asked for a canvas. Code lists every file.
+  Inventory adds the model's own definitions as a third section beside the
+  two. This was tried the other way round first (one fixed list, on the
+  argument that a "go to" should not care where you are standing) and it is
+  worse: the palette is a shortcut *for the page you are on*, and the page
+  commands are always there as the way out, so nothing is trapped.
+- **The Inventory section carries only the definitions, and that is
+  measured, not assumed.** Inventory matches `/inventory/<label>` against
+  the model's `definitions` and falls back to the first row for anything it
+  does not recognise — so a row for a system or a protocol would navigate
+  and then silently open a *different* entity. Checked against the drone
+  example before writing any of it: 13 definitions are addressable, while
+  `systems()` returns 2 and `protocols()` 7 that are not. Its "Interfaces"
+  tab is also still a stub. Adding systems and protocols means Inventory
+  learning to address them first, which is a separate change.
+- **The model is compiled only when the section that needs it is on
+  offer**, and then kept — reopening the palette on the same page is
+  instant. That is a second compile alongside the status bar's, but it
+  happens on open and blocks nothing.
+- **Red/green**: 30 unit tests on the pure logic (range maths for the
+  highlight, Fuse ranking, the chord test, the view-or-file rule, the item
+  builders) and 16 Storybook stories — 9 on the shell, 7 driving the real
+  host over a real seeded project across all three page scopes. Eleven e2e cases over real projects
+  cover the chord, the search, Enter, arrow-key wrap-around, Escape, the
+  Monaco case, "the same rows on every page", "Ctrl-Shift-P opens
+  nothing", and "no project, no palette". Two of my own test expectations
+  were wrong about Fuse's inclusive range semantics and one caught a real
+  bug (a range wholly past a label's end was clamped onto its last
+  character instead of dropped); all three are fixed and the behaviour is
+  pinned.
+- **Not addressed**: the palette is skipped on `/embed/`, since an embed is
+  a chromeless iframe rather than a surface you navigate around in — the
+  same call the status bar already makes. And `PaletteItem.shortcut` has
+  no current user; it is part of the shell's vocabulary, not dead code,
+  but nothing needs it yet.
+- **VRT: 200 baselines, all matching.** Six came from the host's new
+  stories and 24 changed when the scrim went; the six captures for the
+  stories this change removed (the old per-palette ones) were deleted
+  rather than left to rot. The Navbar story that needs a project open is
+  tagged `no-vrt`: the static build has no `beforeEach`, and a loader
+  writes the state *after* the story renders (measured), so a baseline
+  there would read as "the project-scoped controls are invisible" — the
+  opposite of what the component does. The tour button has always been in
+  that position.
+- **Validation**: `just test` (cargo + 794 Vitest + 62 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just
+  build`, `just format` and the full VRT suite (200/200) all pass.
+
+---
+
 ## Task 108 — The node context menu creates a detail view when there isn't one
 
 Right-clicking a node in Modeling now offers "Create a detailed view" when the
