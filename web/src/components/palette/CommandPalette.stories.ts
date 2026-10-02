@@ -72,23 +72,35 @@ export const BrowseAll: Story = {
   },
 };
 
-// The palette is drawn over the page it was summoned from, and it must not
-// change how that page looks: no dimming scrim, no backdrop blur. A modal
-// you can still read the page through is a quick overlay; one that greys the
-// page out says "you are somewhere else now", which is a lie — the editor
-// and the canvas are right there, and dismissing the palette puts you back
-// exactly where you were.
+// The palette must not disturb the page it was summoned from, and the part
+// that is easy to get wrong is not the page but the *browser*: daisyUI's
+// `.modal` carries a `:root:has(&)` rule that reaches `<html>` the moment the
+// dialog opens, and with nothing pinning the browser's own toolbar colour it
+// re-inferred it — so the toolbar visibly jumped. Overriding the scrim's
+// colour, as this component used to, does not help: the rule still targets
+// the root.
 //
-// Asserted as computed styles rather than as class names, because the class
-// is the *intent* and the computed value is what the eye actually gets
-// (daisyUI's `.modal` sets its own background, which a `bg-transparent`
-// override has to beat).
+// So the assertion is on the absence of those classes, which is the part that
+// actually caused it, plus the two visible symptoms.
 export const NoScrim: Story = {
   play: async ({ canvasElement }) => {
     const backdrop = within(canvasElement).getByTestId("command-palette");
+    for (const daisyModalClass of ["modal", "modal-open", "modal-box"]) {
+      await expect(backdrop).not.toHaveClass(daisyModalClass);
+      await expect(
+        backdrop.querySelector(`.${daisyModalClass}`),
+      ).not.toBeInTheDocument();
+    }
     const style = getComputedStyle(backdrop);
     await expect(style.backdropFilter).toBe("none");
     await expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    // And the box still declares its own surface, so it reads as floating
+    // over the page without a scrim behind it.
+    const box = backdrop.querySelector("div");
+    if (box === null) throw new Error("palette box is missing");
+    await expect(getComputedStyle(box).backgroundColor).not.toBe(
+      "rgba(0, 0, 0, 0)",
+    );
   },
 };
 

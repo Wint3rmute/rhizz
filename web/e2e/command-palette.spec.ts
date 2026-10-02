@@ -205,3 +205,64 @@ test("arrow keys move the highlight and wrap around", async ({ page }) => {
   await page.keyboard.press("ArrowDown");
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
 });
+
+test("opening the palette does not move the browser's own colour", async ({ page }) => {
+  const id = await createNewProject(page, "E2E palette chrome");
+  await gotoProject(page, id, "code");
+  await expect(page.locator(".monaco-editor")).toBeVisible();
+
+  // The browser paints its toolbar from `<meta name="theme-color">`. Without
+  // one it infers the colour from painted content and re-infers on every
+  // repaint, so opening a full-viewport dialog visibly shifts it. Asserted
+  // through <html>'s reported background, which is what that inference moves.
+  const themeColor = await page.evaluate(() =>
+    document.querySelector('meta[name="theme-color"]')?.getAttribute("content")
+  );
+  expect(themeColor, "theme-color meta is present").toMatch(/^#[0-9A-F]{6}$/i);
+
+  const rootBackground = () =>
+    page.evaluate(() =>
+      getComputedStyle(document.documentElement).backgroundColor
+    );
+
+  const closed = await rootBackground();
+  await page.keyboard.press("Control+p");
+  await expect(page.getByTestId(PALETTE)).toBeVisible();
+  await page.waitForTimeout(500);
+  const open = await rootBackground();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId(PALETTE)).toHaveCount(0);
+
+  expect(open, "root background must not repaint on open").toBe(closed);
+});
+
+test("the toolbar colour follows the theme", async ({ page }) => {
+  await page.goto("/");
+  // The navbar renders the toggle a beat after load, and it is the same
+  // render pass that applies the theme — so wait for it before reading the
+  // colour it produced, or this reads the static default instead.
+  const toggle = page.getByTitle(/toggle light\/dark theme/i);
+  await expect(toggle).toBeVisible();
+
+  const applied = () =>
+    page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme ?? null,
+      chrome: document
+        .querySelector('meta[name="theme-color"]')
+        ?.getAttribute("content") ?? null,
+    }));
+
+  const start = await applied();
+  expect(start.chrome).toBe(start.theme === "dark" ? "#1D232A" : "#FFFFFF");
+
+  // Toggling pins the opposite theme, and the toolbar colour has to follow
+  // it — a toolbar stuck on the other theme's colour is the same class of
+  // bug as one that jumps.
+  await toggle.click();
+  await expect
+    .poll(async () => (await applied()).theme)
+    .not.toBe(start.theme);
+  const after = await applied();
+  expect(after.chrome).toBe(after.theme === "dark" ? "#1D232A" : "#FFFFFF");
+  expect(after.chrome).not.toBe(start.chrome);
+});

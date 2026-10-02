@@ -158,15 +158,21 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
 <svelte:window onkeydown={handleWindowKeyDown} />
 
 {#if isOpen}
-  <!-- No scrim and no backdrop blur, on purpose: the palette is drawn over
-       the page you summoned it from and leaves that page exactly as it was.
-       Dimming it would claim you had gone somewhere else, when the editor
-       and the canvas are still right there. The full-bleed wrapper is kept
-       only so a click outside the box still dismisses, and
-       `bg-transparent`/`backdrop-blur-none` beat daisyUI's `.modal`
-       defaults rather than relying on not declaring anything. -->
+  <!-- Deliberately not daisyUI's `.modal` / `.modal-box`, even though this
+       is a dialog. Those bring a scrim, a background-colour transition and a
+       `:root:has(&)` rule that reaches the `<html>` element exactly when the
+       dialog opens — and with no `theme-color` for the browser to read
+       instead, that made the browser re-infer its own toolbar colour and
+       visibly jump. Overriding the scrim's colour (which is what this used
+       to do) is not enough: the rule still targets the root.
+
+       So the wrapper states what it needs — full-bleed, click-to-dismiss,
+       on top — and nothing else. The box declares its own background,
+       border, radius, shadow *and its 1.5rem padding*, all of which it was
+       borrowing from `.modal-box`; the padding in particular was never
+       written down here, and the VRT caught it the moment the class went. -->
   <div
-  class="modal modal-open z-50 bg-transparent backdrop-blur-none flex items-start justify-center pt-[12vh] cursor-pointer"
+  class="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] cursor-pointer"
   role="dialog"
   aria-modal="true"
   aria-label={title}
@@ -178,7 +184,7 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
     }}
 >
   <div
-    class="modal-box w-full max-w-xl max-h-[70vh] bg-base-100 border border-base-300 shadow-2xl rounded-box flex flex-col overflow-hidden cursor-default"
+    class="w-full max-w-xl max-h-[70vh] p-6 bg-base-100 border border-base-300 shadow-2xl rounded-box flex flex-col overflow-hidden cursor-default"
   >
       <div
         class="flex items-center gap-2 px-4 py-2 border-b border-base-300 text-sm font-semibold text-base-content/70"
