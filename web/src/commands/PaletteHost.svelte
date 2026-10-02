@@ -74,25 +74,10 @@ function model(sources: Source[]): RawModelPayload | undefined {
 // the page changes. `items` reads `scope`, so an inline compile would re-run
 // on each navigation for a payload that had not changed. This derived reads
 // only the sources and the warning level, so it recompiles exactly when the
-// model it describes has.
+// model it describes has — `items` may read `scope` freely without that
+// costing a recompile.
 let inventoryModel = $derived(
   modelSources === null ? undefined : model(modelSources),
-);
-
-// The entity rows, or none on any page but Inventory. Its own derived for the
-// same reason: this is where the scope check belongs, so that reaching a page
-// that drops the section costs a slice rather than a recompile.
-let entityItems = $derived(
-  scope.inventory && inventoryModel !== undefined
-    ? inventoryItems(inventoryEntities(inventoryModel), (label) => {
-      void goto(
-        resolve("/projects/[id]/inventory/[...label]", {
-          id: projectId,
-          label,
-        }),
-      );
-    })
-    : [],
 );
 
 // Commands first, then the page's files, then (on Inventory) its entities.
@@ -111,7 +96,16 @@ let items = $derived([
     // is diagrams and nothing else.
     group: scope.files === "views" ? VIEWS_GROUP : FILES_GROUP,
   })),
-  ...entityItems,
+  ...(scope.inventory && inventoryModel !== undefined
+    ? inventoryItems(inventoryEntities(inventoryModel), (label) => {
+      void goto(
+        resolve("/projects/[id]/inventory/[...label]", {
+          id: projectId,
+          label,
+        }),
+      );
+    })
+    : []),
 ]);
 
 // The listing is read fresh on every open rather than kept in step with the
