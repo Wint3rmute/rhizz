@@ -1,6 +1,11 @@
 <script lang="ts">
-// Bottom detail pane for the selected definition: tabbed
+// Right-hand detail pane for the selected definition: tabbed
 // Full name / Ports (N) / Requirements (placeholder) / Metadata views.
+//
+// It is a column of the workspace, not a strip under the canvas: the parent
+// row gives it half the width (`md:` and up) and drops it back below the
+// diagram on narrow screens, which is why the border side is switched rather
+// than simply drawn on all four.
 //
 // The Full name tab shows the definition's `docs/<label>.md` documentation
 // (rendered Markdown) with a viewer/editor toggle; saving writes the file
@@ -72,7 +77,7 @@ function flattenTags(def: InventoryDefinition): string[] {
 </script>
 
 <div
-  class="border-t border-base-300 bg-base-100 flex flex-col min-h-[180px]"
+  class="border-base-300 bg-base-100 flex flex-col min-h-[180px] md:min-h-0 md:w-1/2 md:min-w-0 border-t md:border-t-0 md:border-l"
   data-testid="inventory-detail-pane"
 >
   {#if !definition}
@@ -104,7 +109,7 @@ function flattenTags(def: InventoryDefinition): string[] {
       {/each}
     </div>
 
-    <div class="flex-1 overflow-y-auto p-4 text-sm">
+    <div class="flex-1 min-h-0 overflow-auto p-4 text-sm">
       {#if activeTab === "Full name"}
         {#if docMode === "edit"}
           <textarea

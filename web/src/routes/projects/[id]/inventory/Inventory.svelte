@@ -382,10 +382,14 @@ async function handleCreateView(): Promise<void> {
       </div>
     </aside>
 
-    <!-- Main column: diagram preview + detail pane -->
-    <div class="flex flex-col flex-1 min-w-0 min-h-0">
+    <!-- Main row: the diagram preview and the detail pane share it, the pane
+         to the right of the diagram and about as wide (DetailPane takes half
+         the row; the diagram absorbs the rest). Below `md` they stack, since
+         three side-by-side columns have nowhere to go on a phone. -->
+    <div class="flex flex-col md:flex-row flex-1 min-w-0 min-h-0">
       <div
-        class="relative flex-1 min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
+        data-testid="inventory-diagram"
+        class="relative flex-1 min-w-0 min-h-[320px] md:min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
       >
         {#if selectedDefinition}
           <DiagramViewer
