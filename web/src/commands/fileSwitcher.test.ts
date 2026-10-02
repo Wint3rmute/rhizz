@@ -79,9 +79,12 @@ describe("fileTargetFor", () => {
   });
 });
 
+const ALL = { files: "all", inventory: false } as const;
+const VIEWS = { files: "views", inventory: false } as const;
+
 describe("fileItems", () => {
-  it("lists every project file, once", () => {
-    expect(fileItems(ENTRIES).map((i) => i.label)).toEqual([
+  it("lists every project file when the scope is all", () => {
+    expect(fileItems(ENTRIES, ALL).map((i) => i.label)).toEqual([
       "system.hcl",
       "views/drone/engine.hcl",
       "views/main.hcl",
@@ -89,8 +92,33 @@ describe("fileItems", () => {
     ]);
   });
 
+  it("narrows to the diagrams when the scope is views", () => {
+    // Modeling and Explore ask "which diagram?", so a row for the system
+    // file or a doc would open text where the user wanted a canvas.
+    expect(fileItems(ENTRIES, VIEWS).map((i) => i.label)).toEqual([
+      "views/drone/engine.hcl",
+      "views/main.hcl",
+    ]);
+  });
+
+  it("drops a non-HCL file under views/ in the views scope", () => {
+    // views/notes.md is a file that happens to sit in that folder; it is not
+    // a diagram and has no canvas page.
+    const labels = fileItems(ENTRIES, VIEWS).map((i) => i.label);
+    expect(labels).not.toContain("views/notes.md");
+  });
+
+  it("still labels a scoped view by its real path, so it can still be opened", () => {
+    // One label convention in both scopes: the project path. A shorter
+    // "main.hcl" would need a second path convention and a target function
+    // that had to know which scope produced it.
+    expect(fileTargetFor("views/main.hcl").kind).toBe("view");
+  });
+
   it("never lists a directory", () => {
-    expect(fileItems(ENTRIES).map((i) => i.label)).not.toContain(
+    const labels = fileItems(ENTRIES, ALL).map((i) => i.label);
+    expect(labels).not.toContain(VIEW_LAYOUT_DIR);
+    expect(fileItems(ENTRIES, VIEWS).map((i) => i.label)).not.toContain(
       VIEW_LAYOUT_DIR,
     );
   });
@@ -98,23 +126,27 @@ describe("fileItems", () => {
   it("keeps the project-relative path as the label, which is what it opens", () => {
     // One list, one rule: a row's label is the path fileTargetFor reads, so
     // a host can navigate from a chosen row with nothing but its label.
-    for (const item of fileItems(ENTRIES)) {
+    for (const item of fileItems(ENTRIES, ALL)) {
       expect(fileTargetFor(item.label).kind).toBeTypeOf("string");
     }
     expect(fileTargetFor("views/main.hcl").kind).toBe("view");
   });
 
   it("gives every item a distinct id, since the list is keyed on it", () => {
-    const ids = fileItems(ENTRIES).map((i) => i.id);
+    const ids = fileItems(ENTRIES, ALL).map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("sorts by label, so the untyped list is predictable", () => {
     // readdir's order is a store implementation detail; a list that
     // reshuffles between opens is unusable.
-    expect(fileItems([...ENTRIES].reverse()).map((i) => i.label)).toEqual(
-      fileItems(ENTRIES).map((i) => i.label),
+    expect(fileItems([...ENTRIES].reverse(), ALL).map((i) => i.label)).toEqual(
+      fileItems(ENTRIES, ALL).map((i) => i.label),
     );
+    expect(fileItems([...ENTRIES].reverse(), VIEWS).map((i) => i.label))
+      .toEqual(
+        fileItems(ENTRIES, VIEWS).map((i) => i.label),
+      );
   });
 });
 
@@ -145,13 +177,17 @@ describe("readProjectEntries", () => {
   });
 
   it("lists every file of a real project", async () => {
-    expect(fileItems(await readProjectEntries(fs)).map((i) => i.label)).toEqual(
-      [
-        "docs/engine.md",
-        "system.hcl",
-        "views/drone/engine.hcl",
-        "views/main.hcl",
-      ],
-    );
+    const entries = await readProjectEntries(fs);
+    expect(fileItems(entries, ALL).map((i) => i.label)).toEqual([
+      "docs/engine.md",
+      "system.hcl",
+      "views/drone/engine.hcl",
+      "views/main.hcl",
+    ]);
+    // And narrowed, the same project offers only its two diagrams.
+    expect(fileItems(entries, VIEWS).map((i) => i.label)).toEqual([
+      "views/drone/engine.hcl",
+      "views/main.hcl",
+    ]);
   });
 });

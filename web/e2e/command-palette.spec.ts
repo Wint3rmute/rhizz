@@ -26,6 +26,13 @@ function options(page: Page, text: string) {
     .filter({ hasText: text });
 }
 
+// A section heading. Exact, and scoped to the palette: "Views" is also the
+// start of every `views/*.hcl` row, and "Inventory" is also inside the
+// "Go to Inventory" command — a substring match finds six of the wrong ones.
+function section(page: Page, name: string) {
+  return page.getByTestId(PALETTE).getByText(name, { exact: true });
+}
+
 test("Ctrl-P offers the commands and the files in one list", async ({ page }) => {
   const id = await createFromExample(
     page,
@@ -45,31 +52,97 @@ test("Ctrl-P offers the commands and the files in one list", async ({ page }) =>
   ).toBeVisible();
   await expect(options(page, "system.hcl")).toHaveCount(1);
   await expect(options(page, "views/main.hcl")).toHaveCount(1);
-  // Exact, because the footer carries an "↑↓ navigate" hint too.
-  await expect(
-    palette.getByText("Navigate", { exact: true }),
-  ).toBeVisible();
-  await expect(palette.getByText("Files", { exact: true })).toBeVisible();
+  // Both groups are drawn, so the list reads as "both of these" rather
+  // than as one list that happens to contain some files.
+  await expect(section(page, "Navigate")).toBeVisible();
+  await expect(section(page, "Files")).toBeVisible();
+  // And the entities section is not: this is not the inventory page.
+  await expect(section(page, "Inventory")).not.toBeVisible();
 });
 
-test("the same rows are offered on every page", async ({ page }) => {
+test("Modeling and Explore offer only the diagrams", async ({ page }) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
-    "E2E palette everywhere",
+    "E2E palette views scope",
   );
 
-  // What the palette offers does not depend on which page summoned it: one
-  // chord, one list, the whole project from anywhere. This used to narrow to
-  // views on Modeling/Explore, which meant the same key offered different
-  // things depending on where you were standing.
-  for (const path of ["code", "modeling/main.hcl", "explore", "inventory"]) {
+  // Both pages draw diagrams, so both answer "which diagram?" — a row for
+  // the system file would open text where the user asked for a canvas.
+  for (const path of ["modeling/main.hcl", "explore"]) {
     await gotoProject(page, id, path);
     await page.keyboard.press("Control+p");
-    await expect(options(page, "system.hcl")).toHaveCount(1);
-    await expect(options(page, "views/main.hcl")).toHaveCount(1);
+    // Five views in the drone example, and no root file among them.
+    await expect(options(page, "views/")).toHaveCount(5);
+    await expect(options(page, "system.hcl")).toHaveCount(0);
+    await expect(section(page, "Views")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByTestId(PALETTE)).toHaveCount(0);
+  }
+});
+
+test("Code offers every file", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette files scope",
+  );
+  await gotoProject(page, id, "code");
+  await page.keyboard.press("Control+p");
+  // The same project, but now the root file is on offer as well as the
+  // views — Code is about files, so it lists all of them.
+  await expect(options(page, "system.hcl")).toHaveCount(1);
+  await expect(options(page, "views/main.hcl")).toHaveCount(1);
+  await expect(section(page, "Files")).toBeVisible();
+});
+
+test("Inventory adds the model's definitions, and opens one", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette inventory",
+  );
+  await gotoProject(page, id, "inventory");
+  await expect(
+    page.getByTestId("inventory-tree").or(page.locator("aside")).first(),
+  )
+    .toBeVisible();
+
+  await page.keyboard.press("Control+p");
+  const palette = page.getByTestId(PALETTE);
+  // A third section, beside the page commands and the files.
+  await expect(section(page, "Navigate")).toBeVisible();
+  await expect(section(page, "Files")).toBeVisible();
+  await expect(section(page, "Inventory")).toBeVisible();
+  // The files section is still there alongside it.
+  await expect(options(page, "system.hcl")).toHaveCount(1);
+
+  // Searching by a definition's full name finds it — that text is not in
+  // the label, only searchable, and drawn as the row's subtitle. The drone
+  // example calls it "BMP390 barometric pressure sensor".
+  await page.keyboard.type("barometric pressure");
+  const row = palette.getByRole("option", { name: /^barometer\b/ });
+  await expect(row).toBeVisible();
+  await page.keyboard.press("Enter");
+
+  // Choosing one lands on that entity in Inventory, addressed by its label.
+  await expect(page).toHaveURL(`/projects/${id}/inventory/barometer`);
+  await expect(page.getByTestId(PALETTE)).toHaveCount(0);
+});
+
+test("the inventory section appears only on the inventory page", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette inventory scope",
+  );
+  // The drone example declares 13 definitions; they are only ever offered
+  // where they can actually be opened.
+  for (const path of ["overview", "code", "modeling/main.hcl"]) {
+    await gotoProject(page, id, path);
+    await page.keyboard.press("Control+p");
+    await expect(section(page, "Inventory")).not.toBeVisible();
+    await expect(options(page, "battery")).toHaveCount(0);
+    await page.keyboard.press("Escape");
   }
 });
 

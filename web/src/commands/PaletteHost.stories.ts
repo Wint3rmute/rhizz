@@ -116,6 +116,8 @@ export const CommandsAndFilesInOneList: Story = {
     // than as one list that happens to contain some files.
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
     await expect(canvas.getByText("Files")).toBeInTheDocument();
+    // And the entities section is not: this is not the inventory page.
+    await expect(canvas.queryByText("Inventory")).not.toBeInTheDocument();
   },
 };
 
@@ -131,7 +133,37 @@ export const CommandsComeFirst: Story = {
   },
 };
 
+// Modeling and Explore both draw diagrams, so there the palette offers
+// diagrams and nothing else: a row for the system file would open text
+// where the user asked for a canvas.
+export const DiagramsOnlyOnModeling: Story = {
+  args: { pathname: "/projects/p/modeling/main.hcl" },
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    // Exact names: the page commands are always offered alongside whatever
+    // the file section holds, so this is about which *files* appear.
+    await expect(
+      await canvas.findByRole("option", { name: "views/drone/engine.hcl" }),
+    ).toBeInTheDocument();
+    await expect(
+      await canvas.findByRole("option", { name: "views/main.hcl" }),
+    ).toBeInTheDocument();
+    // The fixture's root system file and its doc are not diagrams.
+    await expect(
+      canvas.queryByRole("option", { name: "main.hcl" }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("option", { name: "docs/sensor.md" }),
+    ).not.toBeInTheDocument();
+    // The section is named for what it lists.
+    await expect(canvas.getByText("Views")).toBeInTheDocument();
+    await expect(canvas.queryByText("Files")).not.toBeInTheDocument();
+  },
+};
+
 export const FindsAView: Story = {
+  args: { pathname: "/projects/p/modeling/main.hcl" },
   play: async ({ canvasElement }) => {
     await openVia();
     const canvas = within(canvasElement);
@@ -140,7 +172,46 @@ export const FindsAView: Story = {
     // A view is a file now, so it is found by its project path — and
     // opening it lands on the canvas, not in the text editor.
     await expect(
-      await canvas.findByRole("option", { name: /views\/drone\/engine\.hcl/ }),
+      await canvas.findByRole("option", { name: "views/drone/engine.hcl" }),
+    ).toBeInTheDocument();
+    await expect(canvas.getAllByRole("option")).toHaveLength(1);
+  },
+};
+
+// Inventory gets the model's own definitions alongside the files: the page
+// is about entities, so they are the thing worth searching there. Kept as
+// two stories so each baseline shows one state — this one the three
+// sections side by side, which is the thing a screenshot can actually pin.
+export const InventorySectionOnInventory: Story = {
+  args: { pathname: "/projects/p/inventory" },
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    // The fixture declares one top-level definition. Anchored, because the
+    // row's accessible name includes its full name ("sensor Reads the
+    // world") and "docs/sensor.md" in the files section also holds "sensor".
+    await expect(
+      await canvas.findByRole("option", { name: /^sensor\b/ }),
+    ).toBeInTheDocument();
+    await expect(canvas.getByText("Inventory")).toBeInTheDocument();
+    // All three sections at once: the commands, the files, and the
+    // entities — the palette is one list, not three palettes.
+    await expect(canvas.getByText("Navigate")).toBeInTheDocument();
+    await expect(canvas.getByText("Files")).toBeInTheDocument();
+  },
+};
+
+export const InventoryFindsByFullName: Story = {
+  args: { pathname: "/projects/p/inventory" },
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    const input = await canvas.findByTestId("command-palette-input");
+    // A definition's full name is searchable but is not its label — which
+    // is the whole reason the row carries a `hint` for it.
+    await userEvent.type(input, "reads the world");
+    await expect(
+      await canvas.findByRole("option", { name: /^sensor\b/ }),
     ).toBeInTheDocument();
     await expect(canvas.getAllByRole("option")).toHaveLength(1);
   },

@@ -14,6 +14,7 @@
 import type { PaletteItem } from "../components/palette/commandPalette";
 import { VIEW_LAYOUT_DIR } from "../routes/projects/[id]/modeling/persistence";
 import type { Dirent, ProjectFs } from "../vfs/fs";
+import type { PaletteScope } from "./paletteScope";
 
 /**
  * Where a chosen file takes the user. A view is addressed by its path
@@ -41,11 +42,21 @@ export function fileTargetFor(path: string): FileTarget {
  * — which is also exactly what `fileTargetFor` reads, so a host can
  * navigate from a chosen row by handing that label straight back.
  *
+ * Narrowed to the diagrams in the `views` scope, which is what the pages
+ * that draw diagrams ask for. The label stays the full project path in both
+ * scopes on purpose: a shorter `main.hcl` there would mean a second path
+ * convention and a `fileTargetFor` that had to know which scope produced the
+ * row — the confusion that a per-scope listing already caused once.
+ *
  * Directories never appear: you switch to a file, not to a folder.
  */
-export function fileItems(entries: readonly Dirent[]): PaletteItem[] {
+export function fileItems(
+  entries: readonly Dirent[],
+  scope: PaletteScope,
+): PaletteItem[] {
   return entries
     .filter((entry) => entry.isFile())
+    .filter((entry) => scope.files === "all" || isViewPath(entry.path))
     .map<PaletteItem>((entry) => ({
       id: `file:${entry.path}`,
       label: entry.path,
