@@ -16,6 +16,24 @@ How to work on this file:
 
 ---
 
+## Task <N> - When searching in inventory/ don't display views/ or docs/
+
+When using the command palette in inventory/ only the usual "Go to <subpage>" +
+"Go to component <name>" should be displayed, no other search options.
+
+## Task <N> - Fuzzy search should be more permissive
+
+I have a component named "MPS". I navigate to inventory/ open the command palette and type in "comp MPS",
+which is a substring of "Go to component MPS", one of options in the palette.
+
+Expected behavior: "Go to component MPS" lights up in the search results.
+
+Actual behavior: Nothing shows in search results.
+
+Please fix this. I believe this has to do with matching options of the fuzzy finder.
+
+Similar problem "goover" shows no results, while it contains characters from "go to overview", another palette option.
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
