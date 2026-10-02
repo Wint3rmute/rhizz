@@ -11,23 +11,15 @@ let {
   value = $bindable(),
   language = "hcl",
   options = {},
-  editor = $bindable(undefined),
-  height = "24rem",
 }: {
   value: string;
   language?: string;
   options?: monaco.editor.IStandaloneEditorConstructionOptions;
-  editor?: monaco.editor.IStandaloneCodeEditor | undefined;
-  /** CSS height of the editor box. */
-  height?: string;
 } = $props();
 </script>
 
 <div class="p-4">
-  <div
-    class="overflow-hidden rounded border border-base-300"
-    style:height={height}
-  >
-    <MonacoEditor bind:value {language} {options} bind:editor />
+  <div class="h-96 overflow-hidden rounded border border-base-300">
+    <MonacoEditor bind:value {language} {options} />
   </div>
 </div>
