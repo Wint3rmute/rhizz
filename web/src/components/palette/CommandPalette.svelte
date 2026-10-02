@@ -159,20 +159,21 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
 
 {#if isOpen}
   <!-- Deliberately not daisyUI's `.modal` / `.modal-box`, even though this
-       is a dialog. Those bring a scrim, a background-colour transition and a
+       is a dialog. Those bring a background-colour transition and a
        `:root:has(&)` rule that reaches the `<html>` element exactly when the
        dialog opens — and with no `theme-color` for the browser to read
        instead, that made the browser re-infer its own toolbar colour and
-       visibly jump. Overriding the scrim's colour (which is what this used
-       to do) is not enough: the rule still targets the root.
+       visibly jump. The scrim on its own was never the problem; borrowing
+       it from a component that also targets the root was.
 
        So the wrapper states what it needs — full-bleed, click-to-dismiss,
-       on top — and nothing else. The box declares its own background,
-       border, radius, shadow *and its 1.5rem padding*, all of which it was
-       borrowing from `.modal-box`; the padding in particular was never
-       written down here, and the VRT caught it the moment the class went. -->
+       on top, and a darkening layer — and nothing else. The box declares its
+       own background, border, radius, shadow *and its 1.5rem padding*, all of
+       which it was borrowing from `.modal-box`; the padding in particular
+       was never written down here, and the VRT caught it the moment the class
+       went. -->
   <div
-  class="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] cursor-pointer"
+  class="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] cursor-pointer bg-black/60"
   role="dialog"
   aria-modal="true"
   aria-label={title}
