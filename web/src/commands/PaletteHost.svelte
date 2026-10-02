@@ -43,17 +43,57 @@ let {
 
 let open = $state(false);
 let entries = $state<Dirent[]>([]);
-// The compiled model, held only once the palette has actually needed it —
-// see `loadInventory`. Null means "not loaded yet", which is also the state
-// on every page that does not offer the inventory section at all.
+// The model, read only once the palette has actually needed it — see `show`.
+// Null means "not read yet", which is also the standing state on every page
+// that does not offer the inventory section.
 let modelSources = $state<Source[] | null>(null);
-let loading = $state(false);
 
 // Which page you are on decides what is worth offering — the diagrams on
 // Modeling, every file on Code, and the model's own definitions alongside the
 // files on Inventory. Re-read on every navigation rather than captured at
 // mount, because the host outlives every page inside it.
 let scope = $derived(paletteScopeForPath(pathname));
+
+const FILES_GROUP = "Files";
+const VIEWS_GROUP = "Views";
+
+// The model, compiled the same way every page compiles it (see
+// readProjectSources / compile_system) and read as the same raw payload
+// Inventory reads, so the two can never disagree about what a definition is.
+// Undefined when the project does not compile — which leaves the section
+// empty rather than wrong.
+function model(sources: Source[]): RawModelPayload | undefined {
+  const compiled = compile_system(sources, getWarningLevel()).model();
+  return compiled === undefined
+    ? undefined
+    : (compiled.to_js() as RawModelPayload);
+}
+
+// Compiled on its own rather than inline in `items`, because a compile is the
+// expensive half of opening this palette and must not be repeated every time
+// the page changes. `items` reads `scope`, so an inline compile would re-run
+// on each navigation for a payload that had not changed. This derived reads
+// only the sources and the warning level, so it recompiles exactly when the
+// model it describes has.
+let inventoryModel = $derived(
+  modelSources === null ? undefined : model(modelSources),
+);
+
+// The entity rows, or none on any page but Inventory. Its own derived for the
+// same reason: this is where the scope check belongs, so that reaching a page
+// that drops the section costs a slice rather than a recompile.
+let entityItems = $derived(
+  scope.inventory && inventoryModel !== undefined
+    ? inventoryItems(inventoryEntities(inventoryModel), (label) => {
+      void goto(
+        resolve("/projects/[id]/inventory/[...label]", {
+          id: projectId,
+          label,
+        }),
+      );
+    })
+    : [],
+);
 
 // Commands first, then the page's files, then (on Inventory) its entities.
 // That is the order of the questions the palette answers — "where can I
@@ -62,7 +102,6 @@ let scope = $derived(paletteScopeForPath(pathname));
 // whichever row happens to sort first.
 let items = $derived([
   ...commandItems((pageId) => {
-    close();
     const target = WORKSPACE_PAGES.find((page) => page.id === pageId);
     if (target !== undefined) void goto(target.href(projectId));
   }),
@@ -72,33 +111,8 @@ let items = $derived([
     // is diagrams and nothing else.
     group: scope.files === "views" ? VIEWS_GROUP : FILES_GROUP,
   })),
-  ...(scope.inventory && modelSources !== null
-    ? inventoryItems(inventoryEntities(model(modelSources)), (label) => {
-      close();
-      void goto(
-        resolve("/projects/[id]/inventory/[...label]", {
-          id: projectId,
-          label,
-        }),
-      );
-    })
-    : []),
+  ...entityItems,
 ]);
-
-const FILES_GROUP = "Files";
-const VIEWS_GROUP = "Views";
-
-// The model, compiled the same way every page compiles it (see
-// readProjectSources / compile_system) and read as the same raw payload
-// Inventory reads, so the two can never disagree about what a definition is.
-// Only ever reached on Inventory, and undefined when the project does not
-// compile — which leaves the section empty rather than wrong.
-function model(sources: Source[]): RawModelPayload | undefined {
-  const compiled = compile_system(sources, getWarningLevel()).model();
-  return compiled === undefined
-    ? undefined
-    : (compiled.to_js() as RawModelPayload);
-}
 
 // The listing is read fresh on every open rather than kept in step with the
 // filesystem: a file created on the Code page and the palette opened on the
@@ -117,7 +131,6 @@ async function show(
     return;
   }
   open = true;
-  loading = true;
   try {
     const fs = openProjectFs(projectStore, projectId);
     entries = await readProjectEntries(fs);
@@ -134,23 +147,30 @@ async function show(
     // truthful answer and beats a dialog that never appears.
     entries = [];
   }
-  loading = false;
 }
 
 function close(): void {
   open = false;
 }
 
+// The one place that closes. It used to be closed here *and* again inside
+// each row's own action, which meant every command and entity row closed
+// twice — harmless, but it left the rule ambiguous: is closing this handler's
+// job or the row's? It is the handler's, because a file row has no action at
+// all and still has to close.
+//
+// Closing before the action runs (rather than after) also means the palette
+// is already gone by the time navigation starts, so a slow `goto` cannot
+// leave a stale palette on screen over the page it is navigating to.
 function handleSelect(item: PaletteItem): void {
+  close();
   // A command row carries its own action (it knows its page); a file row is
   // just a path, and its destination follows from what the file is.
   if (item.action !== undefined) {
-    close();
     item.action();
     return;
   }
   const target = fileTargetFor(item.label);
-  close();
   if (target.kind === "view") {
     void goto(
       resolve("/projects/[id]/modeling/[...view]", {
@@ -208,7 +228,6 @@ onMount(() => {
   title="Go to"
   placeholder="Search files and commands…"
   emptyMessage="No matching files or commands"
-  {loading}
   onselect={handleSelect}
   onclose={close}
 />
