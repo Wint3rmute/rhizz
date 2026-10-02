@@ -53,3 +53,20 @@ export function resolveTheme(
 export function nextSelectionOnToggle(resolved: ResolvedTheme): ThemeSelection {
   return resolved === "dark" ? "light" : "dark";
 }
+
+/**
+ * The colour the browser paints its own chrome (toolbar, address bar) for a
+ * theme — i.e. the page's own background, so the two read as one surface.
+ *
+ * Without a `<meta name="theme-color">` the browser infers this from painted
+ * content instead, and re-infers on every repaint — which is how opening the
+ * palette could shift the toolbar. Pinning it removes the inference.
+ *
+ * These are daisyUI's own `--color-base-100` per theme, read off the built
+ * stylesheet and converted by pixel readback. Literals rather than read from
+ * the CSS custom property because a `<meta>` `content` has to be a literal
+ * colour string, and `#RRGGBB` is the one form every browser accepts.
+ */
+export function chromeColorFor(theme: ResolvedTheme): string {
+  return theme === "dark" ? "#1D232A" : "#FFFFFF";
+}

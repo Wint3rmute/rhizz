@@ -110,6 +110,7 @@ export default ts.config(
       "**/inventory/InventoryPage.stories.ts",
       "**/components/Navbar.stories.ts",
       "**/components/DiagnosticsStatusBar.stories.ts",
+      "**/commands/PaletteHost.stories.ts",
       "**/vfs/compile.test.ts",
       "**/modeling/ComponentHierarchyTree.stories.ts",
       "**/modeling/DiagramPage.stories.ts",
