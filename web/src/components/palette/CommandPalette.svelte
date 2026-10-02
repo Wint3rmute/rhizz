@@ -293,14 +293,7 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
                   ? 'opacity-70'
                   : 'text-base-content/50'}">{row.item.detail}</span>
             {/if}
-            {#if row.item.shortcut}
-              <kbd
-                class="ml-auto shrink-0 rounded border border-current/20 px-1.5 py-0.5 font-mono text-[11px] opacity-60"
-              >
-                {row.item.shortcut}
-              </kbd>
-            {/if}
-          </li>
+            </li>
         {/each}
       </ul>
 

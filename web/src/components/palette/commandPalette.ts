@@ -24,8 +24,6 @@ export interface PaletteItem {
   hint?: string;
   /** Section heading, drawn above the first row of each group. */
   group?: string;
-  /** Right-aligned monospace chip, e.g. "Ctrl+Shift+P". */
-  shortcut?: string;
   /** Leading glyph shown before the label (usually an emoji). */
   icon?: string;
   /**
