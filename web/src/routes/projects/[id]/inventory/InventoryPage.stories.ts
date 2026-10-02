@@ -251,3 +251,33 @@ export const DeepLinkedEntity: Story = {
     await expect(canvas.getByTestId("inventory-empty-diagram")).toBeTruthy();
   },
 };
+
+// The detail pane is a column beside the diagram preview, not a strip under
+// it. That arrangement is a `md:` one, and the Vitest story browser is ~414px
+// wide — `md:` never applies here — so the side-by-side geometry cannot be
+// measured in a story: it is pinned by this file's VRT baselines (1280 wide)
+// and by the e2e spec, which runs at Playwright's desktop default.
+//
+// What *is* measurable is the narrow fallback: below `md` the pane goes back
+// under the diagram. Asserted as computed flex-direction on the shared row
+// plus the two rects not overlapping, so neither can drift on its own — a pane
+// that kept a fixed width would still be beside the diagram without changing
+// what the row says, and vice versa.
+export const DetailPaneStacksBelowTheDiagram: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const diagram = await canvas.findByTestId("inventory-diagram");
+    const pane = canvas.getByTestId("inventory-detail-pane");
+    const row = diagram.parentElement;
+    if (!row) {
+      throw new Error("the diagram preview should sit in the main row");
+    }
+
+    await expect(getComputedStyle(row).flexDirection).toBe("column");
+    // The 1px slack absorbs sub-pixel rounding of the stacked heights.
+    await expect(pane.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      diagram.getBoundingClientRect().bottom - 1,
+    );
+  },
+};
