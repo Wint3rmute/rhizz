@@ -69,8 +69,7 @@ describe("labelSegments", () => {
       { text: "ab", matched: false },
     ]);
   });
-
-  });
+});
 
 describe("wrapIndex", () => {
   it("wraps forward past the end", () => {
