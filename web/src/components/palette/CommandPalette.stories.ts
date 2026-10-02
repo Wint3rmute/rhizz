@@ -72,17 +72,15 @@ export const BrowseAll: Story = {
   },
 };
 
-// The palette must not disturb the page it was summoned from, and the part
-// that is easy to get wrong is not the page but the *browser*: daisyUI's
-// `.modal` carries a `:root:has(&)` rule that reaches `<html>` the moment the
-// dialog opens, and with nothing pinning the browser's own toolbar colour it
-// re-inferred it — so the toolbar visibly jumped. Overriding the scrim's
-// colour, as this component used to, does not help: the rule still targets
-// the root.
+// The palette darkens the page behind it, and that is fine — a scrim is what
+// separates a floating panel from whatever it floats over. What it must NOT
+// do is blur, and it must not carry daisyUI's `.modal`, whose `:root:has(&)`
+// rule reaches `<html>` the moment the dialog opens and made the browser
+// re-infer its own toolbar colour.
 //
-// So the assertion is on the absence of those classes, which is the part that
-// actually caused it, plus the two visible symptoms.
-export const NoScrim: Story = {
+// So three separate things, asserted separately: no blur, a real scrim, and
+// none of the classes that caused the jump.
+export const ScrimWithoutBlur: Story = {
   play: async ({ canvasElement }) => {
     const backdrop = within(canvasElement).getByTestId("command-palette");
     for (const daisyModalClass of ["modal", "modal-open", "modal-box"]) {
@@ -92,15 +90,18 @@ export const NoScrim: Story = {
       ).not.toBeInTheDocument();
     }
     const style = getComputedStyle(backdrop);
+    // Darkening, yes — but the page stays legible through it, and no blur:
+    // a blur over a live editor costs a compositing pass per frame and
+    // hides the very page the palette is about.
     await expect(style.backdropFilter).toBe("none");
-    await expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
-    // And the box still declares its own surface, so it reads as floating
-    // over the page without a scrim behind it.
-    const box = backdrop.querySelector("div");
-    if (box === null) throw new Error("palette box is missing");
-    await expect(getComputedStyle(box).backgroundColor).not.toBe(
-      "rgba(0, 0, 0, 0)",
-    );
+    const channels = style.backgroundColor.match(/[\d.]+/g) ?? [];
+    if (channels.length !== 4) {
+      throw new Error(`unexpected scrim colour: ${style.backgroundColor}`);
+    }
+    const [r, g, b, a] = channels.map(Number);
+    await expect([r, g, b]).toEqual([0, 0, 0]);
+    await expect(a).toBeGreaterThan(0.2);
+    await expect(a).toBeLessThan(1);
   },
 };
 
