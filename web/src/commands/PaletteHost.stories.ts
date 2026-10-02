@@ -87,61 +87,62 @@ type Story = StoryObj<typeof meta>;
 // request reach the host before the story starts querying: the signal is
 // module-global, so `find*` below would otherwise be waiting on a dialog
 // that this story's own request has not raised yet.
-async function openVia(kind: "files" | "commands") {
-  requestPalette(kind, HOST_PROJECT_ID);
+async function openVia() {
+  requestPalette(HOST_PROJECT_ID);
   await tick();
 }
 
-export const FileSwitcher: Story = {
+export const CommandsAndFilesInOneList: Story = {
   play: async ({ canvasElement }) => {
-    await openVia("files");
+    await openVia();
     const canvas = within(canvasElement);
     await expect(
-      await canvas.findByRole("dialog", { name: "Go to file" }),
+      await canvas.findByRole("dialog", { name: "Go to" }),
     ).toBeInTheDocument();
-    // Off Modeling/Explore the switcher is project-scoped, so it offers
-    // every file — including the docs, and the non-view file under views/.
-    // The listing is read from the project when the palette opens, so these
-    // wait for it rather than asserting against an empty list.
+    // One palette, one list: the page commands and the project's files are
+    // both reachable from the same search box. The listing is read from the
+    // project when the palette opens, so these wait for it rather than
+    // asserting against a half-filled list.
+    await expect(
+      await canvas.findByRole("option", { name: /go to inventory/i }),
+    ).toBeInTheDocument();
     await expect(
       await canvas.findByRole("option", { name: "main.hcl" }),
     ).toBeInTheDocument();
     await expect(
       await canvas.findByRole("option", { name: "docs/sensor.md" }),
     ).toBeInTheDocument();
+    // Both groups are drawn, so the list reads as "both of these" rather
+    // than as one list that happens to contain some files.
+    await expect(canvas.getByText("Navigate")).toBeInTheDocument();
+    await expect(canvas.getByText("Files")).toBeInTheDocument();
   },
 };
 
-export const FileSwitcherFindsAView: Story = {
+export const CommandsComeFirst: Story = {
   play: async ({ canvasElement }) => {
-    await openVia("files");
+    await openVia();
+    const canvas = within(canvasElement);
+    // The commands are the more common answer to "go to", and Enter on an
+    // untouched palette should do the most likely thing — not open whichever
+    // file sorts first.
+    const rows = await canvas.findAllByRole("option");
+    await expect(rows[0]).toHaveTextContent("Go to Overview");
+  },
+};
+
+export const FindsAView: Story = {
+  play: async ({ canvasElement }) => {
+    await openVia();
     const canvas = within(canvasElement);
     const input = await canvas.findByTestId("command-palette-input");
     await userEvent.type(input, "engine");
-    // A nested view keeps its folder-less path, which is exactly what the
-    // modeling route addresses.
+    // A view is a file now, so it is found by its project path — and
+    // opening it lands on the canvas, not in the text editor.
     await expect(
-      await canvas.findByRole("option", { name: /drone\/engine\.hcl/ }),
+      await canvas.findByRole("option", { name: /views\/drone\/engine\.hcl/ }),
     ).toBeInTheDocument();
     await expect(canvas.getAllByRole("option")).toHaveLength(1);
-  },
-};
-
-export const CommandPalette: Story = {
-  play: async ({ canvasElement }) => {
-    await openVia("commands");
-    const canvas = within(canvasElement);
-    await expect(
-      canvas.getByRole("dialog", { name: "Commands" }),
-    ).toBeInTheDocument();
-    await expect(canvas.getByText("Navigate")).toBeInTheDocument();
-    await expect(canvas.getByText("Views")).toBeInTheDocument();
-    await expect(
-      canvas.getByRole("option", { name: /go to inventory/i }),
-    ).toBeInTheDocument();
-    await expect(
-      canvas.getByRole("option", { name: /drone\/engine\.hcl/ }),
-    ).toBeInTheDocument();
   },
 };
 
@@ -153,7 +154,7 @@ export const CommandPalette: Story = {
 // cover the closed state.)
 export const EscapeCloses: Story = {
   play: async ({ canvasElement }) => {
-    await openVia("commands");
+    await openVia();
     const canvas = within(canvasElement);
     await expect(await canvas.findByTestId("command-palette"))
       .toBeInTheDocument();

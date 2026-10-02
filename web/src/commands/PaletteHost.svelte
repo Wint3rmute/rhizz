@@ -1,8 +1,8 @@
 <script lang="ts">
-// Where the two palettes are actually assembled and wired to the keyboard.
-// It mounts in the project layout, which is what makes "only with a project
-// open" true for free: outside a project there is no project to switch
-// files within, and the host is not there to be asked.
+// Where the palette is assembled and wired to the keyboard. It mounts in the
+// project layout, which is what makes "only with a project open" true for
+// free: outside a project there is no project to switch files within, and
+// the host is not there to be asked.
 //
 // This is the only layer that knows about routes. It reads the project
 // listing, turns it into rows with ../commands, and turns a chosen row back
@@ -10,61 +10,44 @@
 // knows none of that.
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
-import { page } from "$app/state";
 import { onMount } from "svelte";
 import CommandPalette from "../components/palette/CommandPalette.svelte";
 import {
   isPaletteShortcut,
   type PaletteItem,
-  type PaletteKind,
 } from "../components/palette/commandPalette";
 import { projectStore } from "../ProjectState.svelte";
 import { openProjectFs } from "../vfs/fs";
 import type { Dirent } from "../vfs/fs";
-import { paletteCommands } from "./commandItems";
-import {
-  fileSwitcherItems,
-  readProjectEntries,
-  type SwitcherScope,
-  switcherScopeForPath,
-  switcherTargetFor,
-  viewPaths,
-} from "./fileSwitcher";
+import { commandItems } from "./commandItems";
+import { fileItems, fileTargetFor, readProjectEntries } from "./fileSwitcher";
 import { getPaletteRequest } from "./paletteRequest.svelte";
 import { WORKSPACE_PAGES } from "./workspacePages";
 
 let { projectId }: { projectId: string } = $props();
 
-const PALETTE_KINDS: readonly PaletteKind[] = ["files", "commands"];
-
-// null = closed. One palette at a time: the two are alternatives, and
-// stacking two dialogs would leave two inputs fighting over Escape.
-let openKind = $state<PaletteKind | null>(null);
+let open = $state(false);
 let entries = $state<Dirent[]>([]);
 let loading = $state(false);
 
-// Which files are worth offering depends on the page; it is re-read on
-// every navigation rather than captured at mount, because the host outlives
-// every page inside it.
-let scope = $derived(switcherScopeForPath(page.url.pathname));
+// Commands first, then the project's files. That order is the reading order
+// of the two questions the palette answers — "where can I go?" and "where
+// is that thing I was told about?" — and it means Enter on an untouched
+// palette does the most common thing rather than opening whichever file
+// happens to sort first.
+const FILES_GROUP = "Files";
 
-let fileItems = $derived(fileSwitcherItems(entries, scope));
-
-let commandItems = $derived(
-  paletteCommands(viewPaths(entries), {
-    onPage: (pageId) => {
-      closePalette();
-      const target = WORKSPACE_PAGES.find((p) => p.id === pageId);
-      if (target !== undefined) void goto(target.href(projectId));
-    },
-    onView: (view) => {
-      closePalette();
-      void goto(
-        resolve("/projects/[id]/modeling/[...view]", { id: projectId, view }),
-      );
-    },
+let items = $derived([
+  ...commandItems((pageId) => {
+    close();
+    const target = WORKSPACE_PAGES.find((page) => page.id === pageId);
+    if (target !== undefined) void goto(target.href(projectId));
   }),
-);
+  ...fileItems(entries).map<PaletteItem>((item) => ({
+    ...item,
+    group: FILES_GROUP,
+  })),
+]);
 
 // The listing is read fresh on every open rather than kept in step with the
 // filesystem: a file created on the Code page and the palette opened on the
@@ -75,15 +58,14 @@ let commandItems = $derived(
 // again is the obvious way to dismiss a palette you opened by muscle
 // memory. A button press does not: clicking the button that opened the
 // palette should not be a second way to close it.
-async function openPalette(
-  kind: PaletteKind,
+async function show(
   { toggle = false }: { toggle?: boolean } = {},
 ): Promise<void> {
-  if (toggle && openKind === kind) {
-    closePalette();
+  if (toggle && open) {
+    close();
     return;
   }
-  openKind = kind;
+  open = true;
   loading = true;
   try {
     entries = await readProjectEntries(openProjectFs(projectStore, projectId));
@@ -95,15 +77,20 @@ async function openPalette(
   loading = false;
 }
 
-function closePalette(): void {
-  openKind = null;
+function close(): void {
+  open = false;
 }
 
 function handleSelect(item: PaletteItem): void {
-  if (openKind !== "files") return;
-  // A row's label is exactly the path it addresses (see fileSwitcherItems).
-  const target = switcherTargetFor(item.label, scope);
-  closePalette();
+  // A command row carries its own action (it knows its page); a file row is
+  // just a path, and its destination follows from what the file is.
+  if (item.action !== undefined) {
+    close();
+    item.action();
+    return;
+  }
+  const target = fileTargetFor(item.label);
+  close();
   if (target.kind === "view") {
     void goto(
       resolve("/projects/[id]/modeling/[...view]", {
@@ -126,13 +113,13 @@ function handleSelect(item: PaletteItem): void {
 // from the keyboard.
 let lastHandledRequest = 0;
 $effect(() => {
-  const { generation, kind, projectId: target } = getPaletteRequest();
+  const { generation, projectId: target } = getPaletteRequest();
   // Recorded even when the request names another project: a host that
   // mounted afterwards must not pick up a request it was never aimed at.
   if (generation === lastHandledRequest) return;
   lastHandledRequest = generation;
-  if (kind === null || target !== projectId) return;
-  void openPalette(kind);
+  if (target !== projectId) return;
+  void show();
 });
 
 // Registered on the capture phase on purpose. Monaco binds Ctrl/Cmd-P to
@@ -143,60 +130,25 @@ $effect(() => {
 // Monaco keeps its symbol search on Ctrl-Shift-O.
 onMount(() => {
   const onKeyDown = (event: KeyboardEvent) => {
-    for (const kind of PALETTE_KINDS) {
-      if (!isPaletteShortcut(event, kind)) continue;
-      event.preventDefault();
-      event.stopPropagation();
-      void openPalette(kind, { toggle: true });
-      return;
-    }
+    if (!isPaletteShortcut(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void show({ toggle: true });
   };
   window.addEventListener("keydown", onKeyDown, { capture: true });
   return () => {
     window.removeEventListener("keydown", onKeyDown, { capture: true });
   };
 });
-
-interface PaletteCopy {
-  title: string;
-  placeholder: string;
-  empty: string;
-}
-
-// The file switcher says what it is offering, because on Modeling and
-// Explore the rows are views while the chord is still "Go to file" — a
-// palette titled with the wrong noun reads as broken.
-function fileCopy(currentScope: SwitcherScope): PaletteCopy {
-  return currentScope === "views"
-    ? {
-      title: "Go to view",
-      placeholder: "Search this project's views…",
-      empty: "No matching views",
-    }
-    : {
-      title: "Go to file",
-      placeholder: "Search this project's views and files…",
-      empty: "No matching files",
-    };
-}
-
-const COMMAND_COPY: PaletteCopy = {
-  title: "Commands",
-  placeholder: "Type a command…",
-  empty: "No matching commands",
-};
-
-let copy = $derived(openKind === "commands" ? COMMAND_COPY : fileCopy(scope));
 </script>
 
 <CommandPalette
-  isOpen={openKind !== null}
-  items={openKind === "commands" ? commandItems : fileItems}
-  kind={openKind ?? "commands"}
-  title={openKind === null ? "" : copy.title}
-  placeholder={openKind === null ? "" : copy.placeholder}
-  emptyMessage={openKind === null ? "" : copy.empty}
+  isOpen={open}
+  {items}
+  title="Go to"
+  placeholder="Search files and commands…"
+  emptyMessage="No matching files or commands"
   {loading}
   onselect={handleSelect}
-  onclose={closePalette}
+  onclose={close}
 />

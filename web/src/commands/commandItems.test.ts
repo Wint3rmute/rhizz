@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { NAVIGATE_GROUP, paletteCommands, VIEWS_GROUP } from "./commandItems";
+import { commandItems, NAVIGATE_GROUP } from "./commandItems";
 import { WORKSPACE_PAGES } from "./workspacePages";
 
 // Row actions are navigation, which is the host's job — the unit under test
 // is what gets offered and what each row says, not where it goes.
-const NOOP = { onPage: () => {}, onView: () => {} };
-const rows = (views: readonly string[] = []) => paletteCommands(views, NOOP);
+const rows = () => commandItems(() => {});
 
-describe("paletteCommands", () => {
+describe("commandItems", () => {
   it("offers every workspace page, in navbar order", () => {
-    const items = rows();
-    expect(items.slice(0, WORKSPACE_PAGES.length).map((i) => i.label)).toEqual([
+    expect(rows().map((i) => i.label)).toEqual([
       "Go to Overview",
       "Go to Modeling",
       "Go to Inventory",
@@ -20,76 +18,59 @@ describe("paletteCommands", () => {
   });
 
   it("names the pages after the shared workspace list, so the two cannot drift", () => {
-    const pageItems = rows().filter((i) => i.group !== VIEWS_GROUP);
-    expect(pageItems.map((i) => i.label)).toEqual(
+    expect(rows().map((i) => i.label)).toEqual(
       WORKSPACE_PAGES.map((p) => `Go to ${p.label}`),
     );
-    expect(pageItems.map((i) => i.icon)).toEqual(
+    expect(rows().map((i) => i.icon)).toEqual(
       WORKSPACE_PAGES.map((p) => p.icon),
     );
   });
 
-  it("groups the page jumps apart from the views", () => {
+  it("puts them all in one group", () => {
     expect(new Set(rows().map((i) => i.group))).toEqual(
       new Set([NAVIGATE_GROUP]),
     );
   });
 
-  it("offers a row per view, labelled without the views/ folder", () => {
-    const viewItems = rows(["main.hcl", "drone/engine.hcl"]).filter(
-      (i) => i.group === VIEWS_GROUP,
-    );
-    expect(viewItems.map((i) => i.label)).toEqual([
-      "drone/engine.hcl",
-      "main.hcl",
-    ]);
-    expect(viewItems.map((i) => i.id)).toEqual([
-      "command:view:drone/engine.hcl",
-      "command:view:main.hcl",
-    ]);
-  });
-
-  it("keeps the page rows ahead of the views", () => {
-    const items = rows(["main.hcl"]);
-    expect(items[WORKSPACE_PAGES.length]?.group).toBe(VIEWS_GROUP);
-  });
-
-  it('says where a view lives, so typing "views" finds them', () => {
-    const item = rows(["main.hcl"])[WORKSPACE_PAGES.length];
-    expect(item?.detail).toBe("views");
-    expect(item?.hint).toContain("view");
-  });
-
-  it("makes a page row searchable by the bare page name", () => {
-    const inventory = rows().find((i) => i.label === "Go to Inventory");
-    expect(inventory?.hint).toContain("Inventory");
+  it("offers no view rows — the files carry them", () => {
+    // A view used to have a second row here, folder-qualified and opening
+    // the canvas. Now it has exactly one row, from the file listing, which
+    // opens the canvas too — so this list is pages only. Matched on the id
+    // prefix, not the substring "view", which "overview" also contains.
+    expect(rows().every((i) => i.group === NAVIGATE_GROUP)).toBe(true);
+    expect(
+      rows()
+        .map((i) => i.id)
+        .filter((id) => id.startsWith("command:view:")),
+    ).toEqual([]);
   });
 
   it("gives every row a distinct id, since the list is keyed on it", () => {
-    const ids = rows(["main.hcl", "drone/engine.hcl"]).map((i) => i.id);
+    const ids = rows().map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("makes a page row searchable by the bare page name", () => {
+    expect(rows().find((i) => i.label === "Go to Inventory")?.hint).toContain(
+      "Inventory",
+    );
+  });
+
   it("has every row able to act, so no choice is a dead end", () => {
-    for (const item of rows(["main.hcl"])) {
+    for (const item of rows()) {
       expect(item.action).toBeTypeOf("function");
     }
   });
 
-  it("calls the host's callbacks with the page id and the view path", () => {
+  it("calls the host back with the page id", () => {
     const seen: string[] = [];
-    const items = paletteCommands(["main.hcl"], {
-      onPage: (id) => seen.push(`page:${id}`),
-      onView: (view) => seen.push(`view:${view}`),
-    });
-    for (const item of items) item.action?.();
+    for (const item of commandItems((id) => seen.push(id))) item.action?.();
     expect(seen).toEqual([
-      "page:overview",
-      "page:modeling",
-      "page:inventory",
-      "page:explore",
-      "page:code",
-      "view:main.hcl",
+      "overview",
+      "modeling",
+      "inventory",
+      "explore",
+      "code",
     ]);
   });
 });
