@@ -4,10 +4,9 @@ import { expect, test } from "@playwright/test";
 // `docs/<label>.md` (rendered Markdown) with a viewer/editor toggle, and
 // saving persists to the project's VFS.
 //
-// Editing happens in the app's Monaco editor — the same component the Code page
-// uses for these very files — so this drives Monaco rather than a textarea:
-// there is no form value to read, content is read off the rendered lines, and
-// typing goes through the keyboard into the focused editor.
+// Editing happens in the app's Monaco editor, so this drives Monaco rather than
+// a textarea: no form value to read, content read off the rendered lines, and
+// typing through the keyboard into the focused editor.
 async function openInventory(page, name = "E2E inventory docs") {
   await page.goto("/");
   const create = page.getByRole("button", { name: "New project" }).first();

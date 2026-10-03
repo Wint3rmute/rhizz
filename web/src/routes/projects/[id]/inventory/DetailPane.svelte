@@ -1,17 +1,11 @@
 <script lang="ts">
-// Right-hand detail pane for the selected definition: tabbed
-// Full name / Ports (N) / Requirements (placeholder) / Metadata views.
+// Detail pane for the selected definition: one tab per facet of it.
 //
-// It is a column of the workspace, not a strip under the canvas: the parent
-// row gives it two fifths of the width (`md:` and up) and drops it back below
-// the diagram on narrow screens, which is why the border side is switched
-// rather than simply drawn on all four.
-//
-// The Full name tab shows the definition's `docs/<label>.md` documentation
-// (rendered Markdown) with a viewer/editor toggle; saving writes the file
-// back to the project's VFS (creating `docs/` when needed). Editing goes
-// through the app's `MonacoEditor` — the same component the Code page uses for
-// these very files — so a doc looks and behaves identically in both places.
+// A column of the workspace, not a strip under the canvas — the parent row
+// gives it two fifths from `md:` up and drops it below the diagram on narrow
+// screens, which is why the border side is switched rather than drawn on all
+// four. The Full name tab edits `docs/<label>.md` in the app's `MonacoEditor`,
+// the same component the Code page uses for these very files.
 import Markdown from "../../../../components/Markdown.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import { SvelteSet } from "svelte/reactivity";
@@ -152,11 +146,9 @@ function flattenTags(def: InventoryDefinition): string[] {
       {#if activeTab === "Full name"}
         {#if docMode === "edit"}
           <div class="flex-1 min-h-0 flex flex-col gap-2">
-            <!-- Monaco, not a textarea: the Code page already edits Markdown
-                 in it, so docs read and write the same way wherever you open
-                 them. It fills the pane and scrolls itself, which is why the
-                 pane's own scroll lives on the branches below instead of
-                 around all of them. -->
+            <!-- Monaco, not a textarea: the Code page already edits Markdown in
+                 it, so docs read and write the same way wherever you open
+                 them. -->
             <div
               data-testid="inventory-doc-editor"
               class="flex-1 min-h-[200px] overflow-hidden rounded border border-base-300"
