@@ -1,12 +1,17 @@
 <script lang="ts">
-// Bottom detail pane for the selected definition: tabbed
-// Full name / Ports (N) / Requirements (placeholder) / Metadata views.
+// Detail pane for the selected definition: one tab per facet of it.
 //
-// The Full name tab shows the definition's `docs/<label>.md` documentation
-// (rendered Markdown) with a viewer/editor toggle; saving writes the file
-// back to the project's VFS (creating `docs/` when needed).
+// A column of the workspace, not a strip under the canvas — the parent row
+// gives it two fifths from `md:` up and drops it below the diagram on narrow
+// screens, which is why the border side is switched rather than drawn on all
+// four. The Full name tab edits `docs/<label>.md` in the app's `MonacoEditor`,
+// the same component the Code page uses for these very files.
 import Markdown from "../../../../components/Markdown.svelte";
+import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import { SvelteSet } from "svelte/reactivity";
+// Type-only: the editor *type* without dragging the editor itself in, so
+// `DetailPane` does not become a second reason to load Monaco.
+import type * as monaco from "monaco-editor";
 import type { InventoryDefinition } from "./inventory";
 import { definitionDepth } from "./inventory";
 
@@ -25,7 +30,32 @@ let {
 const TABS = ["Full name", "Ports", "Requirements", "Metadata"] as const;
 type Tab = (typeof TABS)[number];
 
+// Monaco options for the documentation editor, as one object so the identity is
+// stable (see `MonacoEditor`: options are read at create time, untracked).
+const DOC_EDITOR_OPTIONS = {
+  // Prose wraps; Monaco's markdown configuration sets no `wordWrap`, so
+  // without this a paragraph is one long horizontal scroll in a pane that is
+  // two fifths of a row.
+  wordWrap: "on",
+  // No minimap: it is a map of a file you cannot scroll in a pane this narrow,
+  // and for a document of a few paragraphs it is dots. The Code page keeps its
+  // own, where files are long and the pane is wide.
+  minimap: { enabled: false },
+  // No occurrence highlighting: in Markdown it paints every other instance of
+  // the word under the cursor, which is noise in a document rather than a
+  // signal in code. It also keeps Monaco's word highlighter from scheduling
+  // its debounce work, which rejects a promise nobody awaits when the editor
+  // is disposed — an unhandled rejection that fails the story suite.
+  occurrencesHighlight: "off",
+} as const satisfies monaco.editor.IStandaloneEditorConstructionOptions;
+
 let activeTab = $state<Tab>("Full name");
+
+// The live Monaco instance while the doc editor is mounted. Only used to put
+// the cursor in the document when the editor opens — see the effect below.
+let docEditor = $state<monaco.editor.IStandaloneCodeEditor | undefined>(
+  undefined,
+);
 
 // Reset to the first tab (and the doc viewer) when switching between
 // definitions so stale tab/editor state doesn't leak across selections.
@@ -44,6 +74,14 @@ $effect(() => {
 
 let portCount = $derived(definition?.ports.length ?? 0);
 let depth = $derived(definition ? definitionDepth(definition) : 0);
+
+// Opening the editor should put you *in* the document, not leave you to click
+// into it first — the point of "Edit" is to start typing. The handle arrives a
+// tick after `docMode` flips (the component mounts then), so this waits for
+// whichever of the two is still missing.
+$effect(() => {
+  if (docMode === "edit") docEditor?.focus();
+});
 
 function startDocEdit(): void {
   editText = docContent ?? "";
@@ -72,7 +110,7 @@ function flattenTags(def: InventoryDefinition): string[] {
 </script>
 
 <div
-  class="border-t border-base-300 bg-base-100 flex flex-col min-h-[180px]"
+  class="border-base-300 bg-base-100 flex flex-col min-h-[180px] md:min-h-0 md:w-2/5 md:min-w-0 border-t md:border-t-0 md:border-l"
   data-testid="inventory-detail-pane"
 >
   {#if !definition}
@@ -104,35 +142,44 @@ function flattenTags(def: InventoryDefinition): string[] {
       {/each}
     </div>
 
-    <div class="flex-1 overflow-y-auto p-4 text-sm">
+    <div class="flex-1 min-h-0 overflow-auto p-4 text-sm flex flex-col">
       {#if activeTab === "Full name"}
         {#if docMode === "edit"}
-          <textarea
-            data-testid="inventory-doc-textarea"
-            bind:value={editText}
-            rows={10}
-            class="textarea textarea-sm textarea-bordered w-full font-mono"
-            placeholder="# {definition.label}\n\nDescribe this component..."
-          ></textarea>
-          <div class="flex gap-2 mt-2">
-            <button
-              type="button"
-              class="btn btn-primary btn-sm"
-              data-testid="inventory-doc-save-button"
-              disabled={savingDoc}
-              onclick={() => void saveDocEdit()}
+          <div class="flex-1 min-h-0 flex flex-col gap-2">
+            <!-- Monaco, not a textarea: the Code page already edits Markdown in
+                 it, so docs read and write the same way wherever you open
+                 them. -->
+            <div
+              data-testid="inventory-doc-editor"
+              class="flex-1 min-h-[200px] overflow-hidden rounded border border-base-300"
             >
-              {savingDoc ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost btn-sm"
-              data-testid="inventory-doc-cancel-button"
-              disabled={savingDoc}
-              onclick={() => (docMode = "view")}
-            >
-              Cancel
-            </button>
+              <MonacoEditor
+                bind:value={editText}
+                bind:editor={docEditor}
+                language="markdown"
+                options={DOC_EDITOR_OPTIONS}
+              />
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                data-testid="inventory-doc-save-button"
+                disabled={savingDoc}
+                onclick={() => void saveDocEdit()}
+              >
+                {savingDoc ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                data-testid="inventory-doc-cancel-button"
+                disabled={savingDoc}
+                onclick={() => (docMode = "view")}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         {:else}
           <div data-testid="inventory-doc-viewer">
@@ -174,7 +221,9 @@ function flattenTags(def: InventoryDefinition): string[] {
         {/if}
       {:else if activeTab === "Ports"}
         {#if definition.ports.length === 0}
-          <p class="text-base-content/50 italic">This definition has no ports.</p>
+          <p class="text-base-content/50 italic">
+            This definition has no ports.
+          </p>
         {:else}
           <table class="table table-sm">
             <thead>

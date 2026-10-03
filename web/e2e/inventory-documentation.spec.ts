@@ -3,6 +3,10 @@ import { expect, test } from "@playwright/test";
 // Inventory → documentation tab: the "Full name" tab shows the component's
 // `docs/<label>.md` (rendered Markdown) with a viewer/editor toggle, and
 // saving persists to the project's VFS.
+//
+// Editing happens in the app's Monaco editor, so this drives Monaco rather than
+// a textarea: no form value to read, content read off the rendered lines, and
+// typing through the keyboard into the focused editor.
 async function openInventory(page, name = "E2E inventory docs") {
   await page.goto("/");
   const create = page.getByRole("button", { name: "New project" }).first();
@@ -31,6 +35,22 @@ async function openInventory(page, name = "E2E inventory docs") {
   await page.getByText("e2e-docs").first().click();
 }
 
+/** The doc editor: its Monaco host, and the rendered lines inside it. */
+function docEditor(page) {
+  const host = page.getByTestId("inventory-doc-editor").locator(
+    ".monaco-editor",
+  );
+  return {
+    host,
+    lines: host.locator(".view-lines"),
+    // The element that actually takes keystrokes, by the aria label Monaco
+    // gives its input (the default of `ariaLabel`). Not `textarea`: this
+    // version also keeps a hidden IME composition textarea that is readonly and
+    // never focused.
+    input: host.locator('[aria-label="Editor content"]'),
+  };
+}
+
 test("inventory writes documentation from the Full name tab", async ({ page }) => {
   await openInventory(page);
   const pane = page.getByTestId("inventory-detail-pane");
@@ -41,38 +61,46 @@ test("inventory writes documentation from the Full name tab", async ({ page }) =
   await expect(viewer).toContainText("No documentation yet");
   await page.getByTestId("inventory-doc-edit-button").click();
 
-  // The editor opens empty; saving renders Markdown in the viewer.
-  const textarea = page.getByTestId("inventory-doc-textarea");
-  await expect(textarea).toBeVisible();
-  await expect(textarea).toHaveValue("");
-  await textarea.fill("# E2E widget\n\nDoes **things**.");
+  // The editor opens empty and takes the focus, so typing starts immediately.
+  const { host, lines, input } = docEditor(page);
+  await expect(host).toBeVisible();
+  await expect(input).toBeFocused();
+  await page.keyboard.type("# E2E widget\n\nDoes **things**.");
+  await expect(lines).toContainText("# E2E widget");
+
+  // Saving renders the Markdown in the viewer: the heading becomes a heading
+  // and the bold markers stop being literal text.
   await page.getByTestId("inventory-doc-save-button").click();
-  await expect(textarea).toBeHidden();
+  await expect(host).toBeHidden();
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole("heading", { name: "E2E widget" }))
     .toBeVisible();
+  await expect(viewer).toContainText("Does things.");
   await expect(page.getByText("**things**")).toBeHidden();
 
-  // Persisted to the VFS: still rendered after a reload.
+  // Persisted to the VFS: still rendered after a reload. Locators are lazy, so
+  // `viewer` survives the reload.
   await page.reload();
   await page.getByText("e2e-docs").first().click();
-  await expect(page.getByTestId("inventory-doc-viewer")).toBeVisible();
-  await expect(
-    page.getByTestId("inventory-doc-viewer").getByRole("heading", {
-      name: "E2E widget",
-    }),
-  ).toBeVisible();
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
+    .toBeVisible();
 
-  // Edit reopens prefilled; Cancel discards without touching the viewer.
+  // Edit reopens prefilled with what was saved — asserted on the rendered
+  // lines, which is the only place the content exists in Monaco's DOM.
   await page.getByTestId("inventory-doc-edit-button").click();
-  const textarea2 = page.getByTestId("inventory-doc-textarea");
-  await expect(textarea2).toHaveValue("# E2E widget\n\nDoes **things**.");
-  await textarea2.fill("discarded draft");
+  const reopened = docEditor(page);
+  await expect(reopened.lines).toContainText("# E2E widget");
+  await expect(reopened.lines).toContainText("Does **things**.");
+
+  // Cancel discards without touching the file or the viewer.
+  await reopened.host.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("discarded draft");
   await page.getByTestId("inventory-doc-cancel-button").click();
-  await expect(textarea2).toBeHidden();
-  await expect(
-    page.getByTestId("inventory-doc-viewer").getByRole("heading", {
-      name: "E2E widget",
-    }),
-  ).toBeVisible();
+  await expect(reopened.host).toBeHidden();
+  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
+    .toBeVisible();
+  await expect(viewer).toContainText("Does things.");
+  await expect(page.getByText("discarded draft")).toBeHidden();
 });

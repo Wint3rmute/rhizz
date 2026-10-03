@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import init from "rhizz";
 import type { Project } from "../../../../vfs/types";
 import { projectSlug } from "../../../../vfs/slug";
@@ -193,6 +193,20 @@ export const MissingDefaultDiagram: Story = {
   },
 };
 
+// Presses "Edit" and waits for Monaco to exist. Its *content* is asserted in
+// e2e: this browser is ~414px wide, where the editor box collapses to zero and
+// Monaco paints nothing, so a content assertion here would pass vacuously.
+async function openDocEditor(canvas: ReturnType<typeof within>) {
+  await userEvent.click(await canvas.findByTestId("inventory-doc-edit-button"));
+  const host = canvas.getByTestId("inventory-doc-editor");
+  // Monaco's input, by the aria label it gives itself (the default of its
+  // `ariaLabel` option) — this version also keeps a hidden IME textarea.
+  await waitFor(() => {
+    void expect(host.querySelector('[aria-label="Editor content"]'))
+      .toBeTruthy();
+  });
+}
+
 export const DocumentationTab: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -203,12 +217,10 @@ export const DocumentationTab: Story = {
     await expect(
       canvas.getByRole("heading", { name: "Battery" }),
     ).toBeTruthy();
-    await userEvent.click(canvas.getByTestId("inventory-doc-edit-button"));
-    const editor = canvas.getByTestId("inventory-doc-textarea");
-    await expect(editor).toBeTruthy();
-    await expect((editor as HTMLTextAreaElement).value).toContain(
-      "# Battery",
-    );
+
+    // "Edit" swaps the rendered doc for the app's editor — the same Monaco
+    // component the Code page uses for these very files.
+    await openDocEditor(canvas);
     await userEvent.click(canvas.getByTestId("inventory-doc-cancel-button"));
     await expect(
       canvas.getByRole("heading", { name: "Battery" }),
@@ -249,5 +261,48 @@ export const DeepLinkedEntity: Story = {
     // ...and the detail pane follows: draft-module is the definition without a
     // default view, so its preview shows the empty state.
     await expect(canvas.getByTestId("inventory-empty-diagram")).toBeTruthy();
+  },
+};
+
+// The detail pane is a column beside the diagram preview, not a strip under
+// it — but that is an `md:` arrangement and this browser is ~414px wide, so the
+// side-by-side geometry cannot be measured here. It is pinned by this file's
+// VRT baselines (1280 wide) and by the e2e spec. What is measurable is the
+// narrow fallback: below `md` the pane goes back under the diagram. Asserted as
+// the row's computed flex-direction *and* the two rects not overlapping, so
+// neither can drift on its own.
+export const DetailPaneStacksBelowTheDiagram: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const diagram = await canvas.findByTestId("inventory-diagram");
+    const pane = canvas.getByTestId("inventory-detail-pane");
+    const row = diagram.parentElement;
+    if (!row) {
+      throw new Error("the diagram preview should sit in the main row");
+    }
+
+    await expect(getComputedStyle(row).flexDirection).toBe("column");
+    // The 1px slack absorbs sub-pixel rounding of the stacked heights.
+    await expect(pane.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      diagram.getBoundingClientRect().bottom - 1,
+    );
+  },
+};
+
+// The documentation editor, open. Every other documentation story cancels back
+// to the viewer, so without this one the editor's own layout inside the pane —
+// its height, its border, where the Save/Cancel row sits — has no picture of it
+// at all: a story that ends in edit mode is the only place the pane as a whole
+// can be compared.
+export const DocumentationEditorOpen: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await openDocEditor(canvas);
+    // Save and Cancel stay reachable below it.
+    await expect(canvas.getByTestId("inventory-doc-save-button")).toBeTruthy();
+    await expect(canvas.getByTestId("inventory-doc-cancel-button"))
+      .toBeTruthy();
   },
 };

@@ -6,12 +6,20 @@ import { cssVarToHex } from "../css_var_to_hex";
 interface Props {
   value: string;
   language?: string;
+  /** Monaco options merged over the defaults below. Create-time only. */
+  options?: monaco.editor.IStandaloneEditorConstructionOptions;
+  /** The live editor, for callers that need `focus()` or a selection. */
+  editor?: monaco.editor.IStandaloneCodeEditor | undefined;
 }
 
-let { value = $bindable(), language = "plaintext" }: Props = $props();
+let {
+  value = $bindable(),
+  language = "plaintext",
+  options = {},
+  editor = $bindable(undefined),
+}: Props = $props();
 
 let editor_div: HTMLDivElement;
-let editor: monaco.editor.IStandaloneCodeEditor | undefined;
 
 $effect(() => {
   monaco.editor.defineTheme("daisy", {
@@ -43,6 +51,14 @@ $effect(() => {
     readOnly: false,
     theme: "daisy",
     automaticLayout: true,
+    // Untracked like `value`, and for a sharper reason: callers pass this
+    // inline — `options={{ wordWrap: "on" }}` — which hands us a *new* object
+    // on every render. Tracking it would tear the editor down and rebuild it
+    // on every keystroke (the parent re-renders on each one, since `value` is
+    // two-way bound), throwing away the cursor, the scroll position and the
+    // undo stack. So options are create-time only, and `language` remains the
+    // one prop that rebuilds the editor.
+    ...untrack(() => options),
   });
   editor = created;
 
