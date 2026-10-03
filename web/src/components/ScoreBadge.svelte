@@ -8,6 +8,11 @@
 // compiles a model and publishes a score, so on the other project pages the
 // bar's left end is empty by design rather than showing a "0%" that would read
 // as a verdict.
+//
+// It is also hidden below `sm`. At phone width the bar has one line for the
+// counts, the expand chevron and the strictness control, and those three are
+// what the bar is *for*; the score is a summary the Overview page already spells
+// out in full. Above `sm` there is room for it, and it is there.
 let {
   score,
 }: {
@@ -18,7 +23,7 @@ let {
 
 {#if score !== null}
   <div
-  class="badge badge-sm badge-outline badge-info font-medium text-xs"
+  class="badge badge-sm badge-outline badge-info font-medium text-xs hidden sm:flex"
   title={`Architecture maturity / completion score: ${score.overall_percentage.toFixed(1)}%`}
 >
     Score: {score.overall_percentage.toFixed(0)}%

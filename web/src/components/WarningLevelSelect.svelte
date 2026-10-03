@@ -29,7 +29,7 @@ let warningLevel = $derived(getWarningLevel());
 <label for="warning-level" class="sr-only">Strictness</label>
 <select
   id="warning-level"
-  class="select select-xs text-xs"
+  class="select select-xs text-xs w-auto shrink-0 max-w-24 sm:max-w-none"
   title="How much detail this project is specified at — gates which warnings are reported. Errors are always reported."
   value={warningLevel}
   onchange={(event) => setWarningLevel(event.currentTarget.value)}
