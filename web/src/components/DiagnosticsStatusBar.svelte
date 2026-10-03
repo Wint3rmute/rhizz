@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
+import { getCurrentScore } from "../ProjectState.svelte";
+import ScoreBadge from "./ScoreBadge.svelte";
 import WarningLevelSelect from "./WarningLevelSelect.svelte";
 
 // Bottom status bar replacing the Overview page's diagnostics sidebar, and the
@@ -12,8 +14,11 @@ import WarningLevelSelect from "./WarningLevelSelect.svelte";
 // neither valid markup nor a usable control. So the row is a flex line and the
 // toggle is a button in the middle of it: the score at the far left, the
 // strictness control at the far right, and everything the toggle owns between
-// them. The toggle keeps `flex-1`, which is what makes the chevron sit at its
-// right edge rather than the middle of the bar.
+// them. The toggle keeps `flex-1`, which is what puts its chevron at the right
+// edge of that middle zone instead of the middle of the bar.
+//
+// The score is the one thing read from a singleton here: only Modeling
+// publishes one (see ScoreBadge), and the bar is the surface that shows it now.
 //
 // Both surfaces are one opaque `bg-base-100`. They used to be `bg-base-100/95`
 // + a backdrop blur, which is why the panel and the strip looked like two
@@ -22,6 +27,8 @@ import WarningLevelSelect from "./WarningLevelSelect.svelte";
 // shell). One solid colour makes the bar a single surface, and a blur behind
 // an opaque fill costs a compositing pass for nothing.
 let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
+
+let score = $derived(getCurrentScore());
 
 let expanded = $state(false);
 
@@ -87,6 +94,7 @@ function specUrl(code: string): string {
   <div
     class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 sm:gap-3 text-sm"
   >
+    <ScoreBadge {score} />
     <button
       type="button"
       class="min-w-0 flex-1 flex items-center gap-3 text-left rounded px-2 -mx-2 hover:bg-base-200/60"
