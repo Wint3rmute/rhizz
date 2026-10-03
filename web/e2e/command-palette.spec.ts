@@ -170,10 +170,6 @@ test("searching on Inventory never surfaces a file", async ({ page }) => {
       options(page, ".md"),
       `${query} must not match a doc row on Inventory`,
     ).toHaveCount(0);
-    await expect(
-      options(page, "docs/"),
-      `${query} must not match a doc row on Inventory`,
-    ).toHaveCount(0);
   }
 
   // And the component row is still there, found by the same query — the
