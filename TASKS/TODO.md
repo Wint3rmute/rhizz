@@ -34,14 +34,6 @@ style/consistency pass after initial implementation to ensure that the bottom
 bar will have a consistent look after the changes, both when closed and when
 expanded.
 
-## Task <N> - Migrate to SvelteKit 3.0
-
-https://svelte.dev/blog/sveltekit-3-is-here
-
-> npx sv migrate sveltekit-3 --tasks all --confirm
-
-For Deno I believe it should be `dx sv migrate sveltekit-3 --tasks all --confirm`
-
 ## Task <N> - Add add a modeling/ context menu option "create new view from selection"
 
 With 1 or more components selected, a context menu option "create new view from selection" should be available.

@@ -4,6 +4,75 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 114 — Migrate to SvelteKit 3.0
+
+`web/` runs on `@sveltejs/kit` 3.0.0 (with `vite` 8, `vite-plugin-svelte`
+7, `adapter-static` 4 and `svelte` 5.57.1 — 3.0's minimum). The
+`$lib` → `#lib` rename turned out to be a non-event: nothing in the
+codebase imported `$lib`.
+
+- **Configuration is an argument now, and there are two callers.**
+  `svelte.config.js` is gone; the project config is passed to `sveltekit()`
+  in `vite.config.ts`. That alone would have been a trap: Vitest prefers
+  `vitest.config.ts` over `vite.config.ts`, so a config written in either
+  file is invisible to the other — the test run would have compiled every
+  `lang="ts"` component without `vitePreprocess()` and without
+  `experimental.async`. The config therefore lives in
+  `sveltekit.config.ts`, imported by both, which makes the sharing
+  explicit instead of accidental.
+- **`tsconfig.json` extends `$app/tsconfig`.** The generated
+  `./.svelte-kit/tsconfig.json` is no longer the base, and the options it
+  used to supply (`moduleResolution`, `skipLibCheck`, `esModuleInterop`, …)
+  come from `$app/tsconfig` now. `eslint.config.js` loses its
+  `svelteConfig` parser option at the same time — there is no file to read,
+  and passing `undefined` gained nothing.
+- **App-code fallout was three APIs.** `resolve()` takes a route id alone
+  when the route has no params; `page.url` is a `ReadonlyURL`, so Explore
+  sets the `diagram` param on a `new URL(page.url.href)` copy; and
+  `goto`'s `noScroll`/`keepFocus` are one `reset` option with
+  `replaceState` renamed `replace`. Explore, Inventory and Modeling all
+  navigated with `reset: false`, which is exactly what the merged option
+  says.
+- **One latent bug became a loud one.** Navbar's tour flow hand-built
+  `/projects/<id>/overview` strings, which ignore `paths.base` — and
+  `goto` now *rejects* a destination that does not resolve to a route, so
+  a deployment under a `BASE_PATH` would have turned a silent no-op into a
+  rejected promise. Both call sites go through `resolve` now. The tour's
+  own paths (`src/tour/Tour.ts`) stay hand-built: they reach `resolve`
+  only through the SvelteKit runtime, which the `tourSteps` unit test does
+  not have.
+- **`handleError` reaches further than its comment claimed.** 3.0 routes
+  rendering errors and *expected* ones (`kind: "app"` from `error(...)`,
+  `kind: "framework"` for its own 404s) through `handleError` too, so the
+  hook is typed `HandleClientError` (new in 3.0 for the client hook) and
+  the comment says so. The hook still returns nothing, so those keep
+  SvelteKit's own status and message.
+- **`$app/paths` broke Storybook, and only Storybook.** Since 3.0 that
+  module reads `__SVELTEKIT_PAYLOAD__` when it is evaluated, and the
+  constant is defined by `vite-plugin-sveltekit-compile` — which
+  `@storybook/sveltekit` removes, because the preview is not the app. In
+  2.x it came from `vite-plugin-sveltekit-setup`, which survives that
+  removal, so nothing noticed until 102 of the 226 VRT baselines rendered
+  Storybook's error boundary. `.storybook/main.ts` defines it to
+  `undefined`, which is the honest value: the payload carries only `base`
+  and `assets`, and both already resolve to empty in a Storybook build.
+- **Most of `MIGRATION_TASKS.md` was a non-event, checked rather than
+  assumed:** no `base`/`assets`/`resolveRoute`, no `invalidateAll`, no
+  shallow routing, no navigation hooks (so no `delta` to guard), nothing
+  cross-origin in dev (so no `server.cors`), and the two files flagged for
+  204 responses fake `fetch` answers for rhizz-server's own VFS
+  endpoints, which SvelteKit is not part of. Clicking the current page's
+  navbar link does now "refresh" — verified with a throwaway e2e probe
+  that no document reload happens; only the (purely param-threading) `load`
+  functions re-run.
+- **Validation**: `just test` (cargo + 854 Vitest + 73 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just
+  build`, `just format`, and the full VRT suite 226/226 with no baseline
+  re-recorded. The 226/226 was checked against a `main` worktree too, so
+  the Storybook regression above was confirmed rather than guessed at.
+
+---
+
 ## Task 113 — Clicking a node in Inventory's preview focuses that component
 
 A node in the diagram Inventory previews is now clickable, and clicking it
