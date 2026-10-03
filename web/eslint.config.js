@@ -119,6 +119,7 @@ export default ts.config(
       "**/modeling/DiagramViewer.stories.ts",
       "**/modeling/OpenViewUrl.stories.ts",
       "**/modeling/DetailedViewMenu.stories.ts",
+      "**/modeling/MiddleClickView.stories.ts",
       "src/example_system.ts",
     ],
     rules: {
