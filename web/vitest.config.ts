@@ -9,16 +9,18 @@ import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { playwright } from "@vitest/browser-playwright";
-const dirname = typeof __dirname !== "undefined"
-  ? __dirname
-  : path.dirname(fileURLToPath(import.meta.url));
+import { sveltekitConfig } from "./sveltekit.config.ts";
+
+// `import.meta.dirname` rather than the old `__dirname ?? fileURLToPath(...)`
+// dance: Vite 8 can load this config natively, and `__dirname` is not defined
+// in a native ESM config loader (it warns about exactly that).
+const dirname = import.meta.dirname;
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
+  plugins: [tailwindcss(), sveltekit(sveltekitConfig)],
   server: {
     fs: {
       allow: [".", "../crates/rhizz-wasm/pkg"],
