@@ -4,6 +4,70 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 110 — Inventory offers no files in the command palette
+
+Ctrl-P on `inventory/` now answers with two things: the workspace pages and
+the model's own definitions. `views/*.hcl` and `docs/*.md` are gone from that
+page's list — they were a third thing to search that the page is not about,
+and picking one sent the user off to the editor to get it.
+
+- **`FileScope` grew a `none`, and that is a scope rather than a boolean
+  next to one.** `paletteScope.ts` already asked "which files does this page
+  offer?" and `fileItems` already narrowed the answer; a page that lists
+  *none* is the same question with a third answer, so it is a third arm of
+  the same union (`"none" | "views" | "all"`) rather than a new flag. Nothing
+  in the host, the shell or `commandPalette.ts` had to learn a new concept:
+  `fileItems` returns `[]` and the rest of the pipeline already handles an
+  empty section.
+- **The row's destination rule from Task 109 is untouched, and that is the
+  point.** A file row's target still follows from *what the file is*
+  (`fileTargetFor` reads the path, `views/` → canvas, everything else →
+  editor) and never from the page. The page decides only *whether* to offer
+  rows, so narrowing the list on one page could not have been a second,
+  page-conditional destination rule waiting to drift.
+- **The listing is not read on Inventory.** `show()` reads `fs.readdir` on
+  every open so a file created a keystroke ago is switchable to — but it now
+  reads only where there are file rows to fill, and *clears* `entries` rather
+  than leaving the previous page's listing behind, so walking Inventory → Code
+  cannot show rows of a page that has not been read. The scope change is
+  therefore also the thing that makes the read skippable, rather than a
+  branch that exists only to throw work away.
+- **The docs were the sharp end of this, and the test that shows it uses the
+  example that has them.** `software-house` ships a `docs/<label>.md` for
+  every one of its 12 top-level components, so searching `automation-qa` there
+  used to answer with the component *and* its doc file — the same word, two
+  rows, one of which opens a markdown file on another page. The new e2e types
+  a component label, a view file and a doc file in turn and asserts no file
+  row comes back for any of them, then asserts the component row is still
+  there: the palette is narrower, not broken.
+- **A story per state, so each screenshot pins one thing.** `InventorySection
+  OnInventory` now asserts the two sections *and* the absence of the `Files`
+  heading and of four specific paths (both diagrams, the system model, the
+  doc) — the absence is the behaviour, so it is asserted by name rather than
+  left to a row count. A new `InventoryFindsEntitiesNotFiles` types `sensor`
+  and pins a single row, which is the query the fixture makes interesting:
+  `docs/sensor.md` and `component "sensor"` share the word.
+- **Red/green**: the two `paletteScope` cases and the two `fileItems` cases
+  went red first, and both changed stories were confirmed red against the
+  old scope (2 failed / 6 passed) rather than assumed to be. The e2e's
+  `Inventory offers the pages and the definitions, and opens one` replaces the
+  old "adds … alongside the files" assertions with the narrower ones.
+- **VRT: 2 of 218 baselines new, 4 re-baselined** (the new story in both
+  themes; both changed inventory stories in both themes).
+  `inventory-finds-by-full-name` moved too, and only because the dialog's
+  header counts rows (`1 of 11` → `1 of 6`) — the searched list itself is
+  identical. A full follow-up run is 218/218, 0 changed.
+- **Not addressed**: the two queued palette tasks that follow this one —
+  component icons on the "Go to component" rows, and a permissive fuzzy
+  matcher (today `comp MPS` finds nothing). Neither is caused by the scope
+  change, and the second is a `Fuse` threshold/keys question in
+  `commandPalette.ts` that deserves its own red test.
+- **Validation**: `just test` (cargo + Vitest + 69 e2e), `just lint` (clippy,
+  rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 109 — One Ctrl-P palette, for files and commands
 
 A single fuzzy-searchable palette for power users, built on a shell that

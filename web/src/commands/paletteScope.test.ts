@@ -27,13 +27,17 @@ describe("paletteScopeForPath", () => {
     });
   });
 
-  it("adds the inventory section on Inventory, alongside the files", () => {
+  it("offers the definitions but no files on Inventory", () => {
+    // Inventory is a page about entities, and both of its answers — the pages
+    // and the model's own definitions — are in the list already. A file row
+    // there is a third thing to search that the page is not about, and it
+    // sends the user off to the editor to get it.
     expect(paletteScopeForPath("/projects/p/inventory")).toEqual({
-      files: "all",
+      files: "none",
       inventory: true,
     });
     expect(paletteScopeForPath("/projects/p/inventory/battery")).toEqual({
-      files: "all",
+      files: "none",
       inventory: true,
     });
   });
@@ -79,7 +83,7 @@ describe("paletteScopeForPath", () => {
       inventory: false,
     });
     expect(paletteScopeForPath("/projects/p/inventory/explore")).toEqual({
-      files: "all",
+      files: "none",
       inventory: true,
     });
   });
