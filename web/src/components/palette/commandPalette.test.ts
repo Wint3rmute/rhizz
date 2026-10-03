@@ -224,18 +224,14 @@ describe("subsequenceRanges", () => {
   it("matches each whitespace-separated term independently", () => {
     // The reported bug. "comp MPS" is two words, and Fuse scores it as one
     // eight-character pattern, so the space has to line up with a space in the
-    // label — and there is only one, in the "Go to" every row shares.
-    expect(subsequenceRanges("Go to component MPS", "comp MPS")).toEqual([
-      [6, 9],
-      [16, 18],
-    ]);
-  });
-
-  it("ignores case on both sides", () => {
-    expect(subsequenceRanges("Go to component MPS", "COMP mps")).toEqual([
-      [6, 9],
-      [16, 18],
-    ]);
+    // label — and there is only one, in the "Go to" every row shares. Matching
+    // is case-insensitive on both sides.
+    for (const query of ["comp MPS", "COMP mps", "Comp Mps"]) {
+      expect(subsequenceRanges("Go to component MPS", query)).toEqual([
+        [6, 9],
+        [16, 18],
+      ]);
+    }
   });
 
   it("returns null when a term is not there at all", () => {
@@ -252,13 +248,8 @@ describe("subsequenceRanges", () => {
     // Searching each term from the start of the label matches *more* queries
     // and highlights the wrong thing: "MPS" would take the m and the p out of
     // "comp" and leave a lone "S" marked. So each term resumes where the last
-    // one stopped.
+    // one stopped, which is what makes the reverse order a non-match.
     expect(subsequenceRanges("Go to component MPS", "MPS comp")).toBeNull();
-    expect(subsequenceRanges("Go to component MPS", "comp")).toEqual([[6, 9]]);
-    expect(subsequenceRanges("Go to component MPS", "comp MPS")).toEqual([
-      [6, 9],
-      [16, 18],
-    ]);
   });
 
   it("treats a query of only whitespace as matching everything", () => {
