@@ -28,9 +28,12 @@ const meta = {
   },
   // Controlled inputs: the component never touches the project store when
   // these are supplied, so the stories render deterministic fixtures.
+  // tipIndex is pinned for the same reason — the Tips panel would otherwise
+  // roll a random tip per mount and flake VRT baselines.
   args: {
     loading: false,
     projects: [],
+    tipIndex: 0,
   },
 } satisfies Meta<typeof ProjectsPage>;
 
@@ -94,6 +97,10 @@ export const WithProjects: Story = {
       .toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: "New from example" }))
       .toBeInTheDocument();
+    // Pinned tipIndex renders exactly one tip: the first entry. The tip is
+    // Markdown-rendered, so assert on a plain fragment (markup splits the
+    // text across elements).
+    await expect(canvas.getByText(/single search box/)).toBeInTheDocument();
   },
 };
 
