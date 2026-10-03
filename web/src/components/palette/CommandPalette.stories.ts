@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, fn, userEvent, within } from "storybook/test";
+import { resolveIcon } from "../../iconHelper";
 import CommandPalette from "./CommandPalette.svelte";
 import type { PaletteItem } from "./commandPalette";
 
@@ -53,6 +54,79 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/**
+ * The leading glyph for a row whose icon came out of a model, resolved by the
+ * caller. `null` — slot drawn, nothing in it — for a row in a list whose
+ * neighbours have glyphs, which is what keeps that list's left edge straight.
+ * Absent would mean "this row has no slot at all", and the shell can tell the
+ * two apart because `exactOptionalPropertyTypes` will not let a caller write
+ * `undefined` here by accident.
+ */
+function glyph(name?: string): Pick<PaletteItem, "icon"> {
+  return { icon: resolveIcon(name ?? "") };
+}
+
+// One slot, two kinds of glyph: a page command's emoji and a model's resolved
+// icon, plus a row with neither. This is the only place the two are drawn side
+// by side, which is the only way to see whether they read as one list — a
+// 14px SVG path and a colour-emoji in the same 1.25rem column either line up
+// or they do not, and no assertion on the markup would say which.
+const GLYPH_ITEMS: PaletteItem[] = [
+  {
+    id: "cmd:modeling",
+    label: "Go to Modeling",
+    group: "Navigate",
+    icon: "📐",
+  },
+  {
+    id: "inventory:battery",
+    label: "Go to component battery",
+    detail: "Stores power",
+    group: "Inventory",
+    ...glyph("battery-three-quarters"),
+  },
+  {
+    id: "inventory:rotor",
+    label: "Go to component rotor",
+    detail: "Spins the blades",
+    group: "Inventory",
+    // No icon in the model. The slot is still drawn, so this row's label starts
+    // where the others' do — included here rather than left out because a
+    // ragged left edge is invisible in the markup and glaring in a screenshot.
+    ...glyph(),
+  },
+];
+
+export const TextAndSvgGlyphsShareOneSlot: Story = {
+  args: { items: GLYPH_ITEMS },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const command = await canvas.findByRole("option", {
+      name: /go to modeling/i,
+    });
+    const battery = await canvas.findByRole("option", { name: /battery/i });
+    const rotor = await canvas.findByRole("option", { name: /rotor/i });
+    // The emoji is still text, drawn as text.
+    await expect(command).toHaveTextContent("📐");
+    await expect(command.querySelector("svg")).toBeNull();
+    // The resolved icon is drawn, and drawn inside the same slot — the glyph
+    // wrapper is the `aria-hidden` span, so the icon never joins the row's
+    // accessible name and cannot change what a search or a screen reader
+    // calls the row.
+    await expect(
+      battery.querySelector('span[aria-hidden="true"] > svg'),
+    ).toBeInTheDocument();
+    await expect(battery).toHaveTextContent("Go to component battery");
+    // And the row with no icon keeps the slot and draws nothing in it, rather
+    // than losing the slot (ragged edge) or being given a stand-in glyph.
+    const rotorSlot = rotor.querySelector('span[aria-hidden="true"]');
+    await expect(rotorSlot).toBeInTheDocument();
+    await expect(rotorSlot?.children).toHaveLength(0);
+    // Same slot width on both, which is the claim the picture is making.
+    await expect(rotorSlot).toHaveClass("w-5");
+  },
+};
 
 export const BrowseAll: Story = {
   play: async ({ canvasElement }) => {

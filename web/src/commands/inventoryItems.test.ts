@@ -4,6 +4,7 @@ import {
   paletteRows,
 } from "../components/palette/commandPalette";
 import type { RawModelPayload } from "../modelView";
+import { resolveIcon } from "../iconHelper";
 import {
   INVENTORY_GROUP,
   inventoryEntities,
@@ -16,9 +17,14 @@ import {
 // and systems that must NOT be offered (see inventoryEntities below).
 const MODEL: RawModelPayload = {
   components: [
-    { label: "battery", full_name: "Stores power", tags: ["power"] },
+    {
+      label: "battery",
+      full_name: "Stores power",
+      icon: "battery-three-quarters",
+      tags: ["power"],
+    },
     { label: "flight-controller", full_name: "Flies the thing" },
-    { label: "barometer", full_name: "Reads the world" },
+    { label: "barometer", full_name: "Reads the world", icon: "gauge" },
     // An instance, addressed by its source — not a definition.
     { label: "barometer", source: "barometer", parent: { Component: 1 } },
     { label: "quadcopter", parent: { System: 0 } },
@@ -52,6 +58,17 @@ describe("inventoryEntities", () => {
     });
   });
 
+  it("carries the icon name off the definition, and nothing where there is none", () => {
+    // The name, not drawn geometry: this is the model's own field, and what
+    // a caller resolves is its business. An absent icon is the empty string
+    // rather than undefined, so the row builder has one thing to test.
+    expect(inventoryEntities(MODEL).map((e) => e.icon)).toEqual([
+      "battery-three-quarters",
+      "",
+      "gauge",
+    ]);
+  });
+
   it("yields nothing for a model that failed to compile", () => {
     expect(inventoryEntities(undefined)).toEqual([]);
     expect(inventoryEntities({})).toEqual([]);
@@ -71,7 +88,12 @@ describe("inventoryEntities", () => {
 
   it("never mutates the tags it was handed", () => {
     const tags = ["power"];
-    inventoryEntities(MODEL).push({ label: "x", fullName: "", tags });
+    inventoryEntities(MODEL).push({
+      label: "x",
+      fullName: "",
+      tags,
+      icon: "",
+    });
     expect(tags).toEqual(["power"]);
   });
 });
@@ -113,10 +135,39 @@ describe("inventoryItems", () => {
     const items = inventoryItems(entities, () => {});
     expect(items[1]?.detail).toBe("Flies the thing");
     const bare = inventoryItems(
-      [{ label: "bare", fullName: "", tags: [] }],
+      [{ label: "bare", fullName: "", tags: [], icon: "" }],
       () => {},
     );
     expect(bare[0]?.detail).toBeUndefined();
+  });
+
+  it("draws the definition's own icon, where a command row draws its glyph", () => {
+    // The same leading slot, filled from the model rather than from the
+    // page list. A component's icon is a FontAwesome *name*, so the row
+    // carries resolved geometry and the shell never learns what a
+    // "battery-three-quarters" is — it only draws the path it is handed.
+    const [battery, , barometer] = inventoryItems(entities, () => {});
+    expect(battery?.icon).toEqual(resolveIcon("battery-three-quarters"));
+    expect(barometer?.icon).toEqual(resolveIcon("gauge"));
+  });
+
+  it("keeps the slot and leaves it empty for a definition with no icon", () => {
+    // `null`, not absent: these rows share one list, and a row that started
+    // half a word earlier than its neighbours would read as a mistake rather
+    // than as a definition with no icon. Nothing is drawn in the slot.
+    const [, controller] = inventoryItems(entities, () => {});
+    expect(controller?.icon).toBeNull();
+  });
+
+  it("keeps the slot empty for an icon name that resolves to no icon", () => {
+    // `icon` is a free-form string in the schema, so a typo or an icon from
+    // another icon set is a value the model legitimately holds. It must not
+    // become an empty <svg> on the row.
+    const [broken] = inventoryItems(
+      [{ label: "x", fullName: "", tags: [], icon: "not-an-icon" }],
+      () => {},
+    );
+    expect(broken?.icon).toBeNull();
   });
 
   it("gives every row a distinct id, since the list is keyed on it", () => {
@@ -128,6 +179,10 @@ describe("inventoryItems", () => {
     const [battery] = inventoryItems(entities, () => {});
     expect(battery?.hint).toContain("Stores power");
     expect(battery?.hint).toContain("power");
+    // The icon's *name* deliberately stays out of it: it is matched as text
+    // if it were there, and nobody types "battery-three-quarters" looking for
+    // the battery. An icon makes a row recognisable once found, not findable.
+    expect(battery?.hint).not.toContain("battery-three-quarters");
   });
 
   it("is still found by the bare name, now that the prefix is drawn", () => {
