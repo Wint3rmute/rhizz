@@ -5,7 +5,6 @@ import {
   createProjectWithMainFile,
   projectStore,
   setCurrentProject,
-  setCurrentScore,
 } from "../ProjectState.svelte";
 import { projectSlug } from "../vfs/slug";
 import Navbar from "./Navbar.svelte";
@@ -22,8 +21,12 @@ const NAVBAR_PROJECT_ID = projectSlug(NAVBAR_PROJECT_NAME);
 
 // The Navbar reads everything from the shared ProjectState singleton (the app
 // renders `<Navbar />` with no props), so the stories drive that singleton
-// rather than injecting fixtures through props: seed the project, make it the
-// active one, and publish the score the badge renders.
+// rather than injecting fixtures through props: seed the project and make it
+// the active one.
+//
+// The score badge and the strictness control used to be seeded here too. Both
+// live in the diagnostics bar now, so the navbar has nothing left to seed —
+// and nothing left that a project can switch on or off.
 async function ensureNavbarProject(): Promise<void> {
   const existing = await projectStore.listProjects();
   if (!existing.some((p) => p.id === NAVBAR_PROJECT_ID)) {
@@ -33,10 +36,9 @@ async function ensureNavbarProject(): Promise<void> {
     );
   }
   await setCurrentProject(NAVBAR_PROJECT_ID);
-  setCurrentScore({ overall_percentage: 72.5 });
 }
 
-// Leaves no story pinned to the fixture project (or its badges).
+// Leaves no story pinned to the fixture project.
 function clearNavbarProject(): void {
   clearCurrentProject();
 }
