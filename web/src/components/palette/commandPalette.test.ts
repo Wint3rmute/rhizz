@@ -16,13 +16,10 @@ const ITEMS: PaletteItem[] = [
   { id: "cmd:explore", label: "Go to Explore", hint: "Navigate" },
 ];
 
-// Shaped after the workspace rows the palette is actually built from: five
-// "Go to <page>" commands and a list of "Go to component <name>" rows, all
-// sharing one 17-character prefix. That prefix is why a match can never begin
-// where Fuse looks for one.
+// Shaped after the rows the palette is built from: "Go to component <name>"
+// rows, all sharing one 17-character prefix. That prefix is why a match can
+// never begin where Fuse looks for one.
 const COMMANDS: PaletteItem[] = [
-  { id: "command:page:overview", label: "Go to Overview", group: "Navigate" },
-  { id: "command:page:code", label: "Go to Code", group: "Navigate" },
   {
     id: "inventory:MPS",
     label: "Go to component MPS",
