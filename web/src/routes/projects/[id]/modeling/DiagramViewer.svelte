@@ -71,11 +71,7 @@ let {
    * one thing at a time.
    */
   onSelectComponent?: ((index: number) => void) | undefined;
-  /**
-   * How a clickable node announces itself. Only meaningful with one of the two
-   * click handlers; the default wording is about detailed views, which is a lie
-   * on a surface that navigates somewhere else.
-   */
+  /** Forwarded to DiagramCanvas, which documents it. */
   linkLabel?: ((node: DiagramNode) => string) | undefined;
   /** Shown until the layout file has loaded. Omit to render the picture immediately. */
   pending?: Snippet | undefined;
