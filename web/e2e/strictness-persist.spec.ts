@@ -23,8 +23,9 @@ async function openProject(page, name = "E2E strictness") {
   return id;
 }
 
-// The desktop navbar select (the mobile-menu copy has a different id and
-// is hidden at this viewport width).
+// The strictness control lives in the diagnostics status bar, so the id is
+// unique again — it used to be rendered twice (navbar desktop + mobile menu)
+// and the e2e had to pick the desktop copy.
 function strictnessSelect(page) {
   return page.locator("select#warning-level");
 }

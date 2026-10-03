@@ -11,15 +11,9 @@ import {
   createProjectWithFiles,
   getCurrentProject,
   getCurrentProjectId,
-  getCurrentScore,
   projectStore,
 } from "../ProjectState.svelte";
-import {
-  getWarningLevel,
-  setWarningLevel,
-  warningLevelLabel,
-} from "../WarningLevelState.svelte";
-import { get_example_projects, WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+import { get_example_projects } from "../rhizz_wasm_wrapper";
 import { toastState } from "../ToastState.svelte";
 import { resolveIcon } from "../iconHelper";
 import { TOUR_TARGETS } from "../tour/tourTargets";
@@ -30,7 +24,7 @@ import { paletteShortcutHint } from "./palette/commandPalette";
 
 // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
 // renders `<Navbar />` with no props and reads everything from the shared
-// ProjectState/WarningLevelState singletons below.
+// ProjectState singleton below.
 let { isOpen = $bindable(false) }: { isOpen?: boolean } = $props();
 
 // The project-scoped workspace links live in ../commands/workspacePages, so
@@ -41,8 +35,6 @@ const NAV_LINKS = WORKSPACE_PAGES;
 
 let activeProjectId = $derived(getCurrentProjectId());
 let activeProject = $derived(getCurrentProject());
-let activeScore = $derived(getCurrentScore());
-let warningLevel = $derived(getWarningLevel());
 
 // Plain FontAwesome question mark for the guided-tour button.
 let tourIcon = $derived(resolveIcon("question"));
@@ -86,33 +78,6 @@ async function startTourFlow(): Promise<void> {
 }
 </script>
 
-{#snippet statusBadges(withScoreTooltip: boolean)}
-  {#if activeScore !== null}
-    <div
-  class="badge badge-outline badge-info font-medium text-xs"
-  title={withScoreTooltip
-        ? `Architecture maturity / completion score: ${activeScore.overall_percentage.toFixed(1)}%`
-        : undefined}
->
-      Score: {activeScore.overall_percentage.toFixed(0)}%
-    </div>
-  {/if}
-{/snippet}
-
-{#snippet warningLevelSelect(id: string, labelClass: string)}
-  <label for={id} class={labelClass}>Strictness</label>
-  <select
-  {id}
-  class="select"
-  value={warningLevel}
-  onchange={(event) => setWarningLevel(event.currentTarget.value)}
->
-    {#each WARNING_LEVELS as level (level)}
-      <option value={level}>{warningLevelLabel(level)}</option>
-    {/each}
-  </select>
-{/snippet}
-
 <header
   class="bg-base-100 text-base-content border-b border-base-300 w-full shrink-0 z-30"
   data-tour={TOUR_TARGETS.navbar}
@@ -152,28 +117,13 @@ async function startTourFlow(): Promise<void> {
       </span>
     {/if}
 
-    <!-- Right section: Desktop badges & controls, Mobile hamburger button -->
+    <!-- Right section: Desktop controls, Mobile hamburger button -->
     <div class="ml-auto flex items-center gap-2 min-w-0">
-      <!-- Desktop badges and theme toggle -->
+      <!-- Desktop buttons and theme toggle. The score badge and the strictness
+           control that used to sit here now live in the diagnostics bar at the
+           bottom of the page — one place for the project's state, rather than
+           two bars each holding half of it. -->
       <div class="hidden md:flex items-center gap-2">
-        {@render statusBadges(true)}
-        <!-- Project-wide warning preset: gates which warnings the compiler
-             reports (errors are never gated). Persisted across reloads. The
-             visible label only appears from `lg` up — the navbar is already
-             tight at `md` — but stays in the accessibility tree at every
-             width, and `title` explains the control either way. -->
-        <!-- The project-wide warning preset: gates which warnings the
-             compiler reports (errors are never gated), persisted across
-             reloads. The visible label only appears from `lg` up — the
-             navbar is already tight at `md` — but stays in the
-             accessibility tree at every width, and `title` explains the
-             control either way. -->
-        <div
-          class="flex items-center gap-1.5 whitespace-nowrap text-base-content/70"
-          title="How much detail this project is specified at — gates which warnings are reported. Errors are always reported."
-        >
-          {@render warningLevelSelect("warning-level", "sr-only lg:not-sr-only")}
-        </div>
         {#if tourIcon}
           <button
             onclick={() => void startTourFlow()}
@@ -258,22 +208,6 @@ async function startTourFlow(): Promise<void> {
         </div>
         <div class="divider my-1"></div>
       {/if}
-
-      <!-- Mobile badges -->
-      <div class="flex flex-wrap items-center gap-2 py-1">
-        {@render statusBadges(false)}
-      </div>
-
-      <!-- Mobile warning-level picker: the same project-wide preset as the
-           desktop select, which is hidden below the md breakpoint. -->
-      <!-- Mobile-menu copy of the same preset (the desktop one is hidden
-           below the md breakpoint). -->
-      <div class="flex items-center justify-between gap-2 pt-1">
-        {@render warningLevelSelect(
-          "warning-level-mobile",
-          "whitespace-nowrap text-xs text-base-content/70",
-        )}
-      </div>
 
       <!-- Mobile theme picker: Auto follows the browser preference;
            picking Light/Dark explicitly pins the theme. -->
