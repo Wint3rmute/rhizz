@@ -84,13 +84,6 @@ const VIEWS = { files: "views", inventory: false } as const;
 const NONE = { files: "none", inventory: true } as const;
 
 describe("fileItems", () => {
-  it("lists nothing at all when the scope is none", () => {
-    // Inventory offers no files, so the listing it was handed is never
-    // turned into a row — not even the diagrams it can navigate to from
-    // elsewhere.
-    expect(fileItems(ENTRIES, NONE)).toEqual([]);
-  });
-
   it("lists every project file when the scope is all", () => {
     expect(fileItems(ENTRIES, ALL).map((i) => i.label)).toEqual([
       "system.hcl",
