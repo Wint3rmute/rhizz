@@ -209,22 +209,12 @@ export const InventorySectionOnInventory: Story = {
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
     await expect(canvas.getByText("Inventory")).toBeInTheDocument();
     await expect(canvas.queryByText("Files")).not.toBeInTheDocument();
-    // And no file row survives in their place — not the diagrams, which the
-    // user can still reach from Modeling, and not the doc that sits one
-    // folder away from the definition it shadows.
-    for (
-      const path of [
-        "views/main.hcl",
-        "views/drone/engine.hcl",
-        "system.hcl",
-        "docs/sensor.md",
-      ]
-    ) {
-      await expect(
-        canvas.queryByRole("option", { name: path }),
-        `${path} must not be offered on Inventory`,
-      ).not.toBeInTheDocument();
-    }
+    // And no file row survives in their place — not the system model, not the
+    // diagrams the user can still reach from Modeling, and not the doc that
+    // sits one folder away from the definition it shadows.
+    await expect(
+      canvas.queryByRole("option", { name: /^(views\/|system\.hcl|docs\/)/ }),
+    ).not.toBeInTheDocument();
   },
 };
 
