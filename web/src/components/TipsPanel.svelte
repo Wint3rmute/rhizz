@@ -75,7 +75,7 @@ let tip = $derived(tips[(index ?? randomIndex) % tips.length] ?? "");
      beneath it; falls back into normal flow once its own place is reached. -->
 <section
   aria-label="Tips"
-  class="alert alert-warning alert-soft text-base-content sticky bottom-4 z-10 shadow-lg"
+  class="alert alert-warning alert-soft text-base-content sticky bottom-4 z-10 shadow-sm"
 >
   {#if starIcon}
     <svg
