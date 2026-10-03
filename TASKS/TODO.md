@@ -16,11 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - When searching in inventory/ don't display views/ or docs/
-
-When using the command palette in inventory/ only the usual "Go to <subpage>" +
-"Go to component <name>" should be displayed, no other search options.
-
 ## Task <N> - Display component icons when searching in inventory
 
 The "Go to component <name>" option should display the component icon at the

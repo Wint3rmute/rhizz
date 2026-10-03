@@ -1,12 +1,13 @@
-// The palette's file rows: every file in the open project, and where each
+// The palette's file rows: the project files a page offers, and where each
 // one goes when chosen.
 //
 // A row's destination follows from *what the file is*, not from which page
 // you summoned the palette on. A `.hcl` under `views/` is a diagram, so it
 // opens on the canvas in Modeling; everything else opens in the editor. One
-// rule, no dependence on where you are standing — and every project file
-// is reachable from anywhere, which is the thing that makes a single
-// palette worth having over a per-page file list.
+// rule, no dependence on where you are standing — so every project file is
+// reachable from the pages that are about files, which is what makes a
+// single palette worth having over a per-page file list. The page decides
+// only *whether* to offer them (see ./paletteScope), never where one lands.
 //
 // The items are built here but nothing here knows how to *navigate*: a row
 // carries its path and `fileTargetFor` reads it, so the host can turn a
@@ -43,10 +44,13 @@ export function fileTargetFor(path: string): FileTarget {
  * navigate from a chosen row by handing that label straight back.
  *
  * Narrowed to the diagrams in the `views` scope, which is what the pages
- * that draw diagrams ask for. The label stays the full project path in both
- * scopes on purpose: a shorter `main.hcl` there would mean a second path
- * convention and a `fileTargetFor` that had to know which scope produced the
- * row — the confusion that a per-scope listing already caused once.
+ * that draw diagrams ask for, and to nothing at all in the `none` scope,
+ * which is what Inventory asks for: the listing it hands over is never
+ * turned into a row. The label stays the full project path wherever rows
+ * exist on purpose: a shorter `main.hcl` on the diagrams would mean a
+ * second path convention and a `fileTargetFor` that had to know which scope
+ * produced the row — the confusion that a per-scope listing already caused
+ * once.
  *
  * Directories never appear: you switch to a file, not to a folder.
  */
@@ -54,6 +58,7 @@ export function fileItems(
   entries: readonly Dirent[],
   scope: PaletteScope,
 ): PaletteItem[] {
+  if (scope.files === "none") return [];
   return entries
     .filter((entry) => entry.isFile())
     .filter((entry) => scope.files === "all" || isViewPath(entry.path))

@@ -49,8 +49,8 @@ let entries = $state<Dirent[]>([]);
 let modelSources = $state<Source[] | null>(null);
 
 // Which page you are on decides what is worth offering — the diagrams on
-// Modeling, every file on Code, and the model's own definitions alongside the
-// files on Inventory. Re-read on every navigation rather than captured at
+// Modeling, every file on Code, and on Inventory the model's own definitions
+// with no files at all. Re-read on every navigation rather than captured at
 // mount, because the host outlives every page inside it.
 let scope = $derived(paletteScopeForPath(pathname));
 
@@ -93,7 +93,8 @@ let items = $derived([
   ...fileItems(entries, scope).map<PaletteItem>((item) => ({
     ...item,
     // Named for what is actually listed, since on Modeling and Explore that
-    // is diagrams and nothing else.
+    // is diagrams and nothing else. The `none` scope produces no rows at
+    // all, so there is no heading to name there.
     group: scope.files === "views" ? VIEWS_GROUP : FILES_GROUP,
   })),
   ...(scope.inventory && inventoryModel !== undefined
@@ -113,6 +114,11 @@ let items = $derived([
 // very next keystroke must not race, and a stale list is a palette that
 // navigates to a file that is no longer there.
 //
+// It is read only where there are file rows to fill. Inventory's scope asks
+// for no files, so there is nothing to list and nothing to pay for — and the
+// listing is cleared rather than left, so walking Inventory → Code cannot
+// show the rows of a page that has not been read yet.
+//
 // `toggle` distinguishes the two callers. The chord toggles — pressing it
 // again is the obvious way to dismiss a palette you opened by muscle
 // memory. A button press does not: clicking the button that opened the
@@ -127,7 +133,9 @@ async function show(
   open = true;
   try {
     const fs = openProjectFs(projectStore, projectId);
-    entries = await fs.readdir(".", { recursive: true });
+    entries = scope.files === "none"
+      ? []
+      : await fs.readdir(".", { recursive: true });
     // Compiling is the expensive half, and only the inventory section needs
     // it — so it is read only when that section is on offer, and kept for
     // afterwards so reopening the palette on the same page is instant. This

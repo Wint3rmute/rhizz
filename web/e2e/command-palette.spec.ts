@@ -95,7 +95,7 @@ test("Code offers every file", async ({ page }) => {
   await expect(section(page, "Files")).toBeVisible();
 });
 
-test("Inventory adds the model's definitions, and opens one", async ({ page }) => {
+test("Inventory offers the pages and the definitions, and opens one", async ({ page }) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -109,12 +109,18 @@ test("Inventory adds the model's definitions, and opens one", async ({ page }) =
 
   await page.keyboard.press("Control+p");
   const palette = page.getByTestId(PALETTE);
-  // A third section, beside the page commands and the files.
+  // Two sections, not three: the pages and the definitions. The page is
+  // about entities, and a file row would be a third thing to search that
+  // lands the user on some other page entirely.
   await expect(section(page, "Navigate")).toBeVisible();
-  await expect(section(page, "Files")).toBeVisible();
   await expect(section(page, "Inventory")).toBeVisible();
-  // The files section is still there alongside it.
-  await expect(options(page, "system.hcl")).toHaveCount(1);
+  await expect(section(page, "Files")).not.toBeVisible();
+  // So no file is on offer there — not the system model, not the views, not
+  // the docs. They are all still one chord away on the pages that are about
+  // them.
+  await expect(options(page, "system.hcl")).toHaveCount(0);
+  await expect(options(page, "views/")).toHaveCount(0);
+  await expect(options(page, "docs/")).toHaveCount(0);
 
   // Searching by a definition's full name finds it — that text is not in
   // the label, only searchable, and drawn as the row's subtitle. The drone
@@ -129,6 +135,58 @@ test("Inventory adds the model's definitions, and opens one", async ({ page }) =
   // Choosing one lands on that entity in Inventory, addressed by its label.
   await expect(page).toHaveURL(`/projects/${id}/inventory/barometer`);
   await expect(page.getByTestId(PALETTE)).toHaveCount(0);
+});
+
+test("searching on Inventory never surfaces a file", async ({ page }) => {
+  // The software-house example is the one that has docs/: every one of its 12
+  // top-level components ships a `docs/<label>.md`, so it is where a doc row
+  // used to answer a search that was really asking for a component.
+  const id = await createFromExample(
+    page,
+    /Software House/,
+    "E2E palette inventory no files",
+  );
+  await gotoProject(page, id, "inventory");
+
+  await page.keyboard.press("Control+p");
+  const palette = page.getByTestId(PALETTE);
+  await expect(palette).toBeVisible();
+  // Neither kind of file is on offer, so neither heading is drawn.
+  await expect(section(page, "Files")).not.toBeVisible();
+  await expect(options(page, "docs/")).toHaveCount(0);
+  await expect(options(page, "views/")).toHaveCount(0);
+
+  const input = page.getByTestId("command-palette-input");
+  // A component label, a view file and a doc file, typed one after the other.
+  // Each used to answer with file rows alongside the component; now the
+  // component answers alone and the files answer with nothing at all.
+  for (const query of ["automation-qa", "org-chart", "platform-team.md"]) {
+    await input.fill(query);
+    await expect(
+      options(page, ".hcl"),
+      `${query} must not match a view row on Inventory`,
+    ).toHaveCount(0);
+    await expect(
+      options(page, ".md"),
+      `${query} must not match a doc row on Inventory`,
+    ).toHaveCount(0);
+    await expect(
+      options(page, "docs/"),
+      `${query} must not match a doc row on Inventory`,
+    ).toHaveCount(0);
+  }
+
+  // And the component row is still there, found by the same query — the
+  // palette is narrower, not broken.
+  await input.fill("automation-qa");
+  await expect(
+    palette.getByRole("option", { name: /^go to component automation-qa\b/i }),
+  ).toBeVisible();
+
+  // The pages are still on offer too, and one of them opens.
+  await input.fill("overview");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(`/projects/${id}/overview`);
 });
 
 test("the inventory section appears only on the inventory page", async ({ page }) => {

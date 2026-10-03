@@ -81,8 +81,16 @@ describe("fileTargetFor", () => {
 
 const ALL = { files: "all", inventory: false } as const;
 const VIEWS = { files: "views", inventory: false } as const;
+const NONE = { files: "none", inventory: true } as const;
 
 describe("fileItems", () => {
+  it("lists nothing at all when the scope is none", () => {
+    // Inventory offers no files, so the listing it was handed is never
+    // turned into a row — not even the diagrams it can navigate to from
+    // elsewhere.
+    expect(fileItems(ENTRIES, NONE)).toEqual([]);
+  });
+
   it("lists every project file when the scope is all", () => {
     expect(fileItems(ENTRIES, ALL).map((i) => i.label)).toEqual([
       "system.hcl",
@@ -189,5 +197,8 @@ describe("readdir", () => {
       "views/drone/engine.hcl",
       "views/main.hcl",
     ]);
+    // And on Inventory, none of them — not even the doc that sits one folder
+    // away from the definitions it does offer.
+    expect(fileItems(entries, NONE)).toEqual([]);
   });
 });

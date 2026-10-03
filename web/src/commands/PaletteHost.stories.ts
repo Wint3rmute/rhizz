@@ -178,10 +178,11 @@ export const FindsAView: Story = {
   },
 };
 
-// Inventory gets the model's own definitions alongside the files: the page
-// is about entities, so they are the thing worth searching there. Kept as
-// two stories so each baseline shows one state — this one the three
-// sections side by side, which is the thing a screenshot can actually pin.
+// Inventory gets the model's own definitions and the page switches, and no
+// files: the page is about entities, so those are the two answers it can
+// give, and a file row is a third thing to search that lands the user on
+// some other page. Kept as two stories so each baseline shows one state —
+// this one the untouched list, which is the thing a screenshot can pin.
 export const InventorySectionOnInventory: Story = {
   args: { pathname: "/projects/p/inventory" },
   play: async ({ canvasElement }) => {
@@ -189,16 +190,47 @@ export const InventorySectionOnInventory: Story = {
     const canvas = within(canvasElement);
     // The fixture declares one top-level definition. Anchored, because the
     // row's accessible name includes its full name ("Go to component sensor
-    // Reads the world") and "docs/sensor.md" in the files section also holds
-    // "sensor".
+    // Reads the world").
     await expect(
       await canvas.findByRole("option", { name: /^go to component sensor\b/i }),
     ).toBeInTheDocument();
-    await expect(canvas.getByText("Inventory")).toBeInTheDocument();
-    // All three sections at once: the commands, the files, and the
-    // entities — the palette is one list, not three palettes.
+    // Two sections, not three: the commands and the entities. The files are
+    // gone entirely, so the heading they were drawn under is gone too.
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
-    await expect(canvas.getByText("Files")).toBeInTheDocument();
+    await expect(canvas.getByText("Inventory")).toBeInTheDocument();
+    await expect(canvas.queryByText("Files")).not.toBeInTheDocument();
+    // And no file row survives in their place — not the diagrams, which the
+    // user can still reach from Modeling, and not the doc that sits one
+    // folder away from the definition it shadows.
+    for (
+      const path of [
+        "views/main.hcl",
+        "views/drone/engine.hcl",
+        "system.hcl",
+        "docs/sensor.md",
+      ]
+    ) {
+      await expect(
+        canvas.queryByRole("option", { name: path }),
+        `${path} must not be offered on Inventory`,
+      ).not.toBeInTheDocument();
+    }
+  },
+};
+
+export const InventoryFindsEntitiesNotFiles: Story = {
+  args: { pathname: "/projects/p/inventory" },
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    const input = await canvas.findByTestId("command-palette-input");
+    // "sensor" is both the definition's label and its doc file's name, so
+    // this is the search that used to answer with two rows — one of them a
+    // documentation file the user has to go elsewhere to read.
+    await userEvent.type(input, "sensor");
+    const rows = await canvas.findAllByRole("option");
+    await expect(rows).toHaveLength(1);
+    await expect(rows[0]).toHaveTextContent("Go to component sensor");
   },
 };
 
