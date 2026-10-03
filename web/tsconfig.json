@@ -2,17 +2,24 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": true,
     "noFallthroughCasesInSwitch": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "types": ["svelte", "@sveltejs/kit"],
-    "lib": ["dom", "dom.iterable", "esnext"]
+    "types": [
+      "svelte",
+      "@sveltejs/kit",
+      "$app/types"
+    ],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ]
   },
-  "include": ["src/**/*"],
-  "extends": "./.svelte-kit/tsconfig.json"
+  "include": [
+    "src/**/*"
+  ],
+  "extends": "$app/tsconfig"
 }

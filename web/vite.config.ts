@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { sentrySvelteKit } from "@sentry/sveltekit/vite";
 import tailwindcss from "@tailwindcss/vite";
+import { sveltekitConfig } from "./sveltekit.config.ts";
 
 // Sentry's Vite plugin does two things: it uploads the build's source maps so
 // stack traces in Sentry point at real source, and it stamps the release
@@ -42,7 +43,10 @@ export default defineConfig(({ mode }) => {
       // Before `sveltekit()`, as the Sentry docs require.
       sentrySvelteKit(sentry),
       tailwindcss(),
-      sveltekit(),
+      // Since SvelteKit 3 this plugin is also where the project's SvelteKit
+      // configuration lives — `svelte.config.js` is no longer read. Shared
+      // with `vitest.config.ts`; see sveltekit.config.ts.
+      sveltekit(sveltekitConfig),
     ],
     server: {
       fs: {
