@@ -225,21 +225,6 @@ export function subsequenceRanges(
 }
 
 /**
- * How much of a label a set of ranges accounts for, as a fraction of its
- * length — the fallback's only ranking signal. Distinct positions, so two
- * terms landing on one character are not counted twice.
- */
-function coverage(ranges: readonly [number, number][], labelLength: number) {
-  const covered = new Set<number>();
-  for (const [start, end] of ranges) {
-    for (let at = start; at <= end; at += 1) covered.add(at);
-  }
-  // An empty label is not a fraction of anything; without the floor this is
-  // NaN, and a NaN in a sort comparator corrupts the whole ordering silently.
-  return covered.size / Math.max(labelLength, 1);
-}
-
-/**
  * Rows for a query the index rejected, matched loosely instead: every
  * whitespace-separated term of the query is a subsequence of the label (see
  * {@link subsequenceRanges}).
@@ -261,10 +246,17 @@ function subsequenceRows(
   for (const item of items) {
     const ranges = subsequenceRanges(item.label, query);
     if (ranges === null) continue;
+    // Distinct positions, so two terms landing on one character count once.
+    const covered = new Set<number>();
+    for (const [start, end] of ranges) {
+      for (let at = start; at <= end; at += 1) covered.add(at);
+    }
     found.push({
       item,
       ranges,
-      covers: coverage(ranges, item.label.length),
+      // The floor keeps an empty label from making this NaN, which would
+      // corrupt the sort comparator below silently.
+      covers: covered.size / Math.max(item.label.length, 1),
     });
   }
   return found
