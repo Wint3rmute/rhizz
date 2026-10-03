@@ -4,6 +4,70 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 112 — The palette finds the row you typed when the words have a gap
+
+Typing `comp MPS` into Ctrl-P now finds "Go to component MPS", which is what
+it always should have done. The palette keeps one search — Fuse, unchanged —
+and adds a second, looser matcher that runs **only** when the first finds
+nothing at all.
+
+- **`comp MPS` was not a threshold problem, so no threshold was touched.**
+  Probing Fuse directly: it rejects the query at `threshold: 0.35`, at `0.6`,
+  and even at `1.0`, where it scores the true row (0.805) *worse* than the
+  noise it is ranked against ("Go to Code", 0.754). Fuse's bitap scores a
+  fuzzy match as its error rate **plus a penalty for where in the text the
+  match starts** (`accuracy + proximity / distance`), and every row in this
+  palette begins "Go to " — so the interesting text is never where Fuse looks
+  first. A query with a word break is worse off still: the space is just
+  another pattern character, so it has to line up with a space in the label,
+  and the only one there is the one every row shares. Raising the threshold to
+  0.6 does "fix" it, and puts "Go to Code" first for `comp MPS`, so that knob
+  was never the answer.
+- **The fallback matches each whitespace-separated term as a *subsequence*,
+  which is the whole trick.** `comp` is a subsequence of "Go to component MPS"
+  and `MPS` is a subsequence of what is left, so the query matches while the
+  space in it is ignored entirely. One `indexOf` walk per term; `null` the
+  moment a character is missing.
+- **Terms run one after another down the label, and the first implementation
+  got that wrong.** Letting each term restart from the beginning matches *more*
+  queries and highlights nonsense: `MPS` takes the `m` and the `p` out of
+  "comp" and leaves a lone `S` marked. A unit test caught it, so the design
+  changed rather than the expectation — the cost is that a query naming things
+  in the other order (`MPS comp`) now finds nothing, which is what a
+  subsequence is. Runs are emitted per stretch of adjacent characters so the
+  characters the query skipped are never highlighted as though they matched.
+- **It is a rescue, not a second ranking.** `paletteRows` returns the fallback's
+  rows only when Fuse's list is empty, so it cannot re-order, re-score or
+  dilute anything that already works — and there is a test for exactly that
+  (`stores power` is on a row's hidden `hint`; no label contains it, so a
+  fallback would lose the row, and its surviving is the proof the fallback did
+  not run). The price is that it never *adds* a row to a list Fuse was happy
+  with. Ranking inside the fallback is by how much of the label the query
+  covers, stable within a tie so equal matches keep the palette's own order.
+- **`goover` already worked and still does.** The report's second example does
+  not reproduce: Fuse has always found "Go to Overview" for it, at 0.73.
+  Recorded here rather than claimed as fixed.
+- **The palette is now looser, and that is a real trade.** A subsequence has no
+  notion of a typo-free query: `mh` holds an `m` before an `h` in both
+  `system.hcl` and `main.hcl`, so it now returns both rows where it returned
+  none. One existing test used `mh` as its "matches nothing" query — its
+  stated intent was "narrows as the query grows", which `mq` still pins, and
+  the new looseness has its own test rather than being quietly forgotten.
+- **Red/green**: 14 unit tests and the new story went red first (the story was
+  confirmed red against the old shell, not assumed to be). The e2e drives the
+  software-house example, where `plat team`, `prod mgr` and `front team` are
+  all two-word queries the labels do not spell, and asserts that exactly the
+  query's own characters come back marked — in order, with the gaps
+  unmarked — plus that a rescued row still navigates.
+- **VRT: 2 of 224 baselines new** (the one new story in both themes). No
+  existing story moved, which is the check that Fuse's own path is untouched.
+  A full follow-up run is 224/224.
+- **Validation**: `just test` (cargo + 850 Vitest + 71 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 111 — A component row in the palette draws the component's own icon
 
 Ctrl-P's "Go to component &lt;name&gt;" rows now lead with the icon the

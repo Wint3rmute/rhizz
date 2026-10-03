@@ -239,6 +239,58 @@ test("a component row draws the component's own icon", async ({ page }) => {
   await expect(options(page, "Go to component automation-qa")).toHaveCount(1);
 });
 
+test("two words with a gap between them still find the component", async ({ page }) => {
+  // The reported failure. A query can be two words the user actually reaches
+  // for and still not be a substring of the label, because the label carries
+  // a prefix the query skips — and the search scores a match partly on *where*
+  // in the label it starts, so a match that cannot begin at the first
+  // character is scored against noise it should beat. The software-house
+  // example has the rows for it: "platform-team" and "product-managers" are
+  // two words each, and neither pair of words is what the label spells.
+  const id = await createFromExample(
+    page,
+    /Software House/,
+    "E2E palette gapped query",
+  );
+  await gotoProject(page, id, "inventory");
+
+  await page.keyboard.press("Control+p");
+  const palette = page.getByTestId(PALETTE);
+  const input = page.getByTestId("command-palette-input");
+
+  for (
+    const [query, component] of [
+      ["plat team", "platform-team"],
+      ["prod mgr", "product-managers"],
+      ["front team", "frontend-team"],
+    ]
+  ) {
+    await input.fill(query);
+    await expect(
+      options(page, `Go to component ${component}`),
+      `${query} must find ${component}`,
+    ).toHaveCount(1);
+    // Exactly the query's own characters are marked, in order — the highlight
+    // is the only account the user gets of why the row matched, so what the
+    // query skipped must not be in it. How many separate runs that takes
+    // depends on how gapped the words are: "mgr" jumps over "an" and "e", so
+    // it marks three runs on its own.
+    const marked = await palette.locator("mark").allTextContents();
+    expect(marked.join(""), `${query} highlights only its own characters`)
+      .toBe(query.replaceAll(" ", ""));
+  }
+
+  // And the words still have to be there: this rescues a query the search
+  // could not place, it does not return the whole project.
+  await input.fill("plat team zzz");
+  await expect(options(page, "Go to component")).toHaveCount(0);
+
+  // A rescued match is a real match — choosing it still navigates.
+  await input.fill("plat team");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(`/projects/${id}/inventory/platform-team`);
+});
+
 test("choosing a file opens it in the editor", async ({ page }) => {
   const id = await createNewProject(page, "E2E palette file");
   await gotoProject(page, id, "overview");

@@ -128,6 +128,51 @@ export const TextAndSvgGlyphsShareOneSlot: Story = {
   },
 };
 
+// A query the index rejects and the palette's own matcher rescues. Two words
+// with a gap between them, over a label that carries a five-word prefix before
+// the part the user is typing: "comp MPS" is a substring of nothing here, and
+// as a single eight-character pattern its space cannot line up with the only
+// space the label has — the one in "Go to".
+export const GappedWordsStillFindTheRow: Story = {
+  args: {
+    items: [
+      {
+        id: "command:page:overview",
+        label: "Go to Overview",
+        group: "Navigate",
+        icon: "🔍",
+      },
+      {
+        id: "inventory:MPS",
+        label: "Go to component MPS",
+        detail: "Main power supply",
+        group: "Inventory",
+      },
+      {
+        id: "inventory:battery",
+        label: "Go to component battery",
+        detail: "Stores power",
+        group: "Inventory",
+      },
+    ] satisfies PaletteItem[],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByTestId("command-palette-input"),
+      "comp MPS",
+    );
+    const rows = await canvas.findAllByRole("option");
+    await expect(rows).toHaveLength(1);
+    await expect(rows[0]).toHaveTextContent("Go to component MPS");
+    // Both words are marked where they actually land, and the six characters
+    // the query skipped between them are not — a highlight is the only account
+    // the user gets of why this row matched.
+    const marks = canvas.getAllByText((_, node) => node?.tagName === "MARK");
+    await expect(marks.map((m) => m.textContent)).toEqual(["comp", "MPS"]);
+  },
+};
+
 export const BrowseAll: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
