@@ -29,8 +29,8 @@ let diagramEntries = $state<Dirent[]>([]);
 let selectedDiagramPath = $state<string | null>(null);
 
 function navigateToDiagram(path: string, replace = false) {
-  // `page.url` is readonly in SvelteKit 3, so the `diagram` param is set on a
-  // mutable copy that is then serialized into the `goto` target.
+  // `page.url` is readonly, so the `diagram` param is set on a mutable copy
+  // that is then serialized into the `goto` target.
   const url = new URL(page.url.href);
   if (url.searchParams.get("diagram") === path) return;
   url.searchParams.set("diagram", path);

@@ -62,13 +62,12 @@ if (dsn !== undefined && dsn !== "") {
   });
 }
 
-// SvelteKit's `handleError` covers what never reaches a component: a rejected
-// `load`, a failure in a `+layout`/page lifecycle, and — since SvelteKit 3 —
-// rendering errors and *expected* ones too (`kind: "app"` from `error(...)`,
-// `kind: "framework"` for its own 404s). The hook returns nothing, so those
-// keep SvelteKit's own status and message; the only thing it does is log, and
-// hand the error to Sentry, which is also what reaches this hook for errors
-// thrown inside event handlers.
+// SvelteKit's `handleError` runs for everything that never reaches a
+// component: a rejected `load`, a rendering failure, and *expected* errors
+// too (`kind: "app"` from `error(...)`, `kind: "framework"` for SvelteKit's
+// own 404s). Returning nothing keeps SvelteKit's own status and message, so
+// all this does is log — and hand the error to Sentry, which is also what
+// reaches this hook for errors thrown inside event handlers.
 const reportClientError: HandleClientError = ({ error, event }) => {
   console.error("An error occurred on the client side:", error, event);
 };

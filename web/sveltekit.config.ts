@@ -1,11 +1,9 @@
 // SvelteKit's project configuration, shared by `vite.config.ts` (dev/build)
 // and `vitest.config.ts` (unit tests + Storybook stories).
 //
-// It lives here rather than in either config because SvelteKit 3 dropped
-// `svelte.config.js`: the `sveltekit()` Vite plugin now takes the config as an
-// argument, so a config written in one Vite config file is invisible to the
-// other. Vitest loads `vitest.config.ts` in preference to `vite.config.ts`, so
-// before this module existed the test run compiled components *without*
+// It is a module of its own because Vitest loads `vitest.config.ts` in
+// preference to `vite.config.ts`, so a config inlined into either one reaches
+// only half the builds: the other would compile components without
 // `vitePreprocess()` (breaking every `lang="ts"` component) and without
 // `experimental.async`.
 import adapter from "@sveltejs/adapter-static";

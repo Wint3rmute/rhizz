@@ -29,17 +29,16 @@ export default {
       ...(config.server.fs.allow || ["."]),
       "../crates/rhizz-wasm/pkg",
     ];
-    // `$app/paths` reads `__SVELTEKIT_PAYLOAD__` when its module is
-    // evaluated. Since SvelteKit 3 that constant is defined by
-    // `vite-plugin-sveltekit-compile`, and `@storybook/sveltekit` removes
-    // exactly that plugin (the preview is not the app), so any story that
-    // touches `resolve()` — Navbar, Inventory, Explore, … — dies on
-    // `ReferenceError: __SVELTEKIT_PAYLOAD__ is not defined`.
+    // `$app/paths` reads a `__SVELTEKIT_PAYLOAD__` global that SvelteKit's
+    // compile plugin normally supplies via Vite's `define` — and that plugin is
+    // exactly what `@storybook/sveltekit` removes, since the preview is not
+    // the app. Without it any story touching `resolve()` (Navbar, Inventory,
+    // Explore, …) dies on a ReferenceError when that module is evaluated.
     //
-    // `undefined` is the honest value here: the payload only carries
-    // `base`/`assets`, both of which the surrounding defines already
-    // resolve to empty in a Storybook build. `config.define` is deep-merged
-    // with what the SvelteKit plugin contributes, so this key survives.
+    // `undefined` is the honest value: the payload carries only `base` and
+    // `assets`, and both already resolve to empty in a Storybook build.
+    // `config.define` is deep-merged with the SvelteKit plugin's own defines,
+    // so this key survives.
     config.define = { ...config.define, __SVELTEKIT_PAYLOAD__: "undefined" };
     return config;
   },

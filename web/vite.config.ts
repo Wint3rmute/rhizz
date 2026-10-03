@@ -43,9 +43,6 @@ export default defineConfig(({ mode }) => {
       // Before `sveltekit()`, as the Sentry docs require.
       sentrySvelteKit(sentry),
       tailwindcss(),
-      // Since SvelteKit 3 this plugin is also where the project's SvelteKit
-      // configuration lives — `svelte.config.js` is no longer read. Shared
-      // with `vitest.config.ts`; see sveltekit.config.ts.
       sveltekit(sveltekitConfig),
     ],
     server: {
