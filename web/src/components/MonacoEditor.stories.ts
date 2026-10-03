@@ -5,8 +5,7 @@ import MonacoEditorHost from "./MonacoEditorHost.svelte";
 // The one editor the app uses, on both surfaces that edit text: the Code page
 // (HCL) and the Inventory's documentation tab (Markdown). It had no stories at
 // all until now, which is why its `options` escape hatch had nothing standing
-// behind it — the Inventory is the only caller that passes one, and nothing
-// would have noticed the option being dropped.
+// behind it — the Inventory is the only caller that passes one.
 
 const meta = {
   title: "Components/MonacoEditor",
@@ -31,11 +30,10 @@ const EDITOR_CONTENT = "Editor content";
  * The rendered editor around `textarea`: its `.monaco-editor` root, its
  * `.view-lines`, and its on-screen text.
  *
- * Text is read off the DOM rather than queried per line, because Monaco splits
- * every line into one span per token and breaks wrapped lines across several
- * `.view-line` elements — no single element holds the string you want. Note
- * the `\s` in the patterns callers pass: Monaco pads wrapped segments with
- * non-breaking spaces, which `\s` matches and a literal space does not.
+ * Text comes off the DOM as a whole, not per line: Monaco splits each line into
+ * one span per token and breaks wrapped lines across several `.view-line`
+ * elements, so no single element holds the string you want. Hence the `\s` in
+ * callers' patterns — Monaco pads wrapped segments with non-breaking spaces.
  */
 function rendered(textarea: HTMLElement) {
   const editor = textarea.closest(".monaco-editor");
@@ -51,13 +49,11 @@ function rendered(textarea: HTMLElement) {
   };
 }
 
-/**
- * Monaco renders its first lines asynchronously — the language's tokenizer is a
- * lazily imported chunk — so an editor can exist, with its textarea focused and
- * a `.view-lines` node, and still be showing nothing. Every assertion below
- * waits, because one that does not is satisfied by an editor that never painted:
- * zero-width lines make "does not overflow" true for the wrong reason.
- */
+// Monaco paints its first lines asynchronously — the tokenizer is a lazily
+// imported chunk — so an editor can exist, with its input and a `.view-lines`
+// node, and still be showing nothing. Every assertion below waits: one that
+// does not is satisfied by an editor that never painted, since zero-width
+// lines make "does not overflow" true for the wrong reason.
 async function waitForRendered(textarea: HTMLElement, text: RegExp) {
   await waitFor(() => {
     // `void`, not `await`: a `waitFor` callback must be synchronous, and
@@ -67,7 +63,6 @@ async function waitForRendered(textarea: HTMLElement, text: RegExp) {
   });
 }
 
-// The Code page's configuration, which is also the component's defaults.
 export const Hcl: Story = {
   args: {
     value:
@@ -82,10 +77,8 @@ export const Hcl: Story = {
 
 // `options`: the Inventory's documentation editor wraps long lines, because its
 // pane is two fifths of a row and Monaco's own markdown configuration sets no
-// `wordWrap` — unwrapped, a prose line is one long horizontal scroll.
-//
-// Asserted geometrically rather than by reading the option back: with wrapping
-// on, the rendered lines stay inside the editor's width; without it,
+// `wordWrap`. Asserted geometrically rather than by reading the option back:
+// wrapped, the rendered lines stay inside the editor's width; unwrapped,
 // `.view-lines` is as wide as its longest line.
 export const MarkdownWordWrapped: Story = {
   args: {
@@ -109,8 +102,7 @@ export const MarkdownWordWrapped: Story = {
 
 // The counter-case: the same prose in the same box with wrapping off really is
 // one long line. Without it the measurement above could be passing because the
-// editor is too narrow to overflow *anything*, rather than because wrapping
-// works.
+// editor is too narrow to overflow anything, rather than because wrapping works.
 export const MarkdownUnwrappedOverflows: Story = {
   args: {
     language: "markdown",
