@@ -8,7 +8,11 @@ import { expect, test } from "@playwright/test";
 // up, and the Vitest story browser renders ~414px wide (see the
 // `DetailPaneStacksBelowTheDiagram` story for the narrow fallback). Playwright
 // runs at its 1280px default, which is above it.
-async function openInventoryWithComponent(page, name: string) {
+//
+// No definition is created: the split is two CSS widths on the row, so an
+// empty pane is as good a witness as a filled one — and a pane whose width
+// turned out to depend on its content would fail the ratio below either way.
+async function openInventory(page, name: string) {
   await page.goto("/");
   const create = page.getByRole("button", { name: "New project" }).first();
   await expect(create).toBeVisible();
@@ -21,24 +25,11 @@ async function openInventoryWithComponent(page, name: string) {
   await expect(tourDialog).toBeHidden();
   const id = new URL(page.url()).pathname.split("/")[2];
   if (!id) throw new Error("project id missing from URL");
-
-  // One definition, so the pane is filled rather than showing its empty state —
-  // a pane whose content cannot influence its width is a weaker witness of the
-  // split than one holding a full name and ports.
-  await page.goto(`/projects/${id}/modeling`);
-  await page.getByRole("button", { name: "+ Component" }).click();
-  const modal = page.getByTestId("create-component-modal");
-  await expect(modal).toBeVisible();
-  await modal.locator("#new-comp-name").fill("e2e-layout");
-  await modal.getByRole("button", { name: "Create Definition" }).click();
-  await expect(modal).toBeHidden();
-
   await page.goto(`/projects/${id}/inventory`);
-  return id;
 }
 
 test("inventory puts the detail pane beside the diagram preview", async ({ page }) => {
-  await openInventoryWithComponent(page, "E2E inventory layout");
+  await openInventory(page, "E2E inventory layout");
 
   const diagram = page.getByTestId("inventory-diagram");
   const pane = page.getByTestId("inventory-detail-pane");
