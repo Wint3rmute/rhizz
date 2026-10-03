@@ -1,9 +1,19 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
+import WarningLevelSelect from "./WarningLevelSelect.svelte";
 
-// Bottom status bar replacing the Overview page's diagnostics sidebar.
-// Collapsed it shows only the counts (or a clean bill of health); clicking
+// Bottom status bar replacing the Overview page's diagnostics sidebar, and the
+// home of the project-wide controls that used to sit in the navbar: collapsed
+// it shows only the counts (or a clean bill of health); clicking the counts
 // expands the full diagnostics list above the bar.
+//
+// The strip is three zones, not one button — the navbar's score badge and
+// strictness control ended up here, and a `<select>` inside a `<button>` is
+// neither valid markup nor a usable control. So the row is a flex line and the
+// toggle is a button in the middle of it: the score at the far left, the
+// strictness control at the far right, and everything the toggle owns between
+// them. The toggle keeps `flex-1`, which is what makes the chevron sit at its
+// right edge rather than the middle of the bar.
 //
 // Both surfaces are one opaque `bg-base-100`. They used to be `bg-base-100/95`
 // + a backdrop blur, which is why the panel and the strip looked like two
@@ -71,14 +81,19 @@ function specUrl(code: string): string {
     </div>
   {/if}
 
-  <button
-    type="button"
-    class="w-full px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-3 text-sm hover:bg-base-200/60"
-    onclick={() => (expanded = !expanded)}
-    aria-expanded={expanded}
-    title={expanded ? "Collapse diagnostics" : "Expand diagnostics"}
+  <!-- One row, three zones. `max-w-7xl mx-auto` + the same responsive padding
+       the panel uses is what keeps the score, the counts and the strictness
+       control on the panel's content edges when the bar is expanded. -->
+  <div
+    class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 sm:gap-3 text-sm"
   >
-    <span class="max-w-7xl mx-auto w-full flex items-center gap-3">
+    <button
+      type="button"
+      class="min-w-0 flex-1 flex items-center gap-3 text-left rounded px-2 -mx-2 hover:bg-base-200/60"
+      onclick={() => (expanded = !expanded)}
+      aria-expanded={expanded}
+      title={expanded ? "Collapse diagnostics" : "Expand diagnostics"}
+    >
       {#if diagnostics.length === 0}
         <span class="badge badge-success badge-sm">✓ clean</span>
         <span class="text-base-content/60">No errors, no warnings</span>
@@ -93,13 +108,14 @@ function specUrl(code: string): string {
             {warnings.length} warning{warnings.length === 1 ? "" : "s"}
           </span>
         {/if}
-        <span class="text-base-content/60 truncate">
+        <span class="text-base-content/60 truncate min-w-0">
           {errors.length > 0 ? errors[0]?.message : warnings[0]?.message}
         </span>
       {/if}
-      <span class="ml-auto text-base-content/50" aria-hidden="true">
+      <span class="ml-auto shrink-0 text-base-content/50" aria-hidden="true">
         {expanded ? "▾" : "▴"}
       </span>
-    </span>
-  </button>
+    </button>
+    <WarningLevelSelect />
+  </div>
 </div>
