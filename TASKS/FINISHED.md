@@ -4,6 +4,81 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 116 — The score and the strictness control moved to the diagnostics bar
+
+The navbar's score badge and strictness select now live in the diagnostics
+status bar at the bottom of every project page — score at the far left,
+strictness at the far right, the counts and the expand toggle between them.
+
+- **A `<select>` inside a `<button>` is what forced the bar's shape, and it is
+  the one thing here that was not a choice.** The strip used to be a single
+  full-width `<button>` wrapping the whole row. Putting a real control in that
+  row means the row cannot be the button, so the strip is a flex line with the
+  toggle as a `flex-1` button in the middle of it. That in turn moved the
+  chevron: it was `ml-auto` in a full-width strip (i.e. the bar's right edge)
+  and is now the right edge of the middle zone, immediately before the strictness
+  control. It reads better that way — the chevron belongs to the thing it opens
+  — but it is a change in where the bar's "affordance" lives.
+- **The strictness control was rendered twice in the navbar, by hand.** A
+  desktop copy in the `hidden md:flex` row and a mobile copy inside the
+  collapsible menu, with different element ids (`warning-level` /
+  `warning-level-mobile`) and different label visibility
+  (`sr-only lg:not-sr-only` vs a visible label) — and `strictness-persist`'s
+  e2e had a comment explaining that it could only pick the desktop copy. It is
+  one value with one meaning, so it is one component now, with one id; the
+  e2e needed no change beyond that stale comment, which is the check that
+  moving the control cost it nothing.
+- **`ScoreBadge` takes its score as a prop; the bar reads the singleton.** The
+  bar is the only surface that shows it now, so it reads `getCurrentScore()`
+  and hands it over. The badge itself stays presentational, which is what buys
+  it a VRT baseline: the static Storybook build never publishes a score, so a
+  badge that read the store would render empty in every screenshot.
+- **Only Modeling publishes a score, so the bar's left end is empty on the
+  other project pages.** That was already true of the navbar badge and this
+  change does not touch it. It was tempting to fix here — the project layout
+  already holds a compile for the diagnostics bar, and `model()?.score()` is
+  right there — and it is a trap: ModelingPage's effect clears the score on
+  unmount, so a second writer in the layout would have the two overwriting each
+  other on every navigation into and out of Modeling. Left alone deliberately.
+- **The style pass found a real overlap, not just an uneven look.** With three
+  zones in one line, a 320px row has 256px of content to fill and the select
+  alone wants 104 (it sizes to its widest option, "Architectural"). The
+  throwaway Playwright probe against the static build measured the chevron
+  ending *underneath* the select. What gives below `sm`: the message preview,
+  the score badge, and the gaps — plus a `max-w-24` on the select. What never
+  gives: the counts (a squeezed "2 warnings" reads as a rendering fault).
+  Re-measured after: chevron ends 7.6px before the select. The toggle also
+  gets `overflow-hidden`, so a model with a dozen warnings clips the chevron
+  rather than spilling the toggle's contents over the control next to it — a
+  missing glyph beats two overlapping controls.
+- **Two stories came out of the pass, and one of them exists because the old
+  ones could not show the feature.** `FullStrip` seeds the score in a `loader`
+  (which, unlike `beforeEach`, also runs in the static build VRT captures), so
+  the bar's baseline finally shows all three zones at once; `NarrowStrip` pins
+  the phone-width row. Both carry their own caveats: Storybook's `expect` does
+  not retry, so the strictness story had to wrap its assertions in `waitFor`
+  after an unpolled check read a working control as broken, and `FullStrip`
+  asserts the score's *presence* rather than its visibility because the test
+  runner's viewport is phone-sized, where the badge is deliberately hidden.
+- **Red/green**: the new e2e case went red twice — first on the select missing
+  from the bar, then on the badge missing from it — and green after each move.
+  It measures "far left" / "far right" rather than eyeballing them: the
+  badge's left edge starts the row, the select's right edge ends it, and the
+  select lands within the bar's own right gutter.
+- **The navbar's tour step was promising controls the navbar no longer has**
+  ("watch the error/warning counts, and switch warning levels"). Rewritten to
+  point at the bar.
+- **VRT: 12 baselines re-recorded** (the navbar's desktop and mobile-expanded —
+  `mobile-collapsed` did not move, which is the check that nothing in the closed
+  menu was one of them — and the bar's four stories), **10 new** (the two
+  component stories, `FullStrip`, `NarrowStrip`, ×2 themes). A follow-up full run
+  is 240/240 with nothing changed.
+- **Validation**: `just test` (cargo + 861 Vitest + 77 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 115 — The middle mouse button opens a component's detail view
 
 Middle-clicking a node on the Modeling canvas now does what `V` does: it opens

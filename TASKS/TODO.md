@@ -16,19 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Migrate some navbar components to the diagnostics bar
-
-I want to migrate some components to the diagnostics bar:
-
-- Score badge
-- Strictness settings
-
-The score shall be displayed on the far-left side of the bar. The strictness
-switched should be displayed on the far-right side of the bar. Run a
-style/consistency pass after initial implementation to ensure that the bottom
-bar will have a consistent look after the changes, both when closed and when
-expanded.
-
 ## Task <N> - Add add a modeling/ context menu option "create new view from selection"
 
 With 1 or more components selected, a context menu option "create new view from selection" should be available.
