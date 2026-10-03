@@ -97,10 +97,48 @@ function completionScore(def: InventoryDefinition): number {
 
 /** A placed component's identity/linkage, mirroring the `raw.components`
  * entries of the compiled model payload (`source` names the reused
- * definition for instances; `parent` climbs to the owning system). */
+ * definition for instances, `parent` climbs to the owning system, and `label`
+ * is what the canvas draws). Fields are optional because the payload spells
+ * "absent" as an empty string about as often as it omits a key. */
 export interface RawPlacement {
   source?: string | undefined;
   parent?: { Component?: number; System?: number } | undefined;
+  label?: string | undefined;
+}
+
+/**
+ * The definition a node placed on a diagram stands for, or `null` when this
+ * page cannot open one.
+ *
+ * Clicking a node in the preview means "focus the inventory on this", and the
+ * two are not the same string: `instance "main-chip" { source = "mcu" }` is
+ * *drawn* as "main-chip" and *addressed* as "mcu", because the usage-site label
+ * is free and the definition is what the list holds. So an instance answers
+ * with the definition it was sourced from, a definition answers with itself,
+ * and anything this list does not hold — a system node, or a source naming
+ * something that is no longer a definition — answers `null` so the click does
+ * nothing rather than navigating somewhere meaningless.
+ *
+ * Takes the arena index the diagram reports. That index is shared with the
+ * typed model (`raw.components` is index-aligned with `model.component_keys()`,
+ * see `componentDataByKey`), which is what lets the diagram hand back a bare
+ * index and this page resolve it.
+ */
+export function definitionLabelForNode(
+  raw: { components?: RawPlacement[] } | undefined,
+  definitionLabels: readonly string[],
+  index: number,
+): string | null {
+  const component = raw?.components?.[index];
+  if (component === undefined) return null;
+  // `source` is "" as often as it is absent, and both mean "not an instance",
+  // so this cannot be a `??`: the empty string has to fall through too.
+  const source = component.source;
+  const label = source === undefined || source === ""
+    ? component.label
+    : source;
+  if (label === undefined) return null;
+  return definitionLabels.includes(label) ? label : null;
 }
 
 /** Picks the system a new component-specific view should bind to: the

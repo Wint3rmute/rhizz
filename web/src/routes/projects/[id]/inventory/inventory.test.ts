@@ -4,6 +4,7 @@ import {
   DEFAULT_VIEW_DIR,
   defaultViewPath,
   definitionDepth,
+  definitionLabelForNode,
   filterDefinitions,
   type InventoryDefinition,
   InventoryTab,
@@ -173,5 +174,62 @@ describe("preferredViewSystem", () => {
 
   it("falls back to main when the model has no systems", () => {
     expect(preferredViewSystem([], [], "motor")).toBe("main");
+  });
+});
+
+describe("definitionLabelForNode", () => {
+  // A placed node is addressed by its arena index, which is shared with the
+  // typed model (see componentDataByKey), and this list is the only thing that
+  // can say what focusing it means — so these are the two questions the click
+  // has to answer: which definition is this node, and is it one this page can
+  // open at all?
+  const raw = {
+    components: [
+      { label: "controller" }, // 0: a definition, no source
+      { label: "main-chip", source: "mcu" }, // 1: an instance, renamed
+      { label: "loose", source: "not-a-definition" }, // 2: dangling source
+      { label: "mcu" }, // 3: the definition itself
+      { label: "demo-system", parent: { System: 0 } }, // 4: a system
+    ],
+  };
+  const DEFINITIONS = ["controller", "mcu"];
+
+  it("answers a definition node with its own label", () => {
+    expect(definitionLabelForNode(raw, DEFINITIONS, 0)).toBe("controller");
+    expect(definitionLabelForNode(raw, DEFINITIONS, 3)).toBe("mcu");
+  });
+
+  it("answers an instance with the definition it was sourced from", () => {
+    // Not the label on the canvas. `instance "main-chip" { source = "mcu" }`
+    // is drawn as "main-chip" and addressed as "mcu", and only the second one
+    // names something this page can open — which is the whole reason the
+    // resolver exists rather than reading the node's label.
+    expect(definitionLabelForNode(raw, DEFINITIONS, 1)).toBe("mcu");
+  });
+
+  it("answers null for a node this page cannot open", () => {
+    // A source naming something that is not a listed definition, and a system
+    // node, are both drawn on a canvas and neither is addressable here. Clicking
+    // them must do nothing rather than navigate somewhere meaningless.
+    expect(definitionLabelForNode(raw, DEFINITIONS, 2)).toBeNull();
+    expect(definitionLabelForNode(raw, DEFINITIONS, 4)).toBeNull();
+  });
+
+  it("answers null for an index the model does not have", () => {
+    expect(definitionLabelForNode(raw, DEFINITIONS, 99)).toBeNull();
+    expect(definitionLabelForNode(undefined, DEFINITIONS, 0)).toBeNull();
+    expect(definitionLabelForNode({}, DEFINITIONS, 0)).toBeNull();
+  });
+
+  it("treats an empty source as no source", () => {
+    // The payload spells "no source" as "" as often as it omits it, and an
+    // empty string must not be read as a definition named "".
+    expect(
+      definitionLabelForNode(
+        { components: [{ label: "battery", source: "" }] },
+        ["battery"],
+        0,
+      ),
+    ).toBe("battery");
   });
 });

@@ -35,6 +35,7 @@ let {
   scene,
   markerId = "arrow",
   linkNodes = false,
+  linkLabel,
   busy = false,
   onNodePointerDown,
   onNodeClick,
@@ -56,6 +57,12 @@ let {
   markerId?: string | undefined;
   /** Wrap each node in `<a>`, preserving the read-only DOM contract (`a > g > g`). */
   linkNodes?: boolean | undefined;
+  /**
+   * How a linked node announces itself, for surfaces whose click means
+   * something other than "open its detailed view" — the default wording would
+   * then be a small lie to anyone listening. Omit to use {@link detailLabel}.
+   */
+  linkLabel?: ((node: DiagramNode) => string) | undefined;
   /** Auto-layout is writing positions; node and resize cursors become `wait`. */
   busy?: boolean | undefined;
   onNodePointerDown?:
@@ -369,7 +376,11 @@ function detailLabel(node: DiagramNode): string {
   <a
     href={onNodeClick ? "#" : undefined}
     style:pointer-events={frozen ? "none" : undefined}
-    aria-label={onNodeClick ? detailLabel(node) : undefined}
+    aria-label={onNodeClick
+      ? linkLabel
+        ? linkLabel(node)
+        : detailLabel(node)
+      : undefined}
     onclick={onNodeClick
           ? (event) => {
             event.preventDefault();

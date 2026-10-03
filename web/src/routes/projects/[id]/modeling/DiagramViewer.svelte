@@ -32,7 +32,7 @@ import {
 } from "./persistence";
 import type { DiagramStaticBox } from "./types";
 import { fitCamera, sceneBounds } from "./blend";
-import { buildReadOnlyScene } from "./scene";
+import { buildReadOnlyScene, type DiagramNode } from "./scene";
 import { createDiagramTransition } from "./transition.svelte";
 import DiagramCanvas from "./DiagramCanvas.svelte";
 
@@ -50,6 +50,8 @@ let {
   projectId = null,
   diagramPath = null,
   onOpenDiagram,
+  onSelectComponent,
+  linkLabel,
   pending,
   whenEmpty,
   whenMissing,
@@ -60,6 +62,21 @@ let {
   diagramPath?: string | null;
   /** Navigate to a component's detail diagram. Omit for a preview that does not navigate; missing views then do not toast. */
   onOpenDiagram?: ((path: string) => void) | undefined;
+  /**
+   * Report a clicked node by its index in the compiled model, for a surface
+   * where a click means something other than opening a detail diagram —
+   * Inventory focuses itself on the definition the node came from, which is a
+   * *different label* from the one on the canvas, so only the caller can say
+   * what the click means. Takes precedence over `onOpenDiagram`: a node means
+   * one thing at a time.
+   */
+  onSelectComponent?: ((index: number) => void) | undefined;
+  /**
+   * How a clickable node announces itself. Only meaningful with one of the two
+   * click handlers; the default wording is about detailed views, which is a lie
+   * on a surface that navigates somewhere else.
+   */
+  linkLabel?: ((node: DiagramNode) => string) | undefined;
   /** Shown until the layout file has loaded. Omit to render the picture immediately. */
   pending?: Snippet | undefined;
   /** Shown when the loaded layout has nothing placed. Omit to render an empty picture. */
@@ -233,6 +250,12 @@ let hoveredDoc = $derived.by(() => {
 });
 
 function onnodeclick(index: number) {
+  // A surface that says what a click means wins: it has already decided, and
+  // re-deriving a detail diagram here would answer a question it never asked.
+  if (onSelectComponent) {
+    onSelectComponent(index);
+    return;
+  }
   if (!onOpenDiagram) return;
   const component = components[index];
   if (!component) return;
@@ -247,6 +270,13 @@ function onnodeclick(index: number) {
   }
   toastState.show(`No detailed view for ${component.label} created`, "info");
 }
+
+// Whether a click on a node goes anywhere. Drives the `<a>` wrapper, so a
+// preview that only *looks* like it navigates must not claim to be a link.
+let clickable = $derived(
+  onOpenDiagram !== undefined ||
+    onSelectComponent !== undefined,
+);
 
 let vacant = $derived(
   layoutLoaded &&
@@ -332,9 +362,10 @@ $effect(() => () => stage.destroy());
     >
       <DiagramCanvas
         scene={stage.shown ? stage.scene : desiredScene}
-        linkNodes={onOpenDiagram !== undefined}
+        linkNodes={clickable}
+        {linkLabel}
         frozen={stage.settling}
-        onNodeClick={onOpenDiagram ? onnodeclick : undefined}
+        onNodeClick={clickable ? onnodeclick : undefined}
         onNodeHover={onnodehover}
       />
     </svg>

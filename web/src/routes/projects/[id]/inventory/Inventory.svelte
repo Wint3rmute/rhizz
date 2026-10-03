@@ -25,6 +25,7 @@ import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
 import {
   defaultViewPath,
+  definitionLabelForNode,
   filterDefinitions,
   INVENTORY_TABS,
   type InventoryDefinition,
@@ -212,6 +213,45 @@ let selectedDefinition = $derived(
   filtered.find((d) => d.label === selectedLabel) ?? null,
 );
 
+// ── Clicking a node in the preview focuses the inventory on it ──────────────
+//
+// The preview is a diagram of the open definition, and a node in it is a
+// component the user can see and point at, so clicking it should do what
+// clicking its card does — which is `selectLabel`, and therefore the same URL
+// change, the same shareable address, and the same back/forward. Explore's
+// node click is the same idea one page over: navigate, and let the URL say so.
+//
+// The click arrives as a model index, which the diagram shares with
+// `raw.components` (see componentDataByKey), and what it *means* is decided
+// here because it is this list's question: a node answers with the definition
+// it came from, which is not the label drawn on it when an instance was renamed
+// at its usage site.
+let definitionLabels = $derived(definitions.map((d) => d.label));
+
+function handleSelectNode(index: number): void {
+  const label = definitionLabelForNode(raw, definitionLabels, index);
+  // A node this page cannot open — a system, or an instance of something that
+  // is no longer a definition — has nowhere to go, and saying so would be
+  // noise on a canvas that is only a preview.
+  if (label === null) return;
+  // This list's own rule is that the open entity is one the current filter
+  // still shows, and the URL effect below would enforce it by falling back to
+  // the first row — undoing the click. Clear the filter instead, so the click
+  // lands on the component that was pointed at.
+  if (!filtered.some((d) => d.label === label)) {
+    query = "";
+    activeTab = InventoryTab.All;
+  }
+  selectLabel(label);
+}
+
+// Not the canvas's default wording, which is about opening a detailed view: on
+// this page the click focuses the inventory, and a link that announces
+// something else is a small lie to anyone listening.
+function nodeLinkLabel(node: { label: string }): string {
+  return `${node.label}, open in inventory`;
+}
+
 let emptyStatePath = $derived(
   selectedDefinition ? defaultViewPath(selectedDefinition.label) : null,
 );
@@ -396,6 +436,8 @@ async function handleCreateView(): Promise<void> {
           <DiagramViewer
             {projectId}
             diagramPath={`${selectedDefinition.label}.hcl`}
+            onSelectComponent={handleSelectNode}
+            linkLabel={nodeLinkLabel}
           >
             {#snippet whenMissing()}
               <div

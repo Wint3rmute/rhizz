@@ -4,6 +4,73 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 113 — Clicking a node in Inventory's preview focuses that component
+
+A node in the diagram Inventory previews is now clickable, and clicking it
+focuses the inventory on that component — the same thing clicking its card
+does, so it changes the URL and the browser's back/forward buttons walk through
+it. Explore's node click was the same idea one page over, and is now built the
+same way.
+
+- **The click hands back an index; this page decides what it means.** The
+  diagram reports a clicked node's arena index, and only Inventory knows that
+  focusing means "the definition this node came from". That indirection is the
+  whole design, because the two labels are routinely different:
+  `instance "main-chip" { source = "mcu" }` is *drawn* as "main-chip" and
+  *addressed* as "mcu", so reading the node's label would navigate to a page
+  that does not exist. `definitionLabelForNode` resolves it and answers `null`
+  when the target is not a listed definition — a system node, or a source
+  naming something that is no longer one — so the click does nothing rather
+  than going somewhere meaningless.
+- **The index is shared with the typed model, which is load-bearing.**
+  `DiagramViewer` counts in `model.components()` and Inventory reads
+  `raw.components`; `componentDataByKey` already relies on those arenas being
+  index-aligned, and that is now stated at the call site rather than left as an
+  assumption two modules apart.
+- **A click that the sidebar's filter would hide clears the filter.** This
+  list's own rule is that the open entity must be one the filter shows, and the
+  URL effect enforces it by falling back to the first row — which would have
+  undone the click and left the user on a blank pane. Clearing the search box
+  is the only outcome that lands on the component that was pointed at.
+- **The node announces what it does, not what the canvas assumes.**
+  `DiagramCanvas`'s default link wording is "open detailed view", which is
+  simply untrue here, so `linkLabel` lets a surface describe its own click.
+  Explore is unchanged and keeps the default.
+- **`dimUnlinked` deliberately stays tied to `onOpenDiagram`.** Explore dims
+  nodes that have no detail view because that is the click it offers;
+  Inventory's nodes are a different proposition, and dimming them by "has a
+  detail view" would be a second wrong assumption. The preview is also
+  visually unchanged — every existing VRT baseline still matches, which is the
+  check that wrapping nodes in `<a>` draws the same picture.
+- **No example ships a per-component view**, so the preview is the "no diagram
+  yet" state in all of them and an e2e had to build its own fixture through the
+  UI: create `views/flight-controller.hcl` from Inventory's empty state, then
+  give it nodes by editing that file on the Code page. The view file is written
+  with a **clipboard paste**, because both obvious alternatives mangle HCL in
+  Monaco's hands — `type` fires auto-close on every brace, and `insertText`
+  arrives as input events that still run through the same auto-indent,
+  cascading a fresh indent per newline and leaving the auto-closed braces
+  behind (three closing braces for two openings, observed).
+- **Two nodes, placed clear of each other**, because they are two cases: `mcu`
+  is an instance of a definition of its own, and `flight-controller` is the
+  definition already on screen. The second case is a real constraint — a child
+  box drawn over its parent's takes the parent's clicks — and clicking the
+  already-focused node must leave the URL alone, or a Back press appears to do
+  nothing.
+- **Red/green**: five `definitionLabelForNode` cases, the new story, and both
+  e2e tests went red first, each confirmed against the un-wired page rather
+  than assumed. A first e2e draft asserted "a node that cannot be opened does
+  nothing" through the UI and passed with *and* without the feature — the
+  un-wired preview has no links to click — so it was deleted rather than kept
+  as a test that cannot fail; that branch is unit-tested instead.
+- **VRT: 2 of 226 baselines new** (the one new story in both themes), 0
+  re-baselined. A full follow-up run is 226/226.
+- **Validation**: `just test` (cargo + 856 Vitest + 73 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 112 — The palette finds the row you typed when the words have a gap
 
 Typing `comp MPS` into Ctrl-P now finds "Go to component MPS", which is what
