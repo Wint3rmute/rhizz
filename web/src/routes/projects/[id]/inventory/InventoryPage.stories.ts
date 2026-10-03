@@ -265,16 +265,12 @@ export const DeepLinkedEntity: Story = {
 };
 
 // The detail pane is a column beside the diagram preview, not a strip under
-// it. That arrangement is a `md:` one, and the Vitest story browser is ~414px
-// wide — `md:` never applies here — so the side-by-side geometry cannot be
-// measured in a story: it is pinned by this file's VRT baselines (1280 wide)
-// and by the e2e spec, which runs at Playwright's desktop default.
-//
-// What *is* measurable is the narrow fallback: below `md` the pane goes back
-// under the diagram. Asserted as computed flex-direction on the shared row
-// plus the two rects not overlapping, so neither can drift on its own — a pane
-// that kept a fixed width would still be beside the diagram without changing
-// what the row says, and vice versa.
+// it — but that is an `md:` arrangement and this browser is ~414px wide, so the
+// side-by-side geometry cannot be measured here. It is pinned by this file's
+// VRT baselines (1280 wide) and by the e2e spec. What is measurable is the
+// narrow fallback: below `md` the pane goes back under the diagram. Asserted as
+// the row's computed flex-direction *and* the two rects not overlapping, so
+// neither can drift on its own.
 export const DetailPaneStacksBelowTheDiagram: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
