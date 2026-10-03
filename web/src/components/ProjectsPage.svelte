@@ -2,6 +2,7 @@
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import ScrollingBackground from "./ScrollingBackground.svelte";
+import TipsPanel from "./TipsPanel.svelte";
 import {
   createProjectWithFiles,
   createProjectWithMainFile,
@@ -31,9 +32,13 @@ interface Props {
   projects?: Project[] | null;
   // `null` (or absent) means "uncontrolled": read live from the store.
   loading?: boolean | null;
+  // Which tip the Tips panel shows. `null` (or absent) means
+  // "uncontrolled": a random tip per mount — the app passes nothing,
+  // stories pin an index so VRT baselines stay deterministic.
+  tipIndex?: number | null;
 }
 
-let { projects = null, loading = null }: Props = $props();
+let { projects = null, loading = null, tipIndex = null }: Props = $props();
 
 // Where the "Read the book" card sends you: the mdBook build of `book/`,
 // published via GitHub Pages.
@@ -226,7 +231,7 @@ async function deleteProject(project: Project) {
         </div>
       </div>
     {:else}
-      <div class="relative h-full min-h-[70vh] overflow-hidden">
+      <div class="relative min-h-[70vh]">
         <!-- Scrolling screenshot background fills the space around the list. -->
         <ScrollingBackground />
 
@@ -283,6 +288,10 @@ async function deleteProject(project: Project) {
                   </li>
                 {/each}
               </ul>
+
+              <!-- Prototype Tips panel: a single tip per visit. -->
+              <div class="divider"></div>
+              <TipsPanel index={tipIndex} />
             </div>
           </div>
         </div>
