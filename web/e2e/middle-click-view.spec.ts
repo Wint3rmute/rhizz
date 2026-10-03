@@ -1,10 +1,15 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 // The middle mouse button over a node is the pointer's `V`: it opens that
-// component's detail view, creating one when the component has none. Panning
-// keeps the middle button on *empty* canvas (Space + left-drag still pans from
-// anywhere, including over a node), so these two tests pin both halves of that
-// split — the second one is the regression guard for the first.
+// component's detail view, creating one when the component has none — from the
+// node's box, from the dots on its border, and only while it has no view yet.
+// Panning keeps the middle button on *empty* canvas (Space + left-drag still
+// pans from anywhere, including over a node), which the last test pins as the
+// regression guard for that split.
+//
+// The whole feature lives in these e2e tests and no Storybook story: a middle
+// click has no picture to compare, so a screenshot would only ever show a
+// canvas that looks the same whether the gesture worked or not.
 
 async function openDiagram(page: Page, name: string) {
   await page.goto("/");
@@ -84,6 +89,27 @@ test("middle-clicking a node creates its detail view, then jumps to it", async (
     `/projects/${id}/modeling/e2e-middle.hcl`,
   );
   await expect(canvas.getByText("e2e-middle").first()).toBeVisible();
+});
+
+test("middle-clicking a node's border dot opens that node's detail view", async ({ page }) => {
+  const { id, canvas } = await openDiagram(page, "E2E middle click port");
+  await createComponent(page, "e2e-port");
+
+  // The dots on a node's border (its directional connection handles, and its
+  // ports where it has any) have their own mousedown handler, which used to
+  // start drawing a connection from any button. They sit exactly where the
+  // pointer lands on a node, so middle click has to reach the node *through*
+  // them — otherwise the gesture has a hole in the most obvious place.
+  const dot = canvas.locator('[data-testid="diagram-side-handle"] circle')
+    .first();
+  await expect(dot).toBeVisible();
+  const box = await dot.boundingBox();
+  if (!box) throw new Error("border dot has no bounding box");
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
+    button: "middle",
+  });
+
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-port.hcl`);
 });
 
 test("middle-drag on empty canvas still pans, and navigates nowhere", async ({ page }) => {
