@@ -65,11 +65,22 @@ codebase imported `$lib`.
   navbar link does now "refresh" — verified with a throwaway e2e probe
   that no document reload happens; only the (purely param-threading) `load`
   functions re-run.
+- **`$app/tsconfig` is a generated file, and nothing synced it before
+  Storybook read it.** CI's VRT job failed the preview build with 39 ×
+  `Tsconfig not found $app/tsconfig`: the new `extends` resolves through
+  `node_modules/$app/tsconfig.json`, which only `svelte-kit sync` writes,
+  and the SvelteKit Vite plugin that would have done so is the one
+  `@storybook/sveltekit` strips. It passed locally only because `deno task
+  sync` had run once and `node_modules/$app` persisted — the kind of
+  green that a clean CI checkout is designed to catch. `build-storybook`
+  syncs first, like `check` and `lint` already did, and the Justfile's
+  Storybook recipes go through that script.
 - **Validation**: `just test` (cargo + 854 Vitest + 73 e2e), `just lint`
   (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just
   build`, `just format`, and the full VRT suite 226/226 with no baseline
-  re-recorded. The 226/226 was checked against a `main` worktree too, so
-  the Storybook regression above was confirmed rather than guessed at.
+  re-recorded — the last from a clean tree, and confirmed against a
+  `main` worktree so the Storybook regression above was measured rather
+  than guessed at.
 
 ---
 
