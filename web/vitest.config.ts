@@ -13,9 +13,7 @@ import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { playwright } from "@vitest/browser-playwright";
 import { sveltekitConfig } from "./sveltekit.config.ts";
 
-// `import.meta.dirname` rather than the old `__dirname ?? fileURLToPath(...)`
-// dance: Vite 8 can load this config natively, and `__dirname` is not defined
-// in a native ESM config loader (it warns about exactly that).
+// Vite can load this config natively, where `__dirname` is undefined.
 const dirname = import.meta.dirname;
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon

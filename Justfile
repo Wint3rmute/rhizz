@@ -43,11 +43,12 @@ wasm:
 
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
-# The Storybook build goes through `deno run build-storybook`, not a bare
-# `storybook build`, because that script runs `svelte-kit sync` first:
+#
+# Both builds go through a package.json script rather than a bare `vite build` /
+# `storybook build`, because those scripts run `svelte-kit sync` first:
 # tsconfig.json extends `$app/tsconfig`, which only exists once sync has
-# written node_modules/$app/tsconfig.json, and a Storybook build started
-# from a clean tree reads tsconfig.json before anything syncs.
+# written node_modules/$app/tsconfig.json, and both tools read tsconfig.json
+# before anything syncs.
 build: wasm
     {{run}} sh -c 'cd web && dx vite build'
     {{run}} sh -c 'cd web && deno run build-storybook'
@@ -94,8 +95,7 @@ dev: wasm
     {{run}} sh -c 'cd web && deno run dev'
 
 # Starts a storybook server. If you're an AI, never use this. It will just hang forever.
-# `deno task sync` first, for the same reason `build-storybook` does it: the
-# SvelteKit plugin that would sync is the one Storybook strips.
+# Syncs first for the same reason `build` does.
 storybook:
     {{run}} sh -c 'cd web && deno task sync'
     {{run}} sh -c 'cd web && dx storybook dev'
