@@ -172,6 +172,134 @@ export function createPaletteIndex(items: PaletteItem[]): PaletteIndex {
  * a relevance score nobody asked for is disorienting — and a real query
  * switches to Fuse's ranking.
  */
+/**
+ * Which characters of `label` a query matches, as inclusive `[start, end]`
+ * ranges ready for {@link labelSegments}, or `null` when the query is not
+ * there at all.
+ *
+ * Every whitespace-separated term is matched as a *subsequence* of the label:
+ * its characters must appear, in order, with anything allowed in between. So
+ * `comp MPS` finds "Go to component MPS" by skipping "onent ", and `ovr`
+ * finds "Go to Overview" by skipping "to ". A run is emitted per stretch of
+ * adjacent characters rather than one run spanning the gap, because the gap
+ * did not match and must not be highlighted as though it had.
+ *
+ * Terms run **one after another down the label**, each picking up where the
+ * last stopped, because that is what decides what gets highlighted. Letting
+ * each term start from the beginning instead matches more queries and
+ * highlights the wrong thing: "comp MPS" over "Go to component MPS" would take
+ * the m and the p out of "comp" and light up "comp" plus a lone "S". The cost
+ * is that a query naming things in the other order ("MPS comp") finds nothing,
+ * which is what a subsequence is.
+ *
+ * There is no notion of a typo here and no notion of a word boundary: `mh`
+ * matches "system.hcl", which is what makes this a *fallback* rather than the
+ * index — see {@link paletteRows}.
+ *
+ * Exported so the range maths can be tested on its own; what a caller wants
+ * is usually {@link paletteRows}.
+ */
+export function subsequenceRanges(
+  label: string,
+  query: string,
+): [number, number][] | null {
+  const haystack = label.toLowerCase();
+  const ranges: [number, number][] = [];
+  // Where the search resumes, carried from one term to the next.
+  let from = 0;
+  for (const term of query.toLowerCase().split(" ")) {
+    if (term === "") continue;
+    // The run this term is currently building.
+    let runStart = -1;
+    let runEnd = -1;
+    for (const character of term) {
+      const at = haystack.indexOf(character, from);
+      if (at === -1) return null;
+      if (runStart === -1) runStart = at;
+      // A character found past the one before it opens a new run; whatever is
+      // in between belongs to neither.
+      else if (at !== runEnd + 1) {
+        ranges.push([runStart, runEnd]);
+        runStart = at;
+      }
+      runEnd = at;
+      from = at + 1;
+    }
+    ranges.push([runStart, runEnd]);
+  }
+  return ranges;
+}
+
+/**
+ * How much of a label a set of ranges accounts for, as a fraction of its
+ * length — the fallback's only ranking signal. Distinct positions, so two
+ * terms landing on one character are not counted twice.
+ */
+function coverage(ranges: readonly [number, number][], labelLength: number) {
+  const covered = new Set<number>();
+  for (const [start, end] of ranges) {
+    for (let at = start; at <= end; at += 1) covered.add(at);
+  }
+  // An empty label is not a fraction of anything; without the floor this is
+  // NaN, and a NaN in a sort comparator corrupts the whole ordering silently.
+  return covered.size / Math.max(labelLength, 1);
+}
+
+/**
+ * Rows for a query the index rejected, matched loosely instead: every
+ * whitespace-separated term of the query is a subsequence of the label (see
+ * {@link subsequenceRanges}).
+ *
+ * This is a rescue, not a second ranking. It runs only when the index found
+ * nothing at all, so it cannot re-order, re-score or dilute a result that
+ * already works — the price of that safety being that it never *adds* a row to
+ * a list the index was happy with.
+ */
+function subsequenceRows(
+  items: readonly PaletteItem[],
+  query: string,
+): PaletteRow[] {
+  const found: {
+    item: PaletteItem;
+    ranges: [number, number][];
+    covers: number;
+  }[] = [];
+  for (const item of items) {
+    const ranges = subsequenceRanges(item.label, query);
+    if (ranges === null) continue;
+    found.push({
+      item,
+      ranges,
+      covers: coverage(ranges, item.label.length),
+    });
+  }
+  return found
+    // Denser first. `sort` is stable, so rows covering equally much keep the
+    // order they were listed in — the palette's own order, which is the one
+    // the empty query shows and so the one the user already knows.
+    .sort((a, b) => b.covers - a.covers)
+    .map(({ item, ranges }) => ({
+      item,
+      segments: labelSegments(item.label, ranges),
+    }));
+}
+
+/**
+ * The rows to show for a query. An empty query lists every item in the
+ * order it was handed over — a palette whose untyped state is shuffled by a
+ * relevance score nobody asked for is disorienting — and a real query
+ * switches to Fuse's ranking.
+ *
+ * When Fuse rejects a query outright the rows come from
+ * {@link subsequenceRows} instead. That closes a real gap rather than
+ * expressing a preference: Fuse scores a fuzzy match as its error rate *plus a
+ * penalty for where in the text the match starts*, and every row here begins
+ * "Go to " — so the interesting text is never where Fuse looks first. A query
+ * with a word break in it is worse off still, because its space has to line up
+ * with a space in the label, and the only one there is the one every row
+ * shares. "comp MPS" scored worse than the noise it was ranked against, at
+ * every threshold, and found nothing.
+ */
 export function paletteRows(
   index: PaletteIndex,
   query: string,
@@ -184,7 +312,10 @@ export function paletteRows(
     }));
   }
 
-  return index.fuse.search(needle).map((result) => {
+  const found = index.fuse.search(needle);
+  if (found.length === 0) return subsequenceRows(index.items, needle);
+
+  return found.map((result) => {
     // Fuse reports one match entry per searched key. Only `label` is on
     // screen, so only its offsets can be highlighted; a hit that came from
     // `hint` leaves the label whole.
