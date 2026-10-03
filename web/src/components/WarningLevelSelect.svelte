@@ -34,7 +34,17 @@ let warningLevel = $derived(getWarningLevel());
   value={warningLevel}
   onchange={(event) => setWarningLevel(event.currentTarget.value)}
 >
-  {#each WARNING_LEVELS as level (level)}
-    <option value={level}>{warningLevelLabel(level)}</option>
-  {/each}
+  <!-- The list carries a group heading, so opening the control says what the
+       numbers mean instead of leaving three bare words. `<optgroup>` is the
+       honest way to do that: it is a real, non-selectable heading the browser
+       draws, and assistive technology announces the group with the option.
+       daisyUI has nothing for it — it styles `option` (padding, radius, hover)
+       and the popup, but has no `optgroup` rules, so the heading is drawn by
+       the browser. The alternative, a disabled first `<option>`, would have
+       inherited daisyUI's option styling and read as a fourth level. -->
+  <optgroup label="Strictness level">
+    {#each WARNING_LEVELS as level (level)}
+      <option value={level}>{warningLevelLabel(level)}</option>
+    {/each}
+  </optgroup>
 </select>
