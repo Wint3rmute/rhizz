@@ -239,7 +239,7 @@ async function deleteProject(project: Project) {
           <!-- Solid card holding the projects list, same style as the landing
                hero card, sitting on top of the scrolling background. -->
           <div class="card bg-base-100 shadow-2xl border border-base-content/10 min-h-[100vh]">
-            <div class="card-body p-6 sm:p-8">
+            <div class="card-body p-6 sm:p-8 flex flex-col grow">
               <!-- Stacks below `sm` so the actions sit under the heading
                    instead of overflowing a narrow viewport; `sm:flex-row`
                    restores the original side-by-side layout. -->
@@ -289,8 +289,11 @@ async function deleteProject(project: Project) {
                 {/each}
               </ul>
 
-              <!-- Prototype Tips panel: a single tip per visit. -->
-              <div class="divider"></div>
+              <!-- mt-auto pushes the divider + tips to the bottom of the
+                   full-height card, so on short lists the panel rests at the
+                   viewport bottom (where sticky then holds it during scroll)
+                   instead of floating mid-card. -->
+              <div class="divider mt-auto"></div>
               <TipsPanel index={tipIndex} />
             </div>
           </div>

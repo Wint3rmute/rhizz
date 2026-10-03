@@ -32,7 +32,7 @@ export const tips: string[] = [
   "In **Modeling**, **+ Component** → **Use Existing Component** places an instance of a reusable definition instead of inventing a new one.",
   "Reporting a **Modeling** bug? Click “**Copy Debug Info**” in the toolbar to export your session as a replayable test for the issue.",
   "Snapping is on by default — hold `Ctrl`/`Cmd` while dragging to place freely; the grid reads faint every 10 units, medium every 100, bold every 1000.",
-  "Pick your snap grid size (`10`/`20`/`50`/`100`) next to **Snap to Grid**; to prace components more precisely.",
+  "In the **Modeling** page, you can pick a snap grid size (`10`/`20`/`50`/`100`) next to **Snap to Grid**; to place components more precisely.",
   "Hold `Shift` and click nodes to build a multi-selection, then drag to move the whole group at once.",
   "With a component selected, press `T`/`B`/`C`/`F` keys to cycle its text alignment, border style, color, and font (also settable as `color`/`border`/`font` in HCL).",
   "Select a node to edit name, tags, leaf status, ports, messages, and fields in the **Node Inspector** while the completion score updates live.",
@@ -71,9 +71,11 @@ let randomIndex = Math.floor(Math.random() * tips.length);
 let tip = $derived(tips[(index ?? randomIndex) % tips.length] ?? "");
 </script>
 
+<!-- Sticky: pinned to the viewport bottom while the project list scrolls
+     beneath it; falls back into normal flow once its own place is reached. -->
 <section
   aria-label="Tips"
-  class="alert alert-warning alert-soft text-base-content"
+  class="alert alert-warning alert-soft text-base-content sticky bottom-4 z-10 shadow-lg"
 >
   {#if starIcon}
     <svg
