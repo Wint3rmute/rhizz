@@ -215,24 +215,17 @@ let selectedDefinition = $derived(
 
 // ── Clicking a node in the preview focuses the inventory on it ──────────────
 //
-// The preview is a diagram of the open definition, and a node in it is a
-// component the user can see and point at, so clicking it should do what
-// clicking its card does — which is `selectLabel`, and therefore the same URL
-// change, the same shareable address, and the same back/forward. Explore's
-// node click is the same idea one page over: navigate, and let the URL say so.
-//
-// The click arrives as a model index, which the diagram shares with
-// `raw.components` (see componentDataByKey), and what it *means* is decided
-// here because it is this list's question: a node answers with the definition
-// it came from, which is not the label drawn on it when an instance was renamed
-// at its usage site.
+// A node in the preview is a component the user can point at, so clicking it
+// does what clicking its card does — `selectLabel`, and therefore the same URL
+// change and the same back/forward. Explore's node click is the same idea one
+// page over. What a click *means* is decided here because it is this list's
+// question; see definitionLabelForNode.
 let definitionLabels = $derived(definitions.map((d) => d.label));
 
 function handleSelectNode(index: number): void {
   const label = definitionLabelForNode(raw, definitionLabels, index);
-  // A node this page cannot open — a system, or an instance of something that
-  // is no longer a definition — has nowhere to go, and saying so would be
-  // noise on a canvas that is only a preview.
+  // Nothing to focus, and saying so would be noise on a canvas that is only a
+  // preview.
   if (label === null) return;
   // This list's own rule is that the open entity is one the current filter
   // still shows, and the URL effect below would enforce it by falling back to
