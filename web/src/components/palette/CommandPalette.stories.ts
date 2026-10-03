@@ -55,14 +55,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/**
- * The leading glyph for a row whose icon came out of a model, resolved by the
- * caller. `null` — slot drawn, nothing in it — for a row in a list whose
- * neighbours have glyphs, which is what keeps that list's left edge straight.
- * Absent would mean "this row has no slot at all", and the shell can tell the
- * two apart because `exactOptionalPropertyTypes` will not let a caller write
- * `undefined` here by accident.
- */
+// `null` — slot drawn, nothing in it — for a row with no icon; see the three
+// states on `PaletteItem.icon`. Never `undefined`: `exactOptionalPropertyTypes`
+// will not let a caller write that by accident.
 function glyph(name?: string): Pick<PaletteItem, "icon"> {
   return { icon: resolveIcon(name ?? "") };
 }
