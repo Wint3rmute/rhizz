@@ -43,9 +43,14 @@ wasm:
 
 # Frontend artifacts first, so rhizz-server's build.rs embeds the real
 # UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
+# The Storybook build goes through `deno run build-storybook`, not a bare
+# `storybook build`, because that script runs `svelte-kit sync` first:
+# tsconfig.json extends `$app/tsconfig`, which only exists once sync has
+# written node_modules/$app/tsconfig.json, and a Storybook build started
+# from a clean tree reads tsconfig.json before anything syncs.
 build: wasm
     {{run}} sh -c 'cd web && dx vite build'
-    {{run}} sh -c 'cd web && dx storybook build'
+    {{run}} sh -c 'cd web && deno run build-storybook'
     {{run}} cargo build --release --all-targets
 
 # Builds the mdBook (book/). The preprocessor (crates/rhizz-book) compiles
@@ -73,7 +78,7 @@ book-serve:
 # gallery to web/vrt-report/index.html (open it straight from disk).
 # Extra args go to Playwright, e.g. `just vrt -g navbar`.
 vrt *args: wasm
-    {{run}} sh -c 'cd web && dx storybook build --quiet'
+    {{run}} sh -c 'cd web && deno run build-storybook --quiet'
     {{run}} sh -c 'cd web && dx playwright test -c playwright.vrt.config.ts {{args}}'
 
 # Same as `vrt`, but skips the wasm + Storybook rebuild.
@@ -89,5 +94,8 @@ dev: wasm
     {{run}} sh -c 'cd web && deno run dev'
 
 # Starts a storybook server. If you're an AI, never use this. It will just hang forever.
+# `deno task sync` first, for the same reason `build-storybook` does it: the
+# SvelteKit plugin that would sync is the one Storybook strips.
 storybook:
+    {{run}} sh -c 'cd web && deno task sync'
     {{run}} sh -c 'cd web && dx storybook dev'
