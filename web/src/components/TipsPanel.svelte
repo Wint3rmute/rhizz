@@ -1,11 +1,12 @@
 <script module lang="ts">
-// One tip per user-facing finished task (see TASKS/FINISHED.md). Refactors,
-// build/CI, audits, and internal architecture tasks are deliberately skipped —
-// only functionality an end user can notice and act on belongs here.
+// Tips displayed in the project selection page.
 //
 // Tips are Markdown (rendered through the shared Markdown.svelte): **bold**
 // names the action or surface, `code` marks shortcuts, paths, commands,
 // diagnostic codes, and HCL snippets.
+//
+// If you stumble across this file when implementing a user-facing functionality,
+// consider adding a tip to this list explaining how to use the new feature.
 export const tips: string[] = [
   "Press **Ctrl-P** (**Cmd-P** on Mac) to jump to any workspace page, file, or command from a single search box.",
   "The **Ctrl-P** palette uses *fuzzy search* — you can type incomplete words and still find correct matches",
