@@ -38,8 +38,9 @@ export const SecondTip: Story = {
     await expect(
       canvas.getByRole("heading", { name: "Tips" }),
     ).toBeInTheDocument();
+    // Plain fragment: Markdown splits the tip across strong/em elements.
     await expect(
-      canvas.getByText(/In the Ctrl-P palette you can type words with gaps/),
+      canvas.getByText(/still find correct matches/),
     ).toBeInTheDocument();
   },
 };
