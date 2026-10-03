@@ -35,36 +35,28 @@ three ways of asking for a detail view cannot disagree about what one is.
   where the pointer lands on a node, and (already) a right-click on a port left
   a half-drawn connection behind under the context menu that opened on top of
   it. Left button only now — every other button belongs to what is underneath.
+  The e2e middle-clicks one of those dots (a directional connection handle,
+  which every placed node has) so the fall-through is covered by the test
+  rather than by the comment above it.
+- **This is the one Modeling change with no Storybook story, on purpose.** A
+  middle click has no picture: the canvas afterwards is the same whether the
+  gesture navigated or did nothing, so a story would have asserted through the
+  sidebar tree and added four VRT baselines (two themes × two stories) of a
+  screenshot that cannot fail for the reason anyone would want checked. The
+  e2e drives a real pointer instead, which is also the only way to be sure the
+  gesture reads `button === 1` off a real `mousedown`.
 - **The e2e's first pan assertion had the sign backwards, and the failure is
   the part worth keeping.** It asserted the node moves *against* the drag; the
   canvas pans with the pointer, so it is `+120`. Recorded as what the run
   reported rather than as a fix, because the wrong guess would have "passed" a
   pan that never happened had the number been 0.
-- **A new story file needs an `eslint.config.js` entry, and that is not
-  optional.** The `no-unsafe-*` override block enumerates every file importing a
-  first-party `.svelte` module, because typescript-eslint's `projectService`
-  types those imports as `any` (ESLint's TS program cannot parse `.svelte`;
-  svelte-check can). Verified rather than assumed: an untouched copy of
-  `DetailedViewMenu.stories.ts` dropped in beside the new story drew the same
-  twelve errors, and was clean once removed — so it is the file list, not the
-  code.
-- **svelte-check caught an option Playwright has and testing-library does
-  not.** The story's tree query passed `exact: true`; valid in `getByRole`
-  (Playwright), a type error in `queryAllByRole` (testing-library), where a
-  string `name` already matches the accessible name in full. ESLint's
-  type-aware rules passed it.
-- **Red/green**: the e2e and both stories went red first against the un-wired
-  page (the URL stayed on `main.hcl`, the tree row never became current), and
-  the pan guard was confirmed green *before* the change. The stories drive
-  `userEvent.pointer` with `[MouseMiddle]` rather than dispatching a synthetic
-  `MouseEvent`, so the gesture takes the same pointer path a real middle click
-  does — a story firing a hand-made event would have passed even if the handler
-  only ever looked at `button` somewhere else.
-- **VRT: 4 of 230 baselines new** (the two stories in both themes), 0
-  re-baselined. The new screenshot is also the proof the gesture ran: it shows
-  `sensor.hcl` open in the tree with only the clicked node on the canvas. A full
-  follow-up run is 230/230.
-- **Validation**: `just test` (cargo + 856 Vitest + 75 e2e), `just lint`
+- **Red/green**: all three e2e cases went red against the un-wired page first —
+  the URL stayed on `main.hcl` and no tree row ever became current — while the
+  pan guard was confirmed green *before* the change. The port-dot case was
+  re-checked by deleting the one-line `button !== 0` guard and watching it fail
+  again, since that guard is the only thing holding it up.
+- **VRT: 226/226, no baselines added and none re-recorded.**
+- **Validation**: `just test` (cargo + 854 Vitest + 76 e2e), `just lint`
   (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
   `just format` and the full VRT suite all pass.
 
