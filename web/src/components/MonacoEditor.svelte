@@ -6,10 +6,7 @@ import { cssVarToHex } from "../css_var_to_hex";
 interface Props {
   value: string;
   language?: string;
-  /**
-   * Monaco options merged over the defaults below. Applied at create time
-   * only — see the `untrack` at the call site for why that matters.
-   */
+  /** Monaco options merged over the defaults below. Create-time only. */
   options?: monaco.editor.IStandaloneEditorConstructionOptions;
   /** The live editor, for callers that need `focus()` or a selection. */
   editor?: monaco.editor.IStandaloneCodeEditor | undefined;
