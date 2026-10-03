@@ -90,33 +90,47 @@ function specUrl(code: string): string {
 
   <!-- One row, three zones. `max-w-7xl mx-auto` + the same responsive padding
        the panel uses is what keeps the score, the counts and the strictness
-       control on the panel's content edges when the bar is expanded. -->
+       control on the panel's content edges when the bar is expanded.
+
+       The row stays one line at every width, so the responsive rules are all
+       about what *gives* when space runs short: below `sm` the score badge and
+       the message preview are hidden, the gaps tighten, and the strictness
+       select is capped. What never gives is the counts — and
+       `overflow-hidden` on the toggle means a model with unusually many
+       diagnostics clips the chevron rather than spilling the toggle's contents
+       over the select. A missing glyph beats two overlapping controls. -->
   <div
     class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 sm:gap-3 text-sm"
   >
     <ScoreBadge {score} />
     <button
       type="button"
-      class="min-w-0 flex-1 flex items-center gap-3 text-left rounded px-2 -mx-2 hover:bg-base-200/60"
+      class="min-w-0 flex-1 flex items-center gap-1.5 sm:gap-3 text-left rounded hover:bg-base-200/60 overflow-hidden"
       onclick={() => (expanded = !expanded)}
       aria-expanded={expanded}
       title={expanded ? "Collapse diagnostics" : "Expand diagnostics"}
     >
       {#if diagnostics.length === 0}
-        <span class="badge badge-success badge-sm">✓ clean</span>
-        <span class="text-base-content/60">No errors, no warnings</span>
+        <span class="badge badge-success badge-sm shrink-0">✓ clean</span>
+        <span class="text-base-content/60 truncate min-w-0 hidden sm:inline">
+          No errors, no warnings
+        </span>
       {:else}
+        <!-- The count badges never shrink: at phone widths they, the chevron
+             and the strictness control are what is left of the row, and a
+             squeezed "2 warnings" reads as a rendering fault. The message
+             preview is the part that gives way — the counts are the news. -->
         {#if errors.length > 0}
-          <span class="badge badge-error badge-sm">
+          <span class="badge badge-error badge-sm shrink-0">
             {errors.length} error{errors.length === 1 ? "" : "s"}
           </span>
         {/if}
         {#if warnings.length > 0}
-          <span class="badge badge-warning badge-sm">
+          <span class="badge badge-warning badge-sm shrink-0">
             {warnings.length} warning{warnings.length === 1 ? "" : "s"}
           </span>
         {/if}
-        <span class="text-base-content/60 truncate min-w-0">
+        <span class="text-base-content/60 truncate min-w-0 hidden sm:inline">
           {errors.length > 0 ? errors[0]?.message : warnings[0]?.message}
         </span>
       {/if}

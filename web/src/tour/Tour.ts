@@ -26,8 +26,10 @@ export function tourSteps(projectId: string): OnboardingStep[] {
       id: "tour-navbar",
       title: "Navbar",
       description: `The core navigational component: jump between Overview,
-        Modeling, Inventory, Explore and Code, watch the
-        error/warning counts, and switch warning levels.`,
+        Modeling, Inventory, Explore and Code, and start the tour or the
+        go-to palette from here. The project's error and warning counts, its
+        score and its strictness setting live in the bar at the bottom of
+        the page.`,
       target: "navbar",
       placement: "bottom",
       href: page(projectId, "overview"),
