@@ -4,6 +4,7 @@
 // project knowledge: it knows about `PaletteItem`s and nothing else. The
 // app-specific halves (which files exist, which commands are on offer)
 // live in ../commands/.
+import type { ResolvedIcon } from "../../iconHelper";
 import Fuse from "fuse.js";
 
 /** One selectable row. Everything the shell renders is declared here. */
@@ -23,8 +24,35 @@ export interface PaletteItem {
   hint?: string;
   /** Section heading, drawn above the first row of each group. */
   group?: string;
-  /** Leading glyph shown before the label (usually an emoji). */
-  icon?: string;
+  /**
+   * The leading glyph, drawn before the label: either a literal character
+   * (an emoji, which is what the page commands use) or resolved SVG
+   * geometry, which is what a model that names its own icons produces. The
+   * two are one field rather than two so a row cannot claim both a glyph and
+   * an icon, and so there is a single slot to align.
+   *
+   * Geometry rather than an icon *name* because the shell has no icon set and
+   * no business having one — the caller resolves a name to a path (see
+   * `resolveIcon`) and hands over something drawable. `ResolvedIcon` is
+   * imported as a type only, so nothing here pulls in an icon library; it is
+   * the same struct the canvas and the tree already draw, which is what keeps
+   * a component's icon the same shape everywhere it appears.
+   *
+   * Three states, and the difference between the last two is the whole reason
+   * this is not a plain optional:
+   *
+   * - a character or geometry — draw the slot, with this in it.
+   * - `null` — draw the slot and leave it empty.
+   * - absent — draw no slot at all, and the label starts at the row's edge.
+   *
+   * A row with `null` is a row in a list whose other rows have glyphs, and it
+   * is what keeps that list's left edge straight: without it, one component
+   * without an icon would start half a word earlier than its neighbours and
+   * read as a mistake rather than as an absent icon. So callers whose list
+   * draws glyphs pass `null` for the rows that have none, and callers whose
+   * list has no glyphs at all (the files) leave the field off.
+   */
+  icon?: string | ResolvedIcon | null;
   /**
    * What picking this row does. Optional, so a palette may also be a
    * read-only list (and so a story can drive the shell without navigating

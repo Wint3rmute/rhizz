@@ -267,9 +267,28 @@ function handleWindowKeyDown(event: KeyboardEvent): void {
               handleSelect(row.item);
             }}
           >
-            {#if row.item.icon}
+            {#if row.item.icon !== undefined}
+              <!-- One slot, three states: a literal character, inline SVG, or
+                   empty-but-present (a `null` icon, which is how a row in a
+                   list of glyphs keeps its left edge straight without being
+                   given a glyph it does not have). Absent means no slot at
+                   all, so a list that has no glyphs is not indented by one.
+
+                   `fill-current` so a drawn glyph takes the row's own colour —
+                   the row turns its text colour when highlighted, and a
+                   hard-coded one would leave the icon behind on exactly the
+                   row the user is looking at. `w-3.5` is the same box the
+                   component tree and the Inventory card draw a resolved icon
+                   in, and `align-text-bottom` sits it on the text rather than
+                   the baseline an inline SVG would use, so an emoji row and
+                   an icon row read as one list. -->
               <span class="shrink-0 w-5 text-center" aria-hidden="true"
-                >{row.item.icon}</span>
+                >{#if typeof row.item.icon === "string"}{row.item.icon}{:else if row.item.icon}<svg
+                    viewBox="0 0 {row.item.icon.width} {row.item.icon.height}"
+                    class="w-3.5 h-3.5 fill-current align-text-bottom"
+                  >
+                    <path d={row.item.icon.svgPath} />
+                  </svg>{/if}</span>
             {/if}
             <span class="shrink-0 truncate font-mono">
               {#each row.segments as segment, j (j)}

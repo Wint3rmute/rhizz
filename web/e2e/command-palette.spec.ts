@@ -206,6 +206,39 @@ test("the inventory section appears only on the inventory page", async ({ page }
   }
 });
 
+test("a component row draws the component's own icon", async ({ page }) => {
+  // All 12 top-level definitions of this example declare an icon, so the count
+  // is the whole claim: every definition row came out of the model carrying a
+  // glyph. That is the part a unit test cannot reach — the name has to
+  // survive the compiler, the JSON payload and the row builder before there is
+  // anything to draw.
+  const id = await createFromExample(
+    page,
+    /Software House/,
+    "E2E palette component icons",
+  );
+  await gotoProject(page, id, "inventory");
+
+  await page.keyboard.press("Control+p");
+  const rows = page.getByTestId(PALETTE).getByTestId("command-palette-option");
+  // The definitions, and only the definitions: the page commands carry emoji
+  // (drawn as text, not as an <svg>), so a glyph count that included them
+  // would be measuring the wrong thing.
+  const components = rows.filter({ hasText: "Go to component" });
+  await expect(components).toHaveCount(12);
+  await expect(components.locator("svg")).toHaveCount(12);
+
+  // The emoji rows are untouched by this — still a character of text in the
+  // same slot, so the two kinds of row read as one list. The commands come
+  // first (see the CommandsComeFirst story), so the first row is one.
+  await expect(rows.first()).toContainText("Go to Overview");
+  await expect(rows.first().locator("svg")).toHaveCount(0);
+
+  // And an icon is decoration, not content: the row is still found, and still
+  // named, by the words on it.
+  await expect(options(page, "Go to component automation-qa")).toHaveCount(1);
+});
+
 test("choosing a file opens it in the editor", async ({ page }) => {
   const id = await createNewProject(page, "E2E palette file");
   await gotoProject(page, id, "overview");

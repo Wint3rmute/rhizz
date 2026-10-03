@@ -33,12 +33,22 @@ const SYSTEM_HCL = `project {
 
 component "sensor" {
   full_name = "Reads the world"
+  icon      = "microchip"
+  leaf      = true
+}
+
+component "pump" {
+  full_name = "Moves fluid"
   leaf      = true
 }
 
 system "demo" {
   instance "sensor" {
     source = "sensor"
+  }
+
+  instance "pump" {
+    source = "pump"
   }
 }
 `;
@@ -215,6 +225,43 @@ export const InventorySectionOnInventory: Story = {
         `${path} must not be offered on Inventory`,
       ).not.toBeInTheDocument();
     }
+  },
+};
+
+// A definition's own icon, drawn where the page commands draw their glyph —
+// and a definition with none, which keeps the slot so the list's left edge
+// stays straight. Both halves are here because the list is only convincing
+// when they sit next to each other: one filled slot is a decoration, a filled
+// slot beside an empty one is the alignment this is protecting.
+export const ComponentIconsOnInventory: Story = {
+  args: { pathname: "/projects/p/inventory" },
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    // The fixture's `sensor` declares `icon = "microchip"`; its `pump`
+    // declares none.
+    const sensor = await canvas.findByRole("option", {
+      name: /^go to component sensor\b/i,
+    });
+    const pump = await canvas.findByRole("option", {
+      name: /^go to component pump\b/i,
+    });
+    // Drawn inside the glyph slot rather than beside the label, which is what
+    // "the same style as the ruler in front of Go to Modeling" means — the
+    // emoji rows above are in that same column.
+    const drawn = sensor.querySelector('span[aria-hidden="true"] > svg');
+    await expect(drawn).toBeInTheDocument();
+    // The definition without an icon keeps the slot and draws nothing in it:
+    // no stand-in glyph, which would be drawing a component row as something
+    // it is not, and no missing slot, which would leave its label a word-width
+    // to the left of every other row in the list.
+    const empty = pump.querySelector('span[aria-hidden="true"]');
+    await expect(empty).toBeInTheDocument();
+    await expect(empty?.children).toHaveLength(0);
+    await expect(empty).toHaveClass("w-5");
+    // And the icon stays out of the row's accessible name, so the palette is
+    // still searched and announced by the words on it.
+    await expect(sensor).toHaveTextContent("Go to component sensor");
   },
 };
 

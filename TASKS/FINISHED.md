@@ -4,6 +4,78 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 111 — A component row in the palette draws the component's own icon
+
+Ctrl-P's "Go to component &lt;name&gt;" rows now lead with the icon the
+definition declares in the model, in the same slot as the ruler in front of
+"Go to Modeling". A definition with no icon keeps the slot and draws nothing
+in it, so the list's left edge stays straight.
+
+- **`PaletteItem.icon` is now a character, resolved geometry, `null`, or
+  nothing at all** — and the two empties are the interesting part. `null` means
+  "draw the slot, leave it empty"; absent means "draw no slot". That is why it
+  is not a plain `string | ResolvedIcon | undefined`: with
+  `exactOptionalPropertyTypes` already on in this repo, the compiler will not
+  let a caller write `undefined` by accident, so the distinction the drawing
+  depends on is one the type system holds rather than one a comment asks for.
+- **The empty slot was not the first answer, and the screenshot is why.** The
+  obvious implementation draws a glyph only when there is one, which is what
+  `ComponentHierarchyTree` does. In the palette it looks broken: an
+  icon-less row starts a word-width left of every other row *and* of the
+  command rows above it, and a ragged left edge across a list reads as a
+  rendering fault rather than as a missing icon. `ComponentHierarchyTree` can
+  get away with it because its rows already start with a checkbox in a reserved
+  column; a palette row has nothing in front of the label. Both stories keep
+  the icon-less row in the baseline for exactly this reason — the defect is
+  invisible in the markup and obvious in the picture.
+- **Nothing is drawn in the empty slot, deliberately.** The obvious filler is
+  the generic `faFile` glyph that `DefinitionCard` falls back to, and it is
+  wrong here: these rows are components, and a file icon would be drawing them
+  as something they are not. An empty reserved column says "no icon" and costs
+  one word-width.
+- **The shell still has no icon set.** A component's `icon` is a FontAwesome
+  *name* in the model, and the name is resolved by the caller
+  (`inventoryItems` → `resolveIcon`); the shell draws the path it is handed.
+  `ResolvedIcon` is imported as a **type only**, so nothing in the palette's
+  module graph pulls in the icon library — and it is the repo's existing struct
+  rather than a parallel one, which is what keeps a component's icon the same
+  14px `fill-current` box on the canvas, in the tree, in the Inventory card and
+  here instead of a fourth shape.
+- **The icon's *name* is not searchable.** `hint` still carries the full name
+  and the tags; nobody types "battery-three-quarters" looking for the battery.
+  A test asserts the resolved name never lands in `hint`, so that stays a
+  decision rather than a drift.
+- **`fill-current`, not a colour.** The row flips its text colour when
+  highlighted, so a hard-coded glyph colour would leave the icon behind on
+  exactly the row the user is looking at. `align-text-bottom` puts the inline
+  SVG on the text rather than the baseline an inline SVG defaults to, which is
+  what lets a 14px path and a colour emoji share one 1.25rem column.
+- **Red/green**: the two `inventoryEntities`/`inventoryItems` cases went red
+  first. Both new stories (`ComponentIconsOnInventory`,
+  `TextAndSvgGlyphsShareOneSlot`) were confirmed red against the old shell
+  rather than assumed to be, and the second one caught the ragged edge: it was
+  written asserting an *absent* slot, which is what the first implementation
+  did, and was rewritten when the screenshot showed what that looked like. The
+  PaletteHost fixture gained a second definition (`pump`, no icon) so both
+  halves of the list are in one baseline. The e2e drives the software-house
+  example, where all 12 top-level definitions declare an icon, so the count of
+  glyphs *is* the claim — the part a unit test cannot reach, since the name has
+  to survive the compiler, the JSON payload and the row builder first.
+- **VRT: 4 of 222 baselines new, 6 re-baselined.** The three existing
+  Inventory stories moved because the fixture gained a definition and a glyph;
+  the two shell stories that draw rows are untouched, which is the check that
+  the emoji path did not regress. A full follow-up run is 222/222.
+- **Not addressed**: the fuzzy matcher. `comp MPS` still finds nothing, and
+  "goover" still finds nothing, so typing anything *but* a name is still the
+  weak spot — the icon does not make a row findable, only findable-once-found.
+  That is the next task, and it is a `Fuse` threshold/keys question rather than
+  anything about icons.
+- **Validation**: `just test` (cargo + 834 Vitest + 70 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 110 — Inventory offers no files in the command palette
 
 Ctrl-P on `inventory/` now answers with two things: the workspace pages and
