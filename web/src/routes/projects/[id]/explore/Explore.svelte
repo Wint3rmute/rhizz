@@ -28,14 +28,15 @@ let effectiveProjectId = $derived(projectId ?? getCurrentProjectId());
 let diagramEntries = $state<Dirent[]>([]);
 let selectedDiagramPath = $state<string | null>(null);
 
-function navigateToDiagram(path: string, replaceState = false) {
-  const url = new URL(page.url);
+function navigateToDiagram(path: string, replace = false) {
+  // `page.url` is readonly in SvelteKit 3, so the `diagram` param is set on a
+  // mutable copy that is then serialized into the `goto` target.
+  const url = new URL(page.url.href);
   if (url.searchParams.get("diagram") === path) return;
   url.searchParams.set("diagram", path);
   void goto(`${url.pathname}${url.search}${url.hash}`, {
-    replaceState,
-    noScroll: true,
-    keepFocus: true,
+    replace,
+    reset: false,
   });
 }
 
@@ -113,7 +114,7 @@ $effect(() => {
           <p class="text-base-content/60 text-sm">
             Select or create a project from the Projects page to explore its diagrams.
           </p>
-          <a href={resolve("/projects", {})} class="btn btn-primary mt-2">
+          <a href={resolve("/projects")} class="btn btn-primary mt-2">
             Back to projects
           </a>
         </div>

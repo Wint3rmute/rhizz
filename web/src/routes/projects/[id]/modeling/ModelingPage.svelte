@@ -509,9 +509,8 @@ function selectView(path: string | null, replace = false): void {
   // below runs on every entry load) must not push a duplicate history entry.
   if (target === page.url.pathname) return;
   void goto(target, {
-    replaceState: replace,
-    noScroll: true,
-    keepFocus: true,
+    replace,
+    reset: false,
   });
 }
 

@@ -79,7 +79,7 @@ let project = $derived(getCurrentProject());
       <p class="text-base-content/60 text-sm">
           No project exists with id "{data.projectId}".
         </p>
-      <a href={resolve("/projects", {})} class="btn btn-primary mt-2">
+      <a href={resolve("/projects")} class="btn btn-primary mt-2">
           Back to projects
         </a>
     </div>

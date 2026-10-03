@@ -1,3 +1,5 @@
+import type { HandleClientError } from "@sveltejs/kit/hooks";
+
 // Sentry's entry point into the app. SvelteKit loads `hooks.client.ts` before
 // anything else, so the SDK is in place before any page, component or layout
 // code can run — an error thrown during the first render is captured rather
@@ -8,7 +10,6 @@
 // initialized at all: local development, Storybook, Vitest and the Playwright
 // suite then send nothing and keep working with no network access.
 import * as Sentry from "@sentry/sveltekit";
-import type { HandleServerError } from "@sveltejs/kit";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 
@@ -62,10 +63,13 @@ if (dsn !== undefined && dsn !== "") {
 }
 
 // SvelteKit's `handleError` covers what never reaches a component: a rejected
-// `load`, a failure in a `+layout`/page lifecycle. Errors thrown inside an
-// event handler that Svelte catches itself are reported by the SDK's Svelte
-// integration without this hook.
-const reportClientError: HandleServerError = ({ error, event }) => {
+// `load`, a failure in a `+layout`/page lifecycle, and — since SvelteKit 3 —
+// rendering errors and *expected* ones too (`kind: "app"` from `error(...)`,
+// `kind: "framework"` for its own 404s). The hook returns nothing, so those
+// keep SvelteKit's own status and message; the only thing it does is log, and
+// hand the error to Sentry, which is also what reaches this hook for errors
+// thrown inside event handlers.
+const reportClientError: HandleClientError = ({ error, event }) => {
   console.error("An error occurred on the client side:", error, event);
 };
 
