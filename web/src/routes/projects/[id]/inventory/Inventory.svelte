@@ -245,13 +245,6 @@ function handleSelectNode(index: number): void {
   selectLabel(label);
 }
 
-// Not the canvas's default wording, which is about opening a detailed view: on
-// this page the click focuses the inventory, and a link that announces
-// something else is a small lie to anyone listening.
-function nodeLinkLabel(node: { label: string }): string {
-  return `${node.label}, open in inventory`;
-}
-
 let emptyStatePath = $derived(
   selectedDefinition ? defaultViewPath(selectedDefinition.label) : null,
 );
@@ -437,7 +430,7 @@ async function handleCreateView(): Promise<void> {
             {projectId}
             diagramPath={`${selectedDefinition.label}.hcl`}
             onSelectComponent={handleSelectNode}
-            linkLabel={nodeLinkLabel}
+            linkLabel={(node) => `${node.label}, open in inventory`}
           >
             {#snippet whenMissing()}
               <div
