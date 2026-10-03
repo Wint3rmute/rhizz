@@ -4,6 +4,64 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 115 — The middle mouse button opens a component's detail view
+
+Middle-clicking a node on the Modeling canvas now does what `V` does: it opens
+that component's detail view, or creates one when the component has none. It
+calls the same `handleDetailView` the key and the context-menu row call, so the
+three ways of asking for a detail view cannot disagree about what one is.
+
+- **Middle click gave up panning over a node — that is the trade, and Space
+  already covers it.** Panning used to be "middle button, anywhere", written
+  that way precisely so it worked from over a node as well. Now the middle
+  button means *the node* there, so a pan that starts on a node is Space +
+  left-drag, which was supported from anywhere and is the half of the pair
+  that survives. Middle-drag on empty canvas still pans untouched, and the e2e
+  pins that as a regression guard: it is green *before* the change and had to
+  stay green, or a re-routed middle button could have taken the canvas pan with
+  it unnoticed.
+- **The gesture skips every canvas guard, because it writes nothing.**
+  `onNodeMouseDown` bails out while auto-layout runs, records an undo point for
+  a drag, and moves focus — all correct for gestures that move things. This one
+  navigates, so it is handled ahead of them: it works while a force layout is
+  settling, adds nothing to the undo stack, and leaves the selection alone (the
+  clicked node is its own subject; a right-click selects only to feed the rows
+  below). It keeps the `preventDefault` every other branch makes, which is also
+  what suppresses the browser's autoscroll — that would otherwise start on this
+  very click.
+- **A port dot sits *on* the node's border, so `onPortMouseDown` had to let
+  the middle button through.** It had no `button` check at all: any button
+  started drawing a connection. The new gesture would have had a hole exactly
+  where the pointer lands on a node, and (already) a right-click on a port left
+  a half-drawn connection behind under the context menu that opened on top of
+  it. Left button only now — every other button belongs to what is underneath.
+  The e2e middle-clicks one of those dots (a directional connection handle,
+  which every placed node has) so the fall-through is covered by the test
+  rather than by the comment above it.
+- **This is the one Modeling change with no Storybook story, on purpose.** A
+  middle click has no picture: the canvas afterwards is the same whether the
+  gesture navigated or did nothing, so a story would have asserted through the
+  sidebar tree and added four VRT baselines (two themes × two stories) of a
+  screenshot that cannot fail for the reason anyone would want checked. The
+  e2e drives a real pointer instead, which is also the only way to be sure the
+  gesture reads `button === 1` off a real `mousedown`.
+- **The e2e's first pan assertion had the sign backwards, and the failure is
+  the part worth keeping.** It asserted the node moves *against* the drag; the
+  canvas pans with the pointer, so it is `+120`. Recorded as what the run
+  reported rather than as a fix, because the wrong guess would have "passed" a
+  pan that never happened had the number been 0.
+- **Red/green**: all three e2e cases went red against the un-wired page first —
+  the URL stayed on `main.hcl` and no tree row ever became current — while the
+  pan guard was confirmed green *before* the change. The port-dot case was
+  re-checked by deleting the one-line `button !== 0` guard and watching it fail
+  again, since that guard is the only thing holding it up.
+- **VRT: 226/226, no baselines added and none re-recorded.**
+- **Validation**: `just test` (cargo + 854 Vitest + 76 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 114 — Migrate to SvelteKit 3.0
 
 `web/` runs on `@sveltejs/kit` 3.0.0 (with `vite` 8, `vite-plugin-svelte`

@@ -1739,10 +1739,11 @@ type Interaction =
     annotationResize?: { index: number; startScale: number };
   }
   | {
-    // Canvas pan. Started by the middle mouse button, or the left
-    // button while Space is held, anywhere on the canvas (including
-    // over a node). lastX/lastY track screen-space pointer position of
-    // the last move event.
+    // Canvas pan. Started by the middle mouse button over empty canvas, or
+    // by the left button while Space is held — which is the only pan that
+    // works from over a node, the middle button belonging to the node itself
+    // there (see onNodeMouseDown). lastX/lastY track screen-space pointer
+    // position of the last move event.
     type: "panning";
     lastX: number;
     lastY: number;
@@ -2108,6 +2109,13 @@ function onPortMouseDown(
   worldPoint: { x: number; y: number },
   startSide?: ConnectionSide,
 ) {
+  // Only the left button draws a connection. Every other button belongs to
+  // what is underneath, and a port dot sits *on* the node's border — so the
+  // middle one has to fall through to the node's own mousedown (its detail
+  // view, see onNodeMouseDown) or the hole would be exactly where the pointer
+  // lands. A right-click lands on the node's context menu, which used to open
+  // over a connection this had already started drawing.
+  if (event.button !== 0) return;
   event.stopPropagation();
   event.preventDefault();
   interaction = {
@@ -2327,11 +2335,31 @@ function openCanvasContextMenu(event: MouseEvent): void {
   };
 }
 
-// Middle mouse button, or the left button while Space is held, always
-// pans, regardless of what's under the cursor — including directly over a
-// node, so it must be handled here too (not just in onCanvasMouseDown,
-// which only sees clicks on empty canvas).
+// The left button selects and drags a node (below); the left button while
+// Space is held pans, whatever is under the cursor — including directly over a
+// node, so it must be handled here too (not just in onCanvasMouseDown, which
+// only sees clicks on empty canvas).
+//
+// The middle button over a node is the pointer's `V`: it opens that node's
+// detail view, or creates one when the component has none. It is handled first,
+// before the guards below, for two reasons. It beats panning — middle-drag
+// from anywhere on the canvas still pans (onCanvasMouseDown), and panning over
+// a node is Space's job alone. And it deliberately touches nothing else: it
+// writes no position, so it needs neither an undo point nor the auto-layout
+// guard (that one exists because a *drag* would fight positions being
+// rewritten every frame), and it leaves the selection alone — the clicked
+// node is its own subject, the way a right-click selects only to feed the
+// rows below.
 function onNodeMouseDown(event: MouseEvent, index: number) {
+  if (event.button === 1) {
+    // The same preventDefault every other branch here makes: it is what
+    // suppresses text selection, and here it also suppresses the browser's
+    // own autoscroll, which would otherwise start on this very click.
+    event.preventDefault();
+    void handleDetailView(index).catch(reportDiagramError);
+    return;
+  }
+
   selectedConnection = null;
   // Auto-layout is actively writing node positions every frame; letting a
   // drag/select start at the same time would silently fight it (clicks
@@ -2339,7 +2367,7 @@ function onNodeMouseDown(event: MouseEvent, index: number) {
   // below for the matching "busy" affordance.
   if (autoLayoutRunning) return;
   focusCanvas();
-  if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
+  if (event.button === 0 && isSpaceHeld()) {
     event.preventDefault();
     interaction = {
       type: "panning",
