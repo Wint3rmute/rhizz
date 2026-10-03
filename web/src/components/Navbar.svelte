@@ -71,7 +71,7 @@ async function startTourFlow(): Promise<void> {
   const projects = await projectStore.listProjects();
   const first = projects[0];
   if (first !== undefined) {
-    await goto(`/projects/${first.id}/overview`);
+    await goto(resolve("/projects/[id]/overview", { id: first.id }));
     requestTourStart(first.id);
     return;
   }
@@ -81,7 +81,7 @@ async function startTourFlow(): Promise<void> {
   if (!drone) return;
   toastState.show("Creating a new project for the introduction", "info");
   const created = await createProjectWithFiles(drone.name, drone.files);
-  await goto(`/projects/${created.id}/overview`);
+  await goto(resolve("/projects/[id]/overview", { id: created.id }));
   requestTourStart(created.id);
 }
 </script>
@@ -121,7 +121,7 @@ async function startTourFlow(): Promise<void> {
     <!-- Left section: Brand + Desktop navigation links -->
     <div class="flex items-center gap-2 min-w-0">
       <a
-        href={resolve("/projects", {})}
+        href={resolve("/projects")}
         class="btn btn-ghost btn-sm sm:btn-md text-lg sm:text-xl shrink-0 font-bold"
       >
         Rhizz

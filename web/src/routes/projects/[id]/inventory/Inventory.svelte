@@ -170,9 +170,8 @@ function selectLabel(label: string | null, replace = false): void {
   const target = labelUrl(label);
   if (target === page.url.pathname) return;
   void goto(target, {
-    replaceState: replace,
-    noScroll: true,
-    keepFocus: true,
+    replace,
+    reset: false,
   });
 }
 
@@ -334,7 +333,7 @@ async function handleCreateView(): Promise<void> {
           <p class="text-base-content/60 text-sm">
             Select or create a project to browse its inventory.
           </p>
-          <a href={resolve("/projects", {})} class="btn btn-primary mt-2">
+          <a href={resolve("/projects")} class="btn btn-primary mt-2">
             Back to projects
           </a>
         </div>
