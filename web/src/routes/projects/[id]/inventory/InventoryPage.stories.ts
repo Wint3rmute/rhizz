@@ -193,6 +193,36 @@ export const MissingDefaultDiagram: Story = {
   },
 };
 
+// Clicking a node in the preview focuses the inventory on that component —
+// the same thing clicking its card does, which is why it also moves the URL
+// and why back/forward work (e2e covers that half; a story has no address bar).
+//
+// The fixture's `controller` preview places the `mcu` instance inside it, and
+// `mcu` is a definition of its own, so the click has somewhere to land. That
+// instance is named after the definition it was sourced from, so here the node
+// label and the focused label are the same string; the case where they differ
+// is unit-tested on definitionLabelForNode, which is cheaper than churning
+// every diagram baseline in this file to rename it.
+export const ClickingANodeFocusesThatComponent: Story = {
+  args: { requestedLabel: "controller" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const diagram = canvas.getByTestId("inventory-diagram");
+    // The node is a link now, and announces what it does here rather than the
+    // canvas's default "open detailed view" wording, which would be a lie on
+    // this page.
+    const node = await within(diagram).findByRole("link", {
+      name: "mcu, open in inventory",
+    });
+    await userEvent.click(node);
+    // Focused: `mcu` has no diagram of its own, so the preview is now the
+    // empty state offering to create one — the same state its card would give.
+    await expect(canvas.getByTestId("inventory-empty-diagram")).toBeTruthy();
+    await expect(canvas.getByText(/views\/mcu\.hcl/)).toBeTruthy();
+  },
+};
+
 // Presses "Edit" and waits for Monaco to exist. Its *content* is asserted in
 // e2e: this browser is ~414px wide, where the editor box collapses to zero and
 // Monaco paints nothing, so a content assertion here would pass vacuously.
