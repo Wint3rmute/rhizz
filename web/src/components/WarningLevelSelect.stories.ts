@@ -37,6 +37,16 @@ export const InTheBar: Story = {
     await expect(select).toBeVisible();
     await expect(select).toHaveValue(initial);
 
+    // The list is grouped, so opening the control says what the three words
+    // mean. The group is the only child of the select: three loose options
+    // would be the shape this replaced.
+    const group = select.querySelector("optgroup");
+    await expect(group).not.toBeNull();
+    await expect(group).toHaveAttribute("label", "Strictness level");
+    await expect(
+      [...(group?.querySelectorAll("option") ?? [])].map((o) => o.value),
+    ).toEqual(["business", "architectural", "component"]);
+
     await userEvent.selectOptions(select, "architectural");
     await waitFor(() => expect(select).toHaveValue("architectural"));
     // The pick reached the shared preset, which is the point: the bar and the

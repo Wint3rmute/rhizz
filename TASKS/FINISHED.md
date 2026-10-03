@@ -65,6 +65,16 @@ strictness at the far right, the counts and the expand toggle between them.
   It measures "far left" / "far right" rather than eyeballing them: the
   badge's left edge starts the row, the select's right edge ends it, and the
   select lands within the bar's own right gutter.
+- **The strictness list carries a group heading, and daisyUI is not what put
+  it there.** Opening the control used to list three bare words. `<optgroup
+  label="Strictness level">` is the honest fix: a real, non-selectable heading
+  the browser draws, announced with the option by assistive technology. daisyUI
+  has no rules for `optgroup` at all (it styles `option` — padding, radius,
+  hover — and the popup), so the heading is browser-drawn; a disabled first
+  `<option>` would have inherited daisyUI's option styling and read as a fourth
+  level. Worth knowing: the VRT baselines cannot see this change by
+  construction — a native popup is not part of the page — so the story asserts
+  the group, its label and its three values instead.
 - **The navbar's tour step was promising controls the navbar no longer has**
   ("watch the error/warning counts, and switch warning levels"). Rewritten to
   point at the bar.
