@@ -167,12 +167,6 @@ export function createPaletteIndex(items: PaletteItem[]): PaletteIndex {
 }
 
 /**
- * The rows to show for a query. An empty query lists every item in the
- * order it was handed over — a palette whose untyped state is shuffled by
- * a relevance score nobody asked for is disorienting — and a real query
- * switches to Fuse's ranking.
- */
-/**
  * Which characters of `label` a query matches, as inclusive `[start, end]`
  * ranges ready for {@link labelSegments}, or `null` when the query is not
  * there at all.
