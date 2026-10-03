@@ -4,6 +4,72 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 115 — The middle mouse button opens a component's detail view
+
+Middle-clicking a node on the Modeling canvas now does what `V` does: it opens
+that component's detail view, or creates one when the component has none. It
+calls the same `handleDetailView` the key and the context-menu row call, so the
+three ways of asking for a detail view cannot disagree about what one is.
+
+- **Middle click gave up panning over a node — that is the trade, and Space
+  already covers it.** Panning used to be "middle button, anywhere", written
+  that way precisely so it worked from over a node as well. Now the middle
+  button means *the node* there, so a pan that starts on a node is Space +
+  left-drag, which was supported from anywhere and is the half of the pair
+  that survives. Middle-drag on empty canvas still pans untouched, and the e2e
+  pins that as a regression guard: it is green *before* the change and had to
+  stay green, or a re-routed middle button could have taken the canvas pan with
+  it unnoticed.
+- **The gesture skips every canvas guard, because it writes nothing.**
+  `onNodeMouseDown` bails out while auto-layout runs, records an undo point for
+  a drag, and moves focus — all correct for gestures that move things. This one
+  navigates, so it is handled ahead of them: it works while a force layout is
+  settling, adds nothing to the undo stack, and leaves the selection alone (the
+  clicked node is its own subject; a right-click selects only to feed the rows
+  below). It keeps the `preventDefault` every other branch makes, which is also
+  what suppresses the browser's autoscroll — that would otherwise start on this
+  very click.
+- **A port dot sits *on* the node's border, so `onPortMouseDown` had to let
+  the middle button through.** It had no `button` check at all: any button
+  started drawing a connection. The new gesture would have had a hole exactly
+  where the pointer lands on a node, and (already) a right-click on a port left
+  a half-drawn connection behind under the context menu that opened on top of
+  it. Left button only now — every other button belongs to what is underneath.
+- **The e2e's first pan assertion had the sign backwards, and the failure is
+  the part worth keeping.** It asserted the node moves *against* the drag; the
+  canvas pans with the pointer, so it is `+120`. Recorded as what the run
+  reported rather than as a fix, because the wrong guess would have "passed" a
+  pan that never happened had the number been 0.
+- **A new story file needs an `eslint.config.js` entry, and that is not
+  optional.** The `no-unsafe-*` override block enumerates every file importing a
+  first-party `.svelte` module, because typescript-eslint's `projectService`
+  types those imports as `any` (ESLint's TS program cannot parse `.svelte`;
+  svelte-check can). Verified rather than assumed: an untouched copy of
+  `DetailedViewMenu.stories.ts` dropped in beside the new story drew the same
+  twelve errors, and was clean once removed — so it is the file list, not the
+  code.
+- **svelte-check caught an option Playwright has and testing-library does
+  not.** The story's tree query passed `exact: true`; valid in `getByRole`
+  (Playwright), a type error in `queryAllByRole` (testing-library), where a
+  string `name` already matches the accessible name in full. ESLint's
+  type-aware rules passed it.
+- **Red/green**: the e2e and both stories went red first against the un-wired
+  page (the URL stayed on `main.hcl`, the tree row never became current), and
+  the pan guard was confirmed green *before* the change. The stories drive
+  `userEvent.pointer` with `[MouseMiddle]` rather than dispatching a synthetic
+  `MouseEvent`, so the gesture takes the same pointer path a real middle click
+  does — a story firing a hand-made event would have passed even if the handler
+  only ever looked at `button` somewhere else.
+- **VRT: 4 of 230 baselines new** (the two stories in both themes), 0
+  re-baselined. The new screenshot is also the proof the gesture ran: it shows
+  `sensor.hcl` open in the tree with only the clicked node on the canvas. A full
+  follow-up run is 230/230.
+- **Validation**: `just test` (cargo + 856 Vitest + 75 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite all pass.
+
+---
+
 ## Task 114 — Migrate to SvelteKit 3.0
 
 `web/` runs on `@sveltejs/kit` 3.0.0 (with `vite` 8, `vite-plugin-svelte`

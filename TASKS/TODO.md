@@ -16,11 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Add a middle click functionality to modeling/
-
-When a middle mouse button is clicked on a component, the editor shall open or
-create a default view for that component - same as the "V" shortcut.
-
 ## Task <N> - Migrate some navbar components to the diagnostics bar
 
 I want to migrate some components to the diagnostics bar:
