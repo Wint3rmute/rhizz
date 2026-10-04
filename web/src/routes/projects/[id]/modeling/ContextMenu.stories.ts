@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import ContextMenu from "./ContextMenu.svelte";
 
 const meta = {
@@ -8,10 +8,12 @@ const meta = {
   args: {
     x: 120,
     y: 80,
+    // The node menu as ModelingPage builds it, all four rows.
     items: [
-      { label: "Hide from this view", shortcut: "H", action: () => {} },
-      { label: "Jump to documentation", shortcut: "O", action: () => {} },
-      { label: "Jump to detailed view", shortcut: "V", action: () => {} },
+      { label: "Hide from this view", shortcut: "H", action: fn() },
+      { label: "Jump to documentation", shortcut: "O", action: fn() },
+      { label: "Jump to detailed view", shortcut: "V", action: fn() },
+      { label: "Create new view from selection", shortcut: "S", action: fn() },
     ],
     onclose: () => {},
   },
@@ -29,6 +31,9 @@ export const ComponentMenu: Story = {
     await expect(canvas.getByRole("menuitem", { name: /hide from this view/i }))
       .toBeInTheDocument();
     await expect(canvas.getByText("H")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("menuitem", { name: /create new view from selection/i }),
+    ).toBeInTheDocument();
   },
 };
 

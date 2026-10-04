@@ -3,14 +3,18 @@ import * as nodeFs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { InMemoryProjectStore } from "../../../../vfs/vfsStore";
-import { openProjectFs } from "../../../../vfs/fs";
+import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import {
   emptyDiagramLayout,
+  layoutFromSelection,
   layoutToHcl,
   mapLayoutToBoxes,
   parse_views,
   readDiagramLayoutFile,
+  type StoredBox,
   VIEW_LAYOUT_DIR,
+  viewPathFromName,
+  viewPathTaken,
   viewsToLayout,
   writeDiagramLayoutFile,
 } from "./persistence";
@@ -282,5 +286,129 @@ describe("mapLayoutToBoxes", () => {
       textAlign: "center",
     });
     expect(boxes[2]).toBeUndefined();
+  });
+});
+
+describe("view paths and the selection-derived layout", () => {
+  const dirent = (path: string, kind: "file" | "dir"): Dirent => ({
+    name: path.split("/").pop() ?? path,
+    path,
+    isFile: () => kind === "file",
+    isDirectory: () => kind === "dir",
+  });
+
+  const CHECKED: Record<string, StoredBox> = {
+    "main/mcu": { x: 10, y: 20, width: 120, height: 80, textAlign: "top-left" },
+    "main/imu": { x: 200, y: 20 },
+    "main/radio": { x: 400, y: 20 },
+  };
+
+  it.each([
+    ["overview", "overview.hcl"],
+    ["overview.hcl", "overview.hcl"],
+    ["  overview  ", "overview.hcl"],
+  ])("reads %j as the path %j", (name, expected) => {
+    expect(viewPathFromName(name)).toBe(expected);
+  });
+
+  it.each([["   "], ["sub/overview"]])(
+    "rejects %j — a name is one path segment, and never blank",
+    (name) => {
+      expect(viewPathFromName(name)).toBeNull();
+    },
+  );
+
+  it("is taken when a view file already sits at that path", () => {
+    expect(
+      viewPathTaken(
+        [dirent("main.hcl", "file"), dirent("over.hcl", "file")],
+        "over.hcl",
+      ),
+    ).toBe(true);
+  });
+
+  it("is free for a different view", () => {
+    expect(viewPathTaken([dirent("main.hcl", "file")], "overview.hcl")).toBe(
+      false,
+    );
+  });
+
+  it("is free for a directory of the same name", () => {
+    // `views/overview/` is a folder, so `views/overview.hcl` is still free.
+    expect(viewPathTaken([dirent("overview", "dir")], "overview.hcl")).toBe(
+      false,
+    );
+  });
+
+  it("places only the selected components, at the boxes they have here", () => {
+    // One assertion on the whole record, because "just the selection" and
+    // "carrying size and alignment over" are the same claim: a node that came
+    // across with only its position would differ here too.
+    const layout = layoutFromSelection("main", CHECKED, [
+      "main/mcu",
+      "main/imu",
+    ]);
+    expect(layout.checked).toEqual({
+      "main/mcu": {
+        x: 10,
+        y: 20,
+        width: 120,
+        height: 80,
+        textAlign: "top-left",
+      },
+      "main/imu": { x: 200, y: 20 },
+    });
+  });
+
+  it("does not alias the boxes it copies — later edits stay in this view", () => {
+    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"]);
+    const copied = layout.checked["main/mcu"];
+    if (!copied) throw new Error("the selected component was not copied");
+    copied.x = 999;
+    expect(CHECKED["main/mcu"]?.x).toBe(10);
+  });
+
+  it("skips a selected key that has no box on the canvas", () => {
+    // A key can outlive its component (renamed away, reparented); the new
+    // view must not gain a node the model can't resolve.
+    const layout = layoutFromSelection("main", CHECKED, ["main/mcu", "gone"]);
+    expect(Object.keys(layout.checked)).toEqual(["main/mcu"]);
+  });
+
+  it("binds to the given system", () => {
+    expect(layoutFromSelection("drone", CHECKED, ["main/mcu"]).system).toBe(
+      "drone",
+    );
+  });
+
+  it("carries the selected annotations across, where they already are", () => {
+    const layout = layoutFromSelection(
+      "main",
+      CHECKED,
+      ["main/mcu"],
+      [{ text: "check this", x: 30, y: 40, scale: 1.5 }],
+    );
+    expect(layout.annotations).toEqual([
+      { text: "check this", x: 30, y: 40, scale: 1.5 },
+    ]);
+  });
+
+  it("does not alias the annotations it copies either", () => {
+    const note = { text: "check this", x: 30, y: 40 };
+    const layout = layoutFromSelection("main", CHECKED, [], [note]);
+    const copied = layout.annotations?.[0];
+    if (!copied) throw new Error("the annotation was not copied");
+    copied.text = "edited";
+    expect(note.text).toBe("check this");
+  });
+
+  it("leaves no annotations behind when the selection has none", () => {
+    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"], []);
+    expect(layout.annotations).toEqual([]);
+  });
+
+  it("brings none of the old view's connection overrides", () => {
+    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"], []);
+    expect(layout.connections).toEqual({});
   });
 });

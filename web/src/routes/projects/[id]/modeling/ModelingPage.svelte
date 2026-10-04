@@ -44,10 +44,13 @@ import {
   type Annotation,
   type DiagramLayout,
   emptyDiagramLayout,
+  layoutFromSelection,
   readDiagramLayoutFile,
   type StoredBox,
   type StoredConnection,
   VIEW_LAYOUT_DIR,
+  viewPathFromName,
+  viewPathTaken,
   writeDiagramLayoutFile,
 } from "./persistence";
 import {
@@ -1463,6 +1466,16 @@ function onDiagramKeyDown(event: KeyboardEvent) {
       // selection there is nothing for the key to mean.
       event.preventDefault();
       void handleDetailView(primarySelected).catch(reportDiagramError);
+    } else if (
+      key === "s" &&
+      (selected.size > 0 || selectedAnnotations.size > 0)
+    ) {
+      // The context menu's "new view from selection" row. Guarded on there
+      // being a selection at all, since with none the key could only write an
+      // empty view — the prompt would still appear, so the guard is the
+      // difference between asking a pointless question and staying quiet.
+      event.preventDefault();
+      void handleCreateViewFromSelection();
     } else if (key === "n") {
       event.preventDefault();
       addAnnotationHandler();
@@ -1559,6 +1572,51 @@ async function createDetailedView(
   );
   await refreshDiagramEntries();
   selectView(path);
+}
+
+// A new view holding just the selected components, at the positions they have
+// here, and the canvas moves into it.
+//
+// The name is asked for with a native prompt rather than NewViewModal, which is
+// the one modal choice this action does not need: the system is not the user's
+// to pick here (see below), and the modal is the Diagrams tree's, where the
+// view is created *before* anything is placed on it.
+async function handleCreateViewFromSelection(): Promise<void> {
+  const name = prompt("New view name?", "selection");
+  // A name that cannot be one (blank, or a nested path — prompt() has no way
+  // to express nesting, which is the Diagrams tree's `+ Folder`) is a no-op,
+  // the same as the folder prompt next to it.
+  if (name === null) return;
+  const path = viewPathFromName(name);
+  if (path === null) return;
+  if (viewPathTaken(diagramEntries, path)) {
+    reportDiagramError(
+      new Error(`View "${path}" already exists. Pick another name.`),
+    );
+    return;
+  }
+  // A view's system binding is immutable after creation, so the new view takes
+  // the one the open view already has: the components on the canvas belong to
+  // that system, and asking again could only offer to bind them elsewhere.
+  const system = effectiveSystem || systems[0]?.label || "main";
+  // Annotations are selected by index into `annotations`, so the selection is
+  // resolved to the notes themselves here — the builder takes the notes, not
+  // the page's indices into them.
+  const notes = [...selectedAnnotations]
+    .map((index) => annotations[index])
+    .filter((note) => note !== undefined);
+  try {
+    await writeDiagramLayoutFile(
+      fs,
+      `${VIEW_LAYOUT_DIR}/${path}`,
+      layoutFromSelection(system, checked, selectedKeys, notes),
+      system,
+    );
+    await refreshDiagramEntries();
+    selectView(path);
+  } catch (error) {
+    reportDiagramError(error);
+  }
 }
 
 // The single selected node, or null if zero or more than one are selected.
@@ -2248,6 +2306,12 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
           : "Jump to detailed view",
         shortcut: "V",
         action: () => void handleDetailView(index).catch(reportDiagramError),
+      },
+      {
+        // About the whole selection, not the node under the pointer.
+        label: "Create new view from selection",
+        shortcut: "S",
+        action: () => void handleCreateViewFromSelection(),
       },
     ],
   };
