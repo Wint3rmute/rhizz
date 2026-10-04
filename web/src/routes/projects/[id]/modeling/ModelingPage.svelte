@@ -1579,9 +1579,6 @@ async function handleCreateViewFromSelection(): Promise<void> {
   if (name === null) return;
   const path = viewPathFromName(name);
   if (path === null) return;
-  // Unlike a bad name, a name already in use needs saying: writing would
-  // replace a hand-arranged view with the selection, with nothing to undo it
-  // and no way back but the browser's history.
   if (viewPathTaken(diagramEntries, path)) {
     reportDiagramError(
       new Error(`View "${path}" already exists. Pick another name.`),
@@ -1600,8 +1597,6 @@ async function handleCreateViewFromSelection(): Promise<void> {
       system,
     );
     await refreshDiagramEntries();
-    // A new view is a place the user moved to, so it pushes a history entry
-    // (back returns to the view the selection was taken from).
     selectView(path);
   } catch (error) {
     reportDiagramError(error);
