@@ -66,6 +66,11 @@ import {
   type LayoutNode,
 } from "./forceLayout";
 import {
+  layoutFromSelection,
+  viewPathFromName,
+  viewPathTaken,
+} from "./viewFromSelection";
+import {
   annotationBounds,
   boxContains,
   clampWithin,
@@ -1561,6 +1566,50 @@ async function createDetailedView(
   selectView(path);
 }
 
+// A new view holding just the selected components, at the positions they have
+// here, and the canvas moves into it.
+//
+// The name is asked for with a native prompt rather than NewViewModal, which is
+// the one modal choice this action does not need: the system is not the user's
+// to pick here (see below), and the modal is the Diagrams tree's, where the
+// view is created *before* anything is placed on it.
+async function handleCreateViewFromSelection(): Promise<void> {
+  const name = prompt("New view name?", "selection");
+  // A name that cannot be one (blank, or a nested path — prompt() has no way
+  // to express nesting, which is the Diagrams tree's `+ Folder`) is a no-op,
+  // the same as the folder prompt next to it.
+  if (name === null) return;
+  const path = viewPathFromName(name);
+  if (path === null) return;
+  // Unlike a bad name, a name already in use needs saying: writing would
+  // replace a hand-arranged view with the selection, with nothing to undo it
+  // and no way back but the browser's history.
+  if (viewPathTaken(diagramEntries, path)) {
+    reportDiagramError(
+      new Error(`View "${path}" already exists. Pick another name.`),
+    );
+    return;
+  }
+  // A view's system binding is immutable after creation, so the new view takes
+  // the one the open view already has: the components on the canvas belong to
+  // that system, and asking again could only offer to bind them elsewhere.
+  const system = effectiveSystem || systems[0]?.label || "main";
+  try {
+    await writeDiagramLayoutFile(
+      fs,
+      `${VIEW_LAYOUT_DIR}/${path}`,
+      layoutFromSelection(system, checked, selectedKeys),
+      system,
+    );
+    await refreshDiagramEntries();
+    // A new view is a place the user moved to, so it pushes a history entry
+    // (back returns to the view the selection was taken from).
+    selectView(path);
+  } catch (error) {
+    reportDiagramError(error);
+  }
+}
+
 // The single selected node, or null if zero or more than one are selected.
 // Used wherever an operation only makes sense for exactly one node (the
 // inspector's details/text-alignment controls).
@@ -2248,6 +2297,15 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
           : "Jump to detailed view",
         shortcut: "V",
         action: () => void handleDetailView(index).catch(reportDiagramError),
+      },
+      {
+        // The last row, and the only one that is about the whole selection
+        // rather than the node under the pointer — which is why it has no
+        // shortcut: it is a heavier gesture (a file, and a navigation), and
+        // the selection it acts on is not a single node, so there is no
+        // single-subject key to bind it to.
+        label: "Create new view from selection",
+        action: () => void handleCreateViewFromSelection(),
       },
     ],
   };
