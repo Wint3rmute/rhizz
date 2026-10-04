@@ -1466,6 +1466,16 @@ function onDiagramKeyDown(event: KeyboardEvent) {
       // selection there is nothing for the key to mean.
       event.preventDefault();
       void handleDetailView(primarySelected).catch(reportDiagramError);
+    } else if (
+      key === "s" &&
+      (selected.size > 0 || selectedAnnotations.size > 0)
+    ) {
+      // The context menu's "new view from selection" row. Guarded on there
+      // being a selection at all, since with none the key could only write an
+      // empty view — the prompt would still appear, so the guard is the
+      // difference between asking a pointless question and staying quiet.
+      event.preventDefault();
+      void handleCreateViewFromSelection();
     } else if (key === "n") {
       event.preventDefault();
       addAnnotationHandler();
@@ -2298,9 +2308,9 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
         action: () => void handleDetailView(index).catch(reportDiagramError),
       },
       {
-        // About the whole selection, not the node under the pointer — which is
-        // why it is the one row here with no shortcut.
+        // About the whole selection, not the node under the pointer.
         label: "Create new view from selection",
+        shortcut: "S",
         action: () => void handleCreateViewFromSelection(),
       },
     ],
