@@ -16,6 +16,17 @@ How to work on this file:
 
 ---
 
+## Task <N> - Change how VFS is served in rhizz-server - use a real filesystem
+
+The idea behind this task is to change how the VFS is handed on `rhizz-server`
+side. I want rhizz-server to work with the VFS like with a normal filesystem,
+expanding paths to real directories and files instead of a single huge JSON.
+
+The end goal would be to mount the current examples/ directory as a data
+directory of `rhizz-server` and have it "just work" with the web application.
+
+Don't think about backwards compatibility.
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
@@ -106,21 +117,6 @@ When 2 components have more than one connection between them, connection routing
 rules cause connections to be drawn over each other. Instead, a better routing algorithm should be implemented.
 I'm thinking about a PCB-style routing that lines up multiple connections along a shared path, but with some extra
 offset to avoid overlapping.
-
----
-
-## (For later brainstorming) Task <N> - when adding a new node - place it in the center of the viewport
-
-As in the title. Position of the node is persisted across deletes, so it can
-be "brought back" into the same position as it was before, but only if it was
-in the diagram before! For completely new nodes, they always appear in a fixed
-place in the diagram. This is cumbersome, as the user might not have that part
-of the diagram in their viewport, which might make them think that nothing
-happened.
-
-Definition of done:
-
-- If a new element is added to the diagram, this element is placed at the center of the viewport by default
 
 ---
 
