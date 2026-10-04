@@ -4,6 +4,97 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 118 — Debounce VFS writes at the sources (editor + diagram layout)
+
+The code editor's write-back effect and Modeling's layout-save effect now
+trailing-debounce their writes (700ms / 500ms), so a typed sentence or a drag
+collapses into one persisted blob instead of one per keystroke or per frame.
+`web/src/debounce.ts` holds the one primitive both of them use.
+
+- **The debounce is at the two sources, never inside `VfsProjectStore`.**
+  Every mutation dumps the whole blob, so the fix could have gone into
+  `mutate()` — but that method's per-call promise *is* its rejection contract
+  (`store.contract.test.ts` pins it), and a debounce would have to either
+  swallow the rejection or make every caller wait on someone else's timer.
+  The discrete transactions (`applyModelMutation`, create/rename/delete/
+  reparent) stay immediate, as the task asked: they're undoable steps, and
+  their callers `await` them.
+- **One framework-free helper rather than two ad-hoc `setTimeout`s**, because
+  the interesting part of a trailing write is not the timer — it's *when the
+  pending call must be forced out*, and both call sites needed that spelled
+  out. `createDebounced(fn, ms)` captures the arguments per call (so the run
+  carries the newest snapshot, not the first one's), and exposes `flush()` for
+  the four force-out points below plus a `pending` getter the tests assert on.
+  No new dependency, no runes: `debounce.test.ts` is 8 fake-timer cases,
+  including "a continuous 10-call burst never fires" and "a flushed call does
+  not run again when the timer would have".
+- **The write carries the *file* it belongs to, captured at call time**, not
+  just the content. That is what makes a mid-burst file/view switch harmless:
+  the trailing write still names the path (and `fs` handle, and view) that was
+  open when the burst started, so it can't land on whatever is open 700ms
+  later. In the editor this also keeps the write inside the project it belongs
+  to when the project itself is what changed.
+- **Flushing on switch is not the same as flushing on every effect re-run, and
+  the difference is the whole design.** The obvious reading of "flush when the
+  effect re-runs" would defeat the debounce entirely — a drag re-runs that
+  effect on every tick, so every tick's cleanup would force the previous
+  tick's write out immediately. So the flushes are placed where the *target*
+  changes instead, which is the only time a pending write can be stranded:
+  the load effect (before it swaps the canvas/editor state, so the write
+  precedes the read of whatever comes next), `handleRename`/`handleDelete` in
+  both files, `onDestroy`, and a `pagehide` handler.
+- **The rename/delete flushes close a hazard the old immediate writes did not
+  have.** `fs.writeFile` *creates* a file that doesn't exist, so a write still
+  queued when a rename or delete lands would recreate the old path — a stray
+  duplicate file (or a resurrected view) with nothing pointing at it. With
+  immediate writes the queue was always empty by the time a click arrived;
+  with a timer it is not. The store serializes mutations through its write
+  chain, so flushing *before* the `fs.rename`/`fs.rm` call is enough to fix
+  the order.
+- **`pagehide` is there because of a real regression the e2e caught, not for
+  symmetry.** `inventory-diagram-click.spec.ts` pastes HCL into Monaco and then
+  `page.goto`s away, which was safe when the write was already in flight and
+  silently lost the edit once the tail sat behind a timer — a full document
+  unload never runs `onDestroy`, and the new document starts with an empty
+  timer and an empty editor. `onDestroy` covers in-app navigation;
+  `pagehide` is the only hook that fires on the way out of *any* navigation,
+  reloads included, and the write it starts lands in the microtask drain that
+  follows the handler — before the incoming document reads the store. (For the
+  HTTP backend the fetch itself was never unload-safe; that is unchanged.)
+- **The Modeling save effect keeps its synchronous `$state.snapshot` reads, and
+  the debounce makes that comment more load-bearing, not less.** The deep read
+  is what subscribes the effect to writes *into* `checked`/`savedLayout`; the
+  async write has simply moved further outside the synchronous dependency-
+  tracking window than one `await`. The effect now also compares
+  `loadedDiagramPath` (a plain, non-reactive marker, deliberately not a
+  dependency) so a view whose layout is still loading can't receive the
+  previous view's layout as a write — which makes the two effects'
+  within-a-flush ordering irrelevant rather than merely correct today. The
+  load effect's own race guards (`diagramEditStamp`/`loadStartStamp`) are
+  untouched.
+- **Red/green**: the 8 unit tests went red against a missing module; the 4 new
+  e2e went red against the un-wired pages. Each was then checked against a
+  *partial* fix too, which is where the interesting numbers came from: without
+  debouncing the two burst tests report 5 and 8 persisted writes instead of 1;
+  with the debounce but no switch flush, switching away and back shows the
+  editor the pre-burst text; with no `pagehide` flush, the reload test loses the
+  edit. `debounced-writes.spec.ts` counts real writes by recording every blob
+  the app persists (via an init-script `Storage.prototype.setItem` patch) and
+  reading one file's content out of each, so a rewrite of identical content
+  doesn't count as a write.
+- **No story, because this change has no visual surface** — a debounced save
+  looks exactly like an immediate one, and every story also costs two VRT
+  baselines in Git LFS. The behavior is covered where it actually lives: unit
+  tests for the primitive, and browser tests against the real store for both
+  call sites.
+- **Validation**: `just test` (cargo + 899 Vitest + 84 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`
+  and `just format` all pass. `just format` also re-wrapped the
+  `ServerProjectStore` super call in `vfs/vfsStore.ts`, which the previous
+  commit left unformatted — CI's `deno fmt --check` would have failed on it.
+
+---
+
 ## Task 117 — The Modeling context menu can cut the selection out into its own view
 
 A new "Create new view from selection" row on the Modeling node context menu

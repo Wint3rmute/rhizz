@@ -163,40 +163,6 @@ view. Please make it possible to navigate back and forth through linked views.
 
 ---
 
-## Task <N> - Debounce VFS writes at the sources (editor + diagram layout)
-
-Every keystroke in the code editor and every diagram drag tick currently
-persists the entire VFS blob in its own PUT (visible as a burst of `vfs.size`
-samples per drag in Sentry). Add trailing-edge debouncing at the two write
-sources so rapid edits coalesce into one write.
-
-- **Editor**: `web/src/routes/projects/[id]/code/+page.svelte`, the `$effect`
-  (~L96-101) calling `fs.writeFile(loadedPath, content)` on every change.
-  Debounce ~500-800 ms; keep updating `lastWrittenContent` optimistically.
-- **Diagram layout**: `ModelingPage.svelte`, the save `$effect` (~L725-748)
-  ending in `writeDiagramLayoutFile(...)`. Debounce ~500 ms. Keep the
-  `$state.snapshot(checked)` reads synchronous in the effect body (see the
-  comment at L725-735) — debounce only the async write of the detached
-  snapshot. Do not weaken the load effect's race guards
-  (`loadedDiagramPath`, `diagramEditStamp`/`loadStartStamp`).
-- **Flush on cleanup**: both effects must flush the pending write when they
-  re-run (file/view switch) or unmount, or fast navigation silently drops
-  the tail.
-- **Out of scope**: `runModelLayoutTransaction` / `applyModelMutation` ops
-  (create/rename/delete/reparent) stay immediate — they are discrete
-  undoable transactions. Do NOT debounce inside `VfsProjectStore.mutate()`
-  — that would break its rejection contract (see `store.contract.test.ts`).
-- Optional: extract a tiny framework-free `createDebounced` helper
-  (`web/src/debounce.ts`) with Vitest fake-timer unit tests, instead of two
-  ad-hoc `setTimeout`s. No new npm dependencies.
-- Validate: `just test`, `just lint`, `just build` green; `just format`;
-  manual check in Network tab (typing/drag bursts collapse to ~1 PUT, no
-  content lost on quick file/view switch or reload). If Rust builds fail
-  with `could not execute process .../build-script-build`, it is a stale
-  `target/` cache — `rm -rf target/debug target/release` and rebuild.
-
----
-
 ## Task <NUMBER> — Task template
 
 - Task description here
