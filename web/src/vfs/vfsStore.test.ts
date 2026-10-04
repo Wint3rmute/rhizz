@@ -6,6 +6,7 @@
 // create/delete console announcements are in the suite after it.
 import { describe, expect, it, vi } from "vitest";
 import {
+  LocalStorageProjectStore,
   memoryBackend,
   ServerProjectStore,
   type VfsBackend,
@@ -142,6 +143,61 @@ describe("ServerProjectStore HTTP behavior", () => {
     ]);
   });
 
+  it("keeps one node when a loaded blob has two at the same id", async () => {
+    // The node-side twin of the project-id case above, and the more dangerous
+    // of the two: ids address every operation in ./operations against the
+    // whole `nodes` array, so two nodes at one id make a write ambiguous —
+    // `updateFileContent` rewrites *every* match, which is how a write in one
+    // project used to land in another (TASKS/FINISHED.md, Task 119a). Both
+    // projects here hold a `system.hcl`, which is what a path-derived id
+    // scheme produces; the later node is dropped so the store never sees an
+    // ambiguous id space at all.
+    const project = (id: string) => ({
+      id,
+      name: id,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    });
+    const file = (id: string, projectId: string, content: string) => ({
+      id,
+      projectId,
+      parentId: null,
+      name: "system.hcl",
+      kind: "file",
+      content,
+      revision: 0,
+      updatedAt: "2024-01-01T00:00:00Z",
+    });
+    const fake = makeFakeFetch({
+      blob: {
+        version: 1,
+        projects: [project("apollo-11"), project("drone")],
+        nodes: [
+          file("shared", "apollo-11", "apollo's content"),
+          file("shared", "drone", "drone's content"),
+        ],
+      },
+    });
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+    });
+
+    const apollo = await store.listNodes("apollo-11");
+    const drone = await store.listNodes("drone");
+    expect(apollo.map((n) => n.id)).toEqual(["shared"]);
+    expect(drone).toEqual([]);
+
+    // The consequence that matters: writing the surviving node no longer
+    // reaches across into the project that shared its id.
+    await store.updateFileContent("shared", "edited");
+    const apolloAfter = await store.listNodes("apollo-11");
+    expect(apolloAfter).toHaveLength(1);
+    const file1 = apolloAfter[0];
+    if (file1?.kind !== "file") throw new Error("expected a file");
+    expect(file1.content).toBe("edited");
+    expect(file1.revision).toBe(1);
+  });
+
   it("rejects when the server is unreachable", async () => {
     const store = new ServerProjectStore("http://rhizz-server", {
       fetch: makeFakeFetch({ networkDown: true }).fetch,
@@ -212,6 +268,63 @@ describe("ServerProjectStore HTTP behavior", () => {
     });
     const projects = await store.listProjects();
     expect(projects.map((p) => p.id)).toEqual(["ok"]);
+  });
+});
+
+describe("ambiguous ids in a stored blob", () => {
+  // The localStorage counterpart of the node-id case under
+  // "ServerProjectStore HTTP behavior", and the one that matters day to day:
+  // localStorage is the default backend, so this is the path a hand-edited or
+  // half-migrated blob actually takes. Both backends run the same
+  // `sanitizeVfsData`, but neither route was covered before.
+  const project = (id: string) => ({
+    id,
+    name: id,
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+  });
+  const file = (id: string, projectId: string, content: string) => ({
+    id,
+    projectId,
+    parentId: null,
+    name: "system.hcl",
+    kind: "file",
+    content,
+    revision: 0,
+    updatedAt: "2024-01-01T00:00:00Z",
+  });
+
+  it("keeps one node when a stored blob has two at the same id", async () => {
+    const map = new Map<string, string>();
+    map.set(
+      "ambiguous",
+      JSON.stringify({
+        version: 1,
+        projects: [project("apollo-11"), project("drone")],
+        nodes: [
+          file("shared", "apollo-11", "apollo's content"),
+          file("shared", "drone", "drone's content"),
+        ],
+      }),
+    );
+    const store = new LocalStorageProjectStore(
+      {
+        getItem: (k) => map.get(k) ?? null,
+        setItem: (k, v) => void map.set(k, v),
+      },
+      "ambiguous",
+    );
+
+    expect((await store.listNodes("apollo-11")).map((n) => n.id)).toEqual([
+      "shared",
+    ]);
+    expect(await store.listNodes("drone")).toEqual([]);
+
+    // Writing the survivor must not reach the project that shared its id.
+    await store.updateFileContent("shared", "edited");
+    const survivors = await store.listNodes("apollo-11");
+    expect(survivors).toHaveLength(1);
+    expect(survivors[0]).toMatchObject({ content: "edited", revision: 1 });
   });
 });
 

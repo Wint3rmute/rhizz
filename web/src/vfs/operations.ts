@@ -69,9 +69,25 @@ export function sanitizeVfsData(
   }
 
   const nodes: FsNode[] = [];
+  const seenNodeIds = new Set<string>();
   for (const candidate of shape.data.nodes) {
     const result = FsNodeSchema.safeParse(candidate);
-    if (result.success) nodes.push(result.data);
+    if (!result.success) continue;
+    // A node id has to be unique across the *whole* VFS, not merely within
+    // its project: every node operation in this file resolves against all of
+    // `nodes` at once — `findNode` takes the first match, and
+    // `updateFileContent`/`renameNode`/`moveNode` rewrite *every* match. Two
+    // nodes at one id would therefore be one node to a write and two to a
+    // read, and a write aimed at one project could land in another (TASKS/
+    // FINISHED.md, Task 119a). The store can never produce such a blob, so
+    // this guards a hand-edited or foreign one the same way the project-id
+    // check above does: keep the first, drop the rest.
+    if (seenNodeIds.has(result.data.id)) {
+      warn(`duplicate node id "${result.data.id}"; dropped`);
+      continue;
+    }
+    seenNodeIds.add(result.data.id);
+    nodes.push(result.data);
   }
 
   return { version: 1, projects, nodes };
