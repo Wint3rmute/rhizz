@@ -8,10 +8,11 @@ import {
 } from "../../../../ViewEditorState.svelte";
 import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
-import { tick, untrack } from "svelte";
+import { onDestroy, tick, untrack } from "svelte";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
+import { createDebounced } from "../../../../debounce";
 import { projectStore, setCurrentScore } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import {
@@ -19,7 +20,7 @@ import {
   readProjectSources,
   type Source,
 } from "../../../../vfs/compile";
-import { type Dirent, openProjectFs } from "../../../../vfs/fs";
+import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { page } from "$app/state";
 import FileTree from "../code/FileTree.svelte";
@@ -651,6 +652,44 @@ function noteDiagramEdited(): void {
   diagramEditStamp += 1;
 }
 
+// Every layout write persists the whole VFS blob, so a drag (one write per
+// tick) used to be one full-blob transfer per frame — visible as a burst of
+// `vfs.size` samples in Sentry. Trailing debounce instead, and only for this
+// high-frequency source: the discrete transactions elsewhere
+// (runModelLayoutTransaction/applyModelMutation — create/rename/delete/
+// reparent) are undoable steps and stay immediate.
+//
+// The `fs` handle, the path, the detached snapshot and the system name are
+// captured per call, so the write that finally lands carries the newest
+// layout and targets the view that was open when the burst started.
+const LAYOUT_WRITE_DEBOUNCE_MS = 500;
+const scheduleLayoutWrite = createDebounced(
+  (
+    file: ProjectFs,
+    path: string,
+    layout: DiagramLayout,
+    systemName: string,
+  ) => {
+    void writeDiagramLayoutFile(file, path, layout, systemName);
+  },
+  LAYOUT_WRITE_DEBOUNCE_MS,
+);
+
+// Leaving the page is the other way a pending write could be lost, and the
+// last chance to flush it: the debounce timer is not tied to the component's
+// lifetime.
+onDestroy(() => scheduleLayoutWrite.flush());
+
+// …and a full document unload (a reload, a closed tab) never runs that
+// teardown at all — the timer dies with the document, taking the tail of the
+// last drag with it. `pagehide` is the one hook that fires on the way out of
+// *any* navigation, including reloads, and the write it starts resolves
+// within the microtask drain that follows the handler, before the new document
+// reads the store.
+function flushLayoutWrite(): void {
+  scheduleLayoutWrite.flush();
+}
+
 // Set by the load effect when its cut-to-fit had to wait for the model (see
 // there), consumed by the effect right after it.
 let cutToFitArmed = false;
@@ -658,6 +697,12 @@ let cutToFitArmed = false;
 $effect(() => {
   const path = fullDiagramPath;
   if (path === loadedDiagramPath) return;
+  // Leaving a view must not swallow the tail of the one being left: its
+  // pending write lands here, before the load below replaces the canvas state
+  // and before any write for the newly selected view is scheduled. (Flushing
+  // later — after the switch — would write the old view's layout over the new
+  // one, or resurrect a view that is about to be renamed/deleted.)
+  scheduleLayoutWrite.flush();
   loadedDiagramPath = path;
   diagramLayoutLoaded = false;
   loadStartStamp = diagramEditStamp;
@@ -727,10 +772,10 @@ $effect(() => {
   // property of `checked`/`savedLayout` synchronously, right here in the
   // effect body — which is what makes later in-place mutations like
   // `checked[key] = {...}` cause this effect to re-run at all.
-  // writeDiagramLayoutFile() is async, so if it (or JSON.stringify) were
+  // The write is async *and* debounced, so if it (or JSON.stringify) were
   // the thing reading those properties, that read would happen after an
-  // `await`, i.e. outside the synchronous window Svelte uses to record an
-  // effect's dependencies — leaving this effect subscribed only to
+  // `await` and a timer, i.e. outside the synchronous window Svelte uses to
+  // record an effect's dependencies — leaving this effect subscribed only to
   // `checked`/`savedLayout`'s own top-level references, never to writes
   // into them.
   const snapshot: DiagramLayout = {
@@ -742,9 +787,17 @@ $effect(() => {
   // Subscribe to the effective system so legacy migration ("" -> first
   // system) persists even before any canvas edit touches checked/etc.
   void effectiveSystem;
+  const file = fs;
   const path = fullDiagramPath;
-  if (!diagramLayoutLoaded || path === null) return;
-  void writeDiagramLayoutFile(fs, path, snapshot, effectiveSystem || "main");
+  // `loadedDiagramPath` is compared, not depended on: it is the plain
+  // (non-reactive) marker the load effect above sets synchronously, so this
+  // guard holds regardless of which of the two effects runs first within a
+  // flush — a view whose layout is still loading never receives the previous
+  // view's layout as a write.
+  if (!diagramLayoutLoaded || path === null || loadedDiagramPath !== path) {
+    return;
+  }
+  scheduleLayoutWrite(file, path, snapshot, effectiveSystem || "main");
 });
 
 function reportDiagramError(error: unknown): void {
@@ -836,6 +889,10 @@ async function handleRenameDiagram(path: string): Promise<void> {
   const name = sanitizeDiagramSegmentName(prompt("Rename to?", oldName) ?? "");
   if (name === null || name === oldName) return;
   const newPath = joinViewPath(parentPath, name);
+  // Land a pending layout write for this view *before* the rename: a write
+  // still queued when the rename lands would recreate the old path (writes
+  // create files that don't exist), leaving a stray duplicate view behind.
+  scheduleLayoutWrite.flush();
   try {
     await fs.rename(
       `${VIEW_LAYOUT_DIR}/${path}`,
@@ -853,6 +910,9 @@ async function handleRenameDiagram(path: string): Promise<void> {
 
 async function handleDeleteDiagram(path: string): Promise<void> {
   if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
+  // Same reasoning as the rename: a write queued behind the delete would
+  // resurrect the view the user just threw away.
+  scheduleLayoutWrite.flush();
   try {
     await fs.rm(`${VIEW_LAYOUT_DIR}/${path}`, { recursive: true });
     const wasOpen = selectedDiagramPath === path ||
@@ -3575,7 +3635,10 @@ $effect(() => {
 </div>
 {/snippet}
 
-<svelte:window onkeydown={onDiagramKeyDown} />
+<svelte:window
+  onkeydown={onDiagramKeyDown}
+  onpagehide={flushLayoutWrite}
+/>
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
