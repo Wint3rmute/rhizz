@@ -2298,11 +2298,8 @@ function openNodeContextMenu(event: MouseEvent, index: number): void {
         action: () => void handleDetailView(index).catch(reportDiagramError),
       },
       {
-        // The last row, and the only one that is about the whole selection
-        // rather than the node under the pointer — which is why it has no
-        // shortcut: it is a heavier gesture (a file, and a navigation), and
-        // the selection it acts on is not a single node, so there is no
-        // single-subject key to bind it to.
+        // About the whole selection, not the node under the pointer — which is
+        // why it is the one row here with no shortcut.
         label: "Create new view from selection",
         action: () => void handleCreateViewFromSelection(),
       },
