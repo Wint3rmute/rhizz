@@ -16,16 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Add add a modeling/ context menu option "create new view from selection"
-
-With 1 or more components selected, a context menu option "create new view from selection" should be available.
-When selected, this context option shall:
-
-1. Prompt the user for the name of the view (simplest possible way).
-2. Create a new view of the existing system.
-3. Copy over just the selected components, their positions etc.
-4. Move the modeling/ page into the new view.
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
