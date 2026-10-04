@@ -8,9 +8,7 @@ const meta = {
   args: {
     x: 120,
     y: 80,
-    // The node menu as ModelingPage builds it. The last row ("create new view
-    // from selection") is about the whole selection rather than the node under
-    // the pointer, and so is the only one without a shortcut hint.
+    // The node menu as ModelingPage builds it, all four rows.
     items: [
       { label: "Hide from this view", shortcut: "H", action: fn() },
       { label: "Jump to documentation", shortcut: "O", action: fn() },
