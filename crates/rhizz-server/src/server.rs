@@ -35,8 +35,8 @@ async fn healthz() -> &'static str {
     "ok"
 }
 
-/// Fetches the entire VFS state (all projects + nodes), merged from the
-/// per-project dumps on disk.
+/// Fetches the entire VFS state (all projects + nodes), expanded from the
+/// project directories under the data dir.
 async fn get_vfs(State(data_dir): State<PathBuf>) -> Response {
     match storage::load_vfs(&data_dir) {
         Ok(vfs) => (StatusCode::OK, Json(vfs)).into_response(),
@@ -48,7 +48,7 @@ async fn get_vfs(State(data_dir): State<PathBuf>) -> Response {
 }
 
 /// Persists the entire VFS state the frontend dumped on save. The payload
-/// is authoritative: dumps for projects absent from it are deleted.
+/// is authoritative: project directories absent from it are deleted.
 async fn put_vfs(State(data_dir): State<PathBuf>, body: Bytes) -> Response {
     let payload: Value = match serde_json::from_slice(&body) {
         Ok(payload) => payload,
@@ -353,7 +353,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_then_get_vfs_round_trips() {
+    async fn put_then_get_vfs_round_trips_through_the_directory_tree() {
         let tmp = tempfile::tempdir().unwrap();
         let payload = json!({
             "version": 1,
@@ -362,7 +362,11 @@ mod tests {
             ],
             "nodes": [
                 { "id": "n1", "projectId": "p1", "parentId": null, "name": "system.hcl",
-                  "kind": "file", "content": "component a {}", "revision": 2, "updatedAt": "t2" }
+                  "kind": "file", "content": "system \"drone\" {}\n", "revision": 2, "updatedAt": "t2" },
+                { "id": "n2", "projectId": "p1", "parentId": "n3", "name": "main.hcl",
+                  "kind": "file", "content": "view \"main\" {}\n", "revision": 1, "updatedAt": "t2" },
+                { "id": "n3", "projectId": "p1", "parentId": null, "name": "views",
+                  "kind": "directory" }
             ]
         });
 
@@ -379,6 +383,18 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
+        // The payload landed as real files, addressed by node *name* — the
+        // client-side ids are its own bookkeeping and do not reach disk.
+        let project_dir = tmp.path().join("p1");
+        assert_eq!(
+            std::fs::read_to_string(project_dir.join("system.hcl")).unwrap(),
+            "system \"drone\" {}\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(project_dir.join("views/main.hcl")).unwrap(),
+            "view \"main\" {}\n"
+        );
+
         let response = app_at(&tmp)
             .oneshot(
                 Request::builder()
@@ -392,7 +408,107 @@ mod tests {
             .await
             .unwrap();
         let loaded: Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(loaded, payload);
+        assert_eq!(loaded["projects"][0]["id"], json!("p1"));
+        let ids: Vec<&str> = loaded["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["system.hcl", "views", "views/main.hcl"]);
+        let main = loaded["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == json!("views/main.hcl"))
+            .unwrap();
+        assert_eq!(main["content"], json!("view \"main\" {}\n"));
+        assert_eq!(main["parentId"], json!("views"));
+    }
+
+    #[tokio::test]
+    async fn get_vfs_serves_a_data_dir_of_project_directories() {
+        // The layout rhizz-server is meant to serve: a directory per project,
+        // named by its address, holding ordinary HCL.
+        let tmp = tempfile::tempdir().unwrap();
+        let drone = tmp.path().join("drone");
+        std::fs::create_dir_all(drone.join("views")).unwrap();
+        std::fs::write(drone.join("system.hcl"), "system \"quadcopter\" {}\n").unwrap();
+        std::fs::write(drone.join("views/main.hcl"), "view \"main\" {}\n").unwrap();
+        // A stray file at the data-dir root is not a project.
+        std::fs::write(tmp.path().join("README.md"), "readme\n").unwrap();
+
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/vfs")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let loaded: Value = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(loaded["version"], json!(1));
+        let projects = loaded["projects"].as_array().unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0]["id"], json!("drone"));
+        assert_eq!(projects[0]["name"], json!("drone"));
+        assert_eq!(loaded["nodes"].as_array().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn put_vfs_rejects_a_project_id_that_would_escape_the_data_dir() {
+        // A project id becomes a directory name, so one carrying `..` would
+        // write outside the data dir. It is the client's fault: 400, not 500.
+        let tmp = tempfile::tempdir().unwrap();
+        let payload = json!({
+            "version": 1,
+            "projects": [{ "id": "../escaped", "name": "x", "createdAt": "t0", "updatedAt": "t1" }],
+            "nodes": []
+        });
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/vfs")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(!tmp.path().parent().unwrap().join("escaped").exists());
+    }
+
+    #[tokio::test]
+    async fn put_vfs_rejects_a_node_name_that_is_not_a_path_segment() {
+        let tmp = tempfile::tempdir().unwrap();
+        let payload = json!({
+            "version": 1,
+            "projects": [{ "id": "p1", "name": "P", "createdAt": "t0", "updatedAt": "t1" }],
+            "nodes": [
+                { "id": "n1", "projectId": "p1", "parentId": null, "name": "../escape.hcl",
+                  "kind": "file", "content": "x", "revision": 1, "updatedAt": "t2" }
+            ]
+        });
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/vfs")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

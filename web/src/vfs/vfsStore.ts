@@ -90,10 +90,13 @@ export function localStorageBackend(
 
 /**
  * A backend over the rhizz-server HTTP API. The whole blob is fetched before
-// each mutation and dumped back afterwards — deliberately naive, matching the
-// task directive ("dump the entire VFS state to the server on save, no
-// optimisation for now"). With the server unavailable every operation
- * rejects, so callers see the same rejected-promise surface as elsewhere.
+ * each mutation and dumped back afterwards — deliberately naive, matching the
+ * task directive ("dump the entire VFS state to the server on save, no
+ * optimisation for now"). The server expands that payload into one directory
+ * of ordinary files per project (see rhizz-server's `storage` module), so
+ * nothing about this side of the wire changes. With the server unavailable
+ * every operation rejects, so callers see the same rejected-promise surface as
+ * elsewhere.
  */
 export function httpBackend(
   baseUrl: string,

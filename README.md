@@ -57,6 +57,12 @@ editor and persists the frontend's virtual filesystem:
 rhizz-server                  # serves UI on 127.0.0.1:3000
 ```
 
+A project is stored as a **directory of ordinary files** — `system.hcl`,
+`views/*.hcl`, `docs/*.md` — one directory per project, named by the project's
+address. Any directory laid out that way is a valid data dir, so
+`just serve` mounts the repository's `examples/` and the examples become
+editable projects (edits land in the working tree).
+
 The frontend persists to the server when built with
 `VITE_RHIZZ_SERVER_URL` set (otherwise it runs fully in the browser via
 localStorage):
@@ -70,16 +76,18 @@ Environment variables:
 | Variable             | Default          | Meaning                                     |
 | -------------------- | ---------------- | ------------------------------------------- |
 | `RHIZZ_ADDR`         | `127.0.0.1:3000` | Listen address                              |
-| `RHIZZ_DATA_DIR`     | `./rhizz-data`   | Where per-project VFS dumps are stored      |
+| `RHIZZ_DATA_DIR`     | `./rhizz-data`   | Directory holding one sub-directory per project |
 | `RUST_LOG`           | `info`           | tracing log level (`debug`, `warn`, ...)    |
 
 No authentication is implemented — the server assumes a public, trusted
 environment.
 
 > **Concurrency:** the VFS persistence API is a read-modify-write of the
-> whole blob with no locking or revision check. Two clients editing the
-> same project concurrently will silently overwrite each other (last write
-> wins). This is an accepted limitation for the current MVP stage; a
+> whole blob with no locking or revision check, and a save brings each
+> project's directory to exactly the state the payload describes. Two clients
+> editing the same project concurrently will silently overwrite each other
+> (last write wins), and so will a client and anything else writing those
+> files. This is an accepted limitation for the current MVP stage; a
 > revision/ETag check is planned before multi-user use.
 
 ## Development commands

@@ -1,8 +1,8 @@
 // A project's address on the filesystem and in the URL is *just* the slug of
-// its name: "Drone System" is served at `/projects/drone-system/…` and
-// persisted as `drone-system.json` server-side. So the slug is the project's
-// identity, and it has to be unique — hence the duplicate check on create and
-// rename (see ./operations).
+// its name: "Drone System" is served at `/projects/drone-system/…`, and
+// persisted server-side as the directory `drone-system/` holding the project's
+// files. So the slug is the project's identity, and it has to be unique — hence
+// the duplicate check on create and rename (see ./operations).
 //
 // Deliberately DOM/storage free, so it is unit tested in plain Node and
 // reusable by the UI (to show the address a name will get) as well as by the
@@ -46,7 +46,7 @@ export function projectSlug(name: string): string {
 /**
  * A slug that is already taken by another project. The slug is the project's
  * address, so a second project claiming it would collide in the URL and in the
- * server-side `&lt;slug&gt;.json` dump — refused in the store, not just in the UI
+ * server-side `&lt;slug&gt;/` directory — refused in the store, not just in the UI
  * (and, for a network backend, again on save: rhizz-server rejects a payload
  * with two projects at one id).
  */

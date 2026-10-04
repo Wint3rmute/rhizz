@@ -128,13 +128,31 @@ impl CompileResultJS {
    overlay panel.
 7. "Export SVG" serialises the current SVG DOM to a downloadable file.
 
-## Current Scope (Prototype)
+## Persistence
 
-- **Read-only** — no editing capabilities.
-- **Hardcoded examples** — drone system and BuzzVid social-media platform,
-  embedded as HCL string literals.
-- **No backend** — everything runs client-side in the browser.
-- **No file I/O** — sources are compiled from in-memory strings.
+The editor keeps every project in a virtual filesystem (`web/src/vfs/`), which
+has two interchangeable backends. The path-based facade (`vfs/fs.ts`, shaped
+after `node:fs/promises`) is the only thing pages use; the id-based
+`ProjectStore` beneath it is an implementation detail.
+
+- **Browser** (default): one JSON document in `localStorage` under
+  `rhizz:vfs:v1`.
+- **`rhizz-server`** (when the build sets `VITE_RHIZZ_SERVER_URL`): a
+  `GET`/`PUT /api/vfs` pair carrying the whole VFS as
+  `{ version, projects, nodes }`.
+
+The server does not invent a container format for that payload: it expands a
+project into a **directory of ordinary files** — `system.hcl`, `views/*.hcl`,
+`docs/*.md`, plus anything else the project contains — one directory per
+project, named by the project's address (`vfs/slug`). So a data dir is a plain
+directory tree, the repository's `examples/` is a valid one, and the files a
+project is made of are the files on disk. See `rhizz-server`'s `storage`
+module for the exact layout and what it deliberately ignores (hidden entries,
+symlinks, directories that are not projects).
+
+> The sections above describe an earlier prototype of this app (a read-only
+> viewer over hardcoded examples). The persistence layer described here is
+> current.
 
 ## Build & Dev
 
