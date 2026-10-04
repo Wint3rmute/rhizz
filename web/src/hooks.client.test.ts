@@ -35,6 +35,14 @@ const mocks = vi.hoisted(() => {
         calls.push("sentry.replayIntegration");
         return { name: "Replay" };
       }),
+      browserTracingIntegration: vi.fn(() => {
+        calls.push("sentry.browserTracingIntegration");
+        return { name: "BrowserTracing" };
+      }),
+      browserProfilingIntegration: vi.fn(() => {
+        calls.push("sentry.browserProfilingIntegration");
+        return { name: "BrowserProfiling" };
+      }),
     },
   };
 });
@@ -54,6 +62,8 @@ async function loadHooks(env: {
   mocks.sentry.init.mockClear();
   mocks.sentry.consoleLoggingIntegration.mockClear();
   mocks.sentry.replayIntegration.mockClear();
+  mocks.sentry.browserTracingIntegration.mockClear();
+  mocks.sentry.browserProfilingIntegration.mockClear();
 
   const lines: string[] = [];
   const spy = vi
@@ -174,6 +184,33 @@ describe("Session Replay", () => {
     // bundle and records the DOM. A build with no DSN must not pay for either.
     const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
     expect(mocks.sentry.replayIntegration).not.toHaveBeenCalled();
+    expect(lines[0]).toContain("not initialized");
+  });
+});
+
+describe("Browser profiling", () => {
+  const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
+
+  it("registers the browser tracing and profiling integrations with init", async () => {
+    const { options } = await loadHooks(withDsn);
+    const integrations = initConfig(options).integrations;
+    expect(Array.isArray(integrations)).toBe(true);
+    expect(integrations).toContainEqual({ name: "BrowserTracing" });
+    expect(integrations).toContainEqual({ name: "BrowserProfiling" });
+  });
+
+  it("profiles every session during active traces", async () => {
+    const { options } = await loadHooks(withDsn);
+    const config = initConfig(options);
+    expect(config.tracesSampleRate).toBe(1.0);
+    expect(config.profileSessionSampleRate).toBe(1.0);
+    expect(config.profileLifecycle).toBe("trace");
+  });
+
+  it("installs no profiling at all when the build has no DSN", async () => {
+    const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
+    expect(mocks.sentry.browserTracingIntegration).not.toHaveBeenCalled();
+    expect(mocks.sentry.browserProfilingIntegration).not.toHaveBeenCalled();
     expect(lines[0]).toContain("not initialized");
   });
 });
