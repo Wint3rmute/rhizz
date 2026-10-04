@@ -384,6 +384,11 @@ export class ServerProjectStore extends VfsProjectStore {
       onPersisted?: (bytes: number) => void;
     } = {},
   ) {
-    super(httpBackend(baseUrl, opts.fetch), opts.now, undefined, opts.onPersisted);
+    super(
+      httpBackend(baseUrl, opts.fetch),
+      opts.now,
+      undefined,
+      opts.onPersisted,
+    );
   }
 }
