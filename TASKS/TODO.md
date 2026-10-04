@@ -16,17 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Change how VFS is served in rhizz-server - use a real filesystem
-
-The idea behind this task is to change how the VFS is handed on `rhizz-server`
-side. I want rhizz-server to work with the VFS like with a normal filesystem,
-expanding paths to real directories and files instead of a single huge JSON.
-
-The end goal would be to mount the current examples/ directory as a data
-directory of `rhizz-server` and have it "just work" with the web application.
-
-Don't think about backwards compatibility.
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
