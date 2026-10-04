@@ -466,3 +466,99 @@ describe("VfsProjectStore lifecycle logging", () => {
     expect(lines).toEqual([]);
   });
 });
+
+describe("VfsProjectStore persisted-size reporting", () => {
+  // Every mutation funnels through mutate(), so one reporter there covers all
+  // backends and all operations — the byte size of the blob that was just
+  // persisted, measured as the UTF-8 length of the canonical JSON the
+  // backends themselves write. Reads report nothing: the blob did not change.
+  function byteLengthOf(value: unknown): number {
+    return new TextEncoder().encode(JSON.stringify(value)).length;
+  }
+
+  it("reports the persisted blob size after a mutation", async () => {
+    const sizes: number[] = [];
+    const store = new VfsProjectStore(
+      memoryBackend(),
+      () => "t0",
+      () => "fixed-id",
+      (bytes) => sizes.push(bytes),
+    );
+    await store.createProject("Drone System");
+    expect(sizes).toHaveLength(1);
+    expect(sizes[0]).toBeGreaterThan(0);
+  });
+
+  it("reports the exact canonical JSON size, growing with content", async () => {
+    // A recording backend captures the very object handed to write(), so the
+    // expected size is computed from the persisted blob itself rather than
+    // reconstructed — key order and all.
+    let written: VfsData | null = null;
+    const recording: VfsBackend = {
+      read: () => Promise.resolve(emptyVfsData()),
+      write: (data) => {
+        written = data;
+        return Promise.resolve();
+      },
+    };
+    const sizes: number[] = [];
+    const store = new VfsProjectStore(
+      recording,
+      () => "t0",
+      () => "fixed-id",
+      (bytes) => sizes.push(bytes),
+    );
+    const project = await store.createProject("Drone System");
+    await store.createFile(project.id, null, "system.hcl", 'system "x" {}\n');
+    expect(sizes).toHaveLength(2);
+    const [afterCreate, afterFile] = sizes;
+    if (afterCreate === undefined || afterFile === undefined) {
+      throw new Error("expected a size report per mutation");
+    }
+    expect(afterFile).toBeGreaterThan(afterCreate);
+    expect(afterFile).toBe(byteLengthOf(written));
+  });
+
+  it("reports nothing for reads", async () => {
+    const sizes: number[] = [];
+    const store = new VfsProjectStore(
+      memoryBackend(),
+      () => "t0",
+      () => "fixed-id",
+      (bytes) => sizes.push(bytes),
+    );
+    await store.createProject("Drone System");
+    sizes.length = 0;
+    await store.listProjects();
+    await store.listNodes("drone-system");
+    expect(sizes).toEqual([]);
+  });
+
+  it("reports nothing when the backend rejects the write", async () => {
+    // Nothing landed, so there is no new persisted size to describe — same
+    // reason the lifecycle log stays silent in that case.
+    const failing: VfsBackend = {
+      read: () => Promise.resolve(emptyVfsData()),
+      write: () => Promise.reject(new Error("disk full")),
+    };
+    const sizes: number[] = [];
+    const store = new VfsProjectStore(
+      failing,
+      () => "t0",
+      () => "fixed-id",
+      (bytes) => sizes.push(bytes),
+    );
+    await expect(store.createProject("Drone System")).rejects.toThrow(
+      "disk full",
+    );
+    expect(sizes).toEqual([]);
+  });
+
+  it("needs no reporter at all", async () => {
+    // Every existing construction site omits it: mutations must work exactly
+    // as before when nothing is wired up.
+    const store = new VfsProjectStore(memoryBackend(), () => "t0");
+    const project = await store.createProject("Drone System");
+    expect(project.name).toBe("Drone System");
+  });
+});

@@ -11,6 +11,8 @@
 // fetch those directly from `projectStore` themselves, so a page's own
 // edits are never at risk of being shadowed by a stale cache living here.
 import { openProjectFs } from "./vfs/fs";
+import { reportVfsSizeBytes } from "./vfs/metrics";
+import { DEFAULT_STORAGE_KEY } from "./vfs/vfsStore";
 import { LocalStorageProjectStore } from "./vfs/vfsStore";
 import { ServerProjectStore } from "./vfs/vfsStore";
 import type { ProjectStore } from "./vfs/store";
@@ -21,9 +23,18 @@ import type { Project } from "./vfs/types";
 // everything stays in the browser via localStorage. Build-time env var —
 // e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 deno run build`.
 const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
+// Every persisted mutation reports the whole blob's byte size to Sentry
+// (see ./vfs/metrics.ts), so the Metrics explorer shows how the VFS grows —
+// wired here, the one place the production store is built, because size
+// reporting is a browser-only concern the store itself stays free of.
 export const projectStore: ProjectStore = serverUrl
-  ? new ServerProjectStore(serverUrl)
-  : new LocalStorageProjectStore();
+  ? new ServerProjectStore(serverUrl, { onPersisted: reportVfsSizeBytes })
+  : new LocalStorageProjectStore(
+    globalThis.localStorage,
+    DEFAULT_STORAGE_KEY,
+    undefined,
+    reportVfsSizeBytes,
+  );
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);
