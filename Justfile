@@ -92,7 +92,7 @@ vrt-accept *args:
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
-    {{run}} sh -c 'cd web && deno run dev'
+    {{run}} sh -c 'cd web && deno install && deno run dev'
 
 # Starts a storybook server. If you're an AI, never use this. It will just hang forever.
 # Syncs first for the same reason `build` does.
