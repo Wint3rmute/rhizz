@@ -75,25 +75,26 @@ they have on the canvas, and moves the page into it.
   is FIFO). `page.removeAllListeners("dialog")` before registering the real
   handler is the fix, and it is the kind of thing that would have looked like a
   flaky test rather than a fixture bug.
-- **The story could not have gone red, and that is the point of keeping
-  `ContextMenu` presentation-only.** The row needed no change at all to appear
-  — no new prop, no new markup — so there was nothing to write a failing story
-  against. What the story *can* check is what the page cannot: that the row has
-  no `kbd` beside it, and that clicking it runs its action and closes the menu.
-  The other half — what the prompt then does with the name — is the e2e's, and
-  the split is the reason neither test needs a mock.
-- **`ComponentMenu` was lying about being the node menu**, listing three of its
-  four rows, so it now lists all four; `ClickItemCloses` moved with it, since it
+- **There is no new story for the row, and the first attempt at one was
+  redundant.** `ContextMenu` is 85 lines of markup with no per-item logic — the
+  row is *data*, not code — so a story of its own could only re-shoot the menu:
+  `ComponentMenu` already renders the exact items the page passes and asserts
+  the row is there, and `ClickItemCloses` already covers a clicked row running
+  its action and closing the menu, focus ring included. The one assertion that
+  looked new ("this row has no `kbd`") tested `{#if item.shortcut}` against
+  itself, and the `ComponentMenu` baseline already *shows* the absence. So the
+  story and its two baselines were deleted, and `ComponentMenu` grew a fourth
+  row instead — which is also what re-recorded `ClickItemCloses`, since it
   shares the default args.
-- **VRT: 8 baselines re-recorded, 2 new.** Four from `ContextMenu`
+- **VRT: 8 baselines re-recorded, 0 new.** Four from `ContextMenu`
   (`ComponentMenu`, `ClickItemCloses`) and four from `DetailViewMenu`, whose two
   stories drive the *real* Modeling page and so screenshot the whole menu — they
   are the only place the row appears in the app's own chrome, with the
   selection it acts on visible behind it. The gallery settled the one question
-  the story could not: "Create new view from selection" is 31 characters in a
+  a unit test could not: "Create new view from selection" is 31 characters in a
   260px menu and could have truncated to "Create new view from selec…". It does
   not — it ends with ~40px to spare, and the missing `kbd` reads as deliberate
-  next to the three rows that have one. A follow-up full run is 242/242 with
+  next to the three rows that have one. A follow-up full run is 240/240 with
   nothing changed.
 - **Red/green**: the 14 unit tests and the e2e went red first, the e2e against
   the un-wired page (the row was not in the menu) and the unit tests against a
@@ -103,9 +104,9 @@ they have on the canvas, and moves the page into it.
   on the viewport center, and the second would nest inside the first
   (`openCreateComponentModal` adopts the single selected node as parent, which
   is also why the fixture clicks empty canvas between spawns).
-- **Validation**: `just test` (cargo + 875 Vitest + 78 e2e), `just lint`
+- **Validation**: `just test` (cargo + 874 Vitest + 78 e2e), `just lint`
   (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
-  `just format` and the full VRT suite 242/242 all pass.
+  `just format` and the full VRT suite 240/240 all pass.
 
 ---
 
