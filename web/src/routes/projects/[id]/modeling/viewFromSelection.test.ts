@@ -55,7 +55,9 @@ describe("viewPathFromName", () => {
 
 describe("viewPathTaken", () => {
   it("is true when a view file already sits at that path", () => {
-    expect(viewPathTaken([file("main.hcl"), file("overview.hcl")], "overview.hcl"))
+    expect(
+      viewPathTaken([file("main.hcl"), file("overview.hcl")], "overview.hcl"),
+    )
       .toBe(true);
   });
 
@@ -70,32 +72,33 @@ describe("viewPathTaken", () => {
 });
 
 describe("layoutFromSelection", () => {
-  it("places only the selected components, where they already are", () => {
+  it("places only the selected components, at the boxes they have here", () => {
+    // One assertion on the whole record, because "just the selection" and
+    // "carrying size and alignment over" are the same claim: a node that came
+    // across with only its position would differ here too.
     const layout = layoutFromSelection(
       "main",
       CHECKED,
       ["main/mcu", "main/imu"],
     );
-    expect(Object.keys(layout.checked)).toEqual(["main/mcu", "main/imu"]);
-    expect(layout.checked["main/mcu"].x).toBe(10);
-    expect(layout.checked["main/imu"].x).toBe(200);
-  });
-
-  it("carries each node's size and text alignment over, not just its position", () => {
-    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"]);
-    expect(layout.checked["main/mcu"]).toEqual({
-      x: 10,
-      y: 20,
-      width: 120,
-      height: 80,
-      textAlign: "top-left",
+    expect(layout.checked).toEqual({
+      "main/mcu": {
+        x: 10,
+        y: 20,
+        width: 120,
+        height: 80,
+        textAlign: "top-left",
+      },
+      "main/imu": { x: 200, y: 20 },
     });
   });
 
   it("does not alias the boxes it copies — later edits stay in this view", () => {
     const layout = layoutFromSelection("main", CHECKED, ["main/mcu"]);
-    layout.checked["main/mcu"].x = 999;
-    expect(CHECKED["main/mcu"].x).toBe(10);
+    const copied = layout.checked["main/mcu"];
+    if (!copied) throw new Error("the selected component was not copied");
+    copied.x = 999;
+    expect(CHECKED["main/mcu"]?.x).toBe(10);
   });
 
   it("skips a selected key that has no box on the canvas", () => {
