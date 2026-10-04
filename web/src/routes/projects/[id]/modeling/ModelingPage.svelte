@@ -44,10 +44,13 @@ import {
   type Annotation,
   type DiagramLayout,
   emptyDiagramLayout,
+  layoutFromSelection,
   readDiagramLayoutFile,
   type StoredBox,
   type StoredConnection,
   VIEW_LAYOUT_DIR,
+  viewPathFromName,
+  viewPathTaken,
   writeDiagramLayoutFile,
 } from "./persistence";
 import {
@@ -65,11 +68,6 @@ import {
   type LayoutEdge,
   type LayoutNode,
 } from "./forceLayout";
-import {
-  layoutFromSelection,
-  viewPathFromName,
-  viewPathTaken,
-} from "./viewFromSelection";
 import {
   annotationBounds,
   boxContains,
