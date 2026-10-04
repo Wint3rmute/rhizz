@@ -19,3 +19,8 @@ web/package-lock.json
 
 # Python bytecode (book preprocessor + tests)
 __pycache__/
+
+# Artifacts the playwright MCP server drops wherever it happens to be run
+# from (page snapshots + console logs), which is the repo root when an agent
+# drives it from here.
+.playwright-mcp/
