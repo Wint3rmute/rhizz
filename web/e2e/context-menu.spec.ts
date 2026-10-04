@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 // Right-click context menu on the Modeling canvas: per-target rows with
 // shortcut hints, actions reusing the existing handlers.
@@ -116,6 +116,147 @@ test("the detail-view row creates a view once, then jumps to it", async ({ page 
   await menu.getByRole("menuitem", { name: /jump to detailed view/i }).click();
   await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-detail.hcl`);
   await expect(canvas.getByText("e2e-detail").first()).toBeVisible();
+});
+
+type Rect = { x: number; y: number; width: number; height: number };
+
+async function boxOf(locator: Locator): Promise<Rect> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("element has no bounding box");
+  return box;
+}
+
+function centerOf(box: Rect) {
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+async function clickAt(page: Page, locator: Locator) {
+  const point = centerOf(await boxOf(locator));
+  await page.mouse.click(point.x, point.y);
+}
+
+// `page.mouse.click` takes no `modifiers`, so shift-click holds the key across
+// the click to extend the selection.
+async function shiftClickAt(page: Page, locator: Locator) {
+  const point = centerOf(await boxOf(locator));
+  await page.keyboard.down("Shift");
+  await page.mouse.click(point.x, point.y);
+  await page.keyboard.up("Shift");
+}
+
+async function rightClickAt(page: Page, locator: Locator) {
+  const point = centerOf(await boxOf(locator));
+  await page.mouse.click(point.x, point.y, { button: "right" });
+}
+
+// A component spawned at a spot on the canvas, as a sibling of whatever else
+// is there: `C` spawns under the pointer (and only with nothing selected),
+// and the click on empty canvas in between is what keeps the next spawn from
+// nesting inside the last one.
+async function spawnComponentAt(
+  page: Page,
+  canvas: Locator,
+  label: string,
+  fx: number,
+  fy: number,
+) {
+  const rect = await boxOf(canvas);
+  // Well above the row of nodes, so this click never lands on one.
+  await clickAt(page, canvas);
+  await page.mouse.move(rect.x + rect.width * fx, rect.y + rect.height * 0.2);
+  await page.keyboard.press("c");
+  const modal = page.getByTestId("create-component-modal");
+  await expect(modal).toBeVisible();
+  await modal.locator("#new-comp-name").fill(label);
+  await modal.getByRole("button", { name: "Create Definition" }).click();
+  await expect(modal).toBeHidden();
+  await expect(canvas.getByText(label).first()).toBeVisible();
+}
+
+// Canvas (world) coordinates of a locator's center, read off the canvas's own
+// viewBox rather than its screen pixels: switching views re-aims the camera,
+// so screen positions say nothing about whether a position was carried over.
+async function worldCenter(canvas: Locator, locator: Locator) {
+  const rect = await boxOf(canvas);
+  const box = await boxOf(locator);
+  const viewBox = await canvas.getAttribute("viewBox");
+  if (!viewBox) throw new Error("canvas has no viewBox");
+  const [vx, vy, vw] = viewBox.split(" ").map(Number);
+  const zoom = rect.width / vw;
+  return {
+    x: vx + (centerOf(box).x - rect.x) / zoom,
+    y: vy + (centerOf(box).y - rect.y) / zoom,
+  };
+}
+
+test("the new-view row copies the selection into a new view and moves there", async ({ page }) => {
+  const id = await openDiagram(page, "E2E view from selection");
+  const canvas = page.getByTestId("diagram-canvas");
+  const menu = page.getByTestId("context-menu");
+  const newViewRow = menu.getByRole("menuitem", {
+    name: /create new view from selection/i,
+  });
+  await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);
+
+  // Three components across the canvas: two get selected, and the third is
+  // what proves the new view is a copy of the selection, not of the canvas.
+  await spawnComponentAt(page, canvas, "e2e-pick-a", 0.25, 0.5);
+  await spawnComponentAt(page, canvas, "e2e-pick-b", 0.5, 0.5);
+  await spawnComponentAt(page, canvas, "e2e-leave-out", 0.75, 0.5);
+
+  await clickAt(page, canvas.getByText("e2e-pick-a").first());
+  await shiftClickAt(page, canvas.getByText("e2e-pick-b").first());
+  const before = {
+    a: await worldCenter(canvas, canvas.getByText("e2e-pick-a").first()),
+    b: await worldCenter(canvas, canvas.getByText("e2e-pick-b").first()),
+  };
+
+  // The prompt is the one dialog this test answers itself, so the fixture's
+  // project-name handler (which would accept it with the wrong text) stands
+  // down first.
+  page.removeAllListeners("dialog");
+  page.once("dialog", (dialog) => void dialog.dismiss());
+
+  // Right-clicking a node that is part of the selection keeps the selection,
+  // so the row sees both components — not just the one under the pointer.
+  await rightClickAt(page, canvas.getByText("e2e-pick-a").first());
+  await expect(newViewRow).toBeVisible();
+  await newViewRow.click();
+  await expect(menu).toBeHidden();
+
+  // A dismissed prompt is a cancel: still on this view, canvas unchanged.
+  await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);
+  await expect(canvas.getByText("e2e-leave-out").first()).toBeVisible();
+
+  page.once("dialog", (dialog) => void dialog.accept("from-selection"));
+  await rightClickAt(page, canvas.getByText("e2e-pick-a").first());
+  await newViewRow.click();
+
+  // The Modeling page is now *in* the new view, which the URL names.
+  await expect(page).toHaveURL(`/projects/${id}/modeling/from-selection.hcl`);
+  await expect(page.getByTestId("diagram-system-label")).toContainText(
+    "system: main",
+  );
+  await expect(
+    page.locator("aside").filter({
+      has: page.getByRole("heading", { name: "Diagrams" }),
+    }).getByRole("button", { name: "from-selection.hcl", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+
+  // The selection came across, at the positions it had here…
+  const after = {
+    a: await worldCenter(canvas, canvas.getByText("e2e-pick-a").first()),
+    b: await worldCenter(canvas, canvas.getByText("e2e-pick-b").first()),
+  };
+  expect(after.a.x).toBeCloseTo(before.a.x, 0);
+  expect(after.a.y).toBeCloseTo(before.a.y, 0);
+  expect(after.b.x).toBeCloseTo(before.b.x, 0);
+  expect(after.b.y).toBeCloseTo(before.b.y, 0);
+
+  // …and the component that was left unselected did not.
+  await expect(canvas.getByText("e2e-pick-a").first()).toBeVisible();
+  await expect(canvas.getByText("e2e-pick-b").first()).toBeVisible();
+  await expect(canvas.getByText("e2e-leave-out")).toHaveCount(0);
 });
 
 test("empty canvas right-click shows canvas menu with shortcuts", async ({ page }) => {
