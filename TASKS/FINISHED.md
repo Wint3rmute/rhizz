@@ -4,6 +4,113 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 119 — The server stores projects as directories, so `examples/` is a data dir
+
+`rhizz-server` no longer keeps a JSON dump per project. A project is a
+directory of ordinary files — `system.hcl`, `views/*.hcl`, `docs/*.md`, plus
+anything else it contains — one directory per project, named by the project's
+address. Any directory laid out that way is a valid data dir, so `just serve`
+mounts the repository's `examples/` and its six projects come up editable.
+
+- **The HTTP contract did not change, and that is the whole design.** The
+  frontend still does `GET`/`PUT /api/vfs` with the same
+  `{version, projects, nodes}` blob, and `web/src/vfs/` is untouched. The task
+  said "instead of a single huge JSON", which the *server* now expands into
+  files; the blob on the wire is a separate question (it is still the scaling
+  limit, and per-file endpoints remain available as follow-up work). The
+  payoff is that the blast radius stopped at one Rust module: 899 Vitest, 84
+  e2e and 240 VRT baselines needed no change at all, because nothing outside
+  `crates/rhizz-server/` knows how a project is stored.
+- **The directory name *is* the project id, enforced rather than normalized.**
+  `projectSlug(name)` is the identity on both sides, so `is_address` demands
+  the name already be a slug (`[a-z0-9]+(-[a-z0-9]+)*`) and a directory that
+  isn't one is skipped. Normalizing instead would have meant an id that
+  differs from its directory, which turns a rename into delete-plus-recreate.
+  The cost is one visible thing: a mounted project's display name is its
+  slug, since `Project.name` has no on-disk representation and inventing one
+  (a `.rhizz/project.json` sidecar) would put a file in every user's repo.
+  Reading `project { name = … }` out of the model instead was rejected on the
+  numbers: 4 of 6 examples disagree with their own directory (`drone/`
+  declares `drone-system`), so it breaks the frontend's `id === slug(name)`
+  invariant.
+- **Node ids are project-relative paths, which is what makes the mapping
+  stateless.** The frontend only ever uses ids as opaque map keys within one
+  project's node set (`tree.ts`), never in a URL or a localStorage key, so
+  `views/main.hcl` as an id costs nothing and saves the server an inode
+  numbering. A save then ignores the ids in the payload entirely and rebuilds
+  each project's paths from the parent chain.
+- **Ordering is now sorted, and that is a deliberate behavior change.**
+  `readdir` order used to decide the compiler's source order and four
+  "first match" defaults (`compile.ts:83`'s `primaryHclPath` fallback, the
+  default open file, the default view, and `Navbar.svelte:63`'s `projects[0]`
+  — which becomes `apollo-11` rather than first-created). Both the project
+  list and every level of a project's tree are sorted by name so a load is
+  reproducible; the walk is depth-first, so a directory is immediately
+  followed by its subtree.
+- **`revision` and `updatedAt` are the file's mtime, in milliseconds.**
+  Millis rather than nanos because `revision` has to survive
+  `z.number().int()` in JavaScript, and nanos (~1.8e18) does not. A project's
+  own `createdAt`/`updatedAt` span the oldest and newest file in it — the
+  directory's own mtime is useless here, since it moves whenever an entry is
+  added. The RFC 3339 formatting is hand-rolled (~25 lines, Hinnant's
+  `civil_from_days`) rather than a date dependency, and saturates throughout:
+  a formatter that cannot fail is not the place for checked-arithmetic noise.
+- **Three things are deliberately not the server's business, and each one is a
+  test.** Hidden entries (any dot-name, any depth) are skipped on read and
+  left alone on write — one rule that covers `.git`, `.DS_Store` and editor
+  droppings, and the reason mounting a checkout never walks into its `.git`.
+  Symlinks are skipped, because following one would serve or overwrite a file
+  outside the data dir. And "delete the projects missing from the payload"
+  only considers directories that *are* projects, so a stray `notes/` beside
+  them survives a save.
+- **Path traversal is refused, and the old code had the bug already.**
+  `storage.rs` used to build `<data_dir>/<id>.json` from a client-supplied id
+  with no validation, so `id: "../x"` wrote outside the data dir. A real
+  filesystem promotes that from one bad id to arbitrary path plus arbitrary
+  content, because node *names* become path segments. So a project id must be
+  an address, a node name must be exactly one `Component::Normal` (which is
+  what rejects `..`, `/etc/passwd` and `a/../b` structurally rather than by
+  string matching), and a parent chain that dangles, crosses projects, loops
+  or resolves to the same path twice is a `Malformed` payload — mapped to 400,
+  since it is the client's fault.
+- **A save skips files whose content already matches.** Without it every
+  debounced write would re-serialize every file in every project, bumping
+  mtimes and therefore `updatedAt` for edits nobody made; with it, re-saving
+  the blob a client just read is a no-op on disk (asserted by comparing mtimes
+  across two saves).
+- **Red/green found one real bug, in the discovery rule.** A directory of
+  nothing but Markdown was being loaded as a project: the model-source test
+  excluded view paths but never checked the extension, so `notes/scratch.md`
+  counted as a model source. It now mirrors the CLI's own `load_sources` —
+  `.hcl`, and not a view. Two other test failures were my own bad premises
+  (a payload that deletes the only `.hcl` really does stop being a project;
+  and `-1 ms` is 1969-12-31T23:59:59.999Z, not a negative year).
+- **The e2e story is unchanged, and that is the gap to know about.** Every
+  Playwright spec runs against `vite dev` with no `VITE_RHIZZ_SERVER_URL`, so
+  all 84 still exercise localStorage; the server backend is covered by Rust
+  tests only (`tower::ServiceExt::oneshot` against the real router, plus a
+  temp-dir tree). One test reads the repository's own `examples/` through the
+  loader and asserts all six projects come out, which is the task's goal as an
+  assertion. A throwaway end-to-end run against a copy of `examples/` also
+  confirmed the round trip: 51 nodes served, an edit through `PUT` landing in
+  `drone/system.hcl` on disk, a re-`PUT` leaving its mtime alone, a dropped
+  project removing its directory, `../escaped` refused with 400 and nothing
+  written.
+- **Two sources of truth for the examples now exist, deliberately.**
+  `rhizz-core/build.rs` still `include_str!`s `examples/` into the WASM build
+  for `get_example_projects()` ("Learn by example"), while the live data dir
+  serves the same directories. Mounting `examples/` read-write means browsing
+  a view can rewrite its file — the Modeling layout-save effect
+  (`ModelingPage.svelte:770-801`) has no dirty check — so a fresh container
+  comes up with six editable systems and a dirty `git status` after a visit.
+  That is the intended trade; a read-only mount is the alternative and would
+  need the UI to degrade on failed writes.
+- **Validation**: `just test` (cargo + 899 Vitest + 84 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`
+  and `just format` all pass.
+
+---
+
 ## Task 118 — Debounce VFS writes at the sources (editor + diagram layout)
 
 The code editor's write-back effect and Modeling's layout-save effect now
