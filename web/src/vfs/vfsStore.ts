@@ -127,6 +127,12 @@ export class VfsProjectStore implements ProjectStore {
   private readonly backend: VfsBackend;
   private readonly now: () => string;
   private readonly newId: () => string;
+  // Optional size reporter (see ./metrics.ts): called with the byte size of
+  // the blob after every persisted mutation. Absent in tests, Storybook and
+  // any non-browser composition — reporting is a browser-only concern, so
+  // the store stays dependency-free and every existing construction site
+  // keeps working unchanged.
+  private readonly onPersisted: ((bytes: number) => void) | undefined;
 
   // ── Session read cache ──────────────────────────────────────────────────
   //
@@ -160,10 +166,12 @@ export class VfsProjectStore implements ProjectStore {
     backend: VfsBackend,
     now: () => string = () => new Date().toISOString(),
     newId: () => string = () => crypto.randomUUID(),
+    onPersisted?: (bytes: number) => void,
   ) {
     this.backend = backend;
     this.now = now;
     this.newId = newId;
+    this.onPersisted = onPersisted;
   }
 
   /** The VFS blob, read from the backend on first use and cached after. */
@@ -188,6 +196,18 @@ export class VfsProjectStore implements ProjectStore {
   }
 
   /**
+   * Reports the byte size of the just-persisted blob. Runs after the write
+   * settles, so a refused write reports nothing — there is no new persisted
+   * size to describe in that case. Measured as the UTF-8 length of the same
+   * canonical JSON the backends themselves persist, so the number matches
+   * what actually lands in localStorage or on the wire.
+   */
+  private reportPersistedSize(data: VfsData): void {
+    if (this.onPersisted === undefined) return;
+    this.onPersisted(new TextEncoder().encode(JSON.stringify(data)).length);
+  }
+
+  /**
    * Mutating op: derive the next blob from the cached one, persist it, and
    * keep it as the cache. Queued behind any mutation still running, so each
    * one builds on the state the previous one left.
@@ -207,6 +227,7 @@ export class VfsProjectStore implements ProjectStore {
         this.cached = null;
         throw error;
       }
+      this.reportPersistedSize(data);
       return value;
     });
     // Keep the queue alive when this mutation rejects, so one failure
@@ -347,8 +368,9 @@ export class LocalStorageProjectStore extends VfsProjectStore {
     storage: StorageLike = globalThis.localStorage,
     key: string = DEFAULT_STORAGE_KEY,
     now?: () => string,
+    onPersisted?: (bytes: number) => void,
   ) {
-    super(localStorageBackend(storage, key), now);
+    super(localStorageBackend(storage, key), now, undefined, onPersisted);
   }
 }
 
@@ -356,8 +378,12 @@ export class LocalStorageProjectStore extends VfsProjectStore {
 export class ServerProjectStore extends VfsProjectStore {
   constructor(
     baseUrl: string,
-    opts: { now?: () => string; fetch?: FetchLike } = {},
+    opts: {
+      now?: () => string;
+      fetch?: FetchLike;
+      onPersisted?: (bytes: number) => void;
+    } = {},
   ) {
-    super(httpBackend(baseUrl, opts.fetch), opts.now);
+    super(httpBackend(baseUrl, opts.fetch), opts.now, undefined, opts.onPersisted);
   }
 }
