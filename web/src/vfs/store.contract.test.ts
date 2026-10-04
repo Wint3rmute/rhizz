@@ -449,6 +449,133 @@ export function runProjectStoreContractTests(
         expect(updatedProject?.updatedAt).not.toBe(project.updatedAt);
       });
     });
+
+    describe("node identity and project isolation", () => {
+      // Node ids are the addressing scheme for every operation in
+      // ./operations, and those resolve a node against the *whole* `nodes`
+      // array — `findNode` takes the first match, `updateFileContent` rewrites
+      // every match. So an id has to be unique across the VFS, not merely
+      // within its project; ids that were unique per project let a write in
+      // one project land in another (TASKS/FINISHED.md, Task 119a).
+      //
+      // These cases pin both halves of that, for every backend: the store
+      // mints ids that do not collide, and a project-scoped operation stays
+      // inside its project. Both projects deliberately hold the *same* file
+      // layout, so every path would collide if the ids were unqualified.
+      async function twoProjectsWithTheSameLayout() {
+        const store = makeStore();
+        const alpha = await store.createProject("alpha");
+        const beta = await store.createProject("beta");
+        for (const project of [alpha, beta]) {
+          await store.createDirectory(project.id, null, "views");
+          const [dir] = await store.listNodes(project.id);
+          if (dir?.kind !== "directory") throw new Error("no directory");
+          await store.createFile(
+            project.id,
+            dir.id,
+            "main.hcl",
+            "original",
+          );
+        }
+        return { store, alpha, beta };
+      }
+
+      async function onlyFile(store: ProjectStore, projectId: string) {
+        const file = (await store.listNodes(projectId)).find(
+          (n) => n.kind === "file",
+        );
+        if (file === undefined) throw new Error("no file in project");
+        return file;
+      }
+
+      it("mints node ids unique across the whole VFS", async () => {
+        const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
+        const ids = [
+          ...(await store.listNodes(alpha.id)).map((n) => n.id),
+          ...(await store.listNodes(beta.id)).map((n) => n.id),
+        ];
+        expect(ids).toHaveLength(4);
+        expect(new Set(ids).size).toBe(ids.length);
+      });
+
+      it("leaves another project's nodes untouched when writing", async () => {
+        const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
+        const alphaBefore = await store.listNodes(alpha.id);
+        const betaFile = await onlyFile(store, beta.id);
+
+        await store.updateFileContent(betaFile.id, "beta's edit");
+
+        const betaAfter = await store.listNodes(beta.id);
+        expect(betaAfter).toHaveLength(2);
+        expect(await onlyFile(store, beta.id)).toMatchObject({
+          content: "beta's edit",
+        });
+        // alpha holds a same-named file that, under an unqualified id scheme,
+        // would have been rewritten as well. Deep-equal, so a stray content,
+        // revision, parentId or timestamp change all fail here.
+        expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
+      });
+
+      it("deletes only inside the project it was asked about", async () => {
+        const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
+        const betaFile = await onlyFile(store, beta.id);
+
+        await store.deleteNode(betaFile.id);
+
+        expect((await store.listNodes(beta.id)).map((n) => n.kind)).toEqual([
+          "directory",
+        ]);
+        // alpha's same-named file survives.
+        expect((await store.listNodes(alpha.id)).map((n) => n.kind)).toEqual([
+          "directory",
+          "file",
+        ]);
+      });
+
+      it("renames only inside the project it was asked about", async () => {
+        const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
+        const alphaBefore = await store.listNodes(alpha.id);
+        const betaFile = await onlyFile(store, beta.id);
+
+        await store.renameNode(betaFile.id, "renamed.hcl");
+
+        expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
+        expect((await store.listNodes(beta.id)).map((n) => n.name)).toEqual([
+          "views",
+          "renamed.hcl",
+        ]);
+      });
+
+      it("moves only inside the project it was asked about", async () => {
+        const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
+        const alphaBefore = await store.listNodes(alpha.id);
+        const betaDir = (await store.listNodes(beta.id)).find(
+          (n) => n.kind === "directory",
+        );
+        const alphaDir = (await store.listNodes(alpha.id)).find(
+          (n) => n.kind === "directory",
+        );
+        if (betaDir?.kind !== "directory" || alphaDir?.kind !== "directory") {
+          throw new Error("no directory");
+        }
+        const betaFile = await onlyFile(store, beta.id);
+
+        // Re-parent beta's file under alpha's directory: with a global lookup
+        // and colliding ids this is the operation that could re-parent (or
+        // adopt) a node in the wrong project.
+        await expect(
+          store.moveNode(betaFile.id, alphaDir.id),
+        ).rejects.toThrow();
+
+        // …and within its own project it still works.
+        await store.moveNode(betaFile.id, betaDir.id);
+        expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
+        expect((await store.listNodes(beta.id)).map((n) => n.name)).toEqual([
+          "views",
+          "main.hcl",
+        ]);
+      });
+    });
   });
 }
 

@@ -16,6 +16,62 @@ How to work on this file:
 
 ---
 
+## Task <N> - Put the project scope in the call: scope every ProjectStore node operation
+
+Every node operation in `web/src/vfs/operations.ts` resolves its target against
+the *whole* `nodes` array rather than the project it was called for:
+`findNode` (`:88-94`) takes the first match anywhere, and
+`updateFileContent`/`renameNode`/`moveNode` then rewrite **every** node whose
+id matches. `deleteNode` collects descendants through `tree.ts`'s
+`descendantsOf`, which builds its child map from all nodes, and
+`wouldCreateCycle` builds `new Map(nodes.map(n => [n.id, n]))` — last one
+wins. So a node id is being used as an unforgeable capability token, and it is
+not one: whoever holds a valid id can name any node in the VFS, in any project.
+This is what let a write in one project land in another (see Task 119a in
+`FINISHED.md`).
+
+Task 119a closed the *producers* (rhizz-server now emits project-qualified
+ids, and `sanitizeVfsData` drops duplicate node ids from a foreign blob), and
+added a "node identity and project isolation" section to the ProjectStore
+contract suite. What is left is the *consumers*: the store itself is still
+unsafe by construction, and only the uniqueness of the ids stands between it
+and a cross-project write.
+
+The filesystem-alike fix is the one `web/src/vfs/store.ts:6-10` already
+describes ("real filesystems don't expose inode numbers to userland"): make the
+scope part of the call rather than an inference, the way `openat(dirfd, path)`
+roots every syscall at a directory handle. There is no `open(42)`.
+
+Definition of done:
+
+1. Every node method on the `ProjectStore` interface takes the `projectId` it
+   belongs to: `updateFileContent(projectId, fileId, content)`,
+   `renameNode(projectId, nodeId, name)`, `moveNode(projectId, nodeId,
+   newParentId)`, `deleteNode(projectId, nodeId)`.
+2. `findNode` filters on `(projectId, id)`, and every rewrite filters on both —
+   so a node of another project is *unrepresentable* as a target rather than
+   merely guarded. `assertValidParent` stops being a check downstream of a
+   global lookup (and starts rejecting genuinely foreign ids, which it cannot
+   distinguish today).
+3. `descendantsOf` and `wouldCreateCycle` are scoped to the project too.
+4. `fs.ts` barely changes: `openProjectFs(store, projectId)` already closes over
+   `projectId` and currently throws it away at every mutating call.
+5. Tests: extend the isolation section of `store.contract.test.ts` (it runs
+   against all three backends) with cases that pass an id belonging to another
+   project and assert a typed rejection rather than a silent cross-write.
+6. Keep the "ids are unique across the VFS" invariant documented on
+   `vfs/types.ts` — it is still what keeps per-project ids sufficient, and
+   `FsNode` remains the wire shape rhizz-server sends.
+
+Deliberately *not* part of this task: collapsing the id layer entirely, i.e.
+making `ProjectStore` path-based per project and deleting the resolution
+duplicated across `tree.ts` and `pathTree.ts`. Once (1)-(3) land, per-project
+id uniqueness is sufficient, so that refactor buys tidiness rather than safety
+and costs the 14-method interface plus the whole contract suite. Worth doing
+eventually as a simplification; not as this fix.
+
+---
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
