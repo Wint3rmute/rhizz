@@ -113,6 +113,11 @@ fn spa_shell() -> Response {
 
 /// Builds a response for one embedded file with its guessed mime type.
 /// Hashed `_app` assets are immutable; the shell is revalidated.
+///
+/// HTML documents additionally carry `Document-Policy: js-profiling`: the
+/// browser JS self-profiler (see `web/src/hooks.client.ts`) only starts when
+/// the document response includes it. Dev documents go through `SvelteKit`'s
+/// `hooks.server.ts`, which sets the same header there.
 fn asset_response(file: EmbeddedFile, path: &str) -> Response {
     let cache_control = if path.starts_with("_app/") {
         "public, max-age=31536000, immutable"
@@ -120,9 +125,12 @@ fn asset_response(file: EmbeddedFile, path: &str) -> Response {
         "no-cache"
     };
     let content_type = mime_guess::from_path(path).first_or_octet_stream();
-    let builder = Response::builder()
+    let mut builder = Response::builder()
         .header(header::CONTENT_TYPE, content_type.as_ref())
         .header(header::CACHE_CONTROL, cache_control);
+    if content_type == mime_guess::mime::TEXT_HTML {
+        builder = builder.header("Document-Policy", "js-profiling");
+    }
     match builder.body(Body::from(file.data.into_owned())) {
         Ok(response) => response,
         Err(err) => {
@@ -260,6 +268,27 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_content_type(&response, "text/html");
+    }
+
+    #[tokio::test]
+    async fn spa_shell_carries_document_policy_for_profiling() {
+        // The browser JS self-profiler only starts when the document response
+        // carries `Document-Policy: js-profiling` (see
+        // `web/src/hooks.client.ts`). Every path that serves the SPA shell is
+        // a document, so all of them must carry it.
+        let tmp = tempfile::tempdir().unwrap();
+        for uri in ["/", "/nope", "/projects/staging/diagrams"] {
+            let response = app_at(&tmp)
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers().get("Document-Policy").unwrap(),
+                "js-profiling",
+                "missing Document-Policy header on {uri}",
+            );
+        }
     }
 
     #[tokio::test]

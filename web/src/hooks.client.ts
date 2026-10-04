@@ -31,6 +31,17 @@ if (dsn !== undefined && dsn !== "") {
     // the git sha), which is the same release its source maps are uploaded
     // under. Setting it independently could tag the two differently.
     integrations: [
+      // Tracing must be enabled for profiling to work: every transaction
+      // carries profiling data while a trace is active (see
+      // `profileLifecycle: "trace"` below).
+      Sentry.browserTracingIntegration(),
+
+      // Browser profiling (JS self-profiling). Only starts when the document
+      // response carries `Document-Policy: js-profiling` — see
+      // `src/hooks.server.ts` (dev) and `crates/rhizz-server/src/server.rs`
+      // (production static serving).
+      Sentry.browserProfilingIntegration(),
+
       // send console.log, console.warn, and console.error calls as logs to Sentry
       Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
 
@@ -58,6 +69,25 @@ if (dsn !== undefined && dsn !== "") {
     // on-error rate is meant to stay at 1.0.
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
+
+    // Browser profiling sampling. The decision whether to profile is made once
+    // per session when the SDK initializes; 1.0 profiles every session.
+    // `profileLifecycle: "trace"` ties profiling to active traces, so with
+    // `tracesSampleRate: 1.0` above every transaction carries profile data.
+    profileSessionSampleRate: 1.0,
+    profileLifecycle: "trace",
+
+    // URLs for which distributed tracing headers are attached. Matched
+    // against the full request URL, so the API pattern must allow any host:
+    // localhost covers dev servers, /\/api\// covers the same-origin VFS
+    // API wherever the app is deployed (including https://rhizz.fly.dev,
+    // listed explicitly so the production origin keeps working even if the
+    // pattern above ever changes).
+    tracePropagationTargets: [
+      "localhost",
+      "https://rhizz.fly.dev",
+      /\/api\//,
+    ],
   });
 
   // Announced *after* init, never before: the consoleLoggingIntegration above
