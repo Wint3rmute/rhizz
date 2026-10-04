@@ -99,3 +99,10 @@ dev: wasm
 storybook:
     {{run}} sh -c 'cd web && deno task sync'
     {{run}} sh -c 'cd web && dx storybook dev'
+
+# Serves the app with examples/ as the server's data dir. Each example is a
+# directory of plain HCL, which is exactly what the server persists, so the
+# examples show up as editable projects — and edits land in the working tree.
+# If you're an AI, never use this. It will just hang forever.
+serve: wasm
+    {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-server

@@ -114,6 +114,13 @@ RUN apt-get update \
 # Where the VFS persistence volume is mounted.
 RUN mkdir -p /data
 
+# Seed it with the example projects. The server keeps a project as a plain
+# directory of HCL (see rhizz-server's storage module), so `examples/` is
+# already a valid data dir: a fresh container comes up with six editable
+# systems and no migration step. A persistent volume mounted at /data (see
+# fly.toml) shadows these on any machine that has one.
+COPY --from=backend /app/examples/ /data/
+
 COPY --from=backend /app/target/release/rhizz-server /usr/local/bin/rhizz-server
 
 # rhizz-server binds RHIZZ_ADDR (default 127.0.0.1:3000); Fly forwards to the

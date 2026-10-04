@@ -24,3 +24,7 @@ __pycache__/
 # from (page snapshots + console logs), which is the repo root when an agent
 # drives it from here.
 .playwright-mcp/
+
+# rhizz-server's default data dir, for a local run without RHIZZ_DATA_DIR
+# (see `just serve` for the examples/ one).
+rhizz-data/

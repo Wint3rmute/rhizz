@@ -15,7 +15,8 @@ fn main() -> ExitCode {
     // Bind address, overridable so a build can be smoke-tested without
     // clashing with other servers.
     let addr = std::env::var("RHIZZ_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_owned());
-    // Where per-project VFS dumps live.
+    // Where the project directories live: one sub-directory each, holding the
+    // project's files.
     let data_dir =
         PathBuf::from(std::env::var("RHIZZ_DATA_DIR").unwrap_or_else(|_| "rhizz-data".to_owned()));
 
