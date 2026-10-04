@@ -11,8 +11,8 @@
 // the filesystem and the navigation.
 import type { Dirent } from "../../../../vfs/fs";
 import {
-  emptyDiagramLayout,
   type DiagramLayout,
+  emptyDiagramLayout,
   type StoredBox,
 } from "./persistence";
 
