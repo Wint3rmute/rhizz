@@ -4,6 +4,111 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 117 — The Modeling context menu can cut the selection out into its own view
+
+A new "Create new view from selection" row on the Modeling node context menu
+writes `views/<name>.hcl` holding just the selected components, at the positions
+they have on the canvas, and moves the page into it.
+
+- **The row went on the node menu, not the empty-canvas one, and that is the
+  whole reason it works with more than one component.** A right-click on empty
+  canvas can land on nothing at all, so a row there would have to decide what
+  "the selection" means for an empty canvas. The node menu already answers it:
+  right-clicking a node that is part of a selection keeps the whole selection
+  (`if (!selected.has(index)) selectOnly(index)`), which
+  `mixed-selection.spec.ts` was already pinning for a component-plus-note
+  selection. So the row sees both components, not only the one under the
+  pointer, and no new multi-select rule was needed.
+- **It is the one row in that menu with no shortcut, and that is deliberate
+  rather than an omission.** The other three act on the node under the pointer,
+  so each has a single subject to bind a key to. This one writes a file and
+  navigates — and its subject is a set, so there is no `primarySelected` to
+  hang a shortcut off the way `V` does.
+- **The name comes from a native `prompt()`, not from `NewViewModal`, because
+  the system is not the user's to pick here.** That modal asks for name *and*
+  system, and the system half has no honest answer in this flow: a view's
+  binding is immutable after creation, and the components on the canvas belong
+  to the view that is already open. So the new view takes that binding, and the
+  modal would only have offered to bind them somewhere they do not live. What
+  is left is one text field, which is what `prompt` already is used for three
+  times over on this page (folder name, view rename, connection name).
+- **A name that is already taken is refused, loudly, and this is the one branch
+  where a no-op would have been wrong.** `fs.writeFile` overwrites, so writing
+  there would replace a hand-arranged view with the selection — and there is no
+  way back from that: the action records no undo point (the undo stack is for
+  canvas edits, and the *old* view was never touched), and the browser's back
+  button returns to the previous view, not to the destroyed one's contents. By
+  contrast a blank or slash-containing name is a silent no-op, which is exactly
+  what the folder prompt beside it does with one.
+- **Positions are copied verbatim rather than re-centered, so the two views
+  cannot disagree about where things are.** `createDetailedView`, the row above
+  it, does the opposite — it drops a single node at the viewport center, since
+  there is nothing to preserve there and an empty canvas would read as "my node
+  was deleted". With a selection of several, the selection *is* the picture, so
+  moving it would be the surprising choice.
+- **Connections came along for free, which is only obvious once you know how
+  edges are drawn.** `DiagramCanvas` filters them through
+  `computeVisibleConnections(scene.edges, boxesByIndex)`: an edge exists exactly
+  when both of its endpoints are placed. So a connection between two selected
+  components follows the selection into the new view without a line of copying
+  code — and the unit test asserts the new layout's `connections` is empty to
+  pin that down, since "empty" is the surprising part.
+- **Three decisions moved into a pure module rather than into the page.**
+  `viewFromSelection.ts` owns what a typed name means (`.hcl` appended, an
+  explicit extension not doubled, slashes rejected), whether a view is already
+  at that path, and what a layout holding only the selection looks like. All
+  three are unit tested (14 cases); the page keeps the three things that are
+  genuinely its own — the prompt, the write, the navigation — which is also
+  why the module is DOM-free and needs no mocking.
+- **The e2e had to read world coordinates off the canvas `viewBox`, because
+  screen positions prove nothing after a view switch.** Switching views fits the
+  new scene, so the two nodes land somewhere else on screen even though their
+  canvas positions are unchanged; asserting pixels would have measured the
+  camera. `worldCenter()` divides the node's screen offset by
+  `canvasWidth / viewBoxWidth` and adds the viewBox origin, which is how the
+  page itself maps screen to world (`svgPoint`).
+- **The shared fixture answers *every* dialog with the project name, and the
+  prompt had to be taken away from it first.** `openDiagram` registers
+  `page.on("dialog", …)` for the project-name `prompt` at creation, and that
+  handler never stands down — so it would have accepted the view-name prompt
+  too, with the wrong text, before this test's own handler even ran (EventEmitter
+  is FIFO). `page.removeAllListeners("dialog")` before registering the real
+  handler is the fix, and it is the kind of thing that would have looked like a
+  flaky test rather than a fixture bug.
+- **The story could not have gone red, and that is the point of keeping
+  `ContextMenu` presentation-only.** The row needed no change at all to appear
+  — no new prop, no new markup — so there was nothing to write a failing story
+  against. What the story *can* check is what the page cannot: that the row has
+  no `kbd` beside it, and that clicking it runs its action and closes the menu.
+  The other half — what the prompt then does with the name — is the e2e's, and
+  the split is the reason neither test needs a mock.
+- **`ComponentMenu` was lying about being the node menu**, listing three of its
+  four rows, so it now lists all four; `ClickItemCloses` moved with it, since it
+  shares the default args.
+- **VRT: 8 baselines re-recorded, 2 new.** Four from `ContextMenu`
+  (`ComponentMenu`, `ClickItemCloses`) and four from `DetailViewMenu`, whose two
+  stories drive the *real* Modeling page and so screenshot the whole menu — they
+  are the only place the row appears in the app's own chrome, with the
+  selection it acts on visible behind it. The gallery settled the one question
+  the story could not: "Create new view from selection" is 31 characters in a
+  260px menu and could have truncated to "Create new view from selec…". It does
+  not — it ends with ~40px to spare, and the missing `kbd` reads as deliberate
+  next to the three rows that have one. A follow-up full run is 242/242 with
+  nothing changed.
+- **Red/green**: the 14 unit tests and the e2e went red first, the e2e against
+  the un-wired page (the row was not in the menu) and the unit tests against a
+  missing module. The e2e's fixture builds its own multi-selection — three
+  components spawned at distinct points with `C`, then click plus shift-click —
+  because the first two components a project gets would otherwise land stacked
+  on the viewport center, and the second would nest inside the first
+  (`openCreateComponentModal` adopts the single selected node as parent, which
+  is also why the fixture clicks empty canvas between spawns).
+- **Validation**: `just test` (cargo + 875 Vitest + 78 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`,
+  `just format` and the full VRT suite 242/242 all pass.
+
+---
+
 ## Task 116 — The score and the strictness control moved to the diagnostics bar
 
 The navbar's score badge and strictness select now live in the diagnostics
