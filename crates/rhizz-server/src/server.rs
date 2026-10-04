@@ -415,15 +415,15 @@ mod tests {
             .iter()
             .map(|n| n["id"].as_str().unwrap())
             .collect();
-        assert_eq!(ids, vec!["system.hcl", "views", "views/main.hcl"]);
+        assert_eq!(ids, vec!["p1/system.hcl", "p1/views", "p1/views/main.hcl"]);
         let main = loaded["nodes"]
             .as_array()
             .unwrap()
             .iter()
-            .find(|n| n["id"] == json!("views/main.hcl"))
+            .find(|n| n["id"] == json!("p1/views/main.hcl"))
             .unwrap();
         assert_eq!(main["content"], json!("view \"main\" {}\n"));
-        assert_eq!(main["parentId"], json!("views"));
+        assert_eq!(main["parentId"], json!("p1/views"));
     }
 
     #[tokio::test]

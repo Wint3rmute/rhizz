@@ -127,18 +127,46 @@ fn is_view_path(path: &Path) -> bool {
         || path.file_name().is_some_and(|name| name == "views.hcl")
 }
 
-/// A node's id: its project-relative path, `/`-separated.
+/// The `parentId` for an entry at `prefix`, or `None` at the project root.
 ///
-/// Ids double as paths, which is what lets the loader hand the frontend a tree
-/// it can address without inventing an inode numbering, and what lets a save
-/// map an id straight back to a file. The frontend only ever compares ids
-/// within one project, so two projects may both hold a `system.hcl` node.
-fn node_id(relative: &Path) -> String {
-    relative
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
+/// The root of a project has no parent *node* — its parent is the project
+/// itself, which the node schema does not model.
+fn parent_id_of(project_id: &str, prefix: &Path) -> Option<String> {
+    (!prefix.as_os_str().is_empty()).then(|| node_id(project_id, prefix))
+}
+
+/// A node's id: its project address and project-relative path, `/`-separated
+/// (e.g. `drone/views/main.hcl`).
+///
+/// The qualification is load-bearing, not decoration. The VFS blob is one
+/// flat `nodes` array, and the frontend's store resolves a node *by id across
+/// that whole array*: `findNode` takes the first match, and `updateFileContent`
+/// rewrites every node whose id matches. Ids that are unique only within a
+/// project therefore let a write to `drone/views/main.hcl` land on
+/// `apollo-11/views/main.hcl` as well — which is exactly what happened before
+/// the address was folded in. Deriving the id from the location keeps the
+/// mapping stateless (a save never has to remember what it handed out) while
+/// making it unique across the blob, which is the property the frontend
+/// actually requires of an id.
+fn node_id(project_id: &str, relative: &Path) -> String {
+    let mut segments = vec![project_id.to_owned()];
+    segments.extend(
+        relative
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+    );
+    segments.join("/")
+}
+
+/// The project-relative part of an id built by [`node_id`].
+///
+/// The view/docs classifiers must see the path *inside* the project: a project
+/// directory may itself be called `views`, and an id that starts `views/…`
+/// would then make every one of its model sources look like a view source.
+fn relative_of<'a>(project_id: &str, id: &'a str) -> &'a str {
+    id.strip_prefix(project_id)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(id)
 }
 
 /// The file name of `entry` as a `String`, or `None` when it is not valid
@@ -298,6 +326,7 @@ impl Found {
 /// and `stats` collects the oldest/newest file stamps seen, for the project's
 /// own `createdAt`/`updatedAt`.
 fn walk_project(
+    project_id: &str,
     dir: &Path,
     prefix: &Path,
     found: &mut Vec<Found>,
@@ -318,13 +347,13 @@ fn walk_project(
         }
         let relative = prefix.join(&name);
         if metadata.is_dir() {
-            let id = node_id(&relative);
+            let id = node_id(project_id, &relative);
             found.push(Found::Dir {
                 id: id.clone(),
-                parent_id: Some(node_id(prefix)).filter(|parent| !parent.is_empty()),
+                parent_id: parent_id_of(project_id, prefix),
                 name,
             });
-            walk_project(&entry.path(), &relative, found, stats)?;
+            walk_project(project_id, &entry.path(), &relative, found, stats)?;
         } else if metadata.is_file() {
             let Ok(content) = fs::read_to_string(entry.path()) else {
                 tracing::warn!(
@@ -340,8 +369,8 @@ fn walk_project(
                 Some((oldest, newest)) => (oldest.min(millis), newest.max(millis)),
             });
             found.push(Found::File {
-                id: node_id(&relative),
-                parent_id: Some(node_id(prefix)).filter(|parent| !parent.is_empty()),
+                id: node_id(project_id, &relative),
+                parent_id: parent_id_of(project_id, prefix),
                 name,
                 content,
                 revision: revision_millis(modified),
@@ -354,11 +383,11 @@ fn walk_project(
 
 /// Whether a walked tree holds a model source, i.e. whether the directory it
 /// came from is a project at all.
-fn has_model_source(found: &[Found]) -> bool {
+fn has_model_source(project_id: &str, found: &[Found]) -> bool {
     found.iter().any(|node| match node {
         Found::Dir { .. } => false,
         Found::File { id, .. } => {
-            let path = Path::new(id);
+            let path = Path::new(relative_of(project_id, id));
             is_hcl_path(path) && !is_view_path(path)
         }
     })
@@ -372,9 +401,9 @@ fn read_project(
 ) -> Result<Option<(Value, Vec<Value>)>, std::io::Error> {
     let mut found = Vec::new();
     let mut stats = None;
-    walk_project(dir, Path::new(""), &mut found, &mut stats)?;
+    walk_project(project_id, dir, Path::new(""), &mut found, &mut stats)?;
 
-    if !has_model_source(&found) {
+    if !has_model_source(project_id, &found) {
         return Ok(None);
     }
 
@@ -396,10 +425,11 @@ fn read_project(
 }
 
 /// Whether `dir` holds a model source, i.e. whether it is a project at all.
-fn is_project_dir(dir: &Path) -> bool {
+fn is_project_dir(project_id: &str, dir: &Path) -> bool {
     let mut found = Vec::new();
     let mut stats = None;
-    walk_project(dir, Path::new(""), &mut found, &mut stats).is_ok() && has_model_source(&found)
+    walk_project(project_id, dir, Path::new(""), &mut found, &mut stats).is_ok()
+        && has_model_source(project_id, &found)
 }
 
 /// Reads the data dir and expands it into the whole-VFS shape
@@ -786,7 +816,7 @@ pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             continue;
         }
-        if is_project_dir(&path) {
+        if is_project_dir(&name, &path) {
             fs::remove_dir_all(&path)?;
         }
     }
@@ -837,6 +867,11 @@ mod tests {
                 let found: Vec<&str> = nodes.iter().filter_map(|n| n["id"].as_str()).collect();
                 panic!("no node with id {id:?}; found {found:?}")
             })
+    }
+
+    /// The id the loader hands out for `path` inside `project`.
+    fn id_of(project: &str, path: &str) -> String {
+        format!("{project}/{path}")
     }
 
     /// Every node id, in the order the blob lists them.
@@ -946,23 +981,34 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                "README.md",
-                "docs",
-                "docs/battery.md",
-                "system.hcl",
-                "views",
-                "views/main.hcl",
+                "drone/README.md",
+                "drone/docs",
+                "drone/docs/battery.md",
+                "drone/system.hcl",
+                "drone/views",
+                "drone/views/main.hcl",
             ]
         );
+        let at = |path: &str| id_of("drone", path);
         assert_eq!(
-            content_of(&loaded, "system.hcl"),
+            content_of(&loaded, &at("system.hcl")),
             "system \"quadcopter\" {}\n"
         );
-        assert_eq!(content_of(&loaded, "views/main.hcl"), "view \"main\" {}\n");
-        assert_eq!(content_of(&loaded, "docs/battery.md"), "# battery\n");
-        assert_eq!(content_of(&loaded, "README.md"), "readme\n");
-        assert_eq!(node(&loaded, "views")["kind"], json!("directory"));
-        assert_eq!(node(&loaded, "system.hcl")["kind"], json!("file"));
+        assert_eq!(
+            content_of(&loaded, &at("views/main.hcl")),
+            "view \"main\" {}\n"
+        );
+        assert_eq!(content_of(&loaded, &at("docs/battery.md")), "# battery\n");
+        assert_eq!(content_of(&loaded, &at("README.md")), "readme\n");
+        assert_eq!(node(&loaded, &at("views"))["kind"], json!("directory"));
+        assert_eq!(node(&loaded, &at("system.hcl"))["kind"], json!("file"));
+        // A root entry has no parent node — its parent is the project itself,
+        // which the node schema does not model.
+        assert_eq!(node(&loaded, &at("system.hcl"))["parentId"], json!(null));
+        assert_eq!(
+            node(&loaded, &at("views/main.hcl"))["parentId"],
+            json!(at("views"))
+        );
     }
 
     #[test]
@@ -982,7 +1028,7 @@ mod tests {
 
         let loaded = load_vfs(dir.path()).unwrap();
 
-        let file = node(&loaded, "system.hcl");
+        let file = node(&loaded, &id_of("drone", "system.hcl"));
         assert_eq!(file["revision"], json!(u64::try_from(expected).unwrap()));
         assert_eq!(file["updatedAt"], json!(format_rfc3339_millis(expected)));
     }
@@ -1041,14 +1087,14 @@ mod tests {
         assert_eq!(
             node_ids(&load_vfs(dir.path()).unwrap()),
             vec![
-                "aaa.hcl",
-                "docs",
-                "docs/battery.md",
-                "mmm.hcl",
-                "views",
-                "views/aaa.hcl",
-                "views/main.hcl",
-                "zzz.hcl",
+                "drone/aaa.hcl",
+                "drone/docs",
+                "drone/docs/battery.md",
+                "drone/mmm.hcl",
+                "drone/views",
+                "drone/views/aaa.hcl",
+                "drone/views/main.hcl",
+                "drone/zzz.hcl",
             ]
         );
     }
@@ -1086,7 +1132,7 @@ mod tests {
         assert_eq!(project_ids(&loaded), vec!["drone"]);
         assert_eq!(
             node_ids(&loaded),
-            vec!["system.hcl", "views", "views/main.hcl"]
+            vec!["drone/system.hcl", "drone/views", "drone/views/main.hcl"]
         );
     }
 
@@ -1129,7 +1175,10 @@ mod tests {
         let loaded = load_vfs(dir.path()).unwrap();
 
         assert_eq!(project_ids(&loaded), vec!["scratch"]);
-        assert_eq!(content_of(&loaded, "main.hcl"), "system \"s\" {}\n");
+        assert_eq!(
+            content_of(&loaded, &id_of("scratch", "main.hcl")),
+            "system \"s\" {}\n"
+        );
     }
 
     #[test]
@@ -1156,17 +1205,86 @@ mod tests {
                 "web-app",
             ]
         );
-        // Node ids are project-relative paths, so the same `system.hcl` id
-        // appears once per project.
-        assert!(content_of(&loaded, "system.hcl").contains("system "));
-        let ids = node_ids(&loaded);
+        // Ids carry the project address, so every example's model source is a
+        // distinct node and no two nodes in the blob share an id.
+        assert!(content_of(&loaded, &id_of("drone", "system.hcl")).contains("system "));
+        let node_list = node_ids(&loaded);
         assert_eq!(
-            ids.iter().filter(|id| *id == "system.hcl").count(),
-            6,
-            "one system.hcl node per example: {ids:?}"
+            node_list
+                .iter()
+                .filter(|id| *id == "drone/system.hcl")
+                .count(),
+            1,
+            "{node_list:?}"
         );
-        assert!(ids.contains(&"views/main.hcl".to_owned()));
-        assert!(ids.contains(&"docs/product.md".to_owned()));
+        assert!(node_list.contains(&"apollo-11/views/main.hcl".to_owned()));
+        assert!(node_list.contains(&"software-house/docs/product.md".to_owned()));
+    }
+
+    #[test]
+    fn node_ids_are_unique_across_the_whole_blob() {
+        // The regression guard for the cross-project wipe: the frontend's store
+        // resolves a node by id across the entire flat `nodes` array
+        // (`findNode` takes the first match, `updateFileContent` rewrites every
+        // match), so an id that is unique only *within* a project lets a write
+        // to one project land on another. Ids must therefore be unique over the
+        // blob, which for a real filesystem means carrying the project address.
+        let dir = tempfile::tempdir().unwrap();
+        // Two projects with byte-identical layouts: every path collides if the
+        // id does not include the address.
+        for project in ["drone", "web-app"] {
+            write_file(
+                &dir.path().join(project).join("system.hcl"),
+                "system \"s\" {}\n",
+            );
+            write_file(
+                &dir.path().join(project).join("views/main.hcl"),
+                "view \"main\" {}\n",
+            );
+            write_file(&dir.path().join(project).join("docs/battery.md"), "# b\n");
+        }
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        let ids = node_ids(&loaded);
+        let mut deduped = ids.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(
+            ids.len(),
+            deduped.len(),
+            "ids must be unique across projects: {ids:?}"
+        );
+        // …and they name the project they belong to.
+        for id in &ids {
+            assert!(
+                id.starts_with("drone/") || id.starts_with("web-app/"),
+                "id {id:?} carries no project address"
+            );
+        }
+        // system.hcl + views/ + views/main.hcl + docs/ + docs/battery.md
+        assert_eq!(ids.len(), 10, "five entries per project: {ids:?}");
+    }
+
+    #[test]
+    fn a_project_directory_named_views_is_still_a_project() {
+        // The view classifier has to see the path *inside* the project: an id
+        // that starts with `views/` must not make the project's own model
+        // source look like a view source.
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir.path().join("views/system.hcl"), "system \"s\" {}\n");
+        write_file(
+            &dir.path().join("views/views/inner.hcl"),
+            "view \"inner\" {}\n",
+        );
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert_eq!(project_ids(&loaded), vec!["views"]);
+        assert_eq!(
+            node_ids(&loaded),
+            vec!["views/system.hcl", "views/views", "views/views/inner.hcl"]
+        );
     }
 
     // ── Timestamp formatting ───────────────────────────────────────────
@@ -1293,7 +1411,10 @@ mod tests {
         assert!(!dir.path().join("drone/views/main.hcl").exists());
         assert!(!dir.path().join("drone/views").exists());
         assert_eq!(
-            content_of(&load_vfs(dir.path()).unwrap(), "system.hcl"),
+            content_of(
+                &load_vfs(dir.path()).unwrap(),
+                &id_of("drone", "system.hcl")
+            ),
             trimmed["nodes"][0]["content"]
         );
     }
@@ -1401,7 +1522,7 @@ mod tests {
         assert!(dir.path().join("drone/views").is_dir());
         assert_eq!(
             node_ids(&load_vfs(dir.path()).unwrap()),
-            vec!["system.hcl", "views", "views/main.hcl"]
+            vec!["drone/system.hcl", "drone/views", "drone/views/main.hcl"]
         );
     }
 
@@ -1430,7 +1551,7 @@ mod tests {
         assert!(dir.path().join("drone/views").is_file());
         assert_eq!(
             node_ids(&load_vfs(dir.path()).unwrap()),
-            vec!["system.hcl", "views"]
+            vec!["drone/system.hcl", "drone/views"]
         );
     }
 

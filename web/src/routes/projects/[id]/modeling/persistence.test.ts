@@ -251,6 +251,115 @@ describe("HCL View conversion and persistence", () => {
   });
 });
 
+describe("view-level attributes survive a Modeling round trip", () => {
+  // Regression guard: Modeling reads a view into a canvas-shaped layout and
+  // writes it straight back, so anything the canvas does not model was being
+  // deleted merely by *opening* the view. `SPEC.md` §2.10 promises the filter
+  // is "parsed and round-tripped"; `full_name` and `tags` are ordinary view
+  // attributes and were lost the same way.
+  const FILTER_VIEW = `view "engineering-teams" {
+  full_name = "Engineering department internal structure"
+  system      = "acme-software"
+  tags        = ["internal", "teams"]
+
+  filter {
+    max_level     = 3
+    components    = ["engineering"]
+  }
+
+  node "acme-software/engineering" {
+    x          = 240
+    y          = 360
+    width      = 300
+    height     = 320
+    text_align = "top-center"
+  }
+}
+`;
+
+  it("carries full_name, tags and the filter out of a parsed view", () => {
+    const layout = viewsToLayout(parse_views(FILTER_VIEW));
+    expect(layout.fullName).toBe("Engineering department internal structure");
+    expect(layout.tags).toEqual(["internal", "teams"]);
+    // The wasm parser fills serde's defaults for every filter field, so
+    // compare the two that were actually written.
+    expect(layout.filter?.max_level).toBe(3);
+    expect(layout.filter?.components).toEqual(["engineering"]);
+    // …and the positional half still reads.
+    expect(layout.checked["acme-software/engineering"]).toEqual({
+      x: 240,
+      y: 360,
+      width: 300,
+      height: 320,
+      textAlign: "top-center",
+    });
+  });
+
+  it("writes them back out unchanged", () => {
+    const hcl = layoutToHcl(
+      viewsToLayout(parse_views(FILTER_VIEW)),
+      "engineering-teams",
+      "acme-software",
+    );
+    expect(hcl).toContain(
+      'full_name = "Engineering department internal structure"',
+    );
+    expect(hcl).toContain('tags        = ["internal", "teams"]');
+    expect(hcl).toContain("filter {");
+    expect(hcl).toContain("max_level     = 3");
+    expect(hcl).toContain('components    = ["engineering"]');
+  });
+
+  it("round-trips the whole file without losing anything", () => {
+    const first = layoutToHcl(
+      viewsToLayout(parse_views(FILTER_VIEW)),
+      "engineering-teams",
+      "acme-software",
+    );
+    const second = layoutToHcl(
+      viewsToLayout(parse_views(first)),
+      "engineering-teams",
+      "acme-software",
+    );
+    expect(second).toBe(first);
+  });
+
+  it("still omits them for a view that never had them", () => {
+    const hcl = layoutToHcl(
+      emptyDiagramLayout("acme-software"),
+      "fresh",
+      "acme-software",
+    );
+    expect(hcl).not.toContain("full_name");
+    expect(hcl).not.toContain("filter {");
+  });
+
+  it("survives a real read-then-write through the project filesystem", async () => {
+    // The whole reported failure in one test: what Modeling does on open.
+    const fs = await projectFs();
+    await fs.mkdir(VIEW_LAYOUT_DIR, { recursive: true });
+    await fs.writeFile(MAIN_DIAGRAM_PATH, FILTER_VIEW);
+
+    const layout = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    await writeDiagramLayoutFile(
+      fs,
+      MAIN_DIAGRAM_PATH,
+      layout,
+      "acme-software",
+    );
+
+    // Re-serializing is canonical (fixed field order), so compare the parsed
+    // form rather than the bytes: what must not change is the content.
+    const written = await fs.readFile(MAIN_DIAGRAM_PATH);
+    const reread = viewsToLayout(parse_views(written));
+    expect(reread.fullName).toBe("Engineering department internal structure");
+    expect(reread.tags).toEqual(["internal", "teams"]);
+    expect(reread.filter?.max_level).toBe(3);
+    expect(reread.filter?.components).toEqual(["engineering"]);
+    expect(Object.keys(reread.checked)).toEqual(["acme-software/engineering"]);
+  });
+});
+
 describe("mapLayoutToBoxes", () => {
   const keyToIndex = new Map<string, number>([
     ["drone/fc", 0],

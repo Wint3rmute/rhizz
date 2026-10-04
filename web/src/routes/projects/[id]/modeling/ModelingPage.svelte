@@ -54,6 +54,7 @@ import {
   viewPathTaken,
   writeDiagramLayoutFile,
 } from "./persistence";
+import type { ViewFilterDefinition } from "../../../../rhizz_wasm_wrapper";
 import {
   createHistoryStack,
   pushHistory,
@@ -359,6 +360,16 @@ let checked = $state<Record<string, StoredBox>>({});
 // from the canvas. Persisted separately from `checked` since the two have
 // different lifetimes (checked entries disappear on uncheck; these don't).
 let savedLayout = $state<Record<string, StoredBox>>({});
+
+// The view block's own attributes (`full_name`, `tags`, the selection
+// `filter`). The canvas has no say over them, but the save effect writes the
+// whole view back, so they have to survive a load→save round trip — otherwise
+// merely *opening* a view deletes them. See DiagramLayout's docs.
+let carriedMeta = $state<{
+  fullName?: string | undefined;
+  tags?: string[] | undefined;
+  filter?: ViewFilterDefinition | undefined;
+}>({});
 let savedConnections = $state<Record<string, StoredConnection>>({});
 let annotations = $state<Annotation[]>([]);
 // Indices into `annotations` currently selected (for drag/delete).
@@ -712,6 +723,7 @@ $effect(() => {
     savedLayout = {};
     savedConnections = {};
     annotations = [];
+    carriedMeta = {};
     selectedSystem = "";
     return;
   }
@@ -736,6 +748,11 @@ $effect(() => {
       savedLayout = { ...layout.checked };
       savedConnections = layout.connections ?? {};
       annotations = layout.annotations ?? [];
+      carriedMeta = {
+        fullName: layout.fullName,
+        tags: layout.tags,
+        filter: layout.filter,
+      };
       selectedSystem = layout.system ?? "";
     }
     diagramLayoutLoaded = true;
@@ -783,6 +800,10 @@ $effect(() => {
     checked: $state.snapshot(checked),
     connections: $state.snapshot(savedConnections),
     annotations: $state.snapshot(annotations),
+    // Carried, not owned: read back from the file this view was loaded from.
+    fullName: carriedMeta.fullName,
+    tags: carriedMeta.tags,
+    filter: carriedMeta.filter,
   };
   // Subscribe to the effective system so legacy migration ("" -> first
   // system) persists even before any canvas edit touches checked/etc.

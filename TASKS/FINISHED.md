@@ -4,6 +4,72 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 119a — Fix the cross-project wipe and the view-attribute loss found in Task 119
+
+Two data-loss bugs, both reported after mounting `examples/` on a real
+machine and clicking through the Modeling tree. Both are fixed, and both had a
+guard that fails without the fix.
+
+- **The wipe: node ids were only unique per project, and the store resolves
+  them globally.** Task 119 derived node ids from the project-*relative* path
+  (`views/main.hcl`), reasoning they were only ever compared within one
+  project's node set. That was wrong: `nodes` is one flat array, and
+  `operations.ts` looks up and rewrites against all of it — `findNode`
+  (`:88-94`) takes the first match, `updateFileContent` (`:297-321`) does
+  `data.nodes.map((n) => n.id === fileId ? updated : n)`, and `deleteNode`
+  collects descendants by `parentId`. Every project with a `views/main.hcl`
+  shares that id, so writing software-house's main view rewrote **apollo-11's,
+  drone's and software-house's** node with it. Ids are now project-qualified
+  (`drone/views/main.hcl`), which keeps the derivation stateless *and* unique
+  over the blob. `relative_of` exists because the view/docs classifiers must
+  see the path inside the project — otherwise a project directory named
+  `views` would make all of its model sources look like view sources.
+- **The loss: opening a view deleted the attributes the canvas does not
+  model.** `layoutToHcl` hardcoded `full_name: ""`, `tags: []` and an empty
+  filter, and `viewsToLayout` never read them, so the Modeling page's
+  load→save round trip (which fires on open, because the save effect has no
+  dirty check) stripped them. `full_name`, `tags` and the selection `filter`
+  now ride along in `DiagramLayout` and are carried through the page's
+  `carriedMeta` state. `SPEC.md` §2.10 promises the filter is "parsed and
+  round-tripped", so this was a spec violation as well as data loss.
+- **A unit test passed while the app was still broken, and the end-to-end run
+  is what caught it.** The new `persistence.test.ts` cases pass a *whole*
+  layout through `readDiagramLayoutFile` → `writeDiagramLayoutFile` — but
+  `ModelingPage.svelte` rebuilds the snapshot from `checked`/`connections`/
+  `annotations` and never carried the rest, so the live page dropped it
+  anyway. Fixed there too, and the browser check over a copy of `examples/`
+  then reported zero changed files across four browsed views. Worth stating as
+  a rule: for a page that composes its own persisted object, the unit test on
+  the serializer is not enough.
+- **The guards fail without the fixes** (checked by reverting each): the two
+  `view-round-trip.spec.ts` e2e cases both go red on the old code — browsing
+  loses the filter, and the edit case cannot even find one. `node_ids_are_unique_across_the_whole_blob`
+  lays two byte-identical projects side by side and asserts no id repeats.
+- **The e2e asserts *meaning*, not bytes.** `serialize_views` re-emits
+  canonical HCL (aligned `=`, fixed field order), so a hand-written view is
+  rewritten on a visit even when nothing was lost — `examples/drone`'s
+  `ground-station.hcl` has a non-canonical `text =` that comes back aligned.
+  Byte-equality would have been asserting an unrelated formatter property, so
+  the test compares parsed *facts* (system, full_name, tags, the filter's
+  sorted body, node labels, annotation count). Browsing is data-preserving but
+  not byte-preserving, and that is the honest contract.
+- **Still true, and deliberately not addressed here:** the layout-save effect
+  has no dirty check, so *opening* a view still writes the file (now
+  losslessly), which rewrites a non-canonical file in canonical form and bumps
+  its mtime. A dirty check would stop that and is the natural follow-up. The
+  frontend's globally-scoped node lookups are also still unsafe by
+  construction — `ProjectStore.updateFileContent(fileId)` and friends take no
+  `projectId`, so scoping them is an interface change (40-case contract suite ×
+  3 backends), not a patch. Until then the "ids are unique across the VFS"
+  invariant is documented on `vfs/types.ts` and enforced by the server.
+- **Validation**: `just test` (cargo + 904 Vitest + 86 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`
+  and `just format` all pass. Browsing four software-house views against a
+  copy of `examples/` now changes nothing, and checking a component still
+  persists its node *and* keeps the view's `filter`.
+
+---
+
 ## Task 119 — The server stores projects as directories, so `examples/` is a data dir
 
 `rhizz-server` no longer keeps a JSON dump per project. A project is a
