@@ -1,12 +1,14 @@
 <script lang="ts">
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { page } from "$app/state";
+import { onDestroy } from "svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
+import { createDebounced } from "../../../../debounce";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
-import { type Dirent, openProjectFs } from "../../../../vfs/fs";
+import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import type { PageProps } from "./$types";
 import FileTree from "./FileTree.svelte";
@@ -64,12 +66,30 @@ let loadedPath: string | null = null;
 let lastWrittenContent = "";
 let fileLoaded = $state(false);
 
+// Every write persists the whole VFS blob, so writing on every keystroke
+// turned a typed sentence into one full-blob transfer per character. Trailing
+// debounce instead: the write happens once the typing pauses. The `fs` handle
+// and the content are captured per call, so the write that finally runs
+// targets the file that was open when the burst started, with its newest text.
+const WRITE_DEBOUNCE_MS = 700;
+const scheduleFileWrite = createDebounced(
+  (file: ProjectFs, path: string, text: string) => {
+    void file.writeFile(path, text);
+  },
+  WRITE_DEBOUNCE_MS,
+);
+
 // Loads the selected file's content into the editor whenever the
 // selection changes identity. Missing files fall back to empty content
 // rather than erroring.
 $effect(() => {
   const path = selectedPath;
   if (path === loadedPath) return;
+  // Switching files must not swallow the tail of the previous one: its
+  // pending write lands here, while we still know which file it belongs to
+  // (flushing later — after the switch — would write it to the new file's
+  // sibling, or resurrect a file that is about to be renamed/deleted).
+  scheduleFileWrite.flush();
   loadedPath = path;
   fileLoaded = false;
   if (path === null) {
@@ -89,22 +109,40 @@ $effect(() => {
     });
 });
 
+// Navigating away (or otherwise unmounting) is the other way a pending write
+// could be lost, and the last chance to flush it: the debounce timer is not
+// tied to the component's lifetime.
+onDestroy(() => scheduleFileWrite.flush());
+
+// …and a full document unload (a reload, a closed tab) never runs that
+// teardown at all — the timer dies with the document, taking the tail of the
+// last burst with it. `pagehide` is the one hook that fires on the way out of
+// *any* navigation, including reloads, and the write it starts resolves
+// within the microtask drain that follows the handler, before the new document
+// reads the store.
+function flushFileWrite(): void {
+  scheduleFileWrite.flush();
+}
+
 // Writes edits back to the store. Comparing against `lastWrittenContent`
 // (rather than re-reading the file, which would need an extra round
 // trip) means this only ever fires for an actual edit, never for the
-// load effect's own initial assignment above.
+// load effect's own initial assignment above. `lastWrittenContent` is updated
+// optimistically, before the debounced write actually lands — it answers
+// "is the editor's text already accounted for", not "is it on disk yet".
 $effect(() => {
+  const file = fs;
   if (fileLoaded && loadedPath !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
-    void fs.writeFile(loadedPath, content);
+    scheduleFileWrite(file, loadedPath, content);
   }
 });
 
 // Compiles the *whole* project (every ".hcl" file), not just whichever
 // one is open — matching rhizz-core's actual "flat merge of a directory"
 // semantics, and how views/overview already compile. The open file's
-// on-disk copy can lag one write behind `content` (the write-back effect
-// above is async), so its entry is patched in-place with the live,
+// on-disk copy trails `content` (the write-back effect above is debounced),
+// so its entry is patched in-place with the live,
 // in-editor value instead of trusting readProjectSources' own read of
 // it — every *other* file is only ever read fresh here, which is fine
 // since nothing else is editing them concurrently.
@@ -174,6 +212,10 @@ async function handleRename(path: string): Promise<void> {
   const name = sanitizeSegmentName(prompt("Rename to?", oldName) ?? "");
   if (name === null || name === oldName) return;
   const newPath = joinPath(parentPath, name);
+  // Land a pending write for this file *before* the rename, not after: a write
+  // still queued when the rename lands would recreate the old path (writes
+  // create files that don't exist), leaving a stray duplicate behind.
+  scheduleFileWrite.flush();
   try {
     await fs.rename(path, newPath);
     if (selectedPath === path) selectedPath = newPath;
@@ -185,6 +227,9 @@ async function handleRename(path: string): Promise<void> {
 
 async function handleDelete(path: string): Promise<void> {
   if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
+  // Same reasoning as the rename: a write queued behind the delete would
+  // resurrect the file the user just threw away.
+  scheduleFileWrite.flush();
   try {
     await fs.rm(path, { recursive: true });
     if (selectedPath === path || selectedPath?.startsWith(`${path}/`)) {
@@ -227,6 +272,8 @@ let totalConnections = $derived(catTotal(score?.connections ?? null));
 let totalMessages = $derived(catTotal(score?.messages ?? null));
 let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
+
+<svelte:window onpagehide={flushFileWrite} />
 
 <div class="flex-1 w-full bg-base-100">
   <div
