@@ -33,7 +33,31 @@ if (dsn !== undefined && dsn !== "") {
     integrations: [
       // send console.log, console.warn, and console.error calls as logs to Sentry
       Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
+
+      // Session Replay: a recording of the DOM leading up to a report, so a
+      // bug report can be read as "what the user actually saw" instead of
+      // reconstructed from a stack trace.
+      //
+      // `maskAllText: false` and `blockAllMedia: false` record text and media
+      // verbatim — that is the point of a replay for this app, where the
+      // subject *is* the picture (component labels, port names, annotation
+      // text). It is also the reason replays can contain whatever a user typed
+      // into a text field, so treat replay access as production data access.
+      Sentry.replayIntegration({
+        maskAllText: false,
+        blockAllMedia: false,
+      }),
     ],
+
+    // Session Replay sampling. `replaysOnErrorSampleRate: 1.0` keeps every
+    // session that produced an error, which is the whole reason to have replay
+    // at all; the 10% baseline is the standing sample of everything else.
+    //
+    // Both are development-time knobs: set `replaysSessionSampleRate` to 1.0
+    // while testing so every session arrives, then lower it again — the
+    // on-error rate is meant to stay at 1.0.
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
   });
 
   // Announced *after* init, never before: the consoleLoggingIntegration above

@@ -11,12 +11,17 @@ const mocks = vi.hoisted(() => {
   // One shared ordered log, so a case can assert not just *that* init ran but
   // that it ran before the line reporting it.
   const calls: string[] = [];
+  // The options `init` was handed, kept so a case can assert on the config
+  // itself (sample rates, registered integrations) rather than only on which
+  // factory functions ran — the rates are plain values with no call to spy on.
+  const initOptions: unknown[] = [];
   return {
     calls,
+    initOptions,
     sentry: {
       init: vi.fn((options: unknown) => {
         calls.push("sentry.init");
-        void options;
+        initOptions.push(options);
       }),
       handleErrorWithSentry: vi.fn(() => {
         calls.push("sentry.handleErrorWithSentry");
@@ -25,6 +30,10 @@ const mocks = vi.hoisted(() => {
       consoleLoggingIntegration: vi.fn(() => {
         calls.push("sentry.consoleLoggingIntegration");
         return { name: "ConsoleLogging" };
+      }),
+      replayIntegration: vi.fn(() => {
+        calls.push("sentry.replayIntegration");
+        return { name: "Replay" };
       }),
     },
   };
@@ -37,12 +46,14 @@ vi.mock("@sentry/sveltekit", () => mocks.sentry);
 // ordered call log the Sentry mock recorded.
 async function loadHooks(env: {
   VITE_SENTRY_DSN?: string;
-}): Promise<{ lines: string[]; calls: string[] }> {
+}): Promise<{ lines: string[]; calls: string[]; options: unknown }> {
   vi.resetModules();
   vi.stubEnv("VITE_SENTRY_DSN", env.VITE_SENTRY_DSN);
   mocks.calls.length = 0;
+  mocks.initOptions.length = 0;
   mocks.sentry.init.mockClear();
   mocks.sentry.consoleLoggingIntegration.mockClear();
+  mocks.sentry.replayIntegration.mockClear();
 
   const lines: string[] = [];
   const spy = vi
@@ -62,7 +73,19 @@ async function loadHooks(env: {
   } finally {
     spy.mockRestore();
   }
-  return { lines, calls: [...mocks.calls] };
+  return {
+    lines,
+    calls: [...mocks.calls],
+    options: mocks.initOptions.at(-1),
+  };
+}
+
+/** The init options as a record, for the cases that read config values. */
+function initConfig(options: unknown): Record<string, unknown> {
+  if (typeof options !== "object" || options === null) {
+    throw new Error("init was called without options");
+  }
+  return options as Record<string, unknown>;
 }
 
 afterEach(() => {
@@ -114,5 +137,43 @@ describe("Sentry startup logging", () => {
     const { lines } = await loadHooks({ VITE_SENTRY_DSN: dsn });
     expect(lines.join("\n")).not.toContain("secretkey");
     expect(lines.join("\n")).not.toContain("example.ingest.sentry.io");
+  });
+});
+
+describe("Session Replay", () => {
+  const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
+
+  it("registers the replay integration with init", async () => {
+    const { options } = await loadHooks(withDsn);
+    // A built integration, not just a call: the SDK only replays what is in
+    // the `integrations` array init was handed.
+    const integrations = initConfig(options).integrations;
+    expect(Array.isArray(integrations)).toBe(true);
+    expect(integrations).toContainEqual({ name: "Replay" });
+  });
+
+  it("does not drop the console logging integration on the way", async () => {
+    // The array is the risk: adding replay means editing a list that was
+    // already carrying something, and silently overwriting it would look
+    // healthy in every other assertion here.
+    const { options } = await loadHooks(withDsn);
+    expect(initConfig(options).integrations).toContainEqual({
+      name: "ConsoleLogging",
+    });
+  });
+
+  it("replays every session that has an error, and a tenth of the rest", async () => {
+    const { options } = await loadHooks(withDsn);
+    const config = initConfig(options);
+    expect(config.replaysOnErrorSampleRate).toBe(1.0);
+    expect(config.replaysSessionSampleRate).toBe(0.1);
+  });
+
+  it("installs no replay at all when the build has no DSN", async () => {
+    // Replay is the most expensive thing in the SDK — it ships the rrweb
+    // bundle and records the DOM. A build with no DSN must not pay for either.
+    const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
+    expect(mocks.sentry.replayIntegration).not.toHaveBeenCalled();
+    expect(lines[0]).toContain("not initialized");
   });
 });
