@@ -13,6 +13,7 @@ import {
   parse_views,
   serialize_views,
   type ViewDefinition,
+  type ViewFilterDefinition,
 } from "../../../../rhizz_wasm_wrapper";
 import type { Box, ConnectionSide, TextAlign } from "./geometry";
 
@@ -71,6 +72,18 @@ export interface DiagramLayout {
   checked: Record<string, StoredBox>;
   connections?: Record<string, StoredConnection>;
   annotations?: Annotation[];
+  /**
+   * View-level attributes the canvas does not own, carried verbatim so a
+   * load/save round trip through Modeling cannot drop them. Modeling renders
+   * boxes and notes; `full_name`, `tags` and the selection `filter` belong to
+   * the view block, and `SPEC.md` §2.10 promises the filter is "parsed and
+   * round-tripped". Writing a layout back used to re-emit `full_name = ""`,
+   * `tags = []` and an empty filter, so *opening* a view silently deleted them
+   * — which is only visible once the file is real and git-tracked.
+   */
+  fullName?: string | undefined;
+  tags?: string[] | undefined;
+  filter?: ViewFilterDefinition | undefined;
 }
 
 export function emptyDiagramLayout(system = ""): DiagramLayout {
@@ -193,12 +206,16 @@ export function layoutToHcl(
 
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty-string systems must fall through, ?? would keep "".
   const resolvedSystem = systemName || layout.system || "";
+  // `full_name`/`tags`/`filter` come from the layout when it carries them —
+  // i.e. when the file being rewritten already had them. New views carry
+  // none, and the explicit empties below are what `serialize_views` then omits,
+  // so a freshly created view is written without them, as before.
   const viewDef: ViewDefinition = {
     label: viewName,
-    full_name: "",
-    tags: [],
+    full_name: layout.fullName ?? "",
+    tags: layout.tags ?? [],
     system: resolvedSystem,
-    filter: {
+    filter: layout.filter ?? {
       include_tags: [],
       exclude_tags: [],
       components: [],
@@ -219,7 +236,14 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const connections: Record<string, StoredConnection> = {};
   const annotations: Annotation[] = [];
   const system = views[0]?.system ?? "";
+  // Carried through verbatim from the first view: these are view-block
+  // attributes, and the canvas has no say over them.
+  const layout: DiagramLayout = { system, checked, connections, annotations };
+  if (views[0]?.full_name !== undefined) layout.fullName = views[0].full_name;
+  if (views[0]?.tags !== undefined) layout.tags = views[0].tags;
+  if (views[0]?.filter !== undefined) layout.filter = views[0].filter;
 
+  // The collections above are filled in place, so `layout` sees them grow.
   for (const view of views) {
     for (const node of view.nodes ?? []) {
       // `parse_views` returns typed values, so no re-validation is needed.
@@ -250,7 +274,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
     }
   }
 
-  return { system, checked, connections, annotations };
+  return layout;
 }
 
 /**
