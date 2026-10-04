@@ -100,9 +100,18 @@ storybook:
     {{run}} sh -c 'cd web && deno task sync'
     {{run}} sh -c 'cd web && dx storybook dev'
 
-# Serves the app with examples/ as the server's data dir. Each example is a
+# Serves the UI with examples/ as the server's data dir: each example is a
 # directory of plain HCL, which is exactly what the server persists, so the
-# examples show up as editable projects — and edits land in the working tree.
+# examples come up as editable projects — and edits land in the working tree.
+#
+# The frontend is rebuilt with VITE_RHIZZ_SERVER_URL=/ first, and that is not
+# optional: rhizz-server embeds web/build at compile time (build.rs), and a
+# frontend built without that variable talks to localStorage instead of
+# /api/vfs — the API would serve the examples to nobody. `/` means "my own
+# origin", which is the server itself.
+#
 # If you're an AI, never use this. It will just hang forever.
 serve: wasm
+    {{run}} sh -c 'cd web && VITE_RHIZZ_SERVER_URL=/ dx vite build'
+    {{run}} cargo build --release -p rhizz-server
     {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-server
