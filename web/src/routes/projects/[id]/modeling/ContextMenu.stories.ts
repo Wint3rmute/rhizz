@@ -13,7 +13,7 @@ const meta = {
       { label: "Hide from this view", shortcut: "H", action: fn() },
       { label: "Jump to documentation", shortcut: "O", action: fn() },
       { label: "Jump to detailed view", shortcut: "V", action: fn() },
-      { label: "Create new view from selection", action: fn() },
+      { label: "Create new view from selection", shortcut: "S", action: fn() },
     ],
     onclose: () => {},
   },

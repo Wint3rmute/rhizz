@@ -19,11 +19,17 @@ they have on the canvas, and moves the page into it.
   `mixed-selection.spec.ts` was already pinning for a component-plus-note
   selection. So the row sees both components, not only the one under the
   pointer, and no new multi-select rule was needed.
-- **It is the one row in that menu with no shortcut, and that is deliberate
-  rather than an omission.** The other three act on the node under the pointer,
-  so each has a single subject to bind a key to. This one writes a file and
-  navigates — and its subject is a set, so there is no `primarySelected` to
-  hang a shortcut off the way `V` does.
+- **`S` is the shortcut, and it took a second pass to land.** The row shipped
+  without one, on the reasoning that the other three rows act on a single node
+  and this one acts on a set — so there was no `primarySelected` to hang a key
+  off the way `V` does. That was a real asymmetry but the wrong call: `H` and
+  `O` are bound to the same way and they act on the selection too (both run
+  `hideSelectedFromView` / `handleOpenDocumentation`, which read `selectedKey`
+  and bail on an empty selection). The guard this row needs is the same one they
+  already use — nothing selected, do nothing — so `S` gets a guard on
+  `selected.size > 0 || selectedAnnotations.size > 0` and the menu row gets its
+  `kbd` hint like every other. The annotation half of that guard matters now
+  that notes carry across: a note-only selection is a selection.
 - **The name comes from a native `prompt()`, not from `NewViewModal`, because
   the system is not the user's to pick here.** That modal asks for name *and*
   system, and the system half has no honest answer in this flow: a view's
@@ -93,9 +99,9 @@ they have on the canvas, and moves the page into it.
   selection it acts on visible behind it. The gallery settled the one question
   a unit test could not: "Create new view from selection" is 31 characters in a
   260px menu and could have truncated to "Create new view from selec…". It does
-  not — it ends with ~40px to spare, and the missing `kbd` reads as deliberate
-  next to the three rows that have one. A follow-up full run is 240/240 with
-  nothing changed.
+  not — it ends with ~40px to spare, which leaves room for the `kbd` the row
+  picked up in the second pass without re-measuring. A follow-up full run is
+  240/240 with nothing changed.
 - **Red/green**: the 14 unit tests and the e2e went red first, the e2e against
   the un-wired page (the row was not in the menu) and the unit tests against a
   missing module. The e2e's fixture builds its own multi-selection — three

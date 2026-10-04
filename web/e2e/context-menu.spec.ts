@@ -189,6 +189,16 @@ async function worldCenter(canvas: Locator, locator: Locator) {
   };
 }
 
+// Three components across the canvas with the first two selected: the third is
+// what proves a new view is a copy of the selection, not of the canvas.
+async function selectTwoComponents(page: Page, canvas: Locator) {
+  await spawnComponentAt(page, canvas, "e2e-pick-a", 0.25, 0.5);
+  await spawnComponentAt(page, canvas, "e2e-pick-b", 0.5, 0.5);
+  await spawnComponentAt(page, canvas, "e2e-leave-out", 0.75, 0.5);
+  await clickAt(page, canvas.getByText("e2e-pick-a").first());
+  await shiftClickAt(page, canvas.getByText("e2e-pick-b").first());
+}
+
 test("the new-view row copies the selection into a new view and moves there", async ({ page }) => {
   const id = await openDiagram(page, "E2E view from selection");
   const canvas = page.getByTestId("diagram-canvas");
@@ -197,15 +207,7 @@ test("the new-view row copies the selection into a new view and moves there", as
     name: /create new view from selection/i,
   });
   await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);
-
-  // Three components across the canvas: two get selected, and the third is
-  // what proves the new view is a copy of the selection, not of the canvas.
-  await spawnComponentAt(page, canvas, "e2e-pick-a", 0.25, 0.5);
-  await spawnComponentAt(page, canvas, "e2e-pick-b", 0.5, 0.5);
-  await spawnComponentAt(page, canvas, "e2e-leave-out", 0.75, 0.5);
-
-  await clickAt(page, canvas.getByText("e2e-pick-a").first());
-  await shiftClickAt(page, canvas.getByText("e2e-pick-b").first());
+  await selectTwoComponents(page, canvas);
   const before = {
     a: await worldCenter(canvas, canvas.getByText("e2e-pick-a").first()),
     b: await worldCenter(canvas, canvas.getByText("e2e-pick-b").first()),
@@ -254,6 +256,35 @@ test("the new-view row copies the selection into a new view and moves there", as
   expect(after.b.y).toBeCloseTo(before.b.y, 0);
 
   // …and the component that was left unselected did not.
+  await expect(canvas.getByText("e2e-pick-a").first()).toBeVisible();
+  await expect(canvas.getByText("e2e-pick-b").first()).toBeVisible();
+  await expect(canvas.getByText("e2e-leave-out")).toHaveCount(0);
+});
+
+test("S does the same from the keyboard", async ({ page }) => {
+  const id = await openDiagram(page, "E2E view from selection by keyboard");
+  const canvas = page.getByTestId("diagram-canvas");
+  await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);
+  page.removeAllListeners("dialog");
+
+  // With nothing selected there is no view to cut, so the key must not ask
+  // for a name — asserting no prompt at all, since a dismissed one would
+  // leave the URL looking exactly as it should.
+  let prompted = false;
+  page.on("dialog", (dialog) => {
+    prompted = true;
+    void dialog.dismiss();
+  });
+  await page.keyboard.press("s");
+  expect(prompted).toBe(false);
+
+  await selectTwoComponents(page, canvas);
+  page.removeAllListeners("dialog");
+
+  page.once("dialog", (dialog) => void dialog.accept("by-key"));
+  await page.keyboard.press("s");
+
+  await expect(page).toHaveURL(`/projects/${id}/modeling/by-key.hcl`);
   await expect(canvas.getByText("e2e-pick-a").first()).toBeVisible();
   await expect(canvas.getByText("e2e-pick-b").first()).toBeVisible();
   await expect(canvas.getByText("e2e-leave-out")).toHaveCount(0);
