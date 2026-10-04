@@ -1589,11 +1589,17 @@ async function handleCreateViewFromSelection(): Promise<void> {
   // the one the open view already has: the components on the canvas belong to
   // that system, and asking again could only offer to bind them elsewhere.
   const system = effectiveSystem || systems[0]?.label || "main";
+  // Annotations are selected by index into `annotations`, so the selection is
+  // resolved to the notes themselves here — the builder takes the notes, not
+  // the page's indices into them.
+  const notes = [...selectedAnnotations]
+    .map((index) => annotations[index])
+    .filter((note) => note !== undefined);
   try {
     await writeDiagramLayoutFile(
       fs,
       `${VIEW_LAYOUT_DIR}/${path}`,
-      layoutFromSelection(system, checked, selectedKeys),
+      layoutFromSelection(system, checked, selectedKeys, notes),
       system,
     );
     await refreshDiagramEntries();

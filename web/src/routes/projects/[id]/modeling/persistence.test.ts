@@ -381,9 +381,34 @@ describe("view paths and the selection-derived layout", () => {
     );
   });
 
-  it("brings none of the old view's annotations or connection overrides", () => {
-    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"]);
+  it("carries the selected annotations across, where they already are", () => {
+    const layout = layoutFromSelection(
+      "main",
+      CHECKED,
+      ["main/mcu"],
+      [{ text: "check this", x: 30, y: 40, scale: 1.5 }],
+    );
+    expect(layout.annotations).toEqual([
+      { text: "check this", x: 30, y: 40, scale: 1.5 },
+    ]);
+  });
+
+  it("does not alias the annotations it copies either", () => {
+    const note = { text: "check this", x: 30, y: 40 };
+    const layout = layoutFromSelection("main", CHECKED, [], [note]);
+    const copied = layout.annotations?.[0];
+    if (!copied) throw new Error("the annotation was not copied");
+    copied.text = "edited";
+    expect(note.text).toBe("check this");
+  });
+
+  it("leaves no annotations behind when the selection has none", () => {
+    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"], []);
     expect(layout.annotations).toEqual([]);
+  });
+
+  it("brings none of the old view's connection overrides", () => {
+    const layout = layoutFromSelection("main", CHECKED, ["main/mcu"], []);
     expect(layout.connections).toEqual({});
   });
 });

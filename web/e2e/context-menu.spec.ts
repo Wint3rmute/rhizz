@@ -259,6 +259,49 @@ test("the new-view row copies the selection into a new view and moves there", as
   await expect(canvas.getByText("e2e-leave-out")).toHaveCount(0);
 });
 
+test("an annotation in the selection comes across into the new view", async ({ page }) => {
+  const id = await openDiagram(page, "E2E view from selection with note");
+  const canvas = page.getByTestId("diagram-canvas");
+  const menu = page.getByTestId("context-menu");
+
+  await spawnComponentAt(page, canvas, "e2e-note-a", 0.3, 0.45);
+  await spawnComponentAt(page, canvas, "e2e-note-b", 0.55, 0.45);
+
+  // A note well clear of both nodes, so it is unambiguously its own thing.
+  const rect = await boxOf(canvas);
+  await page.mouse.move(rect.x + rect.width * 0.4, rect.y + rect.height * 0.8);
+  await page.keyboard.press("n");
+  const note = canvas.getByText("New note").first();
+  await expect(note).toBeVisible();
+
+  // Components and a note can be selected together (shift-click each).
+  await clickAt(page, canvas.getByText("e2e-note-a").first());
+  await shiftClickAt(page, canvas.getByText("e2e-note-b").first());
+  await shiftClickAt(page, note);
+
+  // Proof the note really is part of the selection, rather than the row below
+  // ignoring something that was never selected: a nudge moves it too. Only
+  // "moved", not "moved 10" — snap-to-grid is on, so the first nudge also
+  // pulls an off-grid note onto the grid.
+  const noteBefore = await boxOf(note);
+  await page.keyboard.press("ArrowRight");
+  expect((await boxOf(note)).x).not.toBeCloseTo(noteBefore.x, 0);
+
+  page.removeAllListeners("dialog");
+  page.once("dialog", (dialog) => void dialog.accept("with-note"));
+  await rightClickAt(page, canvas.getByText("e2e-note-a").first());
+  await menu.getByRole("menuitem", {
+    name: /create new view from selection/i,
+  }).click();
+
+  await expect(page).toHaveURL(`/projects/${id}/modeling/with-note.hcl`);
+  // The components came across...
+  await expect(canvas.getByText("e2e-note-a").first()).toBeVisible();
+  await expect(canvas.getByText("e2e-note-b").first()).toBeVisible();
+  // ...and so, being part of the selection, the note should have too.
+  await expect(note).toBeVisible();
+});
+
 test("empty canvas right-click shows canvas menu with shortcuts", async ({ page }) => {
   await openDiagram(page);
   const canvas = page.getByTestId("diagram-canvas");

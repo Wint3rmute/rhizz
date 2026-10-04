@@ -78,7 +78,9 @@ export function emptyDiagramLayout(system = ""): DiagramLayout {
 }
 
 /**
- * A layout placing only `selectedKeys`, each at the box it already has.
+ * A layout placing only what the selection holds: the components in
+ * `selectedKeys`, each at the box it already has, and the annotations in
+ * `selectedNotes` at the position they already have.
  *
  * Positions are copied verbatim rather than re-centered: the selection is
  * already a picture, and moving it would mean the new view and the old one
@@ -90,6 +92,7 @@ export function layoutFromSelection(
   system: string,
   checked: Record<string, StoredBox>,
   selectedKeys: Iterable<string>,
+  selectedNotes: readonly Annotation[] = [],
 ): DiagramLayout {
   const layout = emptyDiagramLayout(system);
   for (const key of selectedKeys) {
@@ -98,6 +101,7 @@ export function layoutFromSelection(
     // picture either — same rule `mapLayoutToBoxes` applies to stale keys.
     if (box) layout.checked[key] = { ...box };
   }
+  layout.annotations = selectedNotes.map((note) => ({ ...note }));
   return layout;
 }
 
