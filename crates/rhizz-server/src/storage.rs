@@ -1598,7 +1598,10 @@ mod tests {
         // byte is written.
         for id in ["../escape", "..", ".", "/etc", "Drone System", "drone/", ""] {
             assert_refused(id, |id| {
-                vfs(&[project(id)], &[file_node("a.hcl", id, None, "a.hcl", "x")])
+                vfs(
+                    &[project(id)],
+                    &[file_node("a.hcl", id, None, "a.hcl", "x")],
+                )
             });
         }
     }
