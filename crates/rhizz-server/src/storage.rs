@@ -317,13 +317,13 @@ impl Found {
 ///
 /// `prefix` is `dir`'s own project-relative path (empty at the project root)
 /// and `stats` collects the oldest/newest file stamps seen, for the project's
-/// own `createdAt`/`updatedAt`.
+/// own `createdAt`/`updatedAt` — seeded wide open so the first file sets both.
 fn walk_project(
     project_id: &str,
     dir: &Path,
     prefix: &Path,
     found: &mut Vec<Found>,
-    stats: &mut Option<(i64, i64)>,
+    stats: &mut (i64, i64),
 ) -> Result<(), std::io::Error> {
     for (name, entry) in sorted_entries(dir)? {
         if is_hidden(&name) {
@@ -340,9 +340,8 @@ fn walk_project(
         }
         let relative = prefix.join(&name);
         if metadata.is_dir() {
-            let id = node_id(project_id, &relative);
             found.push(Found::Dir {
-                id: id.clone(),
+                id: node_id(project_id, &relative),
                 parent_id: parent_id_of(project_id, prefix),
                 name,
             });
@@ -357,10 +356,7 @@ fn walk_project(
             };
             let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
             let millis = millis_since_epoch(modified);
-            *stats = Some(match *stats {
-                None => (millis, millis),
-                Some((oldest, newest)) => (oldest.min(millis), newest.max(millis)),
-            });
+            *stats = (stats.0.min(millis), stats.1.max(millis));
             found.push(Found::File {
                 id: node_id(project_id, &relative),
                 parent_id: parent_id_of(project_id, prefix),
@@ -393,16 +389,15 @@ fn read_project(
     dir: &Path,
 ) -> Result<Option<(Value, Vec<Value>)>, std::io::Error> {
     let mut found = Vec::new();
-    let mut stats = None;
+    let mut stats = (i64::MAX, i64::MIN);
     walk_project(project_id, dir, Path::new(""), &mut found, &mut stats)?;
 
+    // A project always holds at least one file — the model source that got it
+    // here — so the stamps are always real.
     if !has_model_source(project_id, &found) {
         return Ok(None);
     }
 
-    // A project always has at least one file (the model source that got it
-    // here), so the stamps are always defined.
-    let (oldest, newest) = stats.unwrap_or((0, 0));
     let project = json!({
         "id": project_id,
         // The directory name is the address, and an address is a slug — so the
@@ -410,19 +405,11 @@ fn read_project(
         // in every project directory, which would then show up in the user's
         // repository; not worth it for a label.
         "name": project_id,
-        "createdAt": format_rfc3339_millis(oldest),
-        "updatedAt": format_rfc3339_millis(newest),
+        "createdAt": format_rfc3339_millis(stats.0),
+        "updatedAt": format_rfc3339_millis(stats.1),
     });
     let nodes = found.iter().map(|node| node.to_json(project_id)).collect();
     Ok(Some((project, nodes)))
-}
-
-/// Whether `dir` holds a model source, i.e. whether it is a project at all.
-fn is_project_dir(project_id: &str, dir: &Path) -> bool {
-    let mut found = Vec::new();
-    let mut stats = None;
-    walk_project(project_id, dir, Path::new(""), &mut found, &mut stats).is_ok()
-        && has_model_source(project_id, &found)
 }
 
 /// Reads the data dir and expands it into the whole-VFS shape
@@ -808,7 +795,7 @@ pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             continue;
         }
-        if is_project_dir(&name, &path) {
+        if read_project(&name, &path).is_ok_and(|read| read.is_some()) {
             fs::remove_dir_all(&path)?;
         }
     }
