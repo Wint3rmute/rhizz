@@ -16,6 +16,20 @@ How to work on this file:
 
 ---
 
+## Task <N> - UI for creating and browsing systems
+
+The current Rhizz web interace is missing features related to management of systems. I want to manage systems in the following ways:
+
+1. I want to have a systems counter in the stats bar on the overview/ page, on the left from Components.
+2. I want to be able to filter out just systems in the inventory/ page, using the selection box which currently has "All", "Components", and "Interfaces":
+  - Remove the "all" option
+  - Add "Systems" option
+3. When a specific system is selected, in the inventory/ page, it should display
+   the diagram which has the same name as the system, if it exists. If it
+   doesn't exist, it should display a message indicating that no diagram is
+   available and a button to create a new view, same as it currently works with
+   components.
+
 ## Task <N> - Put the project scope in the call: scope every ProjectStore node operation
 
 Every node operation in `web/src/vfs/operations.ts` resolves its target against
