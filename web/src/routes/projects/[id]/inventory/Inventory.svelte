@@ -484,15 +484,6 @@ async function handleCreateView(): Promise<void> {
         {/each}
       </div>
 
-      <!-- Free-text search -->
-      <input
-        type="search"
-        class="input input-sm input-bordered w-full"
-        placeholder="Search inventory…"
-        aria-label="Search inventory"
-        bind:value={query}
-      />
-
       {#if activeTab !== InventoryTab.Interfaces}
         <button
           type="button"
@@ -508,6 +499,15 @@ async function handleCreateView(): Promise<void> {
             : "+ New Component"}
         </button>
       {/if}
+
+      <!-- Free-text search -->
+      <input
+        type="search"
+        class="input input-sm input-bordered w-full"
+        placeholder="Search inventory…"
+        aria-label="Search inventory"
+        bind:value={query}
+      />
 
       <!-- Entity list -->
       <div
