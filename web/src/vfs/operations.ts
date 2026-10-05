@@ -355,21 +355,22 @@ export function renameNode(
 
 export function moveNode(
   data: VfsData,
+  projectId: string,
   nodeId: string,
   newParentId: string | null,
   now: string,
 ): VfsData {
   const node = findNode(data, nodeId);
-  assertValidParent(data, node.projectId, newParentId);
+  assertValidParent(data, projectId, newParentId);
   assertNoSiblingWithName(
     data,
-    node.projectId,
+    projectId,
     newParentId,
     node.name,
     nodeId,
   );
 
-  if (wouldCreateCycle(nodeId, newParentId, data.nodes)) {
+  if (wouldCreateCycle(projectId, nodeId, newParentId, data.nodes)) {
     throw new Error(
       `Moving "${nodeId}" under "${String(newParentId)}" would create a cycle`,
     );
@@ -381,25 +382,32 @@ export function moveNode(
 
   return {
     ...data,
-    projects: touchProject(data.projects, node.projectId, now),
+    projects: touchProject(data.projects, projectId, now),
     nodes,
   };
 }
 
 export function deleteNode(
   data: VfsData,
+  projectId: string,
   nodeId: string,
   now: string,
 ): VfsData {
-  const node = findNode(data, nodeId);
+  // Validates that the node exists; which project it belongs to is the
+  // caller's to say.
+  findNode(data, nodeId);
   const toDelete = new Set([
     nodeId,
-    ...descendantsOf(nodeId, data.nodes).map((n) => n.id),
+    ...descendantsOf(projectId, nodeId, data.nodes).map((n) => n.id),
   ]);
 
   return {
     ...data,
-    projects: touchProject(data.projects, node.projectId, now),
-    nodes: data.nodes.filter((n) => !toDelete.has(n.id)),
+    projects: touchProject(data.projects, projectId, now),
+    // Scoped: an id in `toDelete` must not take another project's node with
+    // the same id along with it.
+    nodes: data.nodes.filter(
+      (n) => n.projectId !== projectId || !toDelete.has(n.id),
+    ),
   };
 }

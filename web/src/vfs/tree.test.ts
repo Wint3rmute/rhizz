@@ -9,8 +9,12 @@ import {
   wouldCreateCycle,
 } from "./tree";
 
+// The project every fixture node belongs to; the two scoped helpers below
+// are called with it, so it is named here rather than repeated.
+const PROJECT = "p1";
+
 function dir(id: string, name: string, parentId: string | null): FsDirectory {
-  return { id, projectId: "p1", parentId, name, kind: "directory" };
+  return { id, projectId: PROJECT, parentId, name, kind: "directory" };
 }
 
 function file(
@@ -50,16 +54,27 @@ function fixture(): FsNode[] {
 
 describe("descendantsOf", () => {
   it("returns a directory's children", () => {
-    const result = descendantsOf("dir-components", fixture());
+    const result = descendantsOf(PROJECT, "dir-components", fixture());
     expect(result.map((n) => n.name)).toEqual(["imu.hcl"]);
   });
 
   it("returns an empty array for a leaf file", () => {
-    expect(descendantsOf("file-imu", fixture())).toEqual([]);
+    expect(descendantsOf(PROJECT, "file-imu", fixture())).toEqual([]);
   });
 
   it("returns an empty array for a node with no descendants at all", () => {
-    expect(descendantsOf("file-drone", fixture())).toEqual([]);
+    expect(descendantsOf(PROJECT, "file-drone", fixture())).toEqual([]);
+  });
+
+  it("does not walk into another project's nodes", () => {
+    // Same ids, different project: without the scope, `mid` below would be
+    // reported as a descendant of `root`.
+    const nodes: FsNode[] = [
+      dir("root", "root", null),
+      { ...dir("mid", "mid", "root"), projectId: "p2" },
+      { ...dir("leaf", "leaf", "mid"), projectId: "p2" },
+    ];
+    expect(descendantsOf(PROJECT, "root", nodes)).toEqual([]);
   });
 
   it("includes grandchildren, not just direct children", () => {
@@ -68,31 +83,46 @@ describe("descendantsOf", () => {
       dir("mid", "mid", "root"),
       file("leaf", "leaf.hcl", "mid"),
     ];
-    const result = descendantsOf("root", nodes);
+    const result = descendantsOf(PROJECT, "root", nodes);
     expect(result.map((n) => n.id).sort()).toEqual(["leaf", "mid"]);
   });
 });
 
 describe("wouldCreateCycle", () => {
+  it("does not follow a parent chain into another project", () => {
+    // `mid` looks like a child of `root`, so moving `root` under `mid` reads
+    // as a cycle. Scoped to PROJECT, `mid` belongs to p2 and there is no cycle.
+    const nodes: FsNode[] = [
+      dir("root", "root", null),
+      { ...dir("mid", "mid", "root"), projectId: "p2" },
+    ];
+    expect(wouldCreateCycle(PROJECT, "root", "mid", nodes)).toBe(false);
+  });
+
   it("is always false when moving to the project root", () => {
-    expect(wouldCreateCycle("dir-components", null, fixture())).toBe(false);
+    expect(wouldCreateCycle(PROJECT, "dir-components", null, fixture())).toBe(
+      false,
+    );
   });
 
   it("is true when a node is moved under itself", () => {
-    expect(wouldCreateCycle("dir-components", "dir-components", fixture()))
+    expect(
+      wouldCreateCycle(PROJECT, "dir-components", "dir-components", fixture()),
+    )
       .toBe(true);
   });
 
   it("is true when a node is moved under one of its own descendants", () => {
     // Moving "components" under its own child "imu.hcl" would create a
     // cycle.
-    expect(wouldCreateCycle("dir-components", "file-imu", fixture())).toBe(
-      true,
-    );
+    expect(wouldCreateCycle(PROJECT, "dir-components", "file-imu", fixture()))
+      .toBe(
+        true,
+      );
   });
 
   it("is false when moving under an unrelated node", () => {
-    expect(wouldCreateCycle("dir-components", "dir-views", fixture()))
+    expect(wouldCreateCycle(PROJECT, "dir-components", "dir-views", fixture()))
       .toBe(false);
   });
 });
