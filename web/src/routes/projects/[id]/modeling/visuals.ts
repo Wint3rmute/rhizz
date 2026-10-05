@@ -6,21 +6,6 @@
 export type BorderStyle = "solid" | "dashed" | "dotted";
 export type FontStyle = "bold" | "italic" | "underline";
 
-// The limited set of color choices offered by the inspector. Each maps to a
-// daisyUI theme token, so the rendered color follows the active theme (and
-// automatically adapts to dark mode) instead of being a fixed CSS color.
-export const COLOR_OPTIONS = [
-  "primary",
-  "secondary",
-  "accent",
-  "success",
-  "warning",
-  "error",
-  "info",
-] as const;
-
-export type ColorOption = (typeof COLOR_OPTIONS)[number];
-
 // Explicit "no value" sentinels the inspector sends for its reset options
 // (and the read model normalizes to). `undefined` means "untouched" on the
 // wire and empty strings predate the inspector, so neither can spell a
@@ -38,6 +23,38 @@ export type ComponentFont =
   | FontStyle
   | typeof DEFAULT_FONT
   | (string & {});
+
+// The limited set of color choices offered by the inspector. Each maps to a
+// daisyUI theme token, so the rendered color follows the active theme (and
+// automatically adapts to dark mode) instead of being a fixed CSS color.
+export const COLOR_OPTIONS = [
+  "primary",
+  "secondary",
+  "accent",
+  "success",
+  "warning",
+  "error",
+  "info",
+] as const;
+
+export type ColorOption = (typeof COLOR_OPTIONS)[number];
+
+// The border styles offered by the inspector, in the order they are presented.
+// A closed enum with no separate "clear" option: `"solid"` is itself the
+// default, and `borderStyleToDasharray` maps it to no dash array — the same
+// rendering an unset border gets, so a reset needs no separate option.
+export const BORDER_OPTIONS = ["solid", "dashed", "dotted"] as const satisfies readonly BorderStyle[];
+
+// The font choices offered by the inspector. Unlike the other two this one
+// leads with the default, because `DEFAULT_FONT` is not a `FontStyle` at all
+// — it is the explicit spelling of "no presentation", and a component with no
+// `font` attribute has to land on it.
+export const FONT_OPTIONS = [
+  DEFAULT_FONT,
+  "bold",
+  "italic",
+  "underline",
+] as const satisfies readonly (FontStyle | typeof DEFAULT_FONT)[];
 
 export interface ComponentVisuals {
   color?: string | undefined;
