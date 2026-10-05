@@ -90,6 +90,47 @@ eventually as a simplification; not as this fix.
 
 ---
 
+## Task <N> - split view-local and component-specific annotations in modeling's inspector
+
+Currently, the instance inspector under modeling/ displays all attributes of the node in a single list:
+
+- Those which are view-specific, e.g. text alignment
+- Those which are component-specific, e.g. icon, color, etc.
+
+I want to split them for 2 purposes:
+
+- Make them visibly separate, with a on-hover popup saying which are view-specific and which are component-specific
+- Re-use the component-specific properties in the inventory/ page, adding a dedicated "style" section to the details view on the right
+
+## Task <N> - Allow assigning icons to systems - same as with components
+
+The "style" section on the inventory/ page already allows editing component-specific properties. I want to re-use
+the same idea on systems. The inventory page's "style" section shall also be available for systems, allowing the user to change:
+
+- System's full name
+- System icon (optional, like with components)
+
+This will probably require changes both on backend and in frontend!
+
+## Task <N> - Add a red "Delete" tab in inventory's details view
+
+I want to be able to delete both systems and components from the inventory.
+However, in the case of Rhizz, deletion of a system or a component requires
+first making sure that after deletion, the project will still build.
+
+This requires "delete" to be it's own page, with extra functionality and a
+confirmation dialog. For components - just click "Confirm deletion" after
+navigating to the "delete" page, which will ask you to enter the system name for
+confirmation.
+
+For components, the user must first delete all instances of that component in
+the project. If instances still exist, the delete operation will be blocked and
+the "component is still used in <paths to instances>" message will be displayed.
+After all instances are removed, the delete button is unlocked and the same
+confirmation flow as with the system applies.
+
+---
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
