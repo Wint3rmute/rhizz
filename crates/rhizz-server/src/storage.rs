@@ -944,16 +944,12 @@ mod tests {
     // ── Loading: discovery ─────────────────────────────────────────────
 
     #[test]
-    fn load_on_missing_dir_yields_empty_vfs() {
+    fn load_yields_empty_vfs_for_a_missing_or_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("does-not-exist");
-        assert_eq!(load_vfs(&missing).unwrap(), empty_vfs());
-    }
-
-    #[test]
-    fn load_on_empty_dir_yields_empty_vfs() {
-        let dir = tempfile::tempdir().unwrap();
-        assert_eq!(load_vfs(dir.path()).unwrap(), empty_vfs());
+        for path in [&missing, dir.path()] {
+            assert_eq!(load_vfs(path).unwrap(), empty_vfs());
+        }
     }
 
     #[test]
