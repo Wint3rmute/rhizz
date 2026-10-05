@@ -48,7 +48,12 @@ let {
 // controls would silently refuse is worse than no tab.
 type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata";
 
-const TABS: readonly Tab[] = ["Description", "Ports", "Requirements", "Metadata"];
+const TABS: readonly Tab[] = [
+  "Description",
+  "Ports",
+  "Requirements",
+  "Metadata",
+];
 const TABS_WITH_STYLE: readonly Tab[] = [
   "Description",
   "Style",
