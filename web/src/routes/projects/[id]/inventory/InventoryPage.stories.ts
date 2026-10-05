@@ -217,6 +217,48 @@ export const SystemsTab: Story = {
   },
 };
 
+// The add button opens the shared creation modal locked to new
+// definitions: no "Use Existing Component" toggle, since this page never
+// places instances.
+export const AddComponentOpensDefinitionModal: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "+ New Component" }),
+    );
+    const modal = within(
+      await canvas.findByTestId("create-component-modal"),
+    );
+    await expect(modal.getByText("Create New Component")).toBeTruthy();
+    await expect(
+      modal.queryByRole("button", { name: "Use Existing Component" }),
+    ).not.toBeInTheDocument();
+    await expect(
+      modal.getByRole("button", { name: "Create Definition" }),
+    ).toBeTruthy();
+  },
+};
+// The system button opens a name-only creation modal in the same style.
+export const AddSystemOpensCreationModal: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("tab", { name: "Systems" }),
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "+ New System" }),
+    );
+    const modal = within(
+      await canvas.findByTestId("create-system-modal"),
+    );
+    await expect(modal.getByText("Create New System")).toBeTruthy();
+    await expect(
+      modal.getByRole("button", { name: "Create System" }),
+    ).toBeTruthy();
+  },
+};
 // A system with a same-named view previews it, like a definition does.
 // `demo-system.hcl` is seeded bound to demo-system itself.
 export const SystemDiagramPreview: Story = {

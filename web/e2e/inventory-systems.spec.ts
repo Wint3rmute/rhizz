@@ -51,20 +51,33 @@ test("inventory add buttons create systems and components", async ({ page }) => 
   const id = await createNewProject(page, "E2E inventory add");
 
   await page.goto(`/projects/${id}/inventory`);
-  // Components is the default tab, so its button shows first.
+  // Components is the default tab, so its button shows first. It opens
+  // the shared creation modal locked to new definitions — no reuse mode.
   const addComponent = page.getByTestId("inventory-add-entity");
   await expect(addComponent).toHaveText("+ New Component");
-  page.once("dialog", (dialog) => void dialog.accept("e2e-comp"));
   await addComponent.click();
+  const modal = page.getByTestId("create-component-modal");
+  await expect(modal).toBeVisible();
+  await expect(
+    modal.getByRole("button", { name: "Use Existing Component" }),
+  ).toHaveCount(0);
+  await modal.locator("#new-comp-name").fill("e2e-comp");
+  await modal.getByRole("button", { name: "Create Definition" }).click();
+  await expect(modal).toBeHidden();
   await expect(page).toHaveURL(`/projects/${id}/inventory/e2e-comp`);
   await page.getByText("e2e-comp").first().click();
 
-  // The Systems tab offers the system-worded button instead.
+  // The Systems tab offers the system-worded button instead. It opens a
+  // name-only creation modal in the same style as the component one.
   await page.getByRole("tab", { name: "Systems" }).click();
   const addSystem = page.getByTestId("inventory-add-entity");
   await expect(addSystem).toHaveText("+ New System");
-  page.once("dialog", (dialog) => void dialog.accept("e2e-sys"));
   await addSystem.click();
+  const sysModal = page.getByTestId("create-system-modal");
+  await expect(sysModal).toBeVisible();
+  await sysModal.locator("#new-sys-name").fill("e2e-sys");
+  await sysModal.getByRole("button", { name: "Create System" }).click();
+  await expect(sysModal).toBeHidden();
   await expect(page).toHaveURL(`/projects/${id}/inventory/e2e-sys`);
 
   // The new system is a real entity: it previews (missing-view state) and

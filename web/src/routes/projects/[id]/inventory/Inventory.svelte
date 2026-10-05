@@ -10,6 +10,7 @@ import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
 import { applyModelMutation } from "../../../../history/applyMutation";
+import type { PortData } from "../../../../modelView";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
 import {
@@ -21,6 +22,8 @@ import { openProjectFs } from "../../../../vfs/fs";
 import type { RawModelPayload } from "../../../../modelView";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import DiagramViewer from "../modeling/DiagramViewer.svelte";
+import CreateComponentModal from "../modeling/CreateComponentModal.svelte";
+import CreateSystemModal from "../modeling/CreateSystemModal.svelte";
 import {
   emptyDiagramLayout,
   VIEW_LAYOUT_DIR,
@@ -350,27 +353,51 @@ async function handleSaveDoc(content: string): Promise<void> {
 }
 
 // Creates a new system or component definition from the sidebar button
-// (below the search box). The kind follows the active tab — systems on the
-// Systems tab, definitions on the Components tab — and the name comes from a
-// native `prompt()`, like the folder/view/connection prompts on the Modeling
-// page. A blank, slash-containing or already-taken name is a silent no-op.
-// On success the list refreshes from disk and the new entity is selected.
+// (above the search box). Both kinds go through a creation modal: systems
+// through a name-only `CreateSystemModal`, components through the shared
+// `CreateComponentModal` locked to "New Component Definition" (no instance
+// placement from here — this page only adds top-level definitions). A blank,
+// slash-containing or already-taken name is a silent no-op. On success the
+// list refreshes from disk and the new entity is selected.
 let creatingEntity = $state(false);
+let isCreateModalOpen = $state(false);
+let isCreateSystemModalOpen = $state(false);
+
+// Parents the modal's inspector shows alongside the new definition's key.
+// Nothing is ever placed under them from here — the modal needs the list,
+// and the systems are the only containers this page knows.
+let modalParents = $derived(
+  systems.map((s) => ({
+    key: s.label,
+    label: s.label,
+    isSystem: true,
+    path: s.label,
+  })),
+);
 
 async function handleAddEntity(): Promise<void> {
   const id = projectId;
   if (!id || creatingEntity) return;
   const isSystem = activeTab === InventoryTab.Systems;
   if (!isSystem && activeTab !== InventoryTab.Components) return;
-  const rawName = prompt(
-    isSystem ? "New system name?" : "New component name?",
-  );
-  const label = rawName?.trim() ?? "";
-  if (label === "" || label.includes("/")) return;
-  const taken = isSystem
-    ? systems.some((s) => s.label === label)
-    : definitions.some((d) => d.label === label);
-  if (taken) return;
+  if (isSystem) {
+    isCreateSystemModalOpen = true;
+    return;
+  }
+  isCreateModalOpen = true;
+}
+
+async function handleSystemCreate(label: string): Promise<void> {
+  isCreateSystemModalOpen = false;
+  const id = projectId;
+  if (!id || creatingEntity) return;
+  const trimmed = label.trim();
+  if (trimmed === "" || trimmed.includes("/")) return;
+  // The system is already there — open it rather than writing a no-op.
+  if (systems.some((s) => s.label === trimmed)) {
+    selectLabel(trimmed);
+    return;
+  }
   creatingEntity = true;
   try {
     const fs = openProjectFs(projectStore, id);
@@ -378,16 +405,54 @@ async function handleAddEntity(): Promise<void> {
       await fs.readdir(".", { recursive: true }),
     );
     const content = await fs.readFile(targetPath).catch(() => "");
-    const result = await applyModelMutation(
-      fs,
-      targetPath,
-      content,
-      isSystem ? { kind: "add_system", label } : {
-        kind: "add_component_definition",
-        label,
-        options: { leaf: true },
-      },
+    const result = await applyModelMutation(fs, targetPath, content, {
+      kind: "add_system",
+      label: trimmed,
+    });
+    if (!result.applied) return;
+    sources = await readProjectSources(fs);
+    selectLabel(trimmed);
+  } catch (error) {
+    console.error("Failed to create inventory entity:", error);
+  } finally {
+    creatingEntity = false;
+  }
+}
+
+async function handleModalCreate(data: {
+  label: string;
+  full_name: string;
+  tags: string[];
+  leaf: boolean;
+  ports: PortData[];
+}): Promise<void> {
+  isCreateModalOpen = false;
+  const id = projectId;
+  if (!id || creatingEntity) return;
+  const label = data.label.trim();
+  if (label === "" || label.includes("/")) return;
+  // The definition is already there — open it rather than writing a no-op.
+  if (definitions.some((d) => d.label === label)) {
+    selectLabel(label);
+    return;
+  }
+  creatingEntity = true;
+  try {
+    const fs = openProjectFs(projectStore, id);
+    const targetPath = primaryHclPath(
+      await fs.readdir(".", { recursive: true }),
     );
+    const content = await fs.readFile(targetPath).catch(() => "");
+    const result = await applyModelMutation(fs, targetPath, content, {
+      kind: "add_component_definition",
+      label,
+      options: {
+        leaf: data.leaf,
+        full_name: data.full_name,
+        tags: data.tags,
+        ports: data.ports,
+      },
+    });
     if (!result.applied) return;
     sources = await readProjectSources(fs);
     selectLabel(label);
@@ -487,7 +552,7 @@ async function handleCreateView(): Promise<void> {
       {#if activeTab !== InventoryTab.Interfaces}
         <button
           type="button"
-          class="btn btn-outline btn-sm w-full"
+          class="btn btn-primary btn-sm w-full"
           disabled={creatingEntity}
           onclick={() => void handleAddEntity()}
           data-testid="inventory-add-entity"
@@ -499,6 +564,7 @@ async function handleCreateView(): Promise<void> {
             : "+ New Component"}
         </button>
       {/if}
+      <div class="divider my-0"></div>
 
       <!-- Free-text search -->
       <input
@@ -617,5 +683,20 @@ async function handleCreateView(): Promise<void> {
         ondocsave={handleSaveDoc}
       />
     </div>
+
+    <CreateComponentModal
+      isOpen={isCreateModalOpen}
+      availableParents={modalParents}
+      reusableDefinitions={[]}
+      allowReuse={false}
+      defaultParentKey={modalParents[0]?.key}
+      oncreate={(data) => void handleModalCreate(data)}
+      onclose={() => (isCreateModalOpen = false)}
+    />
+    <CreateSystemModal
+      isOpen={isCreateSystemModalOpen}
+      oncreate={(label) => void handleSystemCreate(label)}
+      onclose={() => (isCreateSystemModalOpen = false)}
+    />
   {/if}
 </div>
