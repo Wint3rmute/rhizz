@@ -198,14 +198,6 @@ fn millis_since_epoch(time: SystemTime) -> i64 {
     })
 }
 
-/// Milliseconds from the Unix epoch to `time`, as a JSON-safe integer.
-///
-/// Stays inside the range JavaScript represents exactly, which a raw
-/// nanosecond count would not (that is ~1.8e18, well past 2^53).
-fn revision_millis(time: SystemTime) -> u64 {
-    u64::try_from(millis_since_epoch(time)).unwrap_or(0)
-}
-
 /// Formats `millis` since the Unix epoch as RFC 3339, e.g.
 /// `2023-11-14T22:13:20.123Z`.
 ///
@@ -277,7 +269,8 @@ enum Found {
         name: String,
         /// The file's contents, read as UTF-8.
         content: String,
-        /// Milliseconds since the epoch, from the file's mtime.
+        /// Milliseconds since the epoch from the file's mtime, as a JSON-safe
+        /// integer: a raw nanosecond count would not be (~1.8e18, past 2^53).
         revision: u64,
         /// The same instant as `revision`, as RFC 3339.
         updated_at: String,
@@ -373,7 +366,7 @@ fn walk_project(
                 parent_id: parent_id_of(project_id, prefix),
                 name,
                 content,
-                revision: revision_millis(modified),
+                revision: u64::try_from(millis).unwrap_or(0),
                 updated_at: format_rfc3339_millis(millis),
             });
         }
