@@ -48,22 +48,22 @@
         in
         {
           default = pkgs.mkShell {
-            packages = [
-              pkgs.rustc
-              pkgs.cargo
-              pkgs.cargo-audit
-              pkgs.cargo-llvm-cov
-              pkgs.clippy
-              pkgs.mdbook
-              pkgs.rustfmt
-              pkgs.wasm-pack
-              pkgs.deno
-              pkgs.just
-              pkgs.lld
+            packages = with pkgs; [
+              rustc
+              cargo
+              cargo-audit
+              cargo-llvm-cov
+              clippy
+              mdbook
+              rustfmt
+              wasm-pack
+              deno
+              just
+              lld
               # LLVM tools matching rustc's LLVM (21.1.8), required by
               # cargo-llvm-cov (NixOS equivalent of rustup's
               # llvm-tools-preview component).
-              pkgs.llvmPackages_21.llvm
+              llvmPackages_21.llvm
               # Playwright browsers for the web browser-mode tests
               # (`deno run test --project=storybook`, also covered by
               # `just test`). Nixpkgs' playwright-driver version must match the
@@ -74,10 +74,10 @@
               # `deno install`: deno.json sets nodeModulesDir=manual, so a
               # stale tree keeps resolving the old driver (e.g. 1228 lookups
               # against 1243 browsers) with no warning.
-              pkgs.playwright-driver.browsers
+              playwright-driver.browsers
               # Commented out to slim down the image
-              # pkgs.flyctl
-              # pkgs.gh
+              # flyctl
+              # gh
             ];
 
             # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
@@ -89,14 +89,6 @@
               export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
               export RHIZZ_VRT_FONTCONFIG_FILE="${vrtFontsConf}"
             '';
-
-            # LLMs often want to use a Python environment with some popular
-            # libraries for running one-off validation/exploration commands
-            buildInputs = [
-              (pkgs.python3.withPackages (python: [
-                python.pyyaml
-              ]))
-            ];
           };
         });
     };
