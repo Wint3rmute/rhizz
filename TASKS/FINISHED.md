@@ -4,6 +4,97 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 121 — Systems are first-class in the stats bar and the Inventory
+
+Systems stopped being a thing you can only reach through Modeling. The
+overview counts them, the Inventory lists them next to components, and
+either page can create one — the four features the task asked for, in
+that order.
+
+- **The Systems counter is a first stat, and the "All" tab is what pays
+  for it.** Removing `InventoryTab.All` looked like the free half of the
+  filter change: with an "All" tab, "Systems" could not mean *only*
+  systems, and the task wanted it to. The tab enum is now
+  `Components | Systems | Interfaces` in that display order, so the
+  default view is unchanged while the two halves become separately
+  addressable. The stats bar follows the same logic — Systems sits left
+  of Components, so the eye lands on the coarser entity first and
+  refines. `ModelStatsRow`'s last stat also lost a number: its subtext
+  was the overall percentage's own history, and "Overall completion
+  score" is the thing that is actually worth saying there.
+- **A system borrows the whole component machinery instead of
+  growing a parallel one.** `systemAsDefinition` flattens a compiled
+  system into the same `InventoryDefinition` the components already
+  use, which is why the card, the search, the diagram preview and the
+  detail pane came for free. The mapping is honest about what a system
+  is not: no ports, no children, `leaf: true`, so it shows as a single
+  entity and scores "specified" exactly when it carries a `full_name`.
+  The one place it had to lie is the level badge — a system is not a
+  level, and `DefinitionCard` now hides `L1` for them rather than
+  inventing a number. Writing a *second* card, a second preview pane
+  and a second detail pane would have been three components' worth of
+  code to render the same three boxes.
+- **The diagram convention is shared, and that is what makes "a
+  diagram with the same name" free.** `defaultViewPath(label)` was
+  already `views/<label>.hcl` for components, and a system is named the
+  same way, so the preview probes the identical path and the
+  missing-view empty state is the identical one — only the button's
+  wording differs ("Create a view for this system"), because what gets
+  created is bound to a different thing. Nothing about the lookup is
+  system-aware; the reuse is the feature.
+- **The add button follows the tab, and a tab with nothing to add has
+  no button.** `Interfaces` is still a placeholder entity class, so it
+  renders neither list nor button — a button there would offer to
+  create something the model cannot express. The other two labels come
+  from `isSystem`, so the button cannot drift out of sync with the list
+  it sits above.
+- **Two changes beat the `prompt()` the first pass used.** Creation
+  started as a bare `prompt()` for the name — the same three-times-used
+  primitive as the folder and view-rename prompts — and was replaced by
+  a real `CreateSystemModal` and by reusing `CreateComponentModal`
+  behind a new `allowReuse` prop, because the Inventory wants a
+  *definition* and Modeling's existing use of that modal wants to offer
+  an existing definition to reuse. A boolean prop rather than a second
+  modal, so the validation and chrome stay in one place.
+- **The sidebar order is button, divider, search — an inversion of
+  what shipped first, and the commit that fixed it is separate from the
+  one that added it.** The button landed below the search box, which
+  read as a filter control with an action stapled underneath; putting
+  it above the divider makes it the primary action of the panel it acts
+  on. Also a solid primary rather than the outline variant, since it is
+  the only thing in the sidebar that changes the model.
+- **A system's row in the command palette is now addressable, and
+  instances deliberately are not.** Inventory matches
+  `/inventory/<label>` against both lists and switches to whichever tab
+  holds the match, so `Systems` entries stopped being unreachable.
+  Instances stay excluded — they are drawn under their usage-site label
+  but addressed by their `source`, so a palette row for one would
+  confidently open the wrong entity.
+- **Red/green**: `inventory-systems.spec.ts` covers the Systems tab
+  listing, previewing the same-named diagram, the missing-view
+  empty state and the create-it navigation into Modeling bound to that
+  system; both add buttons (create → land on the new entity's URL →
+  the overview's counter goes up); and that Interfaces offers no
+  button. The unit suite in `inventory.test.ts` gained the
+  `systemAsDefinition` shape and the `filterSystems` search cases. Both
+  e2e cases were checked against a *partial* implementation — with the
+  Systems tab but no same-named-diagram probe, and with a button that
+  creates but does not select.
+- **Stories and VRT**: `SystemsTab`, `SystemDiagramPreview` and
+  `SystemMissingDiagram` pin the three states, plus
+  `AddSystemOpensCreationModal` and
+  `AddComponentOpensDefinitionModal` for the two buttons. Every story
+  costs two baselines (dark + light), so the VRT gallery was
+  re-baselined in its own commit rather than mixed into the feature.
+- **Untouched**: no change to `rhizz-core`, `rhizz-wasm` or the HCL
+  schema — `RawModelPayload.systems` was the only addition, and
+  `rhizz-wasm` already emitted it. Nothing in Modeling changed either,
+  except gaining a view bound to a newly created system.
+- **Validation**: `just test` (cargo + 928 Vitest + 86 e2e), `just
+  lint`, `just build` and `just format` all pass.
+
+---
+
 ## Task 120 — Every ProjectStore node operation takes its project in the call
 
 `web/src/vfs/store.ts:1-4` said it outright — "real filesystems don't expose
