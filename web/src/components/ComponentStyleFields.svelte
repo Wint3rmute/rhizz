@@ -49,17 +49,19 @@ export type StylePatch = {
 
 // The full name is a textarea committed on blur, so the draft is local: a
 // half-typed name must not rewrite the model on every keystroke, and an
-// abandoned edit must revert rather than persist. Resynced from the model
-// whenever it changes underneath (an undo, or a different node selected).
-let draftFullName = $state("");
-$effect(() => {
-  draftFullName = style.full_name ?? "";
-});
+// abandoned edit must revert rather than persist. Writable derived rather
+// than `$state` + `$effect`, which would be the same thing with an extra
+// frame: the model value is the fallback, and the draft only diverges while
+// the field is being edited.
+let editedFullName: string | undefined = $state(undefined);
+let draftFullName = $derived(editedFullName ?? style.full_name ?? "");
 
 function commitFullName() {
+  // Only a changed draft commits; blur on an untouched field must not write.
   if (draftFullName !== (style.full_name ?? "")) {
     onchange({ full_name: draftFullName });
   }
+  editedFullName = undefined;
 }
 </script>
 

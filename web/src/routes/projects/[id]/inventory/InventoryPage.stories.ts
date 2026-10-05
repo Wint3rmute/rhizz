@@ -459,6 +459,53 @@ export const DetailPaneStacksBelowTheDiagram: Story = {
   },
 };
 
+/**
+ * Every tab has to be reachable, not just present.
+ *
+ * Adding a fifth tab made the row wider than the pane takes, and the last one
+ * was clipped off the right edge — still in the DOM, still findable by a test
+ * that queries by role, and invisible to anyone using the page.
+ *
+ * The fix is a scrollable row, and that is what this pins: when the tabs do
+ * not fit — which they cannot at this browser's ~414px, below `md` where the
+ * pane is the full width — the row scrolls instead of clipping. A tab outside
+ * the visible box is fine *because* the box scrolls; the same tab outside a
+ * box that does not is gone. Whether they fit on a real screen is the VRT
+ * baselines' job, at 1280 wide.
+ */
+export const EveryTabFitsInThePane: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const pane = await canvas.findByTestId("inventory-detail-pane");
+    const list = within(pane).getByRole("tablist", { name: "Entity details" });
+
+    const names = [
+      "Description",
+      "Style",
+      "Ports",
+      "Requirements",
+      "Metadata",
+    ];
+    const tabs = within(list).getAllByRole("tab");
+    await expect(tabs).toHaveLength(names.length);
+    for (const name of names) {
+      await expect(within(list).getByRole("tab", { name: new RegExp(name) }))
+        .toBeTruthy();
+    }
+
+    // The row is its own scroll container, so an overlong tab list stays
+    // reachable. Asserted as the computed value rather than a class name, so
+    // a future refactor cannot leave the behaviour behind without the
+    // behaviour going with it.
+    await expect(getComputedStyle(list).overflowX).toBe("auto");
+    // ...and at this width it genuinely does overflow, which is the case the
+    // clipping regression was about. If a future tab list did fit, this would
+    // fail and the question would be worth asking again.
+    expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+  },
+};
+
 // The documentation editor, open. Every other documentation story cancels back
 // to the viewer, so without this one the editor's own layout inside the pane —
 // its height, its border, where the Save/Cancel row sits — has no picture of it
@@ -514,24 +561,26 @@ export const StyleTabEditsTheComponent: Story = {
     // Matched with a whitespace-tolerant pattern: the serializer aligns `=`
     // within a block, so an exact `color        = "warning"` would be
     // asserting a formatter property instead of the edit.
-    await waitFor(async () => {
-      const hcl = await openProjectFs(projectStore, SEEDED_PROJECT_ID)
+    const readModel = async (): Promise<string> =>
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
         .readFile("main.hcl");
-      expect(hcl).toMatch(/color\s+= "warning"/);
-      expect(hcl).toMatch(/border\s+= "dashed"/);
-      expect(hcl).toMatch(/font\s+= "bold"/);
+
+    await waitFor(async () => {
+      const hcl = await readModel();
+      await expect(hcl).toMatch(/color\s+= "warning"/);
+      await expect(hcl).toMatch(/border\s+= "dashed"/);
+      await expect(hcl).toMatch(/font\s+= "bold"/);
     });
     // ...and it reached the definition's own block, not a sibling's. The
     // attribute list is closed to an extent (W012 warns on orphans), but
     // nothing stops a wrong path from landing the edit on another component.
-    const hcl = await openProjectFs(projectStore, SEEDED_PROJECT_ID)
-      .readFile("main.hcl");
+    const hcl = await readModel();
     const block = hcl.slice(
       hcl.indexOf('component "styled-module"'),
       hcl.indexOf('system "demo-system"'),
     );
-    expect(block).toMatch(/color\s+= "warning"/);
-    expect(block).toMatch(/font\s+= "bold"/);
+    await expect(block).toMatch(/color\s+= "warning"/);
+    await expect(block).toMatch(/font\s+= "bold"/);
   },
 };
 
