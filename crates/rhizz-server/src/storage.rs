@@ -1589,42 +1589,37 @@ mod tests {
         assert!(save_vfs(dir.path(), &bad).is_err());
     }
 
+    /// Asserts that a payload carrying `name` in `build`'s position is refused
+    /// and writes nothing. A name that cannot be one path segment arrives in
+    /// two places — as the project's directory name and as a node's own — and
+    /// both are the same refusal.
+    fn assert_refused(name: &str, build: impl FnOnce(&str) -> Value) {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            save_vfs(dir.path(), &build(name)).is_err(),
+            "{name:?} should be refused"
+        );
+        assert!(dir_is_empty(dir.path()), "{name:?} wrote something");
+    }
+
     #[test]
     fn save_rejects_a_project_id_that_is_not_an_address() {
-        // The address is the directory name, so anything the frontend's slug
-        // rules would never produce — including a traversal attempt — is
-        // refused before a single byte is written.
+        // The address is the directory name, so a traversal attempt here is
+        // the same hole as one in a node name — and is refused before a single
+        // byte is written.
         for id in ["../escape", "..", ".", "/etc", "Drone System", "drone/", ""] {
-            let dir = tempfile::tempdir().unwrap();
-            let bad = vfs(
-                &[project(id)],
-                &[file_node("a.hcl", id, None, "a.hcl", "x")],
-            );
-            assert!(
-                save_vfs(dir.path(), &bad).is_err(),
-                "project id {id:?} should be refused"
-            );
-            assert!(
-                dir_is_empty(dir.path()),
-                "project id {id:?} wrote something"
-            );
+            assert_refused(id, |id| {
+                vfs(&[project(id)], &[file_node("a.hcl", id, None, "a.hcl", "x")])
+            });
         }
     }
 
     #[test]
     fn save_rejects_a_node_name_that_is_not_a_single_path_segment() {
         for name in ["views/main.hcl", "..", ".", "/etc/passwd", "a/../b", ""] {
-            let dir = tempfile::tempdir().unwrap();
-            let bad = vfs(&[project("p")], &[file_node("n", "p", None, name, "x")]);
-            assert!(
-                save_vfs(dir.path(), &bad).is_err(),
-                "node name {name:?} should be refused"
-            );
-            // Nothing landed inside the project directory either.
-            assert!(
-                dir_is_empty(&dir.path().join("p")),
-                "node name {name:?} wrote something"
-            );
+            assert_refused(name, |name| {
+                vfs(&[project("p")], &[file_node("n", "p", None, name, "x")])
+            });
         }
     }
 
