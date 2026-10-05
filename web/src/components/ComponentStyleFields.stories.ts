@@ -115,11 +115,10 @@ export const ClearedIconIsAbsent: Story = {
     // By `title`, not by role: the button's only text is the glyph "✕", so
     // that -- not the title -- is its accessible name.
     await userEvent.click(canvas.getByTitle("Clear icon"));
-    // The key is present with an `undefined` value rather than dropped: the
-    // patch is JSON-serialized on its way to Rust, where a missing key means
-    // "leave this attribute alone" and would silently keep the icon.
-    await expect(emitted).toHaveLength(1);
-    expect("icon" in (emitted[0] ?? {})).toBe(true);
-    await expect(emitted[0]?.icon).toBeUndefined();
+    // `toStrictEqual`, not `toEqual`: this is the whole claim, and the two
+    // differ on exactly it. The patch is JSON-serialized on its way to Rust,
+    // which drops undefined-valued keys — and there a missing key means "leave
+    // this attribute alone", so `{}` would silently keep the icon.
+    await expect(emitted).toStrictEqual([{ icon: undefined }]);
   },
 };

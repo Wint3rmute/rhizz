@@ -115,6 +115,20 @@ export function isFontStyle(f: string): f is FontStyle {
   return f === "bold" || f === "italic" || f === "underline";
 }
 
+/**
+ * Narrows a stored border attribute to the closed enum. Anything else — an
+ * absent attribute, the empty string hand-written HCL predates, a typo —
+ * reads as `"solid"`, which is also what `borderStyleToDasharray` renders an
+ * unset border as, so the fallback and the rendering agree.
+ *
+ * Lives next to the enum rather than in each reader: the read model and the
+ * Inventory's style controls both need it, and a picker whose `value` is not
+ * one of its own options selects nothing.
+ */
+export function toBorderStyle(border: string | undefined): BorderStyle {
+  return border === "dashed" || border === "dotted" ? border : "solid";
+}
+
 // Maps a stored color to an SVG stroke value. daisyUI tokens become CSS
 // variables (so they follow the theme / dark mode); anything else is passed
 // through as-is (hex or named CSS color). The explicit default (and empty

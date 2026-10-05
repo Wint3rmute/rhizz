@@ -19,6 +19,7 @@ import { definitionDepth } from "./inventory";
 import {
   DEFAULT_COLOR,
   DEFAULT_FONT,
+  toBorderStyle,
 } from "../modeling/visuals";
 
 let {
@@ -41,16 +42,21 @@ let {
   onstylechange?: ((patch: ComponentPatch) => Promise<void>) | undefined;
 } = $props();
 
-const TABS = ["Description", "Ports", "Requirements", "Metadata"] as const;
 // `Style` sits second, right after the description: it is the tab a user
 // comes for on a component, and the only one that edits the model. It is
-// absent when there is nothing to style (see `onstylechange`).
+// absent when there is nothing to style (see `onstylechange`) — a tab whose
+// controls would silently refuse is worse than no tab.
 type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata";
 
+const TABS: readonly Tab[] = ["Description", "Ports", "Requirements", "Metadata"];
+const TABS_WITH_STYLE: readonly Tab[] = [
+  "Description",
+  "Style",
+  ...TABS.slice(1),
+];
+
 let tabs = $derived(
-  onstylechange === undefined
-    ? TABS
-    : (["Description", "Style", ...TABS.slice(1)] as Tab[]),
+  onstylechange === undefined ? TABS : TABS_WITH_STYLE,
 );
 
 // Monaco options for the documentation editor, as one object so the identity is
@@ -143,27 +149,37 @@ function flattenTags(def: InventoryDefinition): string[] {
       Select an entity in the Inventory Browser to inspect it.
     </div>
   {:else}
-    <div
-      class="flex items-center border-b border-base-300 px-2"
-      role="tablist"
-      aria-label="Entity details"
-    >
-      {#each tabs as tab (tab)}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === tab}
-          class="px-3 py-2 text-sm border-b-2 -mb-px transition-colors {
-            activeTab === tab
-              ? 'border-primary text-primary font-medium'
-              : 'border-transparent text-base-content/60 hover:text-base-content'
-          }"
-          onclick={() => (activeTab = tab)}
-        >
-          {tab}{#if tab === "Ports"} ({portCount}){/if}
-        </button>
-      {/each}
-    </div>
+    <!--
+        Scrollable, and the labels are `text-xs`. Both are about the same
+        thing: the pane takes two fifths of the row, and "Description / Style /
+        Ports (n) / Requirements / Metadata" does not fit in that at `text-sm`
+        — Metadata was clipped off the right edge, which is worse than a
+        scrollbar because the tab is then unreachable rather than merely
+        scrolled. Measured at 1280 wide the row now fits outright (383px of
+        383); below `md`, where the pane is the full width of a phone, it
+        scrolls instead of hiding a tab.
+      -->
+      <div
+        class="flex items-center border-b border-base-300 px-2 overflow-x-auto"
+        role="tablist"
+        aria-label="Entity details"
+      >
+        {#each tabs as tab (tab)}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            class="px-2 py-2 text-xs border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 {
+              activeTab === tab
+                ? 'border-primary text-primary font-medium'
+                : 'border-transparent text-base-content/60 hover:text-base-content'
+            }"
+            onclick={() => (activeTab = tab)}
+          >
+            {tab}{#if tab === "Ports"} ({portCount}){/if}
+          </button>
+        {/each}
+      </div>
 
     <div class="flex-1 min-h-0 overflow-auto p-4 text-sm flex flex-col">
       {#if activeTab === "Description"}
@@ -244,29 +260,32 @@ function flattenTags(def: InventoryDefinition): string[] {
         {/if}
       {:else if activeTab === "Style" && onstylechange !== undefined}
         <!--
-          The same `ComponentStyleFields` Modeling's inspector uses, editing
-          the same `system.hcl` attributes. They were listed read-only here
-          before, which meant the Inventory could tell you a component's color
-          but not change it -- the only way to edit was to find the node on the
-          Modeling canvas. Metadata no longer repeats them: a value shown twice
-          in the same pane, once editable and once not, reads as a bug in one
-          of them.
-        -->
-        <div data-testid="inventory-style-fields">
-          <ComponentStyleFields
-            style={{
-              full_name: definition.full_name,
-              icon: definition.icon,
-              // The definition carries the raw attribute; the controls want
-              // the explicit default the select shows for "unset", which is
-              // what the read model normalizes an absent value to.
-              color: definition.color || DEFAULT_COLOR,
-              border: definition.border || "solid",
-              font: definition.font || DEFAULT_FONT,
-            }}
-            onchange={(patch) => void onstylechange(patch)}
-          />
-        </div>
+            The same `ComponentStyleFields` Modeling's inspector uses, editing
+            the same `system.hcl` attributes. They were listed read-only here
+            before, which meant the Inventory could tell you a component's color
+            but not change it -- the only way to edit was to find the node on the
+            Modeling canvas. Metadata no longer repeats them: a value shown twice
+            in the same pane, once editable and once not, reads as a bug in one
+            of them.
+
+            The attributes come off the raw payload, so they arrive as the file
+            spelled them -- absent, or an empty string from hand-written HCL.
+            The controls need the explicit default the read model normalizes to,
+            or the select would hold a value that is not one of its options and
+            select nothing.
+          -->
+          <div data-testid="inventory-style-fields">
+            <ComponentStyleFields
+              style={{
+                full_name: definition.full_name,
+                icon: definition.icon,
+                color: definition.color || DEFAULT_COLOR,
+                border: toBorderStyle(definition.border),
+                font: definition.font || DEFAULT_FONT,
+              }}
+              onchange={(patch) => void onstylechange(patch)}
+            />
+          </div>
       {:else if activeTab === "Ports"}
         {#if definition.ports.length === 0}
           <p class="text-base-content/50 italic">

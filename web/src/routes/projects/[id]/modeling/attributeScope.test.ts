@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  type AttributeName,
   ATTRIBUTE_SCOPES,
   componentAttributes,
   scopeFile,
@@ -38,13 +39,13 @@ describe("attribute scope", () => {
   // which reads as a bug to anyone who learned where to find it.
   it("puts the visual attributes on the component side", () => {
     for (const key of ["icon", "color", "border", "font", "full_name"]) {
-      expect(ATTRIBUTE_SCOPES[key]).toBe("component");
+      expect(ATTRIBUTE_SCOPES[key as AttributeName]).toBe("component");
     }
   });
 
   it("puts the geometry attributes on the view side", () => {
     for (const key of ["text_align", "x", "y", "width", "height"]) {
-      expect(ATTRIBUTE_SCOPES[key]).toBe("view");
+      expect(ATTRIBUTE_SCOPES[key as AttributeName]).toBe("view");
     }
   });
 });
