@@ -571,7 +571,7 @@ fn resolve_path(
 /// address-shaped project id (which is also what keeps `..` out of a path
 /// segment), plain file names, and parent chains that dangle, cross projects,
 /// loop, or resolve to the same path twice.
-fn plan(data_dir: &Path, payload: &Value) -> Result<Vec<(String, ProjectPlan)>, SaveVfsError> {
+fn plan(payload: &Value) -> Result<Vec<(String, ProjectPlan)>, SaveVfsError> {
     let obj = payload
         .as_object()
         .ok_or_else(|| SaveVfsError::Malformed("payload must be a JSON object".to_owned()))?;
@@ -602,7 +602,6 @@ fn plan(data_dir: &Path, payload: &Value) -> Result<Vec<(String, ProjectPlan)>, 
             )));
         }
     }
-    let _ = data_dir;
 
     let mut by_project: HashMap<&str, HashMap<&str, &Value>> = HashMap::new();
     for node in &nodes {
@@ -789,7 +788,7 @@ fn apply_plan(root: &Path, plan: &ProjectPlan) -> Result<(), SaveVfsError> {
 /// writable tree (the caller maps it to 400) or [`SaveVfsError::Io`] when the
 /// filesystem refuses (maps to 500).
 pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
-    let plans = plan(data_dir, payload)?;
+    let plans = plan(payload)?;
     let ids: HashSet<&str> = plans.iter().map(|(id, _)| id.as_str()).collect();
 
     fs::create_dir_all(data_dir)?;
