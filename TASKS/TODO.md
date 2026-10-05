@@ -38,7 +38,7 @@ The current Rhizz web interace is missing features related to management of syst
 
 Every node operation in `web/src/vfs/operations.ts` resolves its target against
 the *whole* `nodes` array rather than the project it was called for:
-`findNode` (`:88-94`) takes the first match anywhere, and
+`findNode` (`:104-110`) takes the first match anywhere, and
 `updateFileContent`/`renameNode`/`moveNode` then rewrite **every** node whose
 id matches. `deleteNode` collects descendants through `tree.ts`'s
 `descendantsOf`, which builds its child map from all nodes, and
@@ -55,7 +55,7 @@ contract suite. What is left is the *consumers*: the store itself is still
 unsafe by construction, and only the uniqueness of the ids stands between it
 and a cross-project write.
 
-The filesystem-alike fix is the one `web/src/vfs/store.ts:6-10` already
+The filesystem-alike fix is the one `web/src/vfs/store.ts:1-4` already
 describes ("real filesystems don't expose inode numbers to userland"): make the
 scope part of the call rather than an inference, the way `openat(dirfd, path)`
 roots every syscall at a directory handle. There is no `open(42)`.
@@ -85,7 +85,8 @@ Deliberately *not* part of this task: collapsing the id layer entirely, i.e.
 making `ProjectStore` path-based per project and deleting the resolution
 duplicated across `tree.ts` and `pathTree.ts`. Once (1)-(3) land, per-project
 id uniqueness is sufficient, so that refactor buys tidiness rather than safety
-and costs the 14-method interface plus the whole contract suite. Worth doing
+and costs the 11-method interface plus the whole contract suite (45 cases
+per backend, 135 in total). Worth doing
 eventually as a simplification; not as this fix.
 
 ---
