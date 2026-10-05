@@ -137,6 +137,31 @@ test("Inventory offers the pages and the definitions, and opens one", async ({ p
   await expect(page.getByTestId(PALETTE)).toHaveCount(0);
 });
 
+test("Inventory offers Go to system rows, and one opens the system", async ({ page }) => {
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette inventory systems",
+  );
+  await gotoProject(page, id, "inventory");
+
+  await page.keyboard.press("Control+p");
+  const palette = page.getByTestId(PALETTE);
+  // The drone example declares two systems alongside its definitions.
+  const row = palette.getByRole("option", {
+    name: /^go to system quadcopter\b/i,
+  });
+  await expect(row).toBeVisible();
+  await row.click();
+
+  // Choosing one lands on that system in Inventory — addressed by its
+  // label, with the Systems tab holding the open row.
+  await expect(page).toHaveURL(`/projects/${id}/inventory/quadcopter`);
+  await expect(
+    page.getByRole("tab", { name: "Systems" }),
+  ).toHaveAttribute("aria-selected", "true");
+});
+
 test("searching on Inventory never surfaces a file", async ({ page }) => {
   // The software-house example is the one that has docs/: every one of its 12
   // top-level components ships a `docs/<label>.md`, so it is where a doc row

@@ -98,6 +98,9 @@ system "demo-system" {
     to   = "controller/mcu/spi"
   }
 }
+
+system "aux-system" {
+}
 `;
 
 // Default view diagrams for two of the three definitions — "draft-module"
@@ -134,6 +137,25 @@ async function ensureInventoryProject(): Promise<Project> {
   for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
     await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
   }
+  // The demo-system view, bound to the system itself — the same convention
+  // a system selection previews (`views/<system>.hcl`). aux-system
+  // deliberately has none, so it shows the system empty state.
+  await writeDiagramLayoutFile(
+    fs,
+    `${VIEW_LAYOUT_DIR}/demo-system.hcl`,
+    {
+      checked: {
+        "demo-system/battery": { x: 60, y: 60, width: 160, height: 100 },
+        "demo-system/controller": {
+          x: 260,
+          y: 60,
+          width: 200,
+          height: 140,
+        },
+      },
+    },
+    "demo-system",
+  );
   // Seeded documentation for battery (controller/mcu/draft-module have none).
   await fs.mkdir("docs", { recursive: true });
   await fs.writeFile("docs/battery.md", "# Battery\n\nMain power source.\n");
@@ -172,6 +194,68 @@ export const Desktop: Story = {
   loaders: [ensureInventoryProject],
 };
 
+export const SystemsTab: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("tab", { name: "Systems" }),
+    );
+    // Both fixture systems are listed, each without the L1 level badge —
+    // systems are not leveled, so the card hides it.
+    const cards = await canvas.findAllByTestId("inventory-card");
+    await expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      await expect(card.textContent).not.toContain("L1");
+    }
+    await expect(canvas.getByText("demo-system")).toBeTruthy();
+    await expect(canvas.getByText("aux-system")).toBeTruthy();
+    // The add button follows the tab: systems here, components there.
+    await expect(
+      canvas.getByRole("button", { name: "+ New System" }),
+    ).toBeTruthy();
+  },
+};
+
+// A system with a same-named view previews it, like a definition does.
+// `demo-system.hcl` is seeded bound to demo-system itself.
+export const SystemDiagramPreview: Story = {
+  args: { requestedLabel: "demo-system" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // The deep link lands on the system: the Systems tab holds the open
+    // row, and the preview is a diagram rather than the empty state.
+    const tab = canvas.getByRole("tab", { name: "Systems" });
+    await expect(tab.getAttribute("aria-selected")).toBe("true");
+    await canvas.findByTestId("inventory-diagram");
+    await expect(
+      canvas.queryByTestId("inventory-empty-diagram"),
+    ).not.toBeInTheDocument();
+  },
+};
+
+// A system without a same-named view gets the empty state with the
+// system-worded button. `aux-system` deliberately has no view file.
+export const SystemMissingDiagram: Story = {
+  args: { requestedLabel: "aux-system" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByTestId("inventory-empty-diagram"),
+    ).toBeTruthy();
+    await expect(
+      canvas.getByText(/views\/aux-system\.hcl/),
+    ).toBeTruthy();
+    await expect(
+      canvas.getByTestId("inventory-create-view"),
+    ).toBeTruthy();
+    await expect(
+      canvas.getByRole("button", { name: "Create a view for this system" }),
+    ).toBeTruthy();
+  },
+};
 export const MissingDefaultDiagram: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
