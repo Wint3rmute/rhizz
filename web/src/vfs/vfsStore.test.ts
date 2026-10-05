@@ -14,8 +14,8 @@ import {
 } from "./vfsStore";
 import { openProjectFs } from "./fs";
 import { readProjectSources } from "./compile";
-import type { VfsData } from "./operations";
-import { emptyVfsData } from "./operations";
+import type { FsDirectory, FsFile } from "./types";
+import { emptyVfsData, type VfsData } from "./operations";
 
 interface FakeFetchOptions {
   /** In-memory blob the fake server serves; undefined = empty VFS. */
@@ -213,6 +213,89 @@ describe("ServerProjectStore HTTP behavior", () => {
     });
     const projects = await store.listProjects();
     expect(projects.map((p) => p.id)).toEqual(["ok"]);
+  });
+});
+
+describe("node operations stay in their project even if ids collide", () => {
+  // Defense in depth. `sanitizeVfsData` drops duplicate node ids on load, so a
+  // store cannot normally hold one -- but `memoryBackend` takes a blob as-is,
+  // which is how this reaches the ops. If the scoping ever regressed, a write
+  // in one project would silently rewrite another's same-id node: exactly the
+  // cross-project wipe of Task 119a, one layer down.
+  const colliding = (): VfsData => {
+    const file = (projectId: string): FsFile => ({
+      id: "shared",
+      projectId,
+      parentId: null,
+      name: "main.hcl",
+      kind: "file" as const,
+      content: projectId,
+      revision: 0,
+      updatedAt: "t0",
+    });
+    return {
+      version: 1 as const,
+      projects: [
+        { id: "alpha", name: "alpha", createdAt: "t0", updatedAt: "t0" },
+        { id: "beta", name: "beta", createdAt: "t0", updatedAt: "t0" },
+      ],
+      // Two nodes at one id, one per project: the shape the sanitizer refuses.
+      nodes: [file("alpha"), file("beta")],
+    };
+  };
+
+  const nodesOf = async (store: VfsProjectStore, projectId: string) =>
+    (await store.listNodes(projectId)).map((n) => ({
+      id: n.id,
+      parentId: n.parentId,
+      name: n.name,
+      ...(n.kind === "file" ? { content: n.content } : {}),
+    }));
+
+  it("scopes an update to the project it was called for", async () => {
+    const store = new VfsProjectStore(memoryBackend(colliding()));
+    await store.updateFileContent("beta", "shared", "beta's edit");
+    expect(await nodesOf(store, "alpha")).toEqual([
+      { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
+    ]);
+  });
+
+  it("scopes a rename to the project it was called for", async () => {
+    const store = new VfsProjectStore(memoryBackend(colliding()));
+    await store.renameNode("beta", "shared", "renamed.hcl");
+    expect(await nodesOf(store, "alpha")).toEqual([
+      { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
+    ]);
+  });
+
+  it("scopes a delete to the project it was called for", async () => {
+    const store = new VfsProjectStore(memoryBackend(colliding()));
+    await store.deleteNode("beta", "shared");
+    expect(await nodesOf(store, "alpha")).toEqual([
+      { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
+    ]);
+    expect(await store.listNodes("beta")).toEqual([]);
+  });
+
+  it("scopes a re-parent to the project it was called for", async () => {
+    const blob = colliding();
+    const dir = (projectId: string): FsDirectory => ({
+      id: `${projectId}-views`,
+      projectId,
+      parentId: null,
+      name: "views",
+      kind: "directory" as const,
+    });
+    blob.nodes = [...blob.nodes, dir("alpha"), dir("beta")];
+    const store = new VfsProjectStore(memoryBackend(blob));
+
+    // Move beta's file under beta's directory. Ids collide across projects, so
+    // an unscoped rewrite would drag alpha's file along to alpha's directory.
+    await store.moveNode("beta", "shared", "beta-views");
+
+    const alpha = await nodesOf(store, "alpha");
+    expect(alpha.find((n) => n.id === "shared")?.parentId).toBe(null);
+    expect(alpha.some((n) => n.parentId === "beta-views")).toBe(false);
   });
 });
 
