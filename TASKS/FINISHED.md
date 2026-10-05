@@ -4,6 +4,116 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 122 — The inspector says which file each attribute is written to
+
+The Modeling inspector listed a node's attributes in one run of
+form-controls, so a color and a text alignment looked like the same kind
+of edit. They are not: the color is written to `system.hcl` and travels
+with the component, the alignment to the open `views/<view>.hcl` and to
+nothing else. The tell was only visible after the fact — reopen the same
+view elsewhere and your color change is there and your alignment change
+is not. The Inventory had the same attributes as read-only text, so it
+could tell you a component's color but not change it.
+
+Both halves of the task land, and the second is what made the first
+worth having: the attributes are now split in the inspector *and* editable
+from the Inventory, through one shared component.
+
+- **`attributeScope.ts` is the map both halves are described against.**
+  Every attribute the inspector can edit, and the file it lands in, with
+  `componentAttributes()` / `viewAttributes()` derived from it. The two
+  panels and the two write paths therefore cannot drift: a panel cannot
+  claim a file the dispatcher does not use. The geometry keys (`x`, `y`,
+  `width`, `height`) are in the map even though the inspector does not
+  render them — the canvas drags and resizes, and they are the reason the
+  distinction exists at all. So `text_align` ends up as the *only*
+  view-side field the inspector edits. That is honest rather than thin:
+  one attribute, correctly scoped, beats a mixed list.
+- **The headings name the entity and, on hover, the file.** "Component"
+  and "This view", with the tooltip text coming from `scopeFile()` rather
+  than being written twice. A daisyUI `tooltip`, which has precedent in
+  `CreateComponentModal`; the dominant `title=` in this codebase would
+  have been an attribute assertion instead of a popup.
+- **`ComponentStyleFields` is one component on two pages, not two
+  copies.** The Inventory had those four values as read-only `<dt>/<dd>`
+  rows; they are now a Style tab that edits them, through the same
+  controls Modeling uses. A style added in one place now appears in both,
+  and the two pages cannot disagree about what a border option does.
+  Tags, `leaf` and ports deliberately stay out: they are attributes too,
+  but not presentation, and putting them next to a color picker would
+  say otherwise.
+- **Metadata no longer repeats the four values.** Shown twice in one
+  pane, once editable and once not, reads as a bug in one of them — and
+  the read-only copy was the one that could not be wrong.
+- **A system's label is not a component path, so the tab is hidden.**
+  `update_component` would refuse it, silently, and a control that
+  discards an edit is worse than no control. The gate is the *absence of
+  the callback* rather than a boolean, which is how the next task extends
+  this to systems and discovers it needs a real op for it.
+- **The border and font pickers stopped hardcoding their `<option>`
+  lists.** Border and font were markup while color was a constant in
+  `visuals.ts`, so adding a style meant editing markup the SVG mapping
+  already knew about. All three are now lists next to the mappings they
+  feed, with a test asserting the pickers offer exactly what can be
+  rendered. `FONT_OPTIONS` leads with `DEFAULT_FONT` because that is not a
+  `FontStyle` at all — it is the explicit spelling of "no presentation",
+  and an unstyled component has to land on it. `toBorderStyle` moved from
+  `modelView.ts` into `visuals.ts` for the same reason: the Inventory's
+  controls needed the narrowing the read model already had privately, and
+  a select whose `value` is not one of its own options selects nothing.
+- **Adding a fifth tab clipped the fifth tab, and only VRT caught it.**
+  The pane takes two fifths of the row, and "Description / Style / Ports
+  (n) / Requirements / Metadata" did not fit — Metadata went off the
+  right edge, still in the DOM and still findable by a role query, which
+  is exactly why no story noticed. The row is now scrollable (a tab that
+  does not fit is scrolled to, not hidden) and the labels are `text-xs`,
+  which makes them fit outright at 1280 — measured, 383px of 383.
+  `EveryTabFitsInThePane` pins the reachability rather than the fit: the
+  story browser is ~414px, where five tabs cannot fit at any size, so the
+  assertion is that the row scrolls.
+- **The source row moved, and a story that documented why had to be
+  rewritten.** It used to sit under the full name, which only made sense
+  while `full_name` was a sibling field there; inside the style block that
+  position puts a provenance link below the border and font pickers. It
+  now sits directly under the name — both answer "which component is
+  this" — and the `Sourced` story's rationale says so.
+- **Red/green**: the `AttributeScopes` story went red first (no panel
+  existed) and *stays* red if alignment is moved back into the shared
+  list — the negative assertion, not just the positive one. Both
+  Inventory stories went red on a missing Style tab. `ComponentStyleFields`
+  has five, the interesting ones being that the selects emit the explicit
+  default rather than an absent value (`toStrictEqual`, not `toEqual`:
+  the claim *is* undefined-vs-missing, and JSON drops undefined-valued
+  keys on the way to Rust, where a missing key means "leave this alone"),
+  and that the full name commits on blur rather than per keystroke.
+- **The e2e that was wrong on the first pass.** Three cases read the VFS
+  back rather than watching the controls. The third asserted the model
+  received the Inventory's style edit — which a write to *both* files
+  also satisfies. Routing the edit at the view file as well as the model
+  left it green; it now asserts the view file stays free of the value,
+  which is what makes it a claim about destination rather than arrival.
+  Two mutations were needed to find that and the first was not even a
+  mutation: pointing the patch at `main/<label>` looks like an instance
+  path but is a valid one (a fresh project has a `main` system), so the
+  dispatcher redirected it to the definition and did the right thing.
+  Model reads match `/color\s+= "warning"/` rather than an exact line —
+  the serializer aligns `=` per block, so byte equality would assert the
+  formatter instead of the edit (the same trap as Task 119a).
+- **VRT**: 45 re-baselined (the inspector's panels, the Inventory's tab)
+  and 11 new. Every Inventory baseline moved, because the tab row is in
+  all of them.
+- **Still open, deliberately**: `text_align` is the only view-side field
+  the inspector edits, and there is no dirty check on the layout-save
+  effect (Task 119a), so opening a view still rewrites its file. Neither
+  is a safety fix. Systems still carry no style attributes — that is the
+  next task, and it needs a backend op this one deliberately did not
+  fake.
+- **Validation**: `just test` (363 cargo + 952 Vitest + 92 e2e), `just
+  lint` (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings),
+  `just build`, `just vrt` and `just format` all pass.
+
+---
+
 ## Task 121 — Systems are first-class in the stats bar and the Inventory
 
 Systems stopped being a thing you can only reach through Modeling. The
