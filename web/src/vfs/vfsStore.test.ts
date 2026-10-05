@@ -14,7 +14,6 @@ import {
 } from "./vfsStore";
 import { openProjectFs } from "./fs";
 import { readProjectSources } from "./compile";
-import type { FsDirectory, FsFile } from "./types";
 import { emptyVfsData, type VfsData } from "./operations";
 
 interface FakeFetchOptions {
@@ -223,7 +222,7 @@ describe("node operations stay in their project even if ids collide", () => {
   // in one project would silently rewrite another's same-id node: exactly the
   // cross-project wipe of Task 119a, one layer down.
   const colliding = (): VfsData => {
-    const file = (projectId: string): FsFile => ({
+    const file = (projectId: string) => ({
       id: "shared",
       projectId,
       parentId: null,
@@ -252,34 +251,27 @@ describe("node operations stay in their project even if ids collide", () => {
       ...(n.kind === "file" ? { content: n.content } : {}),
     }));
 
-  it("scopes an update to the project it was called for", async () => {
-    const store = new VfsProjectStore(memoryBackend(colliding()));
-    await store.updateFileContent("beta", "shared", "beta's edit");
-    expect(await nodesOf(store, "alpha")).toEqual([
+  it("scopes the id-only operations to the project they were called for", async () => {
+    // [the call, how many nodes the project it was called for is left with]
+    const cases: [(s: VfsProjectStore) => Promise<void>, number][] = [
+      [(s) => s.updateFileContent("beta", "shared", "beta's edit"), 1],
+      [(s) => s.renameNode("beta", "shared", "renamed.hcl"), 1],
+      [(s) => s.deleteNode("beta", "shared"), 0],
+    ];
+    const untouched = [
       { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
-    ]);
-  });
-
-  it("scopes a rename to the project it was called for", async () => {
-    const store = new VfsProjectStore(memoryBackend(colliding()));
-    await store.renameNode("beta", "shared", "renamed.hcl");
-    expect(await nodesOf(store, "alpha")).toEqual([
-      { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
-    ]);
-  });
-
-  it("scopes a delete to the project it was called for", async () => {
-    const store = new VfsProjectStore(memoryBackend(colliding()));
-    await store.deleteNode("beta", "shared");
-    expect(await nodesOf(store, "alpha")).toEqual([
-      { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
-    ]);
-    expect(await store.listNodes("beta")).toEqual([]);
+    ];
+    for (const [call, kept] of cases) {
+      const store = new VfsProjectStore(memoryBackend(colliding()));
+      await call(store);
+      expect(await nodesOf(store, "alpha")).toEqual(untouched);
+      expect(await store.listNodes("beta")).toHaveLength(kept);
+    }
   });
 
   it("scopes a re-parent to the project it was called for", async () => {
     const blob = colliding();
-    const dir = (projectId: string): FsDirectory => ({
+    const dir = (projectId: string) => ({
       id: `${projectId}-views`,
       projectId,
       parentId: null,
