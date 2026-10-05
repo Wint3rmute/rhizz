@@ -273,7 +273,7 @@ describe("ambiguous ids in a stored blob", () => {
       expect(await store.listNodes("drone")).toEqual([]);
       // The consequence that matters: writing the survivor no longer reaches
       // across into the project that shared its id.
-      await store.updateFileContent("shared", "edited");
+      await store.updateFileContent("apollo-11", "shared", "edited");
       const survivors = await store.listNodes("apollo-11");
       expect(survivors).toHaveLength(1);
       expect(survivors[0]).toMatchObject({ content: "edited", revision: 1 });

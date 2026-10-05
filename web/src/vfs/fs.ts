@@ -107,7 +107,7 @@ export function openProjectFs(
           `illegal operation on a directory, open '${path}'`,
         );
       }
-      await store.updateFileContent(existing.id, content);
+      await store.updateFileContent(projectId, existing.id, content);
     },
 
     async mkdir(path, options = {}) {
@@ -260,7 +260,7 @@ export function openProjectFs(
         await store.moveNode(projectId, node.id, newParent.id);
       }
       if (basename !== node.name) {
-        await store.renameNode(node.id, basename);
+        await store.renameNode(projectId, node.id, basename);
       }
     },
 
