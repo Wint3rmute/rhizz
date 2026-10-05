@@ -13,15 +13,8 @@
 // id remapping needed for offline-created data).
 //
 // **A node id must be unique across the whole VFS, not merely within its
-// project.** `nodes` is one flat array, and the store resolves a node by id
-// against all of it: `findNode` (./operations) takes the first match, and
-// `updateFileContent` rewrites *every* node whose id matches. Ids that only
-// have to be unique per project therefore let a write in one project land in
-// another — rhizz-server learned this the hard way, having first derived ids
-// from project-relative paths (`views/main.hcl`), which collide across every
-// project that has a `views/main.hcl`. Its ids are now project-qualified
-// (`drone/views/main.hcl`) for exactly this reason; any future backend owes
-// the same.
+// project** — see ./operations (which enforces it when parsing) and
+// rhizz-server's `storage` module (which produces ids that way).
 import { z } from "zod";
 
 const BaseNodeSchema = z.object({
