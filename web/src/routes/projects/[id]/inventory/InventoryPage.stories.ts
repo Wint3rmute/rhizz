@@ -502,7 +502,7 @@ export const EveryTabFitsInThePane: Story = {
     // ...and at this width it genuinely does overflow, which is the case the
     // clipping regression was about. If a future tab list did fit, this would
     // fail and the question would be worth asking again.
-    expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+    await expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
   },
 };
 
