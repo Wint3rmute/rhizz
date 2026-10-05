@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  type AttributeName,
   ATTRIBUTE_SCOPES,
+  type AttributeName,
   componentAttributes,
   scopeFile,
   viewAttributes,

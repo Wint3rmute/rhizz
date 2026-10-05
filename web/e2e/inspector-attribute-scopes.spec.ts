@@ -48,7 +48,10 @@ async function storedFiles(page: import("@playwright/test").Page) {
 
 // A fresh project with one component already placed on `main`, so the
 // inspector is reachable without driving the creation modal.
-async function openInspector(page: import("@playwright/test").Page, name: string) {
+async function openInspector(
+  page: import("@playwright/test").Page,
+  name: string,
+) {
   const id = await createNewProject(page, name);
   await page.goto(`/projects/${id}/modeling`);
   await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
@@ -60,7 +63,8 @@ async function openInspector(page: import("@playwright/test").Page, name: string
   await modal.getByRole("button", { name: "Create Definition" }).click();
   await expect(modal).toBeHidden();
 
-  const node = page.getByTestId("diagram-canvas").getByText("e2e-scopes").first();
+  const node = page.getByTestId("diagram-canvas").getByText("e2e-scopes")
+    .first();
   const box = await node.boundingBox();
   if (!box) throw new Error("created node has no bounding box");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);

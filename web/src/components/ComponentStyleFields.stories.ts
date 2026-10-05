@@ -83,7 +83,12 @@ export const ResetsSendExplicitDefaults: Story = {
  */
 export const FullNameCommitsOnBlur: Story = {
   args: {
-    style: { full_name: "BME280", color: "default", border: "solid", font: "unstyled" },
+    style: {
+      full_name: "BME280",
+      color: "default",
+      border: "solid",
+      font: "unstyled",
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -107,7 +112,12 @@ export const FullNameCommitsOnBlur: Story = {
  * interpret, and the icon field is meant to be absent when unset. */
 export const ClearedIconIsAbsent: Story = {
   args: {
-    style: { icon: "microchip", color: "default", border: "solid", font: "unstyled" },
+    style: {
+      icon: "microchip",
+      color: "default",
+      border: "solid",
+      font: "unstyled",
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

@@ -43,7 +43,11 @@ export type ColorOption = (typeof COLOR_OPTIONS)[number];
 // A closed enum with no separate "clear" option: `"solid"` is itself the
 // default, and `borderStyleToDasharray` maps it to no dash array — the same
 // rendering an unset border gets, so a reset needs no separate option.
-export const BORDER_OPTIONS = ["solid", "dashed", "dotted"] as const satisfies readonly BorderStyle[];
+export const BORDER_OPTIONS = [
+  "solid",
+  "dashed",
+  "dotted",
+] as const satisfies readonly BorderStyle[];
 
 // The font choices offered by the inspector. Unlike the other two this one
 // leads with the default, because `DEFAULT_FONT` is not a `FontStyle` at all
