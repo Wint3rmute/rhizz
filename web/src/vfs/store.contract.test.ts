@@ -307,7 +307,7 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await store.moveNode(file.id, dir.id);
+        await store.moveNode(project.id, file.id, dir.id);
         const nodes = await store.listNodes(project.id);
         expect(nodes.find((n) => n.id === file.id)?.parentId).toBe(dir.id);
       });
@@ -322,7 +322,7 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await store.moveNode(file.id, null);
+        await store.moveNode(project.id, file.id, null);
         const nodes = await store.listNodes(project.id);
         expect(nodes.find((n) => n.id === file.id)?.parentId).toBeNull();
       });
@@ -331,7 +331,8 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        await expect(store.moveNode(dir.id, dir.id)).rejects.toThrow();
+        await expect(store.moveNode(project.id, dir.id, dir.id)).rejects
+          .toThrow();
       });
 
       it("rejects moving a node under one of its own descendants (cycle)", async () => {
@@ -343,7 +344,8 @@ export function runProjectStoreContractTests(
           outer.id,
           "inner",
         );
-        await expect(store.moveNode(outer.id, inner.id)).rejects.toThrow();
+        await expect(store.moveNode(project.id, outer.id, inner.id)).rejects
+          .toThrow();
       });
 
       it("rejects moving a node to an unknown parent", async () => {
@@ -355,7 +357,8 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await expect(store.moveNode(file.id, "nope")).rejects.toThrow();
+        await expect(store.moveNode(project.id, file.id, "nope")).rejects
+          .toThrow();
       });
 
       it("rejects moving a node into a directory that already has a child with the same name", async () => {
@@ -364,7 +367,8 @@ export function runProjectStoreContractTests(
         const dir = await store.createDirectory(project.id, null, "dir");
         await store.createFile(project.id, dir.id, "a.hcl", "");
         const rootFile = await store.createFile(project.id, null, "a.hcl", "");
-        await expect(store.moveNode(rootFile.id, dir.id)).rejects.toThrow();
+        await expect(store.moveNode(project.id, rootFile.id, dir.id)).rejects
+          .toThrow();
       });
     });
 
@@ -374,7 +378,7 @@ export function runProjectStoreContractTests(
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
         await store.createFile(project.id, dir.id, "a.hcl", "");
-        await store.deleteNode(dir.id);
+        await store.deleteNode(project.id, dir.id);
         expect(await store.listNodes(project.id)).toEqual([]);
       });
 
@@ -388,14 +392,14 @@ export function runProjectStoreContractTests(
           "keep.hcl",
           "",
         );
-        await store.deleteNode(dir.id);
+        await store.deleteNode(project.id, dir.id);
         const nodes = await store.listNodes(project.id);
         expect(nodes.map((n) => n.id)).toEqual([other.id]);
       });
 
       it("rejects deleting an unknown node", async () => {
         const store = makeStore();
-        await expect(store.deleteNode("nope")).rejects.toThrow();
+        await expect(store.deleteNode("p", "nope")).rejects.toThrow();
       });
     });
 
@@ -520,7 +524,7 @@ export function runProjectStoreContractTests(
         const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
         const betaFile = await onlyFile(store, beta.id);
 
-        await store.deleteNode(betaFile.id);
+        await store.deleteNode(beta.id, betaFile.id);
 
         expect((await store.listNodes(beta.id)).map((n) => n.kind)).toEqual([
           "directory",
@@ -564,11 +568,11 @@ export function runProjectStoreContractTests(
         // and colliding ids this is the operation that could re-parent (or
         // adopt) a node in the wrong project.
         await expect(
-          store.moveNode(betaFile.id, alphaDir.id),
+          store.moveNode(beta.id, betaFile.id, alphaDir.id),
         ).rejects.toThrow();
 
         // …and within its own project it still works.
-        await store.moveNode(betaFile.id, betaDir.id);
+        await store.moveNode(beta.id, betaFile.id, betaDir.id);
         expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
         expect((await store.listNodes(beta.id)).map((n) => n.name)).toEqual([
           "views",

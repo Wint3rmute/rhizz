@@ -343,16 +343,20 @@ export class VfsProjectStore implements ProjectStore {
     }));
   }
 
-  moveNode(nodeId: string, newParentId: string | null): Promise<void> {
+  moveNode(
+    projectId: string,
+    nodeId: string,
+    newParentId: string | null,
+  ): Promise<void> {
     return this.mutate((data) => ({
-      data: ops.moveNode(data, nodeId, newParentId, this.now()),
+      data: ops.moveNode(data, projectId, nodeId, newParentId, this.now()),
       value: undefined,
     }));
   }
 
-  deleteNode(nodeId: string): Promise<void> {
+  deleteNode(projectId: string, nodeId: string): Promise<void> {
     return this.mutate((data) => ({
-      data: ops.deleteNode(data, nodeId, this.now()),
+      data: ops.deleteNode(data, projectId, nodeId, this.now()),
       value: undefined,
     }));
   }
