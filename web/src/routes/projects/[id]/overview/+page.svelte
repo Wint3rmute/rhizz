@@ -30,6 +30,7 @@ let output = $derived.by(() => compile_system(sources, warningLevel));
 let model = $derived(output.model());
 
 let components = $derived(model ? model.components() : []);
+let systems = $derived(model ? model.systems() : []);
 let score = $derived(model ? model.score() : null);
 let project = $derived(model ? model.project() : null);
 
@@ -65,7 +66,6 @@ function toCat(
 
 let totalPorts = $derived(catTotal(score?.ports ?? null));
 let totalConnections = $derived(catTotal(score?.connections ?? null));
-let totalMessages = $derived(catTotal(score?.messages ?? null));
 let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 let completeTotal = $derived(
   score
@@ -150,6 +150,7 @@ function levelBadge(level: number): string {
 
         <!-- ── Stats row ── -->
         <ModelStatsRow
+          systemCount={systems.length}
           componentCount={components.length}
           {leafCount}
           {compositeCount}
@@ -158,7 +159,6 @@ function levelBadge(level: number): string {
           connectionCount={totalConnections}
           connectionsPct={catPct(score?.connections ?? null)}
           {overallPct}
-          messageCount={totalMessages}
         />
 
         <!-- ── Completion breakdown ── -->

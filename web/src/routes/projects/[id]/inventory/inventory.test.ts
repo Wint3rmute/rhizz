@@ -6,10 +6,13 @@ import {
   definitionDepth,
   definitionLabelForNode,
   filterDefinitions,
+  filterSystems,
   type InventoryDefinition,
+  type InventorySystem,
   InventoryTab,
   type PortInfo,
   preferredViewSystem,
+  systemAsDefinition,
 } from "./inventory";
 
 function def(
@@ -105,11 +108,16 @@ describe("filterDefinitions", () => {
   });
   const all = [cm, sm];
 
-  it("returns all definitions on the All tab", () => {
-    expect(filterDefinitions(all, { tab: InventoryTab.All, query: "" }))
-      .toEqual(
-        all,
-      );
+  it("returns all definitions on the Components tab", () => {
+    expect(
+      filterDefinitions(all, { tab: InventoryTab.Components, query: "" }),
+    ).toEqual(all);
+  });
+
+  it("returns no definitions on the Systems tab (systems have their own list)", () => {
+    expect(
+      filterDefinitions(all, { tab: InventoryTab.Systems, query: "" }),
+    ).toEqual([]);
   });
 
   it("returns all definitions on the Components tab (definitions only)", () => {
@@ -120,17 +128,22 @@ describe("filterDefinitions", () => {
 
   it("filters by query across label and full name", () => {
     expect(
-      filterDefinitions(all, { tab: InventoryTab.All, query: "command" }),
+      filterDefinitions(all, {
+        tab: InventoryTab.Components,
+        query: "command",
+      }),
     ).toEqual([cm]);
-    expect(filterDefinitions(all, { tab: InventoryTab.All, query: "SM" }))
-      .toEqual(
-        [sm],
-      );
+    expect(
+      filterDefinitions(all, { tab: InventoryTab.Components, query: "SM" }),
+    ).toEqual([sm]);
   });
 
   it("matches query against tags too", () => {
     expect(
-      filterDefinitions(all, { tab: InventoryTab.All, query: "propulsion" }),
+      filterDefinitions(
+        all,
+        { tab: InventoryTab.Components, query: "propulsion" },
+      ),
     ).toEqual([sm]);
   });
 
@@ -139,8 +152,47 @@ describe("filterDefinitions", () => {
       filterDefinitions(all, { tab: InventoryTab.Interfaces, query: "" }),
     ).toEqual([]);
     expect(
-      filterDefinitions(all, { tab: InventoryTab.All, query: "zzz" }),
+      filterDefinitions(all, { tab: InventoryTab.Components, query: "zzz" }),
     ).toEqual([]);
+  });
+});
+
+describe("filterSystems", () => {
+  const sys = (overrides: Partial<InventorySystem> = {}): InventorySystem => ({
+    label: "demo-system",
+    full_name: "Demo system",
+    tags: [],
+    ...overrides,
+  });
+  const a = sys({ label: "a-system", full_name: "A system" });
+  const b = sys({
+    label: "b-system",
+    full_name: "B system",
+    tags: ["propulsion"],
+  });
+
+  it("returns all systems on an empty query", () => {
+    expect(filterSystems([a, b], "")).toEqual([a, b]);
+  });
+
+  it("filters by label, full name and tags", () => {
+    expect(filterSystems([a, b], "A-SYSTEM")).toEqual([a]);
+    expect(filterSystems([a, b], "propulsion")).toEqual([b]);
+    expect(filterSystems([a, b], "zzz")).toEqual([]);
+  });
+});
+
+describe("systemAsDefinition", () => {
+  it("reuses the system label for the views/<label>.hcl convention", () => {
+    const d = systemAsDefinition({
+      label: "demo-system",
+      full_name: "Demo",
+      tags: ["t"],
+    });
+    expect(d.label).toBe("demo-system");
+    expect(d.full_name).toBe("Demo");
+    expect(d.tags).toEqual(["t"]);
+    expect(defaultViewPath(d.label)).toBe("views/demo-system.hcl");
   });
 });
 

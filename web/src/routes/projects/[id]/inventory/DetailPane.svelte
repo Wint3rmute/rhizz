@@ -4,7 +4,7 @@
 // A column of the workspace, not a strip under the canvas — the parent row
 // gives it two fifths from `md:` up and drops it below the diagram on narrow
 // screens, which is why the border side is switched rather than drawn on all
-// four. The Full name tab edits `docs/<label>.md` in the app's `MonacoEditor`,
+// four. The Description tab edits `docs/<label>.md` in the app's `MonacoEditor`,
 // the same component the Code page uses for these very files.
 import Markdown from "../../../../components/Markdown.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
@@ -27,7 +27,7 @@ let {
   ondocsave: (content: string) => Promise<void>;
 } = $props();
 
-const TABS = ["Full name", "Ports", "Requirements", "Metadata"] as const;
+const TABS = ["Description", "Ports", "Requirements", "Metadata"] as const;
 type Tab = (typeof TABS)[number];
 
 // Monaco options for the documentation editor, as one object so the identity is
@@ -49,7 +49,7 @@ const DOC_EDITOR_OPTIONS = {
   occurrencesHighlight: "off",
 } as const satisfies monaco.editor.IStandaloneEditorConstructionOptions;
 
-let activeTab = $state<Tab>("Full name");
+let activeTab = $state<Tab>("Description");
 
 // The live Monaco instance while the doc editor is mounted. Only used to put
 // the cursor in the document when the editor opens — see the effect below.
@@ -67,7 +67,7 @@ $effect(() => {
   const label = definition?.label ?? null;
   if (label !== lastLabel) {
     lastLabel = label;
-    activeTab = "Full name";
+    activeTab = "Description";
     docMode = "view";
   }
 });
@@ -143,7 +143,7 @@ function flattenTags(def: InventoryDefinition): string[] {
     </div>
 
     <div class="flex-1 min-h-0 overflow-auto p-4 text-sm flex flex-col">
-      {#if activeTab === "Full name"}
+      {#if activeTab === "Description"}
         {#if docMode === "edit"}
           <div class="flex-1 min-h-0 flex flex-col gap-2">
             <!-- Monaco, not a textarea: the Code page already edits Markdown in

@@ -73,6 +73,11 @@ export interface DefinitionOption {
  * rhizz-core's serializer is the source of truth for the rest.
  */
 export interface RawModelPayload {
+  systems?: {
+    label: string;
+    full_name?: string;
+    tags?: string[];
+  }[];
   components?: {
     label: string;
     /** The top-level definition an `instance` was sourced from, if any. */

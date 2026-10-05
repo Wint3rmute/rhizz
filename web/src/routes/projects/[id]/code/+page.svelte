@@ -254,6 +254,7 @@ $effect(() => {
 let stale = $derived(model === undefined && lastModel !== undefined);
 
 let components = $derived(lastModel ? lastModel.components() : []);
+let systems = $derived(lastModel ? lastModel.systems() : []);
 let score = $derived(lastModel ? lastModel.score() : null);
 let leafCount = $derived(components.filter((c) => c.leaf).length);
 let compositeCount = $derived(components.filter((c) => !c.leaf).length);
@@ -269,7 +270,6 @@ function catPct(cat: { percentage: number } | null) {
 
 let totalPorts = $derived(catTotal(score?.ports ?? null));
 let totalConnections = $derived(catTotal(score?.connections ?? null));
-let totalMessages = $derived(catTotal(score?.messages ?? null));
 let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
 
@@ -303,6 +303,7 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
           "
         >
           <ModelStatsRow
+            systemCount={systems.length}
             componentCount={components.length}
             {leafCount}
             {compositeCount}
@@ -311,7 +312,6 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
             connectionCount={totalConnections}
             connectionsPct={catPct(score?.connections ?? null)}
             {overallPct}
-            messageCount={totalMessages}
           />
         </div>
       {/if}

@@ -9,9 +9,14 @@
 import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
+import { applyModelMutation } from "../../../../history/applyMutation";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
-import { readProjectSources, type Source } from "../../../../vfs/compile";
+import {
+  primaryHclPath,
+  readProjectSources,
+  type Source,
+} from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
 import type { RawModelPayload } from "../../../../modelView";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
@@ -27,10 +32,13 @@ import {
   defaultViewPath,
   definitionLabelForNode,
   filterDefinitions,
+  filterSystems,
   INVENTORY_TABS,
   type InventoryDefinition,
+  type InventorySystem,
   InventoryTab,
   preferredViewSystem,
+  systemAsDefinition,
 } from "./inventory";
 
 let {
@@ -138,12 +146,32 @@ let definitions = $derived.by<InventoryDefinition[]>(() => {
 });
 
 // ── Sidebar state ───────────────────────────────────────────────────────────
-let activeTab = $state<InventoryTab>(InventoryTab.All);
+let activeTab = $state<InventoryTab>(InventoryTab.Components);
 let query = $state("");
 let selectedLabel = $state<string | null>(null);
 
+// Systems come straight from the compiled payload (`raw.systems`), in model
+// order — the same source `model.systems()` reads, but with full_name/tags
+// for search and cards.
+let systems = $derived.by<InventorySystem[]>(() =>
+  (raw?.systems ?? []).map((s) => ({
+    label: s.label,
+    full_name: s.full_name ?? "",
+    tags: s.tags ?? [],
+  }))
+);
+
 let filtered = $derived(
   filterDefinitions(definitions, { tab: activeTab, query }),
+);
+
+let filteredSystems = $derived(filterSystems(systems, query));
+
+// The rows the sidebar actually shows for the active tab.
+let visibleLabels = $derived(
+  activeTab === InventoryTab.Systems
+    ? filteredSystems.map((s) => s.label)
+    : filtered.map((d) => d.label),
 );
 
 // ── The inspected entity lives in the URL path ─────────────────────────────
@@ -191,25 +219,54 @@ $effect(() => {
   if (requested === lastHandledLabel) return;
   lastHandledLabel = requested;
   const isOpenable = requested !== "" &&
-    definitions.some((d) => d.label === requested);
+    (definitions.some((d) => d.label === requested) ||
+      systems.some((s) => s.label === requested));
   if (isOpenable) {
     selectedLabel = requested;
+    // Keep the tab on the kind that holds the deep-linked entity, so the
+    // sidebar shows the open row instead of falling back elsewhere.
+    if (systems.some((s) => s.label === requested)) {
+      activeTab = InventoryTab.Systems;
+    } else if (definitions.some((d) => d.label === requested)) {
+      activeTab = InventoryTab.Components;
+    }
     return;
   }
   // Nothing openable in the path — a bare page, or an entity that has since
   // been renamed or deleted. The open entity has to be one the current filter
   // still shows, so fall back to the first match and take the URL with it:
   // the address bar must keep naming what the detail pane is showing.
-  if (filtered.length === 0) {
+  if (visibleLabels.length === 0) {
     if (selectedLabel !== null) selectLabel(null, true);
     return;
   }
-  if (filtered.some((d) => d.label === selectedLabel)) return;
-  selectLabel(filtered[0]?.label ?? null, true);
+  if (
+    selectedLabel !== null && visibleLabels.includes(selectedLabel)
+  ) return;
+  selectLabel(visibleLabels[0] ?? null, true);
 });
 
-let selectedDefinition = $derived(
-  filtered.find((d) => d.label === selectedLabel) ?? null,
+let selectedDefinition = $derived.by<InventoryDefinition | null>(() => {
+  const fromComponents = filtered.find((d) => d.label === selectedLabel);
+  if (fromComponents) return fromComponents;
+  // Systems reuse the definition card/preview/pane via a synthetic
+  // definition — the diagram convention is the same (`views/<label>.hcl`).
+  const sys = filteredSystems.find((s) => s.label === selectedLabel);
+  if (sys) return systemAsDefinition(sys);
+  // The selection may be hidden by the current tab's filter (e.g. a
+  // deep link resolved before the tab switch, or a click that cleared it)
+  // — still show it rather than a blank pane.
+  const anyDef = definitions.find((d) => d.label === selectedLabel);
+  if (anyDef) return anyDef;
+  const anySys = systems.find((s) => s.label === selectedLabel);
+  return anySys ? systemAsDefinition(anySys) : null;
+});
+
+// Whether the open entity is a system (rather than a component definition).
+// Decides what `handleCreateView` binds the new view to: a system binds to
+// itself, a definition binds to the system that instantiates it.
+let selectedIsSystem = $derived(
+  selectedLabel !== null && systems.some((s) => s.label === selectedLabel),
 );
 
 // ── Clicking a node in the preview focuses the inventory on it ──────────────
@@ -230,9 +287,9 @@ function handleSelectNode(index: number): void {
   // still shows, and the URL effect below would enforce it by falling back to
   // the first row — undoing the click. Clear the filter instead, so the click
   // lands on the component that was pointed at.
-  if (!filtered.some((d) => d.label === label)) {
+  if (!visibleLabels.includes(label)) {
     query = "";
-    activeTab = InventoryTab.All;
+    activeTab = InventoryTab.Components;
   }
   selectLabel(label);
 }
@@ -292,6 +349,55 @@ async function handleSaveDoc(content: string): Promise<void> {
   selectedDocLabel = label;
 }
 
+// Creates a new system or component definition from the sidebar button
+// (below the search box). The kind follows the active tab — systems on the
+// Systems tab, definitions on the Components tab — and the name comes from a
+// native `prompt()`, like the folder/view/connection prompts on the Modeling
+// page. A blank, slash-containing or already-taken name is a silent no-op.
+// On success the list refreshes from disk and the new entity is selected.
+let creatingEntity = $state(false);
+
+async function handleAddEntity(): Promise<void> {
+  const id = projectId;
+  if (!id || creatingEntity) return;
+  const isSystem = activeTab === InventoryTab.Systems;
+  if (!isSystem && activeTab !== InventoryTab.Components) return;
+  const rawName = prompt(
+    isSystem ? "New system name?" : "New component name?",
+  );
+  const label = rawName?.trim() ?? "";
+  if (label === "" || label.includes("/")) return;
+  const taken = isSystem
+    ? systems.some((s) => s.label === label)
+    : definitions.some((d) => d.label === label);
+  if (taken) return;
+  creatingEntity = true;
+  try {
+    const fs = openProjectFs(projectStore, id);
+    const targetPath = primaryHclPath(
+      await fs.readdir(".", { recursive: true }),
+    );
+    const content = await fs.readFile(targetPath).catch(() => "");
+    const result = await applyModelMutation(
+      fs,
+      targetPath,
+      content,
+      isSystem ? { kind: "add_system", label } : {
+        kind: "add_component_definition",
+        label,
+        options: { leaf: true },
+      },
+    );
+    if (!result.applied) return;
+    sources = await readProjectSources(fs);
+    selectLabel(label);
+  } catch (error) {
+    console.error("Failed to create inventory entity:", error);
+  } finally {
+    creatingEntity = false;
+  }
+}
+
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
 // to the system that instantiates the definition) and opens Modeling on that
 // very view, addressed by its path.
@@ -304,8 +410,14 @@ async function handleCreateView(): Promise<void> {
   creatingView = true;
   try {
     const fs = openProjectFs(projectStore, id);
-    const systems = model?.systems().map((s) => s.label) ?? [];
-    const system = preferredViewSystem(comps, systems, def.label);
+    // A system binds its view to itself; a definition binds to the system
+    // that instantiates it. Either way the diagram lives at
+    // `views/<label>.hcl` — the same name the preview already probed.
+    const system = selectedIsSystem ? def.label : preferredViewSystem(
+      comps,
+      model?.systems().map((s) => s.label) ?? [],
+      def.label,
+    );
     const path = defaultViewPath(def.label);
     await writeDiagramLayoutFile(fs, path, emptyDiagramLayout(system), system);
     // The view's own path relative to `views/` — the modeling route is a rest
@@ -317,7 +429,7 @@ async function handleCreateView(): Promise<void> {
       }),
     );
   } catch (error) {
-    console.error("Failed to create component view:", error);
+    console.error("Failed to create inventory view:", error);
   } finally {
     creatingView = false;
   }
@@ -363,10 +475,10 @@ async function handleCreateView(): Promise<void> {
               : 'btn-ghost'}"
             onclick={() => (activeTab = tab)}
           >
-            {tab === InventoryTab.All
-              ? "All"
-              : tab === InventoryTab.Components
+            {tab === InventoryTab.Components
               ? "Components"
+              : tab === InventoryTab.Systems
+              ? "Systems"
               : "Interfaces"}
           </button>
         {/each}
@@ -381,11 +493,46 @@ async function handleCreateView(): Promise<void> {
         bind:value={query}
       />
 
-      <!-- Definition list -->
+      {#if activeTab !== InventoryTab.Interfaces}
+        <button
+          type="button"
+          class="btn btn-outline btn-sm w-full"
+          disabled={creatingEntity}
+          onclick={() => void handleAddEntity()}
+          data-testid="inventory-add-entity"
+        >
+          {creatingEntity
+            ? "Creating…"
+            : activeTab === InventoryTab.Systems
+            ? "+ New System"
+            : "+ New Component"}
+        </button>
+      {/if}
+
+      <!-- Entity list -->
       <div
         class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 min-h-0"
       >
-        {#if filtered.length === 0}
+        {#if activeTab === InventoryTab.Systems}
+          {#if filteredSystems.length === 0}
+            <div class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center">
+              {#if systems.length === 0}
+                No systems in this model yet.
+              {:else}
+                Nothing matches "{query}".
+              {/if}
+            </div>
+          {:else}
+            {#each filteredSystems.map(systemAsDefinition) as definition (definition.label)}
+              <DefinitionCard
+                {definition}
+                selected={definition.label === selectedLabel}
+                showLevel={false}
+                onselect={(label) => selectLabel(label)}
+              />
+            {/each}
+          {/if}
+        {:else if filtered.length === 0}
           <div class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center">
             {#if definitions.length === 0}
               No component definitions in this model yet.
@@ -446,6 +593,8 @@ async function handleCreateView(): Promise<void> {
                     >
                       {creatingView
                         ? "Creating…"
+                        : selectedIsSystem
+                        ? "Create a view for this system"
                         : "Create a view for this component"}
                     </button>
                   </div>

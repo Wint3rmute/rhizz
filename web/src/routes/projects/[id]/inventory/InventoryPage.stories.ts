@@ -242,7 +242,7 @@ export const DocumentationTab: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // battery is selected by default; its seeded docs/battery.md renders
-    // as Markdown in the Full name tab (read-only here — e2e covers save).
+    // as Markdown in the Description tab (read-only here — e2e covers save).
     await canvas.findByTestId("inventory-doc-viewer");
     await expect(
       canvas.getByRole("heading", { name: "Battery" }),
