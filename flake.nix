@@ -60,8 +60,6 @@
               pkgs.deno
               pkgs.just
               pkgs.lld
-              pkgs.flyctl
-              pkgs.gh
               # LLVM tools matching rustc's LLVM (21.1.8), required by
               # cargo-llvm-cov (NixOS equivalent of rustup's
               # llvm-tools-preview component).
@@ -77,6 +75,9 @@
               # stale tree keeps resolving the old driver (e.g. 1228 lookups
               # against 1243 browsers) with no warning.
               pkgs.playwright-driver.browsers
+              # Commented out to slim down the image
+              # pkgs.flyctl
+              # pkgs.gh
             ];
 
             # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
