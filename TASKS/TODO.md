@@ -21,7 +21,8 @@ How to work on this file:
 The current Rhizz web interace is missing features related to management of systems. I want to manage systems in the following ways:
 
 1. I want to have a systems counter in the stats bar on the overview/ page, on the left from Components.
-2. I want to be able to filter out just systems in the inventory/ page, using the selection box which currently has "All", "Components", and "Interfaces":
+2. I want to be able to filter out just systems in the inventory/ page, using
+   the selection box which currently has "All", "Components", and "Interfaces":
   - Remove the "all" option
   - Add "Systems" option
 3. When a specific system is selected, in the inventory/ page, it should display
@@ -29,6 +30,9 @@ The current Rhizz web interace is missing features related to management of syst
    doesn't exist, it should display a message indicating that no diagram is
    available and a button to create a new view, same as it currently works with
    components.
+4. A "Add System/Component" button shall be added to inventory/ allowing the
+   user to add a new system or component, depending on the selected filtering
+   mode.
 
 ## Task <N> - Put the project scope in the call: scope every ProjectStore node operation
 
