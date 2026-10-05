@@ -12,10 +12,14 @@ import {
 } from "./inventoryItems";
 
 // A model as the compiler hands it over: `definitions` holds arena indices
-// into `components`, and everything else is addressed through those indices.
-// Shaped after the drone example, which has 13 definitions plus instances
-// and systems that must NOT be offered (see inventoryEntities below).
+// into `components`, `systems` are top-level, and everything else is
+// addressed through those indices. Shaped after the drone example, which has
+// 13 definitions plus instances and a system that must be offered too —
+// while instances must NOT be (see inventoryEntities above).
 const MODEL: RawModelPayload = {
+  systems: [
+    { label: "demo-system", full_name: "Demo system", tags: ["demo"] },
+  ],
   components: [
     {
       label: "battery",
@@ -33,14 +37,23 @@ const MODEL: RawModelPayload = {
 };
 
 describe("inventoryEntities", () => {
-  it("lists the top-level definitions, not instances or systems", () => {
-    // Only `definitions` is addressable: Inventory matches the route's label
-    // against that list and falls back to the first row for anything else,
-    // so a system or an instance row would silently open the wrong entity.
+  it("lists the top-level definitions followed by the systems, not instances", () => {
+    // Definitions and systems are both addressable: Inventory matches the
+    // route's label against both lists and switches to the holding tab.
+    // Instances are not — an instance is drawn under its usage-site label
+    // but addressed by its `source`, so a row for one would silently open
+    // the wrong entity.
     expect(inventoryEntities(MODEL).map((e) => e.label)).toEqual([
       "battery",
       "flight-controller",
       "barometer",
+      "demo-system",
+    ]);
+    expect(inventoryEntities(MODEL).map((e) => e.kind)).toEqual([
+      "component",
+      "component",
+      "component",
+      "system",
     ]);
   });
 
@@ -66,7 +79,19 @@ describe("inventoryEntities", () => {
       "battery-three-quarters",
       "",
       "gauge",
+      // Systems carry no icon: the schema has no such field, so the row
+      // keeps the slot empty like the Inventory card does.
+      "",
     ]);
+  });
+
+  it("carries the system full name and tags, so a search can match either", () => {
+    expect(inventoryEntities(MODEL)[3]).toMatchObject({
+      label: "demo-system",
+      kind: "system",
+      fullName: "Demo system",
+      tags: ["demo"],
+    });
   });
 
   it("yields nothing for a model that failed to compile", () => {
@@ -92,6 +117,7 @@ describe("inventoryEntities", () => {
       label: "x",
       fullName: "",
       tags,
+      kind: "component",
       icon: "",
     });
     expect(tags).toEqual(["power"]);
@@ -102,16 +128,19 @@ describe("inventoryItems", () => {
   const entities = inventoryEntities(MODEL);
 
   it("offers one row per entity, labelled the way the command rows read", () => {
-    // "Go to component <name>", so an entity row answers the same question
-    // as "Go to Overview" does: the section heading says which list you are
-    // in, and the row says what choosing it does.
+    // "Go to component <name>" / "Go to system <name>", so an entity row
+    // answers the same question as "Go to Overview" does: the section
+    // heading says which list you are in, and the row says what choosing
+    // it does.
     const items = inventoryItems(entities, () => {});
     expect(items.map((i) => i.label)).toEqual([
       "Go to component battery",
       "Go to component flight-controller",
       "Go to component barometer",
+      "Go to system demo-system",
     ]);
     expect(items[0]?.detail).toBe("Stores power");
+    expect(items[3]?.detail).toBe("Demo system");
   });
 
   it("keeps the bare label as the row's identity, since the label is drawn text", () => {
@@ -121,6 +150,7 @@ describe("inventoryItems", () => {
       "inventory:battery",
       "inventory:flight-controller",
       "inventory:barometer",
+      "inventory:demo-system",
     ]);
   });
 
@@ -135,7 +165,7 @@ describe("inventoryItems", () => {
     const items = inventoryItems(entities, () => {});
     expect(items[1]?.detail).toBe("Flies the thing");
     const bare = inventoryItems(
-      [{ label: "bare", fullName: "", tags: [], icon: "" }],
+      [{ label: "bare", fullName: "", tags: [], kind: "component", icon: "" }],
       () => {},
     );
     expect(bare[0]?.detail).toBeUndefined();
@@ -164,7 +194,13 @@ describe("inventoryItems", () => {
     // another icon set is a value the model legitimately holds. It must not
     // become an empty <svg> on the row.
     const [broken] = inventoryItems(
-      [{ label: "x", fullName: "", tags: [], icon: "not-an-icon" }],
+      [{
+        label: "x",
+        fullName: "",
+        tags: [],
+        kind: "component",
+        icon: "not-an-icon",
+      }],
       () => {},
     );
     expect(broken?.icon).toBeNull();
@@ -196,8 +232,9 @@ describe("inventoryItems", () => {
         `inventory:${query}`,
       );
     }
-    // And the prefix itself is a way in, the same as "Go to Overview" is.
+    // And each prefix is a way in, the same as "Go to Overview" is.
     expect(paletteRows(index, "go to component")).toHaveLength(3);
+    expect(paletteRows(index, "go to system")).toHaveLength(1);
   });
 
   it("calls the host back with the bare label, which is what the route addresses", () => {
@@ -208,6 +245,11 @@ describe("inventoryItems", () => {
     for (const item of inventoryItems(entities, (l) => seen.push(l))) {
       item.action?.();
     }
-    expect(seen).toEqual(["battery", "flight-controller", "barometer"]);
+    expect(seen).toEqual([
+      "battery",
+      "flight-controller",
+      "barometer",
+      "demo-system",
+    ]);
   });
 });
