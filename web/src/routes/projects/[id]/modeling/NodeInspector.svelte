@@ -3,16 +3,7 @@ import { resolve } from "$app/paths";
 import type { ComponentPatch } from "../../../../actionLog";
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../modelView";
-import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
-import {
-  BORDER_OPTIONS,
-  type BorderStyle,
-  COLOR_OPTIONS,
-  type ComponentColor,
-  type ComponentFont,
-  DEFAULT_FONT,
-  FONT_OPTIONS,
-} from "./visuals";
+import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
 import { scopeFile } from "./attributeScope";
 
 interface Props {
@@ -64,13 +55,11 @@ let sourceHref = $derived(
 );
 
 let editLabel = $state("");
-let editFullName = $state("");
 let editTagsStr = $state("");
 let editLeaf = $state(false);
 
 $effect(() => {
   editLabel = component.label;
-  editFullName = component.full_name || "";
   editTagsStr = (component.tags || []).join(", ");
   editLeaf = component.leaf;
 });
@@ -81,12 +70,6 @@ function handleLabelBlur() {
     onrename(trimmed);
   } else {
     editLabel = component.label;
-  }
-}
-
-function handleFullNameBlur() {
-  if (editFullName !== (component.full_name || "")) {
-    onupdate({ full_name: editFullName });
   }
 }
 
@@ -102,17 +85,6 @@ function handleLeafChange(e: Event) {
   const checked = (e.target as HTMLInputElement).checked;
   editLeaf = checked;
   onupdate({ leaf: checked });
-}
-
-function handleColorChange(e: Event) {
-  const value = (e.target as HTMLSelectElement).value;
-  onupdate({ color: value as ComponentColor });
-}
-
-function handleBorderChange(e: Event) {
-  const value = (e.target as HTMLSelectElement).value;
-  // "solid" is the explicit default: it passes through as the clear signal.
-  onupdate({ border: value as BorderStyle });
 }
 
 // ── Port Operations ───────────────────────────────────────────────────────────
@@ -192,22 +164,13 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
     </div>
     {/if}
 
-    <div class="form-control">
-      <label class="label py-1" for="comp-fullname-input">
-        <span
-          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Full name
-        </span>
-      </label>
-      <textarea
-        id="comp-fullname-input"
-        bind:value={editFullName}
-        onblur={handleFullNameBlur}
-        class="textarea textarea-sm textarea-bordered w-full resize-y h-16"
-        placeholder="Full official name, expanding abbreviations..."
-      ></textarea>
-    </div>
-
+    <!--
+      Source before the style block, not after it. It used to sit under the
+      full-name box; with full_name now inside the shared style block, keeping
+      that spot would put a link about *provenance* below the color and border
+      pickers. Name and source are both about which component this is, so they
+      stay adjacent, and everything about how it looks follows.
+    -->
     {#if sourceHref !== null}
       <div
         class="text-[11px] font-mono truncate"
@@ -223,78 +186,10 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       </div>
     {/if}
 
-    <IconAutocompleteInput
-      id="comp-icon-input"
-      value={component.icon || ""}
-      onchange={(newIcon) => onupdate({ icon: newIcon || undefined })}
+    <ComponentStyleFields
+      style={component}
+      onchange={onupdate}
     />
-
-    <div class="form-control">
-      <label class="label py-1" for="comp-color-input">
-        <span
-          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Color
-        </span>
-      </label>
-      <select
-        id="comp-color-input"
-        value={component.color}
-        onchange={handleColorChange}
-        class="select select-sm select-bordered w-full"
-      >
-        <option value="default">Default</option>
-        {#each COLOR_OPTIONS as option (option)}
-          <option value={option}>
-            {option.charAt(0).toUpperCase() + option.slice(1)}
-          </option>
-        {/each}
-      </select>
-    </div>
-
-    <div class="form-control">
-      <label class="label py-1" for="comp-border-input">
-        <span
-          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Border
-        </span>
-      </label>
-      <select
-        id="comp-border-input"
-        value={component.border}
-        onchange={handleBorderChange}
-        class="select select-sm select-bordered w-full"
-      >
-        {#each BORDER_OPTIONS as option (option)}
-          <option value={option}>
-            {option.charAt(0).toUpperCase() + option.slice(1)}
-          </option>
-        {/each}
-      </select>
-    </div>
-
-    <div class="form-control">
-      <label class="label py-1" for="comp-font-input">
-        <span
-          class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Font
-        </span>
-      </label>
-      <select
-        id="comp-font-input"
-        value={component.font}
-        onchange={(e) => {
-          const v = (e.target as HTMLSelectElement).value;
-          onupdate({ font: v as ComponentFont });
-        }}
-        class="select select-sm select-bordered w-full"
-      >
-        {#each FONT_OPTIONS as option (option)}
-          <option value={option}>
-            {option === DEFAULT_FONT ? "Unstyled" : option.charAt(0).toUpperCase() + option.slice(1)}
-          </option>
-        {/each}
-      </select>
-    </div>
 
     <div class="form-control">
       <label class="label py-1" for="comp-tags-input">

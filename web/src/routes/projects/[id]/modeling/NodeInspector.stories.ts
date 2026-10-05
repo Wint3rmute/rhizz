@@ -148,12 +148,15 @@ export const Sourced: Story = {
     // the definition's — the same vocabulary CreateComponentModal already uses
     // ("Definition Name" vs "Instance Name") for this exact field.
     await expect(canvas.getByLabelText(/instance name/i)).toBeInTheDocument();
-    // The source row sits under the full name box, not up by the component
-    // path: it is part of the identity block (name -> full name -> what this
-    // was instantiated from), read top to bottom like the fields above it.
+    // The source row sits directly under the name, above the full name: it
+    // answers "which component is this", which is what the name above it also
+    // answers, so the two read together. It used to sit below the full name
+    // instead, which only worked while full_name was a sibling field here —
+    // it now lives inside the shared style block, and a provenance link below
+    // the border and font pickers read as a style value.
     await expect(
-      canvas.getByLabelText(/full name/i).compareDocumentPosition(
-        canvas.getByTestId("component-source"),
+      canvas.getByTestId("component-source").compareDocumentPosition(
+        canvas.getByLabelText(/full name/i),
       ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     // Named by the definition, not by the instance's own label — the link has
