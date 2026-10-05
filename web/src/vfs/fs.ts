@@ -107,7 +107,7 @@ export function openProjectFs(
           `illegal operation on a directory, open '${path}'`,
         );
       }
-      await store.updateFileContent(existing.id, content);
+      await store.updateFileContent(projectId, existing.id, content);
     },
 
     async mkdir(path, options = {}) {
@@ -210,7 +210,7 @@ export function openProjectFs(
         }
       }
 
-      await store.deleteNode(node.id);
+      await store.deleteNode(projectId, node.id);
     },
 
     async rename(oldPath, newPath) {
@@ -251,16 +251,16 @@ export function openProjectFs(
       }
 
       if (newParent.id !== node.parentId) {
-        if (wouldCreateCycle(node.id, newParent.id, nodes)) {
+        if (wouldCreateCycle(projectId, node.id, newParent.id, nodes)) {
           throw new VfsError(
             "EINVAL",
             `cannot move '${oldPath}' into its own subdirectory, rename '${oldPath}' -> '${newPath}'`,
           );
         }
-        await store.moveNode(node.id, newParent.id);
+        await store.moveNode(projectId, node.id, newParent.id);
       }
       if (basename !== node.name) {
-        await store.renameNode(node.id, basename);
+        await store.renameNode(projectId, node.id, basename);
       }
     },
 

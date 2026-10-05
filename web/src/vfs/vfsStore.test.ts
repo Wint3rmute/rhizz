@@ -14,8 +14,7 @@ import {
 } from "./vfsStore";
 import { openProjectFs } from "./fs";
 import { readProjectSources } from "./compile";
-import type { VfsData } from "./operations";
-import { emptyVfsData } from "./operations";
+import { emptyVfsData, type VfsData } from "./operations";
 
 interface FakeFetchOptions {
   /** In-memory blob the fake server serves; undefined = empty VFS. */
@@ -216,6 +215,82 @@ describe("ServerProjectStore HTTP behavior", () => {
   });
 });
 
+describe("node operations stay in their project even if ids collide", () => {
+  // Defense in depth. `sanitizeVfsData` drops duplicate node ids on load, so a
+  // store cannot normally hold one -- but `memoryBackend` takes a blob as-is,
+  // which is how this reaches the ops. If the scoping ever regressed, a write
+  // in one project would silently rewrite another's same-id node: exactly the
+  // cross-project wipe of Task 119a, one layer down.
+  const colliding = (): VfsData => {
+    const file = (projectId: string) => ({
+      id: "shared",
+      projectId,
+      parentId: null,
+      name: "main.hcl",
+      kind: "file" as const,
+      content: projectId,
+      revision: 0,
+      updatedAt: "t0",
+    });
+    return {
+      version: 1 as const,
+      projects: [
+        { id: "alpha", name: "alpha", createdAt: "t0", updatedAt: "t0" },
+        { id: "beta", name: "beta", createdAt: "t0", updatedAt: "t0" },
+      ],
+      // Two nodes at one id, one per project: the shape the sanitizer refuses.
+      nodes: [file("alpha"), file("beta")],
+    };
+  };
+
+  const nodesOf = async (store: VfsProjectStore, projectId: string) =>
+    (await store.listNodes(projectId)).map((n) => ({
+      id: n.id,
+      parentId: n.parentId,
+      name: n.name,
+      ...(n.kind === "file" ? { content: n.content } : {}),
+    }));
+
+  it("scopes the id-only operations to the project they were called for", async () => {
+    // [the call, how many nodes the project it was called for is left with]
+    const cases: [(s: VfsProjectStore) => Promise<void>, number][] = [
+      [(s) => s.updateFileContent("beta", "shared", "beta's edit"), 1],
+      [(s) => s.renameNode("beta", "shared", "renamed.hcl"), 1],
+      [(s) => s.deleteNode("beta", "shared"), 0],
+    ];
+    const untouched = [
+      { id: "shared", parentId: null, name: "main.hcl", content: "alpha" },
+    ];
+    for (const [call, kept] of cases) {
+      const store = new VfsProjectStore(memoryBackend(colliding()));
+      await call(store);
+      expect(await nodesOf(store, "alpha")).toEqual(untouched);
+      expect(await store.listNodes("beta")).toHaveLength(kept);
+    }
+  });
+
+  it("scopes a re-parent to the project it was called for", async () => {
+    const blob = colliding();
+    const dir = (projectId: string) => ({
+      id: `${projectId}-views`,
+      projectId,
+      parentId: null,
+      name: "views",
+      kind: "directory" as const,
+    });
+    blob.nodes = [...blob.nodes, dir("alpha"), dir("beta")];
+    const store = new VfsProjectStore(memoryBackend(blob));
+
+    // Move beta's file under beta's directory. Ids collide across projects, so
+    // an unscoped rewrite would drag alpha's file along to alpha's directory.
+    await store.moveNode("beta", "shared", "beta-views");
+
+    const alpha = await nodesOf(store, "alpha");
+    expect(alpha.find((n) => n.id === "shared")?.parentId).toBe(null);
+    expect(alpha.some((n) => n.parentId === "beta-views")).toBe(false);
+  });
+});
+
 describe("ambiguous ids in a stored blob", () => {
   // A node id has to be unique across the whole VFS: every operation in
   // ./operations resolves a node against all of `nodes` at once, so two nodes
@@ -273,7 +348,7 @@ describe("ambiguous ids in a stored blob", () => {
       expect(await store.listNodes("drone")).toEqual([]);
       // The consequence that matters: writing the survivor no longer reaches
       // across into the project that shared its id.
-      await store.updateFileContent("shared", "edited");
+      await store.updateFileContent("apollo-11", "shared", "edited");
       const survivors = await store.listNodes("apollo-11");
       expect(survivors).toHaveLength(1);
       expect(survivors[0]).toMatchObject({ content: "edited", revision: 1 });

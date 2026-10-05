@@ -101,10 +101,10 @@ function findProject(data: VfsData, id: string): Project {
   return project;
 }
 
-function findNode(data: VfsData, id: string): FsNode {
-  const node = data.nodes.find((n) => n.id === id);
+function findNode(data: VfsData, projectId: string, id: string): FsNode {
+  const node = data.nodes.find((n) => n.projectId === projectId && n.id === id);
   if (node === undefined) {
-    throw new Error(`No node with id "${id}"`);
+    throw new Error(`No node with id "${id}" in project "${projectId}"`);
   }
   return node;
 }
@@ -129,12 +129,7 @@ function assertValidParent(
   parentId: string | null,
 ): void {
   if (parentId === null) return;
-  const parent = findNode(data, parentId);
-  if (parent.projectId !== projectId) {
-    throw new Error(
-      `Parent "${parentId}" belongs to a different project than "${projectId}"`,
-    );
-  }
+  const parent = findNode(data, projectId, parentId);
   if (!isDirectory(parent)) {
     throw new Error(`Parent "${parentId}" is a file, not a directory`);
   }
@@ -312,11 +307,12 @@ export function createDirectory(
 
 export function updateFileContent(
   data: VfsData,
+  projectId: string,
   fileId: string,
   content: string,
   now: string,
 ): VfsData {
-  const node = findNode(data, fileId);
+  const node = findNode(data, projectId, fileId);
   if (!isFile(node)) {
     throw new Error(`Node "${fileId}" is a directory, not a file`);
   }
@@ -327,79 +323,92 @@ export function updateFileContent(
     revision: node.revision + 1,
     updatedAt: now,
   };
-  const nodes = data.nodes.map((n) => n.id === fileId ? updated : n);
+  const nodes = data.nodes.map((n) =>
+    n.projectId === projectId && n.id === fileId ? updated : n
+  );
 
   return {
     ...data,
-    projects: touchProject(data.projects, node.projectId, now),
+    projects: touchProject(data.projects, projectId, now),
     nodes,
   };
 }
 
 export function renameNode(
   data: VfsData,
+  projectId: string,
   nodeId: string,
   name: string,
   now: string,
 ): VfsData {
-  const node = findNode(data, nodeId);
-  assertNoSiblingWithName(data, node.projectId, node.parentId, name, nodeId);
-  const nodes = data.nodes.map((n) => n.id === nodeId ? { ...n, name } : n);
+  const node = findNode(data, projectId, nodeId);
+  assertNoSiblingWithName(data, projectId, node.parentId, name, nodeId);
+  const nodes = data.nodes.map((n) =>
+    n.projectId === projectId && n.id === nodeId ? { ...n, name } : n
+  );
 
   return {
     ...data,
-    projects: touchProject(data.projects, node.projectId, now),
+    projects: touchProject(data.projects, projectId, now),
     nodes,
   };
 }
 
 export function moveNode(
   data: VfsData,
+  projectId: string,
   nodeId: string,
   newParentId: string | null,
   now: string,
 ): VfsData {
-  const node = findNode(data, nodeId);
-  assertValidParent(data, node.projectId, newParentId);
+  const node = findNode(data, projectId, nodeId);
+  assertValidParent(data, projectId, newParentId);
   assertNoSiblingWithName(
     data,
-    node.projectId,
+    projectId,
     newParentId,
     node.name,
     nodeId,
   );
 
-  if (wouldCreateCycle(nodeId, newParentId, data.nodes)) {
+  if (wouldCreateCycle(projectId, nodeId, newParentId, data.nodes)) {
     throw new Error(
       `Moving "${nodeId}" under "${String(newParentId)}" would create a cycle`,
     );
   }
 
   const nodes = data.nodes.map((n) =>
-    n.id === nodeId ? { ...n, parentId: newParentId } : n
+    n.projectId === projectId && n.id === nodeId
+      ? { ...n, parentId: newParentId }
+      : n
   );
 
   return {
     ...data,
-    projects: touchProject(data.projects, node.projectId, now),
+    projects: touchProject(data.projects, projectId, now),
     nodes,
   };
 }
 
 export function deleteNode(
   data: VfsData,
+  projectId: string,
   nodeId: string,
   now: string,
 ): VfsData {
-  const node = findNode(data, nodeId);
+  // Validates that the node exists; which project it belongs to is the
+  // caller's to say.
+  findNode(data, projectId, nodeId);
   const toDelete = new Set([
     nodeId,
-    ...descendantsOf(nodeId, data.nodes).map((n) => n.id),
+    ...descendantsOf(projectId, nodeId, data.nodes).map((n) => n.id),
   ]);
 
   return {
     ...data,
-    projects: touchProject(data.projects, node.projectId, now),
-    nodes: data.nodes.filter((n) => !toDelete.has(n.id)),
+    projects: touchProject(data.projects, projectId, now),
+    nodes: data.nodes.filter(
+      (n) => n.projectId !== projectId || !toDelete.has(n.id),
+    ),
   };
 }

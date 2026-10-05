@@ -269,14 +269,14 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await store.renameNode(file.id, "b.hcl");
+        await store.renameNode(project.id, file.id, "b.hcl");
         const [node] = await store.listNodes(project.id);
         expect(node?.name).toBe("b.hcl");
       });
 
       it("rejects renaming an unknown node", async () => {
         const store = makeStore();
-        await expect(store.renameNode("nope", "x")).rejects.toThrow();
+        await expect(store.renameNode("p", "nope", "x")).rejects.toThrow();
       });
 
       it("rejects renaming a node to a name a sibling already has", async () => {
@@ -284,14 +284,15 @@ export function runProjectStoreContractTests(
         const project = await store.createProject("p");
         await store.createFile(project.id, null, "a.hcl", "");
         const b = await store.createFile(project.id, null, "b.hcl", "");
-        await expect(store.renameNode(b.id, "a.hcl")).rejects.toThrow();
+        await expect(store.renameNode(project.id, b.id, "a.hcl")).rejects
+          .toThrow();
       });
 
       it("allows renaming a node to its own current name (no-op)", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
         const file = await store.createFile(project.id, null, "a.hcl", "");
-        await expect(store.renameNode(file.id, "a.hcl")).resolves
+        await expect(store.renameNode(project.id, file.id, "a.hcl")).resolves
           .toBeUndefined();
       });
     });
@@ -307,7 +308,7 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await store.moveNode(file.id, dir.id);
+        await store.moveNode(project.id, file.id, dir.id);
         const nodes = await store.listNodes(project.id);
         expect(nodes.find((n) => n.id === file.id)?.parentId).toBe(dir.id);
       });
@@ -322,7 +323,7 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await store.moveNode(file.id, null);
+        await store.moveNode(project.id, file.id, null);
         const nodes = await store.listNodes(project.id);
         expect(nodes.find((n) => n.id === file.id)?.parentId).toBeNull();
       });
@@ -331,7 +332,8 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        await expect(store.moveNode(dir.id, dir.id)).rejects.toThrow();
+        await expect(store.moveNode(project.id, dir.id, dir.id)).rejects
+          .toThrow();
       });
 
       it("rejects moving a node under one of its own descendants (cycle)", async () => {
@@ -343,7 +345,8 @@ export function runProjectStoreContractTests(
           outer.id,
           "inner",
         );
-        await expect(store.moveNode(outer.id, inner.id)).rejects.toThrow();
+        await expect(store.moveNode(project.id, outer.id, inner.id)).rejects
+          .toThrow();
       });
 
       it("rejects moving a node to an unknown parent", async () => {
@@ -355,7 +358,8 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await expect(store.moveNode(file.id, "nope")).rejects.toThrow();
+        await expect(store.moveNode(project.id, file.id, "nope")).rejects
+          .toThrow();
       });
 
       it("rejects moving a node into a directory that already has a child with the same name", async () => {
@@ -364,7 +368,8 @@ export function runProjectStoreContractTests(
         const dir = await store.createDirectory(project.id, null, "dir");
         await store.createFile(project.id, dir.id, "a.hcl", "");
         const rootFile = await store.createFile(project.id, null, "a.hcl", "");
-        await expect(store.moveNode(rootFile.id, dir.id)).rejects.toThrow();
+        await expect(store.moveNode(project.id, rootFile.id, dir.id)).rejects
+          .toThrow();
       });
     });
 
@@ -374,7 +379,7 @@ export function runProjectStoreContractTests(
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
         await store.createFile(project.id, dir.id, "a.hcl", "");
-        await store.deleteNode(dir.id);
+        await store.deleteNode(project.id, dir.id);
         expect(await store.listNodes(project.id)).toEqual([]);
       });
 
@@ -388,14 +393,14 @@ export function runProjectStoreContractTests(
           "keep.hcl",
           "",
         );
-        await store.deleteNode(dir.id);
+        await store.deleteNode(project.id, dir.id);
         const nodes = await store.listNodes(project.id);
         expect(nodes.map((n) => n.id)).toEqual([other.id]);
       });
 
       it("rejects deleting an unknown node", async () => {
         const store = makeStore();
-        await expect(store.deleteNode("nope")).rejects.toThrow();
+        await expect(store.deleteNode("p", "nope")).rejects.toThrow();
       });
     });
 
@@ -411,7 +416,7 @@ export function runProjectStoreContractTests(
         );
         expect(file.revision).toBe(0);
 
-        await store.updateFileContent(file.id, "v1");
+        await store.updateFileContent(project.id, file.id, "v1");
         const [afterFirst] = await store.listNodes(project.id);
         if (afterFirst?.kind !== "file") {
           throw new Error("expected a file");
@@ -420,7 +425,7 @@ export function runProjectStoreContractTests(
         expect(afterFirst.content).toBe("v1");
         expect(afterFirst.updatedAt).not.toBe(file.updatedAt);
 
-        await store.updateFileContent(file.id, "v2");
+        await store.updateFileContent(project.id, file.id, "v2");
         const [afterSecond] = await store.listNodes(project.id);
         if (afterSecond?.kind !== "file") {
           throw new Error("expected a file");
@@ -432,7 +437,8 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        await expect(store.updateFileContent(dir.id, "x")).rejects.toThrow();
+        await expect(store.updateFileContent(project.id, dir.id, "x")).rejects
+          .toThrow();
       });
 
       it("touches the owning project's updatedAt on a node mutation", async () => {
@@ -444,7 +450,7 @@ export function runProjectStoreContractTests(
           "a.hcl",
           "",
         );
-        await store.updateFileContent(file.id, "changed");
+        await store.updateFileContent(project.id, file.id, "changed");
         const [updatedProject] = await store.listProjects();
         expect(updatedProject?.updatedAt).not.toBe(project.updatedAt);
       });
@@ -503,7 +509,7 @@ export function runProjectStoreContractTests(
         const alphaBefore = await store.listNodes(alpha.id);
         const betaFile = await onlyFile(store, beta.id);
 
-        await store.updateFileContent(betaFile.id, "beta's edit");
+        await store.updateFileContent(beta.id, betaFile.id, "beta's edit");
 
         const betaAfter = await store.listNodes(beta.id);
         expect(betaAfter).toHaveLength(2);
@@ -520,7 +526,7 @@ export function runProjectStoreContractTests(
         const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
         const betaFile = await onlyFile(store, beta.id);
 
-        await store.deleteNode(betaFile.id);
+        await store.deleteNode(beta.id, betaFile.id);
 
         expect((await store.listNodes(beta.id)).map((n) => n.kind)).toEqual([
           "directory",
@@ -537,13 +543,33 @@ export function runProjectStoreContractTests(
         const alphaBefore = await store.listNodes(alpha.id);
         const betaFile = await onlyFile(store, beta.id);
 
-        await store.renameNode(betaFile.id, "renamed.hcl");
+        await store.renameNode(beta.id, betaFile.id, "renamed.hcl");
 
         expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
         expect((await store.listNodes(beta.id)).map((n) => n.name)).toEqual([
           "views",
           "renamed.hcl",
         ]);
+      });
+
+      it("refuses an id that belongs to another project", async () => {
+        // The point of the whole exercise: with the scope in the call, a
+        // foreign id is a miss rather than a cross-project write.
+        const { store, alpha, beta } = await twoProjectsWithTheSameLayout();
+        const alphaBefore = await store.listNodes(alpha.id);
+        const alphaFile = await onlyFile(store, alpha.id);
+
+        await expect(
+          store.updateFileContent(beta.id, alphaFile.id, "hijacked"),
+        ).rejects.toThrow();
+        await expect(store.renameNode(beta.id, alphaFile.id, "x.hcl")).rejects
+          .toThrow();
+        await expect(store.moveNode(beta.id, alphaFile.id, null)).rejects
+          .toThrow();
+        await expect(store.deleteNode(beta.id, alphaFile.id)).rejects.toThrow();
+
+        // …and nothing in the project that owns the id moved.
+        expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
       });
 
       it("moves only inside the project it was asked about", async () => {
@@ -564,11 +590,11 @@ export function runProjectStoreContractTests(
         // and colliding ids this is the operation that could re-parent (or
         // adopt) a node in the wrong project.
         await expect(
-          store.moveNode(betaFile.id, alphaDir.id),
+          store.moveNode(beta.id, betaFile.id, alphaDir.id),
         ).rejects.toThrow();
 
         // …and within its own project it still works.
-        await store.moveNode(betaFile.id, betaDir.id);
+        await store.moveNode(beta.id, betaFile.id, betaDir.id);
         expect(await store.listNodes(alpha.id)).toEqual(alphaBefore);
         expect((await store.listNodes(beta.id)).map((n) => n.name)).toEqual([
           "views",

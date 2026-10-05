@@ -17,9 +17,17 @@ import { type FsNode, isDirectory } from "./types";
 // Returns every descendant of `nodeId` (not including the node itself),
 // in breadth-first order. Used for recursive directory delete, and by
 // wouldCreateCycle below.
-export function descendantsOf(nodeId: string, nodes: FsNode[]): FsNode[] {
+//
+// Scoped to `projectId`: only that project's nodes can be a descendant, so a
+// node in another project that happens to share an id is not walked into.
+export function descendantsOf(
+  projectId: string,
+  nodeId: string,
+  nodes: FsNode[],
+): FsNode[] {
   const childrenOf = new Map<string, FsNode[]>();
   for (const node of nodes) {
+    if (node.projectId !== projectId) continue;
     if (node.parentId === null) continue;
     const siblings = childrenOf.get(node.parentId) ?? [];
     siblings.push(node);
@@ -43,6 +51,7 @@ export function descendantsOf(nodeId: string, nodes: FsNode[]): FsNode[] {
 // Intended to guard a future ProjectStore.moveNode before it applies a
 // move.
 export function wouldCreateCycle(
+  projectId: string,
   nodeId: string,
   newParentId: string | null,
   nodes: FsNode[],
@@ -50,7 +59,9 @@ export function wouldCreateCycle(
   if (newParentId === null) return false;
   if (newParentId === nodeId) return true;
 
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const byId = new Map(
+    nodes.filter((n) => n.projectId === projectId).map((n) => [n.id, n]),
+  );
   const seen = new Set<string>();
   let current = byId.get(newParentId);
   while (current !== undefined) {

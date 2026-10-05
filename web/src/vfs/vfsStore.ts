@@ -329,30 +329,38 @@ export class VfsProjectStore implements ProjectStore {
     });
   }
 
-  updateFileContent(fileId: string, content: string): Promise<void> {
+  updateFileContent(
+    projectId: string,
+    fileId: string,
+    content: string,
+  ): Promise<void> {
     return this.mutate((data) => ({
-      data: ops.updateFileContent(data, fileId, content, this.now()),
+      data: ops.updateFileContent(data, projectId, fileId, content, this.now()),
       value: undefined,
     }));
   }
 
-  renameNode(nodeId: string, name: string): Promise<void> {
+  renameNode(projectId: string, nodeId: string, name: string): Promise<void> {
     return this.mutate((data) => ({
-      data: ops.renameNode(data, nodeId, name, this.now()),
+      data: ops.renameNode(data, projectId, nodeId, name, this.now()),
       value: undefined,
     }));
   }
 
-  moveNode(nodeId: string, newParentId: string | null): Promise<void> {
+  moveNode(
+    projectId: string,
+    nodeId: string,
+    newParentId: string | null,
+  ): Promise<void> {
     return this.mutate((data) => ({
-      data: ops.moveNode(data, nodeId, newParentId, this.now()),
+      data: ops.moveNode(data, projectId, nodeId, newParentId, this.now()),
       value: undefined,
     }));
   }
 
-  deleteNode(nodeId: string): Promise<void> {
+  deleteNode(projectId: string, nodeId: string): Promise<void> {
     return this.mutate((data) => ({
-      data: ops.deleteNode(data, nodeId, this.now()),
+      data: ops.deleteNode(data, projectId, nodeId, this.now()),
       value: undefined,
     }));
   }

@@ -55,16 +55,24 @@ export interface ProjectStore {
     name: string,
   ): Promise<FsDirectory>;
   /** Bumps the file's revision and updatedAt. Rejects if `fileId` is a directory or doesn't exist. */
-  updateFileContent(fileId: string, content: string): Promise<void>;
+  updateFileContent(
+    projectId: string,
+    fileId: string,
+    content: string,
+  ): Promise<void>;
   /** Rejects if `nodeId` doesn't exist. */
-  renameNode(nodeId: string, name: string): Promise<void>;
+  renameNode(projectId: string, nodeId: string, name: string): Promise<void>;
   /**
    * Re-parents `nodeId` under `newParentId` (`null` = project root).
    * Rejects if the new parent doesn't exist, isn't a directory, belongs
    * to a different project, or the move would create a cycle (moving a
    * node under itself or one of its own descendants).
    */
-  moveNode(nodeId: string, newParentId: string | null): Promise<void>;
+  moveNode(
+    projectId: string,
+    nodeId: string,
+    newParentId: string | null,
+  ): Promise<void>;
   /** Recursively deletes `nodeId` and everything nested under it. Rejects if it doesn't exist. */
-  deleteNode(nodeId: string): Promise<void>;
+  deleteNode(projectId: string, nodeId: string): Promise<void>;
 }
