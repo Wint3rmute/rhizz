@@ -38,18 +38,25 @@ export interface InventoryDefinition {
   font?: string | undefined;
 }
 
+/** A top-level system flattened into plain display data for the Inventory. */
+export interface InventorySystem {
+  label: string;
+  full_name: string;
+  tags: string[];
+}
+
 /** Sidebar filter tabs. `Interfaces` is a placeholder — no interface entities
  * exist in the model yet, so it always yields an empty list. */
 export enum InventoryTab {
-  All = "all",
   Components = "components",
+  Systems = "systems",
   Interfaces = "interfaces",
 }
 
 /** Sidebar tabs in display order. */
 export const INVENTORY_TABS: readonly InventoryTab[] = [
-  InventoryTab.All,
   InventoryTab.Components,
+  InventoryTab.Systems,
   InventoryTab.Interfaces,
 ];
 
@@ -168,6 +175,43 @@ export function preferredViewSystem(
   return systems[0] ?? "main";
 }
 
+/** Case-insensitive substring match of `query` against a system's label,
+ * full_name, and tags. */
+export function matchesSystemQuery(
+  sys: InventorySystem,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (q === "") return true;
+  if (sys.label.toLowerCase().includes(q)) return true;
+  if (sys.full_name.toLowerCase().includes(q)) return true;
+  return sys.tags.some((tag) => tag.toLowerCase().includes(q));
+}
+
+/** Filters the system list for the sidebar: free-text search only. */
+export function filterSystems(
+  systems: InventorySystem[],
+  query: string,
+): InventorySystem[] {
+  return systems.filter((s) => matchesSystemQuery(s, query));
+}
+
+/** A system as an `InventoryDefinition` so it can reuse the card, diagram
+ * preview (`views/<label>.hcl`) and detail pane. Systems have no ports or
+ * children in the inventory sense — they are shown as a single specified
+ * leaf when they carry a full_name, else a draft. */
+export function systemAsDefinition(sys: InventorySystem): InventoryDefinition {
+  return {
+    label: sys.label,
+    full_name: sys.full_name,
+    tags: sys.tags,
+    level: 1,
+    leaf: true,
+    children: [],
+    ports: [],
+  };
+}
+
 /** Case-insensitive substring match of `query` against a definition's label,
  * full_name, and tags. */
 function matchesQuery(def: InventoryDefinition, query: string): boolean {
@@ -179,13 +223,14 @@ function matchesQuery(def: InventoryDefinition, query: string): boolean {
 }
 
 /** Filters the definition list for the sidebar: tab selection + free-text
- * search. Definitions (components) appear on `All` and `Components`;
- * `Interfaces` yields an empty list until interface entities exist. */
+ * search. Definitions (components) appear on `Components`;
+ * `Systems` and `Interfaces` yield an empty list (systems have their own
+ * list, interfaces don't exist yet). */
 export function filterDefinitions(
   definitions: InventoryDefinition[],
   options: { tab: InventoryTab; query: string },
 ): InventoryDefinition[] {
   const { tab, query } = options;
-  if (tab === InventoryTab.Interfaces) return [];
+  if (tab !== InventoryTab.Components) return [];
   return definitions.filter((d) => matchesQuery(d, query));
 }

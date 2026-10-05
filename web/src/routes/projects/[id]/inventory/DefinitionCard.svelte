@@ -11,10 +11,13 @@ import {
 let {
   definition,
   selected = false,
+  showLevel = true,
   onselect,
 }: {
   definition: InventoryDefinition;
   selected?: boolean;
+  /** Systems are not leveled — hide the `L…` badge for them. */
+  showLevel?: boolean;
   onselect?: (label: string) => void;
 } = $props();
 
@@ -79,7 +82,9 @@ let badgeText = $derived(
         <span class="badge {badgeClass} badge-sm badge-soft font-medium">
           {badgeText}
         </span>
-        <span class="badge badge-ghost badge-sm">L{depth}</span>
+        {#if showLevel}
+          <span class="badge badge-ghost badge-sm">L{depth}</span>
+        {/if}
       </div>
       {#if definition.full_name}
         <p class="mt-1 text-xs text-base-content/60 line-clamp-2">

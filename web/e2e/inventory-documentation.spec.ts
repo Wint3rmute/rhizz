@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// Inventory → documentation tab: the "Full name" tab shows the component's
+// Inventory → documentation tab: the "Description" tab shows the component's
 // `docs/<label>.md` (rendered Markdown) with a viewer/editor toggle, and
 // saving persists to the project's VFS.
 //
@@ -51,12 +51,12 @@ function docEditor(page) {
   };
 }
 
-test("inventory writes documentation from the Full name tab", async ({ page }) => {
+test("inventory writes documentation from the Description tab", async ({ page }) => {
   await openInventory(page);
   const pane = page.getByTestId("inventory-detail-pane");
   await expect(pane).toBeVisible();
 
-  // No docs file yet: the Full name tab offers to create it.
+  // No docs file yet: the Description tab offers to create it.
   const viewer = page.getByTestId("inventory-doc-viewer");
   await expect(viewer).toContainText("No documentation yet");
   await page.getByTestId("inventory-doc-edit-button").click();

@@ -5,6 +5,7 @@ const meta = {
   title: "Components/ModelStatsRow",
   component: ModelStatsRow,
   args: {
+    systemCount: 2,
     componentCount: 8,
     leafCount: 6,
     compositeCount: 2,
@@ -13,7 +14,6 @@ const meta = {
     connectionCount: 10,
     connectionsPct: 60,
     overallPct: 82,
-    messageCount: 5,
   },
 } satisfies Meta<typeof ModelStatsRow>;
 
