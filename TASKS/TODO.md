@@ -16,18 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - split view-local and component-specific annotations in modeling's inspector
-
-Currently, the instance inspector under modeling/ displays all attributes of the node in a single list:
-
-- Those which are view-specific, e.g. text alignment
-- Those which are component-specific, e.g. icon, color, etc.
-
-I want to split them for 2 purposes:
-
-- Make them visibly separate, with a on-hover popup saying which are view-specific and which are component-specific
-- Re-use the component-specific properties in the inventory/ page, adding a dedicated "style" section to the details view on the right
-
 ## Task <N> - Allow assigning icons to systems - same as with components
 
 The "style" section on the inventory/ page already allows editing component-specific properties. I want to re-use
