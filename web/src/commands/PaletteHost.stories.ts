@@ -204,6 +204,11 @@ export const InventorySectionOnInventory: Story = {
     await expect(
       await canvas.findByRole("option", { name: /^go to component sensor\b/i }),
     ).toBeInTheDocument();
+    // And its system: the fixture binds views to "demo", which Inventory
+    // opens on the Systems tab.
+    await expect(
+      await canvas.findByRole("option", { name: /^go to system demo\b/i }),
+    ).toBeInTheDocument();
     // Two sections, not three: the commands and the entities. The files are
     // gone entirely, so the heading they were drawn under is gone too.
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
