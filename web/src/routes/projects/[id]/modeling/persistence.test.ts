@@ -295,7 +295,7 @@ describe("view-level attributes survive a Modeling round trip", () => {
     });
   });
 
-  it("writes them back out unchanged", () => {
+  it("writes them back out unchanged, and again identically", () => {
     const hcl = layoutToHcl(
       viewsToLayout(parse_views(FILTER_VIEW)),
       "engineering-teams",
@@ -308,20 +308,16 @@ describe("view-level attributes survive a Modeling round trip", () => {
     expect(hcl).toContain("filter {");
     expect(hcl).toContain("max_level     = 3");
     expect(hcl).toContain('components    = ["engineering"]');
-  });
 
-  it("round-trips the whole file without losing anything", () => {
-    const first = layoutToHcl(
-      viewsToLayout(parse_views(FILTER_VIEW)),
-      "engineering-teams",
-      "acme-software",
-    );
-    const second = layoutToHcl(
-      viewsToLayout(parse_views(first)),
-      "engineering-teams",
-      "acme-software",
-    );
-    expect(second).toBe(first);
+    // Idempotent: a second trip changes nothing, so re-opening a view the app
+    // itself wrote cannot keep rewriting it.
+    expect(
+      layoutToHcl(
+        viewsToLayout(parse_views(hcl)),
+        "engineering-teams",
+        "acme-software",
+      ),
+    ).toBe(hcl);
   });
 
   it("still omits them for a view that never had them", () => {
