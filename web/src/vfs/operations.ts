@@ -378,7 +378,9 @@ export function moveNode(
   }
 
   const nodes = data.nodes.map((n) =>
-    n.id === nodeId ? { ...n, parentId: newParentId } : n
+    n.projectId === projectId && n.id === nodeId
+      ? { ...n, parentId: newParentId }
+      : n
   );
 
   return {
