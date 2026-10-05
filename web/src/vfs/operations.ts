@@ -407,8 +407,6 @@ export function deleteNode(
   return {
     ...data,
     projects: touchProject(data.projects, projectId, now),
-    // Scoped: an id in `toDelete` must not take another project's node with
-    // the same id along with it.
     nodes: data.nodes.filter(
       (n) => n.projectId !== projectId || !toDelete.has(n.id),
     ),
