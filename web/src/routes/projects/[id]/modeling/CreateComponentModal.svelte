@@ -16,6 +16,10 @@ interface Props {
   availableParents: ParentOption[];
   /** Reusable definitions available for "Use Existing Component" mode. */
   reusableDefinitions: DefinitionOption[];
+  /** Hide the mode toggle and lock the modal to "New Component Definition".
+   * For callers that only create top-level definitions (e.g. Inventory),
+   * where placing an instance makes no sense. */
+  allowReuse?: boolean;
   defaultParentKey?: string | undefined;
   initialPosition?: { x: number; y: number } | undefined;
   oncreate: (data: {
@@ -36,6 +40,7 @@ let {
   isOpen,
   availableParents,
   reusableDefinitions,
+  allowReuse = true,
   defaultParentKey,
   initialPosition,
   oncreate,
@@ -173,6 +178,7 @@ function handleCreate() {
     </div>
 
     <div class="py-3">
+      {#if allowReuse}
       <div class="join w-full">
         <button
           type="button"
@@ -197,11 +203,18 @@ function handleCreate() {
           </button>
         </span>
       </div>
+      {:else}
+      <p class="text-xs text-base-content/50">
+        Creates a new reusable component definition.
+      </p>
+      {/if}
+      {#if allowReuse}
       <p class="text-xs text-base-content/50 mt-2">
         {mode === "new"
           ? "Creates a new reusable component definition and places it in the current system."
           : "Places an instance of an existing definition inside the chosen system/container."}
       </p>
+      {/if}
     </div>
 
     <div class="overflow-y-auto flex-1 py-1 space-y-4 pr-1">
