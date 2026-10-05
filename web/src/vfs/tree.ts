@@ -50,9 +50,6 @@ export function descendantsOf(
 // Moving to the project root (`newParentId === null`) is never a cycle.
 // Intended to guard a future ProjectStore.moveNode before it applies a
 // move.
-//
-// Scoped to `projectId` for the same reason as descendantsOf: a chain of
-// parents that runs through another project is not this move's business.
 export function wouldCreateCycle(
   projectId: string,
   nodeId: string,
