@@ -4,6 +4,73 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 120 — Every ProjectStore node operation takes its project in the call
+
+`web/src/vfs/store.ts:1-4` said it outright — "real filesystems don't expose
+inode numbers to userland" — and then defined an interface whose node methods
+took inode numbers with nothing saying which tree they belonged to. Every one
+of them resolved against the whole flat `nodes` array: `findNode` took the
+first match anywhere, and `updateFileContent`/`renameNode`/`moveNode` rewrote
+**every** match. So a node id was a capability token for the entire VFS rather
+than for one project, and holding one meant you could name any node in any
+project. The scope now travels in the call, the way `openat(dirfd, path)`
+roots every syscall at a directory handle; there is no `open(42)`.
+
+- **Two increments, because the change is one API change rippling outward.**
+  The tree walks came first (`descendantsOf`, `wouldCreateCycle`): they were
+  the only callers that had no `projectId` to pass, because they read it off
+  the globally-found node — which *is* the bug, so scoping them forced
+  `moveNode`/`deleteNode` to take it in the call too. The id lookups and
+  rewrites (`findNode`, `updateFileContent`, `renameNode`) came second.
+  `store.ts`, `vfsStore.ts` and `fs.ts` appear in both, unavoidably: the
+  interface changes under them. Splitting per operation instead would have
+  touched those three files five times over and reviewed worse.
+- **`assertValidParent` lost a branch, which is the point.** Its
+  "belongs to a different project" check was a guard *downstream* of a global
+  lookup — it could only turn a silent wrong-node write into a confusing
+  error, and it did not cover `updateFileContent` at all (no parent
+  involved). With the scope in the lookup that case is a plain
+  `No node with id "x" in project "y"`, and the branch is gone rather than
+  merely unreachable.
+- **The first pass missed one, and the tests are why it is now covered.**
+  `moveNode` validated through the scoped `findNode` but still rewrote by bare
+  id, so a re-parent matched every node with that id. It is unreachable today
+  — `sanitizeVfsData` drops duplicate node ids on load (Task 119a) and the
+  store is the only writer — which is precisely why reading the code was not
+  enough. The four new cases in `vfsStore.test.ts` hand the store two nodes
+  at one id via `memoryBackend` (which takes a blob as-is, bypassing the
+  sanitizer) and assert the other project is untouched. The re-parent case
+  failed against the previous code — alpha's file dragged under beta's
+  directory — and passes now.
+- **Two different tests, two different jobs.** The contract suite's new case
+  ("refuses an id that belongs to another project") runs against all three
+  backends and pins the *behaviour*: a foreign id is a rejection, and the
+  project that owns the id is unchanged. The `vfsStore` cases pin the
+  *invariant holding even when broken*, which the contract suite cannot reach
+  because its stores mint unique ids.
+- **Untouched, and that is the result worth having.** `fs.ts` keeps its
+  signature (`openProjectFs` already closes over `projectId` and simply
+  stopped discarding it), `ProjectState.svelte` needed no edit, and **no
+  `.svelte` file, route, component or Storybook story changed** — the task
+  stays inside `web/src/vfs/`, which is what let it be done without colliding
+  with UI work.
+- **Red/green**: the contract case failed first, on all three backends, with
+  the write landing in alpha; the re-parent collision case failed with alpha's
+  file moved under beta's directory. `descendantsOf`/`wouldCreateCycle` gained
+  a case each for a same-id node in another project not being walked into.
+- **Validation**: `just test` (cargo + 928 Vitest + 86 e2e), `just lint`
+  (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings), `just build`
+  and `just format` all pass, with `cargo fmt --check` and `deno fmt --check`
+  clean.
+- **Still open, deliberately**: `FsNode` remains the wire shape rhizz-server
+  sends, and "ids are unique across the VFS" is still documented on
+  `vfs/types.ts` and relied on — per-project uniqueness is sufficient *given*
+  the scope, but the ids themselves are still the handle. Collapsing the id
+  layer into path addressing (deleting the resolution duplicated across
+  `tree.ts` and `pathTree.ts`) remains a simplification, not a safety fix.
+
+---
+
 ## Task 119a — Fix the cross-project wipe and the view-attribute loss found in Task 119
 
 Two data-loss bugs, both reported after mounting `examples/` on a real
