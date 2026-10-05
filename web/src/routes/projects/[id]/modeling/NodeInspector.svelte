@@ -5,11 +5,15 @@ import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../modelView";
 import IconAutocompleteInput from "../../../../components/IconAutocompleteInput.svelte";
 import {
+  BORDER_OPTIONS,
   type BorderStyle,
   COLOR_OPTIONS,
   type ComponentColor,
   type ComponentFont,
+  DEFAULT_FONT,
+  FONT_OPTIONS,
 } from "./visuals";
+import { scopeFile } from "./attributeScope";
 
 interface Props {
   componentKey: string;
@@ -152,6 +156,24 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       title={componentKey}>
       {componentKey}
     </div>
+
+    <!--
+      Two panels, because a node's attributes do not all live in one file.
+      Everything below the divider here is written to the system model and
+      travels with the component; the alignment button after it is written to
+      the open view file and to nothing else. Rendered in one list the two are
+      indistinguishable, so the headings carry a hover popup naming the file
+      each half writes to (`attributeScope` is the same map the write paths
+      are described against).
+    -->
+    <div class="space-y-2" data-testid="component-attributes">
+      <span
+        class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
+        data-testid="component-attributes-heading"
+        data-tip="Written to {scopeFile("component")} — these travel with the component wherever it is used"
+      >
+        Component
+      </span>
     {#if showName}
     <div class="form-control">
       <label class="label py-1" for="comp-name-input">
@@ -242,9 +264,11 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
         onchange={handleBorderChange}
         class="select select-sm select-bordered w-full"
       >
-        <option value="solid">Solid</option>
-        <option value="dashed">Dashed</option>
-        <option value="dotted">Dotted</option>
+        {#each BORDER_OPTIONS as option (option)}
+          <option value={option}>
+            {option.charAt(0).toUpperCase() + option.slice(1)}
+          </option>
+        {/each}
       </select>
     </div>
 
@@ -264,10 +288,11 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
         }}
         class="select select-sm select-bordered w-full"
       >
-        <option value="unstyled">Unstyled</option>
-        <option value="bold">Bold</option>
-        <option value="italic">Italic</option>
-        <option value="underline">Underline</option>
+        {#each FONT_OPTIONS as option (option)}
+          <option value={option}>
+            {option === DEFAULT_FONT ? "Unstyled" : option.charAt(0).toUpperCase() + option.slice(1)}
+          </option>
+        {/each}
       </select>
     </div>
 
@@ -300,37 +325,49 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
           class="label-text font-medium">Atomic Leaf (no sub-components)</span>
       </label>
     </div>
+    </div>
 
-    <div class="space-y-1 pt-1">
+    <div class="divider my-1"></div>
+
+    <div class="space-y-1 pt-1" data-testid="view-attributes">
       <span
-        class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
-        Text alignment
+        class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
+        data-testid="view-attributes-heading"
+        data-tip="Written to {scopeFile("view")} — these apply to this diagram only"
+      >
+        This view
       </span>
-      <div class="join w-full">
-        <button
-          class="btn btn-xs join-item flex-1 {textAlign === 'center'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => onsettextalign("center")}
-        >
-          Center
-        </button>
-        <button
-          class="btn btn-xs join-item flex-1 {textAlign === 'top-center'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => onsettextalign("top-center")}
-        >
-          Top
-        </button>
-        <button
-          class="btn btn-xs join-item flex-1 {textAlign === 'top-left'
-            ? 'btn-primary'
-            : 'btn-ghost'}"
-          onclick={() => onsettextalign("top-left")}
-        >
-          Top-left
-        </button>
+      <div class="space-y-1 pt-1">
+        <span
+          class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Text alignment
+        </span>
+        <div class="join w-full">
+          <button
+            class="btn btn-xs join-item flex-1 {textAlign === 'center'
+              ? 'btn-primary'
+              : 'btn-ghost'}"
+            onclick={() => onsettextalign("center")}
+          >
+            Center
+          </button>
+          <button
+            class="btn btn-xs join-item flex-1 {textAlign === 'top-center'
+              ? 'btn-primary'
+              : 'btn-ghost'}"
+            onclick={() => onsettextalign("top-center")}
+          >
+            Top
+          </button>
+          <button
+            class="btn btn-xs join-item flex-1 {textAlign === 'top-left'
+              ? 'btn-primary'
+              : 'btn-ghost'}"
+            onclick={() => onsettextalign("top-left")}
+          >
+            Top-left
+          </button>
+        </div>
       </div>
     </div>
   </div>
