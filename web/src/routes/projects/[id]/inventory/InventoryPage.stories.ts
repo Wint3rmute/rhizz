@@ -82,6 +82,19 @@ component "draft-module" {
   leaf = false
 }
 
+// Deliberately unstyled: the Style tab story styles it, and a fixture that
+// arrived pre-styled could not tell a write that landed from one that was
+// always there.
+component "styled-module" {
+  full_name = "Module that gets styled from the Style tab"
+  leaf        = true
+
+  port "bus" {
+    protocol = "power"
+    role     = "consumer"
+  }
+}
+
 system "demo-system" {
   full_name = "System using two of the definitions"
 
@@ -460,5 +473,79 @@ export const DocumentationEditorOpen: Story = {
     await expect(canvas.getByTestId("inventory-doc-save-button")).toBeTruthy();
     await expect(canvas.getByTestId("inventory-doc-cancel-button"))
       .toBeTruthy();
+  },
+};
+
+// The same component attributes Modeling's inspector edits, on the Inventory
+// page — which had them as read-only text in Metadata. The tab is the reuse:
+// one set of controls, one place they can change the model.
+//
+// The write is asserted by reading `main.hcl` back off the VFS, because the
+// interesting part is not that the select moved but that the model file
+// changed. It is also the only assertion that catches the trap this reuses:
+// an edit applied to the *instance* path would refuse here, since the
+// Inventory holds definitions.
+export const StyleTabEditsTheComponent: Story = {
+  args: { requestedLabel: "styled-module" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Style" }));
+
+    const style = within(await canvas.findByTestId("inventory-style-fields"));
+    // Metadata shows these read-only; the Style tab is where they are edited,
+    // so the icon autocomplete is here too rather than plain text.
+    await expect(style.getByTestId("icon-autocomplete-wrapper")).toBeTruthy();
+    await expect(style.getByLabelText(/^color$/i)).toBeTruthy();
+    await expect(style.getByLabelText(/^border$/i)).toBeTruthy();
+    await expect(style.getByLabelText(/^font$/i)).toBeTruthy();
+
+    // Unstyled to start: the selects show their defaults, not a value the
+    // fixture already carried.
+    await expect(style.getByLabelText(/^color$/i)).toHaveValue("default");
+    await expect(style.getByLabelText(/^border$/i)).toHaveValue("solid");
+    await expect(style.getByLabelText(/^font$/i)).toHaveValue("unstyled");
+
+    await userEvent.selectOptions(style.getByLabelText(/^color$/i), "warning");
+    await userEvent.selectOptions(style.getByLabelText(/^border$/i), "dashed");
+    await userEvent.selectOptions(style.getByLabelText(/^font$/i), "bold");
+
+    // Persisted to the model file, on the definition and not on an instance.
+    // Matched with a whitespace-tolerant pattern: the serializer aligns `=`
+    // within a block, so an exact `color        = "warning"` would be
+    // asserting a formatter property instead of the edit.
+    await waitFor(async () => {
+      const hcl = await openProjectFs(projectStore, SEEDED_PROJECT_ID)
+        .readFile("main.hcl");
+      expect(hcl).toMatch(/color\s+= "warning"/);
+      expect(hcl).toMatch(/border\s+= "dashed"/);
+      expect(hcl).toMatch(/font\s+= "bold"/);
+    });
+    // ...and it reached the definition's own block, not a sibling's. The
+    // attribute list is closed to an extent (W012 warns on orphans), but
+    // nothing stops a wrong path from landing the edit on another component.
+    const hcl = await openProjectFs(projectStore, SEEDED_PROJECT_ID)
+      .readFile("main.hcl");
+    const block = hcl.slice(
+      hcl.indexOf('component "styled-module"'),
+      hcl.indexOf('system "demo-system"'),
+    );
+    expect(block).toMatch(/color\s+= "warning"/);
+    expect(block).toMatch(/font\s+= "bold"/);
+  },
+};
+
+// A system has no style to speak of, so the tab offers nothing to edit — the
+// pane must not show controls that would silently refuse, since a system's
+// label is not a component path.
+export const StyleTabAbsentForSystems: Story = {
+  args: { requestedLabel: "aux-system" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("tab", { name: "Systems" })).toBeTruthy();
+    await expect(
+      canvas.queryByRole("tab", { name: "Style" }),
+    ).not.toBeInTheDocument();
   },
 };

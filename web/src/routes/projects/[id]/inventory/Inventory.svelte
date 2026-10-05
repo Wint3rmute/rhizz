@@ -10,6 +10,7 @@ import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
 import { applyModelMutation } from "../../../../history/applyMutation";
+import type { ComponentPatch } from "../../../../actionLog";
 import type { PortData } from "../../../../modelView";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -463,6 +464,45 @@ async function handleModalCreate(data: {
   }
 }
 
+// Applies a style edit from the detail pane's Style tab.
+//
+// The path is the definition's own label, which is what `update_component`
+// expects for a top-level definition: the Inventory lists definitions, never
+// instances, and an instance path would be redirected to its definition
+// anyway — but a system label is not a component path at all and would be
+// refused, which is why `handleAddEntity`'s sibling here is gated on
+// `selectedIsSystem` at the call site rather than in this function.
+//
+// The read-modify-write goes through the model file like every other mutation
+// on this page, then `sources` is re-read so the card, the diagram preview
+// and the pane all reflect the new attributes.
+let applyingStyle = $state(false);
+
+async function handleStyleChange(patch: ComponentPatch): Promise<void> {
+  const id = projectId;
+  const label = selectedDefinition?.label;
+  if (!id || !label || applyingStyle) return;
+  applyingStyle = true;
+  try {
+    const fs = openProjectFs(projectStore, id);
+    const targetPath = primaryHclPath(
+      await fs.readdir(".", { recursive: true }),
+    );
+    const content = await fs.readFile(targetPath).catch(() => "");
+    const result = await applyModelMutation(fs, targetPath, content, {
+      kind: "update_component",
+      path: label,
+      patch,
+    });
+    if (!result.applied) return;
+    sources = await readProjectSources(fs);
+  } catch (error) {
+    console.error("Failed to update inventory component style:", error);
+  } finally {
+    applyingStyle = false;
+  }
+}
+
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
 // to the system that instantiates the definition) and opens Modeling on that
 // very view, addressed by its path.
@@ -681,6 +721,7 @@ async function handleCreateView(): Promise<void> {
         definition={selectedDefinition}
         docContent={docContent}
         ondocsave={handleSaveDoc}
+        onstylechange={selectedIsSystem ? undefined : handleStyleChange}
       />
     </div>
 
