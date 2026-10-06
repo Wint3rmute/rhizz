@@ -68,7 +68,17 @@ with a predefined set of correct commands for the project.
 ## Frontend
 
 When adding new components or changing functionality of existing components,
-always add new Storybook stories which excercise the new/changed functionality.
+always add new either new end-to-end tests or new Storybook stories which
+excercise the new/changed functionality.
+
+- When new interaction logic is added - use e2e tests
+- When actual new UI is added - first check if it's not already covered, if it's not - add a new story
+
+### DaisyUI
+
+While the repository is configured with Tailwind CSS and DaisyUI, always prefer
+DaisyUI components over Tailwind CSS utility classes. Only use Tailwind when
+there's no way to achieve the desired UI with DaisyUI.
 
 ### Debugging Modeling editor issues
 
