@@ -9,9 +9,9 @@ rhizz/
   Cargo.toml          # workspace root
   crates/
     rhizz-core/       # model compiler — pure library, no I/O
-    rhizz-cli/        # CLI frontend
+    rhizz-cli/        # CLI frontend (the `rhizz` binary: check/score/build/fmt/watch/web)
     rhizz-wasm/       # WebAssembly bindings (browser / Node.js frontend)
-    rhizz-server/     # HTTP backend serving the VFS for the web app
+    rhizz-server/     # HTTP server library (used by `rhizz web`)
     rhizz-book/       # mdBook preprocessor
     …                 # additional frontends (LSP, …) may be added here
   web/                # Rhizz Web application
