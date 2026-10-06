@@ -42,10 +42,6 @@ let {
   onstylechange?: ((patch: ComponentPatch) => Promise<void>) | undefined;
 } = $props();
 
-// `Style` sits second, right after the description: it is the tab a user
-// comes for on a component, and the only one that edits the model. It is
-// absent when there is nothing to style (see `onstylechange`) — a tab whose
-// controls would silently refuse is worse than no tab.
 type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata";
 
 const TABS: readonly Tab[] = [
@@ -54,14 +50,11 @@ const TABS: readonly Tab[] = [
   "Requirements",
   "Metadata",
 ];
-const TABS_WITH_STYLE: readonly Tab[] = [
-  "Description",
-  "Style",
-  ...TABS.slice(1),
-];
 
-let tabs = $derived(
-  onstylechange === undefined ? TABS : TABS_WITH_STYLE,
+let tabs = $derived<readonly Tab[]>(
+  onstylechange === undefined
+    ? TABS
+    : ["Description", "Style", ...TABS.slice(1)],
 );
 
 // Monaco options for the documentation editor, as one object so the identity is
