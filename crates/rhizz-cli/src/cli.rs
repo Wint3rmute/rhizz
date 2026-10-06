@@ -115,17 +115,14 @@ enum CommandKind {
 
 impl Cli {
     /// Returns the effective command kind and the project path.
-    ///
-    /// Returns `None` for the `web` subcommand, which has no project path.
-    const fn effective(&self) -> Option<(CommandKind, &PathBuf)> {
+    const fn effective(&self) -> (CommandKind, &PathBuf) {
         match &self.command {
-            Some(Command::Check { path }) => Some((CommandKind::Check, path)),
-            Some(Command::Score { path }) => Some((CommandKind::Score, path)),
-            Some(Command::Build { path }) => Some((CommandKind::Build, path)),
-            Some(Command::Fmt { path, .. }) => Some((CommandKind::Fmt, path)),
-            Some(Command::Watch { path }) => Some((CommandKind::Watch, path)),
-            Some(Command::Web { .. }) => None,
-            None => Some((CommandKind::Build, &self.path)),
+            Some(Command::Check { path }) => (CommandKind::Check, path),
+            Some(Command::Score { path }) => (CommandKind::Score, path),
+            Some(Command::Build { path }) => (CommandKind::Build, path),
+            Some(Command::Fmt { path, .. }) => (CommandKind::Fmt, path),
+            Some(Command::Watch { path }) => (CommandKind::Watch, path),
+            Some(Command::Web { .. }) | None => (CommandKind::Build, &self.path),
         }
     }
 }
@@ -546,16 +543,12 @@ fn unified_diff(filename: &str, old: &str, new: &str) -> String {
 /// Dispatch to the appropriate pipeline based on the parsed CLI command.
 #[must_use]
 pub fn run(cli: &Cli) -> i32 {
-    // The `web` subcommand has no project path and runs an async server.
     if let Some(Command::Web { addr, data_dir }) = &cli.command {
         return run_web(addr, data_dir);
     }
 
     let color = use_color(cli);
-    let Some((cmd, path)) = cli.effective() else {
-        // Unreachable: `web` is handled above, all other commands have a path.
-        return 1;
-    };
+    let (cmd, path) = cli.effective();
 
     if cmd == CommandKind::Watch {
         let running = Arc::new(AtomicBool::new(true));
@@ -573,8 +566,6 @@ pub fn run(cli: &Cli) -> i32 {
 }
 
 /// Run the HTTP server (the `rhizz web` subcommand).
-///
-/// Creates a tokio runtime and blocks on the server until it shuts down.
 fn run_web(addr: &str, data_dir: &Path) -> i32 {
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -808,29 +799,20 @@ mod tests {
     }
 
     #[test]
-    fn parse_web_subcommand_defaults() {
+    fn parse_web_subcommand() {
         let cli = parse_args(&["web"]);
         let Some(Command::Web { addr, data_dir }) = &cli.command else {
             panic!("expected Web subcommand");
         };
         assert_eq!(addr, "127.0.0.1:3000");
         assert_eq!(data_dir, &PathBuf::from("rhizz-data"));
-    }
 
-    #[test]
-    fn parse_web_subcommand_with_flags() {
         let cli = parse_args(&["web", "--addr", "0.0.0.0:8080", "--data-dir", "/data"]);
         let Some(Command::Web { addr, data_dir }) = &cli.command else {
             panic!("expected Web subcommand");
         };
         assert_eq!(addr, "0.0.0.0:8080");
         assert_eq!(data_dir, &PathBuf::from("/data"));
-    }
-
-    #[test]
-    fn web_subcommand_has_no_effective_path() {
-        let cli = parse_args(&["web"]);
-        assert!(cli.effective().is_none());
     }
 
     // ── pipeline (unit-level) ─────────────────────────────────────────────
