@@ -8,200 +8,99 @@ Completed tasks are listed here, most recent first.
 
 The Modeling inspector listed a node's attributes in one run of
 form-controls, so a color and a text alignment looked like the same kind
-of edit. They are not: the color is written to `system.hcl` and travels
-with the component, the alignment to the open `views/<view>.hcl` and to
-nothing else. The tell was only visible after the fact — reopen the same
-view elsewhere and your color change is there and your alignment change
-is not. The Inventory had the same attributes as read-only text, so it
-could tell you a component's color but not change it.
+of edit. They are not: the color goes to `system.hcl` and travels with
+the component, the alignment to the open `views/<view>.hcl` and to
+nothing else. The tell only appeared after the fact — reopen the view
+elsewhere and your color is there and your alignment is not. The
+Inventory had the same four values as read-only text, so it could report
+a component's color but not change it.
 
-Both halves of the task land, and the second is what made the first
-worth having: the attributes are now split in the inspector *and* editable
-from the Inventory, through one shared component.
-
-- **`attributeScope.ts` is the map both halves are described against.**
-  Every attribute the inspector can edit, and the file it lands in, with
-  `componentAttributes()` / `viewAttributes()` derived from it. The two
-  panels and the two write paths therefore cannot drift: a panel cannot
-  claim a file the dispatcher does not use. The geometry keys (`x`, `y`,
-  `width`, `height`) are in the map even though the inspector does not
-  render them — the canvas drags and resizes, and they are the reason the
-  distinction exists at all. So `text_align` ends up as the *only*
-  view-side field the inspector edits. That is honest rather than thin:
-  one attribute, correctly scoped, beats a mixed list.
-- **The headings name the entity and, on hover, the file.** "Component"
-  and "This view", with the tooltip text coming from `scopeFile()` rather
-  than being written twice. A daisyUI `tooltip`, which has precedent in
-  `CreateComponentModal`; the dominant `title=` in this codebase would
-  have been an attribute assertion instead of a popup.
+- **`attributeScope.ts` is the map both halves are described against**:
+  every attribute, and the file it lands in, with both panels' contents
+  derived from it — so a panel cannot claim a file the dispatcher does
+  not use. `text_align` ends up the *only* view-side field the inspector
+  edits (`x`/`y`/`width`/`height` belong to the view too, but the canvas
+  drags them). That is honest rather than thin.
 - **`ComponentStyleFields` is one component on two pages, not two
-  copies.** The Inventory had those four values as read-only `<dt>/<dd>`
-  rows; they are now a Style tab that edits them, through the same
-  controls Modeling uses. A style added in one place now appears in both,
-  and the two pages cannot disagree about what a border option does.
-  Tags, `leaf` and ports deliberately stay out: they are attributes too,
-  but not presentation, and putting them next to a color picker would
-  say otherwise.
-- **Metadata no longer repeats the four values.** Shown twice in one
-  pane, once editable and once not, reads as a bug in one of them — and
-  the read-only copy was the one that could not be wrong.
-- **A system's label is not a component path, so the tab is hidden.**
-  `update_component` would refuse it, silently, and a control that
-  discards an edit is worse than no control. The gate is the *absence of
-  the callback* rather than a boolean, which is how the next task extends
-  this to systems and discovers it needs a real op for it.
+  copies.** The Inventory's read-only rows became an editable Style tab
+  through the same controls Modeling uses, so a style added once appears
+  in both. Metadata no longer repeats the four values: shown twice in one
+  pane, once editable and once not, reads as a bug in one of them. Tags,
+  `leaf` and ports stay out — attributes, but not presentation.
+- **A system's label is not a component path, so the tab is hidden**
+  rather than shown refusing silently. The gate is the *absence of the
+  callback*, which is how the next task extends this to systems and finds
+  it needs a real op.
 - **The border and font pickers stopped hardcoding their `<option>`
-  lists.** Border and font were markup while color was a constant in
-  `visuals.ts`, so adding a style meant editing markup the SVG mapping
-  already knew about. All three are now lists next to the mappings they
-  feed, with a test asserting the pickers offer exactly what can be
-  rendered. `FONT_OPTIONS` leads with `DEFAULT_FONT` because that is not a
-  `FontStyle` at all — it is the explicit spelling of "no presentation",
-  and an unstyled component has to land on it. `toBorderStyle` moved from
-  `modelView.ts` into `visuals.ts` for the same reason: the Inventory's
-  controls needed the narrowing the read model already had privately, and
-  a select whose `value` is not one of its own options selects nothing.
+  lists** (color already had one) and `toBorderStyle` moved from
+  `modelView.ts` to `visuals.ts`, both so the option list and the SVG
+  mapping it feeds sit together.
 - **Adding a fifth tab clipped the fifth tab, and only VRT caught it.**
-  The pane takes two fifths of the row, and "Description / Style / Ports
-  (n) / Requirements / Metadata" did not fit — Metadata went off the
-  right edge, still in the DOM and still findable by a role query, which
-  is exactly why no story noticed. The row is now scrollable (a tab that
-  does not fit is scrolled to, not hidden) and the labels are `text-xs`,
-  which makes them fit outright at 1280 — measured, 383px of 383.
-  `EveryTabFitsInThePane` pins the reachability rather than the fit: the
-  story browser is ~414px, where five tabs cannot fit at any size, so the
-  assertion is that the row scrolls.
-- **The source row moved, and a story that documented why had to be
-  rewritten.** It used to sit under the full name, which only made sense
-  while `full_name` was a sibling field there; inside the style block that
-  position puts a provenance link below the border and font pickers. It
-  now sits directly under the name — both answer "which component is
-  this" — and the `Sourced` story's rationale says so.
-- **Red/green**: the `AttributeScopes` story went red first (no panel
-  existed) and *stays* red if alignment is moved back into the shared
-  list — the negative assertion, not just the positive one. Both
-  Inventory stories went red on a missing Style tab. `ComponentStyleFields`
-  has five, the interesting ones being that the selects emit the explicit
-  default rather than an absent value (`toStrictEqual`, not `toEqual`:
-  the claim *is* undefined-vs-missing, and JSON drops undefined-valued
-  keys on the way to Rust, where a missing key means "leave this alone"),
-  and that the full name commits on blur rather than per keystroke.
-- **The e2e that was wrong on the first pass.** Three cases read the VFS
-  back rather than watching the controls. The third asserted the model
-  received the Inventory's style edit — which a write to *both* files
-  also satisfies. Routing the edit at the view file as well as the model
-  left it green; it now asserts the view file stays free of the value,
-  which is what makes it a claim about destination rather than arrival.
-  Two mutations were needed to find that and the first was not even a
-  mutation: pointing the patch at `main/<label>` looks like an instance
-  path but is a valid one (a fresh project has a `main` system), so the
-  dispatcher redirected it to the definition and did the right thing.
-  Model reads match `/color\s+= "warning"/` rather than an exact line —
-  the serializer aligns `=` per block, so byte equality would assert the
-  formatter instead of the edit (the same trap as Task 119a).
-- **VRT**: 45 re-baselined (the inspector's panels, the Inventory's tab)
-  and 11 new. Every Inventory baseline moved, because the tab row is in
-  all of them.
-- **Still open, deliberately**: `text_align` is the only view-side field
-  the inspector edits, and there is no dirty check on the layout-save
-  effect (Task 119a), so opening a view still rewrites its file. Neither
-  is a safety fix. Systems still carry no style attributes — that is the
-  next task, and it needs a backend op this one deliberately did not
-  fake.
+  Metadata went off the right edge — still in the DOM, still findable by
+  a role query, unreachable to anyone using the page. The row is now
+  scrollable and the labels `text-xs`, which fits at 1280 (measured 383
+  of 383). `EveryTabFitsInThePane` pins reachability rather than fit: the
+  story browser is ~414px, where five tabs cannot fit at any size.
+- **Red/green**: `AttributeScopes` went red first and *stays* red if
+  alignment moves back into the shared list. The e2e that pins each half's
+  *destination* was wrong first — it asserted the model got the edit,
+  which a write to both files also satisfies — and now asserts the view
+  file stays clean. Model reads match `/color\s+= "warning"/` rather than
+  an exact line, since the serializer aligns `=` per block.
+- **VRT**: 45 re-baselined, 11 new. **Still open**: systems carry no style
+  attributes (next task, needs a backend op), and the layout-save effect
+  still has no dirty check (Task 119a).
 - **Validation**: `just test` (363 cargo + 952 Vitest + 92 e2e), `just
-  lint` (clippy, rustdoc, eslint, svelte-check 0 errors / 0 warnings),
-  `just build`, `just vrt` and `just format` all pass.
+  lint`, `just build`, `just vrt` and `just format` all pass.
 
 ---
 
 ## Task 121 — Systems are first-class in the stats bar and the Inventory
 
-Systems stopped being a thing you can only reach through Modeling. The
-overview counts them, the Inventory lists them next to components, and
-either page can create one — the four features the task asked for, in
-that order.
+Systems stopped being a thing you can only reach through Modeling: the
+overview counts them, the Inventory lists them beside components, and
+either page can create one.
 
-- **The Systems counter is a first stat, and the "All" tab is what pays
-  for it.** Removing `InventoryTab.All` looked like the free half of the
-  filter change: with an "All" tab, "Systems" could not mean *only*
-  systems, and the task wanted it to. The tab enum is now
-  `Components | Systems | Interfaces` in that display order, so the
-  default view is unchanged while the two halves become separately
-  addressable. The stats bar follows the same logic — Systems sits left
-  of Components, so the eye lands on the coarser entity first and
-  refines. `ModelStatsRow`'s last stat also lost a number: its subtext
-  was the overall percentage's own history, and "Overall completion
-  score" is the thing that is actually worth saying there.
-- **A system borrows the whole component machinery instead of
-  growing a parallel one.** `systemAsDefinition` flattens a compiled
-  system into the same `InventoryDefinition` the components already
-  use, which is why the card, the search, the diagram preview and the
-  detail pane came for free. The mapping is honest about what a system
-  is not: no ports, no children, `leaf: true`, so it shows as a single
-  entity and scores "specified" exactly when it carries a `full_name`.
-  The one place it had to lie is the level badge — a system is not a
-  level, and `DefinitionCard` now hides `L1` for them rather than
-  inventing a number. Writing a *second* card, a second preview pane
-  and a second detail pane would have been three components' worth of
-  code to render the same three boxes.
-- **The diagram convention is shared, and that is what makes "a
-  diagram with the same name" free.** `defaultViewPath(label)` was
-  already `views/<label>.hcl` for components, and a system is named the
-  same way, so the preview probes the identical path and the
-  missing-view empty state is the identical one — only the button's
-  wording differs ("Create a view for this system"), because what gets
-  created is bound to a different thing. Nothing about the lookup is
-  system-aware; the reuse is the feature.
-- **The add button follows the tab, and a tab with nothing to add has
-  no button.** `Interfaces` is still a placeholder entity class, so it
-  renders neither list nor button — a button there would offer to
-  create something the model cannot express. The other two labels come
-  from `isSystem`, so the button cannot drift out of sync with the list
-  it sits above.
-- **Two changes beat the `prompt()` the first pass used.** Creation
-  started as a bare `prompt()` for the name — the same three-times-used
-  primitive as the folder and view-rename prompts — and was replaced by
-  a real `CreateSystemModal` and by reusing `CreateComponentModal`
-  behind a new `allowReuse` prop, because the Inventory wants a
-  *definition* and Modeling's existing use of that modal wants to offer
-  an existing definition to reuse. A boolean prop rather than a second
-  modal, so the validation and chrome stay in one place.
-- **The sidebar order is button, divider, search — an inversion of
-  what shipped first, and the commit that fixed it is separate from the
-  one that added it.** The button landed below the search box, which
-  read as a filter control with an action stapled underneath; putting
-  it above the divider makes it the primary action of the panel it acts
-  on. Also a solid primary rather than the outline variant, since it is
-  the only thing in the sidebar that changes the model.
-- **A system's row in the command palette is now addressable, and
-  instances deliberately are not.** Inventory matches
-  `/inventory/<label>` against both lists and switches to whichever tab
-  holds the match, so `Systems` entries stopped being unreachable.
-  Instances stay excluded — they are drawn under their usage-site label
-  but addressed by their `source`, so a palette row for one would
-  confidently open the wrong entity.
-- **Red/green**: `inventory-systems.spec.ts` covers the Systems tab
-  listing, previewing the same-named diagram, the missing-view
-  empty state and the create-it navigation into Modeling bound to that
-  system; both add buttons (create → land on the new entity's URL →
-  the overview's counter goes up); and that Interfaces offers no
-  button. The unit suite in `inventory.test.ts` gained the
-  `systemAsDefinition` shape and the `filterSystems` search cases. Both
-  e2e cases were checked against a *partial* implementation — with the
-  Systems tab but no same-named-diagram probe, and with a button that
-  creates but does not select.
-- **Stories and VRT**: `SystemsTab`, `SystemDiagramPreview` and
-  `SystemMissingDiagram` pin the three states, plus
-  `AddSystemOpensCreationModal` and
-  `AddComponentOpensDefinitionModal` for the two buttons. Every story
-  costs two baselines (dark + light), so the VRT gallery was
-  re-baselined in its own commit rather than mixed into the feature.
+- **The Systems counter is a first stat, and removing the "All" tab is
+  what paid for it.** With an "All" tab, "Systems" could not mean *only*
+  systems, which is what the task wanted, so the enum is now
+  `Components | Systems | Interfaces` — default view unchanged, the two
+  halves separately addressable.
+- **A system borrows the whole component machinery rather than growing a
+  parallel one.** `systemAsDefinition` flattens a compiled system into
+  the same `InventoryDefinition` components use, which is why the card,
+  search, diagram preview and detail pane came free. It is honest about
+  what a system is not: no ports, no children, `leaf: true`. The one
+  place it lies is the level badge, so `DefinitionCard` hides `L1` rather
+  than inventing a number. A second card, preview and pane would have
+  been three components' worth of code for the same three boxes.
+- **The diagram convention is shared, and that is what makes "a diagram
+  with the same name" free** — `defaultViewPath` was already
+  `views/<label>.hcl`, so the probe, the empty state and the create button
+  are the component ones; only the button's wording differs.
+- **The add button follows the tab, and a tab with nothing to add has no
+  button** — `Interfaces` is still a placeholder, and a button there would
+  offer to create what the model cannot express. Both labels come from
+  `isSystem`, so the button cannot drift from the list above it.
+- **Two changes beat the `prompt()` the first pass used:** a real
+  `CreateSystemModal`, and reusing `CreateComponentModal` behind a new
+  `allowReuse` prop, because the Inventory wants a *definition* while
+  Modeling's use wants to offer an existing one.
+- **Sidebar order is button, divider, search — an inversion of what
+  shipped first**, in its own commit. The button landed below the search
+  box, which read as a filter with an action stapled under it.
+- **A system's palette row is addressable; instances deliberately are
+  not** — they are drawn under their usage-site label but addressed by
+  `source`, so a row for one would open the wrong entity.
+- **Red/green**: `inventory-systems.spec.ts` covers the tab listing, the
+  same-named diagram, the empty state, create-and-bind, and that
+  Interfaces offers no button; both cases were checked against partial
+  implementations. Four new stories, each costing two VRT baselines.
 - **Untouched**: no change to `rhizz-core`, `rhizz-wasm` or the HCL
-  schema — `RawModelPayload.systems` was the only addition, and
-  `rhizz-wasm` already emitted it. Nothing in Modeling changed either,
-  except gaining a view bound to a newly created system.
-- **Validation**: `just test` (cargo + 928 Vitest + 86 e2e), `just
-  lint`, `just build` and `just format` all pass.
+  schema (`RawModelPayload.systems` was the only addition), and nothing
+  in Modeling except gaining a view bound to a new system.
+- **Validation**: `just test` (cargo + 928 Vitest + 86 e2e), `just lint`,
+  `just build` and `just format` all pass.
 
 ---
 
