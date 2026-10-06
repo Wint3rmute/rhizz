@@ -2,15 +2,23 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, userEvent, within } from "storybook/test";
 import ComponentStyleFields from "./ComponentStyleFields.svelte";
 
-// Module scope, so the recording handler can be handed to the component
-// through `args` and read back after the interactions. The style values live
-// with the parent — it writes the model and feeds the result back — so what is
-// worth asserting here is the *request*, not the prop.
-const emitted: Record<string, unknown>[] = [];
+// Every story here is `no-vrt`, and that is the point of this file.
+//
+// How these fields *look* is already covered: the Modeling node inspector
+// renders this component inside the full panel, and its `Default`, `Styled`
+// and `AtomicLeaf` stories carry baselines for both themes. A story of the
+// bare component would screenshot the same five controls in the same two
+// states, for two more LFS-tracked PNGs each, to catch a change the
+// inspector's baselines catch anyway.
+//
+// What is not covered anywhere is what the component *emits* — the patch
+// protocol its two callers both depend on. These stories run and assert
+// that, and cost no baseline.
 
 const meta = {
   title: "Components/ComponentStyleFields",
   component: ComponentStyleFields,
+  tags: ["no-vrt"],
   args: {
     style: {
       full_name: "Central processing unit for flight stabilization",
@@ -19,9 +27,7 @@ const meta = {
       border: "solid",
       font: "unstyled",
     },
-    onchange: (patch: Record<string, unknown>) => {
-      emitted.push(patch);
-    },
+    onchange: () => {},
   },
 } satisfies Meta<typeof ComponentStyleFields>;
 
@@ -29,14 +35,13 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Styled: Story = {};
-
-/** A component with nothing set: every control shows its default rather than
- * a value the file never carried. */
-export const Unstyled: Story = {
-  args: {
-    style: { color: "default", border: "solid", font: "unstyled" },
-  },
+// Module scope, so the recording handler can be handed to the component
+// through `args` and read back after the interactions. The style values live
+// with the parent — it writes the model and feeds the result back — so what
+// is worth asserting here is the *request*, not the prop.
+const emitted: Record<string, unknown>[] = [];
+const record = (patch: Record<string, unknown>): void => {
+  emitted.push(patch);
 };
 
 /**
@@ -54,6 +59,7 @@ export const Unstyled: Story = {
 export const ResetsSendExplicitDefaults: Story = {
   args: {
     style: { color: "warning", border: "dashed", font: "bold" },
+    onchange: record,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -89,6 +95,7 @@ export const FullNameCommitsOnBlur: Story = {
       border: "solid",
       font: "unstyled",
     },
+    onchange: record,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -118,6 +125,7 @@ export const ClearedIconIsAbsent: Story = {
       border: "solid",
       font: "unstyled",
     },
+    onchange: record,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
