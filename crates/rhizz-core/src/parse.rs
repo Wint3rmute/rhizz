@@ -119,6 +119,8 @@ pub struct RawProject {
 pub struct RawSystem {
     /// Optional full name text.
     pub full_name: Option<String>,
+    /// Optional icon name (e.g. `FontAwesome` icon identifier).
+    pub icon: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Child instance blocks (`instance "<local>" { source = "<def>" }`).
@@ -259,6 +261,8 @@ struct ProjectAttrs {
 struct SystemAttrs {
     /// Optional full name.
     full_name: Option<String>,
+    /// Optional icon name.
+    icon: Option<String>,
     /// Optional tags list.
     tags: Option<Vec<String>>,
 }
@@ -610,6 +614,7 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> ParseRes
     }
     Ok(RawSystem {
         full_name: a.full_name,
+        icon: a.icon,
         tags: a.tags.unwrap_or_default(),
         instances,
         connections,
@@ -1118,6 +1123,22 @@ mod tests {
             err.to_string().contains("level"),
             "error should name the rejected key, got: {err}"
         );
+    }
+
+    #[test]
+    fn parse_system_icon_attribute() {
+        let src = r#"
+            system "my-sys" {
+                full_name = "My system"
+                icon        = "rocket"
+            }
+        "#;
+        let path = PathBuf::from("test.hcl");
+        let raw = parse_file(src, &path).unwrap();
+        assert_eq!(raw.systems.len(), 1);
+        let sys = &raw.systems[0];
+        assert_eq!(sys.inner.full_name.as_deref(), Some("My system"));
+        assert_eq!(sys.inner.icon.as_deref(), Some("rocket"));
     }
 
     #[test]

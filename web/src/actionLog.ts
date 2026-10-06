@@ -36,6 +36,17 @@ export type ComponentPatch = Partial<
   >
 >;
 
+// The subset of a system's fields the Inventory style section mutates.
+// Systems carry only `full_name` and `icon` in the model — the dedicated
+// type (rather than reusing `ComponentPatch`) keeps component-only keys
+// from reaching the `update_system` op, where Rust rejects them. Explicit
+// `| undefined`: the pane forwards patches whose values may be absent, and
+// `exactOptionalPropertyTypes` rejects assigning those to a bare `?`.
+export interface SystemPatch {
+  full_name?: string | undefined;
+  icon?: string | undefined;
+}
+
 export type ModelAction =
   | { op: "add_system"; label: string; full_name: string }
   | {
@@ -60,6 +71,7 @@ export type ModelAction =
   | { op: "delete_component"; path: string }
   | { op: "reparent_component"; sourcePath: string; targetParentPath: string }
   | { op: "update_component"; path: string; patch: ComponentPatch }
+  | { op: "update_system"; path: string; patch: SystemPatch }
   | {
     op: "add_connection";
     scopePath: string;
@@ -175,6 +187,12 @@ function toMutationOp(action: ModelAction): unknown {
     case "update_component":
       return {
         kind: "update_component",
+        path: action.path,
+        patch: action.patch,
+      };
+    case "update_system":
+      return {
+        kind: "update_system",
         path: action.path,
         patch: action.patch,
       };

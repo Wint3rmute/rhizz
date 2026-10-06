@@ -61,6 +61,11 @@ export type ModelMutationOp =
   }
   | { kind: "rename_component"; path: string; newLabel: string }
   | { kind: "update_component"; path: string; patch: Partial<ComponentData> }
+  | {
+    kind: "update_system";
+    path: string;
+    patch: { full_name?: string | undefined; icon?: string | undefined };
+  }
   | { kind: "delete_component"; path: string }
   | {
     kind: "add_connection";

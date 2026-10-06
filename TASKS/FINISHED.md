@@ -4,6 +4,48 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 124 — Systems get a Style tab: full name + icon, same controls as components
+
+The Inventory's Style tab was component-only: selecting a system showed no
+tab at all, since a system label is not a component path and `update_component`
+refuses it. Systems now carry `full_name` and `icon` in the model, and the
+same shared controls edit them.
+
+- **Backend: `icon` rides the whole pipeline, nothing else.** `RawSystem`,
+  `SystemAttrs`, resolved `System`, the resolver, and `serialize_system` all
+  carry it; `system "s" { color = … }` is still E000. The op is a dedicated
+  `update_system{path, patch}` with its own `SystemPatchJson`
+  (`deny_unknown_fields`, so component-only keys are rejected at
+  deserialization, not silently dropped). Bare system labels only — instance
+  paths and definition labels refuse, mirroring `update`'s guard behavior.
+  `LoggedAction::UpdateSystem` flows through the action log and replay
+  codegen like every other op.
+- **`ComponentStyleFields` is one component on two modes, not two copies.**
+  `mode="system"` renders full name + icon only; the color/border/font
+  selects would offer edits the op rejects. The DetailPane takes a second
+  optional callback (`onsystemstylechange`) beside `onstylechange` — exactly
+  one is supplied per entity — and the tab gating is the *presence* of either,
+  the same shape Task 123 established.
+- **The read path carries icon end to end.** `RawModelPayload.systems`,
+  `InventorySystem`, the Inventory derivation, and `systemAsDefinition` all
+  pass it through, so the sidebar card renders the system icon via the same
+  `resolveIcon` the component card already used. `SystemJS` gained
+  `full_name` + `icon` getters; `to_js` needed no change (serde).
+- **Red/green**: `parse_system_icon_attribute` plus three `update_system`
+  mutation tests (patch applies, non-system paths refuse, component-only
+  keys rejected); `systemAsDefinition` icon carry-through; the
+  `StyleTabAbsentForSystems` story inverted into `StyleTabEditsTheSystem`
+  (asserts the three selects are absent and the icon write reaches the
+  system's own block); a new e2e pins the model-file destination and the
+  no-leak into views. SPEC.md §2.2 gains the `icon` row.
+- **VRT**: 4 re-recorded (the tab row now shows Style on system panes), 2
+  new (`StyleTabEditsTheSystem`), 2 deleted (the orphaned absent-story
+  baselines). Full suite green: 368 cargo + 945 Vitest + 93 e2e + 256 VRT.
+- **Validation**: `just test`, `just lint`, `just build`, `just vrt` and
+  `just format` all pass.
+
+---
+
 ## Task 123 — The inspector says which file each attribute is written to
 
 The Modeling inspector listed a node's attributes in one run of

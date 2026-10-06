@@ -169,6 +169,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         r.model.systems.push(System {
             label: ls.label.clone(),
             full_name: ls.inner.full_name.clone().unwrap_or_default(),
+            icon: ls.inner.icon.clone(),
             tags: ls.inner.tags.clone(),
             components: vec![],
             connections: vec![],

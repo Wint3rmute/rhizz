@@ -94,6 +94,13 @@ pub enum ModelOp {
     /// definition, mirroring the old TypeScript store).
     #[serde(rename = "update_component")]
     Update { path: String, patch: PatchJson },
+    /// Patch attributes on a system (bare system label; only `full_name`
+    /// and `icon` are honored — systems carry no other style attributes).
+    #[serde(rename = "update_system")]
+    UpdateSystem {
+        path: String,
+        patch: SystemPatchJson,
+    },
     /// Delete a definition (bare label) or a placed instance.
     #[serde(rename = "delete_component")]
     Delete { path: String },
@@ -192,6 +199,23 @@ pub struct PatchJson {
     pub ports: Option<Vec<PortJson>>,
 }
 
+/// Attribute patch for [`ModelOp::UpdateSystem`].
+///
+/// Systems carry only `full_name` and `icon` — every other key is rejected
+/// as unknown during op deserialization (same `deny_unknown_fields` story
+/// as `SystemAttrs` in the HCL parser), so callers cannot smuggle
+/// component-only style into a system block.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SystemPatchJson {
+    /// Full official name, expanding abbreviations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    /// Optional icon name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+}
+
 // ── Logged actions (mirrors the TypeScript `ModelAction` JSON) ───────────────
 
 /// Actions an applied op reports, in the exact JSON shape the web action log
@@ -247,6 +271,12 @@ pub enum LoggedAction {
     /// update landed on after instance→definition redirect).
     #[serde(rename = "update_component")]
     UpdateComponent { path: String, patch: PatchJson },
+    /// System attributes were patched (`full_name` / `icon` only).
+    #[serde(rename = "update_system")]
+    UpdateSystem {
+        path: String,
+        patch: SystemPatchJson,
+    },
     /// A connection was added.
     #[serde(rename = "add_connection")]
     #[serde(rename_all = "camelCase")]
@@ -544,6 +574,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
         } => reparent(raw, source_path, target_parent_path),
         ModelOp::Rename { path, new_label } => rename(raw, path, new_label),
         ModelOp::Update { path, patch } => update(raw, path, patch),
+        ModelOp::UpdateSystem { path, patch } => Ok(update_system(raw, path, patch)),
         ModelOp::Delete { path } => delete(raw, path),
         ModelOp::AddConnection {
             scope_path,
@@ -924,6 +955,36 @@ fn update(
     }]))
 }
 
+/// Patch `full_name` / `icon` on a system. Only bare system labels address
+/// a system — anything with a `/` (an instance path), or a bare definition
+/// label, refuses. Mirrors the `update` guard behavior: unknown targets are
+/// a refusal, not an error.
+fn update_system(raw: &mut RawFile, path: &str, changes: &SystemPatchJson) -> ApplyOutcome {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    if segments.len() != 1 {
+        return idle();
+    }
+    let Some(label) = segments.first() else {
+        return idle();
+    };
+    let Some(index) = find_system(raw, label) else {
+        return idle();
+    };
+    let Some(body) = raw.systems.get_mut(index) else {
+        return idle();
+    };
+    if let Some(full_name) = &changes.full_name {
+        body.inner.full_name = non_empty(full_name);
+    }
+    if let Some(icon) = &changes.icon {
+        body.inner.icon = non_empty(icon);
+    }
+    applied(vec![LoggedAction::UpdateSystem {
+        path: path.to_owned(),
+        patch: changes.clone(),
+    }])
+}
+
 /// Resolve an update path to `(definition label, notified path)`. Instance
 /// paths redirect to their reused definition, since body edits land there
 /// rather than on the instance. `None` refuses the op.
@@ -1109,6 +1170,7 @@ mod tests {
             r#"{"kind":"reparent_component","sourcePath":"demo/a","targetParentPath":"demo/sub"}"#,
             r#"{"kind":"rename_component","path":"demo/a","newLabel":"b"}"#,
             r#"{"kind":"update_component","path":"demo/a","patch":{"full_name":"x"}}"#,
+            r#"{"kind":"update_system","path":"demo","patch":{"full_name":"x"}}"#,
             r#"{"kind":"delete_component","path":"demo/a"}"#,
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
@@ -1229,6 +1291,71 @@ mod tests {
         let action = serde_json::to_value(&updated.actions).expect("json");
         assert_eq!(action[0]["op"], "update_component");
         assert_eq!(action[0]["path"], "cpu");
+    }
+
+    #[test]
+    fn update_system_patches_full_name_and_icon() {
+        let hcl = mutate("", r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+
+        let updated = mutate(
+            &hcl,
+            r#"{"kind":"update_system","path":"demo","patch":{"full_name":"Demo system","icon":"microchip"}}"#,
+        )
+        .expect("ok");
+        assert!(updated.applied);
+        let hcl = updated.hcl.expect("hcl");
+        assert!(hcl.contains(r#"full_name = "Demo system""#));
+        assert!(hcl.contains(r#"icon        = "microchip""#));
+        let action = serde_json::to_value(&updated.actions).expect("json");
+        assert_eq!(action[0]["op"], "update_system");
+        assert_eq!(action[0]["path"], "demo");
+    }
+
+    #[test]
+    fn update_system_refuses_non_system_paths() {
+        let hcl = mutate("", r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+
+        // Instance paths and definition labels are not systems.
+        for path in ["demo/a", "cpu", "missing"] {
+            let refused = mutate(
+                &hcl,
+                &format!(
+                    r#"{{"kind":"update_system","path":"{path}","patch":{{"icon":"microchip"}}}}"#
+                ),
+            )
+            .expect("ok");
+            assert!(!refused.applied, "path {path} must refuse");
+        }
+    }
+
+    #[test]
+    fn update_system_rejects_component_only_keys() {
+        // `deny_unknown_fields` on the system patch: color/border/font/tags
+        // are component-only and must not smuggle into a system block.
+        let result: Result<ModelOp, _> = serde_json::from_str(
+            r#"{"kind":"update_system","path":"demo","patch":{"color":"red"}}"#,
+        );
+        assert!(result.is_err(), "component-only keys must be rejected");
     }
 
     #[test]

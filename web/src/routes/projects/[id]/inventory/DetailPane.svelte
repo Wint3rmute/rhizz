@@ -13,7 +13,7 @@ import { SvelteSet } from "svelte/reactivity";
 // Type-only: the editor *type* without dragging the editor itself in, so
 // `DetailPane` does not become a second reason to load Monaco.
 import type * as monaco from "monaco-editor";
-import type { ComponentPatch } from "../../../../actionLog";
+import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
 import type { InventoryDefinition } from "./inventory";
 import { definitionDepth } from "./inventory";
 import {
@@ -27,6 +27,7 @@ let {
   docContent,
   ondocsave,
   onstylechange,
+  onsystemstylechange,
 }: {
   definition: InventoryDefinition | null;
   /** `docs/<label>.md` content: null when missing, undefined while loading. */
@@ -35,11 +36,18 @@ let {
   ondocsave: (content: string) => Promise<void>;
   /**
    * Persist a component-style edit to the system model. Omitted when the
-   * entity has no component to style (a system), which is also what hides the
-   * Style tab — a tab whose controls would silently refuse is worse than no
-   * tab, because nothing on screen says the edit went nowhere.
+   * entity has no component to style (a system, which uses
+   * `onsystemstylechange` instead) — a tab whose controls would silently
+   * refuse is worse than no tab, because nothing on screen says the edit
+   * went nowhere.
    */
   onstylechange?: ((patch: ComponentPatch) => Promise<void>) | undefined;
+  /**
+   * Persist a system-style edit (`full_name` / `icon` only) to the system
+   * model. Omitted for components, which use `onstylechange` instead.
+   * Exactly one of the two is supplied for any shown entity.
+   */
+  onsystemstylechange?: ((patch: SystemPatch) => Promise<void>) | undefined;
 } = $props();
 
 type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata";
@@ -52,9 +60,13 @@ const TABS: readonly Tab[] = [
 ];
 
 let tabs = $derived<readonly Tab[]>(
-  onstylechange === undefined
+  onstylechange === undefined && onsystemstylechange === undefined
     ? TABS
     : ["Description", "Style", ...TABS.slice(1)],
+);
+
+let styleMode = $derived<"component" | "system">(
+  onsystemstylechange !== undefined ? "system" : "component",
 );
 
 // Monaco options for the documentation editor, as one object so the identity is
@@ -252,16 +264,18 @@ function flattenTags(def: InventoryDefinition): string[] {
             {/if}
           </div>
         {/if}
-      {:else if activeTab === "Style" && onstylechange !== undefined}
+      {:else if activeTab === "Style" && (onstylechange !== undefined || onsystemstylechange !== undefined)}
         <!--
             The attributes come off the raw payload, so they arrive as the file
             spelled them: absent, or an empty string from hand-written HCL. The
             controls need the explicit default the read model normalizes to, or
             a select would hold a value that is not one of its options and select
-            nothing.
+            nothing. Systems show full name + icon only (`mode="system"`):
+            they carry no color/border/font in the model.
           -->
           <div data-testid="inventory-style-fields">
             <ComponentStyleFields
+              mode={styleMode}
               style={{
                 full_name: definition.full_name,
                 icon: definition.icon,
@@ -269,7 +283,16 @@ function flattenTags(def: InventoryDefinition): string[] {
                 border: toBorderStyle(definition.border),
                 font: definition.font || DEFAULT_FONT,
               }}
-              onchange={(patch) => void onstylechange(patch)}
+              onchange={(patch) => {
+                if (styleMode === "system") {
+                  void onsystemstylechange?.({
+                    full_name: patch.full_name,
+                    icon: patch.icon,
+                  });
+                } else {
+                  void onstylechange?.(patch);
+                }
+              }}
             />
           </div>
       {:else if activeTab === "Ports"}

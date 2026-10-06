@@ -584,17 +584,49 @@ export const StyleTabEditsTheComponent: Story = {
   },
 };
 
-// A system has no style to speak of, so the tab offers nothing to edit — the
-// pane must not show controls that would silently refuse, since a system's
-// label is not a component path.
-export const StyleTabAbsentForSystems: Story = {
+// A system offers full name + icon only — the tab is the same shared
+// controls in system mode, without the color/border/font selects, since
+// systems carry no such attributes in the model. The write is asserted by
+// reading `main.hcl` back, matching the component story's read-back style.
+export const StyleTabEditsTheSystem: Story = {
   args: { requestedLabel: "aux-system" },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole("tab", { name: "Systems" })).toBeTruthy();
-    await expect(
-      canvas.queryByRole("tab", { name: "Style" }),
-    ).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("tab", { name: "Style" }));
+
+    const style = within(await canvas.findByTestId("inventory-style-fields"));
+    await expect(style.getByTestId("icon-autocomplete-wrapper")).toBeTruthy();
+    await expect(style.getByLabelText(/full name/i)).toBeTruthy();
+    // No component-only controls: these would offer edits `update_system`
+    // rejects.
+    await expect(style.queryByLabelText(/^color$/i)).toBeNull();
+    await expect(style.queryByLabelText(/^border$/i)).toBeNull();
+    await expect(style.queryByLabelText(/^font$/i)).toBeNull();
+
+    // Type an icon name into the autocomplete and commit it.
+    const iconInput = style.getByLabelText(/fontawesome/i);
+    await userEvent.click(iconInput);
+    await userEvent.clear(iconInput);
+    await userEvent.type(iconInput, "microchip");
+    // The dropdown offers the match; picking it commits the patch.
+    await userEvent.click(
+      within(await canvas.findByTestId("icon-suggestions-list"))
+        .getByRole("option", { name: /microchip/i }),
+    );
+
+    const readModel = async (): Promise<string> =>
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
+        .readFile("main.hcl");
+
+    await waitFor(async () => {
+      const hcl = await readModel();
+      await expect(hcl).toMatch(/icon\s+= "microchip"/);
+    });
+    // ...and it reached the system's own block, not a sibling's.
+    const hcl = await readModel();
+    const block = hcl.slice(hcl.indexOf('system "aux-system"'));
+    await expect(block).toMatch(/icon\s+= "microchip"/);
   },
 };
