@@ -4,7 +4,6 @@ import type { ComponentPatch } from "../../../../actionLog";
 import type { TextAlign } from "./geometry";
 import type { ComponentData, PortData } from "../../../../modelView";
 import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
-import { scopeFile } from "./attributeScope";
 
 interface Props {
   componentKey: string;
@@ -31,6 +30,11 @@ interface Props {
    */
   projectId?: string | undefined;
 }
+
+// Which file each panel's attributes are written to, named the way the user
+// would: the model file, or the open view's own file. `<view>` is a
+// placeholder -- the inspector does not know which view is open.
+const SCOPE_FILE = { component: "system.hcl", view: "views/<view>.hcl" };
 
 let {
   componentKey,
@@ -135,14 +139,13 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       travels with the component; the alignment button after it is written to
       the open view file and to nothing else. Rendered in one list the two are
       indistinguishable, so the headings carry a hover popup naming the file
-      each half writes to (`attributeScope` is the same map the write paths
-      are described against).
+      each half writes to.
     -->
     <div class="space-y-2" data-testid="component-attributes">
       <span
         class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
         data-testid="component-attributes-heading"
-        data-tip="Written to {scopeFile("component")} — these travel with the component wherever it is used"
+        data-tip="Written to {SCOPE_FILE.component} — these travel with the component wherever it is used"
       >
         Component
       </span>
@@ -228,7 +231,7 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
       <span
         class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
         data-testid="view-attributes-heading"
-        data-tip="Written to {scopeFile("view")} — these apply to this diagram only"
+        data-tip="Written to {SCOPE_FILE.view} — these apply to this diagram only"
       >
         This view
       </span>

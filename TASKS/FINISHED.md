@@ -15,12 +15,13 @@ elsewhere and your color is there and your alignment is not. The
 Inventory had the same four values as read-only text, so it could report
 a component's color but not change it.
 
-- **`attributeScope.ts` is the map both halves are described against**:
-  every attribute, and the file it lands in, with both panels' contents
-  derived from it — so a panel cannot claim a file the dispatcher does
-  not use. `text_align` ends up the *only* view-side field the inspector
-  edits (`x`/`y`/`width`/`height` belong to the view too, but the canvas
-  drags them). That is honest rather than thin.
+- **The two panels each name their file, and the split is pinned by test
+  rather than by a map.** Each heading carries a hover popup saying what it
+  writes to (`system.hcl`, or this view's file). The classification lives in
+  the markup rather than a shared table — an earlier `attributeScope` map was
+  read by nothing but its own test, and the negative assertions do the real
+  work: alignment must not be in the component panel, and each half must land
+  in its own file.
 - **`ComponentStyleFields` is one component on two pages, not two
   copies.** The Inventory's read-only rows became an editable Style tab
   through the same controls Modeling uses, so a style added once appears
