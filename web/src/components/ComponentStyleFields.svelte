@@ -62,14 +62,21 @@ function commitFullName() {
 }
 </script>
 
+<!-- One field caption. Four controls repeat it verbatim, and the `for` has to
+     track the control's id by hand in each. -->
+{#snippet fieldLabel(id: string, text: string)}
+  <label class="label py-1" for={id}>
+  <span
+    class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70"
+  >
+      {text}
+    </span>
+</label>
+{/snippet}
+
 <div class="space-y-2" data-testid="component-style-fields">
   <div class="form-control">
-    <label class="label py-1" for="comp-fullname-input">
-      <span
-        class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-        Full name
-      </span>
-    </label>
+    {@render fieldLabel("comp-fullname-input", "Full name")}
     <textarea
       id="comp-fullname-input"
       bind:value={draftFullName}
@@ -86,12 +93,7 @@ function commitFullName() {
   />
 
   <div class="form-control">
-    <label class="label py-1" for="comp-color-input">
-      <span
-        class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-        Color
-      </span>
-    </label>
+    {@render fieldLabel("comp-color-input", "Color")}
     <select
       id="comp-color-input"
       value={style.color}
@@ -109,12 +111,7 @@ function commitFullName() {
   </div>
 
   <div class="form-control">
-    <label class="label py-1" for="comp-border-input">
-      <span
-        class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-        Border
-      </span>
-    </label>
+    {@render fieldLabel("comp-border-input", "Border")}
     <select
       id="comp-border-input"
       value={style.border}
@@ -131,12 +128,7 @@ function commitFullName() {
   </div>
 
   <div class="form-control">
-    <label class="label py-1" for="comp-font-input">
-      <span
-        class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70">
-        Font
-      </span>
-    </label>
+    {@render fieldLabel("comp-font-input", "Font")}
     <select
       id="comp-font-input"
       value={style.font}
