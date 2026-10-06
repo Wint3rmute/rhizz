@@ -6,9 +6,6 @@
 //! project, so a data dir is a plain directory tree. No authentication or
 //! authorization is implemented — the server assumes a trusted, public
 //! environment.
-//!
-//! This crate is a library; the `rhizz` binary (from `rhizz-cli`) exposes it
-//! as the `rhizz web` subcommand.
 #![deny(clippy::all)]
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
