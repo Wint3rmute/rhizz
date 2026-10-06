@@ -47,11 +47,11 @@ a component's color but not change it.
   which a write to both files also satisfies — and now asserts the view
   file stays clean. Model reads match `/color\s+= "warning"/` rather than
   an exact line, since the serializer aligns `=` per block.
-- **VRT**: 45 re-baselined, 11 new. **Still open**: systems carry no style
-  attributes (next task, needs a backend op), and the layout-save effect
-  still has no dirty check (Task 119a).
-- **Validation**: `just test` (363 cargo + 952 Vitest + 92 e2e), `just
-  lint`, `just build`, `just vrt` and `just format` all pass.
+- **VRT**: 8 new baselines, 42 re-recorded (the tab row is in every
+  Inventory one). **Still open**: systems carry no style attributes (next
+  task), and the layout-save effect still has no dirty check (Task 119a).
+- **Validation**: `just test` (363 cargo + 950 Vitest + 92 e2e), `just
+  lint`, `just build`, `just vrt` (258) and `just format` all pass.
 
 ---
 
