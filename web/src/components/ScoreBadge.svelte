@@ -13,6 +13,9 @@
 // counts, the expand chevron and the strictness control, and those three are
 // what the bar is *for*; the score is a summary the Overview page already spells
 // out in full. Above `sm` there is room for it, and it is there.
+//
+// It renders a `<span>`: it sits inside the bar's toggle button, and a `<div>`
+// there would be flow content inside a phrasing-content-only element.
 let {
   score,
 }: {
@@ -22,10 +25,10 @@ let {
 </script>
 
 {#if score !== null}
-  <div
+  <span
   class="badge badge-sm badge-outline badge-info font-medium text-xs hidden sm:flex"
   title={`Architecture maturity / completion score: ${score.overall_percentage.toFixed(1)}%`}
 >
     Score: {score.overall_percentage.toFixed(0)}%
-  </div>
+  </span>
 {/if}

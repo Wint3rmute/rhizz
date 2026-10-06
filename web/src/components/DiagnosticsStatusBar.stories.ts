@@ -77,9 +77,9 @@ export const DuplicateDiagnostics: Story = {
     await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
     await userEvent.click(await bar.findByRole("button"));
     await waitFor(async () => {
-      // Two expanded alert rows (the collapsed preview span stays too, so
+      // Two expanded list rows (the collapsed preview span stays too, so
       // text matching would find three).
-      await expect(bar.getAllByRole("alert")).toHaveLength(2);
+      await expect(bar.getAllByRole("listitem")).toHaveLength(2);
     });
   },
 };
@@ -120,11 +120,37 @@ export const FullStrip: Story = {
     // than its visibility: it is `hidden` below `sm`, and this runner's
     // viewport is phone-sized — the three zones side by side at full width is
     // what the VRT baseline of this story shows.
-    await expect(
-      await bar.findByTitle(/Architecture maturity/),
-    ).toBeInTheDocument();
+    const scoreBadge = await bar.findByTitle(/Architecture maturity/);
+    await expect(scoreBadge).toBeInTheDocument();
     await expect(await bar.findByText("1 error")).toBeVisible();
     await expect(bar.getByLabelText("Strictness")).toBeVisible();
+
+    // The strip's toggle is a full-bleed layer *under* the content: the row is
+    // capped to the panel's content edges, so a button inside it leaves the
+    // gutters dead — on a screen wider than the cap they were exactly that.
+    // The guards: the button spans the bar's full width (gutters included),
+    // the pointer falls through the `pointer-events-none` row onto it —
+    // checked at the count badge, the row's leftmost always-visible thing,
+    // and at the bar's far-left edge — and the strictness select stays outside
+    // it: a `<select>` inside a `<button>` is neither valid markup nor a
+    // usable control, so its zone remains its own. The button carries the
+    // pointer cursor explicitly — the browser gives a bare `<button>` none.
+    const toggle = bar.getByRole("button");
+    await expect(getComputedStyle(toggle).cursor).toBe("pointer");
+    const barBox = canvas.getByTestId("diagnostics-status-bar")
+      .getBoundingClientRect();
+    await expect(toggle.getBoundingClientRect().width)
+      .toBeCloseTo(barBox.width);
+    const hitAt = (x: number, y: number) =>
+      document.elementFromPoint(x, y)?.closest("button");
+    const countBadge = await bar.findByText("1 error");
+    const countBox = countBadge.getBoundingClientRect();
+    await expect(hitAt(countBox.x + 1, countBox.y + 1)).toBe(toggle);
+    await expect(hitAt(barBox.x + 2, barBox.y + barBox.height / 2))
+      .toBe(toggle);
+    await expect(toggle.contains(bar.getByLabelText("Strictness"))).toBe(
+      false,
+    );
   },
 };
 
@@ -193,7 +219,7 @@ export const Expanded: Story = {
     await userEvent.click(await bar.findByRole("button"));
     // One row per diagnostic; the collapsed strip's plain-text preview of the
     // first message matches the panel's text, so assert the rows, not the text.
-    await expect(await bar.findAllByRole("alert")).toHaveLength(3);
+    await expect(await bar.findAllByRole("listitem")).toHaveLength(3);
 
     const panel = surface(root, 0);
     const background = (el: Element) => getComputedStyle(el).backgroundColor;
