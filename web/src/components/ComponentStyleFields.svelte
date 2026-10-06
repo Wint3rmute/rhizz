@@ -14,6 +14,7 @@
 // them next to a color picker would say otherwise. Modeling keeps them in its
 // own component panel; the Inventory shows tags read-only in Metadata.
 import IconAutocompleteInput from "./IconAutocompleteInput.svelte";
+import type { ComponentPatch } from "../actionLog";
 import {
   BORDER_OPTIONS,
   type BorderStyle,
@@ -32,20 +33,16 @@ interface Props {
     border: BorderStyle;
     font: string;
   };
-  /** One attribute changed. Merged into the component by the caller. */
-  onchange: (patch: StylePatch) => void;
+  /**
+   * One attribute changed. Deliberately `ComponentPatch` and not a narrower
+   * style-only type: it is what both call sites already speak (the inspector's
+   * `onupdate` and the Inventory's `onstylechange`), so a second name for the
+   * same shape would be one more thing to keep in step.
+   */
+  onchange: (patch: ComponentPatch) => void;
 }
 
 let { style, onchange }: Props = $props();
-
-/** What the shared block is allowed to patch — the four above, nothing else. */
-export type StylePatch = {
-  full_name?: string;
-  icon?: string | undefined;
-  color?: ComponentColor;
-  border?: BorderStyle;
-  font?: string;
-};
 
 // The full name is a textarea committed on blur, so the draft is local: a
 // half-typed name must not rewrite the model on every keystroke, and an
