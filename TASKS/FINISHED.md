@@ -4,7 +4,7 @@ Completed tasks are listed here, most recent first.
 
 ---
 
-## Task 122 — The inspector says which file each attribute is written to
+## Task 123 — The inspector says which file each attribute is written to
 
 The Modeling inspector listed a node's attributes in one run of
 form-controls, so a color and a text alignment looked like the same kind
@@ -56,7 +56,7 @@ a component's color but not change it.
 
 ---
 
-## Task 121 — Systems are first-class in the stats bar and the Inventory
+## Task 122 — Systems are first-class in the stats bar and the Inventory
 
 Systems stopped being a thing you can only reach through Modeling: the
 overview counts them, the Inventory lists them beside components, and
@@ -102,6 +102,31 @@ either page can create one.
   in Modeling except gaining a view bound to a new system.
 - **Validation**: `just test` (cargo + 928 Vitest + 86 e2e), `just lint`,
   `just build` and `just format` all pass.
+
+## Task 121 — Merge rhizz-server into rhizz-cli as `rhizz web` subcommand
+
+Simplified the build infrastructure by shipping a single `rhizz` binary that
+combines both the CLI and the web server. Instead of a separate `rhizz-server`
+binary, the `web` subcommand was added to `rhizz-cli` to run the HTTP server.
+
+- **`rhizz-server` is now a library crate** — the `[[bin]]` target and
+  `main.rs` are gone; the crate exposes `server`, `signal`, `assets`, and
+  `storage` modules that `rhizz-cli` links against.
+- **`rhizz web` is the new subcommand** — `Command::Web` carries `--addr` and
+  `--data-dir` flags, both with `RHIZZ_ADDR` / `RHIZZ_DATA_DIR` env var
+  fallbacks via clap's `env` feature. `run_web()` creates a tokio runtime and
+  blocks on `rhizz_server::server::run()`.
+- **One binary, one default target** — `cargo r` runs the CLI, `cargo r -- web`
+  starts the server. The Dockerfile builds `rhizz-cli` and runs
+  `CMD ["rhizz", "web"]`.
+- **Tests** — three new unit tests cover `web` subcommand parsing (defaults,
+  flags, and that `effective()` returns `None` for `web`).
+- **Docs updated** — README.md, SPEC/cli.md (new Web Server section),
+  SPEC/architecture.md, SPEC/frontend.md, and the placeholder HTML in
+  `rhizz-server/build.rs`.
+- **Validation**: `just test` (366 Rust tests pass), `just lint`, `just build`,
+  `just format` all pass. One pre-existing flaky e2e test
+  (`command-palette.spec.ts`) failed on a timing issue unrelated to this change.
 
 ---
 
