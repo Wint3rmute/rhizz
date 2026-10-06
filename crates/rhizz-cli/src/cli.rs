@@ -117,7 +117,7 @@ impl Cli {
     /// Returns the effective command kind and the project path.
     ///
     /// Returns `None` for the `web` subcommand, which has no project path.
-    fn effective(&self) -> Option<(CommandKind, &PathBuf)> {
+    const fn effective(&self) -> Option<(CommandKind, &PathBuf)> {
         match &self.command {
             Some(Command::Check { path }) => Some((CommandKind::Check, path)),
             Some(Command::Score { path }) => Some((CommandKind::Score, path)),

@@ -21,9 +21,9 @@ use std::path::{Path, PathBuf};
 /// Minimal SPA shell served when the real frontend was never built.
 const PLACEHOLDER_HTML: &str = r#"<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>rhizz-server</title></head>
+  <head><meta charset="utf-8"><title>rhizz web</title></head>
   <body>
-    <h1>rhizz-server is running</h1>
+    <h1>rhizz web is running</h1>
     <p>The web frontend is not embedded in this binary.</p>
     <p>Rebuild with <code>just build</code> (or run
     <code>cd web &amp;&amp; deno run build</code> first) to bundle the editor UI.</p>
@@ -72,7 +72,7 @@ fn main() {
         write_placeholder(&build_dir);
         println!(
             "cargo:warning=rhizz-server: no frontend build found; embedding a placeholder — \
-             run `just build` to embed the real UI"
+             run `just build` to embed the real UI (served by `rhizz web`)"
         );
     }
 

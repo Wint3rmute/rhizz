@@ -21,9 +21,42 @@ rhizz <command> [options] [path]
 | `check` | Parse project `.hcl` files (`system.hcl`, view files), validate, print errors/warnings. | `0` if no errors, `1` otherwise |
 | `score` | Run `check`, then print the completion report.                              | `0` if no errors, `1` otherwise |
 | `build` | Run `check` + `score` in sequence. Default when no command given.           | `0` if no errors, `1` otherwise |
+| `fmt`   | Canonically format the model `.hcl` files in place (or verify with `--check`). | `0` on success, `1` if files need formatting (with `--check`) or on error |
+| `watch` | Run `build`, then re-run on `.hcl` file changes.                            | `0` on clean exit (Ctrl-C)      |
+| `web`   | Serve the web editor over HTTP (frontend + VFS persistence API).            | `0` on clean shutdown, `1` on error |
 
-Each command is a superset of the previous — `build` does everything. Early
-abort on errors: if `check` finds errors, `score` is skipped.
+Each of `check`, `score`, `build` is a superset of the previous — `build` does
+everything. Early abort on errors: if `check` finds errors, `score` is skipped.
+
+---
+
+## `web` — Web Server
+
+```
+rhizz web [--addr ADDR] [--data-dir DIR]
+```
+
+Starts an HTTP server (axum) that serves the compiled web frontend and
+persists the browser-based virtual filesystem (VFS) to disk. The server
+embeds the frontend at compile time (via `rhizz-server`'s `build.rs`), so the
+`rhizz` binary is fully self-contained.
+
+| Flag         | Env var          | Default          | Description                                     |
+| ------------ | ---------------- | ---------------- | ----------------------------------------------- |
+| `--addr`     | `RHIZZ_ADDR`     | `127.0.0.1:3000` | Address to bind the HTTP server to              |
+| `--data-dir` | `RHIZZ_DATA_DIR` | `rhizz-data`     | Directory holding one sub-directory per project |
+
+The server exposes:
+
+- `GET /healthz` — liveness probe, returns `ok`
+- `GET /api/vfs` — fetch the entire VFS state (all projects + nodes)
+- `PUT /api/vfs` — persist the entire VFS state (authoritative; projects absent
+  from the payload are deleted)
+- `GET /*` — the embedded SPA frontend (falls back to the shell for client-side
+  routes)
+
+No authentication is implemented — the server assumes a trusted, public
+environment.
 
 ---
 
