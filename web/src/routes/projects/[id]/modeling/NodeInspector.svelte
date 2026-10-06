@@ -122,22 +122,68 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
 </script>
 
 <div class="space-y-4 text-sm" data-testid="node-inspector">
-  <!-- Component Info -->
+  <!-- The node's attributes, split by the file each is written to. Two
+       panels because they are not one list: the alignment below is written
+       to the open `views/<view>.hcl` and to nothing else, while everything
+       after the divider is written to the system model and travels with the
+       component. Rendered together the two are indistinguishable, so each
+       heading carries a hover popup naming its file — `attributeScope` is
+       the same map the write paths are described against.
+
+       The view panel leads because the view is what you are looking at: its
+       one attribute is the one whose effect is visible on the canvas without
+       leaving it, and it is the narrower half. The component panel is the
+       model — nine fields, travelling further than this diagram. -->
   <div class="space-y-2">
     <div class="text-[11px] text-base-content/50 font-mono truncate"
       title={componentKey}>
       {componentKey}
     </div>
 
-    <!--
-      Two panels, because a node's attributes do not all live in one file.
-      Everything below the divider here is written to the system model and
-      travels with the component; the alignment button after it is written to
-      the open view file and to nothing else. Rendered in one list the two are
-      indistinguishable, so the headings carry a hover popup naming the file
-      each half writes to (`attributeScope` is the same map the write paths
-      are described against).
-    -->
+    <div class="space-y-1" data-testid="view-attributes">
+      <span
+        class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
+        data-testid="view-attributes-heading"
+        data-tip="Written to {scopeFile("view")} — these apply to this diagram only"
+      >
+        This view
+      </span>
+      <div class="space-y-1 pt-1">
+        <span
+          class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+          Text alignment
+        </span>
+        <div class="join w-full">
+          <button
+            class="btn btn-xs join-item flex-1 {textAlign === 'center'
+              ? 'btn-primary'
+              : 'btn-ghost'}"
+            onclick={() => onsettextalign("center")}
+          >
+            Center
+          </button>
+          <button
+            class="btn btn-xs join-item flex-1 {textAlign === 'top-center'
+              ? 'btn-primary'
+              : 'btn-ghost'}"
+            onclick={() => onsettextalign("top-center")}
+          >
+            Top
+          </button>
+          <button
+            class="btn btn-xs join-item flex-1 {textAlign === 'top-left'
+              ? 'btn-primary'
+              : 'btn-ghost'}"
+            onclick={() => onsettextalign("top-left")}
+          >
+            Top-left
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider my-1"></div>
+
     <div class="space-y-2" data-testid="component-attributes">
       <span
         class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
@@ -222,49 +268,6 @@ function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
     </div>
     </div>
 
-    <div class="divider my-1"></div>
-
-    <div class="space-y-1 pt-1" data-testid="view-attributes">
-      <span
-        class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
-        data-testid="view-attributes-heading"
-        data-tip="Written to {scopeFile("view")} — these apply to this diagram only"
-      >
-        This view
-      </span>
-      <div class="space-y-1 pt-1">
-        <span
-          class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
-          Text alignment
-        </span>
-        <div class="join w-full">
-          <button
-            class="btn btn-xs join-item flex-1 {textAlign === 'center'
-              ? 'btn-primary'
-              : 'btn-ghost'}"
-            onclick={() => onsettextalign("center")}
-          >
-            Center
-          </button>
-          <button
-            class="btn btn-xs join-item flex-1 {textAlign === 'top-center'
-              ? 'btn-primary'
-              : 'btn-ghost'}"
-            onclick={() => onsettextalign("top-center")}
-          >
-            Top
-          </button>
-          <button
-            class="btn btn-xs join-item flex-1 {textAlign === 'top-left'
-              ? 'btn-primary'
-              : 'btn-ghost'}"
-            onclick={() => onsettextalign("top-left")}
-          >
-            Top-left
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <div class="divider my-2"></div>
