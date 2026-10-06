@@ -129,6 +129,23 @@ case, but nothing calls it that way yet.
 
 ---
 
+## (For around November) Task <N> - Migrate to Typescript 7
+
+TypeScript 7.0 (the native Go port) went GA on July 8, 2026 34. But
+svelte-check, svelte2tsx, and the Svelte language server don't just shell out to
+tsc — they import TypeScript's programmatic compiler API and drive the compiler
+directly. TypeScript 7.0 shipped without a stable programmatic API; that's
+deferred to 7.1, currently targeted for around October 2026 582.
+
+Definition of done:
+
+1. Check if Typescript 7 works with svelte now
+2. If it does not - halt the execution immediately and inform the user that it cannot be done
+3. If it does - migrate the project to Typescript 7:
+  - Update dependencies and Typescript configuration
+  - Remove all leftovers of Typescript 6, with zero thoughts about backward compatibility
+  - Verify the migration by usual instructions from AGENTS.md
+
 ## (For later brainstorming) Task <N> - routing multiple connections between 2 components
 
 When 2 components have more than one connection between them, connection routing
