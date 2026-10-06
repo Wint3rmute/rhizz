@@ -2,15 +2,14 @@
 name = "rhizz-server"
 version = "0.1.0"
 edition = "2024"
-description = "Standalone HTTP server for the rhizz web editor"
+description = "HTTP server library for the rhizz web editor (used by `rhizz web`)"
 license.workspace = true
+
+[lib]
+path = "src/lib.rs"
 
 [lints]
 workspace = true
-
-[[bin]]
-name = "rhizz-server"
-path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
