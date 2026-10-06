@@ -156,3 +156,41 @@ test("the Inventory Style tab writes to the model, not the view", async ({ page 
   expect(view).not.toMatch(/dotted/);
   expect(view).not.toMatch(/accent/);
 });
+
+test("a system icon edit rewrites the model, full name and icon only", async ({ page }) => {
+  const id = await createNewProject(page, "E2E system style write");
+  await page.goto(`/projects/${id}/inventory/main`);
+
+  const pane = page.getByTestId("inventory-detail-pane");
+  await expect(pane).toBeVisible();
+  await page.getByRole("tab", { name: "Style" }).click();
+
+  // System mode: full name + icon, no component-only selects.
+  const style = page.getByTestId("inventory-style-fields");
+  await expect(style).toBeVisible();
+  await expect(pane.getByLabel(/full name/i)).toBeVisible();
+  await expect(style.getByTestId("icon-autocomplete-wrapper")).toBeVisible();
+  await expect(pane.locator("#comp-color-input")).toHaveCount(0);
+  await expect(pane.locator("#comp-border-input")).toHaveCount(0);
+  await expect(pane.locator("#comp-font-input")).toHaveCount(0);
+
+  // Commit a full name through the blur-commit textarea.
+  const fullName = pane.getByLabel(/full name/i);
+  await fullName.fill("Main test system");
+  await fullName.blur();
+
+  await expect
+    .poll(async () => {
+      const files = await storedFiles(page);
+      return files["main.hcl"] ?? files["system.hcl"] ?? "";
+    }, { timeout: 10_000 })
+    .toMatch(/full_name = "Main test system"/);
+
+  const files = await storedFiles(page);
+  const model = files["main.hcl"] ?? files["system.hcl"] ?? "";
+  // The edit lands on the system block, not on a view file.
+  const block = model.slice(model.indexOf('system "main"'));
+  expect(block).toMatch(/full_name = "Main test system"/);
+  const view = files["views/main.hcl"] ?? "";
+  expect(view).not.toContain("Main test system");
+});

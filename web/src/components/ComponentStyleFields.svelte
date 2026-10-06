@@ -32,9 +32,15 @@ interface Props {
    * same shape would be one more thing to keep in step.
    */
   onchange: (patch: ComponentPatch) => void;
+  /**
+   * `"system"` renders only full name + icon: systems carry no
+   * color/border/font in the model, and showing those controls would offer
+   * edits the `update_system` op rejects. Defaults to the full set.
+   */
+  mode?: "component" | "system" | undefined;
 }
 
-let { style, onchange }: Props = $props();
+let { style, onchange, mode = "component" }: Props = $props();
 
 // Committed on blur, so a half-typed name must not rewrite the model on every
 // keystroke and an abandoned edit reverts. Writable derived rather than
@@ -80,6 +86,7 @@ function commitFullName() {
     onchange={(newIcon) => onchange({ icon: newIcon || undefined })}
   />
 
+  {#if mode === "component"}
   <div class="form-control">
     {@render fieldLabel("comp-color-input", "Color")}
     <select
@@ -132,4 +139,5 @@ function commitFullName() {
       {/each}
     </select>
   </div>
+  {/if}
 </div>

@@ -16,16 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Allow assigning icons to systems - same as with components
-
-The "style" section on the inventory/ page already allows editing component-specific properties. I want to re-use
-the same idea on systems. The inventory page's "style" section shall also be available for systems, allowing the user to change:
-
-- System's full name
-- System icon (optional, like with components)
-
-This will probably require changes both on backend and in frontend!
-
 ## Task <N> - Add a red "Delete" tab in inventory's details view
 
 I want to be able to delete both systems and components from the inventory.

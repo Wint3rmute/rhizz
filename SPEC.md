@@ -77,6 +77,7 @@ system "consumer-drone" {
 | ------------- | ------------ | -------- | ------- | -------------------------- |
 | _label_       | string       | **yes**  | —       | Unique system identifier   |
 | `full_name` | string       | no       | `""`    | Full official name, expanding abbreviations |
+| `icon`        | string       | no       | `""`    | Optional FontAwesome icon name (e.g. `"microchip"`, `"server"`, `"wifi"`) |
 | `tags`        | list(string) | no       | `[]`    | Filtering tags             |
 
 **Children:** `instance`, `connection`

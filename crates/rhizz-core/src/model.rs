@@ -274,6 +274,8 @@ pub struct System {
     pub label: String,
     /// Full official name, expanding abbreviations.
     pub full_name: String,
+    /// Optional icon name (e.g. `FontAwesome` icon identifier).
+    pub icon: Option<String>,
     /// Filtering tags.
     pub tags: Vec<String>,
     /// Direct child components.

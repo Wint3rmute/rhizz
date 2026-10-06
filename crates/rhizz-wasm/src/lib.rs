@@ -421,6 +421,8 @@ impl From<&rhizz_core::Protocol> for ProtocolJS {
 #[wasm_bindgen]
 pub struct SystemJS {
     label: String,
+    full_name: String,
+    icon: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -431,12 +433,28 @@ impl SystemJS {
     pub fn label(&self) -> String {
         self.label.clone()
     }
+
+    /// Full official name, expanding abbreviations.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn full_name(&self) -> String {
+        self.full_name.clone()
+    }
+
+    /// Optional `FontAwesome` icon name.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn icon(&self) -> Option<String> {
+        self.icon.clone()
+    }
 }
 
 impl From<&rhizz_core::System> for SystemJS {
     fn from(s: &rhizz_core::System) -> Self {
         Self {
             label: s.label.clone(),
+            full_name: s.full_name.clone(),
+            icon: s.icon.clone(),
         }
     }
 }

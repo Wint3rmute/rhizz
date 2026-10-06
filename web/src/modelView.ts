@@ -77,6 +77,7 @@ export interface RawModelPayload {
   systems?: {
     label: string;
     full_name?: string;
+    icon?: string;
     tags?: string[];
   }[];
   components?: {
