@@ -1,18 +1,10 @@
 <script lang="ts">
-// The component attributes that decide how a node *looks*, as one editable
-// block: full name, icon, color, border, font.
+// The component attributes that decide how a node *looks*: full name, icon,
+// color, border, font. Shared by Modeling's node inspector and the Inventory's
+// Style tab, which edit the same `system.hcl` attributes — one component, so a
+// style added here appears on both pages at once.
 //
-// Shared by Modeling's node inspector and the Inventory page's Style tab,
-// because they edit the same `system.hcl` attributes and were drifting apart
-// — the Inventory showed the same four values as read-only text in its
-// Metadata tab, so the only way to change them was to go to Modeling and know
-// which node to select. One component means one set of controls and one
-// write path; a style added here appears on both pages at once.
-//
-// Deliberately not here: tags, `leaf`, and ports. They are attributes too, but
-// they are not presentation — they change what the model *means*, and putting
-// them next to a color picker would say otherwise. Modeling keeps them in its
-// own component panel; the Inventory shows tags read-only in Metadata.
+// Deliberately not tags, `leaf` or ports: attributes, but not presentation.
 import IconAutocompleteInput from "./IconAutocompleteInput.svelte";
 import type { ComponentPatch } from "../actionLog";
 import {
@@ -44,17 +36,13 @@ interface Props {
 
 let { style, onchange }: Props = $props();
 
-// The full name is a textarea committed on blur, so the draft is local: a
-// half-typed name must not rewrite the model on every keystroke, and an
-// abandoned edit must revert rather than persist. Writable derived rather
-// than `$state` + `$effect`, which would be the same thing with an extra
-// frame: the model value is the fallback, and the draft only diverges while
-// the field is being edited.
+// Committed on blur, so a half-typed name must not rewrite the model on every
+// keystroke and an abandoned edit reverts. Writable derived rather than
+// `$state` + `$effect`, which is the same thing an extra frame later.
 let editedFullName: string | undefined = $state(undefined);
 let draftFullName = $derived(editedFullName ?? style.full_name ?? "");
 
 function commitFullName() {
-  // Only a changed draft commits; blur on an untouched field must not write.
   if (draftFullName !== (style.full_name ?? "")) {
     onchange({ full_name: draftFullName });
   }

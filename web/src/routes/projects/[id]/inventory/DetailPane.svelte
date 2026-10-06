@@ -148,14 +148,10 @@ function flattenTags(def: InventoryDefinition): string[] {
     </div>
   {:else}
     <!--
-        Scrollable, and the labels are `text-xs`. Both are about the same
-        thing: the pane takes two fifths of the row, and "Description / Style /
-        Ports (n) / Requirements / Metadata" does not fit in that at `text-sm`
-        — Metadata was clipped off the right edge, which is worse than a
-        scrollbar because the tab is then unreachable rather than merely
-        scrolled. Measured at 1280 wide the row now fits outright (383px of
-        383); below `md`, where the pane is the full width of a phone, it
-        scrolls instead of hiding a tab.
+        `text-xs` and scrollable for the same reason: five tabs do not fit
+        two fifths of the row at `text-sm`, and Metadata was clipped off the
+        right edge — unreachable, not merely scrolled. Measured at 1280 wide
+        the row now fits outright (383px of 383).
       -->
       <div
         class="flex items-center border-b border-base-300 px-2 overflow-x-auto"
@@ -258,19 +254,11 @@ function flattenTags(def: InventoryDefinition): string[] {
         {/if}
       {:else if activeTab === "Style" && onstylechange !== undefined}
         <!--
-            The same `ComponentStyleFields` Modeling's inspector uses, editing
-            the same `system.hcl` attributes. They were listed read-only here
-            before, which meant the Inventory could tell you a component's color
-            but not change it -- the only way to edit was to find the node on the
-            Modeling canvas. Metadata no longer repeats them: a value shown twice
-            in the same pane, once editable and once not, reads as a bug in one
-            of them.
-
             The attributes come off the raw payload, so they arrive as the file
-            spelled them -- absent, or an empty string from hand-written HCL.
-            The controls need the explicit default the read model normalizes to,
-            or the select would hold a value that is not one of its options and
-            select nothing.
+            spelled them: absent, or an empty string from hand-written HCL. The
+            controls need the explicit default the read model normalizes to, or
+            a select would hold a value that is not one of its options and select
+            nothing.
           -->
           <div data-testid="inventory-style-fields">
             <ComponentStyleFields
