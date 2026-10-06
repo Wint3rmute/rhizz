@@ -145,6 +145,10 @@ Definition of done:
   - Update dependencies and Typescript configuration
   - Remove all leftovers of Typescript 6, with zero thoughts about backward compatibility
   - Verify the migration by usual instructions from AGENTS.md
+  - Commit that state
+  - Do a comprehensive check of the current typescript configuration, focusing on whether something can be slimmed down after the update
+  - If you made changes - verify again and commit the updated configuration
+
 
 ## (For later brainstorming) Task <N> - routing multiple connections between 2 components
 
