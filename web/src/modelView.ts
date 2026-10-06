@@ -17,6 +17,7 @@ import {
   type ComponentFont,
   DEFAULT_COLOR,
   DEFAULT_FONT,
+  toBorderStyle,
 } from "./routes/projects/[id]/modeling/visuals";
 
 export interface PortData {
@@ -129,10 +130,6 @@ function toRole(role: string | undefined): PortData["role"] {
   return normalized === "provider" || normalized === "consumer"
     ? normalized
     : "peer";
-}
-
-function toBorderStyle(border: string | undefined): BorderStyle {
-  return border === "dashed" || border === "dotted" ? border : "solid";
 }
 
 /**

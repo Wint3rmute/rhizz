@@ -1,4 +1,4 @@
-//! `rhizz-server` — a standalone HTTP server for `rhizz`.
+//! `rhizz-server` — HTTP server library for the `rhizz web` subcommand.
 //!
 //! The server serves the compiled [`web`](https://github.com/wint3rmute/rhizz/tree/main/web)
 //! frontend over HTTP and gives the browser-based virtual filesystem (VFS) a

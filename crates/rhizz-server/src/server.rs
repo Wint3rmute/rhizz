@@ -1,8 +1,8 @@
 //! HTTP server layer built on axum.
 //!
-//! This module owns the axum router: every route rhizz-server exposes —
-//! liveness, the VFS persistence API, and the embedded frontend — is
-//! assembled here, so handlers can be exercised in-process with
+//! This module owns the axum router: every route the `rhizz web` subcommand
+//! exposes — liveness, the VFS persistence API, and the embedded frontend —
+//! is assembled here, so handlers can be exercised in-process with
 //! `tower::ServiceExt::oneshot` without binding a socket.
 
 use std::path::PathBuf;
@@ -163,7 +163,7 @@ fn error_response(status: StatusCode, body: &'static str) -> Response {
 /// fails after bind.
 pub async fn run(addr: &str, data_dir: PathBuf) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!(%addr, data_dir = %data_dir.display(), "rhizz-server listening");
+    tracing::info!(%addr, data_dir = %data_dir.display(), "rhizz web listening");
 
     // Wait for a termination signal (SIGINT / SIGTERM) and then shut the
     // server down gracefully. Running as PID 1 (the container's init), the

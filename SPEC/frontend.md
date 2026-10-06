@@ -137,7 +137,7 @@ after `node:fs/promises`) is the only thing pages use; the id-based
 
 - **Browser** (default): one JSON document in `localStorage` under
   `rhizz:vfs:v1`.
-- **`rhizz-server`** (when the build sets `VITE_RHIZZ_SERVER_URL`): a
+- **`rhizz web`** (when the build sets `VITE_RHIZZ_SERVER_URL`): a
   `GET`/`PUT /api/vfs` pair carrying the whole VFS as
   `{ version, projects, nodes }`.
 

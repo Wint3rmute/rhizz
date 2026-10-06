@@ -82,6 +82,19 @@ component "draft-module" {
   leaf = false
 }
 
+// Deliberately unstyled: the Style tab story styles it, and a fixture that
+// arrived pre-styled could not tell a write that landed from one that was
+// always there.
+component "styled-module" {
+  full_name = "Module that gets styled from the Style tab"
+  leaf        = true
+
+  port "bus" {
+    protocol = "power"
+    role     = "consumer"
+  }
+}
+
 system "demo-system" {
   full_name = "System using two of the definitions"
 
@@ -446,6 +459,53 @@ export const DetailPaneStacksBelowTheDiagram: Story = {
   },
 };
 
+/**
+ * Every tab has to be reachable, not just present.
+ *
+ * Adding a fifth tab made the row wider than the pane takes, and the last one
+ * was clipped off the right edge — still in the DOM, still findable by a test
+ * that queries by role, and invisible to anyone using the page.
+ *
+ * The fix is a scrollable row, and that is what this pins: when the tabs do
+ * not fit — which they cannot at this browser's ~414px, below `md` where the
+ * pane is the full width — the row scrolls instead of clipping. A tab outside
+ * the visible box is fine *because* the box scrolls; the same tab outside a
+ * box that does not is gone. Whether they fit on a real screen is the VRT
+ * baselines' job, at 1280 wide.
+ */
+export const EveryTabFitsInThePane: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const pane = await canvas.findByTestId("inventory-detail-pane");
+    const list = within(pane).getByRole("tablist", { name: "Entity details" });
+
+    const names = [
+      "Description",
+      "Style",
+      "Ports",
+      "Requirements",
+      "Metadata",
+    ];
+    const tabs = within(list).getAllByRole("tab");
+    await expect(tabs).toHaveLength(names.length);
+    for (const name of names) {
+      await expect(within(list).getByRole("tab", { name: new RegExp(name) }))
+        .toBeTruthy();
+    }
+
+    // The row is its own scroll container, so an overlong tab list stays
+    // reachable. Asserted as the computed value rather than a class name, so
+    // a future refactor cannot leave the behaviour behind without the
+    // behaviour going with it.
+    await expect(getComputedStyle(list).overflowX).toBe("auto");
+    // ...and at this width it genuinely does overflow, which is the case the
+    // clipping regression was about. If a future tab list did fit, this would
+    // fail and the question would be worth asking again.
+    await expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+  },
+};
+
 // The documentation editor, open. Every other documentation story cancels back
 // to the viewer, so without this one the editor's own layout inside the pane —
 // its height, its border, where the Save/Cancel row sits — has no picture of it
@@ -460,5 +520,81 @@ export const DocumentationEditorOpen: Story = {
     await expect(canvas.getByTestId("inventory-doc-save-button")).toBeTruthy();
     await expect(canvas.getByTestId("inventory-doc-cancel-button"))
       .toBeTruthy();
+  },
+};
+
+// The same component attributes Modeling's inspector edits, on the Inventory
+// page — which had them as read-only text in Metadata. The tab is the reuse:
+// one set of controls, one place they can change the model.
+//
+// The write is asserted by reading `main.hcl` back off the VFS, because the
+// interesting part is not that the select moved but that the model file
+// changed. It is also the only assertion that catches the trap this reuses:
+// an edit applied to the *instance* path would refuse here, since the
+// Inventory holds definitions.
+export const StyleTabEditsTheComponent: Story = {
+  args: { requestedLabel: "styled-module" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Style" }));
+
+    const style = within(await canvas.findByTestId("inventory-style-fields"));
+    // Metadata shows these read-only; the Style tab is where they are edited,
+    // so the icon autocomplete is here too rather than plain text.
+    await expect(style.getByTestId("icon-autocomplete-wrapper")).toBeTruthy();
+    await expect(style.getByLabelText(/^color$/i)).toBeTruthy();
+    await expect(style.getByLabelText(/^border$/i)).toBeTruthy();
+    await expect(style.getByLabelText(/^font$/i)).toBeTruthy();
+
+    // Unstyled to start: the selects show their defaults, not a value the
+    // fixture already carried.
+    await expect(style.getByLabelText(/^color$/i)).toHaveValue("default");
+    await expect(style.getByLabelText(/^border$/i)).toHaveValue("solid");
+    await expect(style.getByLabelText(/^font$/i)).toHaveValue("unstyled");
+
+    await userEvent.selectOptions(style.getByLabelText(/^color$/i), "warning");
+    await userEvent.selectOptions(style.getByLabelText(/^border$/i), "dashed");
+    await userEvent.selectOptions(style.getByLabelText(/^font$/i), "bold");
+
+    // Persisted to the model file, on the definition and not on an instance.
+    // Matched with a whitespace-tolerant pattern: the serializer aligns `=`
+    // within a block, so an exact `color        = "warning"` would be
+    // asserting a formatter property instead of the edit.
+    const readModel = async (): Promise<string> =>
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
+        .readFile("main.hcl");
+
+    await waitFor(async () => {
+      const hcl = await readModel();
+      await expect(hcl).toMatch(/color\s+= "warning"/);
+      await expect(hcl).toMatch(/border\s+= "dashed"/);
+      await expect(hcl).toMatch(/font\s+= "bold"/);
+    });
+    // ...and it reached the definition's own block, not a sibling's. The
+    // attribute list is closed to an extent (W012 warns on orphans), but
+    // nothing stops a wrong path from landing the edit on another component.
+    const hcl = await readModel();
+    const block = hcl.slice(
+      hcl.indexOf('component "styled-module"'),
+      hcl.indexOf('system "demo-system"'),
+    );
+    await expect(block).toMatch(/color\s+= "warning"/);
+    await expect(block).toMatch(/font\s+= "bold"/);
+  },
+};
+
+// A system has no style to speak of, so the tab offers nothing to edit — the
+// pane must not show controls that would silently refuse, since a system's
+// label is not a component path.
+export const StyleTabAbsentForSystems: Story = {
+  args: { requestedLabel: "aux-system" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("tab", { name: "Systems" })).toBeTruthy();
+    await expect(
+      canvas.queryByRole("tab", { name: "Style" }),
+    ).not.toBeInTheDocument();
   },
 };

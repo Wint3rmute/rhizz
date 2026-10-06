@@ -8,27 +8,54 @@
 // the same component the Code page uses for these very files.
 import Markdown from "../../../../components/Markdown.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
+import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
 import { SvelteSet } from "svelte/reactivity";
 // Type-only: the editor *type* without dragging the editor itself in, so
 // `DetailPane` does not become a second reason to load Monaco.
 import type * as monaco from "monaco-editor";
+import type { ComponentPatch } from "../../../../actionLog";
 import type { InventoryDefinition } from "./inventory";
 import { definitionDepth } from "./inventory";
+import {
+  DEFAULT_COLOR,
+  DEFAULT_FONT,
+  toBorderStyle,
+} from "../modeling/visuals";
 
 let {
   definition,
   docContent,
   ondocsave,
+  onstylechange,
 }: {
   definition: InventoryDefinition | null;
   /** `docs/<label>.md` content: null when missing, undefined while loading. */
   docContent: string | null | undefined;
   /** Persist edited documentation back to the VFS. */
   ondocsave: (content: string) => Promise<void>;
+  /**
+   * Persist a component-style edit to the system model. Omitted when the
+   * entity has no component to style (a system), which is also what hides the
+   * Style tab — a tab whose controls would silently refuse is worse than no
+   * tab, because nothing on screen says the edit went nowhere.
+   */
+  onstylechange?: ((patch: ComponentPatch) => Promise<void>) | undefined;
 } = $props();
 
-const TABS = ["Description", "Ports", "Requirements", "Metadata"] as const;
-type Tab = (typeof TABS)[number];
+type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata";
+
+const TABS: readonly Tab[] = [
+  "Description",
+  "Ports",
+  "Requirements",
+  "Metadata",
+];
+
+let tabs = $derived<readonly Tab[]>(
+  onstylechange === undefined
+    ? TABS
+    : ["Description", "Style", ...TABS.slice(1)],
+);
 
 // Monaco options for the documentation editor, as one object so the identity is
 // stable (see `MonacoEditor`: options are read at create time, untracked).
@@ -120,27 +147,33 @@ function flattenTags(def: InventoryDefinition): string[] {
       Select an entity in the Inventory Browser to inspect it.
     </div>
   {:else}
-    <div
-      class="flex items-center border-b border-base-300 px-2"
-      role="tablist"
-      aria-label="Entity details"
-    >
-      {#each TABS as tab (tab)}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === tab}
-          class="px-3 py-2 text-sm border-b-2 -mb-px transition-colors {
-            activeTab === tab
-              ? 'border-primary text-primary font-medium'
-              : 'border-transparent text-base-content/60 hover:text-base-content'
-          }"
-          onclick={() => (activeTab = tab)}
-        >
-          {tab}{#if tab === "Ports"} ({portCount}){/if}
-        </button>
-      {/each}
-    </div>
+    <!--
+        `text-xs` and scrollable for the same reason: five tabs do not fit
+        two fifths of the row at `text-sm`, and Metadata was clipped off the
+        right edge — unreachable, not merely scrolled. Measured at 1280 wide
+        the row now fits outright (383px of 383).
+      -->
+      <div
+        class="flex items-center border-b border-base-300 px-2 overflow-x-auto"
+        role="tablist"
+        aria-label="Entity details"
+      >
+        {#each tabs as tab (tab)}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            class="px-2 py-2 text-xs border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 {
+              activeTab === tab
+                ? 'border-primary text-primary font-medium'
+                : 'border-transparent text-base-content/60 hover:text-base-content'
+            }"
+            onclick={() => (activeTab = tab)}
+          >
+            {tab}{#if tab === "Ports"} ({portCount}){/if}
+          </button>
+        {/each}
+      </div>
 
     <div class="flex-1 min-h-0 overflow-auto p-4 text-sm flex flex-col">
       {#if activeTab === "Description"}
@@ -219,6 +252,26 @@ function flattenTags(def: InventoryDefinition): string[] {
             {/if}
           </div>
         {/if}
+      {:else if activeTab === "Style" && onstylechange !== undefined}
+        <!--
+            The attributes come off the raw payload, so they arrive as the file
+            spelled them: absent, or an empty string from hand-written HCL. The
+            controls need the explicit default the read model normalizes to, or
+            a select would hold a value that is not one of its options and select
+            nothing.
+          -->
+          <div data-testid="inventory-style-fields">
+            <ComponentStyleFields
+              style={{
+                full_name: definition.full_name,
+                icon: definition.icon,
+                color: definition.color || DEFAULT_COLOR,
+                border: toBorderStyle(definition.border),
+                font: definition.font || DEFAULT_FONT,
+              }}
+              onchange={(patch) => void onstylechange(patch)}
+            />
+          </div>
       {:else if activeTab === "Ports"}
         {#if definition.ports.length === 0}
           <p class="text-base-content/50 italic">
@@ -263,22 +316,6 @@ function flattenTags(def: InventoryDefinition): string[] {
           <dd>L{depth}</dd>
           <dt class="text-base-content/60">Leaf</dt>
           <dd>{definition.leaf ? "yes" : "no"}</dd>
-          {#if definition.icon}
-            <dt class="text-base-content/60">Icon</dt>
-            <dd>{definition.icon}</dd>
-          {/if}
-          {#if definition.color}
-            <dt class="text-base-content/60">Color</dt>
-            <dd>{definition.color}</dd>
-          {/if}
-          {#if definition.border}
-            <dt class="text-base-content/60">Border</dt>
-            <dd>{definition.border}</dd>
-          {/if}
-          {#if definition.font}
-            <dt class="text-base-content/60">Font</dt>
-            <dd>{definition.font}</dd>
-          {/if}
           <dt class="text-base-content/60">Tags</dt>
           <dd>
             {#if flattenTags(definition).length === 0}

@@ -87,6 +87,15 @@ pub enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Serve the web editor over HTTP (frontend + VFS persistence API).
+    Web {
+        /// Address to bind the HTTP server to.
+        #[arg(long, env = "RHIZZ_ADDR", default_value = "127.0.0.1:3000")]
+        addr: String,
+        /// Directory holding one sub-directory per project.
+        #[arg(long, env = "RHIZZ_DATA_DIR", default_value = "rhizz-data")]
+        data_dir: PathBuf,
+    },
 }
 
 /// Effective command kind (without the path).
@@ -113,7 +122,7 @@ impl Cli {
             Some(Command::Build { path }) => (CommandKind::Build, path),
             Some(Command::Fmt { path, .. }) => (CommandKind::Fmt, path),
             Some(Command::Watch { path }) => (CommandKind::Watch, path),
-            None => (CommandKind::Build, &self.path),
+            Some(Command::Web { .. }) | None => (CommandKind::Build, &self.path),
         }
     }
 }
@@ -534,6 +543,10 @@ fn unified_diff(filename: &str, old: &str, new: &str) -> String {
 /// Dispatch to the appropriate pipeline based on the parsed CLI command.
 #[must_use]
 pub fn run(cli: &Cli) -> i32 {
+    if let Some(Command::Web { addr, data_dir }) = &cli.command {
+        return run_web(addr, data_dir);
+    }
+
     let color = use_color(cli);
     let (cmd, path) = cli.effective();
 
@@ -550,6 +563,25 @@ pub fn run(cli: &Cli) -> i32 {
     }
 
     run_pipeline(cli, cmd, path, color)
+}
+
+/// Run the HTTP server (the `rhizz web` subcommand).
+fn run_web(addr: &str, data_dir: &Path) -> i32 {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("failed to start tokio runtime: {err}");
+            return 1;
+        }
+    };
+
+    match runtime.block_on(rhizz_server::server::run(addr, data_dir.to_path_buf())) {
+        Ok(()) => 0,
+        Err(err) => {
+            tracing::error!(%err, "server exited with an error");
+            1
+        }
+    }
 }
 
 // ── Watch ─────────────────────────────────────────────────────────────────────
@@ -764,6 +796,23 @@ mod tests {
     fn parse_json_flag() {
         let cli = parse_args(&["--json", "examples/drone"]);
         assert!(cli.json);
+    }
+
+    #[test]
+    fn parse_web_subcommand() {
+        let cli = parse_args(&["web"]);
+        let Some(Command::Web { addr, data_dir }) = &cli.command else {
+            panic!("expected Web subcommand");
+        };
+        assert_eq!(addr, "127.0.0.1:3000");
+        assert_eq!(data_dir, &PathBuf::from("rhizz-data"));
+
+        let cli = parse_args(&["web", "--addr", "0.0.0.0:8080", "--data-dir", "/data"]);
+        let Some(Command::Web { addr, data_dir }) = &cli.command else {
+            panic!("expected Web subcommand");
+        };
+        assert_eq!(addr, "0.0.0.0:8080");
+        assert_eq!(data_dir, &PathBuf::from("/data"));
     }
 
     // ── pipeline (unit-level) ─────────────────────────────────────────────

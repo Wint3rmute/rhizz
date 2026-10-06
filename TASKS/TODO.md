@@ -16,37 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - UI for creating and browsing systems
-
-The current Rhizz web interace is missing features related to management of systems. I want to manage systems in the following ways:
-
-1. I want to have a systems counter in the stats bar on the overview/ page, on the left from Components.
-2. I want to be able to filter out just systems in the inventory/ page, using
-   the selection box which currently has "All", "Components", and "Interfaces":
-  - Remove the "all" option
-  - Add "Systems" option
-3. When a specific system is selected, in the inventory/ page, it should display
-   the diagram which has the same name as the system, if it exists. If it
-   doesn't exist, it should display a message indicating that no diagram is
-   available and a button to create a new view, same as it currently works with
-   components.
-4. A "Add System/Component" button shall be added to inventory/ allowing the
-   user to add a new system or component, depending on the selected filtering
-   mode.
-
-
-## Task <N> - split view-local and component-specific annotations in modeling's inspector
-
-Currently, the instance inspector under modeling/ displays all attributes of the node in a single list:
-
-- Those which are view-specific, e.g. text alignment
-- Those which are component-specific, e.g. icon, color, etc.
-
-I want to split them for 2 purposes:
-
-- Make them visibly separate, with a on-hover popup saying which are view-specific and which are component-specific
-- Re-use the component-specific properties in the inventory/ page, adding a dedicated "style" section to the details view on the right
-
 ## Task <N> - Allow assigning icons to systems - same as with components
 
 The "style" section on the inventory/ page already allows editing component-specific properties. I want to re-use
@@ -159,6 +128,27 @@ case, but nothing calls it that way yet.
 - Validate with `deno task check`, `deno task build`, `deno task test`.
 
 ---
+
+## (For around November) Task <N> - Migrate to Typescript 7
+
+TypeScript 7.0 (the native Go port) went GA on July 8, 2026 34. But
+svelte-check, svelte2tsx, and the Svelte language server don't just shell out to
+tsc — they import TypeScript's programmatic compiler API and drive the compiler
+directly. TypeScript 7.0 shipped without a stable programmatic API; that's
+deferred to 7.1, currently targeted for around October 2026 582.
+
+Definition of done:
+
+1. Check if Typescript 7 works with svelte now
+2. If it does not - halt the execution immediately and inform the user that it cannot be done
+3. If it does - migrate the project to Typescript 7:
+  - Update dependencies and Typescript configuration
+  - Remove all leftovers of Typescript 6, with zero thoughts about backward compatibility
+  - Verify the migration by usual instructions from AGENTS.md
+  - Commit that state
+  - Do a comprehensive check of the current typescript configuration, focusing on whether something can be slimmed down after the update
+  - If you made changes - verify again and commit the updated configuration
+
 
 ## (For later brainstorming) Task <N> - routing multiple connections between 2 components
 
