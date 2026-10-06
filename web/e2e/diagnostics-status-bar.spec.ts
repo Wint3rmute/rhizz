@@ -69,9 +69,13 @@ test("the score badge and strictness control live in the bar, not the navbar", a
   await expect(score).toBeVisible();
   await expect(navbar.getByTitle(/Architecture maturity/)).toHaveCount(0);
 
-  // "Far left" / "far right" measured instead of eyeballed: the badge starts
-  // the row, the select ends it, and the diagnostics toggle — the only other
-  // control in there — sits between them.
+  // "Far left" / "far right" measured instead of eyeballed — but for the
+  // sandwich layout: the toggle is a full-bleed layer *under* the content
+  // row, so it spans the bar's whole width (gutters included — a button
+  // inside the capped row left them dead), while the badge still starts the
+  // content row and the select still ends it, over the toggle rather than
+  // beside it. The select keeps its own zone: its wrapper is the one
+  // pointer-events-auto hole, so a click on it must not reach the toggle.
   const [barBox, badgeBox, selectBox, toggleBox] = await Promise.all([
     bar.boundingBox(),
     score.boundingBox(),
@@ -81,12 +85,21 @@ test("the score badge and strictness control live in the bar, not the navbar", a
   if (!barBox || !badgeBox || !selectBox || !toggleBox) {
     throw new Error("the bar's controls have no bounding boxes");
   }
-  expect(badgeBox.x).toBeLessThan(toggleBox.x);
-  expect(selectBox.x).toBeGreaterThanOrEqual(
-    toggleBox.x + toggleBox.width - 1,
-  );
-  // …and the select ends within the bar's own right gutter (`lg:px-8` at this
-  // viewport), so nothing sits between it and the edge.
+  // The toggle covers the strip edge to edge…
+  expect(toggleBox.x).toBeLessThanOrEqual(barBox.x);
+  expect(toggleBox.x + toggleBox.width)
+    .toBeGreaterThanOrEqual(barBox.x + barBox.width - 1);
+  // …the badge starts the content row (inside the toggle, not left of it)…
+  expect(badgeBox.x).toBeGreaterThanOrEqual(toggleBox.x);
+  // …and the select ends the row within the bar's own right padding
+  // (`lg:px-8` at this viewport), so nothing sits between it and the edge.
   expect(barBox.x + barBox.width - (selectBox.x + selectBox.width))
     .toBeLessThan(40);
+  // The select is the toggle's one exclusion: DOM-wise it stays outside the
+  // button, so it remains its own control rather than part of the toggle.
+  const selectInsideToggle = await bar
+    .getByRole("button")
+    .locator("select#warning-level")
+    .count();
+  expect(selectInsideToggle).toBe(0);
 });
