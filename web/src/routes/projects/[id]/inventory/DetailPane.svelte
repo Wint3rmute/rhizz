@@ -63,7 +63,13 @@ let {
   ondelete: () => Promise<void>;
 } = $props();
 
-type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata" | "Delete";
+type Tab =
+  | "Description"
+  | "Style"
+  | "Ports"
+  | "Requirements"
+  | "Metadata"
+  | "Delete";
 
 const TABS: readonly Tab[] = [
   "Description",
