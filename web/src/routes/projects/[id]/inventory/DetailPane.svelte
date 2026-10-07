@@ -65,10 +65,6 @@ let tabs = $derived<readonly Tab[]>(
     : ["Description", "Style", ...TABS.slice(1)],
 );
 
-let styleMode = $derived<"component" | "system">(
-  onsystemstylechange !== undefined ? "system" : "component",
-);
-
 // Monaco options for the documentation editor, as one object so the identity is
 // stable (see `MonacoEditor`: options are read at create time, untracked).
 const DOC_EDITOR_OPTIONS = {
@@ -275,7 +271,7 @@ function flattenTags(def: InventoryDefinition): string[] {
           -->
           <div data-testid="inventory-style-fields">
             <ComponentStyleFields
-              mode={styleMode}
+              mode={onsystemstylechange !== undefined ? "system" : "component"}
               style={{
                 full_name: definition.full_name,
                 icon: definition.icon,
@@ -283,16 +279,13 @@ function flattenTags(def: InventoryDefinition): string[] {
                 border: toBorderStyle(definition.border),
                 font: definition.font || DEFAULT_FONT,
               }}
-              onchange={(patch) => {
-                if (styleMode === "system") {
-                  void onsystemstylechange?.({
+              onchange={(patch) =>
+                onsystemstylechange !== undefined
+                  ? void onsystemstylechange({
                     full_name: patch.full_name,
                     icon: patch.icon,
-                  });
-                } else {
-                  void onstylechange?.(patch);
-                }
-              }}
+                  })
+                  : void onstylechange?.(patch)}
             />
           </div>
       {:else if activeTab === "Ports"}
