@@ -27,8 +27,8 @@ import CreateComponentModal from "../modeling/CreateComponentModal.svelte";
 import CreateSystemModal from "../modeling/CreateSystemModal.svelte";
 import {
   emptyDiagramLayout,
-  VIEW_LAYOUT_DIR,
   parse_views,
+  VIEW_LAYOUT_DIR,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import DefinitionCard from "./DefinitionCard.svelte";
@@ -532,7 +532,11 @@ let deleteBlockers = $derived.by<string[]>(() => {
   if (selectedIsSystem) {
     return viewsBoundToSystem(boundViews, label);
   }
-  return instancePathsForDefinition(comps, model?.component_keys() ?? [], label);
+  return instancePathsForDefinition(
+    comps,
+    model?.component_keys() ?? [],
+    label,
+  );
 });
 
 // Every `views/*.hcl` file with its bound system, parsed from the project
@@ -564,9 +568,14 @@ async function handleDeleteEntity(): Promise<void> {
       await fs.readdir(".", { recursive: true }),
     );
     const content = await fs.readFile(targetPath).catch(() => "");
-    const result = await applyModelMutation(fs, targetPath, content, selectedIsSystem
-      ? { kind: "delete_system", path: label }
-      : { kind: "delete_component", path: label });
+    const result = await applyModelMutation(
+      fs,
+      targetPath,
+      content,
+      selectedIsSystem
+        ? { kind: "delete_system", path: label }
+        : { kind: "delete_component", path: label },
+    );
     if (!result.applied) return;
     sources = await readProjectSources(fs);
     selectLabel(null);
