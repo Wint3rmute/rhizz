@@ -471,7 +471,13 @@ async function handleModalCreate(data: {
 // `handleSystemStyleChange` (`update_system`) instead.
 let applyingStyle = $state(false);
 
-async function handleStyleChange(patch: ComponentPatch): Promise<void> {
+async function applyStyleOp(
+  op: { kind: "update_component"; patch: ComponentPatch } | {
+    kind: "update_system";
+    patch: SystemPatch;
+  },
+  errorMessage: string,
+): Promise<void> {
   const id = projectId;
   const label = selectedDefinition?.label;
   if (!id || !label || applyingStyle) return;
@@ -483,44 +489,32 @@ async function handleStyleChange(patch: ComponentPatch): Promise<void> {
     );
     const content = await fs.readFile(targetPath).catch(() => "");
     const result = await applyModelMutation(fs, targetPath, content, {
-      kind: "update_component",
+      ...op,
       path: label,
-      patch,
     });
     if (!result.applied) return;
     sources = await readProjectSources(fs);
   } catch (error) {
-    console.error("Failed to update inventory component style:", error);
+    console.error(errorMessage, error);
   } finally {
     applyingStyle = false;
   }
 }
 
+async function handleStyleChange(patch: ComponentPatch): Promise<void> {
+  await applyStyleOp(
+    { kind: "update_component", patch },
+    "Failed to update inventory component style:",
+  );
+}
+
 // Systems carry only `full_name` and `icon`: the `SystemPatch` type keeps
 // component-only keys from reaching the op, where Rust rejects them.
 async function handleSystemStyleChange(patch: SystemPatch): Promise<void> {
-  const id = projectId;
-  const label = selectedDefinition?.label;
-  if (!id || !label || applyingStyle) return;
-  applyingStyle = true;
-  try {
-    const fs = openProjectFs(projectStore, id);
-    const targetPath = primaryHclPath(
-      await fs.readdir(".", { recursive: true }),
-    );
-    const content = await fs.readFile(targetPath).catch(() => "");
-    const result = await applyModelMutation(fs, targetPath, content, {
-      kind: "update_system",
-      path: label,
-      patch,
-    });
-    if (!result.applied) return;
-    sources = await readProjectSources(fs);
-  } catch (error) {
-    console.error("Failed to update inventory system style:", error);
-  } finally {
-    applyingStyle = false;
-  }
+  await applyStyleOp(
+    { kind: "update_system", patch },
+    "Failed to update inventory system style:",
+  );
 }
 
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
