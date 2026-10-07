@@ -104,6 +104,11 @@ pub enum ModelOp {
     /// Delete a definition (bare label) or a placed instance.
     #[serde(rename = "delete_component")]
     Delete { path: String },
+    /// Delete a system (bare system label). Refuses when the label is not
+    /// a system; a label colliding with a definition deletes the system,
+    /// never the definition.
+    #[serde(rename = "delete_system")]
+    DeleteSystem { path: String },
     /// Add a connection inside a scope.
     #[serde(rename = "add_connection")]
     #[serde(rename_all = "camelCase")]
@@ -260,6 +265,9 @@ pub enum LoggedAction {
     /// A definition or placed instance was deleted.
     #[serde(rename = "delete_component")]
     DeleteComponent { path: String },
+    /// A system was deleted.
+    #[serde(rename = "delete_system")]
+    DeleteSystem { path: String },
     /// A placed instance moved containers.
     #[serde(rename = "reparent_component")]
     #[serde(rename_all = "camelCase")]
@@ -576,6 +584,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
         ModelOp::Update { path, patch } => update(raw, path, patch),
         ModelOp::UpdateSystem { path, patch } => Ok(update_system(raw, path, patch)),
         ModelOp::Delete { path } => delete(raw, path),
+        ModelOp::DeleteSystem { path } => Ok(delete_system(raw, path)),
         ModelOp::AddConnection {
             scope_path,
             label,
@@ -1073,6 +1082,25 @@ fn delete(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> 
     }]))
 }
 
+/// Delete a system by bare label. Only bare labels address a system —
+/// anything with a `/` refuses, as does a label naming no system. A label
+/// colliding with a definition deletes the system, never the definition.
+/// Like `delete`, the resolver re-validates afterwards, so dangling
+/// references refuse the whole op instead of persisting a broken file.
+fn delete_system(raw: &mut RawFile, path: &str) -> ApplyOutcome {
+    let mut segments = path.split('/').filter(|s| !s.is_empty());
+    let (Some(label), None) = (segments.next(), segments.next()) else {
+        return idle();
+    };
+    let Some(position) = raw.systems.iter().position(|s| s.label == label) else {
+        return idle();
+    };
+    raw.systems.remove(position);
+    applied(vec![LoggedAction::DeleteSystem {
+        path: path.to_owned(),
+    }])
+}
+
 fn add_connection(
     raw: &mut RawFile,
     scope_path: &str,
@@ -1166,6 +1194,7 @@ mod tests {
             r#"{"kind":"update_component","path":"demo/a","patch":{"full_name":"x"}}"#,
             r#"{"kind":"update_system","path":"demo","patch":{"full_name":"x"}}"#,
             r#"{"kind":"delete_component","path":"demo/a"}"#,
+            r#"{"kind":"delete_system","path":"demo"}"#,
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
         ];
@@ -1376,6 +1405,59 @@ mod tests {
         let refused = mutate(&hcl, r#"{"kind":"delete_component","path":"cpu"}"#);
         let diagnostics = refused.expect_err("must refuse dangling delete");
         assert!(diagnostics.iter().any(|d| d.code == DiagnosticCode::E014));
+    }
+
+    #[test]
+    fn delete_system_removes_the_block_and_logs() {
+        let hcl = mutate("", r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"other"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+
+        let deleted = mutate(&hcl, r#"{"kind":"delete_system","path":"demo"}"#).expect("ok");
+        assert!(deleted.applied);
+        let hcl = deleted.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"system "demo""#));
+        assert!(hcl.contains(r#"system "other""#));
+        let action = serde_json::to_value(&deleted.actions).expect("json");
+        assert_eq!(action[0]["op"], "delete_system");
+        assert_eq!(action[0]["path"], "demo");
+    }
+
+    #[test]
+    fn delete_system_refuses_non_system_paths() {
+        let hcl = mutate("", r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+
+        // Instance paths, definition labels, and unknown labels refuse.
+        for path in ["demo/a", "cpu", "missing"] {
+            let refused = mutate(
+                &hcl,
+                &format!(r#"{{"kind":"delete_system","path":"{path}"}}"#),
+            )
+            .expect("ok");
+            assert!(!refused.applied, "path {path} must refuse");
+        }
     }
 
     #[test]
