@@ -375,57 +375,83 @@ function flattenTags(def: InventoryDefinition): string[] {
           <dd>{definition.children.length}</dd>
         </dl>
       {:else if activeTab === "Delete"}
+        <!--
+            The confirm form is always shown; blockers only disable it. A
+            tab that hides its own action when it cannot run reads as
+            broken, and the usage list below is the reason the button is
+            grey — the two belong together, like the diagnostics bar's
+            count badges and its problem rows.
+          -->
         <div class="flex flex-col gap-3" data-testid="inventory-delete-tab">
-          {#if deleteBlockers.length > 0}
-            <div role="alert" class="alert alert-warning text-sm">
-              <span>
-                {#if deleteBlockerKind === "instance"}
-                  This component is still used in:
-                {:else}
-                  This system still has bound views — delete them first (Code page or Modeling's view list):
-                {/if}
+          <p class="text-sm">
+            Delete <code class="font-mono">{definition.label}</code> from
+            the system model? This cannot be undone.
+          </p>
+          <div class="form-control">
+            <label class="label py-1" for="delete-confirm-input">
+              <span
+                class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70"
+              >
+                Type "{definition.label}" to confirm
               </span>
-            </div>
-            <ul class="list-disc list-inside text-sm font-mono">
-              {#each deleteBlockers as blocker (blocker)}
-                <li>{blocker}</li>
-              {/each}
-            </ul>
-          {:else}
-            <p class="text-sm">
-              Delete <code class="font-mono">{definition.label}</code> from
-              the system model? This cannot be undone.
-            </p>
-            <div class="form-control">
-              <label class="label py-1" for="delete-confirm-input">
-                <span
-                  class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70"
-                >
-                  Type "{definition.label}" to confirm
-                </span>
-              </label>
-              <input
-                id="delete-confirm-input"
-                type="text"
-                bind:value={deleteConfirmText}
-                class="input input-sm input-bordered w-full font-mono"
-                autocomplete="off"
-              />
-            </div>
-            <button
-              type="button"
-              class="btn btn-sm btn-error"
-              data-testid="inventory-delete-confirm"
-              disabled={deleteConfirmText !== definition.label || deletingEntity}
-              onclick={() => {
-                deletingEntity = true;
-                void ondelete().finally(() => {
-                  deletingEntity = false;
-                });
-              }}
+            </label>
+            <input
+              id="delete-confirm-input"
+              type="text"
+              bind:value={deleteConfirmText}
+              class="input input-sm input-bordered w-full font-mono"
+              autocomplete="off"
+              disabled={deleteBlockers.length > 0}
+            />
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-error"
+            data-testid="inventory-delete-confirm"
+            disabled={deleteBlockers.length > 0 ||
+              deleteConfirmText !== definition.label ||
+              deletingEntity}
+            onclick={() => {
+              deletingEntity = true;
+              void ondelete().finally(() => {
+                deletingEntity = false;
+              });
+            }}
+          >
+            {deletingEntity ? "Deleting…" : "Confirm deletion"}
+          </button>
+          {#if deleteBlockers.length > 0}
+            <!-- One connected surface, not an alert plus a loose list: the
+                header names the reason, each row is a blocker with the
+                status bar's warning glyph — the same ⚠ + truncated-path
+                vocabulary as the Problems panel. -->
+            <div
+              class="rounded-box border border-warning/40 bg-warning/10 px-3 py-2"
+              data-testid="inventory-delete-blockers"
             >
-              {deletingEntity ? "Deleting…" : "Confirm deletion"}
-            </button>
+              <p class="text-xs font-semibold uppercase tracking-wider text-warning">
+                {#if deleteBlockerKind === "instance"}
+                  Still used in the project — remove these first
+                {:else}
+                  Still has bound views — delete them first (Code page or Modeling's view list)
+                {/if}
+              </p>
+              <ul class="mt-1 text-sm">
+                {#each deleteBlockers as blocker (blocker)}
+                  <li class="flex items-center gap-2 min-w-0 py-0.5">
+                    <span
+                      class="shrink-0 w-4 text-center text-warning"
+                      aria-hidden="true"
+                    >
+                      ⚠
+                    </span>
+                    <span class="truncate min-w-0 flex-1 font-mono" title={blocker}>
+                      {blocker}
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
           {/if}
         </div>
       {/if}

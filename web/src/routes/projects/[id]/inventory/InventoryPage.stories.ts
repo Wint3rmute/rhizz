@@ -632,9 +632,10 @@ export const StyleTabEditsTheSystem: Story = {
   },
 };
 
-// A component with live instances cannot be deleted: the tab names every
-// placement instead of offering the confirm input, so there is nothing to
-// click that would refuse. `battery` is instanced in demo-system.
+// A component with live instances cannot be deleted: the confirm form is
+// shown disabled and greyed out, with the placements listed below it as
+// the reason — so there is nothing to click that would refuse. `battery`
+// is instanced in demo-system.
 export const DeleteTabBlockedForUsedComponent: Story = {
   args: { requestedLabel: "battery" },
   loaders: [ensureInventoryProject],
@@ -643,12 +644,16 @@ export const DeleteTabBlockedForUsedComponent: Story = {
     await userEvent.click(canvas.getByRole("tab", { name: "Delete" }));
 
     const tab = within(await canvas.findByTestId("inventory-delete-tab"));
-    await expect(tab.getByText(/still used in/)).toBeTruthy();
+    await expect(tab.getByText(/still used in/i)).toBeTruthy();
     await expect(tab.getByText("demo-system/battery")).toBeTruthy();
-    // Blocked means blocked: no confirm input, no confirm button.
+    // Blocked means blocked: the form is visible but the input and the
+    // button stay disabled.
     await expect(
-      tab.queryByTestId("inventory-delete-confirm"),
-    ).not.toBeInTheDocument();
+      tab.getByLabelText(/type "battery" to confirm/i),
+    ).toBeDisabled();
+    await expect(
+      tab.getByTestId("inventory-delete-confirm"),
+    ).toBeDisabled();
   },
 };
 
@@ -689,8 +694,8 @@ export const DeleteTabDeletesUnusedComponent: Story = {
 };
 
 // A system with bound views cannot be deleted: removing it would leave
-// `views/demo-system.hcl` dangling with E006, so the tab lists the files
-// to delete first instead of offering the confirm input.
+// `views/demo-system.hcl` dangling with E006. The confirm form is shown
+// disabled, with the files to delete first listed below it.
 export const DeleteTabBlockedForSystemWithViews: Story = {
   args: { requestedLabel: "demo-system" },
   loaders: [ensureInventoryProject],
@@ -701,10 +706,13 @@ export const DeleteTabBlockedForSystemWithViews: Story = {
     await userEvent.click(canvas.getByRole("tab", { name: "Delete" }));
 
     const tab = within(await canvas.findByTestId("inventory-delete-tab"));
-    await expect(tab.getByText(/still has bound views/)).toBeTruthy();
+    await expect(tab.getByText(/still has bound views/i)).toBeTruthy();
     await expect(tab.getByText("views/demo-system.hcl")).toBeTruthy();
     await expect(
-      tab.queryByTestId("inventory-delete-confirm"),
-    ).not.toBeInTheDocument();
+      tab.getByLabelText(/type "demo-system" to confirm/i),
+    ).toBeDisabled();
+    await expect(
+      tab.getByTestId("inventory-delete-confirm"),
+    ).toBeDisabled();
   },
 };
