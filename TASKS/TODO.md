@@ -35,6 +35,35 @@ confirmation flow as with the system applies.
 
 ---
 
+## Task <N> - Inspect end-to-end test adding 2 connections with the same name
+
+I noticed weird behavior when using the application:
+
+1. Create new project, system and view
+2. Create 3 components, A, B, C
+3. Connect A to B with connection named "test-connection"
+4. Connect C to B with connection also named "test-connection"
+
+Expected result:
+
+- Frontend disallows it and shows a message explaining that such connection already exists
+
+Actual result:
+
+- Frontend removed the existing connection from step 3 and replaced it with connection from step 4
+
+## Task <N> - Editing Description in Inventory/ should auto-save changes
+
+Currently, using the Description -> Edit flow under inventory/ requires the user
+to click the small "save" button below the editor window to save their changes.
+If the user forgets to use that button, changes are discarded.
+
+This is not a good design - the editor shall automatically save the changes,
+ideally with a debounce period of ~500ms (customizable via a constant in code).
+
+
+---
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
