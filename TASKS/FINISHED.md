@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 126 — Detail pane keeps the active tab when switching entities
+
+Switching the focused component reset the pane to Description. The
+label-change effect reset `activeTab` alongside the per-entity editor
+state — but the tab names which facet is open, not what it shows, and
+every entity offers the same tab set. The effect now resets only the
+leaky state (doc edit mode, delete confirm text); the tab persists.
+
+- **Red/green**: e2e reproduces the report's steps (Metadata → switch
+  component → Metadata still selected, URL follows the new entity), failed
+  before, passes after. No other test depended on the reset.
+- **Validation**: 952 Vitest + 95 e2e pass, VRT unchanged, lint/build/
+  format clean.
+
+---
+
 ## Task 125 — Red Delete tab in the Inventory detail pane
 
 Systems and components delete from the Inventory through a red Delete tab

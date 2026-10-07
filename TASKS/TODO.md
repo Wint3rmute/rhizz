@@ -16,29 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Switching between components in inventory/ resets the state of the details pane
-
-Reproduction:
-
-1. Create a project
-2. Go to inventory
-3. Select a component
-4. Change details pane to "metadata"
-5. Change the focused component in the inventory
-6. Observe what happens to the details pane
-
-Expected behavior:
-
-- Component changes, the details pane now shows metadata of newly focused componenet
-
-Actual behavior:
-
-- Component changes, the details pane resets back to the "Description" tab
-
-Please first reproduce the behavior via a end-to-end test, then align it with
-expected behavior.
-
-
 ## Task <N> - Inspect end-to-end test adding 2 connections with the same name
 
 I noticed weird behavior when using the application:
