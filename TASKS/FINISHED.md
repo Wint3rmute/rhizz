@@ -4,6 +4,42 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 125 — Red Delete tab in the Inventory detail pane
+
+Systems and components delete from the Inventory through a red Delete tab
+holding the whole confirmation flow — no modal, no separate route.
+
+- **Backend: new `delete_system` op.** `ModelOp::DeleteSystem{path}` removes
+  a system by bare label (instance paths, definition labels and unknown
+  labels refuse, mirroring `update_system`'s guard shape); a colliding
+  definition label deletes the system, never the definition. `delete_component`
+  is unchanged — its E014 refusal on dangling `source` is the build-still-
+  passes gate for components. `LoggedAction::DeleteSystem` flows through the
+  action log and replay codegen.
+- **Usage blocks, computed live.** Components block on
+  `instancePathsForDefinition` (model keys sourcing the definition, e.g.
+  `demo-system/battery`); systems block on `viewsBoundToSystem` (parsed
+  `views/*.hcl` bindings — deleting the system would leave them dangling
+  with E006, and `mutate_to_hcl` never re-validates views). Both recompute
+  from model + sources every render, so removing the last instance/view
+  unlocks the confirm input without a reload. The tab itself answers the
+  task's open question: confirm input takes the entity's own label.
+- **DetailPane stays presentational.** New required `deleteBlockers`,
+  `deleteBlockerKind` ("instance" | "view") and `ondelete` props; Inventory
+  computes blockers and performs the op, then `selectLabel(null)` so the URL
+  falls back to the bare page. Red tab styling (error colors active and
+  idle), scrollable row unchanged — `EveryTabFitsInThePane` now pins six.
+- **Red/green**: `delete_system_{removes,refuses}` mutation tests;
+  `instancePathsForDefinition` / `viewsBoundToSystem` unit tests; three
+  stories (blocked component, delete unused component with read-back,
+  blocked system); e2e deleting one component + one system and reading the
+  model file back, pinning destination and selection fallback.
+- **VRT**: 30 re-recorded (tab row in every Inventory pane), 6 new.
+- **Validation**: cargo + 952 Vitest + 94 e2e + 262 VRT, `just lint`,
+  `just build`, `just format` all pass.
+
+---
+
 ## Task 124 — Systems get a Style tab: full name + icon, same controls as components
 
 The Inventory's Style tab was component-only: selecting a system showed no

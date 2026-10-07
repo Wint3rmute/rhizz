@@ -16,25 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Add a red "Delete" tab in inventory's details view
-
-I want to be able to delete both systems and components from the inventory.
-However, in the case of Rhizz, deletion of a system or a component requires
-first making sure that after deletion, the project will still build.
-
-This requires "delete" to be it's own page, with extra functionality and a
-confirmation dialog. For components - just click "Confirm deletion" after
-navigating to the "delete" page, which will ask you to enter the system name for
-confirmation.
-
-For components, the user must first delete all instances of that component in
-the project. If instances still exist, the delete operation will be blocked and
-the "component is still used in <paths to instances>" message will be displayed.
-After all instances are removed, the delete button is unlocked and the same
-confirmation flow as with the system applies.
-
----
-
 ## Task <N> - Inspect end-to-end test adding 2 connections with the same name
 
 I noticed weird behavior when using the application:
