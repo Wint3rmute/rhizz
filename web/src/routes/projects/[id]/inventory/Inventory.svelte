@@ -551,9 +551,7 @@ let boundViews = $derived.by<{ path: string; system: string }[]>(() => {
       for (const view of parse_views(source.content)) {
         views.push({ path: source.filename, system: view.system ?? "" });
       }
-    } catch {
-      // Skip unparseable view files.
-    }
+    } catch { /* Skip unparseable view files. */ }
   }
   return views;
 });
