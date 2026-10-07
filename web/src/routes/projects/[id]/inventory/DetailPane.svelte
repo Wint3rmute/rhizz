@@ -383,14 +383,16 @@ function flattenTags(def: InventoryDefinition): string[] {
             count badges and its problem rows.
           -->
         <div class="flex flex-col gap-3" data-testid="inventory-delete-tab">
-          <p class="text-sm">
+          <p
+            class="text-sm font-medium rounded-box border border-error/40 bg-error/10 px-3 py-2 text-error"
+          >
             Delete <code class="font-mono">{definition.label}</code> from
             the system model? This cannot be undone.
           </p>
           <div class="form-control">
             <label class="label py-1" for="delete-confirm-input">
               <span
-                class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70"
+                class="label-text text-xs font-semibold tracking-wider text-base-content/70"
               >
                 Type "{definition.label}" to confirm
               </span>
