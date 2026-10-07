@@ -215,6 +215,36 @@ export function systemAsDefinition(sys: InventorySystem): InventoryDefinition {
   };
 }
 
+/** Every placement of a definition, as the model addresses it: the keys of
+ * the components whose `source` names the definition. `keys` is
+ * `model.component_keys()`, index-aligned with `components`. An empty
+ * `source` means "not an instance", same as absent. */
+export function instancePathsForDefinition(
+  components: readonly RawPlacement[],
+  keys: readonly string[],
+  definitionLabel: string,
+): string[] {
+  const paths: string[] = [];
+  for (let i = 0; i < components.length; i++) {
+    if (components[i]?.source !== definitionLabel) continue;
+    const key = keys[i];
+    if (key !== undefined) paths.push(key);
+  }
+  return paths;
+}
+
+/** The view files bound to a system (`view.system == label`), by path. The
+ * Delete tab blocks on these the same way it blocks on instances: removing
+ * the system would leave them dangling with E006. */
+export function viewsBoundToSystem(
+  views: readonly { path: string; system: string }[],
+  systemLabel: string,
+): string[] {
+  return views
+    .filter((view) => view.system === systemLabel)
+    .map((view) => view.path);
+}
+
 /** Case-insensitive substring match of `query` against a definition's label,
  * full_name, and tags. */
 function matchesQuery(def: InventoryDefinition, query: string): boolean {

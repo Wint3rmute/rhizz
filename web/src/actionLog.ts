@@ -69,6 +69,7 @@ export type ModelAction =
   }
   | { op: "rename_component"; path: string; newLabel: string }
   | { op: "delete_component"; path: string }
+  | { op: "delete_system"; path: string }
   | { op: "reparent_component"; sourcePath: string; targetParentPath: string }
   | { op: "update_component"; path: string; patch: ComponentPatch }
   | { op: "update_system"; path: string; patch: SystemPatch }
@@ -178,6 +179,8 @@ function toMutationOp(action: ModelAction): unknown {
       };
     case "delete_component":
       return { kind: "delete_component", path: action.path };
+    case "delete_system":
+      return { kind: "delete_system", path: action.path };
     case "reparent_component":
       return {
         kind: "reparent_component",
