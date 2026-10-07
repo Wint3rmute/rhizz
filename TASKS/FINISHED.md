@@ -4,6 +4,174 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 124 — Systems get a Style tab: full name + icon, same controls as components
+
+The Inventory's Style tab was component-only: selecting a system showed no
+tab at all, since a system label is not a component path and `update_component`
+refuses it. Systems now carry `full_name` and `icon` in the model, and the
+same shared controls edit them.
+
+- **Backend: `icon` rides the whole pipeline, nothing else.** `RawSystem`,
+  `SystemAttrs`, resolved `System`, the resolver, and `serialize_system` all
+  carry it; `system "s" { color = … }` is still E000. The op is a dedicated
+  `update_system{path, patch}` with its own `SystemPatchJson`
+  (`deny_unknown_fields`, so component-only keys are rejected at
+  deserialization, not silently dropped). Bare system labels only — instance
+  paths and definition labels refuse, mirroring `update`'s guard behavior.
+  `LoggedAction::UpdateSystem` flows through the action log and replay
+  codegen like every other op.
+- **`ComponentStyleFields` is one component on two modes, not two copies.**
+  `mode="system"` renders full name + icon only; the color/border/font
+  selects would offer edits the op rejects. The DetailPane takes a second
+  optional callback (`onsystemstylechange`) beside `onstylechange` — exactly
+  one is supplied per entity — and the tab gating is the *presence* of either,
+  the same shape Task 123 established.
+- **The read path carries icon end to end.** `RawModelPayload.systems`,
+  `InventorySystem`, the Inventory derivation, and `systemAsDefinition` all
+  pass it through, so the sidebar card renders the system icon via the same
+  `resolveIcon` the component card already used. `SystemJS` gained
+  `full_name` + `icon` getters; `to_js` needed no change (serde).
+- **Red/green**: `parse_system_icon_attribute` plus three `update_system`
+  mutation tests (patch applies, non-system paths refuse, component-only
+  keys rejected); `systemAsDefinition` icon carry-through; the
+  `StyleTabAbsentForSystems` story inverted into `StyleTabEditsTheSystem`
+  (asserts the three selects are absent and the icon write reaches the
+  system's own block); a new e2e pins the model-file destination and the
+  no-leak into views. SPEC.md §2.2 gains the `icon` row.
+- **VRT**: 4 re-recorded (the tab row now shows Style on system panes), 2
+  new (`StyleTabEditsTheSystem`), 2 deleted (the orphaned absent-story
+  baselines). Full suite green: 368 cargo + 945 Vitest + 93 e2e + 256 VRT.
+- **Validation**: `just test`, `just lint`, `just build`, `just vrt` and
+  `just format` all pass.
+
+---
+
+## Task 123 — The inspector says which file each attribute is written to
+
+The Modeling inspector listed a node's attributes in one run of
+form-controls, so a color and a text alignment looked like the same kind
+of edit. They are not: the color goes to `system.hcl` and travels with
+the component, the alignment to the open `views/<view>.hcl` and to
+nothing else. The tell only appeared after the fact — reopen the view
+elsewhere and your color is there and your alignment is not. The
+Inventory had the same four values as read-only text, so it could report
+a component's color but not change it.
+
+- **The two panels each name their file, and the split is pinned by test
+  rather than by a map.** Each heading carries a hover popup saying what it
+  writes to (`system.hcl`, or this view's file). The classification lives in
+  the markup rather than a shared table — an earlier `attributeScope` map was
+  read by nothing but its own test, and the negative assertions do the real
+  work: alignment must not be in the component panel, and each half must land
+  in its own file.
+- **`ComponentStyleFields` is one component on two pages, not two
+  copies.** The Inventory's read-only rows became an editable Style tab
+  through the same controls Modeling uses, so a style added once appears
+  in both. Metadata no longer repeats the four values: shown twice in one
+  pane, once editable and once not, reads as a bug in one of them. Tags,
+  `leaf` and ports stay out — attributes, but not presentation.
+- **A system's label is not a component path, so the tab is hidden**
+  rather than shown refusing silently. The gate is the *absence of the
+  callback*, which is how the next task extends this to systems and finds
+  it needs a real op.
+- **The border and font pickers stopped hardcoding their `<option>`
+  lists** (color already had one) and `toBorderStyle` moved from
+  `modelView.ts` to `visuals.ts`, both so the option list and the SVG
+  mapping it feeds sit together.
+- **Adding a fifth tab clipped the fifth tab, and only VRT caught it.**
+  Metadata went off the right edge — still in the DOM, still findable by
+  a role query, unreachable to anyone using the page. The row is now
+  scrollable and the labels `text-xs`, which fits at 1280 (measured 383
+  of 383). `EveryTabFitsInThePane` pins reachability rather than fit: the
+  story browser is ~414px, where five tabs cannot fit at any size.
+- **Red/green**: `AttributeScopes` went red first and *stays* red if
+  alignment moves back into the shared list. The e2e that pins each half's
+  *destination* was wrong first — it asserted the model got the edit,
+  which a write to both files also satisfies — and now asserts the view
+  file stays clean. Model reads match `/color\s+= "warning"/` rather than
+  an exact line, since the serializer aligns `=` per block.
+- **VRT**: 8 new baselines, 42 re-recorded (the tab row is in every
+  Inventory one). **Still open**: systems carry no style attributes (next
+  task), and the layout-save effect still has no dirty check (Task 119a).
+- **Validation**: `just test` (363 cargo + 950 Vitest + 92 e2e), `just
+  lint`, `just build`, `just vrt` (258) and `just format` all pass.
+
+---
+
+## Task 122 — Systems are first-class in the stats bar and the Inventory
+
+Systems stopped being a thing you can only reach through Modeling: the
+overview counts them, the Inventory lists them beside components, and
+either page can create one.
+
+- **The Systems counter is a first stat, and removing the "All" tab is
+  what paid for it.** With an "All" tab, "Systems" could not mean *only*
+  systems, which is what the task wanted, so the enum is now
+  `Components | Systems | Interfaces` — default view unchanged, the two
+  halves separately addressable.
+- **A system borrows the whole component machinery rather than growing a
+  parallel one.** `systemAsDefinition` flattens a compiled system into
+  the same `InventoryDefinition` components use, which is why the card,
+  search, diagram preview and detail pane came free. It is honest about
+  what a system is not: no ports, no children, `leaf: true`. The one
+  place it lies is the level badge, so `DefinitionCard` hides `L1` rather
+  than inventing a number. A second card, preview and pane would have
+  been three components' worth of code for the same three boxes.
+- **The diagram convention is shared, and that is what makes "a diagram
+  with the same name" free** — `defaultViewPath` was already
+  `views/<label>.hcl`, so the probe, the empty state and the create button
+  are the component ones; only the button's wording differs.
+- **The add button follows the tab, and a tab with nothing to add has no
+  button** — `Interfaces` is still a placeholder, and a button there would
+  offer to create what the model cannot express. Both labels come from
+  `isSystem`, so the button cannot drift from the list above it.
+- **Two changes beat the `prompt()` the first pass used:** a real
+  `CreateSystemModal`, and reusing `CreateComponentModal` behind a new
+  `allowReuse` prop, because the Inventory wants a *definition* while
+  Modeling's use wants to offer an existing one.
+- **Sidebar order is button, divider, search — an inversion of what
+  shipped first**, in its own commit. The button landed below the search
+  box, which read as a filter with an action stapled under it.
+- **A system's palette row is addressable; instances deliberately are
+  not** — they are drawn under their usage-site label but addressed by
+  `source`, so a row for one would open the wrong entity.
+- **Red/green**: `inventory-systems.spec.ts` covers the tab listing, the
+  same-named diagram, the empty state, create-and-bind, and that
+  Interfaces offers no button; both cases were checked against partial
+  implementations. Four new stories, each costing two VRT baselines.
+- **Untouched**: no change to `rhizz-core`, `rhizz-wasm` or the HCL
+  schema (`RawModelPayload.systems` was the only addition), and nothing
+  in Modeling except gaining a view bound to a new system.
+- **Validation**: `just test` (cargo + 928 Vitest + 86 e2e), `just lint`,
+  `just build` and `just format` all pass.
+
+## Task 121 — Merge rhizz-server into rhizz-cli as `rhizz web` subcommand
+
+Simplified the build infrastructure by shipping a single `rhizz` binary that
+combines both the CLI and the web server. Instead of a separate `rhizz-server`
+binary, the `web` subcommand was added to `rhizz-cli` to run the HTTP server.
+
+- **`rhizz-server` is now a library crate** — the `[[bin]]` target and
+  `main.rs` are gone; the crate exposes `server`, `signal`, `assets`, and
+  `storage` modules that `rhizz-cli` links against.
+- **`rhizz web` is the new subcommand** — `Command::Web` carries `--addr` and
+  `--data-dir` flags, both with `RHIZZ_ADDR` / `RHIZZ_DATA_DIR` env var
+  fallbacks via clap's `env` feature. `run_web()` creates a tokio runtime and
+  blocks on `rhizz_server::server::run()`.
+- **One binary, one default target** — `cargo r` runs the CLI, `cargo r -- web`
+  starts the server. The Dockerfile builds `rhizz-cli` and runs
+  `CMD ["rhizz", "web"]`.
+- **Tests** — three new unit tests cover `web` subcommand parsing (defaults,
+  flags, and that `effective()` returns `None` for `web`).
+- **Docs updated** — README.md, SPEC/cli.md (new Web Server section),
+  SPEC/architecture.md, SPEC/frontend.md, and the placeholder HTML in
+  `rhizz-server/build.rs`.
+- **Validation**: `just test` (366 Rust tests pass), `just lint`, `just build`,
+  `just format` all pass. One pre-existing flaky e2e test
+  (`command-palette.spec.ts`) failed on a timing issue unrelated to this change.
+
+---
+
 ## Task 120 — Every ProjectStore node operation takes its project in the call
 
 `web/src/vfs/store.ts:1-4` said it outright — "real filesystems don't expose

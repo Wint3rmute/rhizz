@@ -41,8 +41,9 @@ coverage:
 wasm:
     {{run}} wasm-pack build crates/rhizz-wasm --target web --release
 
-# Frontend artifacts first, so rhizz-server's build.rs embeds the real
-# UI (wasm pkg is a file: dependency of web/, and vite populates web/build).
+# Frontend artifacts first, so rhizz-server's build.rs (run when rhizz-cli
+# compiles its dependency) embeds the real UI. The wasm pkg is a file:
+# dependency of web/, and vite populates web/build.
 #
 # Both builds go through a package.json script rather than a bare `vite build` /
 # `storybook build`, because those scripts run `svelte-kit sync` first:
@@ -105,13 +106,13 @@ storybook:
 # examples come up as editable projects — and edits land in the working tree.
 #
 # The frontend is rebuilt with VITE_RHIZZ_SERVER_URL=/ first, and that is not
-# optional: rhizz-server embeds web/build at compile time (build.rs), and a
-# frontend built without that variable talks to localStorage instead of
-# /api/vfs — the API would serve the examples to nobody. `/` means "my own
-# origin", which is the server itself.
+# optional: the rhizz binary embeds web/build at compile time (rhizz-server's
+# build.rs), and a frontend built without that variable talks to localStorage
+# instead of /api/vfs — the API would serve the examples to nobody. `/` means
+# "my own origin", which is the server itself.
 #
 # If you're an AI, never use this. It will just hang forever.
 serve: wasm
     {{run}} sh -c 'cd web && VITE_RHIZZ_SERVER_URL=/ dx vite build'
-    {{run}} cargo build --release -p rhizz-server
-    {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-server
+    {{run}} cargo build --release -p rhizz-cli
+    {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-cli -- web

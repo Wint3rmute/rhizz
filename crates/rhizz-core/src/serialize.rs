@@ -123,6 +123,9 @@ fn serialize_system(out: &mut String, sys: &System, model: &Model) {
     if !sys.full_name.is_empty() {
         let _ = writeln!(out, "{indent}full_name = {}", escape_string(&sys.full_name));
     }
+    if let Some(icon) = sys.icon.as_deref().filter(|s| !s.is_empty()) {
+        let _ = writeln!(out, "{indent}icon        = {}", escape_string(icon));
+    }
     if !sys.tags.is_empty() {
         let _ = writeln!(
             out,

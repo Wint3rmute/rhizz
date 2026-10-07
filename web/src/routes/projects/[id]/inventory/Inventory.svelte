@@ -10,6 +10,7 @@ import { goto } from "$app/navigation";
 import { resolve } from "$app/paths";
 import { page } from "$app/state";
 import { applyModelMutation } from "../../../../history/applyMutation";
+import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
 import type { PortData } from "../../../../modelView";
 import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -154,12 +155,13 @@ let query = $state("");
 let selectedLabel = $state<string | null>(null);
 
 // Systems come straight from the compiled payload (`raw.systems`), in model
-// order — the same source `model.systems()` reads, but with full_name/tags
-// for search and cards.
+// order — the same source `model.systems()` reads, but with full_name/icon/
+// tags for search and cards.
 let systems = $derived.by<InventorySystem[]>(() =>
   (raw?.systems ?? []).map((s) => ({
     label: s.label,
     full_name: s.full_name ?? "",
+    icon: s.icon,
     tags: s.tags ?? [],
   }))
 );
@@ -463,6 +465,58 @@ async function handleModalCreate(data: {
   }
 }
 
+// The path is the definition's own label, which is what `update_component`
+// expects for a top-level definition. A system label is not a component path
+// at all and would be refused, which is why systems go through
+// `handleSystemStyleChange` (`update_system`) instead.
+let applyingStyle = $state(false);
+
+async function applyStyleOp(
+  op: { kind: "update_component"; patch: ComponentPatch } | {
+    kind: "update_system";
+    patch: SystemPatch;
+  },
+  errorMessage: string,
+): Promise<void> {
+  const id = projectId;
+  const label = selectedDefinition?.label;
+  if (!id || !label || applyingStyle) return;
+  applyingStyle = true;
+  try {
+    const fs = openProjectFs(projectStore, id);
+    const targetPath = primaryHclPath(
+      await fs.readdir(".", { recursive: true }),
+    );
+    const content = await fs.readFile(targetPath).catch(() => "");
+    const result = await applyModelMutation(fs, targetPath, content, {
+      ...op,
+      path: label,
+    });
+    if (!result.applied) return;
+    sources = await readProjectSources(fs);
+  } catch (error) {
+    console.error(errorMessage, error);
+  } finally {
+    applyingStyle = false;
+  }
+}
+
+async function handleStyleChange(patch: ComponentPatch): Promise<void> {
+  await applyStyleOp(
+    { kind: "update_component", patch },
+    "Failed to update inventory component style:",
+  );
+}
+
+// Systems carry only `full_name` and `icon`: the `SystemPatch` type keeps
+// component-only keys from reaching the op, where Rust rejects them.
+async function handleSystemStyleChange(patch: SystemPatch): Promise<void> {
+  await applyStyleOp(
+    { kind: "update_system", patch },
+    "Failed to update inventory system style:",
+  );
+}
+
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
 // to the system that instantiates the definition) and opens Modeling on that
 // very view, addressed by its path.
@@ -681,6 +735,10 @@ async function handleCreateView(): Promise<void> {
         definition={selectedDefinition}
         docContent={docContent}
         ondocsave={handleSaveDoc}
+        onstylechange={selectedIsSystem ? undefined : handleStyleChange}
+        onsystemstylechange={selectedIsSystem
+          ? handleSystemStyleChange
+          : undefined}
       />
     </div>
 

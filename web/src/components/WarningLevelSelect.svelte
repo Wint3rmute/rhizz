@@ -25,11 +25,17 @@ let warningLevel = $derived(getWarningLevel());
      up in the navbar, which was already tight at `md`; the bar is a status
      strip, and the level's own name ("Component") carries the meaning in one
      word. The `title` spells out what the control gates for anyone hovering
-     it or reaching it by keyboard. -->
+     it or reaching it by keyboard.
+
+     `select-ghost` is what makes it strip text rather than a boxed form
+     control: transparent border and background, no shadow — just the value
+     and daisyUI's chevron (drawn as a background-*image*, so it survives the
+     transparent fill). The variant keeps the base select's 2px focus outline,
+     so the keyboard cue needs nothing custom either. -->
 <label for="warning-level" class="sr-only">Strictness</label>
 <select
   id="warning-level"
-  class="select select-xs text-xs w-auto shrink-0 max-w-24 sm:max-w-none"
+  class="select select-ghost select-xs text-xs w-auto shrink-0 max-w-24 sm:max-w-none"
   title="How much detail this project is specified at — gates which warnings are reported. Errors are always reported."
   value={warningLevel}
   onchange={(event) => setWarningLevel(event.currentTarget.value)}

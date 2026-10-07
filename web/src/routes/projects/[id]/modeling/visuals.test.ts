@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  BORDER_OPTIONS,
   borderStyleToDasharray,
   borderStyleToSvg,
   COLOR_OPTIONS,
   colorToSvgStroke,
   DEFAULT_COLOR,
   DEFAULT_FONT,
+  FONT_OPTIONS,
   fontStyleToSvg,
   isColorOption,
   isFontStyle,
@@ -63,6 +65,34 @@ describe("borderStyleToDasharray", () => {
   it("maps dashed and dotted to dash arrays", () => {
     expect(borderStyleToDasharray("dashed")).toBe("6 4");
     expect(borderStyleToDasharray("dotted")).toBe("1.5 3");
+  });
+
+  // The picker's options are one list, next to the mapping they feed: the
+  // border enum is closed, so a fourth option here would have no mapping.
+  it("offers exactly the border styles it can render", () => {
+    expect([...BORDER_OPTIONS]).toEqual(["solid", "dashed", "dotted"]);
+    for (const option of BORDER_OPTIONS) {
+      expect(
+        option === "solid" || borderStyleToDasharray(option) !== undefined,
+      ).toBe(true);
+    }
+  });
+
+  // Same for fonts, except the default is not a `FontStyle` at all — it is
+  // the "no presentation" value, and it is the first option so a component
+  // with no font set lands on it.
+  it("offers exactly the font styles it can render, default first", () => {
+    expect([...FONT_OPTIONS]).toEqual([
+      DEFAULT_FONT,
+      "bold",
+      "italic",
+      "underline",
+    ]);
+    for (const option of FONT_OPTIONS) {
+      if (option === DEFAULT_FONT) continue;
+      expect(isFontStyle(option)).toBe(true);
+      expect(Object.keys(fontStyleToSvg(option)).length).toBe(1);
+    }
   });
 });
 

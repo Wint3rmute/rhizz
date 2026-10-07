@@ -13,10 +13,11 @@ primary_region = 'fra'
   #
   # VITE_SENTRY_DSN must be here, not in `fly secrets`. Vite inlines
   # `VITE_*` variables when it bundles, and the bundle is compiled into
-  # rhizz-server by build.rs — all of which happens while the image is being
-  # built, before any runtime secret exists. A `fly secrets` value lands in
-  # the container's environment when the machine starts, long after the JS
-  # that would have read it was frozen, so it cannot reach it.
+  # the `rhizz` binary by rhizz-server's build.rs — all of which happens
+  # while the image is being built, before any runtime secret exists. A
+  # `fly secrets` value lands in the container's environment when the
+  # machine starts, long after the JS that would have read it was frozen,
+  # so it cannot reach it.
   #
   # Committing it is deliberate: a Sentry DSN is public by design — it ships
   # in every browser bundle and is visible in devtools. It is an ingest

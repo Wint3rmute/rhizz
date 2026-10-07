@@ -194,6 +194,19 @@ describe("systemAsDefinition", () => {
     expect(d.tags).toEqual(["t"]);
     expect(defaultViewPath(d.label)).toBe("views/demo-system.hcl");
   });
+
+  it("carries the system icon, but no component-only style", () => {
+    const d = systemAsDefinition({
+      label: "demo-system",
+      full_name: "Demo",
+      icon: "rocket",
+      tags: [],
+    });
+    expect(d.icon).toBe("rocket");
+    expect(d.color).toBeUndefined();
+    expect(d.border).toBeUndefined();
+    expect(d.font).toBeUndefined();
+  });
 });
 
 describe("defaultViewPath", () => {

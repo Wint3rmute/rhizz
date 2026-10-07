@@ -88,6 +88,44 @@ export const AtomicLeaf: Story = {
 };
 
 /**
+ * The split itself: attributes that live in `system.hcl` are in one panel,
+ * attributes that live in the open view are in another, and each panel's
+ * heading carries a hover popup naming its file.
+ */
+export const AttributeScopes: Story = {
+  args: {},
+  globals: {
+    viewport: { value: "phone" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const component = await canvas.findByTestId("component-attributes");
+    const view = await canvas.findByTestId("view-attributes");
+
+    // The component panel holds what the model owns...
+    await expect(within(component).getByLabelText(/^color$/i)).toBeTruthy();
+    await expect(within(component).getByLabelText(/^border$/i)).toBeTruthy();
+    await expect(within(component).getByLabelText(/^font$/i)).toBeTruthy();
+    // ...and not what the view owns. This is the assertion that would fail
+    // if alignment ever drifted back into the shared list: it is the one
+    // attribute whose two halves write to different files.
+    await expect(within(component).queryByText("Text alignment")).toBeNull();
+
+    // The view panel holds the alignment, and nothing else.
+    await expect(within(view).getByText("Text alignment")).toBeTruthy();
+    await expect(within(view).queryByLabelText(/^color$/i)).toBeNull();
+
+    // Both headings say which file they write to, on hover.
+    await expect(
+      within(component).getByTestId("component-attributes-heading"),
+    ).toHaveAttribute("data-tip", expect.stringContaining("system.hcl"));
+    await expect(
+      within(view).getByTestId("view-attributes-heading"),
+    ).toHaveAttribute("data-tip", expect.stringContaining("views/"));
+  },
+};
+
+/**
  * An instance, placed under a name of its own, cloned from a shared
  * definition: the source row links to that definition's Inventory page.
  */
@@ -110,12 +148,15 @@ export const Sourced: Story = {
     // the definition's — the same vocabulary CreateComponentModal already uses
     // ("Definition Name" vs "Instance Name") for this exact field.
     await expect(canvas.getByLabelText(/instance name/i)).toBeInTheDocument();
-    // The source row sits under the full name box, not up by the component
-    // path: it is part of the identity block (name -> full name -> what this
-    // was instantiated from), read top to bottom like the fields above it.
+    // The source row sits directly under the name, above the full name: it
+    // answers "which component is this", which is what the name above it also
+    // answers, so the two read together. It used to sit below the full name
+    // instead, which only worked while full_name was a sibling field here —
+    // it now lives inside the shared style block, and a provenance link below
+    // the border and font pickers read as a style value.
     await expect(
-      canvas.getByLabelText(/full name/i).compareDocumentPosition(
-        canvas.getByTestId("component-source"),
+      canvas.getByTestId("component-source").compareDocumentPosition(
+        canvas.getByLabelText(/full name/i),
       ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     // Named by the definition, not by the instance's own label — the link has

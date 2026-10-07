@@ -43,18 +43,23 @@ view "power-paths" {
 rhizz check [path]   # parse and validate
 rhizz score [path]   # print completion report
 rhizz build [path]   # check + score (default)
+rhizz fmt [path]     # format .hcl files in place
+rhizz watch [path]   # rebuild on file changes
+rhizz web            # serve the web editor over HTTP
 ```
 
 See `SPEC.md`, `SPEC/`, and `examples/` for the full specification and worked
 examples.
 
-## Server
+## Web Server
 
-`rhizz-server` is a standalone HTTP server (axum) that serves the compiled web
-editor and persists the frontend's virtual filesystem:
+`rhizz web` is an HTTP server (axum) that serves the compiled web editor and
+persists the frontend's virtual filesystem:
 
 ```
-rhizz-server                  # serves UI on 127.0.0.1:3000
+rhizz web                         # serves UI on 127.0.0.1:3000
+rhizz web --addr 0.0.0.0:8080     # custom bind address
+rhizz web --data-dir /data        # custom data directory
 ```
 
 A project is stored as a **directory of ordinary files** — `system.hcl`,
@@ -71,13 +76,13 @@ localStorage):
 VITE_RHIZZ_SERVER_URL=http://localhost:3000 just build
 ```
 
-Environment variables:
+Options (flags override environment variables):
 
-| Variable             | Default          | Meaning                                     |
-| -------------------- | ---------------- | ------------------------------------------- |
-| `RHIZZ_ADDR`         | `127.0.0.1:3000` | Listen address                              |
-| `RHIZZ_DATA_DIR`     | `./rhizz-data`   | Directory holding one sub-directory per project |
-| `RUST_LOG`           | `info`           | tracing log level (`debug`, `warn`, ...)    |
+| Flag         | Env var          | Default          | Meaning                                     |
+| ------------ | ---------------- | ---------------- | ------------------------------------------- |
+| `--addr`     | `RHIZZ_ADDR`     | `127.0.0.1:3000` | Listen address                              |
+| `--data-dir` | `RHIZZ_DATA_DIR` | `./rhizz-data`   | Directory holding one sub-directory per project |
+|              | `RUST_LOG`       | `info`           | tracing log level (`debug`, `warn`, ...)    |
 
 No authentication is implemented — the server assumes a public, trusted
 environment.

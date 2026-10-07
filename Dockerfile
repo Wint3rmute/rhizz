@@ -4,8 +4,9 @@
 # Stage 1 — build the frontend.
 #
 # Produces `web/build` (the SPA shell `404.html` + hashed `_app/` assets) that
-# `rhizz-server` embeds at compile time via build.rs. The frontend depends on
-# the WASM package (`file:../crates/rhizz-wasm/pkg/`), so we build that first.
+# the `rhizz` binary embeds at compile time via rhizz-server's build.rs. The
+# frontend depends on the WASM package (`file:../crates/rhizz-wasm/pkg/`), so
+# we build that first.
 #
 # VITE_RHIZZ_SERVER_URL is baked in at build time: set to "/" so the embedded
 # frontend talks to the same-origin `/api/vfs` (the VFS persistence API) rather
@@ -70,8 +71,8 @@ RUN cd web \
 # Stage 2 — build the backend, embedding the frontend artifacts.
 #
 # Copies `web/build` (and the wasm pkg) from the frontend stage, then compiles
-# `rhizz-server`. build.rs embeds `web/build` into the binary, so the release
-# binary below is fully self-contained.
+# `rhizz-cli` (the `rhizz` binary). rhizz-server's build.rs embeds `web/build`
+# into the binary, so the release binary below is fully self-contained.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM rust:1-bookworm AS backend
 
@@ -84,7 +85,7 @@ COPY --from=frontend /app/crates/rhizz-wasm/pkg crates/rhizz-wasm/pkg
 # Backend sources. SPEC/ and examples/ are needed by the rhizz-core build
 # script (it embeds SPEC/diagnostics and examples/ via include_str!).
 # Every workspace member crate must be present so the workspace manifest
-# resolves (rhizz-book is a member even though the server doesn't link it).
+# resolves (rhizz-book is a member even though the rhizz binary doesn't link it).
 COPY crates/rhizz-core crates/rhizz-core
 COPY crates/rhizz-cli crates/rhizz-cli
 COPY crates/rhizz-server crates/rhizz-server
@@ -94,9 +95,9 @@ COPY SPEC SPEC
 COPY examples examples
 COPY Cargo.toml Cargo.lock ./
 
-# Compile the server (release). The frontend is embedded here, so this is the
-# only artifact the runtime stage needs.
-RUN cargo build --release -p rhizz-server
+# Compile the rhizz binary (release). The frontend is embedded here, so this is
+# the only artifact the runtime stage needs.
+RUN cargo build --release -p rhizz-cli
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3 — minimal runtime.
@@ -121,9 +122,9 @@ RUN mkdir -p /data
 # fly.toml) shadows these on any machine that has one.
 COPY --from=backend /app/examples/ /data/
 
-COPY --from=backend /app/target/release/rhizz-server /usr/local/bin/rhizz-server
+COPY --from=backend /app/target/release/rhizz /usr/local/bin/rhizz
 
-# rhizz-server binds RHIZZ_ADDR (default 127.0.0.1:3000); Fly forwards to the
+# `rhizz web` binds RHIZZ_ADDR (default 127.0.0.1:3000); Fly forwards to the
 # container port, so bind all interfaces. The data dir defaults to ./rhizz-data
 # relative to cwd, so point it at the volume. This ENV is the single source of
 # truth for RHIZZ_DATA_DIR — fly.toml intentionally omits it and inherits the
@@ -134,4 +135,4 @@ ENV RHIZZ_ADDR=0.0.0.0:8080 \
 
 EXPOSE 8080
 
-CMD ["rhizz-server"]
+CMD ["rhizz", "web"]

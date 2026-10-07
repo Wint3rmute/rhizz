@@ -42,6 +42,7 @@ export interface InventoryDefinition {
 export interface InventorySystem {
   label: string;
   full_name: string;
+  icon?: string | undefined;
   tags: string[];
 }
 
@@ -199,7 +200,8 @@ export function filterSystems(
 /** A system as an `InventoryDefinition` so it can reuse the card, diagram
  * preview (`views/<label>.hcl`) and detail pane. Systems have no ports or
  * children in the inventory sense — they are shown as a single specified
- * leaf when they carry a full_name, else a draft. */
+ * leaf when they carry a full_name, else a draft. Only `full_name` and
+ * `icon` travel: systems carry no color/border/font in the model. */
 export function systemAsDefinition(sys: InventorySystem): InventoryDefinition {
   return {
     label: sys.label,
@@ -209,6 +211,7 @@ export function systemAsDefinition(sys: InventorySystem): InventoryDefinition {
     leaf: true,
     children: [],
     ports: [],
+    icon: sys.icon,
   };
 }
 
