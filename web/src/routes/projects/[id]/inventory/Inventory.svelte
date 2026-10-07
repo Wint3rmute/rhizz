@@ -28,6 +28,7 @@ import CreateSystemModal from "../modeling/CreateSystemModal.svelte";
 import {
   emptyDiagramLayout,
   VIEW_LAYOUT_DIR,
+  parse_views,
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import DefinitionCard from "./DefinitionCard.svelte";
@@ -37,12 +38,14 @@ import {
   definitionLabelForNode,
   filterDefinitions,
   filterSystems,
+  instancePathsForDefinition,
   INVENTORY_TABS,
   type InventoryDefinition,
   type InventorySystem,
   InventoryTab,
   preferredViewSystem,
   systemAsDefinition,
+  viewsBoundToSystem,
 } from "./inventory";
 
 let {
@@ -517,6 +520,61 @@ async function handleSystemStyleChange(patch: SystemPatch): Promise<void> {
   );
 }
 
+// ── Deletion ───────────────────────────────────────────────────────────────
+// The Delete tab blocks while the entity is still referenced: a component
+// with live instances (its placements, by model key), a system with bound
+// views (which would dangle with E006). The blockers are recomputed from
+// the compiled model + sources on every render, so removing the last
+// instance/view unlocks the confirm input without a reload.
+let deleteBlockers = $derived.by<string[]>(() => {
+  const label = selectedDefinition?.label;
+  if (!label) return [];
+  if (selectedIsSystem) {
+    return viewsBoundToSystem(boundViews, label);
+  }
+  return instancePathsForDefinition(comps, model?.component_keys() ?? [], label);
+});
+
+// Every `views/*.hcl` file with its bound system, parsed from the project
+// sources. Malformed view files are skipped — they are someone else's
+// diagnostic, not this tab's problem.
+let boundViews = $derived.by<{ path: string; system: string }[]>(() => {
+  const views: { path: string; system: string }[] = [];
+  for (const source of sources) {
+    if (!source.filename.startsWith(`${VIEW_LAYOUT_DIR}/`)) continue;
+    if (!source.filename.endsWith(".hcl")) continue;
+    try {
+      for (const view of parse_views(source.content)) {
+        views.push({ path: source.filename, system: view.system ?? "" });
+      }
+    } catch {
+      // Skip unparseable view files.
+    }
+  }
+  return views;
+});
+
+async function handleDeleteEntity(): Promise<void> {
+  const id = projectId;
+  const label = selectedDefinition?.label;
+  if (!id || !label) return;
+  try {
+    const fs = openProjectFs(projectStore, id);
+    const targetPath = primaryHclPath(
+      await fs.readdir(".", { recursive: true }),
+    );
+    const content = await fs.readFile(targetPath).catch(() => "");
+    const result = await applyModelMutation(fs, targetPath, content, selectedIsSystem
+      ? { kind: "delete_system", path: label }
+      : { kind: "delete_component", path: label });
+    if (!result.applied) return;
+    sources = await readProjectSources(fs);
+    selectLabel(null);
+  } catch (error) {
+    console.error("Failed to delete inventory entity:", error);
+  }
+}
+
 // Creates the missing component-specific view (`views/<label>.hcl`, bound
 // to the system that instantiates the definition) and opens Modeling on that
 // very view, addressed by its path.
@@ -739,6 +797,9 @@ async function handleCreateView(): Promise<void> {
         onsystemstylechange={selectedIsSystem
           ? handleSystemStyleChange
           : undefined}
+        deleteBlockers={deleteBlockers}
+        deleteBlockerKind={selectedIsSystem ? "view" : "instance"}
+        ondelete={handleDeleteEntity}
       />
     </div>
 
