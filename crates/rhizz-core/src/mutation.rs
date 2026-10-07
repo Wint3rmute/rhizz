@@ -960,17 +960,11 @@ fn update(
 /// label, refuses. Mirrors the `update` guard behavior: unknown targets are
 /// a refusal, not an error.
 fn update_system(raw: &mut RawFile, path: &str, changes: &SystemPatchJson) -> ApplyOutcome {
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-    if segments.len() != 1 {
-        return idle();
-    }
-    let Some(label) = segments.first() else {
+    let mut segments = path.split('/').filter(|s| !s.is_empty());
+    let (Some(label), None) = (segments.next(), segments.next()) else {
         return idle();
     };
-    let Some(index) = find_system(raw, label) else {
-        return idle();
-    };
-    let Some(body) = raw.systems.get_mut(index) else {
+    let Some(body) = find_system(raw, label).and_then(|i| raw.systems.get_mut(i)) else {
         return idle();
     };
     if let Some(full_name) = &changes.full_name {
