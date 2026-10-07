@@ -131,6 +131,35 @@ test("inventory add buttons create systems and components", async ({ page }) => 
   await expect(page.getByTestId("inventory-add-entity")).toHaveCount(0);
 });
 
+test("inventory detail pane keeps the active tab when switching entities", async ({ page }) => {
+  const id = await createNewProject(page, "E2E inventory tab keeps");
+  await page.goto(`/projects/${id}/inventory`);
+
+  // Create two components to switch between.
+  for (const name of ["tab-comp-a", "tab-comp-b"]) {
+    await page.getByTestId("inventory-add-entity").click();
+    const modal = page.getByTestId("create-component-modal");
+    await expect(modal).toBeVisible();
+    await modal.locator("#new-comp-name").fill(name);
+    await modal.getByRole("button", { name: "Create Definition" }).click();
+    await expect(modal).toBeHidden();
+  }
+
+  const pane = page.getByTestId("inventory-detail-pane");
+  await page.getByRole("tab", { name: "Metadata" }).click();
+  await expect(
+    pane.getByRole("tab", { name: "Metadata" }),
+  ).toHaveAttribute("aria-selected", "true");
+
+  // Switching the focused entity keeps the tab — the pane now shows the
+  // newly focused component's metadata, not the Description tab.
+  await page.getByText("tab-comp-a").first().click();
+  await expect(
+    pane.getByRole("tab", { name: "Metadata" }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(`/projects/${id}/inventory/tab-comp-a`);
+});
+
 test("inventory Delete tab removes systems and components from the model", async ({ page }) => {
   const id = await createNewProject(page, "E2E inventory delete");
 

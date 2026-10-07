@@ -112,8 +112,10 @@ let docEditor = $state<monaco.editor.IStandaloneCodeEditor | undefined>(
   undefined,
 );
 
-// Reset to the first tab (and the doc viewer) when switching between
-// definitions so stale tab/editor state doesn't leak across selections.
+// Reset per-entity editor state when switching between definitions so a
+// half-typed doc edit or delete confirmation does not leak across
+// selections. The active tab is deliberately kept: switching the focused
+// entity swaps what the pane shows, not which facet of it is open.
 let lastLabel = $state<string | null>(null);
 let docMode = $state<"view" | "edit">("view");
 let editText = $state("");
@@ -124,7 +126,6 @@ $effect(() => {
   const label = definition?.label ?? null;
   if (label !== lastLabel) {
     lastLabel = label;
-    activeTab = "Description";
     docMode = "view";
     deleteConfirmText = "";
   }
