@@ -12,6 +12,7 @@
 // the compiled model — there is no second TypeScript model to keep in sync.
 
 import { type ComponentData, type PortData } from "../modelView";
+import type { SystemPatch } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
 import { apply_model_op } from "../rhizz_wasm_wrapper";
 
@@ -61,11 +62,7 @@ export type ModelMutationOp =
   }
   | { kind: "rename_component"; path: string; newLabel: string }
   | { kind: "update_component"; path: string; patch: Partial<ComponentData> }
-  | {
-    kind: "update_system";
-    path: string;
-    patch: { full_name?: string | undefined; icon?: string | undefined };
-  }
+  | { kind: "update_system"; path: string; patch: SystemPatch }
   | { kind: "delete_component"; path: string }
   | {
     kind: "add_connection";
