@@ -7,12 +7,14 @@ import {
   definitionLabelForNode,
   filterDefinitions,
   filterSystems,
+  instancePathsForDefinition,
   type InventoryDefinition,
   type InventorySystem,
   InventoryTab,
   type PortInfo,
   preferredViewSystem,
   systemAsDefinition,
+  viewsBoundToSystem,
 } from "./inventory";
 
 function def(
@@ -296,5 +298,58 @@ describe("definitionLabelForNode", () => {
         0,
       ),
     ).toBe("battery");
+  });
+});
+
+describe("instancePathsForDefinition", () => {
+  // Arena indices shared with the typed model (`component_keys`), so the
+  // Delete tab can name every placement of a definition.
+  const components = [
+    { label: "controller" },
+    { label: "main-chip", source: "mcu", parent: { System: 0 } },
+    { label: "spare", source: "mcu", parent: { System: 1 } },
+    { label: "mcu" },
+  ];
+  const keys = [
+    "controller",
+    "demo/main-chip",
+    "other/spare",
+    "mcu",
+  ];
+
+  it("lists the key of every instance sourced from the definition", () => {
+    expect(instancePathsForDefinition(components, keys, "mcu")).toEqual([
+      "demo/main-chip",
+      "other/spare",
+    ]);
+  });
+
+  it("ignores empty sources and returns [] when unused", () => {
+    expect(
+      instancePathsForDefinition(
+        [{ label: "battery", source: "" }],
+        ["battery"],
+        "battery",
+      ),
+    ).toEqual([]);
+    expect(instancePathsForDefinition(components, keys, "controller")).toEqual(
+      [],
+    );
+  });
+});
+
+describe("viewsBoundToSystem", () => {
+  const views = [
+    { path: "views/demo.hcl", system: "demo" },
+    { path: "views/other.hcl", system: "other" },
+    { path: "views/unbound.hcl", system: "" },
+  ];
+
+  it("lists the view files bound to the system", () => {
+    expect(viewsBoundToSystem(views, "demo")).toEqual(["views/demo.hcl"]);
+  });
+
+  it("returns [] when nothing is bound to the system", () => {
+    expect(viewsBoundToSystem(views, "missing")).toEqual([]);
   });
 });

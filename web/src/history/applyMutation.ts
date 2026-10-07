@@ -64,6 +64,7 @@ export type ModelMutationOp =
   | { kind: "update_component"; path: string; patch: Partial<ComponentData> }
   | { kind: "update_system"; path: string; patch: SystemPatch }
   | { kind: "delete_component"; path: string }
+  | { kind: "delete_system"; path: string }
   | {
     kind: "add_connection";
     scopePath: string;
