@@ -486,6 +486,7 @@ export const EveryTabFitsInThePane: Story = {
       "Ports",
       "Requirements",
       "Metadata",
+      "Delete",
     ];
     const tabs = within(list).getAllByRole("tab");
     await expect(tabs).toHaveLength(names.length);
@@ -628,5 +629,82 @@ export const StyleTabEditsTheSystem: Story = {
     const hcl = await readModel();
     const block = hcl.slice(hcl.indexOf('system "aux-system"'));
     await expect(block).toMatch(/icon\s+= "microchip"/);
+  },
+};
+
+// A component with live instances cannot be deleted: the tab names every
+// placement instead of offering the confirm input, so there is nothing to
+// click that would refuse. `battery` is instanced in demo-system.
+export const DeleteTabBlockedForUsedComponent: Story = {
+  args: { requestedLabel: "battery" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Delete" }));
+
+    const tab = within(await canvas.findByTestId("inventory-delete-tab"));
+    await expect(tab.getByText(/still used in/)).toBeTruthy();
+    await expect(tab.getByText("demo-system/battery")).toBeTruthy();
+    // Blocked means blocked: no confirm input, no confirm button.
+    await expect(
+      tab.queryByTestId("inventory-delete-confirm"),
+    ).not.toBeInTheDocument();
+  },
+};
+
+// A component with no instances deletes through the type-to-confirm gate:
+// the button stays disabled until the input names the label, and the model
+// file loses the block. `draft-module` is never instanced.
+export const DeleteTabDeletesUnusedComponent: Story = {
+  args: { requestedLabel: "draft-module" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Delete" }));
+
+    const tab = within(await canvas.findByTestId("inventory-delete-tab"));
+    const confirm = tab.getByTestId("inventory-delete-confirm");
+    // Wrong text keeps the button disabled — the gate is the match, not
+    // the click.
+    await userEvent.type(
+      tab.getByLabelText(/type "draft-module" to confirm/i),
+      "draft-modul",
+    );
+    await expect(confirm).toBeDisabled();
+    await userEvent.type(
+      tab.getByLabelText(/type "draft-module" to confirm/i),
+      "e",
+    );
+    await expect(confirm).not.toBeDisabled();
+    await userEvent.click(confirm);
+
+    const readModel = async (): Promise<string> =>
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
+        .readFile("main.hcl");
+    await waitFor(async () => {
+      const hcl = await readModel();
+      await expect(hcl).not.toContain('component "draft-module"');
+    });
+  },
+};
+
+// A system with bound views cannot be deleted: removing it would leave
+// `views/demo-system.hcl` dangling with E006, so the tab lists the files
+// to delete first instead of offering the confirm input.
+export const DeleteTabBlockedForSystemWithViews: Story = {
+  args: { requestedLabel: "demo-system" },
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Systems" }));
+    await userEvent.click(canvas.getByText("demo-system"));
+    await userEvent.click(canvas.getByRole("tab", { name: "Delete" }));
+
+    const tab = within(await canvas.findByTestId("inventory-delete-tab"));
+    await expect(tab.getByText(/still has bound views/)).toBeTruthy();
+    await expect(tab.getByText("views/demo-system.hcl")).toBeTruthy();
+    await expect(
+      tab.queryByTestId("inventory-delete-confirm"),
+    ).not.toBeInTheDocument();
   },
 };

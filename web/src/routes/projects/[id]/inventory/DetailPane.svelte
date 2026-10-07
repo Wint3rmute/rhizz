@@ -28,6 +28,9 @@ let {
   ondocsave,
   onstylechange,
   onsystemstylechange,
+  deleteBlockers,
+  deleteBlockerKind,
+  ondelete,
 }: {
   definition: InventoryDefinition | null;
   /** `docs/<label>.md` content: null when missing, undefined while loading. */
@@ -48,15 +51,26 @@ let {
    * Exactly one of the two is supplied for any shown entity.
    */
   onsystemstylechange?: ((patch: SystemPatch) => Promise<void>) | undefined;
+  /**
+   * Paths blocking deletion of the shown entity: instance keys for a
+   * component, bound view files for a system. Empty means deletion is
+   * allowed (behind the type-to-confirm gate below).
+   */
+  deleteBlockers: string[];
+  /** What the blockers are, for the blocked message wording. */
+  deleteBlockerKind: "instance" | "view";
+  /** Delete the shown entity from the system model. */
+  ondelete: () => Promise<void>;
 } = $props();
 
-type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata";
+type Tab = "Description" | "Style" | "Ports" | "Requirements" | "Metadata" | "Delete";
 
 const TABS: readonly Tab[] = [
   "Description",
   "Ports",
   "Requirements",
   "Metadata",
+  "Delete",
 ];
 
 let tabs = $derived<readonly Tab[]>(
@@ -98,12 +112,15 @@ let lastLabel = $state<string | null>(null);
 let docMode = $state<"view" | "edit">("view");
 let editText = $state("");
 let savingDoc = $state(false);
+let deleteConfirmText = $state("");
+let deletingEntity = $state(false);
 $effect(() => {
   const label = definition?.label ?? null;
   if (label !== lastLabel) {
     lastLabel = label;
     activeTab = "Description";
     docMode = "view";
+    deleteConfirmText = "";
   }
 });
 
@@ -173,7 +190,11 @@ function flattenTags(def: InventoryDefinition): string[] {
             aria-selected={activeTab === tab}
             class="px-2 py-2 text-xs border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 {
               activeTab === tab
-                ? 'border-primary text-primary font-medium'
+                ? tab === 'Delete'
+                  ? 'border-error text-error font-medium'
+                  : 'border-primary text-primary font-medium'
+                : tab === 'Delete'
+                ? 'border-transparent text-error/60 hover:text-error'
                 : 'border-transparent text-base-content/60 hover:text-base-content'
             }"
             onclick={() => (activeTab = tab)}
@@ -347,6 +368,60 @@ function flattenTags(def: InventoryDefinition): string[] {
           <dt class="text-base-content/60">Child components</dt>
           <dd>{definition.children.length}</dd>
         </dl>
+      {:else if activeTab === "Delete"}
+        <div class="flex flex-col gap-3" data-testid="inventory-delete-tab">
+          {#if deleteBlockers.length > 0}
+            <div role="alert" class="alert alert-warning text-sm">
+              <span>
+                {#if deleteBlockerKind === "instance"}
+                  This component is still used in:
+                {:else}
+                  This system still has bound views — delete them first (Code page or Modeling's view list):
+                {/if}
+              </span>
+            </div>
+            <ul class="list-disc list-inside text-sm font-mono">
+              {#each deleteBlockers as blocker (blocker)}
+                <li>{blocker}</li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="text-sm">
+              Delete <code class="font-mono">{definition.label}</code> from
+              the system model? This cannot be undone.
+            </p>
+            <div class="form-control">
+              <label class="label py-1" for="delete-confirm-input">
+                <span
+                  class="label-text text-xs font-semibold uppercase tracking-wider text-base-content/70"
+                >
+                  Type "{definition.label}" to confirm
+                </span>
+              </label>
+              <input
+                id="delete-confirm-input"
+                type="text"
+                bind:value={deleteConfirmText}
+                class="input input-sm input-bordered w-full font-mono"
+                autocomplete="off"
+              />
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-error"
+              data-testid="inventory-delete-confirm"
+              disabled={deleteConfirmText !== definition.label || deletingEntity}
+              onclick={() => {
+                deletingEntity = true;
+                void ondelete().finally(() => {
+                  deletingEntity = false;
+                });
+              }}
+            >
+              {deletingEntity ? "Deleting…" : "Confirm deletion"}
+            </button>
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}
