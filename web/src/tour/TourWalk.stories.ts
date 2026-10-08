@@ -111,10 +111,6 @@ async function ensureWalkProject(): Promise<Project> {
   return project;
 }
 
-function clearWalkProject(): void {
-  clearCurrentProject();
-}
-
 // `beforeEach` must resolve to void: the loader above carries the seeded
 // project, this only repeats the singleton write for the runner phase.
 async function ensureWalkProjectVoid(): Promise<void> {
@@ -134,7 +130,7 @@ const meta = {
   },
   loaders: [ensureWalkProject],
   beforeEach: [ensureWalkProjectVoid],
-  afterEach: [clearWalkProject],
+  afterEach: [clearCurrentProject],
 } satisfies Meta<typeof TourWalk>;
 
 export default meta;
