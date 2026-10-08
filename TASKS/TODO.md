@@ -16,23 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Inspect end-to-end test adding 2 connections with the same name
-
-I noticed weird behavior when using the application:
-
-1. Create new project, system and view
-2. Create 3 components, A, B, C
-3. Connect A to B with connection named "test-connection"
-4. Connect C to B with connection also named "test-connection"
-
-Expected result:
-
-- Frontend disallows it and shows a message explaining that such connection already exists
-
-Actual result:
-
-- Frontend removed the existing connection from step 3 and replaced it with connection from step 4
-
 ## Task <N> - Editing Description in Inventory/ should auto-save changes
 
 Currently, using the Description -> Edit flow under inventory/ requires the user
