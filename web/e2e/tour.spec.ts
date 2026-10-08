@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { expectInViewport } from "./helpers";
 
 // Full walkthrough e2e: creating the first project auto-opens the guided
@@ -35,48 +35,46 @@ async function createFirstProject(
 }
 
 for (const source of ["example", "empty"] as const) {
-  test(`first project (${source}) auto-opens the tour; Next walks all pages to Done`, async ({
-    page,
-  }) => {
+  test(`first project (${source}) auto-opens the tour; Next walks all pages to Done`, async ({ page }) => {
     await createFirstProject(page, source);
 
-  // First-run pending start: the welcome dialog opens on its own.
-  const dialog = page.getByRole("alertdialog");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
-  await expectInViewport(dialog);
-
-  // Walk every stop; each step navigates to its page before spotlighting.
-  const next = page.getByRole("button", { name: "next step" });
-  const titles = [
-    "Navbar",
-    "Up next: Overview",
-    "Overview",
-    "Up next: Modeling",
-    "Modeling: the core tool",
-    "Modeling: selection & inspector",
-    "Up next: Inventory",
-    "Inventory",
-    "Up next: Explore",
-    "Explore",
-    "Up next: Code",
-    "Code",
-    "You're set 🚀",
-  ];
-  for (const title of titles) {
-    await next.click();
-    // Titles render as the card heading; getByText would also match
-    // description prose (e.g. "Code" appears in its own description).
-    await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
-    // Visibility is not enough: the card must sit fully in the viewport,
-    // not float half off-screen on any stop.
+    // First-run pending start: the welcome dialog opens on its own.
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
     await expectInViewport(dialog);
-  }
 
-  // Last stop offers Done; the tour closes and the page stays usable.
-  await dialog.getByText("Done").click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("link", { name: "Modeling" }).first())
-    .toBeVisible();
+    // Walk every stop; each step navigates to its page before spotlighting.
+    const next = page.getByRole("button", { name: "next step" });
+    const titles = [
+      "Navbar",
+      "Up next: Overview",
+      "Overview",
+      "Up next: Modeling",
+      "Modeling: the core tool",
+      "Modeling: selection & inspector",
+      "Up next: Inventory",
+      "Inventory",
+      "Up next: Explore",
+      "Explore",
+      "Up next: Code",
+      "Code",
+      "You're set 🚀",
+    ];
+    for (const title of titles) {
+      await next.click();
+      // Titles render as the card heading; getByText would also match
+      // description prose (e.g. "Code" appears in its own description).
+      await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
+      // Visibility is not enough: the card must sit fully in the viewport,
+      // not float half off-screen on any stop.
+      await expectInViewport(dialog);
+    }
+
+    // Last stop offers Done; the tour closes and the page stays usable.
+    await dialog.getByText("Done").click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("link", { name: "Modeling" }).first())
+      .toBeVisible();
   });
 }

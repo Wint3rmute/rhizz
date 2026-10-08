@@ -12,9 +12,6 @@ import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import FileTree from "./FileTree.svelte";
 
-// The code editor itself. The route shell (+page.svelte) only hands the
-// route parameter over as a prop, so page-level stories can render this
-// directly (same split as ModelingPage/Inventory).
 let {
   projectId,
 }: {
