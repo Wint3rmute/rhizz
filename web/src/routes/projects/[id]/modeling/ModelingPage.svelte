@@ -2331,6 +2331,16 @@ async function handleCreateConnection(
   const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
   if (!connLabel) return;
 
+  // The backend silently no-ops a same-scope duplicate (the op reports
+  // applied with unchanged HCL), so without this the draw gesture would
+  // accept the name and visibly do nothing.
+  if (connections.some((c) => c.label === connLabel)) {
+    alert(
+      `A connection named "${connLabel}" already exists. Choose a different name.`,
+    );
+    return;
+  }
+
   await runModelLayoutTransaction(
     `connect ${connLabel}`,
     {
