@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectInViewport } from "./helpers";
 
 // Full walkthrough e2e: creating the first project (here from the drone
 // example, so every stop has content to spotlight) auto-opens the guided
@@ -21,6 +22,7 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
+  await expectInViewport(dialog);
 
   // Walk every stop; each step navigates to its page before spotlighting.
   const next = page.getByRole("button", { name: "next step" });
@@ -44,6 +46,9 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
     // Titles render as the card heading; getByText would also match
     // description prose (e.g. "Code" appears in its own description).
     await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
+    // Visibility is not enough: the card must sit fully in the viewport,
+    // not float half off-screen on any stop.
+    await expectInViewport(dialog);
   }
 
   // Last stop offers Done; the tour closes and the page stays usable.

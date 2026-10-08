@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export async function skipTourIfPresent(page: Page): Promise<void> {
   const tourDialog = page.getByRole("alertdialog");
@@ -40,4 +40,19 @@ export async function createFromExample(
   await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
   await skipTourIfPresent(page);
   return projectIdFromUrl(page);
+}
+
+// The whole tour card must sit inside the viewport on every stop —
+// `toBeVisible` alone passes for a card floating half off-screen. Asserts
+// full containment (not just intersection) against the live viewport size,
+// with a 1px rounding tolerance for sub-pixel placement math.
+export async function expectInViewport(target: Locator): Promise<void> {
+  const box = await target.boundingBox();
+  if (!box) throw new Error("tour card has no bounding box");
+  const viewport = target.page().viewportSize();
+  if (!viewport) throw new Error("page has no viewport size");
+  expect(box.x).toBeGreaterThanOrEqual(-1);
+  expect(box.y).toBeGreaterThanOrEqual(-1);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 }
