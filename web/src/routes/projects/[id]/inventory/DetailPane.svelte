@@ -13,7 +13,9 @@ import { SvelteSet } from "svelte/reactivity";
 // Type-only: the editor *type* without dragging the editor itself in, so
 // `DetailPane` does not become a second reason to load Monaco.
 import type * as monaco from "monaco-editor";
+import { onDestroy } from "svelte";
 import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
+import { createDebounced } from "../../../../debounce";
 import type { InventoryDefinition } from "./inventory";
 import { definitionDepth } from "./inventory";
 import {
@@ -35,8 +37,12 @@ let {
   definition: InventoryDefinition | null;
   /** `docs/<label>.md` content: null when missing, undefined while loading. */
   docContent: string | null | undefined;
-  /** Persist edited documentation back to the VFS. */
-  ondocsave: (content: string) => Promise<void>;
+  /**
+   * Persist edited documentation to the VFS. The label travels with the
+   * text so a debounced write that lands after an entity switch still
+   * reaches the file it was typed for, not the newly selected one.
+   */
+  ondocsave: (label: string, content: string) => Promise<void>;
   /**
    * Persist a component-style edit to the system model. Omitted when the
    * entity has no component to style (a system, which uses
@@ -119,17 +125,33 @@ let docEditor = $state<monaco.editor.IStandaloneCodeEditor | undefined>(
 let lastLabel = $state<string | null>(null);
 let docMode = $state<"view" | "edit">("view");
 let editText = $state("");
-let savingDoc = $state(false);
 let deleteConfirmText = $state("");
 let deletingEntity = $state(false);
+
+// Edits auto-save once typing pauses — there is no Save button to forget.
+// The label is captured per call (not read live at write time), so a write
+// that lands after an entity switch still reaches the file it was typed
+// for. Switching entities flushes first for the same reason the Code page
+// flushes on file switch; unmount flushes for navigation away.
+const DOC_WRITE_DEBOUNCE_MS = 500;
+const scheduleDocSave = createDebounced(
+  (label: string, text: string) => {
+    void ondocsave(label, text);
+  },
+  DOC_WRITE_DEBOUNCE_MS,
+);
+let lastScheduledDocText = $state<string | null>(null);
 $effect(() => {
   const label = definition?.label ?? null;
   if (label !== lastLabel) {
+    scheduleDocSave.flush();
     lastLabel = label;
     docMode = "view";
     deleteConfirmText = "";
+    lastScheduledDocText = null;
   }
 });
+onDestroy(() => scheduleDocSave.flush());
 
 let portCount = $derived(definition?.ports.length ?? 0);
 let depth = $derived(definition ? definitionDepth(definition) : 0);
@@ -144,19 +166,24 @@ $effect(() => {
 
 function startDocEdit(): void {
   editText = docContent ?? "";
+  lastScheduledDocText = editText;
   docMode = "edit";
 }
 
-async function saveDocEdit(): Promise<void> {
-  if (savingDoc) return;
-  savingDoc = true;
-  try {
-    await ondocsave(editText);
-    docMode = "view";
-  } finally {
-    savingDoc = false;
-  }
-}
+// Schedules a save while editing, once per distinct text: comparing against
+// the last scheduled text (rather than re-reading the file) means the
+// load effect's own initial assignment never schedules a write.
+$effect(() => {
+  const label = definition?.label;
+  if (docMode !== "edit" || label === undefined || label === null) return;
+  if (editText === lastScheduledDocText) return;
+  lastScheduledDocText = editText;
+  scheduleDocSave(label, editText);
+});
+
+// Whether the editor holds unsaved text: the saved copy trails by the
+// debounce window, so a mismatch means a write is still in flight.
+let docDirty = $derived(editText !== (docContent ?? ""));
 function flattenTags(def: InventoryDefinition): string[] {
   const tags = new SvelteSet<string>(def.tags);
   const walk = (d: InventoryDefinition) => {
@@ -229,24 +256,23 @@ function flattenTags(def: InventoryDefinition): string[] {
                 options={DOC_EDITOR_OPTIONS}
               />
             </div>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="btn btn-primary btn-sm"
-                data-testid="inventory-doc-save-button"
-                disabled={savingDoc}
-                onclick={() => void saveDocEdit()}
+            <div class="flex gap-2 items-center">
+              <span
+                class="text-xs text-base-content/50"
+                data-testid="inventory-doc-save-status"
               >
-                {savingDoc ? "Saving…" : "Save"}
-              </button>
+                {docDirty ? "Saving…" : "Saved"}
+              </span>
               <button
                 type="button"
                 class="btn btn-ghost btn-sm"
                 data-testid="inventory-doc-cancel-button"
-                disabled={savingDoc}
-                onclick={() => (docMode = "view")}
+                onclick={() => {
+                  scheduleDocSave.flush();
+                  docMode = "view";
+                }}
               >
-                Cancel
+                Done
               </button>
             </div>
           </div>
