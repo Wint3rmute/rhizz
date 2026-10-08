@@ -1,22 +1,44 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { expectInViewport } from "./helpers";
 
-// Full walkthrough e2e: creating the first project (here from the drone
-// example, so every stop has content to spotlight) auto-opens the guided
+// Full walkthrough e2e: creating the first project auto-opens the guided
 // tour, and Next walks all fourteen stops across the six workspace pages to
 // Done. Desktop viewport only — the tour entry point is desktop-gated.
-// Unit tests cover the step factory/targets/store; this spec proves the
+// Unit tests cover the step factory/targets/store; these specs prove the
 // cross-page wiring — mount, per-step navigation, spotlight, advance.
-test("first project auto-opens the tour; Next walks all pages to Done", async ({ page }) => {
+//
+// Two creations, one walk: from the drone example (every stop has content
+// to spotlight) and from an empty project (its model has no `project`
+// block, so the overview renders without a named header card — regression:
+// the Overview anchor lived only on that card, so Zag never resolved the
+// target and closed the whole tour as TARGET.NOT_FOUND around step 4).
+async function createFirstProject(
+  page: Page,
+  source: "example" | "empty",
+): Promise<void> {
   await page.goto("/");
-  await page.getByRole("button", { name: "Learn by example" }).click();
-  // The example card prompts for the project name — arm the handler
-  // before clicking it (same pattern as smoke.spec.ts).
-  page.on("dialog", (dialog) => void dialog.accept("E2E tour"));
-  await page.getByRole("button", { name: /Quadcopter Drone/ }).click();
+  if (source === "example") {
+    await page.getByRole("button", { name: "Learn by example" }).click();
+    // The example card prompts for the project name — arm the handler
+    // before clicking it (same pattern as smoke.spec.ts).
+    page.on("dialog", (dialog) => void dialog.accept("E2E tour"));
+    await page.getByRole("button", { name: /Quadcopter Drone/ }).click();
+  } else {
+    const create = page.getByRole("button", { name: "New project" }).first();
+    await expect(create).toBeVisible();
+    page.on("dialog", (dialog) => void dialog.accept("E2E empty tour"));
+    await create.click();
+  }
   // Creation lands in code; the armed first-run tour may already
   // have routed onward to the overview by the time the poll lands.
   await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
+}
+
+for (const source of ["example", "empty"] as const) {
+  test(`first project (${source}) auto-opens the tour; Next walks all pages to Done`, async ({
+    page,
+  }) => {
+    await createFirstProject(page, source);
 
   // First-run pending start: the welcome dialog opens on its own.
   const dialog = page.getByRole("alertdialog");
@@ -56,4 +78,5 @@ test("first project auto-opens the tour; Next walks all pages to Done", async ({
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("link", { name: "Modeling" }).first())
     .toBeVisible();
-});
+  });
+}
