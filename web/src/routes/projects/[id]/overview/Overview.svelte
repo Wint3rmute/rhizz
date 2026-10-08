@@ -9,9 +9,6 @@ import { getWarningLevel } from "../../../../WarningLevelState.svelte";
 import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
 
-// The overview dashboard itself. The route shell (`+page.svelte`) only
-// hands the route parameter over as a prop, so page-level stories can
-// render this directly (same split as ModelingPage/Inventory).
 let {
   projectId,
 }: {
