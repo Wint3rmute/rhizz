@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectInViewport } from "./helpers";
 
 // Empty first project: its model has no `project` block, so the overview
 // page renders without a named header card. The tour's Overview stop must
@@ -20,6 +21,7 @@ test("empty first project walks the whole tour to Done", async ({ page }) => {
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
+  await expectInViewport(dialog);
 
   // Walk every stop; each step navigates to its page before spotlighting.
   const next = page.getByRole("button", { name: "next step" });
@@ -43,6 +45,9 @@ test("empty first project walks the whole tour to Done", async ({ page }) => {
     // Titles render as the card heading; getByText would also match
     // description prose (e.g. "Code" appears in its own description).
     await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
+    // Visibility is not enough: the card must sit fully in the viewport,
+    // not float half off-screen on any stop.
+    await expectInViewport(dialog);
   }
 
   // Last stop offers Done; the tour closes and the page stays usable.
