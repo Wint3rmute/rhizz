@@ -98,7 +98,7 @@ function levelBadge(level: number): string {
       <!-- Main dashboard -->
       <main class="md:col-span-12 flex flex-col gap-6">
       {#if !model}
-        <div class="card bg-base-200 shadow">
+        <div class="card bg-base-200 shadow" data-tour={TOUR_TARGETS.overview}>
           <div class="card-body items-center text-center py-16">
             <div class="text-5xl mb-4">📐</div>
             <h2 class="card-title text-base-content">
@@ -121,7 +121,7 @@ function levelBadge(level: number): string {
       {:else}
         <!-- ── Project header ── -->
         {#if project && project.name}
-          <div class="card bg-base-200 shadow" data-tour={TOUR_TARGETS.overview}>
+          <div class="card bg-base-200 shadow">
             <div
               class="card-body py-4 px-6 flex-row items-center gap-4 flex-wrap"
             >
@@ -149,17 +149,23 @@ function levelBadge(level: number): string {
         {/if}
 
         <!-- ── Stats row ── -->
-        <ModelStatsRow
-          systemCount={systems.length}
-          componentCount={components.length}
-          {leafCount}
-          {compositeCount}
-          portCount={totalPorts}
-          portsPct={catPct(score?.ports ?? null)}
-          connectionCount={totalConnections}
-          connectionsPct={catPct(score?.connections ?? null)}
-          {overallPct}
-        />
+        <!-- Carries the tour's `overview` anchor: unlike the header card
+             above (which only renders for a named project), this row mounts
+             for every compiled model, so the guided tour's Overview stop
+             always has a target to resolve. -->
+        <div data-tour={TOUR_TARGETS.overview}>
+          <ModelStatsRow
+            systemCount={systems.length}
+            componentCount={components.length}
+            {leafCount}
+            {compositeCount}
+            portCount={totalPorts}
+            portsPct={catPct(score?.ports ?? null)}
+            connectionCount={totalConnections}
+            connectionsPct={catPct(score?.connections ?? null)}
+            {overallPct}
+          />
+        </div>
 
         <!-- ── Completion breakdown ── -->
         <CompletionBreakdown

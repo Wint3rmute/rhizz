@@ -12,9 +12,13 @@ interface Props {
   steps: OnboardingStep[];
   /** Increment to (re)start the tour from the first step. */
   startSignal?: number;
+  /** Start at this step id instead of the first — the per-step Storybook
+      stories use it to screenshot every stop without clicking through. */
+  initialStepId?: string | undefined;
 }
 
-let { id = "onboarding", steps, startSignal = 0 }: Props = $props();
+let { id = "onboarding", steps, startSignal = 0, initialStepId }: Props =
+  $props();
 
 function toZagStep(step: OnboardingStep, index: number): tour.StepDetails {
   const last = index === steps.length - 1;
@@ -67,7 +71,9 @@ $effect(() => {
   const signal = startSignal;
   // Read `api` untracked: starting must only react to the signal, not to
   // every tour state change (api is a fresh object each step).
-  if (signal > 0) untrack(() => api.start());
+  // Zag's `start` takes an optional step id (`event.value ?? 0`), so an
+  // unknown initialStepId falls back to the first step, never nowhere.
+  if (signal > 0) untrack(() => api.start(initialStepId));
 });
 </script>
 
