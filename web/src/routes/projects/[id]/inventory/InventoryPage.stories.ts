@@ -507,18 +507,19 @@ export const EveryTabFitsInThePane: Story = {
   },
 };
 
-// The documentation editor, open. Every other documentation story cancels back
+// The documentation editor, open. Every other documentation story closes back
 // to the viewer, so without this one the editor's own layout inside the pane —
-// its height, its border, where the Save/Cancel row sits — has no picture of it
-// at all: a story that ends in edit mode is the only place the pane as a whole
-// can be compared.
+// its height, its border, where the status/Done row sits — has no picture of
+// it at all: a story that ends in edit mode is the only place the pane as a
+// whole can be compared.
 export const DocumentationEditorOpen: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await openDocEditor(canvas);
-    // Save and Cancel stay reachable below it.
-    await expect(canvas.getByTestId("inventory-doc-save-button")).toBeTruthy();
+    // The save status and Done stay reachable below it.
+    await expect(canvas.getByTestId("inventory-doc-save-status"))
+      .toBeTruthy();
     await expect(canvas.getByTestId("inventory-doc-cancel-button"))
       .toBeTruthy();
   },

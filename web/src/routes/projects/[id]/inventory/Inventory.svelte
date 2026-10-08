@@ -346,13 +346,17 @@ let docContent = $derived(
   selectedDocLabel === selectedDefinition?.label ? selectedDoc : undefined,
 );
 
-async function handleSaveDoc(content: string): Promise<void> {
+async function handleSaveDoc(label: string, content: string): Promise<void> {
   const id = projectId;
-  const label = selectedDefinition?.label;
-  if (!id || !label) return;
+  if (!id) return;
   const fs = openProjectFs(projectStore, id);
   await fs.mkdir("docs", { recursive: true });
   await fs.writeFile(`docs/${label}.md`, content);
+  // A debounced write can land after an entity switch: only refresh the
+  // viewer state when its entity is still selected, otherwise the new
+  // selection would flash "Loading…" until its own load lands. Reopening
+  // the written entity reads the file fresh anyway.
+  if (selectedDefinition?.label !== label) return;
   selectedDoc = content;
   selectedDocLabel = label;
 }

@@ -68,9 +68,14 @@ test("inventory writes documentation from the Description tab", async ({ page })
   await page.keyboard.type("# E2E widget\n\nDoes **things**.");
   await expect(lines).toContainText("# E2E widget");
 
-  // Saving renders the Markdown in the viewer: the heading becomes a heading
-  // and the bold markers stop being literal text.
-  await page.getByTestId("inventory-doc-save-button").click();
+  // No Save button to press: typing pauses, the debounced write lands, and
+  // the viewer renders the Markdown — the heading becomes a heading and
+  // the bold markers stop being literal text.
+  await expect(page.getByTestId("inventory-doc-save-status")).toContainText(
+    "Saved",
+    { timeout: 10_000 },
+  );
+  await page.getByTestId("inventory-doc-cancel-button").click();
   await expect(host).toBeHidden();
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole("heading", { name: "E2E widget" }))
@@ -93,14 +98,12 @@ test("inventory writes documentation from the Description tab", async ({ page })
   await expect(reopened.lines).toContainText("# E2E widget");
   await expect(reopened.lines).toContainText("Does **things**.");
 
-  // Cancel discards without touching the file or the viewer.
+  // Done closes the editor and keeps the text: with auto-save there is no
+  // draft to discard, so nothing is lost by leaving.
   await reopened.host.click();
   await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.type("discarded draft");
+  await page.keyboard.type("kept draft");
   await page.getByTestId("inventory-doc-cancel-button").click();
   await expect(reopened.host).toBeHidden();
-  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
-    .toBeVisible();
-  await expect(viewer).toContainText("Does things.");
-  await expect(page.getByText("discarded draft")).toBeHidden();
+  await expect(viewer).toContainText("kept draft");
 });
