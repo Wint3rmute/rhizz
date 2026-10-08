@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 128 — Inventory Description auto-saves with debounce
+
+The Description → Edit flow needed a manual Save click or edits were
+lost. Typing now auto-saves to `docs/<label>.md` 500ms after the pause
+(`DOC_WRITE_DEBOUNCE_MS`), reusing the `createDebounced` utility the Code
+page and Modeling layout writes already use. The Save button is gone;
+Cancel became Done (flush + close — with auto-save there is no draft to
+discard), next to a Saving…/Saved status derived from editor-vs-file text.
+
+- **No lost writes by construction.** The label is captured per scheduled
+  call, so a write landing after an entity switch reaches the file it was
+  typed for; entity switches and unmount flush first (Code page precedent).
+  `handleSaveDoc` only refreshes viewer state when the written entity is
+  still selected, so a background write can't flash "Loading…" on the new
+  selection.
+- **Tests**: e2e rewritten to the new contract (type → Saved status →
+  Done → viewer renders → reload persists → reopen prefilled → Done
+  keeps text); story asserts the status/Done row layout. A story driving
+  real Monaco typing was tried and dropped — at the story browser's
+  ~414px the editor collapses to zero and Monaco paints nothing, so content
+  assertions there pass vacuously (the file's own `openDocEditor` comment
+  says the same).
+- **VRT**: 2 re-recorded (editor-open row). **Validation**: 952 Vitest +
+  e2e, lint/build/format clean.
+
+---
+
 ## Task 127 — Duplicate connection names are refused with a message
 
 Drawing a second connection with an existing name silently did nothing

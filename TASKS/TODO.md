@@ -16,18 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Editing Description in Inventory/ should auto-save changes
-
-Currently, using the Description -> Edit flow under inventory/ requires the user
-to click the small "save" button below the editor window to save their changes.
-If the user forgets to use that button, changes are discarded.
-
-This is not a good design - the editor shall automatically save the changes,
-ideally with a debounce period of ~500ms (customizable via a constant in code).
-
-
----
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
