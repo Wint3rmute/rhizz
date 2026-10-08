@@ -4,6 +4,26 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task 127 — Duplicate connection names are refused with a message
+
+Drawing a second connection with an existing name silently did nothing
+visible (the backend `add_connection` no-ops same-scope duplicates,
+reporting applied with unchanged HCL, so the prompt accepted the name
+and the canvas kept showing only the first edge). `handleCreateConnection`
+now checks `model.connections()` for the label after the name prompt and
+alerts `A connection named "X" already exists. Choose a different name.`
+— the same native alert/prompt convention the flow already uses for the
+cross-system refusal.
+
+- **Red/green**: new `duplicate-connection.spec.ts` drives the report's
+  exact flow (3 components, A→B then C→B named "test-connection"),
+  asserting the alert and exactly one `connection "test-connection"` in
+  the model file. Failed before (no refusal of any kind), passes after.
+- **Validation**: 952 Vitest + 96 e2e pass, cargo clean, lint/build/
+  format clean. No VRT impact (no visual change on any story path).
+
+---
+
 ## Task 126 — Detail pane keeps the active tab when switching entities
 
 Switching the focused component reset the pane to Description. The
