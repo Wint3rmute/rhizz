@@ -1,90 +1,67 @@
 <script lang="ts">
+import Navbar from "../components/Navbar.svelte";
 import OnboardingTour from "../components/OnboardingTour.svelte";
+import Overview from "../routes/projects/[id]/overview/Overview.svelte";
+import ModelingPage from "../routes/projects/[id]/modeling/ModelingPage.svelte";
+import Inventory from "../routes/projects/[id]/inventory/Inventory.svelte";
+import Explore from "../routes/projects/[id]/explore/Explore.svelte";
+import CodePage from "../routes/projects/[id]/code/CodePage.svelte";
 import { tourSteps } from "./Tour";
-import { TOUR_TARGETS } from "./tourTargets";
 
-// Static stand-in for the workspace chrome the guided tour spotlights:
-// one small bar per `data-tour` anchor, laid out like the app shell
-// (navbar on top, page body below). Lets every tour step resolve its
-// target without mounting routed pages — the `TourWalk` stories start
-// the real `OnboardingTour` at each step id for per-step VRT shots.
-//
+// One real workspace page per tour stop, exactly as the app renders it —
+// the guided tour spotlights the page's own `data-tour` anchors, so the
+// VRT screenshots pin the genuine card/spotlight/placement per step.
 // `href`s are stripped: the story iframe is not the SvelteKit app, so a
-// `goto` on step change would navigate the preview away. The card,
-// spotlight, placement and progress are untouched — those are what the
-// screenshots pin.
+// `goto` on step change would navigate the preview away.
+export type TourWalkPage =
+  | "navbar"
+  | "overview"
+  | "modeling"
+  | "inventory"
+  | "explore"
+  | "code";
+
 interface Props {
+  /** Which real page to mount underneath the tour card. */
+  page: TourWalkPage;
+  /** Project fixture the page reads (seeded by the stories' loaders). */
+  projectId: string;
   /** Step id to open on (falls back to the first step when unknown). */
   stepId?: string | undefined;
 }
 
-let { stepId }: Props = $props();
+let { page, projectId, stepId }: Props = $props();
 
 let steps = $derived(
-  tourSteps("story-project").map(({ href: _href, ...step }) => step),
+  tourSteps(projectId).map(({ href: _href, ...step }) => step),
 );
 </script>
 
-<div class="min-h-screen bg-base-100 text-base-content flex flex-col">
-  <!-- Navbar strip: workspace links carry the preview-stop anchors. -->
-  <header
-    class="bg-base-100 border-b border-base-300 w-full shrink-0"
-    data-tour={TOUR_TARGETS.navbar}
+<div class="h-screen w-screen flex flex-col bg-base-100 text-base-content">
+  <Navbar />
+  <!-- The Code page mounts Monaco, which fills whatever box it is given
+       (see MonacoEditorHost): below the `sm` breakpoint the stats row
+       stacks vertically and squeezes the editor to zero height, where it
+       renders no lines and never settles. The story browser is narrower
+       than that, so the code stop gets a desktop-wide box — a no-op in
+       VRT (captured at 1280) that gives the editor a real box to paint. -->
+  <div
+    class="flex-1 flex flex-col min-h-0 {page === 'code'
+      ? 'min-w-[1100px] overflow-x-auto'
+      : ''}"
   >
-    <div class="navbar min-h-12 px-4 flex items-center gap-1">
-      <span class="font-bold text-lg mr-2">Rhizz</span>
-      <span
-        class="btn btn-ghost btn-sm"
-        data-tour={TOUR_TARGETS.navOverview}>Overview</span>
-      <span
-        class="btn btn-ghost btn-sm"
-        data-tour={TOUR_TARGETS.navModeling}>Modeling</span>
-      <span
-        class="btn btn-ghost btn-sm"
-        data-tour={TOUR_TARGETS.navInventory}>Inventory</span>
-      <span
-        class="btn btn-ghost btn-sm"
-        data-tour={TOUR_TARGETS.navExplore}>Explore</span>
-      <span
-        class="btn btn-ghost btn-sm"
-        data-tour={TOUR_TARGETS.navCode}>Code</span>
-    </div>
-  </header>
-
-  <!-- Page body: one small chrome block per content-stop anchor. -->
-  <main class="flex-1 p-6 flex flex-col gap-4 max-w-4xl w-full mx-auto">
-    <div class="card bg-base-200 shadow" data-tour={TOUR_TARGETS.overview}>
-      <div class="card-body py-4">
-        <h1 class="text-2xl font-bold">Story project</h1>
-      </div>
-    </div>
-    <div
-      class="bg-base-100 border border-base-300 rounded-box shadow-lg p-2 self-center"
-      data-tour={TOUR_TARGETS.diagramToolbar}
-    >
-      <span class="btn btn-ghost btn-sm">Auto Layout</span>
-      <span class="btn btn-ghost btn-sm">Zoom to Fill</span>
-    </div>
-    <aside
-      class="bg-base-100 border border-base-300 p-4 w-64"
-      data-tour={TOUR_TARGETS.diagramSidebar}
-    >
-      <h3 class="font-semibold text-sm mb-3 uppercase">Inspector</h3>
-    </aside>
-    <div class="flex items-center gap-1" data-tour={TOUR_TARGETS.inventory}>
-      <span class="btn btn-xs btn-primary">Components</span>
-      <span class="btn btn-xs btn-ghost">Systems</span>
-    </div>
-    <aside
-      class="bg-base-100 border border-base-300 p-4 w-64"
-      data-tour={TOUR_TARGETS.explore}
-    >
-      <h3 class="font-semibold text-sm mb-3 uppercase">Diagrams</h3>
-    </aside>
-    <h1 class="text-2xl font-semibold" data-tour={TOUR_TARGETS.editor}>
-      Editor
-    </h1>
-  </main>
+    {#if page === "navbar" || page === "overview"}
+      <Overview {projectId} />
+    {:else if page === "modeling"}
+      <ModelingPage {projectId} />
+    {:else if page === "inventory"}
+      <Inventory {projectId} />
+    {:else if page === "explore"}
+      <Explore {projectId} />
+    {:else}
+      <CodePage {projectId} />
+    {/if}
+  </div>
 </div>
 
 <OnboardingTour id="tour-walk" {steps} startSignal={1} initialStepId={stepId} />

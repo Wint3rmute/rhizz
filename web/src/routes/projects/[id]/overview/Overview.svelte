@@ -1,0 +1,271 @@
+<script lang="ts">
+import { compile_system } from "../../../../rhizz_wasm_wrapper";
+import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
+import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
+import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
+import { projectStore } from "../../../../ProjectState.svelte";
+import { TOUR_TARGETS } from "../../../../tour/tourTargets";
+import { getWarningLevel } from "../../../../WarningLevelState.svelte";
+import { readProjectSources, type Source } from "../../../../vfs/compile";
+import { openProjectFs } from "../../../../vfs/fs";
+
+// The overview dashboard itself. The route shell (`+page.svelte`) only
+// hands the route parameter over as a prop, so page-level stories can
+// render this directly (same split as ModelingPage/Inventory).
+let {
+  projectId,
+}: {
+  projectId: string;
+} = $props();
+
+let sources = $state<Source[]>([]);
+$effect(() => {
+  const fs = openProjectFs(projectStore, projectId);
+  void readProjectSources(fs).then((s) => {
+    sources = s;
+  });
+});
+
+// The project-wide warning preset (navbar select); reading it inside the
+// `$derived` compile below keeps the stats reactive to it.
+// Diagnostics live in the layout-level status bar.
+let warningLevel = $derived(getWarningLevel());
+
+let output = $derived.by(() => compile_system(sources, warningLevel));
+
+let model = $derived(output.model());
+
+let components = $derived(model ? model.components() : []);
+let systems = $derived(model ? model.systems() : []);
+let score = $derived(model ? model.score() : null);
+let project = $derived(model ? model.project() : null);
+
+let leafCount = $derived(components.filter((c) => c.leaf).length);
+let compositeCount = $derived(components.filter((c) => !c.leaf).length);
+
+function catTotal(
+  cat: { complete: number; partial: number; incomplete: number } | null,
+) {
+  return cat ? cat.complete + cat.partial + cat.incomplete : 0;
+}
+function catPct(cat: { percentage: number } | null) {
+  return cat ? Math.round(cat.percentage) : 0;
+}
+function toCat(
+  cat:
+    | {
+      complete: number;
+      partial: number;
+      incomplete: number;
+      percentage: number;
+    }
+    | null
+    | undefined,
+): CategoryScore {
+  return {
+    complete: cat?.complete ?? 0,
+    partial: cat?.partial ?? 0,
+    incomplete: cat?.incomplete ?? 0,
+    pct: cat ? Math.round(cat.percentage) : 0,
+  };
+}
+
+let totalPorts = $derived(catTotal(score?.ports ?? null));
+let totalConnections = $derived(catTotal(score?.connections ?? null));
+let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
+let completeTotal = $derived(
+  score
+    ? score.components.complete +
+      score.ports.complete +
+      score.connections.complete +
+      score.messages.complete
+    : 0,
+);
+let grandTotal = $derived(
+  catTotal(score?.components ?? null) +
+    catTotal(score?.ports ?? null) +
+    catTotal(score?.connections ?? null) +
+    catTotal(score?.messages ?? null),
+);
+
+function levelBadge(level: number): string {
+  if (level <= 1) return "badge-primary";
+  if (level === 2) return "badge-secondary";
+  if (level === 3) return "badge-accent";
+  return "badge-neutral";
+}
+</script>
+
+<div class="flex-1 w-full bg-base-100 flex flex-col min-h-0">
+  <div class="flex-1 overflow-y-auto">
+    <div
+      class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6"
+    >
+      <!-- Main dashboard -->
+      <main class="md:col-span-12 flex flex-col gap-6">
+      {#if !model}
+        <div class="card bg-base-200 shadow" data-tour={TOUR_TARGETS.overview}>
+          <div class="card-body items-center text-center py-16">
+            <div class="text-5xl mb-4">📐</div>
+            <h2 class="card-title text-base-content">
+              No model loaded
+            </h2>
+            <p class="text-base-content/60 text-sm">
+              Open the editor and write some HCL to see your system overview
+              here.
+            </p>
+            {#if output.error_count() > 0}
+              <div
+                class="alert alert-error alert-soft mt-4 text-left"
+              >
+                {output.error_count()} compilation error(s) — see the
+                status bar below.
+              </div>
+            {/if}
+          </div>
+        </div>
+      {:else}
+        <!-- ── Project header ── -->
+        {#if project && project.name}
+          <div class="card bg-base-200 shadow">
+            <div
+              class="card-body py-4 px-6 flex-row items-center gap-4 flex-wrap"
+            >
+              <div>
+                <h1 class="text-2xl font-bold text-base-content">
+                  {project.name}
+                </h1>
+                {#if project.version}
+                  <span class="text-sm text-base-content/60">v{project.version}</span>
+                {/if}
+              </div>
+              {#if project.authors.length > 0}
+                <div class="ml-auto flex gap-2 flex-wrap">
+                  {#each project.authors as author, i (i)}
+                    <div
+                      class="badge badge-outline badge-sm text-base-content/70"
+                    >
+                      {author}
+                    </div>
+                    {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
+        <!-- ── Stats row ── -->
+        <!-- Carries the tour's `overview` anchor: unlike the header card
+             above (which only renders for a named project), this row mounts
+             for every compiled model, so the guided tour's Overview stop
+             always has a target to resolve. -->
+        <div data-tour={TOUR_TARGETS.overview}>
+          <ModelStatsRow
+            systemCount={systems.length}
+            componentCount={components.length}
+            {leafCount}
+            {compositeCount}
+            portCount={totalPorts}
+            portsPct={catPct(score?.ports ?? null)}
+            connectionCount={totalConnections}
+            connectionsPct={catPct(score?.connections ?? null)}
+            {overallPct}
+          />
+        </div>
+
+        <!-- ── Completion breakdown ── -->
+        <CompletionBreakdown
+          {overallPct}
+          {completeTotal}
+          {grandTotal}
+          components={toCat(score?.components)}
+          ports={toCat(score?.ports)}
+          connections={toCat(score?.connections)}
+          messages={toCat(score?.messages)}
+        />
+
+        <!-- ── Components table ── -->
+        {#if components.length > 0}
+          <div class="card bg-base-200 shadow">
+            <div class="card-body">
+              <h2 class="card-title text-base-content mb-2">
+                Components
+              </h2>
+              <div class="overflow-x-auto">
+                <table class="table table-sm">
+                  <thead>
+                    <tr
+                      class="text-base-content/60 border-base-300"
+                    >
+                      <th>Label</th>
+                      <th>Level</th>
+                      <th>Type</th>
+                      <th>Full name</th>
+                      <th>Tags</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each components as comp, i (i)}
+                      <tr
+                        class="border-base-300 hover:bg-base-300"
+                      >
+                        <td
+                          class="font-mono text-primary text-sm"
+                        >
+                          {comp.label}
+                        </td>
+                        <td>
+                          <span
+                            class="
+                              badge badge-sm {levelBadge(
+                              comp.level,
+                              )}
+                            "
+                          >L{comp.level}</span>
+                        </td>
+                        <td>
+                          {#if comp.leaf}
+                            <span
+                              class="badge badge-sm badge-outline text-base-content/70"
+                            >atomic</span>
+                          {:else}
+                            <span
+                              class="badge badge-sm badge-outline text-base-content/60"
+                            >composite</span>
+                          {/if}
+                        </td>
+                        <td
+                          class="text-base-content/70 text-sm max-w-xs truncate"
+                        >
+                          {#if comp.full_name}
+                            {comp.full_name}
+                          {:else}
+                            <span
+                              class="text-base-content/40 italic"
+                            >—</span>
+                          {/if}
+                        </td>
+                        <td>
+                          <div
+                            class="flex gap-1 flex-wrap"
+                          >
+                            {#each comp.tags as tag, j (j)}
+                              <span
+                                class="badge badge-primary text-base-content"
+                              >{tag}</span>
+                    {/each}
+                          </div>
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        {/if}
+      {/if}
+    </main>
+    </div>
+  </div>
+</div>
