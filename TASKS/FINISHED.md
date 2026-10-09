@@ -52,6 +52,11 @@ fixed widths (`md:w-80`, `md:w-2/5`) to the new `Pane` shell.
   same `Show …` name for AT), instead of a fiddly icon button. Covered by
   a rail edge-click + cursor e2e and a `PanesHiddenShowsRails` story that
   also pins the rail chrome in VRT.
+- **CI follow-up:** the palette's inventory-settled gate looked for an
+  `aside` the new layout no longer renders — it now gates on
+  `inventory-pane-left`. (Pre-existing, verified on clean `main`: the
+  `tour.spec.ts` Navbar-stop positioning failure and the vitest startup
+  crash reproduce without this branch's changes.)
 
 ---
 

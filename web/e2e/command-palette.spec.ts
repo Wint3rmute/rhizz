@@ -102,10 +102,8 @@ test("Inventory offers the pages and the definitions, and opens one", async ({ p
     "E2E palette inventory",
   );
   await gotoProject(page, id, "inventory");
-  await expect(
-    page.getByTestId("inventory-tree").or(page.locator("aside")).first(),
-  )
-    .toBeVisible();
+  // Gate on the browser panel: the page is settled once it is visible.
+  await expect(page.getByTestId("inventory-pane-left")).toBeVisible();
 
   await page.keyboard.press("Control+p");
   const palette = page.getByTestId(PALETTE);
