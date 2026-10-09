@@ -105,6 +105,7 @@ import {
   GRID_GRADUATIONS,
 } from "./grid";
 import { nodeTopLeftAt, pickSpawnAnchor } from "./spawnPlacement";
+import { readLastView, rememberLastView, resolveViewToOpen } from "./lastView";
 import { asTestScript, createActionLog } from "../../../../actionLog";
 import { copyToClipboard } from "../../../../clipboard";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
@@ -517,8 +518,15 @@ function viewUrl(path: string | null): string {
 // `replace` rewrites the current history entry instead of pushing a new one —
 // used when the URL is being canonicalised (a bare page, a renamed or deleted
 // view) rather than moved to by the user.
+//
+// Every settled view is remembered per project (see lastView.ts), so the next
+// bare-page arrival (navbar link, "Go to Modeling") can reopen it instead of
+// always falling back to the first view. `null` never clears the memory: a
+// transient "nothing open" (project switch, delete) is immediately followed
+// by a fallback selection, which is what gets recorded.
 function selectView(path: string | null, replace = false): void {
   selectedDiagramPath = path;
+  if (path !== null) rememberLastView(projectId, path);
   const target = viewUrl(path);
   // Canonicalising a URL that already says this (the common case: the effect
   // below runs on every entry load) must not push a duplicate history entry.
@@ -557,9 +565,22 @@ $effect(() => {
     return;
   }
   // Nothing openable in the path — a bare page, or a view that has since been
-  // renamed or deleted. Keep whatever is open and state it in the URL, so the
-  // address bar keeps naming the canvas.
-  selectView(selectedDiagramPath ?? firstDiagramPath(), true);
+  // renamed or deleted. Reopen the last view settled in this project when it
+  // still exists (navbar / "Go to Modeling" land on the bare page, and the
+  // page itself unmounts on every navigation away, so in-memory state cannot
+  // carry this); else keep whatever is open, else the first view — and state
+  // it in the URL, so the address bar keeps naming the canvas.
+  selectView(
+    resolveViewToOpen({
+      requested: "",
+      remembered: readLastView(projectId),
+      open: selectedDiagramPath,
+      first: firstDiagramPath(),
+      exists: (viewPath) =>
+        diagramEntries.some((e) => e.isFile() && e.path === viewPath),
+    }),
+    true,
+  );
 });
 
 // (Re)loads the diagram file list once per project, when the project
