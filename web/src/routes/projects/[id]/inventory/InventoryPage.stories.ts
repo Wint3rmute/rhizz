@@ -469,12 +469,14 @@ export const DetailPaneStacksBelowTheDiagram: Story = {
  * was clipped off the right edge — still in the DOM, still findable by a test
  * that queries by role, and invisible to anyone using the page.
  *
- * The fix is a scrollable row, and that is what this pins: when the tabs do
- * not fit — which they cannot at this browser's ~414px, below `md` where the
- * pane is the full width — the row scrolls instead of clipping. A tab outside
- * the visible box is fine *because* the box scrolls; the same tab outside a
- * box that does not is gone. Whether they fit on a real screen is the VRT
- * baselines' job, at 1280 wide.
+ * The fix is a scrollable row, and that is what this pins: the row scrolls
+ * instead of clipping, and an overlong list stays reachable through it.
+ * Whether the fixture list overflows at a given runner width is
+ * viewport- and font-sensitive (CI fits it exactly where this browser
+ * overflows), so the story narrows the row itself to force the overlong
+ * case deterministically — then the last tab must still be reachable by
+ * scrolling, which is the regression. Whether they fit on a real screen is
+ * the VRT baselines' job, at 1280 wide.
  */
 export const EveryTabFitsInThePane: Story = {
   loaders: [ensureInventoryProject],
@@ -503,10 +505,13 @@ export const EveryTabFitsInThePane: Story = {
     // a future refactor cannot leave the behaviour behind without the
     // behaviour going with it.
     await expect(getComputedStyle(list).overflowX).toBe("auto");
-    // ...and at this width it genuinely does overflow, which is the case the
-    // clipping regression was about. If a future tab list did fit, this would
-    // fail and the question would be worth asking again.
+    // Force the overlong case: a tab outside the visible box is fine
+    // *because* the box scrolls, and reachable through it.
+    list.style.maxWidth = "200px";
     await expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+    const last = within(list).getByRole("tab", { name: /Delete/ });
+    last.scrollIntoView({ inline: "end" });
+    await expect(last).toBeVisible();
   },
 };
 
