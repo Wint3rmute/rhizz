@@ -23,6 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - run: nix develop --command just wasm
@@ -37,6 +44,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       # Swatinem/rust-cache persists workspace target/, which lives outside
       # /nix/store and is therefore not covered by the Nix cache.
@@ -81,6 +95,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: Swatinem/rust-cache@v2
         with:
@@ -104,6 +125,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
@@ -152,6 +180,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
@@ -203,6 +238,13 @@ jobs:
           lfs: true
 
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
@@ -235,6 +277,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: Swatinem/rust-cache@v2
         with:
