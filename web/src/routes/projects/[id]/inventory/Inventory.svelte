@@ -646,7 +646,7 @@ async function handleCreateView(): Promise<void> {
 
 <div
   data-testid="inventory-workspace"
-  class="flex flex-col md:flex-row flex-1 w-full h-screen overflow-hidden bg-base-300"
+  class="flex flex-col md:flex-row flex-1 w-full min-h-screen md:h-screen overflow-hidden bg-base-300"
 >
   {#if !projectId}
     <div class="flex-1 flex items-center justify-center p-4">
