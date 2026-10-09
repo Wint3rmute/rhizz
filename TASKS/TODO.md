@@ -22,52 +22,6 @@ It appears that connection arrows don't fade out when the component to which the
 arrow points to is not supposed to exist in the target view. They stay fully
 visible until the transition completes, then disappear abruptly.
 
-## Task <N> - experiment: rework the inventory/ panel into a modular UI
-
-**Background**
-
-`inventory/` needs a way to hide its side panels so it can serve the same
-purpose as the existing `epxlore/` page. This task covers only `inventory/`. Do not
-modify or remove `explore/`.
-
-**Goal**
-
-Turn `inventory/` into a simple modular layout with two side panels (browser on
-the left, details on the right) and a central main area with the diagram.
-
-**Requirements**
-- **Resize:** Drag a splitter between each side panel and the main area to change its width.
-- **Hide:** A button in each panel's header hides the panel. When hidden, the panel is replaced by a small, always-visible toggle button that restores it.
-- **Hide keeps content mounted:** Hiding a panel must not unmount its content. Use `display: none` (or an equivalent hidden state) so component state is preserved.
-- **Min/max:** Each panel has a minimum and maximum width. The main area fills the remaining space.
-- **Persistence:** Panel widths and hidden state persist across reloads (localStorage).
-
-**Out of scope**
-
-- Changes to `explore/`.
-- Docking, drag-to-rearrange, multi-window, or floating panels.
-- Changes to the content of the browser or details panels beyond wrapping them.
-
-**Approach**
-
-- Add a `Pane` wrapper component that owns the header, hide/show control, and size. Existing panel contents are passed in as children and left unchanged.
-- Add a `Splitter` component for drag-to-resize, using pointer events.
-- Store layout state (sizes, hidden flags) in one store, as plain serializable data.
-
-**Acceptance criteria**
-
-- [ ] Both side panels can be resized by dragging, and respect min/max.
-- [ ] Each side panel can be hidden and restored via its toggle.
-- [ ] Hidden panels stay mounted, and their component state survives hide/restore.
-- [ ] Layout state survives a page reload.
-- [ ] Existing `inventory/` tests pass. New tests cover resize clamping, hide/restore, and state preservation across hide/restore.
-- [ ] Toggle buttons are keyboard-accessible and labeled for screen readers.
-
-**Open questions for the agent to report back on**
-
-- Any `inventory/` behavior that conflicts with hiding a panel or with the layout store.
-
-
 ## Task <N> - Changing project name does not respect lower/uppercase
 
 Steps to reproduce:

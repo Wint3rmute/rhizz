@@ -14,6 +14,7 @@ import {
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import Inventory from "./Inventory.svelte";
+import { forgetInventoryLayout } from "./inventoryLayout";
 
 // Deterministic project ids so story args can be built synchronously at
 // module scope while the async seeding runs lazily from loaders (top-level
@@ -140,6 +141,10 @@ const DEFINITION_DIAGRAMS: Record<string, DiagramLayout> = {
 
 async function ensureInventoryProject(): Promise<Project> {
   await init();
+  // A previous panes story may have persisted hidden/resized panels — reset
+  // so every story opens the default workspace (same reason the shared
+  // project loader forgets the last modeling view).
+  forgetInventoryLayout();
   const existing = await projectStore.listProjects();
   const project = existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
     await createProjectWithFiles(
@@ -177,6 +182,7 @@ async function ensureInventoryProject(): Promise<Project> {
 
 // An empty project: no definitions at all.
 async function ensureEmptyProject(): Promise<Project> {
+  forgetInventoryLayout();
   const existing = await projectStore.listProjects();
   return existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
     await createProjectWithFiles(
@@ -433,25 +439,22 @@ export const DeepLinkedEntity: Story = {
   },
 };
 
-// The detail pane is a column beside the diagram preview, not a strip under
-// it — but that is an `md:` arrangement and this browser is ~414px wide, so the
-// side-by-side geometry cannot be measured here. It is pinned by this file's
-// VRT baselines (1280 wide) and by the e2e spec. What is measurable is the
-// narrow fallback: below `md` the pane goes back under the diagram. Asserted as
-// the row's computed flex-direction *and* the two rects not overlapping, so
-// neither can drift on its own.
+// The workspace is a row of panels beside the diagram preview — but that is
+// an `md:` arrangement and this browser is ~414px wide, so the side-by-side
+// geometry cannot be measured here. It is pinned by this file's VRT baselines
+// (1280 wide) and by the e2e spec. What is measurable is the narrow fallback:
+// below `md` the workspace stacks vertically and the pane goes back under the
+// diagram. Asserted as the workspace's computed flex-direction *and* the two
+// rects not overlapping, so neither can drift on its own.
 export const DetailPaneStacksBelowTheDiagram: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const diagram = await canvas.findByTestId("inventory-diagram");
     const pane = canvas.getByTestId("inventory-detail-pane");
-    const row = diagram.parentElement;
-    if (!row) {
-      throw new Error("the diagram preview should sit in the main row");
-    }
+    const workspace = canvas.getByTestId("inventory-workspace");
 
-    await expect(getComputedStyle(row).flexDirection).toBe("column");
+    await expect(getComputedStyle(workspace).flexDirection).toBe("column");
     // The 1px slack absorbs sub-pixel rounding of the stacked heights.
     await expect(pane.getBoundingClientRect().top).toBeGreaterThanOrEqual(
       diagram.getBoundingClientRect().bottom - 1,
@@ -715,5 +718,98 @@ export const DeleteTabBlockedForSystemWithViews: Story = {
     await expect(
       tab.getByTestId("inventory-delete-confirm"),
     ).toBeDisabled();
+  },
+};
+
+// Both side panels open with a hide control in their header, a splitter
+// beside them, and no restore rail — the default workspace. The rails are
+// asserted hidden (not absent) because hiding must never unmount content.
+export const PanesOpenByDefault: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const left = await canvas.findByTestId("inventory-pane-left");
+    const right = canvas.getByTestId("inventory-pane-right");
+    await expect(left).toBeVisible();
+    await expect(right).toBeVisible();
+
+    await expect(
+      canvas.getByRole("button", { name: "Hide Inventory Browser" }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole("button", { name: "Hide Details" }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole("slider", { name: "Resize browser panel" }),
+    ).toBeTruthy();
+    await expect(
+      canvas.getByRole("slider", { name: "Resize details panel" }),
+    ).toBeTruthy();
+
+    // Rails exist but stay out of the way until a panel is hidden.
+    await expect(
+      canvas.getByTestId("inventory-pane-rail-left"),
+    ).not.toBeVisible();
+    await expect(
+      canvas.getByTestId("inventory-pane-rail-right"),
+    ).not.toBeVisible();
+  },
+};
+
+// Hiding a panel swaps it for its restore rail without unmounting it: the
+// search text typed before hiding is still there after restoring, on both
+// sides (the details side is pinned through its open tab instead — the
+// Description viewer stays mounted under the rail the same way).
+export const PanesHideAndRestore: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const search = await canvas.findByLabelText("Search inventory");
+    await userEvent.type(search, "battery");
+    await expect(search).toHaveValue("battery");
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Hide Inventory Browser" }),
+    );
+    await expect(
+      canvas.getByTestId("inventory-pane-left"),
+    ).not.toBeVisible();
+    const showBrowser = canvas.getByRole("button", {
+      name: "Show Inventory Browser",
+    });
+    await expect(showBrowser).toBeVisible();
+    // The splitter goes with its panel — there is nothing to resize.
+    await expect(
+      canvas.getByTestId("inventory-splitter-left"),
+    ).not.toBeVisible();
+
+    await userEvent.click(showBrowser);
+    await expect(
+      canvas.getByTestId("inventory-pane-left"),
+    ).toBeVisible();
+    // State survived: the panel was hidden, never unmounted.
+    await expect(canvas.getByLabelText("Search inventory")).toHaveValue(
+      "battery",
+    );
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Hide Details" }),
+    );
+    await expect(
+      canvas.getByTestId("inventory-pane-right"),
+    ).not.toBeVisible();
+    const showDetails = canvas.getByRole("button", {
+      name: "Show Details",
+    });
+    await expect(showDetails).toBeVisible();
+    await userEvent.click(showDetails);
+    await expect(
+      canvas.getByTestId("inventory-pane-right"),
+    ).toBeVisible();
+    // The open entity follows too — restoring shows the same tab, not a
+    // reset pane.
+    await expect(
+      canvas.getByRole("tablist", { name: "Entity details" }),
+    ).toBeVisible();
   },
 };

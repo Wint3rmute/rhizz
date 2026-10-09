@@ -4,6 +4,52 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Inventory is a modular three-pane workspace
+
+`inventory/` is now a resizable multi-pane workspace instead of a fixed
+sidebar + 60/40 row: an `Inventory Browser` panel on the left, the diagram
+preview in the centre, and a `Details` panel on the right. Each side panel
+hides behind a button in its header and comes back through a slim
+Always-visible restore rail; hiding uses `display: none` so content stays
+mounted (search text, scroll, open tabs and half-typed edits survive). A
+splitter beside each panel drag-resizes it (pointer drag plus arrow keys,
+200–600px clamp, centre fills the rest), and widths + hidden flags persist
+across reloads in localStorage (`rhizz-inventory-layout:v1`). `explore/` is
+untouched, and panel contents are unchanged apart from giving up their old
+fixed widths (`md:w-80`, `md:w-2/5`) to the new `Pane` shell.
+
+- **New code, all under `inventory/`:** `inventoryLayout.ts` (pure layout
+  state: defaults, clamp, coerce, hide/show/resize helpers, guarded
+  storage — the `lastView.ts` idiom), `Pane.svelte` (header + hide/show
+  rail + width, children stay mounted), `Splitter.svelte` (`slider` role
+  with `aria-valuenow/min/max`, pointer capture + keyboard nudge, parent
+  owns the drag sign). One serializable store in `Inventory.svelte`,
+  persisted by effect.
+- **Conflicts found (the task's open question):** none blocking. Two
+  adaptations: panel widths moved from content roots into `Pane`, and story
+  loaders call `forgetInventoryLayout()` so a persisted layout cannot leak
+  across stories sharing one browser context (same reason the shared
+  project loader forgets the last view). The layout key is global, not
+  per-project — a deliberate simplification; per-project would follow the
+  `lastView` pattern if wanted.
+- **Tests**: 21 unit tests (clamp, coerce/garbage, hide/show width
+  preservation, resize clamp + hidden-flag stability, storage round-trip);
+  e2e `inventory-layout.spec.ts` rewritten to the new contract (default
+  320/384px geometry, hide/restore without unmounting, drag resize +
+  min-clamp, keyboard slider, reload persistence); stories
+  `PanesOpenByDefault` / `PanesHideAndRestore` plus the updated narrow
+  fallback; all 21 Inventory story plays pass.
+- **VRT**: 54 inventory-area baselines re-recorded after review (new pane
+  headers, splitters, rails); 54/54 green. Full-suite VRT and `just test`
+  are broken on this machine for pre-existing reasons unrelated to this
+  task (vitest startup crash `vite_ssr_environment_not_runnable` and
+  app-wide glyph-noise diffs — both reproduced on a clean `main` tree).
+- **Validation**: unit (53/53 incl. existing `inventory.test.ts`), e2e
+  (5 layout + 12 neighbouring inventory/inspector), svelte-check 0/0,
+  eslint clean, `deno fmt` clean, clippy clean, `vite build` succeeds.
+
+---
+
 ## Task <N> — Minor Diagnostics Panel changes
 
 Expanded rows now read icon → code → message (the code moved out of its

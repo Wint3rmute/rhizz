@@ -1,11 +1,10 @@
 <script lang="ts">
 // Detail pane for the selected definition: one tab per facet of it.
 //
-// A column of the workspace, not a strip under the canvas — the parent row
-// gives it two fifths from `md:` up and drops it below the diagram on narrow
-// screens, which is why the border side is switched rather than drawn on all
-// four. The Description tab edits `docs/<label>.md` in the app's `MonacoEditor`,
-// the same component the Code page uses for these very files.
+// Fills the right `Pane` of the Inventory workspace, which owns the panel
+// header, width and hide/restore rail — this component only owns the tabs and
+// their content. The Description tab edits `docs/<label>.md` in the app's
+// `MonacoEditor`, the same component the Code page uses for these very files.
 import Markdown from "../../../../components/Markdown.svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
@@ -196,7 +195,7 @@ function flattenTags(def: InventoryDefinition): string[] {
 </script>
 
 <div
-  class="border-base-300 bg-base-100 flex flex-col min-h-[180px] md:min-h-0 md:w-2/5 md:min-w-0 border-t md:border-t-0 md:border-l"
+  class="bg-base-100 flex flex-col flex-1 min-h-[180px] md:min-h-0 w-full min-w-0"
   data-testid="inventory-detail-pane"
 >
   {#if !definition}
@@ -207,8 +206,8 @@ function flattenTags(def: InventoryDefinition): string[] {
     </div>
   {:else}
     <!--
-        `text-xs` and scrollable for the same reason: five tabs do not fit
-        two fifths of the row at `text-sm`, and Metadata was clipped off the
+        `text-xs` and scrollable for the same reason: the tabs do not fit
+        the details panel at `text-sm`, and Metadata was clipped off the
         right edge — unreachable, not merely scrolled. Measured at 1280 wide
         the row now fits outright (383px of 383).
       -->
