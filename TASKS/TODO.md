@@ -16,6 +16,24 @@ How to work on this file:
 
 ---
 
+## Task <N> - Rendered Markdown - open links in a new tab
+
+When component descriptions are rendered as markdown, make it so that rendered
+links are opened in a new tab, instead of the current one.
+
+## Task <N> - When switching through Navbar, modeling/ should remember last opened view
+
+When working in the application, I find myself frequently jumping between
+modeling, inventory, code.
+
+The problem is, when I jump away from modeling/ to a different page, modeling/
+always switches me back to the default diagram (i'm assuming that's the first
+one in the list).
+
+Would it be possible to make modeling/ page remember which was the last opened
+diagram and open it up when switching using either the navbar or
+ctrl+p -> "Go to modeling"?
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
