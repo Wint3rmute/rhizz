@@ -5,8 +5,9 @@
 //
 // Hiding never unmounts the content: the section stays in the DOM with
 // `display: none`, so component state (search text, scroll, open tabs,
-// half-typed edits) survives hide/restore. The restore rail is a separate
-// slim element that is only visible while hidden.
+// half-typed edits) survives hide/restore. The restore rail is a slim bar
+// that is only visible while hidden — and the whole bar is the expand
+// control (one large click target, not a fiddly icon button).
 import type { Snippet } from "svelte";
 
 let {
@@ -39,32 +40,30 @@ const hideLabel = $derived(`Hide ${title}`);
 const showLabel = $derived(`Show ${title}`);
 </script>
 
-<!-- Restore rail: a slim always-visible strip while the panel is hidden. -->
-<div
+<!-- Restore rail: a slim bar while the panel is hidden. The whole bar is
+     one button — a large click target instead of a fiddly icon — with an
+     explicit pointer cursor (Tailwind v4 does not put one on buttons) and
+     hover feedback so its clickability is obvious. -->
+<button
+  type="button"
   data-testid="inventory-pane-rail-{side}"
   style:display={hidden ? "" : "none"}
-  class="shrink-0 flex md:flex-col items-center justify-center gap-1 bg-base-100 border-base-300 p-1 {side ===
+  onclick={onshow}
+  aria-label={showLabel}
+  title={showLabel}
+  aria-expanded="false"
+  aria-controls={panelId}
+  class="shrink-0 flex md:flex-col items-center justify-center gap-1 bg-base-100 border-base-300 px-2 py-3 cursor-pointer hover:bg-base-200 hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {side ===
   'left'
     ? 'border-r'
     : 'border-l'}"
 >
-  <button
-    type="button"
-    class="btn btn-ghost btn-xs"
-    onclick={onshow}
-    aria-label={showLabel}
-    title={showLabel}
-    aria-expanded="false"
-    aria-controls={panelId}
-    data-testid="inventory-pane-show-{side}"
-  >
-    {#if side === "left"}
-      <span aria-hidden="true">»</span>
-    {:else}
-      <span aria-hidden="true">«</span>
-    {/if}
-  </button>
-</div>
+  {#if side === "left"}
+    <span aria-hidden="true" class="text-base leading-none">»</span>
+  {:else}
+    <span aria-hidden="true" class="text-base leading-none">«</span>
+  {/if}
+</button>
 
 <section
   id={panelId}

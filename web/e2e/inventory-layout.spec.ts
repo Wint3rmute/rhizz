@@ -142,6 +142,20 @@ test("inventory splitter answers the keyboard", async ({ page }) => {
   expect(after).toBeGreaterThan(before);
 });
 
+test("inventory restore rails expand on any click and show a pointer", async ({ page }) => {
+  await openInventory(page, "E2E inventory rail");
+
+  await page.getByRole("button", { name: "Hide Inventory Browser" }).click();
+  const rail = page.getByTestId("inventory-pane-rail-left");
+  await expect(rail).toBeVisible();
+  await expect(rail).toHaveCSS("cursor", "pointer");
+
+  // Click the rail's corner, far from the chevron: the whole bar expands,
+  // so no precise aiming is needed.
+  await rail.click({ position: { x: 2, y: 2 } });
+  await expect(page.getByTestId("inventory-pane-left")).toBeVisible();
+});
+
 test("inventory remembers hidden panels across reloads", async ({ page }) => {
   await openInventory(page, "E2E inventory persist");
 
