@@ -8,13 +8,14 @@ import {
   projectStore,
 } from "../../../../ProjectState.svelte";
 import DiagramPage from "./ModelingPage.svelte";
+import { forgetLastView, rememberLastView } from "./lastView";
 
 // The open view is named by the route's rest param, which arrives here as the
 // `requestedView` prop — that is the whole contract a shared link exercises.
 // These stories drive the prop directly (the router is mocked in Storybook),
-// pinning the two rules the page applies to it: a view that exists is opened,
-// and one that doesn't falls back to the first view rather than leaving the
-// canvas empty.
+// pinning the rules the page applies to it: a view that exists is opened, an
+// unknown one falls back to the remembered view when it still exists (else
+// the first view) rather than leaving the canvas empty.
 
 const URL_PROJECT_NAME = "Open view story";
 // A project's id is the slug of its name (see vfs/slug), so a story derives
@@ -71,7 +72,11 @@ async function ensureUrlProject(): Promise<Project> {
   await init();
   // Recreate from scratch every run: the editor seeds a view (and possibly the
   // model) on load, so an existing project can't be trusted to still match
-  // the fixture below (same reasoning as DiagramPage.stories.ts).
+  // the fixture below (same reasoning as DiagramPage.stories.ts). The
+  // remembered last view is browser state, not project content, so it
+  // survives the recreate under the reused id — forget it for hermetic
+  // stories (each story sets its own memory explicitly when it needs one).
+  forgetLastView(URL_PROJECT_ID);
   const existing = await projectStore.listProjects();
   const stale = existing.find((candidate) => candidate.id === URL_PROJECT_ID);
   if (stale !== undefined) {
@@ -136,5 +141,28 @@ export const UnknownViewFallsBack: Story = {
     await canvas.findByRole("button", { name: "Toggle Grid" });
 
     await expect(await openRow(canvas)).toHaveTextContent("main.hcl");
+  },
+};
+
+/** An unknown link reopens the remembered view while it still exists. */
+export const UnknownViewReopensRemembered: Story = {
+  args: {
+    requestedView: "renamed-away.hcl",
+  },
+  loaders: [
+    async () => {
+      const project = await ensureUrlProject();
+      // The loader recreates the project but the memory under test is set
+      // here, after the hermetic reset — this is the "visited actuator,
+      // followed a stale link" session.
+      rememberLastView(project.id, "actuator.hcl");
+      return {};
+    },
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("button", { name: "Toggle Grid" });
+
+    await expect(await openRow(canvas)).toHaveTextContent("actuator.hcl");
   },
 };

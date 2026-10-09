@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Modeling remembers the last opened view
+
+Leaving Modeling for another page and coming back (navbar link or ctrl+p →
+"Go to Modeling", both targeting the bare page) reopened the first view every
+time, because the open view lived in page-local `$state` that unmounting
+wiped. Every settled view is now remembered per project in localStorage
+(`rhizz-last-view:<projectId>`, new `lastView.ts` following the
+tourRequest/WarningLevelState storage idiom — guarded access, validated
+read), recorded in `selectView` so all flows (sidebar, create, rename,
+palette file rows) are covered. Bare-page resolution is a pure
+`resolveViewToOpen`: explicit request (deep link, legacy `?diagram=`,
+back/forward) > remembered (when it still exists) > already open > first
+view. Deleted views fall through via the `exists` check; `null` never wipes
+memory since a fallback selection is recorded right after.
+
+- **Tests**: 13 unit tests (storage round-trip, project isolation, garbage
+  rejection, no-storage quiet, resolve priority); new story
+  `UnknownViewReopensRemembered` pins unknown-link → remembered; the shared
+  `ensureUrlProject` loader now forgets memory for hermetic stories
+  (`forgetLastView`); e2e `modeling-remember-view.spec.ts` drives the
+  report's exact flow (second view → Inventory → navbar back reopens it →
+  palette "Go to Modeling" reopens it → reload keeps the URL).
+- **Validation**: Vitest + 98 e2e, lint/build/format clean. No VRT impact
+  (behavior-only, no visual change).
+
+---
+
 ## Task <N> — Rendered Markdown opens links in a new tab
 
 A `link` renderer override in `web/src/components/markdownRenderer.ts`
