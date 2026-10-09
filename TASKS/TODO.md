@@ -40,6 +40,78 @@ It appears that connection arrows don't fade out when the component to which the
 arrow points to is not supposed to exist in the target view. They stay fully
 visible until the transition completes, then disappear abruptly.
 
+## Task <N> - Minor Diagnostics Panel changes
+
+In the expandable diagnostics panel at the bottom:
+
+1. Change the order of items:
+  - Current: Icon, description, error code (aligned right)
+  - Target: Icon: error code, description (nothing aligned right)
+2. Style the error code to be in monospace and underlined, indicating a clickable link
+3. Stop displaying the first diagnostic in the collapsed panel, just display the amount of warnings/errors
+
+## Task <N> - experiment: rework the inventory/ panel into a modular UI
+
+**Background**
+
+`inventory/` needs a way to hide its side panels so it can serve the same
+purpose as the existing `epxlore/` page. This task covers only `inventory/`. Do not
+modify or remove `explore/`.
+
+**Goal**
+
+Turn `inventory/` into a simple modular layout with two side panels (browser on
+the left, details on the right) and a central main area with the diagram.
+
+**Requirements**
+- **Resize:** Drag a splitter between each side panel and the main area to change its width.
+- **Hide:** A button in each panel's header hides the panel. When hidden, the panel is replaced by a small, always-visible toggle button that restores it.
+- **Hide keeps content mounted:** Hiding a panel must not unmount its content. Use `display: none` (or an equivalent hidden state) so component state is preserved.
+- **Min/max:** Each panel has a minimum and maximum width. The main area fills the remaining space.
+- **Persistence:** Panel widths and hidden state persist across reloads (localStorage).
+
+**Out of scope**
+
+- Changes to `explore/`.
+- Docking, drag-to-rearrange, multi-window, or floating panels.
+- Changes to the content of the browser or details panels beyond wrapping them.
+
+**Approach**
+
+- Add a `Pane` wrapper component that owns the header, hide/show control, and size. Existing panel contents are passed in as children and left unchanged.
+- Add a `Splitter` component for drag-to-resize, using pointer events.
+- Store layout state (sizes, hidden flags) in one store, as plain serializable data.
+
+**Acceptance criteria**
+
+- [ ] Both side panels can be resized by dragging, and respect min/max.
+- [ ] Each side panel can be hidden and restored via its toggle.
+- [ ] Hidden panels stay mounted, and their component state survives hide/restore.
+- [ ] Layout state survives a page reload.
+- [ ] Existing `inventory/` tests pass. New tests cover resize clamping, hide/restore, and state preservation across hide/restore.
+- [ ] Toggle buttons are keyboard-accessible and labeled for screen readers.
+
+**Open questions for the agent to report back on**
+
+- Any `inventory/` behavior that conflicts with hiding a panel or with the layout store.
+
+
+## Task <N> - Changing project name does not respect lower/uppercase
+
+Steps to reproduce:
+
+1. Create a new project "test"
+2. Go back to projects list, click on rename and enter "Test" as the project name, click "ok"
+3. Notice that the project's name changed to "Test" - that's correct
+4. Refresh the page
+5. Project's name is back to "test"
+
+I believe that the project name should live in the `project` metadata,
+filesystem-based name should only be used when a project does not have a name
+set under `project`. Think about how GitLab/GitHub handle this - there's a
+separate project name and project **path**. Right now, the path is used for
+everything and it also appears that it does not respect upper/lowercase.
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, the connections are always routed using a "double-knee" approach,
