@@ -72,9 +72,9 @@ function specUrl(code: string): string {
          a panel over the page rather than as more page.
 
          The list is VS Code's Problems panel, not a stack of alert badges:
-         one dense row per diagnostic — severity glyph, message (truncated,
-         full text in a tooltip), and the code as a muted link to its spec
-         page, right-aligned so the codes line up down the list. Rows are
+         one dense row per diagnostic — severity glyph, the code as a
+         monospace underlined link to its spec page, then the message
+         (truncated, full text in a tooltip). Rows are
          list items rather than `role="alert"`s: the panel opens on demand
          and its contents are a list to scan, and an alert role would
          announce every row on expand. -->
@@ -100,18 +100,18 @@ function specUrl(code: string): string {
             >
               {isError ? "✕" : "⚠"}
             </span>
+            <a
+              class="link underline shrink-0 font-mono text-xs"
+              target="_blank"
+              href={specUrl(diagnostic.code)}
+              title={`Open the ${diagnostic.code} spec`}
+            >{diagnostic.code}</a>
             <span
               class="truncate min-w-0 flex-1"
               title={diagnostic.message}
             >
               {diagnostic.message}
             </span>
-            <a
-              class="link link-hover shrink-0 text-xs text-base-content/50"
-              target="_blank"
-              href={specUrl(diagnostic.code)}
-              title={`Open the ${diagnostic.code} spec`}
-            >{diagnostic.code}</a>
           </li>
         {/each}
       </ul>
@@ -130,9 +130,9 @@ function specUrl(code: string): string {
        `inset-0` over the row, not the other way round.
 
        The row stays one line at every width, so the responsive rules are all
-       about what *gives* when space runs short: below `sm` the score badge and
-       the message preview are hidden, the gaps tighten, and the strictness
-       select is capped. What never gives is the counts — and
+       about what *gives* when space runs short: below `sm` the score badge is
+       hidden and the gaps tighten, and the strictness select is capped. What
+       never gives is the counts — and
        `overflow-hidden` on their zone means a model with unusually many
        diagnostics clips the chevron rather than spilling it over the select.
        A missing glyph beats two overlapping controls. -->
@@ -158,10 +158,10 @@ function specUrl(code: string): string {
             No errors, no warnings
           </span>
         {:else}
-          <!-- The count badges never shrink: at phone widths they, the chevron
+          <!-- Collapsed the strip carries counts only — no message preview.
+               The count badges never shrink: at phone widths they, the chevron
                and the strictness control are what is left of the row, and a
-               squeezed "2 warnings" reads as a rendering fault. The message
-               preview is the part that gives way — the counts are the news. -->
+               squeezed "2 warnings" reads as a rendering fault. -->
           {#if errors.length > 0}
             <span class="badge badge-error badge-sm shrink-0">
               {errors.length} error{errors.length === 1 ? "" : "s"}
@@ -172,9 +172,6 @@ function specUrl(code: string): string {
               {warnings.length} warning{warnings.length === 1 ? "" : "s"}
             </span>
           {/if}
-          <span class="text-base-content/60 truncate min-w-0 hidden sm:inline">
-            {errors.length > 0 ? errors[0]?.message : warnings[0]?.message}
-          </span>
         {/if}
         <span class="ml-auto shrink-0 text-base-content/50" aria-hidden="true">
           {expanded ? "▾" : "▴"}

@@ -39,10 +39,12 @@ export const Collapsed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
-    // Collapsed: counts visible (plus a plain-text preview of the first
-    // message by design), but no expanded alert rows may render.
+    // Collapsed: counts only — no message preview, no expanded alert rows.
     await expect(await bar.findByText("1 error")).toBeInTheDocument();
     await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
+    await expect(
+      bar.queryByText(/references undefined component/),
+    ).not.toBeInTheDocument();
     await expect(bar.queryByRole("alert")).not.toBeInTheDocument();
     // The strictness control is part of the strip now, not the navbar: it is
     // the bar's right-hand zone, so a bar rendered on its own has to carry it.
@@ -77,8 +79,7 @@ export const DuplicateDiagnostics: Story = {
     await expect(await bar.findByText("2 warnings")).toBeInTheDocument();
     await userEvent.click(await bar.findByRole("button"));
     await waitFor(async () => {
-      // Two expanded list rows (the collapsed preview span stays too, so
-      // text matching would find three).
+      // Two expanded list rows.
       await expect(bar.getAllByRole("listitem")).toHaveLength(2);
     });
   },
@@ -161,8 +162,7 @@ export const FullStrip: Story = {
 //
 // Only Modeling publishes a score, and a static VRT build never has one, so
 // this is the tightest row the bar really renders: counts on the left,
-// strictness on the right, and the message preview squeezed to nothing between
-// them.
+// strictness on the right, and the chevron between them.
 export const NarrowStrip: Story = {
   globals: {
     viewport: { value: "mobile1" },
@@ -176,9 +176,8 @@ export const NarrowStrip: Story = {
     await expect(await bar.findByText("2 warnings")).toBeVisible();
     // Neither zone may be pushed out of the row to make room for the other.
     await expect(bar.getByLabelText("Strictness")).toBeVisible();
-    // The message preview is what gives way at this width — the counts are
-    // the news — but the chevron is the only thing that says the strip
-    // expands, so it has to survive being squeezed.
+    // The chevron is the only thing that says the strip expands, so it has
+    // to survive being squeezed.
     await expect(bar.getByText("▴")).toBeVisible();
     // …and nothing spills past the bar's own right edge.
     const rootBox = canvas.getByTestId("diagnostics-status-bar")
@@ -217,9 +216,22 @@ export const Expanded: Story = {
     canvasElement.prepend(page);
 
     await userEvent.click(await bar.findByRole("button"));
-    // One row per diagnostic; the collapsed strip's plain-text preview of the
-    // first message matches the panel's text, so assert the rows, not the text.
-    await expect(await bar.findAllByRole("listitem")).toHaveLength(3);
+    // One row per diagnostic; each row reads icon, then code, then message —
+    // the code is the monospace underlined link to its spec page.
+    const rows = await bar.findAllByRole("listitem");
+    await expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      const link = within(row).getByRole("link");
+      await expect(link).toHaveTextContent(/^[EW]\d+$/);
+      // Icon, then code, then message: the link is the row's second element
+      // child, between the glyph span and the message span.
+      const children = Array.from(row.children);
+      await expect(children.indexOf(link)).toBe(1);
+      await expect(children).toHaveLength(3);
+      const style = getComputedStyle(link);
+      await expect(style.textDecorationLine).toContain("underline");
+      await expect(style.fontFamily.toLowerCase()).toContain("mono");
+    }
 
     const panel = surface(root, 0);
     const background = (el: Element) => getComputedStyle(el).backgroundColor;
