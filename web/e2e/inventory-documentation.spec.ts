@@ -68,6 +68,12 @@ test("inventory writes documentation from the Description tab", async ({ page })
   await page.keyboard.type("# E2E widget\n\nDoes **things**.");
   await expect(lines).toContainText("# E2E widget");
 
+  // Links render; they open in a new tab so following one never navigates
+  // the workspace away.
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("[docs](https://example.com/docs)");
+  await expect(lines).toContainText("[docs](https://example.com/docs)");
+
   // No Save button to press: typing pauses, the debounced write lands, and
   // the viewer renders the Markdown — the heading becomes a heading and
   // the bold markers stop being literal text.
@@ -82,6 +88,10 @@ test("inventory writes documentation from the Description tab", async ({ page })
     .toBeVisible();
   await expect(viewer).toContainText("Does things.");
   await expect(page.getByText("**things**")).toBeHidden();
+  const docLink = viewer.getByRole("link", { name: "docs" });
+  await expect(docLink).toHaveAttribute("href", "https://example.com/docs");
+  await expect(docLink).toHaveAttribute("target", "_blank");
+  await expect(docLink).toHaveAttribute("rel", "noopener");
 
   // Persisted to the VFS: still rendered after a reload. Locators are lazy, so
   // `viewer` survives the reload.
