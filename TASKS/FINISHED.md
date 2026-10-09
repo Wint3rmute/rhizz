@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Minor Diagnostics Panel changes
+
+Expanded rows now read icon → code → message (the code moved out of its
+right-aligned slot to sit right after the glyph; the message takes the
+remaining width). The code link is `font-mono` underlined instead of muted
+`text-base-content/50`, reading as the clickable spec link it is. The
+collapsed strip carries counts only — the first-diagnostic message preview
+is gone, so the strip no longer keeps a stale sentence next to the badges.
+
+- **Tests**: red-first story updates (`Collapsed` asserts counts with no
+  message text; `Expanded` asserts per-row DOM order icon/code/message plus
+  computed underline + monospace on the link); stale preview references in
+  `DuplicateDiagnostics`/`NarrowStrip` comments cleaned up.
+- **VRT**: 8 re-recorded (collapsed, duplicate, expanded, full-strip ×
+  dark/light — reviewed in the gallery before accepting).
+- **Validation**: Vitest + 98 e2e, lint/build/format clean.
+
+---
+
 ## Task <N> — Modeling remembers the last opened view
 
 Leaving Modeling for another page and coming back (navbar link or ctrl+p →

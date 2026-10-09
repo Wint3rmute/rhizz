@@ -22,16 +22,6 @@ It appears that connection arrows don't fade out when the component to which the
 arrow points to is not supposed to exist in the target view. They stay fully
 visible until the transition completes, then disappear abruptly.
 
-## Task <N> - Minor Diagnostics Panel changes
-
-In the expandable diagnostics panel at the bottom:
-
-1. Change the order of items:
-  - Current: Icon, description, error code (aligned right)
-  - Target: Icon: error code, description (nothing aligned right)
-2. Style the error code to be in monospace and underlined, indicating a clickable link
-3. Stop displaying the first diagnostic in the collapsed panel, just display the amount of warnings/errors
-
 ## Task <N> - experiment: rework the inventory/ panel into a modular UI
 
 **Background**
