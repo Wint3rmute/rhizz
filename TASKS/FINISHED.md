@@ -47,6 +47,11 @@ fixed widths (`md:w-80`, `md:w-2/5`) to the new `Pane` shell.
 - **Validation**: unit (53/53 incl. existing `inventory.test.ts`), e2e
   (5 layout + 12 neighbouring inventory/inspector), svelte-check 0/0,
   eslint clean, `deno fmt` clean, clippy clean, `vite build` succeeds.
+- **Follow-up:** the restore rail is now the expand control itself — the
+  whole collapsed bar is one button (`cursor-pointer`, hover feedback,
+  same `Show …` name for AT), instead of a fiddly icon button. Covered by
+  a rail edge-click + cursor e2e and a `PanesHiddenShowsRails` story that
+  also pins the rail chrome in VRT.
 
 ---
 

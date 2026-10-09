@@ -774,16 +774,19 @@ export const PanesHideAndRestore: Story = {
     await expect(
       canvas.getByTestId("inventory-pane-left"),
     ).not.toBeVisible();
-    const showBrowser = canvas.getByRole("button", {
-      name: "Show Inventory Browser",
-    });
-    await expect(showBrowser).toBeVisible();
+    // The whole rail is the expand control, not just the chevron — restore
+    // through the rail itself.
+    const rail = canvas.getByTestId("inventory-pane-rail-left");
+    await expect(rail).toBeVisible();
+    await expect(
+      rail.getAttribute("aria-label"),
+    ).toBe("Show Inventory Browser");
     // The splitter goes with its panel — there is nothing to resize.
     await expect(
       canvas.getByTestId("inventory-splitter-left"),
     ).not.toBeVisible();
 
-    await userEvent.click(showBrowser);
+    await userEvent.click(rail);
     await expect(
       canvas.getByTestId("inventory-pane-left"),
     ).toBeVisible();
@@ -810,6 +813,29 @@ export const PanesHideAndRestore: Story = {
     // reset pane.
     await expect(
       canvas.getByRole("tablist", { name: "Entity details" }),
+    ).toBeVisible();
+  },
+};
+
+// A hidden panel leaves its rail behind: slim, full-height, and itself the
+// expand control. Ends hidden so VRT pins the rail chrome (no other story
+// shows one — they all end with both panels open).
+export const PanesHiddenShowsRails: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId("inventory-pane-left");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Hide Inventory Browser" }),
+    );
+    const rail = canvas.getByTestId("inventory-pane-rail-left");
+    await expect(rail).toBeVisible();
+    await expect(
+      canvas.getByTestId("inventory-pane-left"),
+    ).not.toBeVisible();
+    // The diagram takes the freed space; the details side is untouched.
+    await expect(
+      canvas.getByTestId("inventory-pane-right"),
     ).toBeVisible();
   },
 };
