@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Rendered Markdown opens links in a new tab
+
+A `link` renderer override in `web/src/components/markdownRenderer.ts`
+delegates to marked's default (href sanitization and titles unchanged) and
+injects `target="_blank" rel="noopener"`, so following a doc link never
+navigates the workspace away. Single choke point — covers Inventory docs,
+Explore popups, DiagramViewer, and TipsPanel. Canvas annotations render
+links as non-clickable SVG text, so untouched.
+
+- **Tests**: 3 new unit tests (inline links, autolinks, titles preserved);
+  e2e `inventory-documentation.spec.ts` types a link and asserts the
+  rendered anchor carries `target="_blank"` / `rel="noopener"`.
+- **Validation**: Vitest + 97 e2e, lint/build/format clean.
+
+---
+
 ## Task 128 — Inventory Description auto-saves with debounce
 
 The Description → Edit flow needed a manual Save click or edits were
