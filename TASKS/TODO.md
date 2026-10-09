@@ -16,11 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Rendered Markdown - open links in a new tab
-
-When component descriptions are rendered as markdown, make it so that rendered
-links are opened in a new tab, instead of the current one.
-
 ## Task <N> - When switching through Navbar, modeling/ should remember last opened view
 
 When working in the application, I find myself frequently jumping between
