@@ -721,9 +721,15 @@ export const DeleteTabBlockedForSystemWithViews: Story = {
   },
 };
 
-// Both side panels open with a hide control in their header, a splitter
-// beside them, and no restore rail — the default workspace. The rails are
-// asserted hidden (not absent) because hiding must never unmount content.
+// Both side panels open with a hide control in their header and no restore
+// rail — the default workspace. The rails are asserted hidden (not absent)
+// because hiding must never unmount content.
+//
+// Splitters are `hidden md:flex` by design (a horizontal drag is meaningless
+// once the panes stack full-width), and this browser is ~414px wide, so no
+// slider can be found here — asserted absent, not present. Splitter dragging
+// and keyboard nudges live at desktop width and are covered by
+// e2e/inventory-layout.spec.ts instead.
 export const PanesOpenByDefault: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -740,11 +746,11 @@ export const PanesOpenByDefault: Story = {
       canvas.getByRole("button", { name: "Hide Details" }),
     ).toBeVisible();
     await expect(
-      canvas.getByRole("slider", { name: "Resize browser panel" }),
-    ).toBeTruthy();
+      canvas.queryByRole("slider", { name: "Resize browser panel" }),
+    ).not.toBeInTheDocument();
     await expect(
-      canvas.getByRole("slider", { name: "Resize details panel" }),
-    ).toBeTruthy();
+      canvas.queryByRole("slider", { name: "Resize details panel" }),
+    ).not.toBeInTheDocument();
 
     // Rails exist but stay out of the way until a panel is hidden.
     await expect(
