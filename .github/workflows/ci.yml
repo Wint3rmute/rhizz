@@ -127,6 +127,7 @@ jobs:
         with:
           path: web/.eslintcache
           key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/deno.lock', 'web/package.json') }}
+          restore-keys: eslint-${{ runner.os }}-
 
       - run: nix develop --command deno fmt --check
         working-directory: ./web
