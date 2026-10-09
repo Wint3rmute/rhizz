@@ -646,7 +646,7 @@ async function handleCreateView(): Promise<void> {
 
 <div
   data-testid="inventory-workspace"
-  class="flex flex-col md:flex-row flex-1 w-full min-h-screen md:h-screen overflow-hidden bg-base-300"
+  class="flex flex-col md:flex-row flex-1 w-full h-screen overflow-y-auto md:overflow-hidden bg-base-300"
 >
   {#if !projectId}
     <div class="flex-1 flex items-center justify-center p-4">
@@ -784,8 +784,10 @@ async function handleCreateView(): Promise<void> {
         ))}
     />
 
-    <!-- Centre: the diagram preview fills whatever the panels leave over. -->
-    <div class="flex flex-1 min-w-0 min-h-0">
+    <!-- Centre: the diagram preview fills whatever the panels leave over.
+         Below `md` the workspace stacks and scrolls, so this wrapper is
+         natural-height there (`flex-none`) and only stretches on desktop. -->
+    <div class="flex flex-none md:flex-1 min-w-0 min-h-0">
       <div
         data-testid="inventory-diagram"
         class="relative flex-1 min-w-0 min-h-[320px] md:min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
