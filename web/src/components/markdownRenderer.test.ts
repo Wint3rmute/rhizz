@@ -32,7 +32,27 @@ describe("renderMarkdown", () => {
 
   it("renders links", () => {
     const html = renderMarkdown("[rhizz](https://example.com)");
-    expect(html).toContain('<a href="https://example.com">rhizz</a>');
+    expect(html).toContain(
+      '<a target="_blank" rel="noopener" href="https://example.com">rhizz</a>',
+    );
+  });
+
+  it("opens links in a new tab", () => {
+    const html = renderMarkdown("[rhizz](https://example.com)");
+    const link = /<a [^>]*>rhizz<\/a>/.exec(html)?.[0] ?? "";
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('rel="noopener"');
+  });
+
+  it("opens autolinks in a new tab", () => {
+    const html = renderMarkdown("<https://example.com>");
+    expect(html).toContain('target="_blank"');
+  });
+
+  it("keeps link titles when opening in a new tab", () => {
+    const html = renderMarkdown('[rhizz](https://example.com "home")');
+    expect(html).toContain('title="home"');
+    expect(html).toContain('target="_blank"');
   });
 
   it("escapes raw HTML instead of injecting it", () => {
