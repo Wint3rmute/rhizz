@@ -33,6 +33,16 @@ import {
 } from "../modeling/persistence";
 import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
+import Pane from "./Pane.svelte";
+import Splitter from "./Splitter.svelte";
+import {
+  hideInventoryPanel,
+  type InventoryLayout,
+  readInventoryLayout,
+  resizeInventoryPanel,
+  showInventoryPanel,
+  writeInventoryLayout,
+} from "./inventoryLayout";
 import {
   defaultViewPath,
   definitionLabelForNode,
@@ -156,6 +166,16 @@ let definitions = $derived.by<InventoryDefinition[]>(() => {
 let activeTab = $state<InventoryTab>(InventoryTab.Components);
 let query = $state("");
 let selectedLabel = $state<string | null>(null);
+
+// ── Modular workspace layout ────────────────────────────────────────────────
+// Panel widths + hidden flags in one serializable store, persisted across
+// reloads. Resizes clamp via `resizeInventoryPanel`; hide/restore preserve
+// widths so a restored panel comes back exactly as it was.
+let layout = $state<InventoryLayout>(readInventoryLayout());
+
+$effect(() => {
+  writeInventoryLayout(layout);
+});
 
 // Systems come straight from the compiled payload (`raw.systems`), in model
 // order — the same source `model.systems()` reads, but with full_name/icon/
@@ -624,7 +644,10 @@ async function handleCreateView(): Promise<void> {
 }
 </script>
 
-<div class="flex flex-1 w-full h-screen overflow-hidden bg-base-300">
+<div
+  data-testid="inventory-workspace"
+  class="flex flex-col md:flex-row flex-1 w-full h-screen overflow-hidden bg-base-300"
+>
   {#if !projectId}
     <div class="flex-1 flex items-center justify-center p-4">
       <div class="card bg-base-200 shadow-xl">
@@ -640,19 +663,24 @@ async function handleCreateView(): Promise<void> {
       </div>
     </div>
   {:else}
-    <!-- Left sidebar: Inventory Browser -->
-    <aside
-      class="w-full shrink-0 bg-base-100 text-base-content border-r border-base-300 p-3 md:w-80 flex flex-col gap-3 overflow-hidden"
+    <!-- Left panel: Inventory Browser. The Pane owns the header, width and
+         hide/restore rail; the browser content below is unchanged. -->
+    <Pane
+      title="Inventory Browser"
+      side="left"
+      width={layout.leftWidth}
+      hidden={layout.leftHidden}
+      onhide={() => (layout = hideInventoryPanel(layout, "left"))}
+      onshow={() => (layout = showInventoryPanel(layout, "left"))}
     >
-      <h2 class="font-semibold text-lg">Inventory Browser</h2>
-
-      <!-- Filter tabs -->
-      <div
-        class="flex items-center gap-1"
-        role="tablist"
-        aria-label="Inventory filters"
-        data-tour={TOUR_TARGETS.inventory}
-      >
+      <div class="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden p-3">
+        <!-- Filter tabs -->
+        <div
+          class="flex items-center gap-1"
+          role="tablist"
+          aria-label="Inventory filters"
+          data-tour={TOUR_TARGETS.inventory}
+        >
         {#each INVENTORY_TABS as tab (tab)}
           <button
             type="button"
@@ -741,14 +769,23 @@ async function handleCreateView(): Promise<void> {
           {/each}
         {/if}
       </div>
-    </aside>
+      </div>
+    </Pane>
 
-    <!-- Main row: the diagram preview and the detail pane share it, the pane
-         to the right of the diagram. The split is 60/40 in the diagram's
-         favour — a canvas is what you look at, the pane is what you consult —
-         so the pane takes two fifths and the diagram absorbs the rest, and the
-         split holds at any window width. Below `md` they stack. -->
-    <div class="flex flex-col md:flex-row flex-1 min-w-0 min-h-0">
+    <Splitter
+      side="left"
+      value={layout.leftWidth}
+      hidden={layout.leftHidden}
+      onresize={(dx) =>
+        (layout = resizeInventoryPanel(
+          layout,
+          "left",
+          layout.leftWidth + dx,
+        ))}
+    />
+
+    <!-- Centre: the diagram preview fills whatever the panels leave over. -->
+    <div class="flex flex-1 min-w-0 min-h-0">
       <div
         data-testid="inventory-diagram"
         class="relative flex-1 min-w-0 min-h-[320px] md:min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
@@ -799,7 +836,29 @@ async function handleCreateView(): Promise<void> {
           </div>
         {/if}
       </div>
+    </div>
 
+    <Splitter
+      side="right"
+      value={layout.rightWidth}
+      hidden={layout.rightHidden}
+      onresize={(dx) =>
+        (layout = resizeInventoryPanel(
+          layout,
+          "right",
+          layout.rightWidth - dx,
+        ))}
+    />
+
+    <!-- Right panel: entity details. The DetailPane content is unchanged. -->
+    <Pane
+      title="Details"
+      side="right"
+      width={layout.rightWidth}
+      hidden={layout.rightHidden}
+      onhide={() => (layout = hideInventoryPanel(layout, "right"))}
+      onshow={() => (layout = showInventoryPanel(layout, "right"))}
+    >
       <DetailPane
         definition={selectedDefinition}
         docContent={docContent}
@@ -812,7 +871,7 @@ async function handleCreateView(): Promise<void> {
         deleteBlockerKind={selectedIsSystem ? "view" : "instance"}
         ondelete={handleDeleteEntity}
       />
-    </div>
+    </Pane>
 
     <CreateComponentModal
       isOpen={isCreateModalOpen}
