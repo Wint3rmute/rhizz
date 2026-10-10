@@ -767,8 +767,7 @@ async function handleCreateView(): Promise<void> {
     </Pane>
 
     <Splitter
-      scope="inventory"
-      side="left"
+      testid="inventory-splitter-left"
       panelName="browser"
       value={layout.leftWidth}
       hidden={layout.leftHidden}
@@ -837,8 +836,7 @@ async function handleCreateView(): Promise<void> {
     </div>
 
     <Splitter
-      scope="inventory"
-      side="right"
+      testid="inventory-splitter-right"
       panelName="details"
       value={layout.rightWidth}
       hidden={layout.rightHidden}
