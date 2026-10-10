@@ -300,5 +300,20 @@ export const ResizablePanel: Story = {
     await expect(slider.getAttribute("aria-valuemin")).toBe("96");
     await expect(slider.getAttribute("aria-valuemax")).toBe("1000");
     await expect(slider.getAttribute("aria-orientation")).toBe("vertical");
+
+    // The panel carries the shared pane header: title plus its own hide
+    // control, which collapses through the same persisted flag as the
+    // strip toggle. Ends open (re-expanded) so the baseline shows it.
+    await expect(
+      bar.getByRole("heading", { name: "Diagnostics" }),
+    ).toBeVisible();
+    await userEvent.click(
+      bar.getByRole("button", { name: "Hide Diagnostics" }),
+    );
+    await expect(panel).not.toBeVisible();
+    await userEvent.click(
+      bar.getByRole("button", { name: "Expand diagnostics" }),
+    );
+    await expect(panel).toBeVisible();
   },
 };

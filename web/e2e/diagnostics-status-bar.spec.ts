@@ -31,17 +31,17 @@ test("diagnostics status bar shows on overview, code, and modeling", async ({ pa
 
   await page.goto(`/projects/${id}/modeling`);
   await expect(bar).toBeVisible();
-  // The bar expands and collapses again in place.
-  await bar.getByRole("button").click();
-  await expect(bar.getByRole("button")).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
-  await bar.getByRole("button").click();
-  await expect(bar.getByRole("button")).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
+  // The bar expands and collapses again in place (named toggle: the open
+  // panel carries its own Hide control, so a bare button query would match
+  // two).
+  await bar.getByRole("button", { name: "Expand diagnostics" }).click();
+  await expect(
+    bar.getByRole("button", { name: "Collapse diagnostics" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  await bar.getByRole("button", { name: "Collapse diagnostics" }).click();
+  await expect(
+    bar.getByRole("button", { name: "Expand diagnostics" }),
+  ).toHaveAttribute("aria-expanded", "false");
 });
 
 test("diagnostics panel height adjusts by dragging its top edge", async ({ page }) => {
@@ -50,7 +50,7 @@ test("diagnostics panel height adjusts by dragging its top edge", async ({ page 
   const bar = page.getByTestId("diagnostics-status-bar");
   const panel = page.getByTestId("diagnostics-panel");
 
-  await bar.getByRole("button").click();
+  await bar.getByRole("button", { name: "Expand diagnostics" }).click();
   await expect(panel).toBeVisible();
   const before = (await panel.boundingBox())?.height;
   if (!before) throw new Error("the panel should be laid out");
@@ -93,8 +93,9 @@ test("diagnostics splitter answers the keyboard", async ({ page }) => {
   await page.goto(`/projects/${id}/overview`);
   const panel = page.getByTestId("diagnostics-panel");
 
-  await page.getByTestId("diagnostics-status-bar").getByRole("button")
-    .click();
+  await page.getByTestId("diagnostics-status-bar").getByRole("button", {
+    name: "Expand diagnostics",
+  }).click();
   await expect(panel).toBeVisible();
   const before = (await panel.boundingBox())?.height;
   if (!before) throw new Error("the panel should be laid out");
@@ -118,8 +119,9 @@ test("diagnostics panel stops at a share of the viewport height", async ({ page 
   const expected = viewport.height * 0.7;
   const panel = page.getByTestId("diagnostics-panel");
 
-  await page.getByTestId("diagnostics-status-bar").getByRole("button")
-    .click();
+  await page.getByTestId("diagnostics-status-bar").getByRole("button", {
+    name: "Expand diagnostics",
+  }).click();
   await expect(panel).toBeVisible();
 
   // Drag far past the top edge: the 70%-of-viewport cap binds before the
@@ -145,16 +147,15 @@ test("diagnostics expanded panel survives a reload", async ({ page }) => {
   await page.goto(`/projects/${id}/overview`);
   const bar = page.getByTestId("diagnostics-status-bar");
 
-  await bar.getByRole("button").click();
+  await bar.getByRole("button", { name: "Expand diagnostics" }).click();
   await expect(page.getByTestId("diagnostics-panel")).toBeVisible();
 
   await page.reload();
   await expect(page.getByTestId("diagnostics-status-bar")).toBeVisible();
   await expect(page.getByTestId("diagnostics-panel")).toBeVisible();
-  await expect(bar.getByRole("button")).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
+  await expect(
+    bar.getByRole("button", { name: "Collapse diagnostics" }),
+  ).toHaveAttribute("aria-expanded", "true");
 });
 
 // The two project-wide controls live *in* the bar now: the score badge at its
