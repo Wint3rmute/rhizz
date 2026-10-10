@@ -34,15 +34,15 @@
         "warnings": [
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           }
         ]
       }
@@ -81,7 +81,7 @@
         "warnings": [
           {
             "code": "W001",
-            "message": "component 'wheel' is non-leaf but has no child components"
+            "message": "component `wheel` is non-leaf but has no child components"
           }
         ]
       }
@@ -120,11 +120,11 @@
         "warnings": [
           {
             "code": "W003",
-            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
+            "message": "component `front-wheel` (source `wheel`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+            "message": "component `rear-wheel` (source `wheel`) is not referenced by any connection"
           }
         ]
       }
@@ -197,23 +197,23 @@
         "warnings": [
           {
             "code": "W003",
-            "message": "component 'front-wheel' (source 'wheel') is not referenced by any connection"
+            "message": "component `front-wheel` (source `wheel`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'rear-wheel' (source 'wheel') is not referenced by any connection"
+            "message": "component `rear-wheel` (source `wheel`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           }
         ]
       }
@@ -354,23 +354,23 @@
         "warnings": [
           {
             "code": "W004",
-            "message": "component 'controller' is missing a full_name"
+            "message": "component `controller` is missing a full_name"
           },
           {
             "code": "W004",
-            "message": "connection 'link' is missing a full_name"
+            "message": "connection `link` is missing a full_name"
           },
           {
             "code": "W011",
-            "message": "protocol 'serial' has no messages defined"
+            "message": "protocol `serial` has no messages defined"
           },
           {
             "code": "W018",
-            "message": "component 'controller' is missing documentation (docs/controller.md)"
+            "message": "component `controller` is missing documentation (`docs/controller.md`)"
           },
           {
             "code": "W018",
-            "message": "component 'sensor-hat' is missing documentation (docs/sensor-hat.md)"
+            "message": "component `sensor-hat` is missing documentation (`docs/sensor-hat.md`)"
           }
         ]
       }
@@ -420,15 +420,15 @@
         "warnings": [
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           },
           {
             "code": "W003",
-            "message": "component 'tire' (source 'tire') is not referenced by any connection"
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
           }
         ]
       },
@@ -525,7 +525,7 @@
         "warnings": [
           {
             "code": "W016",
-            "message": "views/overview.hcl: view 'overview' node 'computer-setup/not-a-computer' does not reference a known component"
+            "message": "views/overview.hcl: view `overview` node `computer-setup/not-a-computer` does not reference a known component"
           }
         ]
       },

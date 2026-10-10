@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
+import { renderMarkdownInline } from "./markdownRenderer";
 import { getCurrentScore } from "../ProjectState.svelte";
 import ScoreBadge from "./ScoreBadge.svelte";
 import WarningLevelSelect from "./WarningLevelSelect.svelte";
@@ -180,7 +181,8 @@ function specUrl(code: string): string {
               class="truncate min-w-0 flex-1"
               title={diagnostic.message}
             >
-              {diagnostic.message}
+              <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+              {@html renderMarkdownInline(diagnostic.message)}
             </span>
           </li>
         {/each}

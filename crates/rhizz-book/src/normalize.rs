@@ -60,20 +60,20 @@ mod tests {
                 NormDiagnostic {
                     code: "E011".to_owned(),
                     line: None,
-                    message: "connection 'greet' references undefined component 'sender' in 'from'"
+                    message: "connection `greet` references undefined component `sender` in 'from'"
                         .to_owned(),
                 },
                 NormDiagnostic {
                     code: "E011".to_owned(),
                     line: Some(12),
-                    message: "connection 'greet' references undefined component 'receiver' in 'to'"
+                    message: "connection `greet` references undefined component `receiver` in 'to'"
                         .to_owned(),
                 },
             ],
             warnings: vec![NormDiagnostic {
                 code: "W005".to_owned(),
                 line: None,
-                message: "connection 'greet' has 'from' and 'to' pointing to the same component"
+                message: "connection `greet` has 'from' and 'to' pointing to the same component"
                     .to_owned(),
             }],
             score: None,
@@ -86,7 +86,7 @@ mod tests {
         sort_diagnostics(&mut out.errors);
         assert_eq!(
             out.errors[0].message,
-            "connection 'greet' references undefined component 'sender' in 'from'"
+            "connection `greet` references undefined component `sender` in 'from'"
         );
         assert_eq!(out.errors[1].line, Some(12));
     }

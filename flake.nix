@@ -75,9 +75,8 @@
               # stale tree keeps resolving the old driver (e.g. 1228 lookups
               # against 1243 browsers) with no warning.
               playwright-driver.browsers
-              # Commented out to slim down the image
-              # flyctl
-              # gh
+              flyctl
+              gh
             ];
 
             # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright

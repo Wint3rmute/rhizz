@@ -123,9 +123,14 @@ runtime values (labels, file paths, etc.):
 ```rust
 Diagnostic::error(
     DiagnosticCode::E001,
-    format!("duplicate system label '{label}'"),
+    format!("duplicate system label `{label}`"),
 )
 ```
+
+Messages are Markdown: entity names (labels, paths, source definitions) are
+wrapped in backticks so front-ends can render them in monospace. Keywords such
+as `'from'` or `'source'` stay in single quotes. Backticks stay literal in CLI
+and `--json` output.
 
 This is not duplication — the Markdown file explains the _class_ of error, while
 the call-site message describes the _specific instance_.

@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
+import { renderMarkdownInline } from "../../components/markdownRenderer";
 
 export type VerdictStatus = "ok" | "warn" | "error";
 
@@ -67,7 +68,8 @@ const alertClass = $derived(
       {#each errors as diagnostic, i (i)}
         <li class="py-px">
           <span class="font-mono font-bold">{diagnostic.code}</span>—
-          {diagnostic.message}
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+          {@html renderMarkdownInline(diagnostic.message)}
         </li>
       {/each}
     </ul>
@@ -77,7 +79,8 @@ const alertClass = $derived(
       {#each warnings as diagnostic, i (i)}
         <li class="py-px">
           <span class="font-mono font-bold">{diagnostic.code}</span>—
-          {diagnostic.message}
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+          {@html renderMarkdownInline(diagnostic.message)}
         </li>
       {/each}
     </ul>
