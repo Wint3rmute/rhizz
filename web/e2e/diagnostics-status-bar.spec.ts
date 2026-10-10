@@ -44,6 +44,89 @@ test("diagnostics status bar shows on overview, code, and modeling", async ({ pa
   );
 });
 
+test("diagnostics panel height adjusts by dragging its top edge", async ({ page }) => {
+  const id = await openProject(page, "E2E bar resize");
+  await page.goto(`/projects/${id}/overview`);
+  const bar = page.getByTestId("diagnostics-status-bar");
+  const panel = page.getByTestId("diagnostics-panel");
+
+  await bar.getByRole("button").click();
+  await expect(panel).toBeVisible();
+  const before = (await panel.boundingBox())?.height;
+  if (!before) throw new Error("the panel should be laid out");
+
+  const splitter = page.getByRole("slider", {
+    name: "Resize diagnostics panel",
+  });
+  const box = await splitter.boundingBox();
+  if (!box) throw new Error("the splitter should be laid out");
+
+  // Dragging up grows the panel.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 100, { steps: 5 });
+  await page.mouse.up();
+
+  const grown = (await panel.boundingBox())?.height;
+  if (!grown) throw new Error("the panel should be laid out");
+  expect(grown).toBeGreaterThan(before + 80);
+
+  // Dragging far past the bottom edge clamps instead of collapsing.
+  const grownBox = await splitter.boundingBox();
+  if (!grownBox) throw new Error("the splitter should be laid out");
+  await page.mouse.move(
+    grownBox.x + grownBox.width / 2,
+    grownBox.y + grownBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(grownBox.x + grownBox.width / 2, 2000, { steps: 5 });
+  await page.mouse.up();
+
+  const clamped = (await panel.boundingBox())?.height;
+  if (!clamped) throw new Error("the panel should be laid out");
+  expect(clamped).toBeGreaterThanOrEqual(95);
+  expect(clamped).toBeLessThanOrEqual(97);
+});
+
+test("diagnostics splitter answers the keyboard", async ({ page }) => {
+  const id = await openProject(page, "E2E bar splitter keys");
+  await page.goto(`/projects/${id}/overview`);
+  const panel = page.getByTestId("diagnostics-panel");
+
+  await page.getByTestId("diagnostics-status-bar").getByRole("button")
+    .click();
+  await expect(panel).toBeVisible();
+  const before = (await panel.boundingBox())?.height;
+  if (!before) throw new Error("the panel should be laid out");
+
+  const splitter = page.getByRole("slider", {
+    name: "Resize diagnostics panel",
+  });
+  await splitter.focus();
+  await page.keyboard.press("ArrowUp");
+  const after = (await panel.boundingBox())?.height;
+  if (!after) throw new Error("the panel should be laid out");
+  // ArrowUp moves the edge up, which grows the panel.
+  expect(after).toBeGreaterThan(before);
+});
+
+test("diagnostics expanded panel survives a reload", async ({ page }) => {
+  const id = await openProject(page, "E2E bar persist");
+  await page.goto(`/projects/${id}/overview`);
+  const bar = page.getByTestId("diagnostics-status-bar");
+
+  await bar.getByRole("button").click();
+  await expect(page.getByTestId("diagnostics-panel")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByTestId("diagnostics-status-bar")).toBeVisible();
+  await expect(page.getByTestId("diagnostics-panel")).toBeVisible();
+  await expect(bar.getByRole("button")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+});
+
 // The two project-wide controls live *in* the bar now: the score badge at its
 // far left, the strictness control at its far right. Both used to sit in the
 // navbar, so the navbar must not keep a copy — one score and one level

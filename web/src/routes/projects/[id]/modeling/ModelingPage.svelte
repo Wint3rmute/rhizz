@@ -3828,8 +3828,7 @@ $effect(() => {
   </Pane>
 
   <Splitter
-    scope="modeling"
-    side="left"
+    testid="modeling-splitter-left"
     panelName="inspector"
     value={paneLayout.leftWidth}
     hidden={paneLayout.leftHidden}
@@ -4043,8 +4042,7 @@ $effect(() => {
     drag-resizes — while staying mounted (`display: none`).
   -->
   <Splitter
-    scope="modeling"
-    side="right"
+    testid="modeling-splitter-right"
     panelName="components"
     value={paneLayout.rightWidth}
     hidden={paneLayout.rightHidden}

@@ -3,6 +3,16 @@ import type { DiagnosticJS } from "rhizz";
 import { getCurrentScore } from "../ProjectState.svelte";
 import ScoreBadge from "./ScoreBadge.svelte";
 import WarningLevelSelect from "./WarningLevelSelect.svelte";
+import Splitter from "./modular_ui/Splitter.svelte";
+import {
+  collapseDiagnosticsPanel,
+  DIAGNOSTICS_MAX_HEIGHT,
+  DIAGNOSTICS_MIN_HEIGHT,
+  expandDiagnosticsPanel,
+  readDiagnosticsLayout,
+  resizeDiagnosticsPanel,
+  writeDiagnosticsLayout,
+} from "./modular_ui/diagnosticsLayout";
 
 // Bottom status bar replacing the Overview page's diagnostics sidebar, and the
 // home of the project-wide controls that used to sit in the navbar: collapsed
@@ -42,7 +52,16 @@ let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
 
 let score = $derived(getCurrentScore());
 
-let expanded = $state(false);
+// ── Expandable, resizable panel ─────────────────────────────────────────────
+// Open flag + panel height in one serializable store, persisted across
+// reloads. Resizing clamps; toggling preserves the height.
+let barLayout = $state(readDiagnosticsLayout());
+
+$effect(() => {
+  writeDiagnosticsLayout(barLayout);
+});
+
+let expanded = $derived(barLayout.expanded);
 
 let toggleLabel = $derived(
   expanded ? "Collapse diagnostics" : "Expand diagnostics",
@@ -77,11 +96,31 @@ function specUrl(code: string): string {
          (truncated, full text in a tooltip). Rows are
          list items rather than `role="alert"`s: the panel opens on demand
          and its contents are a list to scan, and an alert role would
-         announce every row on expand. -->
+         announce every row on expand.
+
+         The panel has a fixed persisted height (drag the handle on its top
+         edge, or nudge it with Up/Down once focused) instead of hugging
+         its content, like a docked tool panel. -->
     <div
-      class="absolute inset-x-0 bottom-full max-h-64 overflow-y-auto px-4 sm:px-6 lg:px-8 py-2 bg-base-100 border-t border-base-300 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]"
+      class="absolute inset-x-0 bottom-full overflow-y-auto px-4 sm:px-6 lg:px-8 pb-2 bg-base-100 border-t border-base-300 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]"
+      style:height="{barLayout.height}px"
+      data-testid="diagnostics-panel"
     >
-      <ul class="max-w-7xl mx-auto text-sm">
+      <Splitter
+        testid="diagnostics-splitter"
+        orientation="vertical"
+        panelName="diagnostics"
+        value={barLayout.height}
+        min={DIAGNOSTICS_MIN_HEIGHT}
+        max={DIAGNOSTICS_MAX_HEIGHT}
+        responsive={false}
+        onresize={(dy) =>
+          (barLayout = resizeDiagnosticsPanel(
+            barLayout,
+            barLayout.height - dy,
+          ))}
+      />
+      <ul class="max-w-7xl mx-auto text-sm pt-2">
         {#if diagnostics.length === 0}
           <li class="px-2 py-1.5 text-base-content/60">
             No problems detected in this project — Well Done!
@@ -140,7 +179,10 @@ function specUrl(code: string): string {
     <button
       type="button"
       class="absolute inset-0 rounded cursor-pointer hover:bg-base-200/60"
-      onclick={() => (expanded = !expanded)}
+      onclick={() =>
+        (barLayout = expanded
+          ? collapseDiagnosticsPanel(barLayout)
+          : expandDiagnosticsPanel(barLayout))}
       aria-expanded={expanded}
       aria-label={toggleLabel}
       title={toggleLabel}
