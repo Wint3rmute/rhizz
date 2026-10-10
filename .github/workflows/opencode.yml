@@ -30,4 +30,4 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
-          model: openrouter/stealth/space-bunny-alpha
+          model: openrouter/~deepseek/deepseek-flash-latest
