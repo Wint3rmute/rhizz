@@ -82,23 +82,36 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-// The inspector panel opens with a hide control in its header, a splitter
-// beside it, and no restore rail — the default workspace.
+// Both side panels open with a hide control in their header, a splitter
+// beside them, and no restore rail — the default workspace.
 export const PanesOpenByDefault: Story = {
   loaders: [ensurePanesProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const panel = await canvas.findByTestId("modeling-pane-left");
-    await expect(panel).toBeVisible();
+    const left = await canvas.findByTestId("modeling-pane-left");
+    const right = canvas.getByTestId("modeling-pane-right");
+    await expect(left).toBeVisible();
+    await expect(right).toBeVisible();
 
     await expect(
       canvas.getByRole("button", { name: "Hide Inspector" }),
     ).toBeVisible();
     await expect(
+      canvas.getByRole("button", { name: "Hide Components" }),
+    ).toBeVisible();
+    await expect(
       canvas.getByRole("slider", { name: "Resize inspector panel" }),
     ).toBeTruthy();
     await expect(
+      canvas.getByRole("slider", { name: "Resize components panel" }),
+    ).toBeTruthy();
+
+    // Rails exist but stay out of the way until a panel is hidden.
+    await expect(
       canvas.getByTestId("modeling-pane-rail-left"),
+    ).not.toBeVisible();
+    await expect(
+      canvas.getByTestId("modeling-pane-rail-right"),
     ).not.toBeVisible();
   },
 };
@@ -133,5 +146,36 @@ export const PanesHideAndRestore: Story = {
     await expect(
       canvas.getByRole("button", { name: /^main\.hcl$/ }),
     ).toBeVisible();
+  },
+};
+
+// Same contract on the components side: hiding swaps the tree panel for
+// its rail, restoring brings the same tree back (still bound to the open
+// view's system).
+export const ComponentsPaneHideAndRestore: Story = {
+  loaders: [ensurePanesProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByTestId("modeling-pane-right");
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Hide Components" }),
+    );
+    await expect(
+      canvas.getByTestId("modeling-pane-right"),
+    ).not.toBeVisible();
+    const rail = canvas.getByTestId("modeling-pane-rail-right");
+    await expect(rail).toBeVisible();
+    await expect(rail.getAttribute("aria-label")).toBe("Show Components");
+    await expect(
+      canvas.getByTestId("modeling-splitter-right"),
+    ).not.toBeVisible();
+
+    await userEvent.click(rail);
+    await expect(
+      canvas.getByTestId("modeling-pane-right"),
+    ).toBeVisible();
+    await expect(canvas.getByTestId("diagram-system-label"))
+      .toHaveTextContent("system: demo");
   },
 };

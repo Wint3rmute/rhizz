@@ -4037,12 +4037,38 @@ $effect(() => {
     </div>
   </div>
 
-  <!-- Right sidebar: component list and embed action -->
-  <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300 flex flex-col justify-between gap-4"
+  <!--
+    Right panel: component tree (+ definitions, connections) and the embed
+    action, pinned at the bottom. A `Pane`, so it hides behind a rail and
+    drag-resizes — while staying mounted (`display: none`).
+  -->
+  <Splitter
+    scope="modeling"
+    side="right"
+    panelName="components"
+    value={paneLayout.rightWidth}
+    hidden={paneLayout.rightHidden}
+    onresize={(dx) =>
+      (paneLayout = modelingPanes.resize(
+        paneLayout,
+        "right",
+        paneLayout.rightWidth - dx,
+      ))}
+  />
+
+  <Pane
+    scope="modeling"
+    title="Components"
+    side="right"
+    width={paneLayout.rightWidth}
+    hidden={paneLayout.rightHidden}
+    responsive={false}
+    onhide={() => (paneLayout = modelingPanes.hide(paneLayout, "right"))}
+    onshow={() => (paneLayout = modelingPanes.show(paneLayout, "right"))}
   >
-    <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      {#if selectedDiagramPath !== null}
+    <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden p-4">
+      <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+        {#if selectedDiagramPath !== null}
         <div
           class="font-semibold text-sm mb-1 text-base-content uppercase tracking-wide"
           data-testid="diagram-system-label"
@@ -4055,12 +4081,6 @@ $effect(() => {
           {/if}
         </div>
       {/if}
-
-      <h3
-        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-      >
-        Components
-      </h3>
 
       {#if selectedDiagramPath === null}
         <p class="text-base-content/50 text-sm">
@@ -4088,7 +4108,7 @@ $effect(() => {
         {/if}
       {/if}
 
-        <div class="divider"></div>
+      <div class="divider"></div>
 
       <h3
         class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
@@ -4131,23 +4151,24 @@ $effect(() => {
       </ul>
     </div>
 
-    <!-- Embed Diagram + Copy Debug Info buttons -->
-    <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
-      <button
-        type="button"
-        class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
-        onclick={() => void handleCopyDebug().catch(reportDiagramError)}
-        title="Copy the session's model mutations as a replayable TypeScript test"
-      >
-        <span aria-hidden="true">🚧</span>
-        <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
-      </button>
-      <EmbedDiagramButton
-        projectId={projectId}
-        diagramPath={selectedDiagramPath}
-      />
+      <!-- Embed Diagram + Copy Debug Info buttons -->
+      <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
+          onclick={() => void handleCopyDebug().catch(reportDiagramError)}
+          title="Copy the session's model mutations as a replayable TypeScript test"
+        >
+          <span aria-hidden="true">🚧</span>
+          <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
+        </button>
+        <EmbedDiagramButton
+          projectId={projectId}
+          diagramPath={selectedDiagramPath}
+        />
+      </div>
     </div>
-  </aside>
+  </Pane>
 </div>
 
 <NewViewModal
