@@ -72,7 +72,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         if !proto_seen.insert(lp.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
-                format!("duplicate protocol label '{}'", lp.label),
+                format!("duplicate protocol label `{}`", lp.label),
             );
             continue;
         }
@@ -113,7 +113,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             if !def_seen.insert(lc.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
-                    format!("duplicate top-level component label '{}'", lc.label),
+                    format!("duplicate top-level component label `{}`", lc.label),
                 );
                 continue;
             }
@@ -158,7 +158,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         if !system_labels_seen.insert(ls.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
-                format!("duplicate system label '{}'", ls.label),
+                format!("duplicate system label `{}`", ls.label),
             );
             continue;
         }
@@ -187,7 +187,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
                 r.push_error(
                     DiagnosticCode::E001,
                     format!(
-                        "duplicate instance label '{}' in system '{}'",
+                        "duplicate instance label `{}` in system `{}`",
                         li.label, ls.label
                     ),
                 );
@@ -245,7 +245,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
         for label in orphan_proto_labels {
             r.push_warning(
                 DiagnosticCode::W012,
-                format!("top-level protocol '{label}' is not referenced by any port"),
+                format!("top-level protocol `{label}` is not referenced by any port"),
             );
         }
     }
@@ -319,7 +319,7 @@ fn register_component_inner(
     if leaf && (!body.instances.is_empty() || !body.connections.is_empty()) {
         r.push_error(
             DiagnosticCode::E005,
-            format!("leaf component '{label}' contains children or connections"),
+            format!("leaf component `{label}` contains children or connections"),
         );
     }
 
@@ -360,7 +360,7 @@ fn register_component_inner(
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate instance label '{}' in component '{}'",
+                    "duplicate instance label `{}` in component `{}`",
                     child_li.label, label
                 ),
             );
@@ -422,7 +422,7 @@ fn register_instance(
         // parse_instance guarantees a source, but guard defensively.
         r.push_error(
             DiagnosticCode::E014,
-            format!("instance '{}' is missing a 'source' attribute", li.label),
+            format!("instance `{}` is missing a 'source' attribute", li.label),
         );
         let body = RawComponent::default();
         return register_component_inner(
@@ -444,7 +444,7 @@ fn register_instance(
         r.push_error(
             DiagnosticCode::E014,
             format!(
-                "instance '{}' sources undefined definition '{}'",
+                "instance `{}` sources undefined definition `{}`",
                 li.label, src_label
             ),
         );
@@ -497,7 +497,7 @@ fn process_ports(
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate port label '{}' in component '{}'",
+                    "duplicate port label `{}` in component `{}`",
                     lp.label, comp_label
                 ),
             );
@@ -523,7 +523,7 @@ fn process_ports(
                                 r.push_error(
                                     DiagnosticCode::E009,
                                     format!(
-                                        "port '{}' in component '{}' has role '{}' which is not permitted by protocol '{}' (permitted: {:?})",
+                                        "port `{}` in component `{}` has role `{}` which is not permitted by protocol `{}` (permitted: {:?})",
                                         lp.label, comp_label, invalid_role, proto_name, proto.roles
                                     ),
                                 );
@@ -532,7 +532,7 @@ fn process_ports(
                                 r.push_error(
                                     DiagnosticCode::E009,
                                     format!(
-                                        "port '{}' in component '{}' must specify a role for protocol '{}' (permitted: {:?})",
+                                        "port `{}` in component `{}` must specify a role for protocol `{}` (permitted: {:?})",
                                         lp.label, comp_label, proto_name, proto.roles
                                     ),
                                 );
@@ -544,7 +544,7 @@ fn process_ports(
                     r.push_warning(
                         DiagnosticCode::W014,
                         format!(
-                            "port '{}' in component '{}' references undefined protocol '{}'",
+                            "port `{}` in component `{}` references undefined protocol `{}`",
                             lp.label, comp_label, proto_name
                         ),
                     );
@@ -599,7 +599,7 @@ fn process_connections_in_scope(
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate connection label '{}' in '{}'",
+                    "duplicate connection label `{}` in `{}`",
                     lc.label, scope_name
                 ),
             );
@@ -641,7 +641,7 @@ fn process_connections_in_scope(
                 r.push_error(
                     DiagnosticCode::E015,
                     format!(
-                        "connection '{}' is declared in '{}' which is not an ancestor of both endpoints (declared outside Lowest Common Ancestor)",
+                        "connection `{}` is declared in `{}` which is not an ancestor of both endpoints (declared outside Lowest Common Ancestor)",
                         lc.label, scope_name
                     ),
                 );
@@ -710,7 +710,7 @@ fn resolve_endpoint(
         None => {
             r.push_error(
                 DiagnosticCode::E002,
-                format!("connection '{conn_label}' is missing required '{field}' attribute"),
+                format!("connection `{conn_label}` is missing required '{field}' attribute"),
             );
             return None;
         }
@@ -720,7 +720,7 @@ fn resolve_endpoint(
     if raw.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
-            format!("connection '{conn_label}' has empty '{field}' attribute"),
+            format!("connection `{conn_label}` has empty '{field}' attribute"),
         );
         return None;
     }
@@ -729,7 +729,7 @@ fn resolve_endpoint(
         r.push_error(
             DiagnosticCode::E002,
             format!(
-                "connection '{conn_label}' has invalid non-UNIX path '{raw}' in '{field}' (colon notation is not supported; use '/' path notation)"
+                "connection `{conn_label}` has invalid non-UNIX path `{raw}` in '{field}' (colon notation is not supported; use '/' path notation)"
             ),
         );
         return None;
@@ -741,7 +741,7 @@ fn resolve_endpoint(
     if raw_segments.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
-            format!("connection '{conn_label}' references empty path in '{field}'"),
+            format!("connection `{conn_label}` references empty path in '{field}'"),
         );
         return None;
     }
@@ -759,7 +759,7 @@ fn resolve_endpoint(
             r.push_error(
                 DiagnosticCode::E002,
                 format!(
-                    "connection '{conn_label}' references undefined system '{system_label}' in path '{raw}'"
+                    "connection `{conn_label}` references undefined system `{system_label}` in path `{raw}`"
                 ),
             );
             return None;
@@ -773,7 +773,7 @@ fn resolve_endpoint(
         r.push_error(
             DiagnosticCode::E002,
             format!(
-                "connection '{conn_label}' references system instead of component in path '{raw}'"
+                "connection `{conn_label}` references system instead of component in path `{raw}`"
             ),
         );
         return None;
@@ -810,7 +810,7 @@ fn resolve_endpoint(
                     r.push_error(
                         DiagnosticCode::E002,
                         format!(
-                            "connection '{conn_label}' cannot navigate above root system with '..' in path '{raw}'"
+                            "connection `{conn_label}` cannot navigate above root system with '..' in path `{raw}`"
                         ),
                     );
                     return None;
@@ -855,7 +855,7 @@ fn resolve_endpoint(
             r.push_error(
                 DiagnosticCode::E010,
                 format!(
-                    "connection '{conn_label}': component '{comp_label}' has no port '{seg}' (in '{field}')"
+                    "connection `{conn_label}`: component `{comp_label}` has no port `{seg}` (in '{field}')"
                 ),
             );
             return None;
@@ -870,7 +870,7 @@ fn resolve_endpoint(
         r.push_error(
             err_code,
             format!(
-                "connection '{conn_label}' references undefined component '{seg}' in '{field}'"
+                "connection `{conn_label}` references undefined component `{seg}` in '{field}'"
             ),
         );
         return None;
@@ -899,7 +899,7 @@ fn resolve_encapsulates(
                 r.push_error(
                     DiagnosticCode::E003,
                     format!(
-                        "connection '{conn_label}' encapsulates undefined connection '{label}'"
+                        "connection `{conn_label}` encapsulates undefined connection `{label}`"
                     ),
                 );
             }
@@ -913,7 +913,7 @@ fn resolve_encapsulates(
     if has_encapsulation_cycle(&r.model.connections, conn_id) {
         r.push_error(
             DiagnosticCode::E004,
-            format!("circular encapsulation chain detected involving connection '{conn_label}'"),
+            format!("circular encapsulation chain detected involving connection `{conn_label}`"),
         );
         // Clear the encapsulates list to break the cycle in the model.
         if let Some(conn) = r.model.connection_mut(conn_id) {
@@ -977,7 +977,7 @@ fn process_messages(
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate message label '{}' in protocol '{}'",
+                    "duplicate message label `{}` in protocol `{}`",
                     lm.label, proto_label
                 ),
             );
@@ -1015,7 +1015,7 @@ fn process_fields(
             r.push_error(
                 DiagnosticCode::E001,
                 format!(
-                    "duplicate field label '{}' in message '{}'",
+                    "duplicate field label `{}` in message `{}`",
                     lf.label, msg_label
                 ),
             );
@@ -1028,7 +1028,7 @@ fn process_fields(
                 r.push_error(
                     DiagnosticCode::E007,
                     format!(
-                        "field '{}' in message '{}' is missing required 'type'",
+                        "field `{}` in message `{}` is missing required 'type'",
                         lf.label, msg_label
                     ),
                 );
@@ -1470,6 +1470,29 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E011),
             "expected E011, got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn diagnostic_messages_wrap_entity_names_in_backticks() {
+        let src = r#"
+            system "s" {
+              component "a" { leaf = true }
+              connection "c" {
+                from = "a"
+                to   = "ghost/port"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let diags = resolve(raw).unwrap_err();
+        let e011 = diags
+            .iter()
+            .find(|d| d.code == DiagnosticCode::E011)
+            .expect("expected E011");
+        assert_eq!(
+            e011.message,
+            "connection `c` references undefined component `ghost` in 'to'"
         );
     }
 

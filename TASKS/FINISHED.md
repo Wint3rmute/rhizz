@@ -4,6 +4,40 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Markdown-flavored diagnostics with monospace entity names
+
+Diagnostic messages are now Markdown: entity names (labels, paths, source
+definitions) are wrapped in backticks at every `format!` site in `rhizz-core`,
+and the four web render sites show them as monospace via the existing
+XSS-safe marked instance.
+
+- **Emit-site sweep:** `resolve.rs`, `validate.rs`, `parse.rs`, `mutation.rs`,
+  `lib.rs`. Keywords (`'from'`, `'to'`, `'source'`, `'type'`, `'full_name'`,
+  field/block-type words) stay in single quotes; filenames, block types and
+  view-file prefixes are not wrapped. No transport change.
+- **Renderers:** `DiagnosticsStatusBar`, `CompilationDiagnosticsOutline`,
+  book `VerdictPanel`, Modeling `firstError` overlay. Added
+  `renderMarkdownInline` (`marked.parseInline`, same instance and overrides)
+  next to `renderMarkdown`: the status-bar row relies on `truncate`, which
+  does not ellipsize a block `<p>`, and the outline row must stay on one line.
+- **Decisions kept:** backticks are literal in CLI output, `--json`, and
+  native `title=` tooltips.
+- **Fixtures:** `book/book.lock` regenerated via `just book-accept`;
+  `normalize.rs`, status-bar/verdict stories, `SPEC/diagnostics.md`,
+  `W003.md`, `book/src/01_basics.md` updated.
+- **Tests:** Rust `diagnostic_messages_wrap_entity_names_in_backticks` (E011)
+  and updated W003 assertion; Vitest coverage for code-span rendering, keyword
+  quoting, HTML escaping inside code spans, and inline rendering.
+- **VRT:** re-baselined `overview-diagnosticsstatusbar` (expanded, duplicate),
+  `book-verdictpanel` (4), and `components-compilationdiagnosticsoutline` (2).
+- **Open edge:** a label containing a backtick would break its code span
+  (no escaping yet); labels are not validated against it.
+- **Validation:** `just test`, `just lint`, `just build`, `just format` all
+  pass. One unrelated command-palette e2e test flaked once and passed on
+  rerun.
+
+---
+
 ## Task <N> — Inventory is a modular three-pane workspace
 
 `inventory/` is now a resizable multi-pane workspace instead of a fixed

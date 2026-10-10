@@ -115,6 +115,7 @@ import { nodeTopLeftAt, pickSpawnAnchor } from "./spawnPlacement";
 import { readLastView, rememberLastView, resolveViewToOpen } from "./lastView";
 import { asTestScript, createActionLog } from "../../../../actionLog";
 import { copyToClipboard } from "../../../../clipboard";
+import { renderMarkdownInline } from "../../../../components/markdownRenderer";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
 import { subscribeToMutations } from "../../../../mutationObserver";
 
@@ -4006,7 +4007,8 @@ $effect(() => {
                 title={firstError.message}
               >
                 <span class="font-bold">[{firstError.code}]</span>
-                {firstError.message}
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+                {@html renderMarkdownInline(firstError.message)}
               </div>
             {/if}
             <a

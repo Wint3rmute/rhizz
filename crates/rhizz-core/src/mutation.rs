@@ -470,7 +470,7 @@ fn resolve_scope(raw: &RawFile, path: &str) -> Result<Scope, MutationError> {
 }
 
 fn unknown_container(path: &str) -> MutationError {
-    MutationError::InvalidInput(format!("unknown container '{path}'"))
+    MutationError::InvalidInput(format!("unknown container `{path}`"))
 }
 
 /// Explicit "no value" sentinels the web inspector sends for its reset
@@ -848,7 +848,7 @@ fn create_component(
         params.source_label
     };
     let scope = resolve_scope(raw, &parent)
-        .map_err(|_| MutationError::InvalidInput(format!("unknown container '{parent}'")))?;
+        .map_err(|_| MutationError::InvalidInput(format!("unknown container `{parent}`")))?;
     actions.extend(add_instance(raw, scope, params.label, source)?);
     let label = params.label;
     Ok(ApplyOutcome {
