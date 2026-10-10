@@ -38,6 +38,12 @@ coverage:
     {{run}} sh -c 'RUSTC_BOOTSTRAP=1 cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info'
     {{run}} sh -c 'cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml'
 
+# Runs the Criterion benchmarks for the core library (compile + score each
+# embedded example). HTML reports are written to target/criterion/.
+# Proof of concept: intentionally not part of CI, so these never gate a build.
+bench:
+    {{run}} cargo bench -p rhizz-core
+
 wasm:
     {{run}} wasm-pack build crates/rhizz-wasm --target web --release
 
