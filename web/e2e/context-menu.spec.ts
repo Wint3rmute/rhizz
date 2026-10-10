@@ -97,9 +97,7 @@ test("the detail-view row creates a view once, then jumps to it", async ({ page 
   await expect(page.getByTestId("diagram-system-label")).toContainText(
     "system: main",
   );
-  const tree = page.locator("aside").filter({
-    has: page.getByRole("heading", { name: "Diagrams" }),
-  });
+  const tree = page.getByTestId("modeling-pane-left");
   await expect(
     tree.getByRole("button", { name: "e2e-detail.hcl", exact: true }),
   ).toHaveAttribute("aria-current", "true");
@@ -240,9 +238,10 @@ test("the new-view row copies the selection into a new view and moves there", as
     "system: main",
   );
   await expect(
-    page.locator("aside").filter({
-      has: page.getByRole("heading", { name: "Diagrams" }),
-    }).getByRole("button", { name: "from-selection.hcl", exact: true }),
+    page.getByTestId("modeling-pane-left").getByRole("button", {
+      name: "from-selection.hcl",
+      exact: true,
+    }),
   ).toHaveAttribute("aria-current", "true");
 
   // The selection came across, at the positions it had here…

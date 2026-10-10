@@ -8,6 +8,7 @@ import {
   projectStore,
 } from "../../../../ProjectState.svelte";
 import DiagramPage from "./ModelingPage.svelte";
+import { modelingPanes } from "./panes";
 
 // Deterministic project ids so story args can be built synchronously at
 // module scope while the async seeding runs lazily from loaders (top-level
@@ -66,6 +67,9 @@ system "demo" {
 
 async function ensureBrokenProject(): Promise<Project> {
   await init();
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // every story opens the default workspace.
+  modelingPanes.forget();
   // Recreate from scratch every run: the diagrams page seeds a diagram
   // file (and possibly the model) on load, so an existing project can't
   // be trusted to still match the fixture below.
@@ -85,6 +89,7 @@ async function ensureBrokenProject(): Promise<Project> {
 async function ensureLongErrorProject(): Promise<Project> {
   await init();
   // Same hermetic-fixture reasoning as ensureBrokenProject above.
+  modelingPanes.forget();
   const existing = await projectStore.listProjects();
   const stale = existing.find((candidate) =>
     candidate.id === LONG_ERROR_PROJECT_ID

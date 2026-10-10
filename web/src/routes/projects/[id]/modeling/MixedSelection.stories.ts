@@ -19,6 +19,7 @@ import {
   rectOf,
 } from "./diagramStoryCanvas";
 import DiagramPage from "./ModelingPage.svelte";
+import { modelingPanes } from "./panes";
 
 // A component and a note can be selected together — shift-click extends the
 // selection across both kinds — and the operations that act on "the
@@ -55,6 +56,9 @@ system "demo" {
 // an existing project can't be trusted to still match the fixture.
 async function ensureProject(): Promise<Project> {
   await init();
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // every story opens the default workspace.
+  modelingPanes.forget();
   const existing = await projectStore.listProjects();
   const stale = existing.find((candidate) => candidate.id === PROJECT_ID);
   if (stale !== undefined) {

@@ -15,6 +15,7 @@ import {
   placedNode,
 } from "./diagramStoryCanvas";
 import DiagramPage from "./ModelingPage.svelte";
+import { modelingPanes } from "./panes";
 
 // The arrow keys move the selection one step (the active snap grid) per
 // press, rigidly across a multi-selection. A screenshot cannot show *where*
@@ -62,6 +63,9 @@ system "demo" {
 // an existing project can't be trusted to still match the fixture.
 async function ensureProject(): Promise<Project> {
   await init();
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // every story opens the default workspace.
+  modelingPanes.forget();
   const existing = await projectStore.listProjects();
   const stale = existing.find((candidate) => candidate.id === PROJECT_ID);
   if (stale !== undefined) {
