@@ -7,6 +7,7 @@ import {
   projectStore,
 } from "../../../../ProjectState.svelte";
 import DiagramPage from "./ModelingPage.svelte";
+import { modelingPanes } from "./panes";
 
 // Deterministic project id so story args can be built synchronously at
 // module scope while the async (re)seeding runs lazily from loaders —
@@ -101,6 +102,9 @@ const GRID_VIEWS_HCL = `view "main" {
 `;
 
 async function ensureGridProject(): Promise<Project> {
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // every story opens the default workspace.
+  modelingPanes.forget();
   // Recreate from scratch every run: the diagram page mutates its own
   // diagram file (and stale localStorage from earlier test runs can linger
   // in the shared chromium profile), so an existing project can't be

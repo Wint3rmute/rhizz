@@ -17,6 +17,8 @@ import {
 } from "../routes/projects/[id]/modeling/persistence";
 import { tourSteps } from "./Tour";
 import TourWalk, { type TourWalkPage } from "./TourWalk.svelte";
+import { modelingPanes } from "../routes/projects/[id]/modeling/panes";
+import { inventoryPanes } from "../routes/projects/[id]/inventory/panes";
 
 // One story per guided-tour stop, each mounting the real workspace page
 // the stop spotlights (Navbar, Overview, Modeling, Inventory, Explore,
@@ -102,6 +104,10 @@ const WALK_LAYOUT: DiagramLayout = {
 
 async function ensureWalkProject(): Promise<Project> {
   await init();
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // the modeling/inventory stops open the default workspace.
+  modelingPanes.forget();
+  inventoryPanes.forget();
   const existing = await projectStore.listProjects();
   const project = existing.find((p) => p.id === WALK_PROJECT_ID) ??
     await createProjectWithMainFile(WALK_PROJECT_NAME, WALK_HCL);

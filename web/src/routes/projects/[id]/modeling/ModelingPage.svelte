@@ -34,6 +34,9 @@ import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
 import NewViewModal from "./NewViewModal.svelte";
 import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
+import Pane from "../../../../components/modular_ui/Pane.svelte";
+import Splitter from "../../../../components/modular_ui/Splitter.svelte";
+import { modelingPanes } from "./panes";
 import {
   type ComponentData,
   componentDataByKey,
@@ -187,6 +190,17 @@ let {
 } = $props();
 
 let fs = $derived(openProjectFs(projectStore, projectId));
+
+// ── Modular side panels ─────────────────────────────────────────────────────
+// Inspector (+ diagram picker) on the left, component tree on the right:
+// widths + hidden flags in one serializable store, persisted across
+// reloads. Hiding keeps panels mounted (`display: none`), so canvas size
+// only changes on explicit user action — never on selection change.
+let paneLayout = $state(modelingPanes.read());
+
+$effect(() => {
+  modelingPanes.write(paneLayout);
+});
 
 let sources = $state<Source[]>([]);
 $effect(() => {
@@ -3694,25 +3708,25 @@ $effect(() => {
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
-    Left sidebar: inspector (top) + diagram picker (bottom), sharing one
-    w-64 column instead of two, to leave more horizontal room for the
-    canvas. Always rendered (even with nothing selected) so it keeps a
-    fixed w-64 slot in this flex row — toggling it in/out of the DOM
-    would resize the canvas column next to it (since it's flex-1), which
-    changes canvas_width/canvas_height and jumps the whole viewBox on
-    every selection change.
+    Left panel: inspector (top) + diagram picker (bottom) in one column to
+    leave more horizontal room for the canvas. A `Pane`, so it hides behind
+    a rail and drag-resizes — while staying mounted (`display: none`), so
+    the canvas column only resizes on explicit user action, never on
+    selection change (which would jump the whole viewBox).
   -->
-  <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300 flex flex-col"
-    data-tour={TOUR_TARGETS.diagramSidebar}
+  <Pane
+    scope="modeling"
+    title="Inspector"
+    side="left"
+    width={paneLayout.leftWidth}
+    hidden={paneLayout.leftHidden}
+    responsive={false}
+    tourTarget={TOUR_TARGETS.diagramSidebar}
+    onhide={() => (paneLayout = modelingPanes.hide(paneLayout, "left"))}
+    onshow={() => (paneLayout = modelingPanes.show(paneLayout, "left"))}
   >
-    <h3
-      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-    >
-      Inspector
-    </h3>
-
-    {#if selected.size > 1}
+    <div class="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col">
+      {#if selected.size > 1}
       <p class="text-sm text-base-content/70">
         {selected.size} components selected.
       </p>
@@ -3810,7 +3824,22 @@ $effect(() => {
       onrename={handleRenameDiagram}
       ondelete={handleDeleteDiagram}
     />
-  </aside>
+    </div>
+  </Pane>
+
+  <Splitter
+    scope="modeling"
+    side="left"
+    panelName="inspector"
+    value={paneLayout.leftWidth}
+    hidden={paneLayout.leftHidden}
+    onresize={(dx) =>
+      (paneLayout = modelingPanes.resize(
+        paneLayout,
+        "left",
+        paneLayout.leftWidth + dx,
+      ))}
+  />
 
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">

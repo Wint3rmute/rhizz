@@ -56,9 +56,7 @@ async function middleClickNode(page: Page, canvas: Locator, label: string) {
 
 /** The sidebar row of the view the canvas is showing. */
 function viewRow(page: Page, path: string): Locator {
-  const tree = page.locator("aside").filter({
-    has: page.getByRole("heading", { name: "Diagrams" }),
-  });
+  const tree = page.getByTestId("modeling-pane-left");
   return tree.getByRole("button", { name: path, exact: true });
 }
 

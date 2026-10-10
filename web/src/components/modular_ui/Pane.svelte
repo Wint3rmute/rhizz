@@ -17,6 +17,8 @@ let {
   side,
   width,
   hidden = false,
+  responsive = true,
+  tourTarget = undefined,
   onhide,
   onshow,
   children,
@@ -34,6 +36,18 @@ let {
   width: number;
   /** When true the panel is hidden and the restore rail shows instead. */
   hidden?: boolean;
+  /**
+   * When false the panel keeps its pixel width below `md:` too, instead of
+   * stacking full-width. For pages whose row never stacks (Modeling keeps
+   * its fixed sidebars on small screens) so mobile renders exactly as
+   * before.
+   */
+  responsive?: boolean;
+  /**
+   * Tour anchor (`data-tour`) for the panel, when a guided-tour stop
+   * spotlights it.
+   */
+  tourTarget?: string | undefined;
   /** Hides the panel (width is preserved for the restore). */
   onhide: () => void;
   /** Restores the panel at its preserved width. */
@@ -76,9 +90,12 @@ const showLabel = $derived(`Show ${title}`);
   id={panelId}
   aria-label={title}
   data-testid="{scope}-pane-{side}"
+  data-tour={tourTarget}
   style:display={hidden ? "none" : ""}
   style:--pane-width="{width}px"
-  class="shrink-0 w-full md:w-[var(--pane-width)] bg-base-100 text-base-content flex flex-col min-h-0 overflow-hidden {side ===
+  class="shrink-0 {responsive
+    ? 'w-full md:w-[var(--pane-width)]'
+    : 'w-[var(--pane-width)]'} bg-base-100 text-base-content flex flex-col min-h-0 overflow-hidden {side ===
   'left'
     ? 'border-r border-base-300'
     : 'border-l border-base-300'}"

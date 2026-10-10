@@ -6,9 +6,7 @@ import { createNewProject } from "./helpers";
 // the last settled view instead of always falling back to the first one.
 
 function diagramsTree(page: Page) {
-  return page.locator("aside").filter({
-    has: page.getByRole("heading", { name: "Diagrams" }),
-  });
+  return page.getByTestId("modeling-pane-left");
 }
 
 function card(page: Page, label: string) {
