@@ -156,6 +156,29 @@ test("inventory restore rails expand on any click and show a pointer", async ({ 
   await expect(page.getByTestId("inventory-pane-left")).toBeVisible();
 });
 
+test("inventory panels stop at a share of the viewport width", async ({ page }) => {
+  await openInventory(page, "E2E inventory viewport cap");
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("page has no viewport size");
+  const expected = viewport.width * 0.4;
+
+  // Drag far past the edge: the 40%-of-viewport cap binds before the
+  // absolute px ceiling does.
+  const splitter = page.getByTestId("inventory-splitter-left");
+  const box = await splitter.boundingBox();
+  if (!box) throw new Error("the splitter should be laid out");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(viewport.width - 10, box.y + box.height / 2, {
+    steps: 10,
+  });
+  await page.mouse.up();
+
+  const width = await paneWidth(page, "inventory-pane-left");
+  expect(width).toBeGreaterThanOrEqual(expected - 1);
+  expect(width).toBeLessThanOrEqual(expected + 1);
+});
+
 test("inventory remembers hidden panels across reloads", async ({ page }) => {
   await openInventory(page, "E2E inventory persist");
 

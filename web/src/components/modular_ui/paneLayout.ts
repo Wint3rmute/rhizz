@@ -22,7 +22,8 @@ export const DEFAULT_PANE_RIGHT_WIDTH = 384;
 
 /** Clamp bounds in pixels, shared by every side-panel workspace. */
 export const DEFAULT_PANE_MIN_WIDTH = 200;
-export const DEFAULT_PANE_MAX_WIDTH = 600;
+/** Absolute clamp ceiling; the viewport share usually binds first. */
+export const DEFAULT_PANE_MAX_WIDTH = 800;
 
 export interface PaneLayoutOptions {
   /** localStorage key holding the JSON-encoded layout. */

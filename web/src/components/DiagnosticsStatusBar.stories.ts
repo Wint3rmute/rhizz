@@ -298,7 +298,7 @@ export const ResizablePanel: Story = {
     await expect(slider).toBeVisible();
     await expect(slider.getAttribute("aria-valuenow")).toBe("256");
     await expect(slider.getAttribute("aria-valuemin")).toBe("96");
-    await expect(slider.getAttribute("aria-valuemax")).toBe("480");
+    await expect(slider.getAttribute("aria-valuemax")).toBe("1000");
     await expect(slider.getAttribute("aria-orientation")).toBe("vertical");
   },
 };
