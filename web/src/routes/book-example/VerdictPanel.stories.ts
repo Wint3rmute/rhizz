@@ -44,11 +44,11 @@ export const Warnings: Story = {
     warnings: [
       {
         code: "W003",
-        message: "component 'front-wheel' is not referenced by any connection",
+        message: "component `front-wheel` is not referenced by any connection",
       },
       {
         code: "W003",
-        message: "component 'rear-wheel' is not referenced by any connection",
+        message: "component `rear-wheel` is not referenced by any connection",
       },
     ],
     stats,
@@ -67,7 +67,7 @@ export const Errors: Story = {
     errors: [
       {
         code: "E011",
-        message: "connection 'greet' references undefined component 'sender'",
+        message: "connection `greet` references undefined component `sender`",
       },
     ],
     stats: null,

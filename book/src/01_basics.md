@@ -141,7 +141,7 @@ system "bicycle" {
 
 ## Connections
 
-The warnings *"component 'NAME' is not referenced by any connection"* appear
+The warnings *"component `NAME` is not referenced by any connection"* appear
 multiple times, let's fix some of them by building a bike with:
 
 - A bicycle frame

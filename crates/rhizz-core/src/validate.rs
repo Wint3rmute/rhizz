@@ -31,7 +31,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W001,
                 format!(
-                    "component '{}' is non-leaf but has no child components",
+                    "component `{}` is non-leaf but has no child components",
                     comp.label
                 ),
             ));
@@ -43,7 +43,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if msg.fields.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W002,
-                format!("message '{}' has no fields", msg.label),
+                format!("message `{}` has no fields", msg.label),
             ));
         }
     }
@@ -64,11 +64,11 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             let source_suffix = comp
                 .source
                 .as_deref()
-                .map_or_else(String::new, |source| format!(" (source '{source}')"));
+                .map_or_else(String::new, |source| format!(" (source `{source}`)"));
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W003,
                 format!(
-                    "component '{}'{} is not referenced by any connection",
+                    "component `{}`{} is not referenced by any connection",
                     comp.label, source_suffix
                 ),
             ));
@@ -80,7 +80,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if sys.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("system '{}' is missing a full_name", sys.label),
+                format!("system `{}` is missing a full_name", sys.label),
             ));
         }
     }
@@ -91,7 +91,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if comp.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("component '{}' is missing a full_name", comp.label),
+                format!("component `{}` is missing a full_name", comp.label),
             ));
         }
     }
@@ -99,7 +99,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if conn.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("connection '{}' is missing a full_name", conn.label),
+                format!("connection `{}` is missing a full_name", conn.label),
             ));
         }
     }
@@ -107,7 +107,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if msg.full_name.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W004,
-                format!("message '{}' is missing a full_name", msg.label),
+                format!("message `{}` is missing a full_name", msg.label),
             ));
         }
     }
@@ -118,7 +118,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W005,
                 format!(
-                    "connection '{}' has 'from' and 'to' pointing to the same component",
+                    "connection `{}` has 'from' and 'to' pointing to the same component",
                     conn.label
                 ),
             ));
@@ -138,7 +138,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W006,
                 format!(
-                    "component '{}' has level {} which is less than parent level {}",
+                    "component `{}` has level {} which is less than parent level {}",
                     comp.label, comp.level, parent_level
                 ),
             ));
@@ -164,7 +164,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W006,
                 format!(
-                    "connection '{}' has level {} which is less than parent level {}",
+                    "connection `{}` has level {} which is less than parent level {}",
                     conn.label, conn.level, parent_level
                 ),
             ));
@@ -179,7 +179,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W007,
                 format!(
-                    "connection '{}': one side is typed (comp/port) but the other is bare",
+                    "connection `{}`: one side is typed (comp/port) but the other is bare",
                     conn.label
                 ),
             ));
@@ -201,7 +201,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
                 warnings.push(Diagnostic::warning(
                     DiagnosticCode::W008,
                     format!(
-                        "connection '{}': protocol mismatch ('{}' vs '{}')",
+                        "connection `{}`: protocol mismatch (`{}` vs `{}`)",
                         conn.label, from_proto, to_proto
                     ),
                 ));
@@ -234,7 +234,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             if !port.external || port.required {
                 warnings.push(Diagnostic::warning(
                     DiagnosticCode::W010,
-                    format!("port '{}' is not referenced by any connection", port.label),
+                    format!("port `{}` is not referenced by any connection", port.label),
                 ));
             }
         }
@@ -245,7 +245,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if proto.messages.is_empty() {
             warnings.push(Diagnostic::warning(
                 DiagnosticCode::W011,
-                format!("protocol '{}' has no messages defined", proto.label),
+                format!("protocol `{}` has no messages defined", proto.label),
             ));
         }
     }
@@ -292,7 +292,7 @@ pub fn validate_docs(
         warnings.push(Diagnostic::warning(
             DiagnosticCode::W018,
             format!(
-                "component '{}' is missing documentation (docs/{}.md)",
+                "component `{}` is missing documentation (`docs/{}.md`)",
                 comp.label, comp.label
             ),
         ));
@@ -357,7 +357,7 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
             DiagnosticCode::E016,
             &file,
             format!(
-                "{filename}: view label '{}' does not match filename stem '{stem}'",
+                "{filename}: view label `{}` does not match filename stem `{stem}`",
                 view.label
             ),
         ));
@@ -368,7 +368,7 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
             DiagnosticCode::E006,
             &file,
             format!(
-                "{filename}: view '{}' does not specify a system",
+                "{filename}: view `{}` does not specify a system",
                 view.label
             ),
         ));
@@ -382,7 +382,7 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
             DiagnosticCode::E006,
             &file,
             format!(
-                "{filename}: view '{}' references undefined system '{}'",
+                "{filename}: view `{}` references undefined system `{}`",
                 view.label, view.system
             ),
         ));
@@ -420,7 +420,7 @@ fn validate_view_nodes(
                 DiagnosticCode::W016,
                 file,
                 format!(
-                    "{filename}: view '{}' node '{}' does not reference a known component",
+                    "{filename}: view `{}` node `{}` does not reference a known component",
                     view.label, node.component
                 ),
             ));
@@ -441,7 +441,7 @@ fn validate_view_nodes(
             DiagnosticCode::W017,
             file,
             format!(
-                "{filename}: view '{}' node '{}' belongs to system '{}', not the view's system '{}'",
+                "{filename}: view `{}` node `{}` belongs to system `{}`, not the view's system `{}`",
                 view.label, node.component, owner, view.system
             ),
         ));
@@ -992,7 +992,7 @@ mod tests {
         assert!(
             w003[0]
                 .message
-                .contains("component 'sensor' (source 'sensor') is not referenced"),
+                .contains("component `sensor` (source `sensor`) is not referenced"),
             "W003 should name the local label with source context: {}",
             w003[0].message
         );

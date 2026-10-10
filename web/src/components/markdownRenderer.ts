@@ -48,3 +48,12 @@ marked.use({
 export function renderMarkdown(md: string): string {
   return marked.parse(md, { async: false });
 }
+
+/**
+ * Renders a single line of Markdown without the block wrapper (`<p>`), for
+ * inline slots such as a truncated status-bar row. Same marked instance and
+ * the same XSS-neutralising overrides as {@link renderMarkdown}.
+ */
+export function renderMarkdownInline(md: string): string {
+  return marked.parseInline(md, { async: false });
+}

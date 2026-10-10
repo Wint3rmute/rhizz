@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderMarkdown } from "./markdownRenderer";
+import { renderMarkdown, renderMarkdownInline } from "./markdownRenderer";
 
 describe("renderMarkdown", () => {
   it("renders headings", () => {
@@ -65,5 +65,37 @@ describe("renderMarkdown", () => {
     const html = renderMarkdown("Hello <img src=x onerror=alert(1)> world");
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img");
+  });
+});
+
+describe("diagnostic messages", () => {
+  it("renders backticked entity names as monospace code", () => {
+    const html = renderMarkdown(
+      "connection `uart-link` references undefined component `gps`",
+    );
+    expect(html).toContain("<code>uart-link</code>");
+    expect(html).toContain("<code>gps</code>");
+    expect(html).not.toContain("`");
+  });
+
+  it("keeps single-quoted keywords as plain text", () => {
+    const html = renderMarkdown(
+      "connection `c` has 'from' and 'to' pointing to the same component",
+    );
+    expect(html).toContain("&#39;from&#39; and &#39;to&#39;");
+    expect(html).not.toContain("<code>from</code>");
+  });
+
+  it("escapes HTML-looking entity names inside code spans", () => {
+    const html = renderMarkdown(
+      "component `<img src=x onerror=alert(1)>` is missing a full_name",
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+
+  it("renders inline markdown without a block wrapper", () => {
+    const html = renderMarkdownInline("port `tx` is not referenced");
+    expect(html).toBe("port <code>tx</code> is not referenced");
   });
 });

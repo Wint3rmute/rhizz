@@ -185,34 +185,6 @@ view. Please make it possible to navigate back and forth through linked views.
 
 ---
 
-## Task <N> — Markdown-flavored diagnostics with monospace entity names
-
-Diagnostic messages are plain strings built with `format!` in `rhizz-core`
-(e.g. `connection 'uart-link' references undefined component 'gps'` from
-`resolve.rs`), copied verbatim through `DiagnosticJS` into the frontend,
-where every surface renders them as inert escaped text. Emit them as
-Markdown with component/instance/connection/message names in backticks, and
-render them as Markdown in the web UI so names show in monospace.
-
-- **Emit-site sweep**: wrap entity names in backticks at all `format!` sites
-  (`resolve.rs` push_error/push_warning, `validate.rs`, `parse.rs`,
-  `mutation.rs`/`lib.rs`). Per-site judgment on which quoted spans are
-  entity names vs. literal keywords (`'from'`/`'to'`). No transport change —
-  Markdown is still just a string over the WASM boundary.
-- **Renderer swap**: use the existing XSS-safe `renderMarkdown`
-  (`markdownRenderer.ts`) via `{@html}` at the four HTML render sites:
-  `DiagnosticsStatusBar`, `CompilationDiagnosticsOutline`, book `VerdictPanel`,
-  Modeling `firstError` overlay.
-- **Decisions (accepted)**: backticks stay literal in CLI terminal output,
-  `--json` machine output, and native `title=` tooltips (status bar panel,
-  Modeling overlay) — single source of truth, stripped nowhere.
-- **Fixtures**: update exact-text assertions (`rhizz-book` `normalize.rs`
-  tests, `book/book.lock` via the accept flow).
-- **Validation**: red/green TDD, `just test`, `just lint`, `just build`,
-  `just format`, VRT re-baselines for the diagnostics surfaces.
-
----
-
 ## Task <NUMBER> — Task template
 
 - Task description here

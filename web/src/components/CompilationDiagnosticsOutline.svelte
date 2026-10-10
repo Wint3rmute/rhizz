@@ -1,5 +1,6 @@
 <script lang="ts">
 import { DiagnosticJS } from "rhizz";
+import { renderMarkdownInline } from "./markdownRenderer";
 let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
 </script>
 
@@ -17,14 +18,16 @@ let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
       <div role="alert" class="alert alert-error alert-soft">
           <p>
           <a class="link" target="_blank" href="https://github.com/Wint3rmute/rhizz/blob/main/SPEC/diagnostics/{diagnostic.code}.md">{diagnostic.code}</a>
-            - {diagnostic.message}
+            - <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+            {@html renderMarkdownInline(diagnostic.message)}
           </p>
       </div>
     {:else}
       <div role="alert" class="alert alert-warning alert-soft">
           <p>
           <a class="link" target="_blank" href="https://github.com/Wint3rmute/rhizz/blob/main/SPEC/diagnostics/{diagnostic.code}.md">{diagnostic.code}</a>
-            - {diagnostic.message}
+            - <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+            {@html renderMarkdownInline(diagnostic.message)}
           </p>
       </div>
     {/if}
