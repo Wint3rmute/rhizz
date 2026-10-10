@@ -116,3 +116,44 @@ test("modeling remembers a hidden inspector across reloads", async ({ page }) =>
     page.getByRole("button", { name: "Show Inspector" }),
   ).toBeVisible();
 });
+
+test("modeling hides and restores the components panel", async ({ page }) => {
+  await openModeling(page, "E2E modeling components hide");
+
+  const panel = page.getByTestId("modeling-pane-right");
+  await expect(panel).toBeVisible();
+
+  await page.getByRole("button", { name: "Hide Components" }).click();
+  await expect(panel).toBeHidden();
+  const rail = page.getByTestId("modeling-pane-rail-right");
+  await expect(rail).toBeVisible();
+  await expect(rail).toHaveCSS("cursor", "pointer");
+  await expect(page.getByTestId("modeling-splitter-right")).toBeHidden();
+
+  await rail.click({ position: { x: 2, y: 2 } });
+  await expect(panel).toBeVisible();
+  // The tree is back, still bound to the open view's system.
+  await expect(page.getByTestId("diagram-system-label")).toContainText(
+    "system: main",
+  );
+});
+
+test("modeling resizes the components panel by dragging its splitter", async ({ page }) => {
+  await openModeling(page, "E2E modeling components resize");
+
+  const before = await paneWidth(page, "modeling-pane-right");
+  const splitter = page.getByTestId("modeling-splitter-right");
+  const box = await splitter.boundingBox();
+  if (!box) throw new Error("the splitter should be laid out");
+
+  // Dragging left widens the right panel (mirrored sign of the left one).
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 100, box.y + box.height / 2, {
+    steps: 5,
+  });
+  await page.mouse.up();
+
+  const grown = await paneWidth(page, "modeling-pane-right");
+  expect(grown).toBeGreaterThan(before + 80);
+});

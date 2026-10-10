@@ -18,11 +18,9 @@ test("view stays bound to its system when the model holds several", async ({ pag
   const header = page.getByTestId("diagram-system-label");
   await expect(header).toContainText("system: quadcopter");
 
-  // The explorer shows the bound system's own instances, and the other
+  // The tree panel shows the bound system's own instances, and the other
   // system's root never shows up (the bound system's root row is hidden).
-  const sidebar = page.locator("aside").filter({
-    has: page.getByRole("heading", { name: "Components" }),
-  });
+  const sidebar = page.getByTestId("modeling-pane-right");
   await expect(sidebar.getByText("flight-controller").first()).toBeVisible();
   await expect(sidebar.getByText("ground-control")).toHaveCount(0);
 
