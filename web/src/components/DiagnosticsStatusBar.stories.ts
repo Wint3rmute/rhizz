@@ -3,6 +3,7 @@ import type { DiagnosticJS } from "rhizz";
 import { setCurrentScore } from "../ProjectState.svelte";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import DiagnosticsStatusBar from "./DiagnosticsStatusBar.svelte";
+import { forgetDiagnosticsLayout } from "./modular_ui/diagnosticsLayout";
 
 type StoryDiagnostic = Pick<DiagnosticJS, "code" | "message">;
 
@@ -27,6 +28,15 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/**
+ * Reset persisted bar state so no story inherits another story's open or
+ * resized panel (the bar persists both across reloads, and stories share
+ * one browser profile).
+ */
+function resetDiagnosticsBar(): void {
+  forgetDiagnosticsLayout();
+}
+
 /** One of the bar's rendered surfaces (the panel, when expanded). */
 function surface(root: Element, index: number): HTMLElement {
   const el = root.children.item(index);
@@ -36,6 +46,7 @@ function surface(root: Element, index: number): HTMLElement {
 
 export const Collapsed: Story = {
   args: {},
+  loaders: [resetDiagnosticsBar],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bar = within(canvas.getByTestId("diagnostics-status-bar"));
@@ -69,6 +80,7 @@ const duplicateDiagnostics = [
 ] satisfies StoryDiagnostic[];
 
 export const DuplicateDiagnostics: Story = {
+  loaders: [resetDiagnosticsBar],
   args: {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- svelte-check needs DiagnosticJS (wasm class); ESLint's program can't see it.
     diagnostics: duplicateDiagnostics as DiagnosticJS[],
@@ -86,6 +98,7 @@ export const DuplicateDiagnostics: Story = {
 };
 
 export const Clean: Story = {
+  loaders: [resetDiagnosticsBar],
   args: {
     diagnostics: [] satisfies DiagnosticJS[],
   },
@@ -110,7 +123,7 @@ function seedScore(): void {
 }
 
 export const FullStrip: Story = {
-  loaders: [seedScore],
+  loaders: [resetDiagnosticsBar, seedScore],
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
@@ -164,6 +177,7 @@ export const FullStrip: Story = {
 // this is the tightest row the bar really renders: counts on the left,
 // strictness on the right, and the chevron between them.
 export const NarrowStrip: Story = {
+  loaders: [resetDiagnosticsBar],
   globals: {
     viewport: { value: "mobile1" },
   },
@@ -193,6 +207,7 @@ export const NarrowStrip: Story = {
 // so each showed 5% of whatever sat behind it, and the panel (over the page's
 // canvas) read a shade greyer than the strip (over the app's own background).
 export const Expanded: Story = {
+  loaders: [resetDiagnosticsBar],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const root = canvas.getByTestId("diagnostics-status-bar");
@@ -240,5 +255,67 @@ export const Expanded: Story = {
     // that a surface is meant to be glass.
     await expect(getComputedStyle(panel).backdropFilter).toBe("none");
     await expect(getComputedStyle(root).backdropFilter).toBe("none");
+  },
+};
+
+// The expanded panel opens at its persisted height with a resize handle on
+// its top edge. Opens through a click (like the other expanding stories),
+// because seeding open state through the store loader races the static
+// build's first mount; the persisted-open path itself is pinned by e2e
+// (expand → reload → still open). Dragging and the keyboard are e2e's job
+// too (pointer capture + reload persistence need a real page).
+export const ResizablePanel: Story = {
+  loaders: [resetDiagnosticsBar],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = canvas.getByTestId("diagnostics-status-bar");
+    const bar = within(root);
+    await expect(await bar.findByText("1 error")).toBeInTheDocument();
+
+    // Same bottom-anchoring as Expanded: the panel pops *above* the bar,
+    // so without a page above it the story renders off-screen and VRT
+    // captures a clipped sliver.
+    canvasElement.style.display = "flex";
+    canvasElement.style.flexDirection = "column";
+    canvasElement.style.justifyContent = "flex-end";
+    canvasElement.style.height = "100vh";
+    canvasElement.style.background = "var(--color-base-100)";
+    const page = document.createElement("div");
+    page.style.flex = "1";
+    page.style.background = "var(--color-base-300)";
+    canvasElement.prepend(page);
+
+    await userEvent.click(await bar.findByRole("button"));
+    const panel = canvas.getByTestId("diagnostics-panel");
+    await expect(panel).toBeVisible();
+    // Fixed persisted height (border-box, so the 1px top border is inside
+    // the 256, give or take sub-pixel rounding).
+    await expect(panel.getBoundingClientRect().height).toBeCloseTo(256, 0);
+
+    const slider = bar.getByRole("slider", {
+      name: "Resize diagnostics panel",
+    });
+    await expect(slider).toBeVisible();
+    await expect(slider.getAttribute("aria-valuenow")).toBe("256");
+    await expect(slider.getAttribute("aria-valuemin")).toBe("96");
+    await expect(slider.getAttribute("aria-valuemax")).toBe("1000");
+    await expect(slider.getAttribute("aria-orientation")).toBe("vertical");
+
+    // The panel carries the shared pane header: title plus its own hide
+    // control, which collapses through the same persisted flag as the
+    // strip toggle. Ends open (re-expanded) so the baseline shows it.
+    await expect(
+      bar.getByRole("heading", { name: "Diagnostics" }),
+    ).toBeVisible();
+    await userEvent.click(
+      bar.getByRole("button", { name: "Hide Diagnostics" }),
+    );
+    await expect(panel).not.toBeVisible();
+    await userEvent.click(
+      bar.getByRole("button", { name: "Expand diagnostics" }),
+    );
+    // Re-query: the panel is inside an `{#if expanded}`, so hiding destroyed
+    // the node — the reference captured above is detached, not hidden.
+    await expect(canvas.getByTestId("diagnostics-panel")).toBeVisible();
   },
 };

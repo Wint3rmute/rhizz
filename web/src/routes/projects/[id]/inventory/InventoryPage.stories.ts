@@ -14,7 +14,7 @@ import {
   writeDiagramLayoutFile,
 } from "../modeling/persistence";
 import Inventory from "./Inventory.svelte";
-import { forgetInventoryLayout } from "./inventoryLayout";
+import { inventoryPanes } from "./panes";
 
 // Deterministic project ids so story args can be built synchronously at
 // module scope while the async seeding runs lazily from loaders (top-level
@@ -144,7 +144,7 @@ async function ensureInventoryProject(): Promise<Project> {
   // A previous panes story may have persisted hidden/resized panels — reset
   // so every story opens the default workspace (same reason the shared
   // project loader forgets the last modeling view).
-  forgetInventoryLayout();
+  inventoryPanes.forget();
   const existing = await projectStore.listProjects();
   const project = existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
     await createProjectWithFiles(
@@ -182,7 +182,7 @@ async function ensureInventoryProject(): Promise<Project> {
 
 // An empty project: no definitions at all.
 async function ensureEmptyProject(): Promise<Project> {
-  forgetInventoryLayout();
+  inventoryPanes.forget();
   const existing = await projectStore.listProjects();
   return existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
     await createProjectWithFiles(

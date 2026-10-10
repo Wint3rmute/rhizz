@@ -9,6 +9,7 @@ import {
 } from "../../../../ProjectState.svelte";
 import { pinCanvasSize, placedNode } from "./diagramStoryCanvas";
 import DiagramPage from "./ModelingPage.svelte";
+import { modelingPanes } from "./panes";
 
 // The node context menu offers the *detail view* of a component, and which
 // of the two things it can do with that view depends on whether one already
@@ -79,6 +80,9 @@ ${blocks}
 
 async function ensureDetailProject(): Promise<Project> {
   await init();
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // every story opens the default workspace.
+  modelingPanes.forget();
   // Recreate from scratch every run: the editor seeds a view (and possibly the
   // model) on load, so an existing project can't be trusted to still match
   // the fixture below (same reasoning as OpenViewUrl.stories.ts).

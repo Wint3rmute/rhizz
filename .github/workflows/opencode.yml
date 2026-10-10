@@ -25,6 +25,22 @@ jobs:
         with:
           persist-credentials: false
 
+      # Same toolchain the other jobs use: install Nix and warm /nix/store
+      # from cache. Upstream Nix (determinate: false) skips the FlakeHub
+      # login, which this repo never uses.
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      # The Justfile wraps every recipe in `nix develop --command` whenever
+      # Nix is present, so exposing the devshell's PATH is enough: `just`,
+      # `cargo`, `deno`, … resolve, and the shell hook (Playwright browsers,
+      # LLVM tools, VRT fonts) is re-applied per recipe. GITHUB_PATH expects
+      # one path per line, hence the `tr`.
+      - name: Put the flake devshell on PATH
+        run: nix develop --command bash -c 'echo "$PATH" | tr ":" "\n" >> "$GITHUB_PATH"'
+
       - name: Run opencode
         uses: anomalyco/opencode/github@latest
         env:

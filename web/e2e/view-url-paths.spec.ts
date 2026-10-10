@@ -20,9 +20,7 @@ async function createDefinition(page: Page, label: string): Promise<void> {
 }
 
 function diagramsTree(page: Page) {
-  return page.locator("aside").filter({
-    has: page.getByRole("heading", { name: "Diagrams" }),
-  });
+  return page.getByTestId("modeling-pane-left");
 }
 
 function card(page: Page, label: string) {

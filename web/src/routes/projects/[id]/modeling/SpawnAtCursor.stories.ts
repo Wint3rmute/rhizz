@@ -14,6 +14,7 @@ import {
   viewBoxOf,
 } from "./diagramStoryCanvas";
 import DiagramPage from "./ModelingPage.svelte";
+import { modelingPanes } from "./panes";
 
 // Entities spawned without a position of their own — the `C`/`N` keyboard
 // shortcuts — land under the pointer while it is over the canvas, and on the
@@ -52,6 +53,9 @@ system "demo" {
 // an existing project can't be trusted to still match the fixture.
 async function ensureProject(): Promise<Project> {
   await init();
+  // A panes story may have persisted a hidden/resized panel — reset so
+  // every story opens the default workspace.
+  modelingPanes.forget();
   const existing = await projectStore.listProjects();
   const stale = existing.find((candidate) => candidate.id === PROJECT_ID);
   if (stale !== undefined) {
@@ -120,8 +124,10 @@ export const AnnotationFallsBackToCenter: Story = {
   play: async ({ canvasElement }) => {
     const scoped = within(canvasElement);
     const canvas = await pinCanvasSize(canvasElement);
-    const sidebar = canvasElement.querySelector("aside");
-    if (!sidebar) throw new Error("inspector sidebar not rendered");
+    const sidebar = canvasElement.querySelector(
+      '[data-testid="modeling-pane-left"]',
+    );
+    if (!sidebar) throw new Error("inspector pane not rendered");
     // Both moves in one call: leaving the canvas is what drops the spawn
     // anchor, and only a continuous pointer path dispatches the mouseleave.
     // With no canvas pointer left to place under, the note lands where the

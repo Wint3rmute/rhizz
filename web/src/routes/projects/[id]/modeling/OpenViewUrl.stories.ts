@@ -9,6 +9,7 @@ import {
 } from "../../../../ProjectState.svelte";
 import DiagramPage from "./ModelingPage.svelte";
 import { forgetLastView, rememberLastView } from "./lastView";
+import { modelingPanes } from "./panes";
 
 // The open view is named by the route's rest param, which arrives here as the
 // `requestedView` prop — that is the whole contract a shared link exercises.
@@ -77,6 +78,9 @@ async function ensureUrlProject(): Promise<Project> {
   // survives the recreate under the reused id — forget it for hermetic
   // stories (each story sets its own memory explicitly when it needs one).
   forgetLastView(URL_PROJECT_ID);
+  // Same for the pane layout: a panes story's hidden panel is browser
+  // state, not project content.
+  modelingPanes.forget();
   const existing = await projectStore.listProjects();
   const stale = existing.find((candidate) => candidate.id === URL_PROJECT_ID);
   if (stale !== undefined) {

@@ -34,6 +34,13 @@ import NodeInspector from "./NodeInspector.svelte";
 import CreateComponentModal from "./CreateComponentModal.svelte";
 import NewViewModal from "./NewViewModal.svelte";
 import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
+import Pane from "../../../../components/modular_ui/Pane.svelte";
+import Splitter from "../../../../components/modular_ui/Splitter.svelte";
+import {
+  SIDE_PANEL_WIDTH_FRACTION,
+  viewportCap,
+} from "../../../../components/modular_ui/viewport";
+import { modelingPanes } from "./panes";
 import {
   type ComponentData,
   componentDataByKey,
@@ -187,6 +194,17 @@ let {
 } = $props();
 
 let fs = $derived(openProjectFs(projectStore, projectId));
+
+// ── Modular side panels ─────────────────────────────────────────────────────
+// Inspector (+ diagram picker) on the left, component tree on the right:
+// widths + hidden flags in one serializable store, persisted across
+// reloads. Hiding keeps panels mounted (`display: none`), so canvas size
+// only changes on explicit user action — never on selection change.
+let paneLayout = $state(modelingPanes.read());
+
+$effect(() => {
+  modelingPanes.write(paneLayout);
+});
 
 let sources = $state<Source[]>([]);
 $effect(() => {
@@ -3694,25 +3712,25 @@ $effect(() => {
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
-    Left sidebar: inspector (top) + diagram picker (bottom), sharing one
-    w-64 column instead of two, to leave more horizontal room for the
-    canvas. Always rendered (even with nothing selected) so it keeps a
-    fixed w-64 slot in this flex row — toggling it in/out of the DOM
-    would resize the canvas column next to it (since it's flex-1), which
-    changes canvas_width/canvas_height and jumps the whole viewBox on
-    every selection change.
+    Left panel: inspector (top) + diagram picker (bottom) in one column to
+    leave more horizontal room for the canvas. A `Pane`, so it hides behind
+    a rail and drag-resizes — while staying mounted (`display: none`), so
+    the canvas column only resizes on explicit user action, never on
+    selection change (which would jump the whole viewBox).
   -->
-  <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-r border-base-300 flex flex-col"
-    data-tour={TOUR_TARGETS.diagramSidebar}
+  <Pane
+    scope="modeling"
+    title="Inspector"
+    side="left"
+    width={paneLayout.leftWidth}
+    hidden={paneLayout.leftHidden}
+    responsive={false}
+    tourTarget={TOUR_TARGETS.diagramSidebar}
+    onhide={() => (paneLayout = modelingPanes.hide(paneLayout, "left"))}
+    onshow={() => (paneLayout = modelingPanes.show(paneLayout, "left"))}
   >
-    <h3
-      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-    >
-      Inspector
-    </h3>
-
-    {#if selected.size > 1}
+    <div class="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col">
+      {#if selected.size > 1}
       <p class="text-sm text-base-content/70">
         {selected.size} components selected.
       </p>
@@ -3810,7 +3828,25 @@ $effect(() => {
       onrename={handleRenameDiagram}
       ondelete={handleDeleteDiagram}
     />
-  </aside>
+    </div>
+  </Pane>
+
+  <Splitter
+    testid="modeling-splitter-left"
+    panelName="inspector"
+    value={paneLayout.leftWidth}
+    hidden={paneLayout.leftHidden}
+    responsive={false}
+    onresize={(dx) =>
+      (paneLayout = modelingPanes.resize(
+        paneLayout,
+        "left",
+        Math.min(
+          paneLayout.leftWidth + dx,
+          viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+        ),
+      ))}
+  />
 
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
@@ -4008,12 +4044,41 @@ $effect(() => {
     </div>
   </div>
 
-  <!-- Right sidebar: component list and embed action -->
-  <aside
-    class="w-64 shrink-0 bg-base-100 text-base-content p-4 overflow-y-auto border-l border-base-300 flex flex-col justify-between gap-4"
+  <!--
+    Right panel: component tree (+ definitions, connections) and the embed
+    action, pinned at the bottom. A `Pane`, so it hides behind a rail and
+    drag-resizes — while staying mounted (`display: none`).
+  -->
+  <Splitter
+    testid="modeling-splitter-right"
+    panelName="components"
+    value={paneLayout.rightWidth}
+    hidden={paneLayout.rightHidden}
+    responsive={false}
+    onresize={(dx) =>
+      (paneLayout = modelingPanes.resize(
+        paneLayout,
+        "right",
+        Math.min(
+          paneLayout.rightWidth - dx,
+          viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+        ),
+      ))}
+  />
+
+  <Pane
+    scope="modeling"
+    title="Components"
+    side="right"
+    width={paneLayout.rightWidth}
+    hidden={paneLayout.rightHidden}
+    responsive={false}
+    onhide={() => (paneLayout = modelingPanes.hide(paneLayout, "right"))}
+    onshow={() => (paneLayout = modelingPanes.show(paneLayout, "right"))}
   >
-    <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      {#if selectedDiagramPath !== null}
+    <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden p-4">
+      <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
+        {#if selectedDiagramPath !== null}
         <div
           class="font-semibold text-sm mb-1 text-base-content uppercase tracking-wide"
           data-testid="diagram-system-label"
@@ -4026,12 +4091,6 @@ $effect(() => {
           {/if}
         </div>
       {/if}
-
-      <h3
-        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-      >
-        Components
-      </h3>
 
       {#if selectedDiagramPath === null}
         <p class="text-base-content/50 text-sm">
@@ -4059,7 +4118,7 @@ $effect(() => {
         {/if}
       {/if}
 
-        <div class="divider"></div>
+      <div class="divider"></div>
 
       <h3
         class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
@@ -4102,23 +4161,24 @@ $effect(() => {
       </ul>
     </div>
 
-    <!-- Embed Diagram + Copy Debug Info buttons -->
-    <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
-      <button
-        type="button"
-        class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
-        onclick={() => void handleCopyDebug().catch(reportDiagramError)}
-        title="Copy the session's model mutations as a replayable TypeScript test"
-      >
-        <span aria-hidden="true">🚧</span>
-        <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
-      </button>
-      <EmbedDiagramButton
-        projectId={projectId}
-        diagramPath={selectedDiagramPath}
-      />
+      <!-- Embed Diagram + Copy Debug Info buttons -->
+      <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
+          onclick={() => void handleCopyDebug().catch(reportDiagramError)}
+          title="Copy the session's model mutations as a replayable TypeScript test"
+        >
+          <span aria-hidden="true">🚧</span>
+          <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
+        </button>
+        <EmbedDiagramButton
+          projectId={projectId}
+          diagramPath={selectedDiagramPath}
+        />
+      </div>
     </div>
-  </aside>
+  </Pane>
 </div>
 
 <NewViewModal
