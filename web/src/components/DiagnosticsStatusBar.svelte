@@ -4,6 +4,7 @@ import { getCurrentScore } from "../ProjectState.svelte";
 import ScoreBadge from "./ScoreBadge.svelte";
 import WarningLevelSelect from "./WarningLevelSelect.svelte";
 import Splitter from "./modular_ui/Splitter.svelte";
+import { BOTTOM_BAR_HEIGHT_FRACTION, viewportCap } from "./modular_ui/viewport";
 import {
   collapseDiagnosticsPanel,
   DIAGNOSTICS_MAX_HEIGHT,
@@ -117,7 +118,10 @@ function specUrl(code: string): string {
         onresize={(dy) =>
           (barLayout = resizeDiagnosticsPanel(
             barLayout,
-            barLayout.height - dy,
+            Math.min(
+              barLayout.height - dy,
+              viewportCap(BOTTOM_BAR_HEIGHT_FRACTION, "height"),
+            ),
           ))}
       />
       <ul class="max-w-7xl mx-auto text-sm pt-2">

@@ -35,6 +35,10 @@ import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
 import Pane from "../../../../components/modular_ui/Pane.svelte";
 import Splitter from "../../../../components/modular_ui/Splitter.svelte";
+import {
+  SIDE_PANEL_WIDTH_FRACTION,
+  viewportCap,
+} from "../../../../components/modular_ui/viewport";
 import { inventoryPanes } from "./panes";
 import {
   defaultViewPath,
@@ -775,7 +779,10 @@ async function handleCreateView(): Promise<void> {
         (layout = inventoryPanes.resize(
           layout,
           "left",
-          layout.leftWidth + dx,
+          Math.min(
+            layout.leftWidth + dx,
+            viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+          ),
         ))}
     />
 
@@ -844,7 +851,10 @@ async function handleCreateView(): Promise<void> {
         (layout = inventoryPanes.resize(
           layout,
           "right",
-          layout.rightWidth - dx,
+          Math.min(
+            layout.rightWidth - dx,
+            viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+          ),
         ))}
     />
 

@@ -110,6 +110,36 @@ test("diagnostics splitter answers the keyboard", async ({ page }) => {
   expect(after).toBeGreaterThan(before);
 });
 
+test("diagnostics panel stops at a share of the viewport height", async ({ page }) => {
+  const id = await openProject(page, "E2E bar viewport cap");
+  await page.goto(`/projects/${id}/overview`);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("page has no viewport size");
+  const expected = viewport.height * 0.7;
+  const panel = page.getByTestId("diagnostics-panel");
+
+  await page.getByTestId("diagnostics-status-bar").getByRole("button")
+    .click();
+  await expect(panel).toBeVisible();
+
+  // Drag far past the top edge: the 70%-of-viewport cap binds before the
+  // absolute px ceiling does.
+  const splitter = page.getByRole("slider", {
+    name: "Resize diagnostics panel",
+  });
+  const box = await splitter.boundingBox();
+  if (!box) throw new Error("the splitter should be laid out");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, 0, { steps: 10 });
+  await page.mouse.up();
+
+  const height = (await panel.boundingBox())?.height;
+  if (!height) throw new Error("the panel should be laid out");
+  expect(height).toBeGreaterThanOrEqual(expected - 1);
+  expect(height).toBeLessThanOrEqual(expected + 1);
+});
+
 test("diagnostics expanded panel survives a reload", async ({ page }) => {
   const id = await openProject(page, "E2E bar persist");
   await page.goto(`/projects/${id}/overview`);

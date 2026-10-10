@@ -23,8 +23,11 @@ export const DIAGNOSTICS_DEFAULT_HEIGHT = 256;
 /** Minimum panel height: a few rows stay readable. */
 export const DIAGNOSTICS_MIN_HEIGHT = 96;
 
-/** Maximum panel height in pixels. */
-export const DIAGNOSTICS_MAX_HEIGHT = 480;
+/**
+ * Absolute clamp ceiling in pixels; the viewport share usually binds
+ * first. Raised so large screens get roomier panels.
+ */
+export const DIAGNOSTICS_MAX_HEIGHT = 1000;
 
 /** Default layout: closed bar, default panel height. */
 export const DIAGNOSTICS_LAYOUT_DEFAULTS: DiagnosticsLayout = {

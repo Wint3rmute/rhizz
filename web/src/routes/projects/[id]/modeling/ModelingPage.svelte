@@ -36,6 +36,10 @@ import NewViewModal from "./NewViewModal.svelte";
 import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
 import Pane from "../../../../components/modular_ui/Pane.svelte";
 import Splitter from "../../../../components/modular_ui/Splitter.svelte";
+import {
+  SIDE_PANEL_WIDTH_FRACTION,
+  viewportCap,
+} from "../../../../components/modular_ui/viewport";
 import { modelingPanes } from "./panes";
 import {
   type ComponentData,
@@ -3836,7 +3840,10 @@ $effect(() => {
       (paneLayout = modelingPanes.resize(
         paneLayout,
         "left",
-        paneLayout.leftWidth + dx,
+        Math.min(
+          paneLayout.leftWidth + dx,
+          viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+        ),
       ))}
   />
 
@@ -4050,7 +4057,10 @@ $effect(() => {
       (paneLayout = modelingPanes.resize(
         paneLayout,
         "right",
-        paneLayout.rightWidth - dx,
+        Math.min(
+          paneLayout.rightWidth - dx,
+          viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+        ),
       ))}
   />
 
