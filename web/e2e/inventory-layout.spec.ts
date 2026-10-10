@@ -112,6 +112,13 @@ test("inventory resizes panels by dragging their splitter", async ({ page }) => 
   const grown = await paneWidth(page, "inventory-pane-left");
   expect(grown).toBeGreaterThan(before + 80);
 
+  // The drag crossed cards and text on its way — none of it may end up
+  // selected (the splitter holds a selection guard while dragging).
+  const selected = await page.evaluate(() =>
+    window.getSelection()?.toString() ?? ""
+  );
+  expect(selected).toBe("");
+
   // Dragging far past the edge clamps instead of collapsing or exploding.
   const grownBox = await splitter.boundingBox();
   if (!grownBox) throw new Error("the splitter should be laid out");

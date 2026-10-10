@@ -7,6 +7,7 @@
 // +dx, a bottom panel with −dy) and clamps the result — this component
 // only measures.
 import { DEFAULT_PANE_MAX_WIDTH, DEFAULT_PANE_MIN_WIDTH } from "./paneLayout";
+import { beginPaneDrag, endPaneDrag } from "./dragGuard";
 
 let {
   testid,
@@ -62,6 +63,9 @@ const KEY_STEP_COARSE = 32;
 function onpointerdown(event: PointerEvent): void {
   dragAt = isVertical ? event.clientY : event.clientX;
   track?.setPointerCapture(event.pointerId);
+  // The drag crosses arbitrary page content on its way — hold the
+  // selection guard until it ends, or the motion reads as text selection.
+  beginPaneDrag();
 }
 
 function onpointermove(event: PointerEvent): void {
@@ -74,6 +78,7 @@ function onpointermove(event: PointerEvent): void {
 
 function endDrag(event: PointerEvent): void {
   dragAt = null;
+  endPaneDrag();
   if (track?.hasPointerCapture(event.pointerId)) {
     track.releasePointerCapture(event.pointerId);
   }
@@ -108,11 +113,12 @@ function onkeydown(event: KeyboardEvent): void {
     ? 'hidden md:flex'
     : 'flex'} {isVertical
     ? 'w-full items-center justify-center h-2 cursor-row-resize'
-    : 'items-stretch justify-center w-2 cursor-col-resize'} group"
+    : 'items-stretch justify-center w-2 cursor-col-resize'} group touch-none select-none"
   onpointerdown={onpointerdown}
   onpointermove={onpointermove}
   onpointerup={endDrag}
   onpointercancel={endDrag}
+  onlostpointercapture={endDrag}
   onkeydown={onkeydown}
 >
   <div

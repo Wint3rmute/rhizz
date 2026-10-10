@@ -32,3 +32,14 @@
 [data-theme="light"] {
   --scrolling-bg-overlay: 60%;
 }
+
+/* While a pane splitter is dragged, pointer motion must not select page
+   text (toggled by beginPaneDrag/endPaneDrag in
+   components/modular_ui/dragGuard.ts). The `!important` wins over
+   explicitly selectable descendants; the guard is reference-counted so
+overlapping drags cannot clear it early. */
+body.pane-dragging,
+body.pane-dragging * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
