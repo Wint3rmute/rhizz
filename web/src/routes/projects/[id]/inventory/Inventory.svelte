@@ -33,16 +33,9 @@ import {
 } from "../modeling/persistence";
 import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
-import Pane from "./Pane.svelte";
-import Splitter from "./Splitter.svelte";
-import {
-  hideInventoryPanel,
-  type InventoryLayout,
-  readInventoryLayout,
-  resizeInventoryPanel,
-  showInventoryPanel,
-  writeInventoryLayout,
-} from "./inventoryLayout";
+import Pane from "../../../../components/Pane.svelte";
+import Splitter from "../../../../components/Splitter.svelte";
+import { inventoryPanes } from "./panes";
 import {
   defaultViewPath,
   definitionLabelForNode,
@@ -169,12 +162,12 @@ let selectedLabel = $state<string | null>(null);
 
 // ── Modular workspace layout ────────────────────────────────────────────────
 // Panel widths + hidden flags in one serializable store, persisted across
-// reloads. Resizes clamp via `resizeInventoryPanel`; hide/restore preserve
-// widths so a restored panel comes back exactly as it was.
-let layout = $state<InventoryLayout>(readInventoryLayout());
+// reloads. Resizes clamp via the store; hide/restore preserve widths so a
+// restored panel comes back exactly as it was.
+let layout = $state(inventoryPanes.read());
 
 $effect(() => {
-  writeInventoryLayout(layout);
+  inventoryPanes.write(layout);
 });
 
 // Systems come straight from the compiled payload (`raw.systems`), in model
@@ -666,12 +659,13 @@ async function handleCreateView(): Promise<void> {
     <!-- Left panel: Inventory Browser. The Pane owns the header, width and
          hide/restore rail; the browser content below is unchanged. -->
     <Pane
+      scope="inventory"
       title="Inventory Browser"
       side="left"
       width={layout.leftWidth}
       hidden={layout.leftHidden}
-      onhide={() => (layout = hideInventoryPanel(layout, "left"))}
-      onshow={() => (layout = showInventoryPanel(layout, "left"))}
+      onhide={() => (layout = inventoryPanes.hide(layout, "left"))}
+      onshow={() => (layout = inventoryPanes.show(layout, "left"))}
     >
       <div class="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden p-3">
         <!-- Filter tabs -->
@@ -773,11 +767,13 @@ async function handleCreateView(): Promise<void> {
     </Pane>
 
     <Splitter
+      scope="inventory"
       side="left"
+      panelName="browser"
       value={layout.leftWidth}
       hidden={layout.leftHidden}
       onresize={(dx) =>
-        (layout = resizeInventoryPanel(
+        (layout = inventoryPanes.resize(
           layout,
           "left",
           layout.leftWidth + dx,
@@ -841,11 +837,13 @@ async function handleCreateView(): Promise<void> {
     </div>
 
     <Splitter
+      scope="inventory"
       side="right"
+      panelName="details"
       value={layout.rightWidth}
       hidden={layout.rightHidden}
       onresize={(dx) =>
-        (layout = resizeInventoryPanel(
+        (layout = inventoryPanes.resize(
           layout,
           "right",
           layout.rightWidth - dx,
@@ -854,12 +852,13 @@ async function handleCreateView(): Promise<void> {
 
     <!-- Right panel: entity details. The DetailPane content is unchanged. -->
     <Pane
+      scope="inventory"
       title="Details"
       side="right"
       width={layout.rightWidth}
       hidden={layout.rightHidden}
-      onhide={() => (layout = hideInventoryPanel(layout, "right"))}
-      onshow={() => (layout = showInventoryPanel(layout, "right"))}
+      onhide={() => (layout = inventoryPanes.hide(layout, "right"))}
+      onshow={() => (layout = inventoryPanes.show(layout, "right"))}
     >
       <DetailPane
         definition={selectedDefinition}

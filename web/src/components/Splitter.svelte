@@ -1,26 +1,36 @@
 <script lang="ts">
-// A drag handle between a side panel and the Inventory's central diagram:
+// A drag handle between a side panel and a workspace's central area:
 // pointer drags report the horizontal delta in pixels, arrow keys nudge by a
 // fixed step. Exposed as a `slider` (the interactive role for a resize handle
 // with a value) so it is keyboard-focusable and announced with its current
-// width. The parent owns the sign (a left panel grows with +dx, a right
+// size. The parent owns the sign (a left panel grows with +dx, a right
 // panel with −dx) and clamps the result — this component only measures.
 import {
-  INVENTORY_PANEL_MAX_WIDTH,
-  INVENTORY_PANEL_MIN_WIDTH,
-} from "./inventoryLayout";
+  DEFAULT_PANE_MAX_WIDTH,
+  DEFAULT_PANE_MIN_WIDTH,
+  type PaneSide,
+} from "./paneLayout";
 
 let {
+  scope,
   side,
+  panelName,
   value,
-  min = INVENTORY_PANEL_MIN_WIDTH,
-  max = INVENTORY_PANEL_MAX_WIDTH,
+  min = DEFAULT_PANE_MIN_WIDTH,
+  max = DEFAULT_PANE_MAX_WIDTH,
   onresize,
   hidden = false,
 }: {
-  /** Which panel the splitter resizes (names the control for AT). */
-  side: "left" | "right";
-  /** Current panel width in pixels, announced as the slider value. */
+  /**
+   * Test-id namespace for the splitter, e.g. `"inventory"` renders
+   * `inventory-splitter-left`.
+   */
+  scope: string;
+  /** Which panel the splitter resizes (orients the control for AT). */
+  side: PaneSide;
+  /** Human name of the resized panel, e.g. `"browser"`. */
+  panelName: string;
+  /** Current panel size in pixels, announced as the slider value. */
   value: number;
   /** Clamp bounds, announced as the slider range. */
   min?: number;
@@ -32,9 +42,7 @@ let {
   hidden?: boolean;
 } = $props();
 
-const label = $derived(
-  side === "left" ? "Resize browser panel" : "Resize details panel",
-);
+const label = $derived(`Resize ${panelName} panel`);
 
 let track = $state<HTMLElement | null>(null);
 let dragX = $state<number | null>(null);
@@ -83,7 +91,7 @@ function onkeydown(event: KeyboardEvent): void {
   aria-valuemax={max}
   aria-orientation="vertical"
   tabindex="0"
-  data-testid="inventory-splitter-{side}"
+  data-testid="{scope}-splitter-{side}"
   style:display={hidden ? "none" : ""}
   class="shrink-0 hidden md:flex items-stretch justify-center w-2 cursor-col-resize group"
   onpointerdown={onpointerdown}
