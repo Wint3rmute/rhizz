@@ -33,8 +33,8 @@ import {
 } from "../modeling/persistence";
 import DefinitionCard from "./DefinitionCard.svelte";
 import DetailPane from "./DetailPane.svelte";
-import Pane from "../../../../components/Pane.svelte";
-import Splitter from "../../../../components/Splitter.svelte";
+import Pane from "../../../../components/modular_ui/Pane.svelte";
+import Splitter from "../../../../components/modular_ui/Splitter.svelte";
 import { inventoryPanes } from "./panes";
 import {
   defaultViewPath,
