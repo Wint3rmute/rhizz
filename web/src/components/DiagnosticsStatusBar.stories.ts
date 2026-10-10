@@ -314,6 +314,8 @@ export const ResizablePanel: Story = {
     await userEvent.click(
       bar.getByRole("button", { name: "Expand diagnostics" }),
     );
-    await expect(panel).toBeVisible();
+    // Re-query: the panel is inside an `{#if expanded}`, so hiding destroyed
+    // the node — the reference captured above is detached, not hidden.
+    await expect(canvas.getByTestId("diagnostics-panel")).toBeVisible();
   },
 };

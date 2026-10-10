@@ -124,8 +124,10 @@ export const AnnotationFallsBackToCenter: Story = {
   play: async ({ canvasElement }) => {
     const scoped = within(canvasElement);
     const canvas = await pinCanvasSize(canvasElement);
-    const sidebar = canvasElement.querySelector("aside");
-    if (!sidebar) throw new Error("inspector sidebar not rendered");
+    const sidebar = canvasElement.querySelector(
+      '[data-testid="modeling-pane-left"]',
+    );
+    if (!sidebar) throw new Error("inspector pane not rendered");
     // Both moves in one call: leaving the canvas is what drops the spawn
     // anchor, and only a continuous pointer path dispatches the mouseleave.
     // With no canvas pointer left to place under, the note lands where the
