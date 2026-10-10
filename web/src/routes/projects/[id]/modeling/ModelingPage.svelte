@@ -3836,6 +3836,7 @@ $effect(() => {
     panelName="inspector"
     value={paneLayout.leftWidth}
     hidden={paneLayout.leftHidden}
+    responsive={false}
     onresize={(dx) =>
       (paneLayout = modelingPanes.resize(
         paneLayout,
@@ -4053,6 +4054,7 @@ $effect(() => {
     panelName="components"
     value={paneLayout.rightWidth}
     hidden={paneLayout.rightHidden}
+    responsive={false}
     onresize={(dx) =>
       (paneLayout = modelingPanes.resize(
         paneLayout,
