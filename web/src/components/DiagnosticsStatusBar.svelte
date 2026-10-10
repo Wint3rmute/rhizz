@@ -105,6 +105,7 @@ function specUrl(code: string): string {
     <div
       class="absolute inset-x-0 bottom-full overflow-y-auto px-4 sm:px-6 lg:px-8 pb-2 bg-base-100 border-t border-base-300 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]"
       style:height="{barLayout.height}px"
+      id="diagnostics-panel"
       data-testid="diagnostics-panel"
     >
       <Splitter
@@ -124,6 +125,32 @@ function specUrl(code: string): string {
             ),
           ))}
       />
+      <!-- Panel header in the shared Pane chrome (title + hide control),
+           so the overlay reads as the same kind of surface as the side
+           panels. The chevron points down — the direction this panel
+           collapses — mirroring how side-pane chevrons point at their
+           rail. The strip toggle below stays the primary control. -->
+      <div class="max-w-7xl mx-auto w-full">
+        <header
+          class="flex items-center gap-2 px-3 py-2 border-b border-base-300"
+        >
+          <h2 class="font-semibold text-lg flex-1 min-w-0 truncate">
+            Diagnostics
+          </h2>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs"
+            onclick={() =>
+              (barLayout = collapseDiagnosticsPanel(barLayout))}
+            aria-label="Hide Diagnostics"
+            title="Hide Diagnostics"
+            aria-expanded="true"
+            aria-controls="diagnostics-panel"
+          >
+            <span aria-hidden="true">▾</span>
+          </button>
+        </header>
+      </div>
       <ul class="max-w-7xl mx-auto text-sm pt-2">
         {#if diagnostics.length === 0}
           <li class="px-2 py-1.5 text-base-content/60">
