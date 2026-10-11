@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
-import { renderMarkdownInline } from "../../components/markdownRenderer";
+import DiagnosticRow from "../../components/DiagnosticRow.svelte";
 
 export type VerdictStatus = "ok" | "warn" | "error";
 
@@ -66,22 +66,14 @@ const alertClass = $derived(
   {#if errors.length > 0}
     <ul class="w-full list-none m-0 px-4 py-1 max-h-48 overflow-auto text-left">
       {#each errors as diagnostic, i (i)}
-        <li class="py-px">
-          <span class="font-mono font-bold">{diagnostic.code}</span>—
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
-          {@html renderMarkdownInline(diagnostic.message)}
-        </li>
+        <DiagnosticRow {diagnostic} />
       {/each}
     </ul>
   {/if}
   {#if warnings.length > 0}
     <ul class="w-full list-none m-0 px-4 py-1 max-h-48 overflow-auto text-left">
       {#each warnings as diagnostic, i (i)}
-        <li class="py-px">
-          <span class="font-mono font-bold">{diagnostic.code}</span>—
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
-          {@html renderMarkdownInline(diagnostic.message)}
-        </li>
+        <DiagnosticRow {diagnostic} />
       {/each}
     </ul>
   {/if}
