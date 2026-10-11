@@ -1,5 +1,7 @@
+import { safeGetItem, safeSetItem } from "./safeStorage";
+
 export default function persisted<T>(key: string, initial: T) {
-  const stored = localStorage.getItem(key);
+  const stored = safeGetItem(key);
   let parsed = initial;
 
   if (stored !== null) {
@@ -7,13 +9,13 @@ export default function persisted<T>(key: string, initial: T) {
       parsed = JSON.parse(stored) as T;
     } catch {
       parsed = initial;
-      localStorage.setItem(key, JSON.stringify(initial));
+      safeSetItem(key, JSON.stringify(initial));
     }
   }
 
   let value = $state<T>(parsed);
   $effect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
+    safeSetItem(key, JSON.stringify(value));
   });
   return {
     get value() {

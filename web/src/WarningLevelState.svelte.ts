@@ -18,6 +18,7 @@ import {
   WARNING_LEVELS,
   type WarningLevel,
 } from "./rhizz_wasm_wrapper";
+import { safeGetItem, safeSetItem } from "./safeStorage";
 
 /** localStorage key holding the JSON-encoded warning level. */
 export const WARNING_LEVEL_STORAGE_KEY = "RHIZZ_WARNING_LEVEL";
@@ -44,8 +45,9 @@ export function warningLevelLabel(level: WarningLevel): string {
 }
 
 function readInitialWarningLevel(): WarningLevel {
-  if (typeof localStorage === "undefined") return DEFAULT_WARNING_LEVEL;
-  const raw = localStorage.getItem(WARNING_LEVEL_STORAGE_KEY);
+  // safeGetItem: cross-site iframes with blocked third-party storage throw
+  // on any localStorage touch — fall back to the default level.
+  const raw = safeGetItem(WARNING_LEVEL_STORAGE_KEY);
   if (raw === null) return DEFAULT_WARNING_LEVEL;
   // Machine-written entries are JSON-encoded; tolerate bare hand-edited
   // ones. Anything else (garbage, unknown names, wrong types) is corrupt.
@@ -63,8 +65,7 @@ function readInitialWarningLevel(): WarningLevel {
 let warningLevel = $state<WarningLevel>(readInitialWarningLevel());
 
 function persistWarningLevel(level: WarningLevel): void {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(WARNING_LEVEL_STORAGE_KEY, JSON.stringify(level));
+  safeSetItem(WARNING_LEVEL_STORAGE_KEY, JSON.stringify(level));
 }
 
 /** The active warning level; reactive to {@link setWarningLevel}. */
