@@ -133,6 +133,35 @@ export const WithAnnotations: Story = {
   },
 };
 
+// An annotation whose Markdown contains an inline-code span: the SVG text
+// renderer draws a tinted background <rect> behind the run, reusing the same
+// `--inline-code-bg` custom property as the HTML renderer's `.inline-code`
+// (app.css). The marker is painted before (under) the text — and fenced code
+// blocks, which also carry `code` spans, deliberately get none.
+export const InlineCodeAnnotation: Story = {
+  args: {
+    components: pipelineComponents,
+    connections: pipelineConnections,
+    boxes: pipelineBoxes,
+    annotations: [
+      { text: "Publishes to `topic:events` then stops", x: 10, y: 10 },
+      { text: "```\nraw block\n```", x: 10, y: 320 },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const code = await within(canvasElement).findByText("topic:events");
+    await expect(code.tagName.toLowerCase()).toBe("tspan");
+    await expect(canvasElement.getElementsByTagName("pre").length).toBe(0);
+    const markers = canvasElement.querySelectorAll(
+      'rect[fill="var(--inline-code-bg)"]',
+    );
+    // One marker for the inline span only — the fenced block stays plain.
+    await expect(markers.length).toBe(1);
+    await expect(markers[0]?.nextElementSibling).toBe(code.closest("text"));
+    await expect(canvasElement.textContent).toContain("raw block");
+  },
+};
+
 // The pipeline with an annotation placed far outside the node cluster's
 // bounding box and a scaled one — the auto-fit viewBox must extend to
 // include them, else the note would be clipped out of the Explore viewport.
