@@ -1,13 +1,11 @@
 <script lang="ts">
-import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import { page } from "$app/state";
 import { onDestroy } from "svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { createDebounced } from "../../../../debounce";
+import { getProjectModel } from "../../../../ProjectModel.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
-import { getWarningLevel } from "../../../../WarningLevelState.svelte";
-import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import FileTree from "./FileTree.svelte";
@@ -20,11 +18,11 @@ let {
 
 let fs = $derived(openProjectFs(projectStore, projectId));
 
-// The project-wide warning preset (navbar select). Reading it inside the
-// `$derived` compile below is what makes the stats and
-// the score react to a change of level without any extra plumbing.
-// Diagnostics live in the layout-level status bar.
-let warningLevel = $derived(getWarningLevel());
+// Compiled model is shared with the status bar and the other pages; this
+// page contributes the open editor's buffer as a draft so the shared model
+// (and thus the stats and the bar) reflect unsaved keystrokes, while the
+// debounced write persists them.
+const projectModel = getProjectModel();
 
 let entries = $state<Dirent[]>([]);
 let selectedPath = $state<string | null>(null);
@@ -137,29 +135,11 @@ $effect(() => {
   const file = fs;
   if (fileLoaded && loadedPath !== null && content !== lastWrittenContent) {
     lastWrittenContent = content;
+    // Reflect the edit in the shared model immediately, before the debounced
+    // write lands, so stats and the status bar track the editor per keystroke.
+    projectModel.setDraft(loadedPath, content);
     scheduleFileWrite(file, loadedPath, content);
   }
-});
-
-// Compiles the *whole* project (every ".hcl" file), not just whichever
-// one is open — matching rhizz-core's actual "flat merge of a directory"
-// semantics, and how views/overview already compile. The open file's
-// on-disk copy trails `content` (the write-back effect above is debounced),
-// so its entry is patched in-place with the live,
-// in-editor value instead of trusting readProjectSources' own read of
-// it — every *other* file is only ever read fresh here, which is fine
-// since nothing else is editing them concurrently.
-let sources = $state<Source[]>([]);
-$effect(() => {
-  const path = loadedPath;
-  const liveContent = content;
-  void readProjectSources(fs).then((loaded) => {
-    sources = path === null
-      ? loaded
-      : loaded.map((s) =>
-        s.filename === path ? { ...s, content: liveContent } : s
-      );
-  });
 });
 
 function reportError(error: unknown): void {
@@ -245,12 +225,10 @@ async function handleDelete(path: string): Promise<void> {
   }
 }
 
-let output = $derived.by(() => compile_system(sources, warningLevel));
-
-let model = $derived(output.model());
+let model = $derived(projectModel.model);
 
 // Persist the last successfully compiled model so stats survive syntax errors.
-let lastModel = $state<ReturnType<typeof output.model>>(undefined);
+let lastModel = $state<typeof model>(undefined);
 $effect(() => {
   if (model !== undefined) lastModel = model;
 });

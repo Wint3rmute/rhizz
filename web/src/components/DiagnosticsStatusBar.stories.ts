@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import type { DiagnosticJS } from "rhizz";
-import { setCurrentScore } from "../ProjectState.svelte";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import DiagnosticsStatusBar from "./DiagnosticsStatusBar.svelte";
 import { forgetDiagnosticsLayout } from "./modular_ui/diagnosticsLayout";
@@ -113,17 +112,13 @@ export const Clean: Story = {
 };
 
 // The strip as a project page actually renders it: all three zones at once,
-// which no other story here can show. The score is a module singleton the bar
-// reads (only Modeling publishes one), so the story seeds it in a `loader` —
-// which unlike `beforeEach` also runs in the static build VRT screenshots, and
-// each of those is a fresh page load, so the seeded value cannot leak from one
-// baseline into the next.
-function seedScore(): void {
-  setCurrentScore({ overall_percentage: 72.5 });
-}
-
+// which no other story here can show. The score arrives as a prop (the app
+// feeds it from the shared ProjectModel).
 export const FullStrip: Story = {
-  loaders: [resetDiagnosticsBar, seedScore],
+  loaders: [resetDiagnosticsBar],
+  args: {
+    score: { overall_percentage: 72.5 },
+  },
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },

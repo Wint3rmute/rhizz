@@ -17,12 +17,7 @@ import {
   isPaletteShortcut,
   type PaletteItem,
 } from "../components/palette/commandPalette";
-import type { RawModelPayload } from "../modelView";
-import { projectStore } from "../ProjectState.svelte";
-import { getWarningLevel } from "../WarningLevelState.svelte";
-import { compile_system } from "../rhizz_wasm_wrapper";
-import { readProjectSources, type Source } from "../vfs/compile";
-import { openProjectFs } from "../vfs/fs";
+import { getProjectModel } from "../ProjectModel.svelte";
 import type { Dirent } from "../vfs/fs";
 import { commandItems } from "./commandItems";
 import { fileItems, fileTargetFor } from "./fileSwitcher";
@@ -43,10 +38,11 @@ let {
 
 let open = $state(false);
 let entries = $state<Dirent[]>([]);
-// The model, read only once the palette has actually needed it — see `show`.
-// Null means "not read yet", which is also the standing state on every page
-// that does not offer the inventory section.
-let modelSources = $state<Source[] | null>(null);
+
+// The compiled model is shared with the status bar and the pages (see
+// ProjectModel.svelte) — the palette reads its raw payload for the Inventory
+// section, so the two can never disagree about what a definition is.
+const projectModel = getProjectModel();
 
 // Which page you are on decides what is worth offering — the diagrams on
 // Modeling, every file on Code, and on Inventory the model's own definitions
@@ -56,29 +52,6 @@ let scope = $derived(paletteScopeForPath(pathname));
 
 const FILES_GROUP = "Files";
 const VIEWS_GROUP = "Views";
-
-// The model, compiled the same way every page compiles it (see
-// readProjectSources / compile_system) and read as the same raw payload
-// Inventory reads, so the two can never disagree about what a definition is.
-// Undefined when the project does not compile — which leaves the section
-// empty rather than wrong.
-function model(sources: Source[]): RawModelPayload | undefined {
-  const compiled = compile_system(sources, getWarningLevel()).model();
-  return compiled === undefined
-    ? undefined
-    : (compiled.to_js() as RawModelPayload);
-}
-
-// Compiled on its own rather than inline in `items`, because a compile is the
-// expensive half of opening this palette and must not be repeated every time
-// the page changes. `items` reads `scope`, so an inline compile would re-run
-// on each navigation for a payload that had not changed. This derived reads
-// only the sources and the warning level, so it recompiles exactly when the
-// model it describes has — `items` may read `scope` freely without that
-// costing a recompile.
-let inventoryModel = $derived(
-  modelSources === null ? undefined : model(modelSources),
-);
 
 // Commands first, then the page's files, then (on Inventory) its entities.
 // That is the order of the questions the palette answers — "where can I
@@ -97,8 +70,8 @@ let items = $derived([
     // all, so there is no heading to name there.
     group: scope.files === "views" ? VIEWS_GROUP : FILES_GROUP,
   })),
-  ...(scope.inventory && inventoryModel !== undefined
-    ? inventoryItems(inventoryEntities(inventoryModel), (label) => {
+  ...(scope.inventory && projectModel.raw !== undefined
+    ? inventoryItems(inventoryEntities(projectModel.raw), (label) => {
       void goto(
         resolve("/projects/[id]/inventory/[...label]", {
           id: projectId,
@@ -132,18 +105,10 @@ async function show(
   }
   open = true;
   try {
-    const fs = openProjectFs(projectStore, projectId);
-    entries = scope.files === "none"
+    const fs = projectModel.fs;
+    entries = scope.files === "none" || fs === null
       ? []
       : await fs.readdir(".", { recursive: true });
-    // Compiling is the expensive half, and only the inventory section needs
-    // it — so it is read only when that section is on offer, and kept for
-    // afterwards so reopening the palette on the same page is instant. This
-    // is a second compile on top of the status bar's; both are per-open and
-    // neither blocks anything the user is waiting on.
-    if (scope.inventory && modelSources === null) {
-      modelSources = await readProjectSources(fs);
-    }
   } catch {
     // An unreadable project still opens its palette; an empty list is a
     // truthful answer and beats a dialog that never appears.
