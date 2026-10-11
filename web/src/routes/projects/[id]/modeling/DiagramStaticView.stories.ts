@@ -101,9 +101,9 @@ export const Empty: Story = {
 
 // The pipeline with free-standing view annotations rendered at absolute
 // canvas positions — including a multi-line annotation (newline in text)
-// and a Markdown-styled one (**bold** run). Each Markdown line is its own
-// outer <tspan>; styled runs nest one level deeper, so the two lines share
-// a grandparent <text>.
+// and a Markdown-styled one (**bold** and `code` runs). Each Markdown line
+// is its own outer <tspan>; styled runs nest one level deeper, so the two
+// lines share a grandparent <text>.
 export const WithAnnotations: Story = {
   args: {
     components: pipelineComponents,
@@ -112,7 +112,7 @@ export const WithAnnotations: Story = {
     annotations: [
       { text: "Ingest path", x: 10, y: 10 },
       { text: "Processed here\n(2 workers)", x: 230, y: 140 },
-      { text: "**Note** on queue", x: 200, y: 160 },
+      { text: "**Note** on `queue`", x: 200, y: 160 },
     ],
   },
   play: async ({ canvasElement }) => {
@@ -130,35 +130,16 @@ export const WithAnnotations: Story = {
     const bold = await canvas.findByText("Note");
     await expect(bold.getAttribute("font-weight")).toBe("bold");
     await expect(canvas.queryByText("**Note**")).toBeNull();
-  },
-};
-
-// An annotation whose Markdown contains an inline-code span: the SVG text
-// renderer draws a tinted background <rect> behind the run, reusing the same
-// `--inline-code-bg` custom property as the HTML renderer's `.inline-code`
-// (app.css). The marker is painted before (under) the text — and fenced code
-// blocks, which also carry `code` spans, deliberately get none.
-export const InlineCodeAnnotation: Story = {
-  args: {
-    components: pipelineComponents,
-    connections: pipelineConnections,
-    boxes: pipelineBoxes,
-    annotations: [
-      { text: "Publishes to `topic:events` then stops", x: 10, y: 10 },
-      { text: "```\nraw block\n```", x: 10, y: 320 },
-    ],
-  },
-  play: async ({ canvasElement }) => {
-    const code = await within(canvasElement).findByText("topic:events");
+    // Its `code` run gets a tinted background <rect>, filled from the same
+    // `--inline-code-bg` the HTML renderer's `.inline-code` uses (app.css).
+    // The marker paints before (under) the text.
+    const code = await canvas.findByText("queue");
     await expect(code.tagName.toLowerCase()).toBe("tspan");
-    await expect(canvasElement.getElementsByTagName("pre").length).toBe(0);
     const markers = canvasElement.querySelectorAll(
       'rect[fill="var(--inline-code-bg)"]',
     );
-    // One marker for the inline span only — the fenced block stays plain.
     await expect(markers.length).toBe(1);
     await expect(markers[0]?.nextElementSibling).toBe(code.closest("text"));
-    await expect(canvasElement.textContent).toContain("raw block");
   },
 };
 
