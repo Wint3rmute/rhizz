@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
-import { renderMarkdownInline } from "./markdownRenderer";
+import DiagnosticRow from "./DiagnosticRow.svelte";
 import { getCurrentScore } from "../ProjectState.svelte";
 import ScoreBadge from "./ScoreBadge.svelte";
 import WarningLevelSelect from "./WarningLevelSelect.svelte";
@@ -76,10 +76,6 @@ let warnings = $derived(diagnostics.filter((d) => !d.code.startsWith("E")));
 // blocks used to hardcode, as one list so both severities render identical
 // row markup.
 let rows = $derived([...errors, ...warnings]);
-
-function specUrl(code: string): string {
-  return `https://github.com/Wint3rmute/rhizz/blob/main/SPEC/diagnostics/${code}.md`;
-}
 </script>
 
 <div
@@ -159,32 +155,7 @@ function specUrl(code: string): string {
           </li>
         {/if}
         {#each rows as diagnostic, i (i)}
-          {@const isError = diagnostic.code.startsWith("E")}
-          <li
-            class="flex items-center gap-2 min-w-0 px-2 py-1.5 rounded hover:bg-base-200"
-          >
-            <span
-              class="shrink-0 w-4 text-center {isError
-                ? "text-error"
-                : "text-warning"}"
-              aria-hidden="true"
-            >
-              {isError ? "✕" : "⚠"}
-            </span>
-            <a
-              class="link underline shrink-0 font-mono text-xs"
-              target="_blank"
-              href={specUrl(diagnostic.code)}
-              title={`Open the ${diagnostic.code} spec`}
-            >{diagnostic.code}</a>
-            <span
-              class="truncate min-w-0 flex-1"
-              title={diagnostic.message}
-            >
-              <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
-              {@html renderMarkdownInline(diagnostic.message)}
-            </span>
-          </li>
+          <DiagnosticRow {diagnostic} />
         {/each}
       </ul>
     </div>
