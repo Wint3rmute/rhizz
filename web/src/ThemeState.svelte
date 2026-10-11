@@ -23,10 +23,12 @@ import {
   THEME_STORAGE_KEY,
   type ThemeSelection,
 } from "./theme";
+import { safeGetItem, safeSetItem } from "./safeStorage";
 
 function readInitialSelection(): ThemeSelection {
-  if (typeof localStorage === "undefined") return "auto";
-  return loadSelection(localStorage.getItem(THEME_STORAGE_KEY));
+  // safeGetItem: cross-site iframes with blocked third-party storage throw
+  // on any localStorage touch — fall back to following the OS theme.
+  return loadSelection(safeGetItem(THEME_STORAGE_KEY));
 }
 
 function systemPrefersDark(): boolean {
@@ -63,7 +65,7 @@ if (typeof window !== "undefined") {
       const resolved = resolve();
       document.documentElement.dataset.theme = resolved;
       applyChromeColor(resolved);
-      localStorage.setItem(THEME_STORAGE_KEY, selection);
+      safeSetItem(THEME_STORAGE_KEY, selection);
     });
   });
 }

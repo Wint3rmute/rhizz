@@ -41,10 +41,26 @@ marked.use({
         .call(this, token)
         .replace(/^<a /, '<a target="_blank" rel="noopener" ');
     },
+    // Tag inline code spans so the shared `.inline-code` rule (app.css) can
+    // style them — the same look the SVG annotation renderer draws.
+    codespan(token: Tokens.Codespan): string {
+      return Renderer.prototype.codespan
+        .call(this, token)
+        .replace(/^<code>/, '<code class="inline-code">');
+    },
   },
 });
 
 /** Renders Markdown to an HTML string safe for `{@html}` injection. */
 export function renderMarkdown(md: string): string {
   return marked.parse(md, { async: false });
+}
+
+/**
+ * Renders a single line of Markdown without the block wrapper (`<p>`), for
+ * inline slots such as a truncated status-bar row. Same marked instance and
+ * the same XSS-neutralising overrides as {@link renderMarkdown}.
+ */
+export function renderMarkdownInline(md: string): string {
+  return marked.parseInline(md, { async: false });
 }

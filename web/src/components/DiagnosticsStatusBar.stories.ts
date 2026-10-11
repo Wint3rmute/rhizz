@@ -10,10 +10,10 @@ type StoryDiagnostic = Pick<DiagnosticJS, "code" | "message">;
 const sampleDiagnostics = [
   {
     code: "E002",
-    message: 'connection "uart-link" references undefined component "gps"',
+    message: "connection `uart-link` references undefined component `gps`",
   },
-  { code: "W004", message: 'component "motor" is missing a full_name' },
-  { code: "W004", message: 'component "esc" is missing a full_name' },
+  { code: "W004", message: "component `motor` is missing a full_name" },
+  { code: "W004", message: "component `esc` is missing a full_name" },
 ] satisfies StoryDiagnostic[];
 
 const meta = {
@@ -70,12 +70,12 @@ const duplicateDiagnostics = [
   {
     code: "W003",
     message:
-      "component 'FDS' (source 'FDS') is not referenced by any connection",
+      "component `FDS` (source `FDS`) is not referenced by any connection",
   },
   {
     code: "W003",
     message:
-      "component 'FDS' (source 'FDS') is not referenced by any connection",
+      "component `FDS` (source `FDS`) is not referenced by any connection",
   },
 ] satisfies StoryDiagnostic[];
 

@@ -445,7 +445,7 @@ fn parse_message(body: &hcl::Body) -> ParseResult<RawMessage> {
         if block.identifier() == "field" {
             let label = first_label(block)?;
             let inner = parse_field(block.body())
-                .map_err(|e| e.with_prefix(format!("in field '{label}'")))?;
+                .map_err(|e| e.with_prefix(format!("in field `{label}`")))?;
             fields.push(Labeled { label, inner });
         }
     }
@@ -478,7 +478,7 @@ fn parse_protocol(body: &hcl::Body) -> ParseResult<RawProtocol> {
         if block.identifier() == "message" {
             let label = first_label(block)?;
             let inner = parse_message(block.body())
-                .map_err(|e| e.with_prefix(format!("in message '{label}'")))?;
+                .map_err(|e| e.with_prefix(format!("in message `{label}`")))?;
             messages.push(Labeled { label, inner });
         }
     }
@@ -520,19 +520,19 @@ fn parse_component(
             "port" => {
                 let label = first_label(block)?;
                 let inner = parse_port(block.body())
-                    .map_err(|e| e.with_prefix(format!("in port '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in port `{label}`")))?;
                 ports.push(Labeled { label, inner });
             }
             "instance" => {
                 let label = first_label(block)?;
                 let inner = parse_instance(block.body())
-                    .map_err(|e| e.with_prefix(format!("in instance '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in instance `{label}`")))?;
                 instances.push(Labeled { label, inner });
             }
             "connection" => {
                 let label = first_label(block)?;
                 let inner = parse_connection(block.body())
-                    .map_err(|e| e.with_prefix(format!("in connection '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in connection `{label}`")))?;
                 connections.push(Labeled { label, inner });
             }
             other => {
@@ -595,13 +595,13 @@ fn parse_system(body: &hcl::Body, diagnostics: &mut Vec<Diagnostic>) -> ParseRes
             "instance" => {
                 let label = first_label(block)?;
                 let inner = parse_instance(block.body())
-                    .map_err(|e| e.with_prefix(format!("in instance '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in instance `{label}`")))?;
                 instances.push(Labeled { label, inner });
             }
             "connection" => {
                 let label = first_label(block)?;
                 let inner = parse_connection(block.body())
-                    .map_err(|e| e.with_prefix(format!("in connection '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in connection `{label}`")))?;
                 connections.push(Labeled { label, inner });
             }
             other => {
@@ -653,19 +653,19 @@ pub fn parse_file(src: &str, path: &Path) -> ParseResult<RawFile> {
             "system" => {
                 let label = first_label(block)?;
                 let inner = parse_system(block.body(), &mut file.diagnostics)
-                    .map_err(|e| e.with_prefix(format!("in system '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in system `{label}`")))?;
                 file.systems.push(Labeled { label, inner });
             }
             "component" => {
                 let label = first_label(block)?;
                 let inner = parse_component(block.body(), &mut file.diagnostics)
-                    .map_err(|e| e.with_prefix(format!("in component '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in component `{label}`")))?;
                 file.components.push(Labeled { label, inner });
             }
             "protocol" => {
                 let label = first_label(block)?;
                 let inner = parse_protocol(block.body())
-                    .map_err(|e| e.with_prefix(format!("in protocol '{label}'")))?;
+                    .map_err(|e| e.with_prefix(format!("in protocol `{label}`")))?;
                 file.protocols.push(Labeled { label, inner });
             }
             other => {

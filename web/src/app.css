@@ -4,6 +4,33 @@
   themes: dark --default, light;
 }
 
+/* One look for inline code spans, shared by every Markdown renderer: the HTML
+   path (`markdownRenderer.ts`, which tags `<code>` with `.inline-code`) and the
+   SVG annotation path (`AnnotationText.svelte`, whose background <rect> fills
+   with the same `--inline-code-bg`). Kept in app.css because the HTML is
+   injected with `{@html}`, so Svelte's scoped styles never reach it. */
+:root {
+  --inline-code-bg: var(--color-base-300);
+  --inline-code-radius: 0.25rem;
+}
+
+.inline-code {
+  background-color: var(--inline-code-bg);
+  border-radius: var(--inline-code-radius);
+  padding: 0.1em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  font-weight: inherit;
+  color: inherit;
+}
+
+/* The typography plugin brackets prose code in literal backticks via
+   pseudo-elements; the tinted background is the marker now, so drop them. */
+.prose code::before,
+.prose code::after {
+  content: none;
+}
+
 /* Slowly scrolls the landing-page screenshot strip horizontally. The strip
    is `w-max` and holds the images side by side; translating it by -50%
    loops seamlessly because the image sequence is duplicated (see
