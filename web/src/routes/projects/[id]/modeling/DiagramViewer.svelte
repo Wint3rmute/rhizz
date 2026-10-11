@@ -5,11 +5,9 @@
 import type { ComponentJS, ConnectionJS } from "rhizz";
 import { type Snippet, untrack } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
-import { getWarningLevel } from "../../../../WarningLevelState.svelte";
+import { getProjectModel } from "../../../../ProjectModel.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { toastState } from "../../../../ToastState.svelte";
-import { compile_system } from "../../../../rhizz_wasm_wrapper";
-import { readProjectSources, type Source } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs } from "../../../../vfs/fs";
 import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
 import Markdown from "../../../../components/Markdown.svelte";
@@ -83,8 +81,10 @@ let {
   children?: Snippet<[DiagramView]> | undefined;
 } = $props();
 
-let sources = $state<Source[]>([]);
-let sourcesLoaded = $state(false);
+// Compiled model and sources come from the project-scoped context; the
+// viewer only owns the diagram-layout and docs reads that are specific to it.
+const projectModel = getProjectModel();
+
 let docs = $state<ProjectDoc[]>([]);
 let viewportWidth = $state(0);
 let viewportHeight = $state(0);
@@ -98,26 +98,12 @@ let diagramEntries = $state<Dirent[]>([]);
 $effect(() => {
   const id = projectId;
   if (!id) {
-    sources = [];
-    sourcesLoaded = true;
     docs = [];
     diagramEntries = [];
     return;
   }
-  sourcesLoaded = false;
   let cancelled = false;
   const fs = openProjectFs(projectStore, id);
-  readProjectSources(fs)
-    .then((loaded) => {
-      if (cancelled) return;
-      sources = loaded;
-      sourcesLoaded = true;
-    })
-    .catch(() => {
-      if (cancelled) return;
-      sources = [];
-      sourcesLoaded = true;
-    });
   readProjectDocs(fs)
     .then((loaded) => {
       if (!cancelled) docs = loaded;
@@ -175,20 +161,12 @@ $effect(() => {
   };
 });
 
-let warningLevel = $derived(getWarningLevel());
-let output = $derived.by(() => {
-  if (sources.length === 0) return null;
-  try {
-    return compile_system(sources, warningLevel);
-  } catch {
-    return null;
-  }
-});
-let model = $derived(output ? output.model() : undefined);
-let components = $derived(model ? model.components() : []);
-let connections = $derived(model ? model.connections() : []);
-let componentKeys = $derived(model ? model.component_keys() : []);
-let keyToIndex = $derived(componentKeyIndex(model));
+let components = $derived(projectModel.components);
+let connections = $derived(projectModel.connections);
+let componentKeys = $derived(
+  projectModel.model ? projectModel.model.component_keys() : [],
+);
+let keyToIndex = $derived(componentKeyIndex(projectModel.model));
 let boxes = $derived(mapLayoutToBoxes(layout.checked, keyToIndex));
 let annotations = $derived(layout.annotations ?? []);
 let linked = $derived(
@@ -293,7 +271,8 @@ let desiredScene = $derived(
 );
 
 let ready = $derived(
-  layoutLoaded && sourcesLoaded && !layoutMissing && diagramPath !== null &&
+  layoutLoaded && projectModel.ready && !layoutMissing &&
+    diagramPath !== null &&
     viewportWidth > 0 && viewportHeight > 0,
 );
 

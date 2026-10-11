@@ -1,7 +1,6 @@
 <script lang="ts">
 import type { DiagnosticJS } from "rhizz";
 import DiagnosticRow from "./DiagnosticRow.svelte";
-import { getCurrentScore } from "../ProjectState.svelte";
 import ScoreBadge from "./ScoreBadge.svelte";
 import WarningLevelSelect from "./WarningLevelSelect.svelte";
 import Splitter from "./modular_ui/Splitter.svelte";
@@ -50,9 +49,14 @@ import {
 // on different backdrops (the panel over the page, the strip over the app
 // shell). One solid colour makes the bar a single surface, and a blur behind
 // an opaque fill costs a compositing pass for nothing.
-let { diagnostics }: { diagnostics: DiagnosticJS[] } = $props();
-
-let score = $derived(getCurrentScore());
+let {
+  diagnostics,
+  score = null,
+}: {
+  diagnostics: DiagnosticJS[];
+  /** The compiled model's overall score; null hides the badge. */
+  score?: { overall_percentage: number } | null;
+} = $props();
 
 // ── Expandable, resizable panel ─────────────────────────────────────────────
 // Open flag + panel height in one serializable store, persisted across

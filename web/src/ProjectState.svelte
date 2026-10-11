@@ -56,7 +56,6 @@ export const projectStore: ProjectStore = createDefaultStore();
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);
-let currentScore = $state<{ overall_percentage: number } | null>(null);
 
 export function getCurrentProjectId(): string | null {
   return currentProjectId;
@@ -66,16 +65,6 @@ export function getCurrentProject(): Project | null {
   return currentProject;
 }
 
-export function getCurrentScore(): { overall_percentage: number } | null {
-  return currentScore;
-}
-
-export function setCurrentScore(
-  score: { overall_percentage: number } | null,
-): void {
-  currentScore = score;
-}
-
 // Loads `id`'s metadata into the shared reactive state. `currentProject`
 // ends up `null` if no project with that id exists (e.g. a stale/bad
 // URL) — callers (see routes/projects/[id]/+layout.svelte) are expected
@@ -83,7 +72,6 @@ export function setCurrentScore(
 // project-scoped content.
 export async function setCurrentProject(id: string): Promise<void> {
   currentProjectId = id;
-  currentScore = null;
   const projects = await projectStore.listProjects();
   const found = projects.find((p) => p.id === id) ?? null;
   // A stale async call (e.g. rapid navigation between two projects)
@@ -99,7 +87,6 @@ export async function setCurrentProject(id: string): Promise<void> {
 export function clearCurrentProject(): void {
   currentProjectId = null;
   currentProject = null;
-  currentScore = null;
 }
 
 // Re-reads the active project's metadata (e.g. after a rename elsewhere)

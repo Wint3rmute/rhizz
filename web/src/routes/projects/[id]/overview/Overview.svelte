@@ -1,40 +1,20 @@
 <script lang="ts">
-import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import CompletionBreakdown from "../../../../components/CompletionBreakdown.svelte";
 import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
-import { projectStore } from "../../../../ProjectState.svelte";
+import { getProjectModel } from "../../../../ProjectModel.svelte";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import { getWarningLevel } from "../../../../WarningLevelState.svelte";
-import { readProjectSources, type Source } from "../../../../vfs/compile";
-import { openProjectFs } from "../../../../vfs/fs";
 
-let {
-  projectId,
-}: {
-  projectId: string;
-} = $props();
+// The compiled model is shared with the status bar and every other page (see
+// ProjectModel.svelte); the warning preset it compiles at is read inside the
+// model, so the stats stay reactive to it.
+const projectModel = getProjectModel();
 
-let sources = $state<Source[]>([]);
-$effect(() => {
-  const fs = openProjectFs(projectStore, projectId);
-  void readProjectSources(fs).then((s) => {
-    sources = s;
-  });
-});
-
-// The project-wide warning preset (navbar select); reading it inside the
-// `$derived` compile below keeps the stats reactive to it.
-// Diagnostics live in the layout-level status bar.
-let warningLevel = $derived(getWarningLevel());
-
-let output = $derived.by(() => compile_system(sources, warningLevel));
-
-let model = $derived(output.model());
-
-let components = $derived(model ? model.components() : []);
-let systems = $derived(model ? model.systems() : []);
-let score = $derived(model ? model.score() : null);
+let output = $derived(projectModel.output);
+let model = $derived(projectModel.model);
+let components = $derived(projectModel.components);
+let systems = $derived(projectModel.systems);
+let score = $derived(projectModel.score);
 let project = $derived(model ? model.project() : null);
 
 let leafCount = $derived(components.filter((c) => c.leaf).length);
@@ -111,7 +91,7 @@ function levelBadge(level: number): string {
               Open the editor and write some HCL to see your system overview
               here.
             </p>
-            {#if output.error_count() > 0}
+            {#if output && output.error_count() > 0}
               <div
                 class="alert alert-error alert-soft mt-4 text-left"
               >

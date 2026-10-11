@@ -12,15 +12,10 @@ import { page } from "$app/state";
 import { applyModelMutation } from "../../../../history/applyMutation";
 import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
 import type { PortData } from "../../../../modelView";
-import { compile_system } from "../../../../rhizz_wasm_wrapper";
+import { getProjectModel } from "../../../../ProjectModel.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
-import {
-  primaryHclPath,
-  readProjectSources,
-  type Source,
-} from "../../../../vfs/compile";
+import { primaryHclPath } from "../../../../vfs/compile";
 import { openProjectFs } from "../../../../vfs/fs";
-import type { RawModelPayload } from "../../../../modelView";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import DiagramViewer from "../modeling/DiagramViewer.svelte";
 import CreateComponentModal from "../modeling/CreateComponentModal.svelte";
@@ -64,49 +59,13 @@ let {
   requestedLabel?: string;
 } = $props();
 
-// ── Model state (compiled from the project's HCL sources) ──────────────────
-let sources = $state<Source[]>([]);
+// ── Model state (shared with the status bar and the other pages) ───────────
+const projectModel = getProjectModel();
+let model = $derived(projectModel.model);
+let raw = $derived(projectModel.raw);
 // Whether the model has been read (or found unreadable) — see `modelReady`
 // under the URL section below, which waits for this before resolving the URL.
-let modelReady = $state(false);
-
-$effect(() => {
-  const id = projectId;
-  modelReady = false;
-  if (!id) {
-    sources = [];
-    modelReady = true;
-    return;
-  }
-  let cancelled = false;
-  const fs = openProjectFs(projectStore, id);
-  readProjectSources(fs)
-    .then((loaded) => {
-      if (!cancelled) sources = loaded;
-    })
-    .catch(() => {
-      if (!cancelled) sources = [];
-    })
-    .finally(() => {
-      if (!cancelled) modelReady = true;
-    });
-  return () => {
-    cancelled = true;
-  };
-});
-
-let output = $derived.by(() => {
-  if (sources.length === 0) return null;
-  try {
-    return compile_system(sources);
-  } catch {
-    return null;
-  }
-});
-let model = $derived(output ? output.model() : undefined);
-let raw = $derived(
-  model ? (model.to_js() as RawModelPayload) : undefined,
-);
+let modelReady = $derived(projectModel.ready);
 let comps = $derived(raw?.components ?? []);
 let rawPorts = $derived(raw?.ports ?? []);
 
@@ -436,7 +395,7 @@ async function handleSystemCreate(label: string): Promise<void> {
       label: trimmed,
     });
     if (!result.applied) return;
-    sources = await readProjectSources(fs);
+    await projectModel.reload();
     selectLabel(trimmed);
   } catch (error) {
     console.error("Failed to create inventory entity:", error);
@@ -480,7 +439,7 @@ async function handleModalCreate(data: {
       },
     });
     if (!result.applied) return;
-    sources = await readProjectSources(fs);
+    await projectModel.reload();
     selectLabel(label);
   } catch (error) {
     console.error("Failed to create inventory entity:", error);
@@ -517,7 +476,7 @@ async function applyStyleOp(
       path: label,
     });
     if (!result.applied) return;
-    sources = await readProjectSources(fs);
+    await projectModel.reload();
   } catch (error) {
     console.error(errorMessage, error);
   } finally {
@@ -565,7 +524,7 @@ let deleteBlockers = $derived.by<string[]>(() => {
 // diagnostic, not this tab's problem.
 let boundViews = $derived.by<{ path: string; system: string }[]>(() => {
   const views: { path: string; system: string }[] = [];
-  for (const source of sources) {
+  for (const source of projectModel.sources) {
     if (!source.filename.startsWith(`${VIEW_LAYOUT_DIR}/`)) continue;
     if (!source.filename.endsWith(".hcl")) continue;
     try {
@@ -596,7 +555,7 @@ async function handleDeleteEntity(): Promise<void> {
         : { kind: "delete_component", path: label },
     );
     if (!result.applied) return;
-    sources = await readProjectSources(fs);
+    await projectModel.reload();
     selectLabel(null);
   } catch (error) {
     console.error("Failed to delete inventory entity:", error);

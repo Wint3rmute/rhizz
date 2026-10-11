@@ -51,7 +51,7 @@ let steps = $derived(
       : ''}"
   >
     {#if page === "navbar" || page === "overview"}
-      <Overview {projectId} />
+      <Overview />
     {:else if page === "modeling"}
       <ModelingPage {projectId} />
     {:else if page === "inventory"}

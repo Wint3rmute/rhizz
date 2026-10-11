@@ -104,6 +104,7 @@ export default ts.config(
     // all pure-`.ts` app code. This override is scoped to exactly the
     // files that import such modules.
     files: [
+      "src/ProjectModel.svelte.ts",
       "**/explore/Explore.stories.ts",
       "**/inventory/InventoryPage.stories.ts",
       "**/components/Navbar.stories.ts",

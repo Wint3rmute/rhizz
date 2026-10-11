@@ -5,4 +5,4 @@ import type { PageProps } from "./$types";
 let { data }: PageProps = $props();
 </script>
 
-<Overview projectId={data.projectId} />
+<Overview />

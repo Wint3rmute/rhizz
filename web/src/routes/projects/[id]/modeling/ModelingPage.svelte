@@ -9,17 +9,12 @@ import {
 import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { onDestroy, tick, untrack } from "svelte";
-import { compile_system } from "../../../../rhizz_wasm_wrapper";
 import persisted from "../../../../Persisted.svelte";
 import { toastState } from "../../../../ToastState.svelte";
 import { createDebounced } from "../../../../debounce";
-import { projectStore, setCurrentScore } from "../../../../ProjectState.svelte";
-import { getWarningLevel } from "../../../../WarningLevelState.svelte";
-import {
-  primaryHclPath,
-  readProjectSources,
-  type Source,
-} from "../../../../vfs/compile";
+import { getProjectModel } from "../../../../ProjectModel.svelte";
+import { projectStore } from "../../../../ProjectState.svelte";
+import { primaryHclPath } from "../../../../vfs/compile";
 import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 import { page } from "$app/state";
@@ -194,6 +189,10 @@ let {
   requestedView?: string;
 } = $props();
 
+// The compiled model is shared with the status bar and every other page;
+// mutations below call `projectModel.reload()` to refresh it.
+const projectModel = getProjectModel();
+
 let fs = $derived(openProjectFs(projectStore, projectId));
 
 // ── Modular side panels ─────────────────────────────────────────────────────
@@ -207,28 +206,19 @@ $effect(() => {
   modelingPanes.write(paneLayout);
 });
 
-let sources = $state<Source[]>([]);
-$effect(() => {
-  void readProjectSources(fs).then((s) => {
-    sources = s;
-  });
-});
+let sources = $derived(projectModel.sources);
 
-// The project-wide warning preset (navbar select). Reading it inside the
-// `$derived` compile below is what makes the diagnostics shown here react
-// to a change of level.
-let warningLevel = $derived(getWarningLevel());
-
-let output = $derived.by(() => compile_system(sources, warningLevel));
-let model = $derived(output.model());
+let output = $derived(projectModel.output);
+let model = $derived(projectModel.model);
 let systems = $derived(model ? model.systems() : []);
 let components = $derived(model ? model.components() : []);
 let connections = $derived(model ? model.connections() : []);
 
 let compileErrors = $derived.by(() => {
-  return output.diagnostics().filter((d) => d.level === "Error");
+  return (output?.diagnostics() ?? []).filter((d) => d.level === "Error");
 });
 let firstError = $derived(compileErrors[0] ?? null);
+let errorCount = $derived(output?.error_count() ?? 0);
 
 // Structurally-stable persistence keys for every component, index-aligned
 // with `components` and computed by rhizz-core (`Model::component_keys`), so
@@ -639,8 +629,8 @@ $effect(() => {
         // never just the primary file), and a failing model is left
         // untouched — the view seeds unlinked instead.
         let systemName = "";
-        const projectSources = await readProjectSources(fs);
-        const baselineModel = compile_system(projectSources).model();
+        await projectModel.reload();
+        const baselineModel = projectModel.model;
         if (baselineModel) {
           const existing = baselineModel.systems();
           if (existing.length === 0) {
@@ -657,7 +647,7 @@ $effect(() => {
               },
             );
             if (ensured.applied) {
-              sources = await readProjectSources(fs);
+              await projectModel.reload();
             }
           }
           systemName = existing[0]?.label || "main";
@@ -1332,9 +1322,8 @@ async function undoUnifiedEntry(): Promise<boolean> {
         unifiedRedoSeqs.shift();
       }
     }
-    const loaded = await readProjectSources(fs);
+    await projectModel.reload();
     presentMode = "nodes";
-    sources = loaded;
     flashActivity("Undo");
     return true;
   }
@@ -1374,9 +1363,8 @@ async function redoUnifiedEntry(): Promise<boolean> {
         unifiedUndoSeqs.shift();
       }
     }
-    const loaded = await readProjectSources(fs);
+    await projectModel.reload();
     presentMode = "nodes";
-    sources = loaded;
     flashActivity("Redo");
     return true;
   }
@@ -1464,14 +1452,14 @@ async function runModelLayoutTransaction(
       const cur = await readMainContent();
       const result = await applyModelMutation(fs, cur.path, cur.content, op);
       if (!result.applied) return false;
-      sources = await readProjectSources(fs);
+      await projectModel.reload();
       layoutApply?.(result.path);
       noteDiagramEdited();
       return true;
     },
     undo: async (): Promise<void> => {
       await fs.writeFile(targetPath, systemBefore);
-      sources = await readProjectSources(fs);
+      await projectModel.reload();
       applyDiagramSnapshot(diagramBefore);
       noteDiagramEdited();
     },
@@ -2181,14 +2169,6 @@ function onCanvasDblClick(event: MouseEvent) {
 // the canvas and the inspector need — they look components up *by key*, never
 // by walking a tree.
 let componentData = $derived(componentDataByKey(model));
-
-$effect(() => {
-  const sc = output.model()?.score();
-  setCurrentScore(sc ? { overall_percentage: sc.overall_percentage } : null);
-  return () => {
-    setCurrentScore(null);
-  };
-});
 
 let selectedKey = $derived(
   selectedKeys.size === 1 ? selectedKeys.values().next().value ?? null : null,
@@ -3985,7 +3965,7 @@ $effect(() => {
         />
       {/if}
 
-      {#if !model && output.error_count() > 0}
+      {#if !model && errorCount > 0}
         <div
           class="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
         >
@@ -3997,7 +3977,7 @@ $effect(() => {
               Model failed to compile
             </h3>
             <p class="text-sm text-base-content/70 mb-3">
-              {output.error_count()} error{output.error_count() > 1
+              {errorCount} error{errorCount > 1
                 ? "s"
                 : ""} detected in the system model. Check the code in the editor!
             </p>
