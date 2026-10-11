@@ -13,8 +13,10 @@
 import { openProjectFs } from "./vfs/fs";
 import { reportVfsSizeBytes } from "./vfs/metrics";
 import { DEFAULT_STORAGE_KEY } from "./vfs/vfsStore";
+import { InMemoryProjectStore } from "./vfs/vfsStore";
 import { LocalStorageProjectStore } from "./vfs/vfsStore";
 import { ServerProjectStore } from "./vfs/vfsStore";
+import { getSafeStorage } from "./safeStorage";
 import type { ProjectStore } from "./vfs/store";
 import type { Project } from "./vfs/types";
 
@@ -23,18 +25,34 @@ import type { Project } from "./vfs/types";
 // everything stays in the browser via localStorage. Build-time env var —
 // e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 deno run build`.
 const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
-// Every persisted mutation reports the whole blob's byte size to Sentry
-// (see ./vfs/metrics.ts), so the Metrics explorer shows how the VFS grows —
-// wired here, the one place the production store is built, because size
-// reporting is a browser-only concern the store itself stays free of.
-export const projectStore: ProjectStore = serverUrl
-  ? new ServerProjectStore(serverUrl, { onPersisted: reportVfsSizeBytes })
-  : new LocalStorageProjectStore(
-    globalThis.localStorage,
+// Probing one key (rather than evaluating `globalThis.localStorage`)
+// detects blocked third-party storage: cross-site iframes with storage
+// denied throw on any localStorage touch, which used to crash module init
+// and left embeds (e.g. the book's `/book-example` iframes) rendering only
+// their empty background. Without persistence the app falls back to memory:
+// fully working, just not surviving reloads.
+function createDefaultStore(): ProjectStore {
+  if (serverUrl) {
+    return new ServerProjectStore(serverUrl, {
+      onPersisted: reportVfsSizeBytes,
+    });
+  }
+  // Null when third-party storage is blocked: evaluating
+  // `globalThis.localStorage` itself would throw and crash module init.
+  const storage = getSafeStorage();
+  if (storage === null) return new InMemoryProjectStore();
+  return new LocalStorageProjectStore(
+    storage,
     DEFAULT_STORAGE_KEY,
     undefined,
     reportVfsSizeBytes,
   );
+}
+// Every persisted mutation reports the whole blob's byte size to Sentry
+// (see ./vfs/metrics.ts), so the Metrics explorer shows how the VFS grows —
+// wired here, the one place the production store is built, because size
+// reporting is a browser-only concern the store itself stays free of.
+export const projectStore: ProjectStore = createDefaultStore();
 
 let currentProjectId = $state<string | null>(null);
 let currentProject = $state<Project | null>(null);

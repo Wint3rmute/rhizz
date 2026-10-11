@@ -5,8 +5,14 @@
 // localStorage, not the VFS: this is a per-browser UI preference, not project
 // content — it must never land in versioned `views/*.hcl`. Same storage idiom
 // as tourRequest / WarningLevelState: a namespaced key, JSON-encoded value,
-// guarded access (SSR / private-browsing have no working storage), and a
-// validated read so garbage never reaches the router.
+// guarded access via safeStorage (cross-site iframes with blocked
+// third-party storage throw on any localStorage touch), and a validated
+// read so garbage never reaches the router.
+import {
+  safeGetItem,
+  safeRemoveItem,
+  safeSetItem,
+} from "../../../../safeStorage";
 
 /** localStorage key prefix; the project id is appended per project. */
 const LAST_VIEW_KEY_PREFIX = "rhizz-last-view:";
@@ -15,32 +21,15 @@ function storageKey(projectId: string): string {
   return `${LAST_VIEW_KEY_PREFIX}${projectId}`;
 }
 
-function viewStore():
-  | Pick<
-    Storage,
-    "getItem" | "setItem" | "removeItem"
-  >
-  | null {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    return localStorage;
-  } catch {
-    // Private browsing etc. — remembering simply does not happen.
-    return null;
-  }
-}
-
 /**
  * Records the view the user settled on. Called on every view change that
  * lands in the URL (selectView's `path`), so the next bare-page arrival can
  * reopen it.
  */
 export function rememberLastView(projectId: string, viewPath: string): void {
-  try {
-    viewStore()?.setItem(storageKey(projectId), JSON.stringify(viewPath));
-  } catch {
-    // Storage unwritable: the bare page just falls back to the first view.
-  }
+  // safeSetItem degrades to a no-op without storage: the bare page just
+  // falls back to the first view.
+  safeSetItem(storageKey(projectId), JSON.stringify(viewPath));
 }
 
 /**
@@ -48,9 +37,9 @@ export function rememberLastView(projectId: string, viewPath: string): void {
  * stored (never visited, corrupt entry, wrong type).
  */
 export function readLastView(projectId: string): string | null {
+  const raw = safeGetItem(storageKey(projectId));
+  if (raw === null) return null;
   try {
-    const raw = viewStore()?.getItem(storageKey(projectId)) ?? null;
-    if (raw === null) return null;
     const decoded: unknown = JSON.parse(raw);
     return typeof decoded === "string" && decoded !== "" ? decoded : null;
   } catch {
@@ -63,11 +52,7 @@ export function readLastView(projectId: string): string | null {
  * call when a project is recreated from scratch under a reused id.
  */
 export function forgetLastView(projectId: string): void {
-  try {
-    viewStore()?.removeItem(storageKey(projectId));
-  } catch {
-    // Storage unwritable: nothing to forget.
-  }
+  safeRemoveItem(storageKey(projectId));
 }
 
 export interface ViewChoice {
