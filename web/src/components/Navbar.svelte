@@ -91,6 +91,10 @@ async function startTourFlow(): Promise<void> {
       >
         Rhizz
       </a>
+      <span
+        class="badge badge-primary badge-sm shrink-0 font-semibold"
+        title="Rhizz is still under active development"
+      >beta</span>
 
       <!-- Desktop navigation links (positioned next to ← rhizz button).
            Each link carries its tour anchor here only (not in the mobile
