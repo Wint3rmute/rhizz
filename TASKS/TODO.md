@@ -185,14 +185,6 @@ view. Please make it possible to navigate back and forth through linked views.
 
 ---
 
-## Task <N> - Remove dead `CompilationDiagnosticsOutline`
-
-`web/src/components/CompilationDiagnosticsOutline.svelte` is mounted nowhere —
-only its own Storybook story (plus VRT screenshots) references it. Remove the
-component, its story, and its `web/vrt/__screenshots__/` entries.
-
----
-
 ## Task <NUMBER> — Task template
 
 - Task description here
