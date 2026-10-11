@@ -41,6 +41,13 @@ marked.use({
         .call(this, token)
         .replace(/^<a /, '<a target="_blank" rel="noopener" ');
     },
+    // Tag inline code spans so the shared `.inline-code` rule (app.css) can
+    // style them — the same look the SVG annotation renderer draws.
+    codespan(token: Tokens.Codespan): string {
+      return Renderer.prototype.codespan
+        .call(this, token)
+        .replace(/^<code>/, '<code class="inline-code">');
+    },
   },
 });
 

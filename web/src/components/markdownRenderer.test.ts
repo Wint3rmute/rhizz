@@ -18,7 +18,7 @@ describe("renderMarkdown", () => {
 
   it("renders inline code and fenced code blocks", () => {
     const html = renderMarkdown("Use `code` here.\n\n```\nconst x = 1;\n```");
-    expect(html).toContain("<code>code</code>");
+    expect(html).toContain('<code class="inline-code">code</code>');
     expect(html).toContain("<pre>");
     expect(html).toContain("const x = 1;");
   });
@@ -73,8 +73,8 @@ describe("diagnostic messages", () => {
     const html = renderMarkdown(
       "connection `uart-link` references undefined component `gps`",
     );
-    expect(html).toContain("<code>uart-link</code>");
-    expect(html).toContain("<code>gps</code>");
+    expect(html).toContain('<code class="inline-code">uart-link</code>');
+    expect(html).toContain('<code class="inline-code">gps</code>');
     expect(html).not.toContain("`");
   });
 
@@ -83,7 +83,7 @@ describe("diagnostic messages", () => {
       "connection `c` has 'from' and 'to' pointing to the same component",
     );
     expect(html).toContain("&#39;from&#39; and &#39;to&#39;");
-    expect(html).not.toContain("<code>from</code>");
+    expect(html).not.toContain('<code class="inline-code">from</code>');
   });
 
   it("escapes HTML-looking entity names inside code spans", () => {
@@ -96,6 +96,8 @@ describe("diagnostic messages", () => {
 
   it("renders inline markdown without a block wrapper", () => {
     const html = renderMarkdownInline("port `tx` is not referenced");
-    expect(html).toBe("port <code>tx</code> is not referenced");
+    expect(html).toBe(
+      'port <code class="inline-code">tx</code> is not referenced',
+    );
   });
 });
