@@ -112,7 +112,7 @@ export const WithAnnotations: Story = {
     annotations: [
       { text: "Ingest path", x: 10, y: 10 },
       { text: "Processed here\n(2 workers)", x: 230, y: 140 },
-      { text: "**Note** on `queue`", x: 200, y: 160 },
+      { text: "**Note** on `queue`", x: 200, y: 190 },
     ],
   },
   play: async ({ canvasElement }) => {
