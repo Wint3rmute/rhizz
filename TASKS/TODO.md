@@ -16,17 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Unify the code/ page with modular UI from modeling/ and inventory/
-
-The code/ page currently stands out from modeling/ and inventory/ pages:
-
-- It does not follow the modular UI practices
-- It does not have a "sidebar(s) + main content" layout and colors aligned with modeling/ and inventory/
-
-Fix both those things. While you're at it, make sure that the monaco editor
-fills the entire available height vertically, all the way down to the bottom
-bar. No margins/gaps/etc - use all the screenspace you can get.
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the

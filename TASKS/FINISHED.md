@@ -4,6 +4,42 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Code page uses the modular workspace layout
+
+The Code page is now a modular workspace like Modeling and Inventory: a
+resizable, hideable `Files` sidebar (`Pane` + `Splitter`) beside the main
+area, with the Monaco editor filling all the height down to the diagnostics
+status bar. The sidebar's width and hidden flag persist in localStorage
+(`rhizz-code-layout:v1`, `code/panes.ts`).
+
+- **Layout:** `CodePage.svelte` replaces the `max-w-7xl` grid and rounded
+  cards with a `bg-base-300` workspace row; the editor card is now a header
+  bar plus a `flex-1 min-h-0` editor area, so there are no gaps to the bar.
+- **Keeps the `main h1` contract:** the "Editor" heading with the open path
+  stays an `h1` in `main`, which the Ctrl-P e2e tests rely on.
+- **Tests**: new `e2e/code-layout.spec.ts` (sidebar beside editor; editor
+  bottom flush with status bar; hide/restore without unmounting). Red first:
+  all 3 failed on the old markup.
+- **Validation**: `just test`, `just lint`, `just build`, `just format` all
+  pass (Vitest 1044/1044, Playwright 120/120).
+
+### Follow-up: recessed content tone and no stats row
+
+- The central area is `bg-base-300`, the same recessed tone as the diagram
+  canvas, and the Monaco editor uses it too. `MonacoEditor` gained a
+  `surface` prop (`"base-200"` default, `"base-300"` recessed) that selects a
+  `daisy-recessed` theme. The inventory docs editor keeps the default.
+- The model stats row is gone from the Code page, along with the
+  last-compiled-model and stale logic that only it used. `ModelStatsRow` stays
+  on Overview. The file-write debounce is unrelated and remains.
+- `e2e/code-layout.spec.ts` checks that the editor and main area match the
+  canvas tone and that the sidebar does not. That test was added after the
+  change, not observed failing first.
+- VRT: `tour-walk--code` dark/light re-baselined after review (stats row
+  removed, editor full height).
+
+---
+
 ## Task <N> — Ctrl-P file switching works on the Code page
 
 Choosing a file from the palette while on Code now opens it in the editor.
