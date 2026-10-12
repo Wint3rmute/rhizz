@@ -1,6 +1,6 @@
 <script lang="ts">
 import { page } from "$app/state";
-import { onDestroy } from "svelte";
+import { onDestroy, untrack } from "svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
 import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { createDebounced } from "../../../../debounce";
@@ -59,6 +59,20 @@ $effect(() => {
   selectedPath = null;
   void refreshEntries().then(() => {
     selectedPath = firstHclPath();
+  });
+});
+
+// A navigation that names a file while this page is already mounted (the
+// palette does this from Code) must select it. Only `page` is tracked: the
+// listing and the selection are read untracked, so a refresh after a
+// create/rename/delete does not snap the selection back to the URL's file.
+$effect(() => {
+  const requested = page.url.searchParams.get("file");
+  if (requested === null) return;
+  untrack(() => {
+    if (entries.some((e) => e.isFile() && e.path === requested)) {
+      selectedPath = requested;
+    }
   });
 });
 

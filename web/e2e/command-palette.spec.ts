@@ -349,6 +349,50 @@ test("choosing a view opens the canvas, not the text", async ({ page }) => {
   await expect(page.getByTestId("diagram-canvas")).toBeVisible();
 });
 
+test("choosing a file from the code page switches the open editor", async ({ page }) => {
+  // The reported failure: the Code page is already mounted, so a palette
+  // navigation that only changes `?file=` used to leave the old file open.
+  const id = await createFromExample(
+    page,
+    /Software House/,
+    "E2E palette code switch",
+  );
+  await gotoProject(page, id, "code");
+  const heading = page.locator("main h1");
+
+  await page.keyboard.press("Control+p");
+  await page.keyboard.type("platform-team.md");
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(
+    `/projects/${id}/code?file=docs%2Fplatform-team.md`,
+  );
+  await expect(heading).toContainText("docs/platform-team.md");
+});
+
+test("choosing a view from the code page opens it in the editor", async ({ page }) => {
+  // On the Code page every file is text: a view opens in the editor, not on
+  // the canvas, and the page does not navigate away to Modeling.
+  const id = await createFromExample(
+    page,
+    /Quadcopter Drone/,
+    "E2E palette code view",
+  );
+  await gotoProject(page, id, "code");
+
+  await page.keyboard.press("Control+p");
+  await page.keyboard.type("power-paths");
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(
+    `/projects/${id}/code?file=views%2Fpower-paths.hcl`,
+  );
+  await expect(page.locator("main h1")).toContainText(
+    "views/power-paths.hcl",
+  );
+  await expect(page.getByTestId("diagram-canvas")).toHaveCount(0);
+});
+
 test("choosing a command switches page", async ({ page }) => {
   const id = await createNewProject(page, "E2E palette command");
   await gotoProject(page, id, "overview");

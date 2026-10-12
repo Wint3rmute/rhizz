@@ -1,13 +1,12 @@
 // The palette's file rows: the project files a page offers, and where each
 // one goes when chosen.
 //
-// A row's destination follows from *what the file is*, not from which page
-// you summoned the palette on. A `.hcl` under `views/` is a diagram, so it
-// opens on the canvas in Modeling; everything else opens in the editor. One
-// rule, no dependence on where you are standing — so every project file is
-// reachable from the pages that are about files, which is what makes a
-// single palette worth having over a per-page file list. The page decides
-// only *whether* to offer them (see ./paletteScope), never where one lands.
+// Outside the Code page, a row's destination follows from *what the file is*:
+// a `.hcl` under `views/` is a diagram, so it opens on the canvas in Modeling;
+// everything else opens in the editor. On the Code page every file opens in
+// the editor, because there every file is text (see `editorTargetFor`). The
+// page decides whether rows are offered (see ./paletteScope) and, for Code,
+// where they land.
 //
 // The items are built here but nothing here knows how to *navigate*: a row
 // carries its path and `fileTargetFor` reads it, so the host can turn a
@@ -36,6 +35,14 @@ export function fileTargetFor(path: string): FileTarget {
   return isViewPath(path)
     ? { kind: "view", view: path.slice(VIEW_LAYOUT_DIR.length + 1) }
     : { kind: "file", path };
+}
+
+/**
+ * Where a chosen file goes when the page is the Code page: always the editor,
+ * views included, since there a view is just another file to read and edit.
+ */
+export function editorTargetFor(path: string): FileTarget {
+  return { kind: "file", path };
 }
 
 /**

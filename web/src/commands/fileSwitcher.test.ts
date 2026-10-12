@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { VIEW_LAYOUT_DIR } from "../routes/projects/[id]/modeling/persistence";
 import { InMemoryProjectStore } from "../vfs/vfsStore";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
-import { fileItems, fileTargetFor } from "./fileSwitcher";
+import { editorTargetFor, fileItems, fileTargetFor } from "./fileSwitcher";
 
 const ENTRIES = [
   {
@@ -75,6 +75,29 @@ describe("fileTargetFor", () => {
     expect(fileTargetFor("docs/views/main.hcl")).toEqual({
       kind: "file",
       path: "docs/views/main.hcl",
+    });
+  });
+});
+
+describe("editorTargetFor", () => {
+  it("opens every file in the editor by its project path, views included", () => {
+    // On the Code page a view is a file like any other: it opens as text,
+    // not on the canvas.
+    expect(editorTargetFor("views/main.hcl")).toEqual({
+      kind: "file",
+      path: "views/main.hcl",
+    });
+    expect(editorTargetFor("views/drone/engine.hcl")).toEqual({
+      kind: "file",
+      path: "views/drone/engine.hcl",
+    });
+    expect(editorTargetFor("docs/engine.md")).toEqual({
+      kind: "file",
+      path: "docs/engine.md",
+    });
+    expect(editorTargetFor("system.hcl")).toEqual({
+      kind: "file",
+      path: "system.hcl",
     });
   });
 });
