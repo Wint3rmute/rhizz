@@ -23,6 +23,21 @@ status bar. The sidebar's width and hidden flag persist in localStorage
 - **Validation**: `just test`, `just lint`, `just build`, `just format` all
   pass (Vitest 1044/1044, Playwright 120/120).
 
+### Follow-up: recessed content tone and no stats row
+
+- The central area is `bg-base-300`, the same recessed tone as the diagram
+  canvas, and the Monaco editor uses it too. `MonacoEditor` gained a
+  `surface` prop (`"base-200"` default, `"base-300"` recessed) that selects a
+  `daisy-recessed` theme. The inventory docs editor keeps the default.
+- The model stats row is gone from the Code page, along with the
+  last-compiled-model and stale logic that only it used. `ModelStatsRow` stays
+  on Overview. The file-write debounce is unrelated and remains.
+- `e2e/code-layout.spec.ts` checks that the editor and main area match the
+  canvas tone and that the sidebar does not. That test was added after the
+  change, not observed failing first.
+- VRT: `tour-walk--code` dark/light re-baselined after review (stats row
+  removed, editor full height).
+
 ---
 
 ## Task <N> — Ctrl-P file switching works on the Code page

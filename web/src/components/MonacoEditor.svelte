@@ -10,6 +10,12 @@ interface Props {
   options?: monaco.editor.IStandaloneEditorConstructionOptions;
   /** The live editor, for callers that need `focus()` or a selection. */
   editor?: monaco.editor.IStandaloneCodeEditor | undefined;
+  /**
+   * Background tone. `"base-200"` (default) sits on a panel; `"base-300"` is
+   * the darker recessed tone of a workspace's central content area, like the
+   * diagram canvas. Create-time only, like `options`.
+   */
+  surface?: "base-200" | "base-300";
 }
 
 let {
@@ -17,17 +23,23 @@ let {
   language = "plaintext",
   options = {},
   editor = $bindable(undefined),
+  surface = "base-200",
 }: Props = $props();
 
 let editor_div: HTMLDivElement;
 
 $effect(() => {
-  monaco.editor.defineTheme("daisy", {
+  // One theme per surface: the surface is create-time (untracked, like
+  // `options`), so each theme is defined once with its own background.
+  const recessed = untrack(() => surface === "base-300");
+  const background = recessed ? "--color-base-300" : "--color-base-200";
+  const themeName = recessed ? "daisy-recessed" : "daisy";
+  monaco.editor.defineTheme(themeName, {
     base: "vs-dark",
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": cssVarToHex("--color-base-200"),
+      "editor.background": cssVarToHex(background),
       "editor.foreground": cssVarToHex("--color-base-content"),
       "editor.lineHighlightBackground": cssVarToHex("--color-base-300"),
       "editorLineNumber.foreground": cssVarToHex(
@@ -37,7 +49,7 @@ $effect(() => {
       "editor.selectionBackground": cssVarToHex("--color-primary") + "55",
       "editorWidget.background": cssVarToHex("--color-base-300"),
       "editorWidget.border": cssVarToHex("--color-base-100"),
-      "input.background": cssVarToHex("--color-base-200"),
+      "input.background": cssVarToHex(background),
       "input.foreground": cssVarToHex("--color-base-content"),
     },
   });
@@ -49,7 +61,7 @@ $effect(() => {
     roundedSelection: false,
     scrollBeyondLastLine: false,
     readOnly: false,
-    theme: "daisy",
+    theme: themeName,
     automaticLayout: true,
     // Untracked like `value`, and for a sharper reason: callers pass this
     // inline — `options={{ wordWrap: "on" }}` — which hands us a *new* object
