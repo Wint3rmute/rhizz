@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Code page uses the modular workspace layout
+
+The Code page is now a modular workspace like Modeling and Inventory: a
+resizable, hideable `Files` sidebar (`Pane` + `Splitter`) beside the main
+area, with the Monaco editor filling all the height down to the diagnostics
+status bar. The sidebar's width and hidden flag persist in localStorage
+(`rhizz-code-layout:v1`, `code/panes.ts`).
+
+- **Layout:** `CodePage.svelte` replaces the `max-w-7xl` grid and rounded
+  cards with a `bg-base-300` workspace row; the editor card is now a header
+  bar plus a `flex-1 min-h-0` editor area, so there are no gaps to the bar.
+- **Keeps the `main h1` contract:** the "Editor" heading with the open path
+  stays an `h1` in `main`, which the Ctrl-P e2e tests rely on.
+- **Tests**: new `e2e/code-layout.spec.ts` (sidebar beside editor; editor
+  bottom flush with status bar; hide/restore without unmounting). Red first:
+  all 3 failed on the old markup.
+- **Validation**: `just test`, `just lint`, `just build`, `just format` all
+  pass (Vitest 1044/1044, Playwright 120/120).
+
+---
+
 ## Task <N> — Ctrl-P file switching works on the Code page
 
 Choosing a file from the palette while on Code now opens it in the editor.
