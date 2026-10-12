@@ -195,7 +195,7 @@ function flattenTags(def: InventoryDefinition): string[] {
 </script>
 
 <div
-  class="bg-base-100 flex flex-col flex-1 min-h-[180px] md:min-h-0 w-full min-w-0"
+  class="bg-[var(--workspace-side-bg)] flex flex-col flex-1 min-h-[180px] md:min-h-0 w-full min-w-0"
   data-testid="inventory-detail-pane"
 >
   {#if !definition}

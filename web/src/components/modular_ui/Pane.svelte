@@ -74,7 +74,7 @@ const showLabel = $derived(`Show ${title}`);
   title={showLabel}
   aria-expanded="false"
   aria-controls={panelId}
-  class="shrink-0 flex md:flex-col items-center justify-center gap-1 bg-base-100 border-base-300 px-2 py-3 cursor-pointer hover:bg-base-200 hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {side ===
+  class="shrink-0 flex md:flex-col items-center justify-center gap-1 bg-[var(--workspace-side-bg)] border-base-300 px-2 py-3 cursor-pointer hover:bg-base-200 hover:text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary {side ===
   'left'
     ? 'border-r'
     : 'border-l'}"
@@ -95,7 +95,7 @@ const showLabel = $derived(`Show ${title}`);
   style:--pane-width="{width}px"
   class="shrink-0 {responsive
     ? 'w-full md:w-[var(--pane-width)]'
-    : 'w-[var(--pane-width)]'} bg-base-100 text-base-content flex flex-col min-h-0 overflow-hidden {side ===
+    : 'w-[var(--pane-width)]'} bg-[var(--workspace-side-bg)] text-base-content flex flex-col min-h-0 overflow-hidden {side ===
   'left'
     ? 'border-r border-base-300'
     : 'border-l border-base-300'}"

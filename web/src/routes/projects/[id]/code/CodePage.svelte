@@ -260,7 +260,7 @@ async function handleDelete(path: string): Promise<void> {
      beside the main area, with the editor filling all the height down to the
      diagnostics status bar that the project layout renders below this page. -->
 <div
-  class="flex flex-row flex-1 w-full min-h-0 overflow-hidden bg-base-300"
+  class="flex flex-row flex-1 w-full min-h-0 overflow-hidden bg-[var(--workspace-main-bg)]"
   data-testid="code-workspace"
 >
   <Pane
@@ -301,9 +301,10 @@ async function handleDelete(path: string): Promise<void> {
       ))}
   />
 
-  <main class="flex flex-col flex-1 min-w-0 min-h-0 bg-base-300">
+  <main
+    class="flex flex-col flex-1 min-w-0 min-h-0 bg-[var(--workspace-main-bg)]">
     <header
-      class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-base-100 text-base-content"
+      class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[var(--workspace-side-bg)] text-base-content"
       data-tour={TOUR_TARGETS.editor}
     >
       <h1 class="flex items-baseline gap-2 min-w-0 font-semibold text-lg">

@@ -3832,7 +3832,7 @@ $effect(() => {
   <!-- Main canvas -->
   <div class="flex flex-col flex-1 min-w-0">
     <div
-      class="relative flex-1 w-full h-full bg-base-300"
+      class="relative flex-1 w-full h-full bg-[var(--workspace-main-bg)]"
       bind:clientWidth={canvas_width}
       bind:clientHeight={canvas_height}
     >

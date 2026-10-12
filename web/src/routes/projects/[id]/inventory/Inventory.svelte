@@ -751,7 +751,7 @@ async function handleCreateView(): Promise<void> {
     <div class="flex flex-none md:flex-1 min-w-0 min-h-0">
       <div
         data-testid="inventory-diagram"
-        class="relative flex-1 min-w-0 min-h-[320px] md:min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
+        class="relative flex-1 min-w-0 min-h-[320px] md:min-h-0 bg-[var(--workspace-main-bg)] flex items-center justify-center overflow-hidden"
       >
         {#if selectedDefinition}
           <DiagramViewer

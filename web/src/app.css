@@ -60,6 +60,24 @@
   --scrolling-bg-overlay: 60%;
 }
 
+/* Workspace surfaces: side panels (Pane) against the central content (diagram
+   canvas, code editor, inventory preview). Dark keeps the daisyUI tones: panels
+   on base-100, content recessed on base-300. Light swaps them, so the panels
+   sit darker and the content brighter. Components use the tokens through
+   `bg-[var(--workspace-side-bg)]` / `bg-[var(--workspace-main-bg)]` (not a
+   plain class, so Tailwind's hover utilities still win), and the Monaco
+   recessed theme reads them too. */
+:root,
+[data-theme="dark"] {
+  --workspace-side-bg: var(--color-base-100);
+  --workspace-main-bg: var(--color-base-300);
+}
+
+[data-theme="light"] {
+  --workspace-side-bg: var(--color-base-300);
+  --workspace-main-bg: var(--color-base-100);
+}
+
 /* While a pane splitter is dragged, pointer motion must not select page
    text (toggled by beginPaneDrag/endPaneDrag in
    components/modular_ui/dragGuard.ts). The `!important` wins over

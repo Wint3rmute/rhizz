@@ -170,7 +170,7 @@ function onTouchEnd() {
 </script>
 
 <div
-  class="relative flex-1 w-full h-full bg-base-300 select-none overflow-hidden"
+  class="relative flex-1 w-full h-full bg-[var(--workspace-main-bg)] select-none overflow-hidden"
   bind:clientWidth={canvas_width}
   bind:clientHeight={canvas_height}
 >

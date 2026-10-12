@@ -72,12 +72,11 @@ test("code page hides and restores the file sidebar without unmounting it", asyn
   await expect(page.locator(".monaco-editor").first()).toBeVisible();
 });
 
-test("code page editor sits on the same recessed tone as the diagram canvas", async ({ page }) => {
+test("code page uses the workspace tones for its panel and its content", async ({ page }) => {
   await openCodePage(page, "E2E code colors");
 
-  // Computed colours come back in whatever notation the browser picked
-  // (oklch for the probe, rgb for the elements), so each one is normalised
-  // through a canvas pixel read before comparing.
+  // Computed colours come back in whatever notation the browser picked, so
+  // each one is normalised through a canvas pixel read before comparing.
   const toPixel = (color: string) =>
     page.evaluate((c) => {
       const canvas = document.createElement("canvas");
@@ -87,21 +86,22 @@ test("code page editor sits on the same recessed tone as the diagram canvas", as
       ctx.fillStyle = "#000";
       ctx.fillStyle = c;
       ctx.fillRect(0, 0, 1, 1);
-      return Array.from(ctx.getImageData(0, 0, 1, 1).data).join(",");
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
     }, color);
 
-  // The recessed workspace tone, resolved through the app's own theme: a
-  // throwaway element with the same class the diagram canvas uses.
-  const recessed = await toPixel(
-    await page.evaluate(() => {
-      const probe = document.createElement("div");
-      probe.className = "bg-base-300";
-      document.body.appendChild(probe);
-      const color = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return color;
-    }),
-  );
+  // The workspace tones, resolved through the app's own theme: throwaway
+  // elements with the same classes the panels and the content use.
+  const tone = async (className: string) =>
+    toPixel(
+      await page.evaluate((cls) => {
+        const probe = document.createElement("div");
+        probe.className = cls;
+        document.body.appendChild(probe);
+        const color = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return color;
+      }, className),
+    );
 
   const background = async (locator: ReturnType<typeof page.locator>) =>
     toPixel(
@@ -113,8 +113,21 @@ test("code page editor sits on the same recessed tone as the diagram canvas", as
   const surface = page.locator(".monaco-editor .monaco-editor-background")
     .first();
 
-  expect(await background(main)).toBe(recessed);
-  expect(await background(surface)).toBe(recessed);
-  // The sidebar stays on the brighter panel tone.
-  expect(await background(sidebar)).not.toBe(recessed);
+  const sideTone = await tone("bg-[var(--workspace-side-bg)]");
+  const mainTone = await tone("bg-[var(--workspace-main-bg)]");
+
+  expect(await background(main)).toEqual(mainTone);
+  expect(await background(surface)).toEqual(mainTone);
+  expect(await background(sidebar)).toEqual(sideTone);
+
+  // Dark: panels brighter than the content. Light: the reverse.
+  const luminance = ([r, g, b]: number[]) => r + g + b;
+  const theme = await page.evaluate(() =>
+    document.documentElement.dataset.theme
+  );
+  if (theme === "light") {
+    expect(luminance(sideTone)).toBeLessThan(luminance(mainTone));
+  } else {
+    expect(luminance(sideTone)).toBeGreaterThan(luminance(mainTone));
+  }
 });

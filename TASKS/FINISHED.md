@@ -4,6 +4,29 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Light theme swaps side panels and workspace content
+
+Light theme now shows side panels darker and the central content (diagram,
+code editor, inventory preview) brighter. Dark is unchanged: panels brighter,
+content recessed.
+
+- **Tokens:** `app.css` defines `--workspace-side-bg` and
+  `--workspace-main-bg`, dark mapped to `base-100` / `base-300` and light
+  swapped. Components use them as `bg-[var(...)]` arbitrary utilities, not
+  classes, so Tailwind's hover utilities (the Pane rail) still apply.
+- **Components:** `Pane` (and rail), `DetailPane` body → side token;
+  Modeling canvas, Inventory preview, Code main → main token; Monaco's
+  `recessed` surface reads the main token.
+- **Tests:** `code-layout.spec.ts` checks the panel and content tones match
+  the tokens and that the luminance ordering follows the active theme. Red
+  first (the tokens did not exist yet).
+- **VRT:** 44 light baselines re-accepted after review (side panels darker,
+  content brighter). All dark baselines unchanged; `tour-walk--code` dark was
+  briefly changed by a header border tweak and restored.
+- **Validation:** `just test`, `just lint`, `just build`, `just format` pass.
+
+---
+
 ## Task <N> — Code page uses the modular workspace layout
 
 The Code page is now a modular workspace like Modeling and Inventory: a

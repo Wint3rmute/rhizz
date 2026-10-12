@@ -32,7 +32,7 @@ $effect(() => {
   // One theme per surface: the surface is create-time (untracked, like
   // `options`), so each theme is defined once with its own background.
   const recessed = untrack(() => surface === "base-300");
-  const background = recessed ? "--color-base-300" : "--color-base-200";
+  const background = recessed ? "--workspace-main-bg" : "--color-base-200";
   const themeName = recessed ? "daisy-recessed" : "daisy";
   monaco.editor.defineTheme(themeName, {
     base: "vs-dark",
