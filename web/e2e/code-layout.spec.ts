@@ -71,3 +71,50 @@ test("code page hides and restores the file sidebar without unmounting it", asyn
   await expect(page.getByTestId("code-pane-left")).toBeVisible();
   await expect(page.locator(".monaco-editor").first()).toBeVisible();
 });
+
+test("code page editor sits on the same recessed tone as the diagram canvas", async ({ page }) => {
+  await openCodePage(page, "E2E code colors");
+
+  // Computed colours come back in whatever notation the browser picked
+  // (oklch for the probe, rgb for the elements), so each one is normalised
+  // through a canvas pixel read before comparing.
+  const toPixel = (color: string) =>
+    page.evaluate((c) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("no 2d context");
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = c;
+      ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data).join(",");
+    }, color);
+
+  // The recessed workspace tone, resolved through the app's own theme: a
+  // throwaway element with the same class the diagram canvas uses.
+  const recessed = await toPixel(
+    await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.className = "bg-base-300";
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }),
+  );
+
+  const background = async (locator: ReturnType<typeof page.locator>) =>
+    toPixel(
+      await locator.evaluate((el) => getComputedStyle(el).backgroundColor),
+    );
+
+  const main = page.getByTestId("code-workspace").locator("main");
+  const sidebar = page.getByTestId("code-pane-left");
+  const surface = page.locator(".monaco-editor .monaco-editor-background")
+    .first();
+
+  expect(await background(main)).toBe(recessed);
+  expect(await background(surface)).toBe(recessed);
+  // The sidebar stays on the brighter panel tone.
+  expect(await background(sidebar)).not.toBe(recessed);
+});

@@ -2,7 +2,6 @@
 import { page } from "$app/state";
 import { onDestroy, untrack } from "svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
-import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { createDebounced } from "../../../../debounce";
 import { getProjectModel } from "../../../../ProjectModel.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
@@ -35,8 +34,8 @@ let fs = $derived(openProjectFs(projectStore, projectId));
 
 // Compiled model is shared with the status bar and the other pages; this
 // page contributes the open editor's buffer as a draft so the shared model
-// (and thus the stats and the bar) reflect unsaved keystrokes, while the
-// debounced write persists them.
+// (and thus the bar) reflects unsaved keystrokes, while the debounced write
+// persists them.
 const projectModel = getProjectModel();
 
 let entries = $state<Dirent[]>([]);
@@ -253,34 +252,6 @@ async function handleDelete(path: string): Promise<void> {
     reportError(error);
   }
 }
-
-let model = $derived(projectModel.model);
-
-// Persist the last successfully compiled model so stats survive syntax errors.
-let lastModel = $state<typeof model>(undefined);
-$effect(() => {
-  if (model !== undefined) lastModel = model;
-});
-let stale = $derived(model === undefined && lastModel !== undefined);
-
-let components = $derived(lastModel ? lastModel.components() : []);
-let systems = $derived(lastModel ? lastModel.systems() : []);
-let score = $derived(lastModel ? lastModel.score() : null);
-let leafCount = $derived(components.filter((c) => c.leaf).length);
-let compositeCount = $derived(components.filter((c) => !c.leaf).length);
-
-function catTotal(
-  cat: { complete: number; partial: number; incomplete: number } | null,
-) {
-  return cat ? cat.complete + cat.partial + cat.incomplete : 0;
-}
-function catPct(cat: { percentage: number } | null) {
-  return cat ? Math.round(cat.percentage) : 0;
-}
-
-let totalPorts = $derived(catTotal(score?.ports ?? null));
-let totalConnections = $derived(catTotal(score?.connections ?? null));
-let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
 
 <svelte:window onpagehide={flushFileWrite} />
@@ -330,28 +301,9 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
       ))}
   />
 
-  <main class="flex flex-col flex-1 min-w-0 min-h-0 bg-base-100">
-    {#if lastModel !== undefined}
-      <div
-        class="shrink-0 px-3 pt-3 pb-3 transition-opacity duration-300 {stale
-          ? 'opacity-40 grayscale'
-          : ''}"
-      >
-        <ModelStatsRow
-          systemCount={systems.length}
-          componentCount={components.length}
-          {leafCount}
-          {compositeCount}
-          portCount={totalPorts}
-          portsPct={catPct(score?.ports ?? null)}
-          connectionCount={totalConnections}
-          connectionsPct={catPct(score?.connections ?? null)}
-          {overallPct}
-        />
-      </div>
-    {/if}
+  <main class="flex flex-col flex-1 min-w-0 min-h-0 bg-base-300">
     <header
-      class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-base-300 text-base-content"
+      class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-base-100 text-base-content"
       data-tour={TOUR_TARGETS.editor}
     >
       <h1 class="flex items-baseline gap-2 min-w-0 font-semibold text-lg">
@@ -374,6 +326,7 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
         <MonacoEditor
           bind:value={content}
           language={selectedPath?.endsWith(".md") ? "markdown" : "hcl"}
+          surface="base-300"
         />
       </div>
     {/if}
