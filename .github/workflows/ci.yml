@@ -119,7 +119,7 @@ jobs:
           name: rhizz-book
           path: book-artifact/
 
-  frontend:
+  frontend-lint:
     needs: wasm
     runs-on: ubuntu-latest
     steps:
@@ -167,7 +167,7 @@ jobs:
         working-directory: ./web
 
   # Vitest suite (`deno run test`, incl. the Storybook browser project).
-  # Split out of `frontend` so the long test run doesn't block lint/typecheck.
+  # Split out of `frontend-lint` so the long test run doesn't block lint/typecheck.
   # Browsers come from the flake (PLAYWRIGHT_BROWSERS_PATH).
   frontend-test:
     needs: wasm
