@@ -11,6 +11,7 @@ import {
 } from "../../../ProjectState.svelte";
 import ProjectTour from "../../../tour/ProjectTour.svelte";
 import PaletteHost from "../../../commands/PaletteHost.svelte";
+import { formatPageTitle, pageLabelForPath } from "../../../commands/pageTitle";
 import type { LayoutProps } from "./$types";
 
 let { data, children }: LayoutProps = $props();
@@ -47,7 +48,17 @@ $effect(() => {
 let isEmbed = $derived(page.url.pathname.includes("/embed/"));
 
 let project = $derived(getCurrentProject());
+
+// Browser tab: "Rhizz: <project> - <page>", reactive to navigation and
+// renames. Falls back to the static <title> in app.html off project pages.
+let tabTitle = $derived(
+  formatPageTitle(project?.name ?? null, pageLabelForPath(page.url.pathname)),
+);
 </script>
+
+<svelte:head>
+  <title>{tabTitle}</title>
+</svelte:head>
 
 {#if loading}
   <div class="flex-1 flex items-center justify-center text-base-content/60">
