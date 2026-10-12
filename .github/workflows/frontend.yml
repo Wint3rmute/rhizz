@@ -1,4 +1,4 @@
-name: ci
+name: frontend
 
 on:
   push:
@@ -39,87 +39,7 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-  rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: DeterminateSystems/nix-installer-action@main
-        with:
-          # Upstream Nix: skips the FlakeHub login (private flakes / binary
-          # caches), which this repo never uses — the login's transient
-          # failures were stalling every job for 10-15s before continuing
-          # anyway. The /nix/store caching (magic-nix-cache-action) is
-          # unaffected.
-          determinate: false
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-      # Swatinem/rust-cache persists workspace target/, which lives outside
-      # /nix/store and is therefore not covered by the Nix cache.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust"
-          cmd-format: nix develop -c {0}
-
-      - run: nix develop --command cargo fmt --all -- --check
-      - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
-      # Single instrumented pass: runs all tests (incl. doctests) + writes
-      # lcov + enforces the 80% line-coverage gate. rhizz-wasm is excluded
-      # (wasm cdylib, no host tests) and crates/*/tests are not counted as
-      # source. --doctests is unstable, hence RUSTC_BOOTSTRAP=1; the cobertura
-      # report is generated from the same saved data (no re-test) for when
-      # GitHub's native Code Quality upload (beta) becomes available.
-      - run: nix develop --command just coverage
-
-      # Raw lcov report kept for humans who want the data outside the log.
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rust-coverage
-          path: target/coverage/lcov.info
-
-      - run: nix develop --command cargo build --release --quiet
-
-  audit:
-    runs-on: ubuntu-latest
-    permissions:
-      checks: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  # Builds the mdBook with the current compiler and verifies that the
-  # compiled ```rhizz blocks still match book/book.lock. Any drift in the
-  # book's examples or the compiler's diagnostics fails this job.
-  book:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: DeterminateSystems/nix-installer-action@main
-        with:
-          # Upstream Nix: skips the FlakeHub login (private flakes / binary
-          # caches), which this repo never uses — the login's transient
-          # failures were stalling every job for 10-15s before continuing
-          # anyway. The /nix/store caching (magic-nix-cache-action) is
-          # unaffected.
-          determinate: false
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "book"
-          cmd-format: nix develop -c {0}
-
-      - run: nix develop --command just book
-      - run: |
-          rm -rf book-artifact
-          mkdir -p book-artifact
-          cp -a book/target-mdbook/. book-artifact/
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rhizz-book
-          path: book-artifact/
-
-  frontend-lint:
+  lint:
     needs: wasm
     runs-on: ubuntu-latest
     steps:
@@ -167,9 +87,9 @@ jobs:
         working-directory: ./web
 
   # Vitest suite (`deno run test`, incl. the Storybook browser project).
-  # Split out of `frontend-lint` so the long test run doesn't block lint/typecheck.
+  # Split out of `lint` so the long test run doesn't block lint/typecheck.
   # Browsers come from the flake (PLAYWRIGHT_BROWSERS_PATH).
-  frontend-test:
+  test:
     needs: wasm
     runs-on: ubuntu-latest
     steps:
@@ -293,67 +213,5 @@ jobs:
           path: web/vrt-report/
           if-no-files-found: ignore
 
-  # Docs are only for Pages, not a PR check.
-  docs:
-    if: ${{ github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: DeterminateSystems/nix-installer-action@main
-        with:
-          # Upstream Nix: skips the FlakeHub login (private flakes / binary
-          # caches), which this repo never uses — the login's transient
-          # failures were stalling every job for 10-15s before continuing
-          # anyway. The /nix/store caching (magic-nix-cache-action) is
-          # unaffected.
-          determinate: false
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "docs"
-          cmd-format: nix develop -c {0}
-
-      - run: nix develop --command cargo doc --no-deps --all
-      - run: echo '<meta http-equiv="refresh" content="0; url=rhizz_core/index.html">' > target/doc/index.html
-
-      - run: |
-          mkdir -p docs-artifact
-          cp -a target/doc/. docs-artifact/
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rhizz-docs
-          path: docs-artifact/
-
-  # Pages carries the book and the API docs only. The app is no longer
-  # published here — only `docs`/`book` produce artifacts to deploy.
-  deploy-pages:
-    needs: [docs, book]
-    if: ${{ github.event_name != 'pull_request' && !cancelled() &&
-      needs.docs.result == 'success' && needs.book.result == 'success' }}
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: rhizz-docs
-          path: pages/docs/
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: rhizz-book
-          path: pages/book/
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages/
-
-      - uses: actions/deploy-pages@v4
-        id: deploy
-
 permissions:
   contents: read
-  pages: write
-  id-token: write

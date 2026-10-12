@@ -1,0 +1,117 @@
+name: docs
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+# All toolchains come from flake.nix (pinned via flake.lock): every job
+# installs Nix, warms /nix/store from cache, then runs the same `just`
+# recipes and tool commands developers run locally. No per-tool setup
+# actions (rust-toolchain, setup-deno, mdbook, wasm-pack installer) remain.
+
+jobs:
+  # Builds the mdBook with the current compiler and verifies that the
+  # compiled ```rhizz blocks still match book/book.lock. Any drift in the
+  # book's examples or the compiler's diagnostics fails this job.
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "book"
+          cmd-format: nix develop -c {0}
+
+      - run: nix develop --command just book
+      - run: |
+          rm -rf book-artifact
+          mkdir -p book-artifact
+          cp -a book/target-mdbook/. book-artifact/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rhizz-book
+          path: book-artifact/
+
+  # API reference (`cargo doc`). Was `docs` in the old monolithic workflow;
+  # renamed to avoid the `docs / docs` stutter now that the workflow carries
+  # the prefix. Only built for Pages, not a PR check.
+  api:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "docs"
+          cmd-format: nix develop -c {0}
+
+      - run: nix develop --command cargo doc --no-deps --all
+      - run: echo '<meta http-equiv="refresh" content="0; url=rhizz_core/index.html">' > target/doc/index.html
+
+      - run: |
+          mkdir -p docs-artifact
+          cp -a target/doc/. docs-artifact/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rhizz-docs
+          path: docs-artifact/
+
+  # Pages carries the book and the API docs only. The app is no longer
+  # published here — only `api`/`book` produce artifacts to deploy.
+  deploy-pages:
+    needs: [api, book]
+    if: ${{ github.event_name != 'pull_request' && !cancelled() &&
+      needs.api.result == 'success' && needs.book.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: rhizz-docs
+          path: pages/docs/
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: rhizz-book
+          path: pages/book/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+
+      - uses: actions/deploy-pages@v4
+        id: deploy
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
