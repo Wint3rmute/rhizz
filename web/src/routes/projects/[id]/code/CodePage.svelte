@@ -2,13 +2,19 @@
 import { page } from "$app/state";
 import { onDestroy, untrack } from "svelte";
 import MonacoEditor from "../../../../components/MonacoEditor.svelte";
-import ModelStatsRow from "../../../../components/ModelStatsRow.svelte";
 import { createDebounced } from "../../../../debounce";
 import { getProjectModel } from "../../../../ProjectModel.svelte";
 import { projectStore } from "../../../../ProjectState.svelte";
 import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
 import { TOUR_TARGETS } from "../../../../tour/tourTargets";
+import Pane from "../../../../components/modular_ui/Pane.svelte";
+import Splitter from "../../../../components/modular_ui/Splitter.svelte";
+import {
+  SIDE_PANEL_WIDTH_FRACTION,
+  viewportCap,
+} from "../../../../components/modular_ui/viewport";
 import FileTree from "./FileTree.svelte";
+import { codePanes } from "./panes";
 
 let {
   projectId,
@@ -16,12 +22,20 @@ let {
   projectId: string;
 } = $props();
 
+// Modular workspace layout: the file sidebar's width and hidden flag in one
+// serializable store, persisted across reloads.
+let layout = $state(codePanes.read());
+
+$effect(() => {
+  codePanes.write(layout);
+});
+
 let fs = $derived(openProjectFs(projectStore, projectId));
 
 // Compiled model is shared with the status bar and the other pages; this
 // page contributes the open editor's buffer as a draft so the shared model
-// (and thus the stats and the bar) reflect unsaved keystrokes, while the
-// debounced write persists them.
+// (and thus the bar) reflects unsaved keystrokes, while the debounced write
+// persists them.
 const projectModel = getProjectModel();
 
 let entries = $state<Dirent[]>([]);
@@ -238,46 +252,28 @@ async function handleDelete(path: string): Promise<void> {
     reportError(error);
   }
 }
-
-let model = $derived(projectModel.model);
-
-// Persist the last successfully compiled model so stats survive syntax errors.
-let lastModel = $state<typeof model>(undefined);
-$effect(() => {
-  if (model !== undefined) lastModel = model;
-});
-let stale = $derived(model === undefined && lastModel !== undefined);
-
-let components = $derived(lastModel ? lastModel.components() : []);
-let systems = $derived(lastModel ? lastModel.systems() : []);
-let score = $derived(lastModel ? lastModel.score() : null);
-let leafCount = $derived(components.filter((c) => c.leaf).length);
-let compositeCount = $derived(components.filter((c) => !c.leaf).length);
-
-function catTotal(
-  cat: { complete: number; partial: number; incomplete: number } | null,
-) {
-  return cat ? cat.complete + cat.partial + cat.incomplete : 0;
-}
-function catPct(cat: { percentage: number } | null) {
-  return cat ? Math.round(cat.percentage) : 0;
-}
-
-let totalPorts = $derived(catTotal(score?.ports ?? null));
-let totalConnections = $derived(catTotal(score?.connections ?? null));
-let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
 </script>
 
 <svelte:window onpagehide={flushFileWrite} />
 
-<div class="flex-1 w-full bg-base-100">
-  <div
-    class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 md:grid-cols-12 gap-6 h-full"
+<!-- Same modular workspace as Modeling and Inventory: a file sidebar (Pane)
+     beside the main area, with the editor filling all the height down to the
+     diagnostics status bar that the project layout renders below this page. -->
+<div
+  class="flex flex-row flex-1 w-full min-h-0 overflow-hidden bg-base-300"
+  data-testid="code-workspace"
+>
+  <Pane
+    scope="code"
+    title="Files"
+    side="left"
+    width={layout.leftWidth}
+    hidden={layout.leftHidden}
+    responsive={false}
+    onhide={() => (layout = codePanes.hide(layout, "left"))}
+    onshow={() => (layout = codePanes.show(layout, "left"))}
   >
-    <aside
-      class="md:col-span-3 lg:col-span-2 bg-base-100 text-base-content p-4 rounded shadow"
-    >
-      <h3 class="font-semibold mb-3 text-base-content">Files</h3>
+    <div class="flex-1 min-h-0 overflow-auto p-3">
       <FileTree
         {entries}
         bind:selectedPath
@@ -286,56 +282,53 @@ let overallPct = $derived(score ? Math.round(score.overall_percentage) : 0);
         onrename={handleRename}
         ondelete={handleDelete}
       />
-    </aside>
+    </div>
+  </Pane>
 
-    <main class="md:col-span-9 lg:col-span-10 flex flex-col gap-4">
-      {#if lastModel !== undefined}
-        <div
-          class="
-            transition-opacity duration-300 {stale
-            ? 'opacity-40 grayscale'
-            : ''}
-          "
-        >
-          <ModelStatsRow
-            systemCount={systems.length}
-            componentCount={components.length}
-            {leafCount}
-            {compositeCount}
-            portCount={totalPorts}
-            portsPct={catPct(score?.ports ?? null)}
-            connectionCount={totalConnections}
-            connectionsPct={catPct(score?.connections ?? null)}
-            {overallPct}
-          />
-        </div>
-      {/if}
-      <div
-        class="w-full bg-base-200 p-6 rounded shadow flex flex-col flex-1 text-base-content"
-      >
-        <h1
-          class="text-2xl font-semibold mb-4 text-base-content"
-          data-tour={TOUR_TARGETS.editor}
-        >
-          Editor{#if selectedPath}<span
-              class="text-base-content/50 font-mono text-base ml-2"
-            >{selectedPath}</span>{/if}
-        </h1>
-        {#if selectedPath === null}
-          <div
-            class="flex-1 flex items-center justify-center text-base-content/50 text-sm"
-          >
-            No file selected — create or pick one from the sidebar.
-          </div>
-        {:else}
-          <div class="flex-1 w-full">
-            <MonacoEditor
-              bind:value={content}
-              language={selectedPath?.endsWith(".md") ? "markdown" : "hcl"}
-            />
-          </div>
+  <Splitter
+    testid="code-splitter-left"
+    panelName="files"
+    value={layout.leftWidth}
+    hidden={layout.leftHidden}
+    onresize={(dx) =>
+      (layout = codePanes.resize(
+        layout,
+        "left",
+        Math.min(
+          layout.leftWidth + dx,
+          viewportCap(SIDE_PANEL_WIDTH_FRACTION, "width"),
+        ),
+      ))}
+  />
+
+  <main class="flex flex-col flex-1 min-w-0 min-h-0 bg-base-300">
+    <header
+      class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-base-100 text-base-content"
+      data-tour={TOUR_TARGETS.editor}
+    >
+      <h1 class="flex items-baseline gap-2 min-w-0 font-semibold text-lg">
+        <span>Editor</span>
+        {#if selectedPath}
+          <span class="text-base-content/50 font-mono text-sm truncate">
+            {selectedPath}
+          </span>
         {/if}
+      </h1>
+    </header>
+    {#if selectedPath === null}
+      <div
+        class="flex-1 min-h-0 flex items-center justify-center text-base-content/50 text-sm"
+      >
+        No file selected — create or pick one from the sidebar.
       </div>
-    </main>
-  </div>
+    {:else}
+      <div class="flex-1 min-h-0 w-full">
+        <MonacoEditor
+          bind:value={content}
+          language={selectedPath?.endsWith(".md") ? "markdown" : "hcl"}
+          surface="base-300"
+        />
+      </div>
+    {/if}
+  </main>
 </div>
