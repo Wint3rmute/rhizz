@@ -1,0 +1,71 @@
+name: rust
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+# All toolchains come from flake.nix (pinned via flake.lock): every job
+# installs Nix, warms /nix/store from cache, then runs the same `just`
+# recipes and tool commands developers run locally. No per-tool setup
+# actions (rust-toolchain, setup-deno, mdbook, wasm-pack installer) remain.
+
+jobs:
+  # Was `rust` in the old monolithic workflow; renamed to avoid the
+  # `rust / rust` stutter now that the workflow carries the prefix.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      # Swatinem/rust-cache persists workspace target/, which lives outside
+      # /nix/store and is therefore not covered by the Nix cache.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust"
+          cmd-format: nix develop -c {0}
+
+      - run: nix develop --command cargo fmt --all -- --check
+      - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+      # Single instrumented pass: runs all tests (incl. doctests) + writes
+      # lcov + enforces the 80% line-coverage gate. rhizz-wasm is excluded
+      # (wasm cdylib, no host tests) and crates/*/tests are not counted as
+      # source. --doctests is unstable, hence RUSTC_BOOTSTRAP=1; the cobertura
+      # report is generated from the same saved data (no re-test) for when
+      # GitHub's native Code Quality upload (beta) becomes available.
+      - run: nix develop --command just coverage
+
+      # Raw lcov report kept for humans who want the data outside the log.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rust-coverage
+          path: target/coverage/lcov.info
+
+      - run: nix develop --command cargo build --release --quiet
+
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: read
