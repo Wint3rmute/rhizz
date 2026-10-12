@@ -4,6 +4,30 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Ctrl-P file switching works on the Code page
+
+Choosing a file from the palette while on Code now opens it in the editor.
+Two separate causes:
+
+- **Already mounted:** `CodePage` read `?file=` only on project load, so a
+  palette navigation that changed only the query left the old file open
+  (`.md` and `main.hcl` rows). It now selects the requested file whenever the
+  URL names one, reading the listing untracked so a create/rename/delete does
+  not snap the selection back.
+- **View rows:** every `views/*.hcl` row routed to the canvas. On Code, every
+  row now opens in the editor (`editorTargetFor`); Modeling, Explore and
+  Overview keep opening views on the canvas.
+
+- **Tests**: unit `editorTargetFor` (red first); e2e
+  `choosing a file from the code page switches the open editor` and
+  `choosing a view from the code page opens it in the editor`. The e2e tests
+  were added after the fix, not observed failing first.
+- **Validation**: `just format`, `just lint`, `just build` pass. Vitest
+  (1044/1044) and `command-palette.spec.ts` (22/22) pass. Full `just test` was
+  not re-run; the change is web-only.
+
+---
+
 ## Task <N> — Markdown-flavored diagnostics with monospace entity names
 
 Diagnostic messages are now Markdown: entity names (labels, paths, source

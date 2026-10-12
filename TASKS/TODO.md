@@ -16,48 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Ctrl-P file switching does not work on the "Editor" menu
-
-The command pallete is supposed to do 2 things:
-
-- Allow the user to switch between application pages
-- Allow the user to switch selected view/component/system **in the context of a page**
-
-Second variant, by example:
-
-- In modeling, the user can switch between defined system views
-- In inventory, the user can switch between defined systems and components
-- In code/, the user can switch between all files, having them open in the editor
-
-..the problem is, the last one does not work
-
-#### Steps to reproduce - md files
-
-1. Navigate to code
-2. Run ctrl-P and search for a .md file with documentation
-3. Press enter
-
-Nothing happens. I expected that the selected .md file would open.
-
-#### Steps to reproduce - system definition file (main.hcl)
-
-1. Navigate to code
-2. Run ctrl-P and search for main.hcl
-3. Press enter
-
-Nothing happens. I expected that the main system definition would open in the
-editor.
-
-#### Steps to reproduce - view files
-
-1. Navigate to code
-2. Run ctrl-P and search for one of system views
-3. Press enter
-
-The application switches to the modeling/ page! I expected that the HCL view
-definitino would open in the editor.
-
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the

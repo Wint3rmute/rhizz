@@ -20,7 +20,7 @@ import {
 import { getProjectModel } from "../ProjectModel.svelte";
 import type { Dirent } from "../vfs/fs";
 import { commandItems } from "./commandItems";
-import { fileItems, fileTargetFor } from "./fileSwitcher";
+import { editorTargetFor, fileItems, fileTargetFor } from "./fileSwitcher";
 import { inventoryEntities, inventoryItems } from "./inventoryItems";
 import { getPaletteRequest } from "./paletteRequest.svelte";
 import { paletteScopeForPath } from "./paletteScope";
@@ -49,6 +49,9 @@ const projectModel = getProjectModel();
 // with no files at all. Re-read on every navigation rather than captured at
 // mount, because the host outlives every page inside it.
 let scope = $derived(paletteScopeForPath(pathname));
+// Whether the page is Code. A file row's destination depends on it (see
+// handleSelect), so it is read off the pathname the same way scope is.
+let onCodePage = $derived(pathname.split("/")[3] === "code");
 
 const FILES_GROUP = "Files";
 const VIEWS_GROUP = "Views";
@@ -137,7 +140,12 @@ function handleSelect(item: PaletteItem): void {
     item.action();
     return;
   }
-  const target = fileTargetFor(item.label);
+  // A file row is just a path. Where it lands depends on the page: on Code
+  // every file is text, so every row opens in the editor; elsewhere a view
+  // opens on the canvas.
+  const target = onCodePage
+    ? editorTargetFor(item.label)
+    : fileTargetFor(item.label);
   if (target.kind === "view") {
     void goto(
       resolve("/projects/[id]/modeling/[...view]", {
