@@ -107,6 +107,7 @@ export default ts.config(
       "src/ProjectModel.svelte.ts",
       "**/explore/Explore.stories.ts",
       "**/inventory/InventoryPage.stories.ts",
+      "**/code/CodePage.stories.ts",
       "**/components/Navbar.stories.ts",
       "**/components/DiagnosticsStatusBar.stories.ts",
       "**/commands/PaletteHost.stories.ts",
