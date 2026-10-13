@@ -72,7 +72,8 @@ always add new either new end-to-end tests or new Storybook stories which
 excercise the new/changed functionality.
 
 - When new interaction logic is added - use e2e tests
-- When actual new UI is added - first check if it's not already covered, if it's not - add a new story
+- When UI (the looks) is added/changed - first check if it's not already covered
+  via a story (VRT test). Only add a new story if it's not covered anywhere!
 
 ### DaisyUI
 
