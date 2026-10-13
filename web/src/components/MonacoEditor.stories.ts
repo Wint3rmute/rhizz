@@ -2,10 +2,11 @@ import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, waitFor, within } from "storybook/test";
 import MonacoEditorHost from "./MonacoEditorHost.svelte";
 
-// The one editor the app uses, on both surfaces that edit text: the Code page
-// (HCL) and the Inventory's documentation tab (Markdown). It had no stories at
-// all until now, which is why its `options` escape hatch had nothing standing
-// behind it — the Inventory is the only caller that passes one.
+// The one editor the app uses, on every surface that edits text: the Code page
+// (HCL, bright panel tone) and the Inventory's documentation tab (Markdown,
+// default panel-card tone). It had no stories at all until now, which is why
+// its `options` escape hatch had nothing standing behind it — the Inventory is
+// the only caller that passes one.
 
 const meta = {
   title: "Components/MonacoEditor",

@@ -72,7 +72,7 @@ test("code page hides and restores the file sidebar without unmounting it", asyn
   await expect(page.locator(".monaco-editor").first()).toBeVisible();
 });
 
-test("code page editor sits on the same recessed tone as the diagram canvas", async ({ page }) => {
+test("code page editor sits on the same bright tone as the file sidebar", async ({ page }) => {
   await openCodePage(page, "E2E code colors");
 
   // Computed colours come back in whatever notation the browser picked
@@ -90,12 +90,12 @@ test("code page editor sits on the same recessed tone as the diagram canvas", as
       return Array.from(ctx.getImageData(0, 0, 1, 1).data).join(",");
     }, color);
 
-  // The recessed workspace tone, resolved through the app's own theme: a
-  // throwaway element with the same class the diagram canvas uses.
-  const recessed = await toPixel(
+  // The bright panel tone, resolved through the app's own theme: a
+  // throwaway element with the same class the file sidebar uses.
+  const panel = await toPixel(
     await page.evaluate(() => {
       const probe = document.createElement("div");
-      probe.className = "bg-base-300";
+      probe.className = "bg-base-100";
       document.body.appendChild(probe);
       const color = getComputedStyle(probe).backgroundColor;
       probe.remove();
@@ -113,8 +113,7 @@ test("code page editor sits on the same recessed tone as the diagram canvas", as
   const surface = page.locator(".monaco-editor .monaco-editor-background")
     .first();
 
-  expect(await background(main)).toBe(recessed);
-  expect(await background(surface)).toBe(recessed);
-  // The sidebar stays on the brighter panel tone.
-  expect(await background(sidebar)).not.toBe(recessed);
+  expect(await background(main)).toBe(panel);
+  expect(await background(surface)).toBe(panel);
+  expect(await background(sidebar)).toBe(panel);
 });
