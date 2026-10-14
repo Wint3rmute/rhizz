@@ -275,6 +275,7 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                 identifier_suffix(),
                 prop::option::of(side()),
                 prop::option::of(side()),
+                any::<bool>(),
             ),
             0..5,
         ),
@@ -322,10 +323,11 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                     .into_iter()
                     .enumerate()
                     .map(
-                        |(index, (connection, start_side, end_side))| ConnectionLayout {
+                        |(index, (connection, start_side, end_side, hidden))| ConnectionLayout {
                             connection: format!("connection-{index}-{connection}"),
                             start_side,
                             end_side,
+                            hidden,
                         },
                     )
                     .collect(),

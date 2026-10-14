@@ -84,7 +84,7 @@
 
   let model = $derived(output?.model());
   let components = $derived(model?.components() ?? []);
-  let connections = $derived(model?.connections() ?? []);
+  let allConnections = $derived(model?.connections() ?? []);
   let systems = $derived(model?.systems() ?? []);
   let diagnostics = $derived.by(() => output?.diagnostics() ?? []);
   let score = $derived(model?.score());
@@ -213,6 +213,20 @@
   let showDiagram = $derived(
     !singleFile && diagramView && isDiagram(selectedFile),
   );
+
+  // Connections hidden in the selected view are not drawn. Hiding is keyed
+  // by name, so all copies of one declaration are skipped together.
+  let connections = $derived.by(() => {
+    const hidden = new Set(
+      selectedViews.flatMap((view) =>
+        (view.connections ?? [])
+          .filter((conn) => conn.hidden === true)
+          .map((conn) => conn.connection),
+      ),
+    );
+    if (hidden.size === 0) return allConnections;
+    return allConnections.filter((conn) => !hidden.has(conn.label));
+  });
 
   let keyToIndex = $derived(componentKeyIndex(model));
   let boxes = $derived(

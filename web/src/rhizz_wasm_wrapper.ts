@@ -22,6 +22,7 @@ export interface ConnectionLayout {
   connection: string;
   start_side?: string;
   end_side?: string;
+  hidden?: boolean;
 }
 
 export interface Annotation {

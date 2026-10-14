@@ -24,6 +24,7 @@ export type { ConnectionSide, TextAlign } from "./geometry";
 export interface StoredConnection {
   startSide?: ConnectionSide | undefined;
   endSide?: ConnectionSide | undefined;
+  hidden?: boolean | undefined;
 }
 
 // Position + size + style of a node, as stored in `checked`.
@@ -195,14 +196,24 @@ export function layoutToHcl(
     return node;
   });
 
-  const connections = Object.entries(layout.connections ?? {}).map(
-    ([connection, data]) => {
+  const connections = Object.entries(layout.connections ?? {})
+    .filter(([, data]) => {
+      // A stored entry with no routing override and no hide flag carries no
+      // information — omitting it keeps canonical HCL stable. A hidden entry
+      // always carries its flag, even with no sides.
+      return (
+        data.startSide !== undefined ||
+        data.endSide !== undefined ||
+        data.hidden === true
+      );
+    })
+    .map(([connection, data]) => {
       const conn: ConnectionLayout = { connection };
       if (data.startSide !== undefined) conn.start_side = data.startSide;
       if (data.endSide !== undefined) conn.end_side = data.endSide;
+      if (data.hidden === true) conn.hidden = true;
       return conn;
-    },
-  );
+    });
 
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty-string systems must fall through, ?? would keep "".
   const resolvedSystem = systemName || layout.system || "";
@@ -260,7 +271,12 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
       const endSide = asConnectionSide(conn.end_side);
       if (startSide !== undefined) entry.startSide = startSide;
       if (endSide !== undefined) entry.endSide = endSide;
-      if (entry.startSide !== undefined || entry.endSide !== undefined) {
+      if (conn.hidden === true) entry.hidden = true;
+      if (
+        entry.startSide !== undefined ||
+        entry.endSide !== undefined ||
+        entry.hidden === true
+      ) {
         connections[conn.connection] = entry;
       }
     }

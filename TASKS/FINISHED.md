@@ -4,6 +4,44 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Show and hide connections per view
+
+Connections can be hidden per view from the Modeling connections sidebar, the
+same way component instances are shown and hidden. The sidebar lists every
+system connection with both endpoints placed in the view, each with a
+checkbox (checked = shown); hidden connections stay listed, unchecked, so
+they can be shown again. Hidden connections are not drawn on the canvas or
+in read-only viewers (Explore, embed, Inventory, book example).
+
+- **Storage:** `hidden` boolean on the view's `connection` block
+  (`connection "fc-to-prop" { hidden = true }`), omitted when `false`.
+  Added to `ConnectionLayout` in `rhizz-core` (parse + serialize round-trip)
+  and to `StoredConnection` on the web side (`viewsToLayout`/`layoutToHcl`).
+- **Shared predicate:** `connectionVisibility.ts` owns `isConnectionDrawn`
+  (placed + in-system + not hidden), used by both the canvas edge list and
+  `systemConnections`; rows group copies by name (listed/checked if any copy
+  is), hiding applies to all copies. `hidden` survives endpoint
+  uncheck/re-check; toggling goes through `recordUndoPoint` + the save
+  effect like component checkboxes.
+- **Uniqueness:** connections are keyed by name within a system. Each
+  `Connection` records its declaring `decl` (`system:<label>` or
+  `component:<label>`); copies share it, and two different declarations
+  sharing a name in one system fail with E001 naming both declarations.
+  Documented in `SPEC.md` §2.10, `SPEC/models.md`, and `SPEC/diagnostics/E001.md`.
+  All `examples/` compile with 0 errors, no renames needed.
+- **Tests:** Rust round-trip (`hidden`, omitted when `false`) + E001
+  duplicates/copies; Vitest predicate (9 tests) + layout round-trip;
+  Playwright `connection-visibility.spec.ts` (hide removes edge + unchecks,
+  undo/redo, reload persistence, endpoint cascade, exact sidebar listing,
+  re-show clears the flag).
+- **Validation:** `cargo test --all`, Vitest unit 897/897, Playwright
+  128/128, `just lint`, `just build`, `just format` pass. The storybook
+  project's one failure is the known macOS-only `Ctrl+P`/`⌘P` tooltip
+  assertion. VRT not run on macOS — the sidebar's new empty-state hint
+  changes 4 `pages-diagrams-compilation-error` screenshots; review in CICD.
+
+---
+
 ## Task <N> — Migrate the web frontend from Deno to Node/npm
 
 The web frontend, its tooling, CI, the container build and the Nix dev shell
