@@ -16,6 +16,45 @@ How to work on this file:
 
 ---
 
+## Task <N> — Finish the Deno → Node/npm migration (incremental plan)
+
+The toolchain switch is in `refactor/remove-deno` (`web/package-lock.json`
+replaces `deno.lock`; the Justfile, CI, Dockerfile, flake and AGENTS.md run
+npm on Node 24). Remaining work is split into small tasks, smallest blast
+radius first. Each is independently verifiable and lands as its own commit.
+
+Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
+`lint` pass; `test` fails 2 of 1056 (`InventoryPage.stories.ts`:
+"Detail Pane Stacks Below The Diagram", "Panes Open By Default"). `e2e` and
+`visual-regressions` are not yet resolved and VRT is out of scope.
+
+- [ ] **1. Fix the two viewport-dependent Inventory play tests.** The stories
+  assume the test browser is ~414px wide (below `md`). Pin the viewport in the
+  story `parameters` so the assertion no longer depends on runner size.
+  Blast radius: one stories file. Verify: `npm run test` storybook project.
+- [ ] **2. Remove the Node teardown error.** The storybook project prints
+  `browser.closeBrowserProvider is not a function` on exit. Find the mismatched
+  `@vitest/browser-playwright` / `vitest` pin and align it. Verify: the
+  storybook run exits 0 with no `closeBrowserProvider` line.
+- [ ] **3. Make `e2e` green under npm.** Run `npm run test:e2e` in CI and
+  locally; fix any failure caused by the toolchain (paths, `webServer` command
+  resolution, `.deno` references). Skip VRT.
+- [ ] **4. Move the spike to FINISHED and close it out.** Record the Node vs.
+  Deno numbers from the spike in `FINISHED.md` (this section is the source).
+- [ ] **5. Fix the 10 ESLint errors** in SvelteKit `+page.ts`/`+layout.ts`
+  (`no-unsafe-member-access` on `any`). Likely a stale `.svelte-kit` tsconfig
+  or `$types` resolution; verify with `npm run sync && npm run eslint`.
+- [ ] **6. Reintroduce formatting.** `deno fmt` has no replacement. Choose a
+  formatter, measure the drift (Prettier defaults flag ~130 files), and land
+  the reformat as its own commit with no other changes.
+- [ ] **7. Verify the Dockerfile build.** The frontend stage now copies Node 24
+  from `node:24-bookworm`. Build the image on a machine with Docker and confirm
+  `npm run build` succeeds inside it.
+- [ ] **8. Triage `npm audit`.** Four moderate findings predate the switch.
+  Review and fix or document each.
+
+---
+
 ## (Experimental) Task <N> — Spike a Node/npm test toolchain to replace Deno for the web frontend
 
 Frontend unit and Storybook tests run via `deno run test` in `web/`. On macOS
