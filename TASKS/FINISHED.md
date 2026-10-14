@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Filter inventory by defined views
+
+The Inventory page gained an "Only with defined views" checkbox in the tab
+row, beside the add button. When checked, Components shows only definitions
+that have their own `views/<label>.hcl`, and Systems only those bound by at
+least one view. The checkbox never appears on Interfaces. Its state is shared
+across tabs (checking it on Components leaves it checked on Systems) and
+composes with the search query.
+
+- **Logic:** `filterWithViews` in `inventory.ts` narrows a filtered list to
+  entities with a view, reusing the same "has view" definition as the rest of
+  the page. `Inventory.svelte` renders the DaisyUI checkbox in the tab row.
+- **Tests:** unit coverage in `inventory.test.ts` (unchecked returns all;
+  checked keeps only view-bearing entities; composes with search) and
+  `e2e/inventory-view-filter.spec.ts` (visibility per tab, component/system
+  filtering, persistence across tab switches, add button still in the row).
+- **Validation:** `just test` (Rust, Vitest 1056/1056, Playwright 127/127),
+  `just lint`, `just build`, `just format` all pass.
+
+---
+
 ## Task <N> — Code page uses the modular workspace layout
 
 The Code page is now a modular workspace like Modeling and Inventory: a
