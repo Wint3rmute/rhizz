@@ -70,9 +70,9 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
 - [ ] **6. Reintroduce formatting.** `deno fmt` has no replacement. Choose a
   formatter, measure the drift (Prettier defaults flag ~130 files), and land
   the reformat as its own commit with no other changes.
-- [ ] **7. Verify the Dockerfile build.** The frontend stage now copies Node 24
-  from `node:24-bookworm`. Build the image on a machine with Docker and confirm
-  `npm run build` succeeds inside it.
+- [x] **7. Verify the Dockerfile build.** Result: the `docker` workflow on
+  `main` (run 38578075822) builds the image. The frontend stage runs `npm ci`
+  and `npm run build` on `node:24-bookworm`, and the image exports.
 - [x] **8. Triage `npm audit`.** Result: 4 moderate findings, 0 after the
   fix. Two were real, two were stale metadata:
   - `dompurify@3.2.7` (under `monaco-editor`, runtime path): pinned to
