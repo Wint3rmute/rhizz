@@ -35,10 +35,13 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
   `NARROW_VIEWPORT`. Inventory stories: 22/22 pass. Full storybook project:
   169/170; the one remaining failure is `Navbar > Project Open`, the known
   macOS `Ctrl+P` vs `⌘P` tooltip assertion, which passes on Linux CI.
-- [ ] **2. Remove the Node teardown error.** The storybook project prints
-  `browser.closeBrowserProvider is not a function` on exit. Find the mismatched
-  `@vitest/browser-playwright` / `vitest` pin and align it. Verify: the
-  storybook run exits 0 with no `closeBrowserProvider` line.
+- [x] **2. Remove the Node teardown error.** Result: not reproducible on the
+  current tree. The combined run (`vitest run`, unit + storybook) exits 1 only
+  because of the Navbar tooltip test, with no `closeBrowserProvider` line and
+  no hang (13.9s). The error came from the pre-pin tree: the Deno lock pinned
+  `@storybook/addon-vitest@10.5.10` (vitest 3.2.7), while npm resolved 10.6.2
+  against vitest 5. Left the current pins alone since they run clean; re-check
+  if the storybook project starts printing the error again.
 - [ ] **3. Make `e2e` green under npm.** Run `npm run test:e2e` in CI and
   locally; fix any failure caused by the toolchain (paths, `webServer` command
   resolution, `.deno` references). Skip VRT.
