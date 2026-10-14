@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## (Experimental) Task <N> — Spike a Node/npm test toolchain to replace Deno
+
+Time-boxed experiment: does a Node/npm toolchain run the whole web test suite
+cleanly? Result: yes, and the project migrated (see the follow-up plan in
+`TODO.md`).
+
+- **Deno baseline** (`deno run test`, `web/`, commit `acebb1f`): exit 1, ~8s.
+  Unit: 880/880 pass. Storybook never ran: Playwright Chromium `1243` missing
+  outside the Nix shell. Under `nix develop`, Deno died mid-run with
+  `IPC channel is already disconnected` (its Node `child_process` shim).
+- **Node, unit project, unfixed**: exit 1, 866 pass, 14 fail in
+  `WorkspaceHarness`. Cause: the WASM glue calls `fetch()` on a `file:` URL,
+  which Node rejects (`not implemented... yet`). Also fails the
+  `simulation.test.ts` property test through the same path.
+- **Node, unit project, WASM read from disk** (`initSync` +
+  `readFileSync`): exit 0, 880/880 pass, ~6s. This is the fix that shipped
+  as `src/testing/wasmInit.ts`.
+- **Node, storybook project** (under `nix develop`): exit 1, 169/170 pass,
+  ~22s. The one failure is a macOS-only assertion (`Ctrl+P` vs `⌘P` tooltip).
+  The teardown error `browser.closeBrowserProvider is not a function` appeared
+  only on the pre-pin tree; it does not reproduce on the pinned tree.
+- **Recommendation: migrate.** Node runs the unit suite cleanly with one
+  small fix, and Deno's storybook run is broken under the Nix shell. The cost
+  was real: `AGENTS.md`, `Justfile`, `flake.nix`, the CI workflows, the
+  Dockerfile, Dependabot and `deno.lock` all changed, and `deno fmt` has no
+  Node replacement yet (tracked as a follow-up).
+- **Outcome on the migration branch** (`refactor/remove-deno`, CI on
+  `d0e0dfd`): `wasm`, `lint`, `test`, `e2e` and `rust`/`docs` pass.
+  `visual-regressions` fails and is deferred to a Linux re-run.
+
+---
+
 ## Task <N> — Filter inventory by defined views
 
 The Inventory page gained an "Only with defined views" checkbox in the tab

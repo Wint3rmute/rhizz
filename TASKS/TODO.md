@@ -55,8 +55,9 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
     off-screen box still fails. This was a real test race, not a regression
     from `main`: `main`'s CI run passed on the first attempt, which is why it
     looked fine there. Skip VRT.
-- [ ] **4. Move the spike to FINISHED and close it out.** Record the Node vs.
-  Deno numbers from the spike in `FINISHED.md` (this section is the source).
+- [x] **4. Move the spike to FINISHED and close it out.** Done: the Node vs.
+  Deno numbers are in `FINISHED.md`, and the spike section is removed from
+  this file.
 - [ ] **5. Fix the 10 ESLint errors** in SvelteKit `+page.ts`/`+layout.ts`
   (`no-unsafe-member-access` on `any`). Likely a stale `.svelte-kit` tsconfig
   or `$types` resolution; verify with `npm run sync && npm run eslint`.
@@ -68,49 +69,6 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
   `npm run build` succeeds inside it.
 - [ ] **8. Triage `npm audit`.** Four moderate findings predate the switch.
   Review and fix or document each.
-
----
-
-## (Experimental) Task <N> — Spike a Node/npm test toolchain to replace Deno for the web frontend
-
-Frontend unit and Storybook tests run via `deno run test` in `web/`. On macOS
-the combined run (unit + Storybook projects) never exits cleanly: Deno's Node
-`child_process` shim drops the Vitest worker IPC channel, and the process
-hangs or exits 1 with "something prevents 2 Vite servers from exiting". Each
-project passes on its own. Plain Node Vitest avoids the IPC error, but it
-still fails 14 `WorkspaceHarness` tests, because the WASM glue calls
-`fetch(new URL(...))` on a `file:` URL, which Node's `fetch` rejects.
-
-This task is a time-boxed experiment to answer one question: does a Node/npm
-toolchain run the whole web test suite cleanly, and is it worth the cost of
-changing the project's conventions? Nothing is merged to `main` from this task.
-The result is a go/no-go write-up.
-
-Requirements:
-
-- Work in a throwaway copy of `web/` (or a scratch branch that is never merged),
-  not in the main tree. `AGENTS.md`, `Justfile`, `flake.nix`, and CI stay
-  unchanged, because `AGENTS.md` mandates Deno and forbids `npm`/`npx`.
-- Timebox: stop after one working attempt. If the suite is not clean after the
-  WASM and teardown fixes below, report what blocked it and stop.
-- Fix the WASM init so Node reads the bytes from disk, e.g. `initSync` with
-  `readFileSync` on `rhizz_wasm_bg.wasm`, instead of `fetch(file: URL)`.
-- Run `vitest run` under Node with the `unit_tests` and `storybook` projects.
-  The Storybook project needs the nix shell (`nix develop`) so Playwright finds
-  the Nix-provided browsers via `PLAYWRIGHT_BROWSERS_PATH`.
-- Compare against the Deno baseline from the same commit: pass/fail counts,
-  wall-clock time, and whether the process exits 0.
-
-Definition of done:
-
-1. A written result: exit code, test counts, and runtime for Node vs. Deno, on
-   the same commit, with the exact commands used.
-2. Every failure or hang that remains, with the error text and a suspected cause.
-3. A recommendation: migrate, keep Deno, or migrate partially (e.g. only the
-   test runner). Include the cost: changes needed to `AGENTS.md`, `Justfile`,
-   `flake.nix`, CI, and `deno.lock`.
-4. If the recommendation is to migrate, a separate follow-up task is drafted in
-   this file. The experiment itself does not change project conventions.
 
 ---
 
