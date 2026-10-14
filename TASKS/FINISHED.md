@@ -23,11 +23,6 @@ Deno and `dx` are gone from the repository.
   by `format:check` in the CI lint job.
 - **Verified on `main`:** `wasm`, `lint`, `test`, `e2e`, `docs`, `rust`, and the
   `docker` workflow (the Node-based image build) pass.
-- **Open:** the formatting commit left 3 VRT screenshots failing on `main`. The
-  cause is not isolated, and the re-baseline is tracked in `TODO.md`. The palette
-  e2e flake is tracked there too.
-- **Left as history:** `audit/architecture.md` still describes the Deno setup,
-  as a record of the audit at the time.
 
 ---
 
