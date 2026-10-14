@@ -1,85 +1,88 @@
 <script lang="ts">
-import type { DiagnosticJS } from "rhizz";
-import DiagnosticRow from "./DiagnosticRow.svelte";
-import ScoreBadge from "./ScoreBadge.svelte";
-import WarningLevelSelect from "./WarningLevelSelect.svelte";
-import Splitter from "./modular_ui/Splitter.svelte";
-import { BOTTOM_BAR_HEIGHT_FRACTION, viewportCap } from "./modular_ui/viewport";
-import {
-  collapseDiagnosticsPanel,
-  DIAGNOSTICS_MAX_HEIGHT,
-  DIAGNOSTICS_MIN_HEIGHT,
-  expandDiagnosticsPanel,
-  readDiagnosticsLayout,
-  resizeDiagnosticsPanel,
-  writeDiagnosticsLayout,
-} from "./modular_ui/diagnosticsLayout";
+  import type { DiagnosticJS } from "rhizz";
+  import DiagnosticRow from "./DiagnosticRow.svelte";
+  import ScoreBadge from "./ScoreBadge.svelte";
+  import WarningLevelSelect from "./WarningLevelSelect.svelte";
+  import Splitter from "./modular_ui/Splitter.svelte";
+  import {
+    BOTTOM_BAR_HEIGHT_FRACTION,
+    viewportCap,
+  } from "./modular_ui/viewport";
+  import {
+    collapseDiagnosticsPanel,
+    DIAGNOSTICS_MAX_HEIGHT,
+    DIAGNOSTICS_MIN_HEIGHT,
+    expandDiagnosticsPanel,
+    readDiagnosticsLayout,
+    resizeDiagnosticsPanel,
+    writeDiagnosticsLayout,
+  } from "./modular_ui/diagnosticsLayout";
 
-// Bottom status bar replacing the Overview page's diagnostics sidebar, and the
-// home of the project-wide controls that used to sit in the navbar: collapsed
-// it shows only the counts (or a clean bill of health); clicking anywhere on
-// the strip expands the full diagnostics list above the bar.
-//
-// The strip is a transparent full-bleed button with the content laid over it.
-// The content row is capped (`max-w-7xl`) to sit on the panel's content edges,
-// and on a screen wider than that cap the bar's gutters used to be dead
-// margin — a button inside the capped row can never cover them, and a button
-// around the row cannot exclude the strictness select (a `<select>` inside a
-// `<button>` is neither valid markup nor a usable control). So the button is
-// an `absolute inset-0` layer under everything: it spans the bar's full width,
-// gutters included; the content row above it is `pointer-events-none` so
-// clicks and hover fall through to it; and the select's wrapper is the one
-// `pointer-events-auto` hole. The row needs `relative` for that — a static
-// box paints below a positioned one, and the button must end up under the
-// row, not over it.
-//
-// The button is empty (its content lives above it, outside it), so its
-// accessible name is carried by `aria-label`/`title` instead of its children.
-// One cost of `pointer-events-none` on the row: the score badge's own tooltip
-// never shows — its rounded value is right there in the badge, and the exact
-// one on the Overview page. `cursor-pointer` is set explicitly because neither
-// the browser nor daisyUI gives a button one.
-//
-// The score is the one thing read from a singleton here: only Modeling
-// publishes one (see ScoreBadge), and the bar is the surface that shows it now.
-//
-// Both surfaces are one opaque `bg-base-100`. They used to be `bg-base-100/95`
-// + a backdrop blur, which is why the panel and the strip looked like two
-// different colours: each showed 5% of whatever sat behind it, and they sit
-// on different backdrops (the panel over the page, the strip over the app
-// shell). One solid colour makes the bar a single surface, and a blur behind
-// an opaque fill costs a compositing pass for nothing.
-let {
-  diagnostics,
-  score = null,
-}: {
-  diagnostics: DiagnosticJS[];
-  /** The compiled model's overall score; null hides the badge. */
-  score?: { overall_percentage: number } | null;
-} = $props();
+  // Bottom status bar replacing the Overview page's diagnostics sidebar, and the
+  // home of the project-wide controls that used to sit in the navbar: collapsed
+  // it shows only the counts (or a clean bill of health); clicking anywhere on
+  // the strip expands the full diagnostics list above the bar.
+  //
+  // The strip is a transparent full-bleed button with the content laid over it.
+  // The content row is capped (`max-w-7xl`) to sit on the panel's content edges,
+  // and on a screen wider than that cap the bar's gutters used to be dead
+  // margin — a button inside the capped row can never cover them, and a button
+  // around the row cannot exclude the strictness select (a `<select>` inside a
+  // `<button>` is neither valid markup nor a usable control). So the button is
+  // an `absolute inset-0` layer under everything: it spans the bar's full width,
+  // gutters included; the content row above it is `pointer-events-none` so
+  // clicks and hover fall through to it; and the select's wrapper is the one
+  // `pointer-events-auto` hole. The row needs `relative` for that — a static
+  // box paints below a positioned one, and the button must end up under the
+  // row, not over it.
+  //
+  // The button is empty (its content lives above it, outside it), so its
+  // accessible name is carried by `aria-label`/`title` instead of its children.
+  // One cost of `pointer-events-none` on the row: the score badge's own tooltip
+  // never shows — its rounded value is right there in the badge, and the exact
+  // one on the Overview page. `cursor-pointer` is set explicitly because neither
+  // the browser nor daisyUI gives a button one.
+  //
+  // The score is the one thing read from a singleton here: only Modeling
+  // publishes one (see ScoreBadge), and the bar is the surface that shows it now.
+  //
+  // Both surfaces are one opaque `bg-base-100`. They used to be `bg-base-100/95`
+  // + a backdrop blur, which is why the panel and the strip looked like two
+  // different colours: each showed 5% of whatever sat behind it, and they sit
+  // on different backdrops (the panel over the page, the strip over the app
+  // shell). One solid colour makes the bar a single surface, and a blur behind
+  // an opaque fill costs a compositing pass for nothing.
+  let {
+    diagnostics,
+    score = null,
+  }: {
+    diagnostics: DiagnosticJS[];
+    /** The compiled model's overall score; null hides the badge. */
+    score?: { overall_percentage: number } | null;
+  } = $props();
 
-// ── Expandable, resizable panel ─────────────────────────────────────────────
-// Open flag + panel height in one serializable store, persisted across
-// reloads. Resizing clamps; toggling preserves the height.
-let barLayout = $state(readDiagnosticsLayout());
+  // ── Expandable, resizable panel ─────────────────────────────────────────────
+  // Open flag + panel height in one serializable store, persisted across
+  // reloads. Resizing clamps; toggling preserves the height.
+  let barLayout = $state(readDiagnosticsLayout());
 
-$effect(() => {
-  writeDiagnosticsLayout(barLayout);
-});
+  $effect(() => {
+    writeDiagnosticsLayout(barLayout);
+  });
 
-let expanded = $derived(barLayout.expanded);
+  let expanded = $derived(barLayout.expanded);
 
-let toggleLabel = $derived(
-  expanded ? "Collapse diagnostics" : "Expand diagnostics",
-);
+  let toggleLabel = $derived(
+    expanded ? "Collapse diagnostics" : "Expand diagnostics",
+  );
 
-let errors = $derived(diagnostics.filter((d) => d.code.startsWith("E")));
-let warnings = $derived(diagnostics.filter((d) => !d.code.startsWith("E")));
+  let errors = $derived(diagnostics.filter((d) => d.code.startsWith("E")));
+  let warnings = $derived(diagnostics.filter((d) => !d.code.startsWith("E")));
 
-// The panel's rows: errors first, warnings after — the order the two each
-// blocks used to hardcode, as one list so both severities render identical
-// row markup.
-let rows = $derived([...errors, ...warnings]);
+  // The panel's rows: errors first, warnings after — the order the two each
+  // blocks used to hardcode, as one list so both severities render identical
+  // row markup.
+  let rows = $derived([...errors, ...warnings]);
 </script>
 
 <div
@@ -141,8 +144,7 @@ let rows = $derived([...errors, ...warnings]);
           <button
             type="button"
             class="btn btn-ghost btn-xs"
-            onclick={() =>
-              (barLayout = collapseDiagnosticsPanel(barLayout))}
+            onclick={() => (barLayout = collapseDiagnosticsPanel(barLayout))}
             aria-label="Hide Diagnostics"
             title="Hide Diagnostics"
             aria-expanded="true"

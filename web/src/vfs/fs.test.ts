@@ -38,9 +38,7 @@ describe("writeFile / readFile", () => {
   it("creates a nested file once its parent directory exists", async () => {
     await fs.mkdir("components");
     await fs.writeFile("components/imu.hcl", 'component "imu" {}');
-    expect(await fs.readFile("components/imu.hcl")).toBe(
-      'component "imu" {}',
-    );
+    expect(await fs.readFile("components/imu.hcl")).toBe('component "imu" {}');
   });
 
   it("readFile rejects with ENOENT for a missing file", async () => {
@@ -92,9 +90,7 @@ describe("mkdir", () => {
 
   it("recursive rejects with ENOTDIR when a segment is actually a file", async () => {
     await fs.writeFile("a", "not a directory");
-    expect(await codeOf(fs.mkdir("a/b", { recursive: true }))).toBe(
-      "ENOTDIR",
-    );
+    expect(await codeOf(fs.mkdir("a/b", { recursive: true }))).toBe("ENOTDIR");
   });
 });
 
@@ -249,9 +245,7 @@ describe("rename", () => {
     await fs.mkdir("components");
     await fs.writeFile("components/a.hcl", "");
     await fs.writeFile("b.hcl", "");
-    await expect(
-      fs.rename("b.hcl", "components/a.hcl"),
-    ).rejects.toThrow();
+    await expect(fs.rename("b.hcl", "components/a.hcl")).rejects.toThrow();
     // Exactly one entry named "a.hcl" should exist under components/,
     // not two silently-shadowing nodes.
     const entries = await fs.readdir("components");

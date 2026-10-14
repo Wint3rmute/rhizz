@@ -28,7 +28,9 @@ async function paneWidth(page: Page, testId: string): Promise<number> {
   return box.width;
 }
 
-test("modeling puts the inspector panel beside the canvas", async ({ page }) => {
+test("modeling puts the inspector panel beside the canvas", async ({
+  page,
+}) => {
   await openModeling(page, "E2E modeling panes");
 
   const panel = page.getByTestId("modeling-pane-left");
@@ -44,9 +46,7 @@ test("modeling puts the inspector panel beside the canvas", async ({ page }) => 
 
   // Beside, not below: the canvas starts where the panel ends, sharing a
   // vertical band. The 1px slack absorbs sub-pixel rounding.
-  expect(canvasBox.x).toBeGreaterThanOrEqual(
-    panelBox.x + panelBox.width - 1,
-  );
+  expect(canvasBox.x).toBeGreaterThanOrEqual(panelBox.x + panelBox.width - 1);
   expect(canvasBox.y).toBeLessThan(panelBox.y + panelBox.height);
 
   // Default width matches the old fixed sidebar (w-64).
@@ -54,7 +54,9 @@ test("modeling puts the inspector panel beside the canvas", async ({ page }) => 
   expect(panelBox.width).toBeLessThanOrEqual(257);
 });
 
-test("modeling hides and restores the inspector without unmounting it", async ({ page }) => {
+test("modeling hides and restores the inspector without unmounting it", async ({
+  page,
+}) => {
   await openModeling(page, "E2E modeling hide");
 
   await page.getByRole("button", { name: "Hide Inspector" }).click();
@@ -69,7 +71,9 @@ test("modeling hides and restores the inspector without unmounting it", async ({
   await expect(page.getByTestId("modeling-pane-left")).toBeVisible();
 });
 
-test("modeling resizes the inspector by dragging its splitter", async ({ page }) => {
+test("modeling resizes the inspector by dragging its splitter", async ({
+  page,
+}) => {
   await openModeling(page, "E2E modeling resize");
 
   const before = await paneWidth(page, "modeling-pane-left");
@@ -103,7 +107,9 @@ test("modeling resizes the inspector by dragging its splitter", async ({ page })
   expect(clamped).toBeLessThanOrEqual(201);
 });
 
-test("modeling remembers a hidden inspector across reloads", async ({ page }) => {
+test("modeling remembers a hidden inspector across reloads", async ({
+  page,
+}) => {
   await openModeling(page, "E2E modeling persist");
 
   await page.getByRole("button", { name: "Hide Inspector" }).click();
@@ -138,7 +144,9 @@ test("modeling hides and restores the components panel", async ({ page }) => {
   );
 });
 
-test("modeling resizes the components panel by dragging its splitter", async ({ page }) => {
+test("modeling resizes the components panel by dragging its splitter", async ({
+  page,
+}) => {
   await openModeling(page, "E2E modeling components resize");
 
   const before = await paneWidth(page, "modeling-pane-right");

@@ -61,10 +61,7 @@ async function ensureProject(): Promise<Project> {
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
   }
-  return await createProjectWithMainFile(
-    PROJECT_NAME,
-    DEMO_HCL,
-  );
+  return await createProjectWithMainFile(PROJECT_NAME, DEMO_HCL);
 }
 
 const meta = {

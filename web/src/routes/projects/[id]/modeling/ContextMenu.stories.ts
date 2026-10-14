@@ -28,8 +28,9 @@ export const ComponentMenu: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByTestId("context-menu")).toBeInTheDocument();
-    await expect(canvas.getByRole("menuitem", { name: /hide from this view/i }))
-      .toBeInTheDocument();
+    await expect(
+      canvas.getByRole("menuitem", { name: /hide from this view/i }),
+    ).toBeInTheDocument();
     await expect(canvas.getByText("H")).toBeInTheDocument();
     await expect(
       canvas.getByRole("menuitem", { name: /create new view from selection/i }),
@@ -50,26 +51,31 @@ export const EmptyCanvasMenu: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByTestId("context-menu")).toBeInTheDocument();
-    await expect(canvas.getByRole("menuitem", { name: /new component/i }))
-      .toBeInTheDocument();
-    await expect(canvas.getByRole("menuitem", { name: /toggle grid/i }))
-      .toBeInTheDocument();
+    await expect(
+      canvas.getByRole("menuitem", { name: /new component/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("menuitem", { name: /toggle grid/i }),
+    ).toBeInTheDocument();
   },
 };
 
 export const AnnotationMenu: Story = {
   args: {
-    items: [{
-      label: "Delete",
-      shortcut: "Del",
-      action: () => {},
-      dangerous: true,
-    }],
+    items: [
+      {
+        label: "Delete",
+        shortcut: "Del",
+        action: () => {},
+        dangerous: true,
+      },
+    ],
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("menuitem", { name: /delete/i }))
-      .toBeInTheDocument();
+    await expect(
+      canvas.getByRole("menuitem", { name: /delete/i }),
+    ).toBeInTheDocument();
   },
 };
 

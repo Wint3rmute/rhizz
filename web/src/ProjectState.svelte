@@ -1,148 +1,148 @@
 <script module lang="ts">
-// Shared, app-wide "which project is active" state — a module-only file
-// (no markup), following the same pattern as ThemeState.svelte/
-// KeyboardState.svelte. Any component can import and read the active
-// project's id/metadata without prop-drilling (e.g. Navbar, to build
-// project-scoped links and show the workspace project's name).
-//
-// This deliberately only tracks the active project's *metadata*
-// (Project, from vfs/types.ts — the workspace container), not its node
-// list: pages that need the project's files (editor/views/overview)
-// fetch those directly from `projectStore` themselves, so a page's own
-// edits are never at risk of being shadowed by a stale cache living here.
-import { openProjectFs } from "./vfs/fs";
-import { reportVfsSizeBytes } from "./vfs/metrics";
-import { DEFAULT_STORAGE_KEY } from "./vfs/vfsStore";
-import { InMemoryProjectStore } from "./vfs/vfsStore";
-import { LocalStorageProjectStore } from "./vfs/vfsStore";
-import { ServerProjectStore } from "./vfs/vfsStore";
-import { getSafeStorage } from "./safeStorage";
-import type { ProjectStore } from "./vfs/store";
-import type { Project } from "./vfs/types";
+  // Shared, app-wide "which project is active" state — a module-only file
+  // (no markup), following the same pattern as ThemeState.svelte/
+  // KeyboardState.svelte. Any component can import and read the active
+  // project's id/metadata without prop-drilling (e.g. Navbar, to build
+  // project-scoped links and show the workspace project's name).
+  //
+  // This deliberately only tracks the active project's *metadata*
+  // (Project, from vfs/types.ts — the workspace container), not its node
+  // list: pages that need the project's files (editor/views/overview)
+  // fetch those directly from `projectStore` themselves, so a page's own
+  // edits are never at risk of being shadowed by a stale cache living here.
+  import { openProjectFs } from "./vfs/fs";
+  import { reportVfsSizeBytes } from "./vfs/metrics";
+  import { DEFAULT_STORAGE_KEY } from "./vfs/vfsStore";
+  import { InMemoryProjectStore } from "./vfs/vfsStore";
+  import { LocalStorageProjectStore } from "./vfs/vfsStore";
+  import { ServerProjectStore } from "./vfs/vfsStore";
+  import { getSafeStorage } from "./safeStorage";
+  import type { ProjectStore } from "./vfs/store";
+  import type { Project } from "./vfs/types";
 
-// Storage backend switch: with VITE_RHIZZ_SERVER_URL set, the whole VFS
-// persists through the rhizz-server HTTP API; without it (the default),
-// everything stays in the browser via localStorage. Build-time env var —
-// e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 npm run build`.
-const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
-// Probing one key (rather than evaluating `globalThis.localStorage`)
-// detects blocked third-party storage: cross-site iframes with storage
-// denied throw on any localStorage touch, which used to crash module init
-// and left embeds (e.g. the book's `/book-example` iframes) rendering only
-// their empty background. Without persistence the app falls back to memory:
-// fully working, just not surviving reloads.
-function createDefaultStore(): ProjectStore {
-  if (serverUrl) {
-    return new ServerProjectStore(serverUrl, {
-      onPersisted: reportVfsSizeBytes,
-    });
-  }
-  // Null when third-party storage is blocked: evaluating
-  // `globalThis.localStorage` itself would throw and crash module init.
-  const storage = getSafeStorage();
-  if (storage === null) return new InMemoryProjectStore();
-  return new LocalStorageProjectStore(
-    storage,
-    DEFAULT_STORAGE_KEY,
-    undefined,
-    reportVfsSizeBytes,
-  );
-}
-// Every persisted mutation reports the whole blob's byte size to Sentry
-// (see ./vfs/metrics.ts), so the Metrics explorer shows how the VFS grows —
-// wired here, the one place the production store is built, because size
-// reporting is a browser-only concern the store itself stays free of.
-export const projectStore: ProjectStore = createDefaultStore();
-
-let currentProjectId = $state<string | null>(null);
-let currentProject = $state<Project | null>(null);
-
-export function getCurrentProjectId(): string | null {
-  return currentProjectId;
-}
-
-export function getCurrentProject(): Project | null {
-  return currentProject;
-}
-
-// Loads `id`'s metadata into the shared reactive state. `currentProject`
-// ends up `null` if no project with that id exists (e.g. a stale/bad
-// URL) — callers (see routes/projects/[id]/+layout.svelte) are expected
-// to show a "not found" fallback in that case rather than rendering
-// project-scoped content.
-export async function setCurrentProject(id: string): Promise<void> {
-  currentProjectId = id;
-  const projects = await projectStore.listProjects();
-  const found = projects.find((p) => p.id === id) ?? null;
-  // A stale async call (e.g. rapid navigation between two projects)
-  // could resolve after a newer one already changed `currentProjectId`
-  // — guard against overwriting the newer result with the older one.
-  if (currentProjectId === id) currentProject = found;
-}
-
-// Drops the active project (e.g. when leaving all project routes) so
-// project-scoped UI — navbar links, badges, the tour button flow — never
-// acts on a stale id. Switching projects (A → B) keeps the layout alive
-// and re-sets state via the effect above, so this only fires on real exit.
-export function clearCurrentProject(): void {
-  currentProjectId = null;
-  currentProject = null;
-}
-
-// Re-reads the active project's metadata (e.g. after a rename elsewhere)
-// without changing which project is active.
-export async function refreshCurrentProject(): Promise<void> {
-  if (currentProjectId !== null) await setCurrentProject(currentProjectId);
-}
-
-// Creates a project and seeds it with a single root-level "main.hcl"
-// file — the interim "one editable file per project" convention until
-// Task 58 adds a real file-tree UI. Kept here rather than duplicated at
-// each call site (the /projects page's "new project" and "new from
-// example" actions). Also seeds an empty `docs/` folder (via `.gitkeep`,
-// so the directory persists in the VFS) alongside the model file.
-//
-// Rejects when the name's slug is taken or unusable (see vfs/slug) — callers
-// in the UI are expected to surface that rather than let it escape.
-export async function createProjectWithMainFile(
-  name: string,
-  content: string,
-): Promise<Project> {
-  const project = await projectStore.createProject(name);
-  const fs = openProjectFs(projectStore, project.id);
-  await fs.writeFile("main.hcl", content);
-  await fs.mkdir("docs", { recursive: true });
-  await fs.writeFile("docs/.gitkeep", "");
-  return project;
-}
-
-// Populates a project's virtual filesystem with a list of relative files.
-// Automatically creates parent directories as needed. Diagram files (e.g.
-// "views/main.hcl") live at the project root under `views/`.
-export async function populateProjectFiles(
-  fs: ReturnType<typeof openProjectFs>,
-  files: Array<{ path: string; content: string }>,
-): Promise<void> {
-  for (const file of files) {
-    const targetPath = file.path;
-
-    const lastSlash = targetPath.lastIndexOf("/");
-    if (lastSlash !== -1) {
-      const dir = targetPath.slice(0, lastSlash);
-      await fs.mkdir(dir, { recursive: true });
+  // Storage backend switch: with VITE_RHIZZ_SERVER_URL set, the whole VFS
+  // persists through the rhizz-server HTTP API; without it (the default),
+  // everything stays in the browser via localStorage. Build-time env var —
+  // e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 npm run build`.
+  const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
+  // Probing one key (rather than evaluating `globalThis.localStorage`)
+  // detects blocked third-party storage: cross-site iframes with storage
+  // denied throw on any localStorage touch, which used to crash module init
+  // and left embeds (e.g. the book's `/book-example` iframes) rendering only
+  // their empty background. Without persistence the app falls back to memory:
+  // fully working, just not surviving reloads.
+  function createDefaultStore(): ProjectStore {
+    if (serverUrl) {
+      return new ServerProjectStore(serverUrl, {
+        onPersisted: reportVfsSizeBytes,
+      });
     }
-    await fs.writeFile(targetPath, file.content);
+    // Null when third-party storage is blocked: evaluating
+    // `globalThis.localStorage` itself would throw and crash module init.
+    const storage = getSafeStorage();
+    if (storage === null) return new InMemoryProjectStore();
+    return new LocalStorageProjectStore(
+      storage,
+      DEFAULT_STORAGE_KEY,
+      undefined,
+      reportVfsSizeBytes,
+    );
   }
-}
+  // Every persisted mutation reports the whole blob's byte size to Sentry
+  // (see ./vfs/metrics.ts), so the Metrics explorer shows how the VFS grows —
+  // wired here, the one place the production store is built, because size
+  // reporting is a browser-only concern the store itself stays free of.
+  export const projectStore: ProjectStore = createDefaultStore();
 
-// Creates a project and writes all supplied files into its virtual filesystem.
-export async function createProjectWithFiles(
-  name: string,
-  files: Array<{ path: string; content: string }>,
-): Promise<Project> {
-  const project = await projectStore.createProject(name);
-  const fs = openProjectFs(projectStore, project.id);
-  await populateProjectFiles(fs, files);
-  return project;
-}
+  let currentProjectId = $state<string | null>(null);
+  let currentProject = $state<Project | null>(null);
+
+  export function getCurrentProjectId(): string | null {
+    return currentProjectId;
+  }
+
+  export function getCurrentProject(): Project | null {
+    return currentProject;
+  }
+
+  // Loads `id`'s metadata into the shared reactive state. `currentProject`
+  // ends up `null` if no project with that id exists (e.g. a stale/bad
+  // URL) — callers (see routes/projects/[id]/+layout.svelte) are expected
+  // to show a "not found" fallback in that case rather than rendering
+  // project-scoped content.
+  export async function setCurrentProject(id: string): Promise<void> {
+    currentProjectId = id;
+    const projects = await projectStore.listProjects();
+    const found = projects.find((p) => p.id === id) ?? null;
+    // A stale async call (e.g. rapid navigation between two projects)
+    // could resolve after a newer one already changed `currentProjectId`
+    // — guard against overwriting the newer result with the older one.
+    if (currentProjectId === id) currentProject = found;
+  }
+
+  // Drops the active project (e.g. when leaving all project routes) so
+  // project-scoped UI — navbar links, badges, the tour button flow — never
+  // acts on a stale id. Switching projects (A → B) keeps the layout alive
+  // and re-sets state via the effect above, so this only fires on real exit.
+  export function clearCurrentProject(): void {
+    currentProjectId = null;
+    currentProject = null;
+  }
+
+  // Re-reads the active project's metadata (e.g. after a rename elsewhere)
+  // without changing which project is active.
+  export async function refreshCurrentProject(): Promise<void> {
+    if (currentProjectId !== null) await setCurrentProject(currentProjectId);
+  }
+
+  // Creates a project and seeds it with a single root-level "main.hcl"
+  // file — the interim "one editable file per project" convention until
+  // Task 58 adds a real file-tree UI. Kept here rather than duplicated at
+  // each call site (the /projects page's "new project" and "new from
+  // example" actions). Also seeds an empty `docs/` folder (via `.gitkeep`,
+  // so the directory persists in the VFS) alongside the model file.
+  //
+  // Rejects when the name's slug is taken or unusable (see vfs/slug) — callers
+  // in the UI are expected to surface that rather than let it escape.
+  export async function createProjectWithMainFile(
+    name: string,
+    content: string,
+  ): Promise<Project> {
+    const project = await projectStore.createProject(name);
+    const fs = openProjectFs(projectStore, project.id);
+    await fs.writeFile("main.hcl", content);
+    await fs.mkdir("docs", { recursive: true });
+    await fs.writeFile("docs/.gitkeep", "");
+    return project;
+  }
+
+  // Populates a project's virtual filesystem with a list of relative files.
+  // Automatically creates parent directories as needed. Diagram files (e.g.
+  // "views/main.hcl") live at the project root under `views/`.
+  export async function populateProjectFiles(
+    fs: ReturnType<typeof openProjectFs>,
+    files: Array<{ path: string; content: string }>,
+  ): Promise<void> {
+    for (const file of files) {
+      const targetPath = file.path;
+
+      const lastSlash = targetPath.lastIndexOf("/");
+      if (lastSlash !== -1) {
+        const dir = targetPath.slice(0, lastSlash);
+        await fs.mkdir(dir, { recursive: true });
+      }
+      await fs.writeFile(targetPath, file.content);
+    }
+  }
+
+  // Creates a project and writes all supplied files into its virtual filesystem.
+  export async function createProjectWithFiles(
+    name: string,
+    files: Array<{ path: string; content: string }>,
+  ): Promise<Project> {
+    const project = await projectStore.createProject(name);
+    const fs = openProjectFs(projectStore, project.id);
+    await populateProjectFiles(fs, files);
+    return project;
+  }
 </script>

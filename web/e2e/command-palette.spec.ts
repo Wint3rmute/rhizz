@@ -22,7 +22,9 @@ async function gotoProject(
 }
 
 function options(page: Page, text: string) {
-  return page.getByTestId(PALETTE).getByTestId("command-palette-option")
+  return page
+    .getByTestId(PALETTE)
+    .getByTestId("command-palette-option")
     .filter({ hasText: text });
 }
 
@@ -33,7 +35,9 @@ function section(page: Page, name: string) {
   return page.getByTestId(PALETTE).getByText(name, { exact: true });
 }
 
-test("Ctrl-P offers the commands and the files in one list", async ({ page }) => {
+test("Ctrl-P offers the commands and the files in one list", async ({
+  page,
+}) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -95,7 +99,9 @@ test("Code offers every file", async ({ page }) => {
   await expect(section(page, "Files")).toBeVisible();
 });
 
-test("Inventory offers the pages and the definitions, and opens one", async ({ page }) => {
+test("Inventory offers the pages and the definitions, and opens one", async ({
+  page,
+}) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -135,7 +141,9 @@ test("Inventory offers the pages and the definitions, and opens one", async ({ p
   await expect(page.getByTestId(PALETTE)).toHaveCount(0);
 });
 
-test("Inventory offers Go to system rows, and one opens the system", async ({ page }) => {
+test("Inventory offers Go to system rows, and one opens the system", async ({
+  page,
+}) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -155,9 +163,10 @@ test("Inventory offers Go to system rows, and one opens the system", async ({ pa
   // Choosing one lands on that system in Inventory — addressed by its
   // label, with the Systems tab holding the open row.
   await expect(page).toHaveURL(`/projects/${id}/inventory/quadcopter`);
-  await expect(
-    page.getByRole("tab", { name: "Systems" }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Systems" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 });
 
 test("searching on Inventory never surfaces a file", async ({ page }) => {
@@ -208,7 +217,9 @@ test("searching on Inventory never surfaces a file", async ({ page }) => {
   await expect(page).toHaveURL(`/projects/${id}/overview`);
 });
 
-test("the inventory section appears only on the inventory page", async ({ page }) => {
+test("the inventory section appears only on the inventory page", async ({
+  page,
+}) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -258,7 +269,9 @@ test("a component row draws the component's own icon", async ({ page }) => {
   await expect(options(page, "Go to component automation-qa")).toHaveCount(1);
 });
 
-test("two words with a gap between them still find the component", async ({ page }) => {
+test("two words with a gap between them still find the component", async ({
+  page,
+}) => {
   // The reported failure. A query can be two words the user actually reaches
   // for and still not be a substring of the label, because the label carries
   // a prefix the query skips — and the search scores a match partly on *where*
@@ -277,13 +290,11 @@ test("two words with a gap between them still find the component", async ({ page
   const palette = page.getByTestId(PALETTE);
   const input = page.getByTestId("command-palette-input");
 
-  for (
-    const [query, component] of [
-      ["plat team", "platform-team"],
-      ["prod mgr", "product-managers"],
-      ["front team", "frontend-team"],
-    ]
-  ) {
+  for (const [query, component] of [
+    ["plat team", "platform-team"],
+    ["prod mgr", "product-managers"],
+    ["front team", "frontend-team"],
+  ]) {
     await input.fill(query);
     await expect(
       options(page, `Go to component ${component}`),
@@ -295,8 +306,9 @@ test("two words with a gap between them still find the component", async ({ page
     // depends on how gapped the words are: "mgr" jumps over "an" and "e", so
     // it marks three runs on its own.
     const marked = await palette.locator("mark").allTextContents();
-    expect(marked.join(""), `${query} highlights only its own characters`)
-      .toBe(query.replaceAll(" ", ""));
+    expect(marked.join(""), `${query} highlights only its own characters`).toBe(
+      query.replaceAll(" ", ""),
+    );
   }
 
   // And the words still have to be there: this rescues a query the search
@@ -338,9 +350,9 @@ test("choosing a view opens the canvas, not the text", async ({ page }) => {
   await expect(options(page, "power-paths.hcl")).toHaveCount(1);
   // The matched letters are drawn as <mark>, which is the point of the
   // search while typing.
-  await expect(
-    page.getByTestId(PALETTE).locator("mark").first(),
-  ).toHaveText("power");
+  await expect(page.getByTestId(PALETTE).locator("mark").first()).toHaveText(
+    "power",
+  );
   await page.keyboard.press("Enter");
 
   // But it opens where a diagram belongs, addressed by its path within
@@ -349,7 +361,9 @@ test("choosing a view opens the canvas, not the text", async ({ page }) => {
   await expect(page.getByTestId("diagram-canvas")).toBeVisible();
 });
 
-test("choosing a file from the code page switches the open editor", async ({ page }) => {
+test("choosing a file from the code page switches the open editor", async ({
+  page,
+}) => {
   // The reported failure: the Code page is already mounted, so a palette
   // navigation that only changes `?file=` used to leave the old file open.
   const id = await createFromExample(
@@ -370,7 +384,9 @@ test("choosing a file from the code page switches the open editor", async ({ pag
   await expect(heading).toContainText("docs/platform-team.md");
 });
 
-test("choosing a view from the code page opens it in the editor", async ({ page }) => {
+test("choosing a view from the code page opens it in the editor", async ({
+  page,
+}) => {
   // On the Code page every file is text: a view opens in the editor, not on
   // the canvas, and the page does not navigate away to Modeling.
   const id = await createFromExample(
@@ -387,9 +403,7 @@ test("choosing a view from the code page opens it in the editor", async ({ page 
   await expect(page).toHaveURL(
     `/projects/${id}/code?file=views%2Fpower-paths.hcl`,
   );
-  await expect(page.locator("main h1")).toContainText(
-    "views/power-paths.hcl",
-  );
+  await expect(page.locator("main h1")).toContainText("views/power-paths.hcl");
   await expect(page.getByTestId("diagram-canvas")).toHaveCount(0);
 });
 
@@ -420,7 +434,9 @@ test("Ctrl-Shift-P no longer opens a palette", async ({ page }) => {
   await expect(page.getByTestId(PALETTE)).toBeVisible();
 });
 
-test("Escape closes the palette and leaves the page as it was", async ({ page }) => {
+test("Escape closes the palette and leaves the page as it was", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E palette escape");
   await gotoProject(page, id, "code");
   const url = page.url();
@@ -433,7 +449,9 @@ test("Escape closes the palette and leaves the page as it was", async ({ page })
   expect(page.url()).toBe(url);
 });
 
-test("the chord opens the palette over the HCL editor too", async ({ page }) => {
+test("the chord opens the palette over the HCL editor too", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E palette editor");
   await gotoProject(page, id, "code");
   await expect(page.locator(".monaco-editor")).toBeVisible();
@@ -461,8 +479,9 @@ test("the navbar's button opens the palette", async ({ page }) => {
 
 test("no project open means no palette", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Rhizz", exact: true }))
-    .toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Rhizz", exact: true }),
+  ).toBeVisible();
   await page.keyboard.press("Control+p");
   await expect(page.getByTestId(PALETTE)).toHaveCount(0);
   await page.keyboard.press("Control+Shift+p");
@@ -487,7 +506,9 @@ test("arrow keys move the highlight and wrap around", async ({ page }) => {
   await expect(rows.first()).toHaveAttribute("aria-selected", "true");
 });
 
-test("opening the palette does not move the browser's own colour", async ({ page }) => {
+test("opening the palette does not move the browser's own colour", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E palette chrome");
   await gotoProject(page, id, "code");
   await expect(page.locator(".monaco-editor")).toBeVisible();
@@ -497,13 +518,13 @@ test("opening the palette does not move the browser's own colour", async ({ page
   // repaint, so opening a full-viewport dialog visibly shifts it. Asserted
   // through <html>'s reported background, which is what that inference moves.
   const themeColor = await page.evaluate(() =>
-    document.querySelector('meta[name="theme-color"]')?.getAttribute("content")
+    document.querySelector('meta[name="theme-color"]')?.getAttribute("content"),
   );
   expect(themeColor, "theme-color meta is present").toMatch(/^#[0-9A-F]{6}$/i);
 
   const rootBackground = () =>
-    page.evaluate(() =>
-      getComputedStyle(document.documentElement).backgroundColor
+    page.evaluate(
+      () => getComputedStyle(document.documentElement).backgroundColor,
     );
 
   const closed = await rootBackground();
@@ -528,9 +549,10 @@ test("the toolbar colour follows the theme", async ({ page }) => {
   const applied = () =>
     page.evaluate(() => ({
       theme: document.documentElement.dataset.theme ?? null,
-      chrome: document
-        .querySelector('meta[name="theme-color"]')
-        ?.getAttribute("content") ?? null,
+      chrome:
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.getAttribute("content") ?? null,
     }));
 
   const start = await applied();
@@ -540,9 +562,7 @@ test("the toolbar colour follows the theme", async ({ page }) => {
   // it — a toolbar stuck on the other theme's colour is the same class of
   // bug as one that jumps.
   await toggle.click();
-  await expect
-    .poll(async () => (await applied()).theme)
-    .not.toBe(start.theme);
+  await expect.poll(async () => (await applied()).theme).not.toBe(start.theme);
   const after = await applied();
   expect(after.chrome).toBe(after.theme === "dark" ? "#1D232A" : "#FFFFFF");
   expect(after.chrome).not.toBe(start.chrome);

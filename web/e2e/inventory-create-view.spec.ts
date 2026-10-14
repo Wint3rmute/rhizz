@@ -22,7 +22,9 @@ async function openModeling(page, name = "E2E inventory view") {
   return id;
 }
 
-test("inventory creates and opens a component-specific view", async ({ page }) => {
+test("inventory creates and opens a component-specific view", async ({
+  page,
+}) => {
   const id = await openModeling(page);
 
   // A fresh definition has no same-named view file.

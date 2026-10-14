@@ -74,7 +74,7 @@ async function loadHooks(env: {
       mocks.calls.push("console.log");
       lines.push(
         args
-          .map((arg) => typeof arg === "string" ? arg : JSON.stringify(arg))
+          .map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg)))
           .join(" "),
       );
     });

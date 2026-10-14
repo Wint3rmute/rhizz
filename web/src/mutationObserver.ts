@@ -16,9 +16,7 @@ type MutationObserver = (action: ModelAction) => void;
 const mutationObservers = new Set<MutationObserver>();
 
 /** Subscribes to every reported model mutation. Returns an unsubscribe function. */
-export function subscribeToMutations(
-  observer: MutationObserver,
-): () => void {
+export function subscribeToMutations(observer: MutationObserver): () => void {
   mutationObservers.add(observer);
   return () => {
     mutationObservers.delete(observer);

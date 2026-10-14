@@ -4,17 +4,15 @@ import { TOUR_TARGETS, tourSelector, type TourTargetKey } from "./tourTargets";
 describe("TOUR_TARGETS", () => {
   it("covers every stop of the drone tutorial", () => {
     const keys = Object.keys(TOUR_TARGETS) as TourTargetKey[];
-    for (
-      const key of [
-        "navbar",
-        "overview",
-        "diagramToolbar",
-        "diagramSidebar",
-        "inventory",
-        "explore",
-        "editor",
-      ] as const
-    ) {
+    for (const key of [
+      "navbar",
+      "overview",
+      "diagramToolbar",
+      "diagramSidebar",
+      "inventory",
+      "explore",
+      "editor",
+    ] as const) {
       expect(keys).toContain(key);
     }
   });

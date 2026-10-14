@@ -170,9 +170,7 @@ describe("HCL View conversion and persistence", () => {
 
     // "Reload" (page switch) reads from the file again.
     const reloaded = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
-    expect(reloaded.annotations).toEqual([
-      { text: "test", x: 10, y: 10 },
-    ]);
+    expect(reloaded.annotations).toEqual([{ text: "test", x: 10, y: 10 }]);
     // And the raw file on disk has the annotation block.
     const raw = await fs.readFile(MAIN_DIAGRAM_PATH);
     expect(raw).toContain("annotation {");
@@ -190,9 +188,7 @@ describe("HCL View conversion and persistence", () => {
           textAlign: "top-left" as const,
         },
       },
-      annotations: [
-        { text: "Persisted note", x: 30, y: 40, scale: 1.5 },
-      ],
+      annotations: [{ text: "Persisted note", x: 30, y: 40, scale: 1.5 }],
     };
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
 

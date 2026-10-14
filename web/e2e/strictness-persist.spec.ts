@@ -39,8 +39,9 @@ test("strictness survives a page reload", async ({ page }) => {
   await select.selectOption("business");
   await expect(select).toHaveValue("business");
   await expect
-    .poll(async () =>
-      await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)
+    .poll(
+      async () =>
+        await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
     )
     .toBe('"business"');
 
@@ -56,7 +57,9 @@ test("strictness survives a page reload", async ({ page }) => {
   expect(stored).toBe('"business"');
 });
 
-test("a corrupt stored strictness falls back to component", async ({ page }) => {
+test("a corrupt stored strictness falls back to component", async ({
+  page,
+}) => {
   await page.addInitScript(
     (key) => void localStorage.setItem(key, "{oops"),
     STORAGE_KEY,

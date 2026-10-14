@@ -49,22 +49,26 @@ const editorScene: DiagramScene = {
       handles: "resize",
     },
   ],
-  edges: [{
-    id: "wire:0:1",
-    label: "wire",
-    from: 0,
-    to: 1,
-    selected: true,
-  }],
-  notes: [{
-    id: "note-0",
-    index: 0,
-    text: "hello",
-    x: 10,
-    y: 90,
-    scale: 1,
-    selected: true,
-  }],
+  edges: [
+    {
+      id: "wire:0:1",
+      label: "wire",
+      from: 0,
+      to: 1,
+      selected: true,
+    },
+  ],
+  notes: [
+    {
+      id: "note-0",
+      index: 0,
+      text: "hello",
+      x: 10,
+      y: 90,
+      scale: 1,
+      selected: true,
+    },
+  ],
   overlays: [
     { type: "marquee", box: { x: 5, y: 5, width: 40, height: 20 } },
     {
@@ -96,8 +100,9 @@ export const EditorChrome: Story = {
     await expect(selectedPath?.getAttribute("d")).toBe(
       elbowPath(edge.a.x, edge.a.y, edge.b.x, edge.b.y, edge.orientation),
     );
-    await expect(selectedEdge?.querySelector("polygon")?.getAttribute("fill"))
-      .toBe("var(--color-primary)");
+    await expect(
+      selectedEdge?.querySelector("polygon")?.getAttribute("fill"),
+    ).toBe("var(--color-primary)");
 
     const rubber = canvasElement.querySelector(
       "[data-testid='diagram-rubber-band']",
@@ -116,10 +121,12 @@ export const EditorChrome: Story = {
       "[data-testid='diagram-port']",
     );
     await expect(ports.length).toBe(1);
-    const expectedPort = computePortPositions(100, 60, [{
-      label: "out",
-      role: "provider",
-    }])[0];
+    const expectedPort = computePortPositions(100, 60, [
+      {
+        label: "out",
+        role: "provider",
+      },
+    ])[0];
     if (!expectedPort) throw new Error("expected a port position");
     await expect(ports[0]?.getAttribute("transform")).toBe(
       `translate(${String(expectedPort.x)}, ${String(expectedPort.y)})`,
@@ -152,8 +159,7 @@ export const EditorChrome: Story = {
     ).toBe(1);
     await expect(
       canvasElement.querySelector("[data-testid='diagram-note-frame']"),
-    )
-      .toBeTruthy();
+    ).toBeTruthy();
     await expect(canvasElement.textContent).toContain("hello");
   },
 };
@@ -190,9 +196,11 @@ export const ReadOnlyLinks: Story = {
     await expect(links[1]?.getAttribute("aria-label")).toBe(
       "radio, open detailed view",
     );
-    await expect(links[0]?.querySelector("g")?.classList.contains("opacity-90"))
-      .toBe(true);
-    await expect(links[1]?.querySelector("g")?.classList.contains("opacity-90"))
-      .toBe(false);
+    await expect(
+      links[0]?.querySelector("g")?.classList.contains("opacity-90"),
+    ).toBe(true);
+    await expect(
+      links[1]?.querySelector("g")?.classList.contains("opacity-90"),
+    ).toBe(false);
   },
 };

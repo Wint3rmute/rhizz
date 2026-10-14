@@ -1,62 +1,61 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
-import DiagramViewport from "./DiagramViewport.svelte";
-import DiagramElements from "./DiagramElements.svelte";
-import { annotationBounds, unionBox } from "./geometry";
-import type {
-  DiagramStaticAnnotation,
-  DiagramStaticBox,
-  DiagramStaticComponent,
-  DiagramStaticConnection,
-} from "./types";
+  import { resolve } from "$app/paths";
+  import DiagramViewport from "./DiagramViewport.svelte";
+  import DiagramElements from "./DiagramElements.svelte";
+  import { annotationBounds, unionBox } from "./geometry";
+  import type {
+    DiagramStaticAnnotation,
+    DiagramStaticBox,
+    DiagramStaticComponent,
+    DiagramStaticConnection,
+  } from "./types";
 
-let {
-  components = [],
-  connections = [],
-  boxes = {},
-  annotations = [],
-  projectId = null,
-  diagramPath = null,
-  selected = new Set<number>(),
-  linked = new Set<number>(),
-  onnodeclick,
-  onnodehover,
-}: {
-  components: DiagramStaticComponent[];
-  connections: DiagramStaticConnection[];
-  boxes: Record<number, DiagramStaticBox>;
-  annotations?: DiagramStaticAnnotation[];
-  projectId?: string | null;
-  diagramPath?: string | null;
-  /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
-  selected?: Set<number>;
-  /** Component indices with a linked detail view (dimmed otherwise, click navigates). */
-  linked?: Set<number>;
-  /** Optional node interaction — wired to drill-down navigation by the embed page. */
-  onnodeclick?: ((index: number) => void) | undefined;
-  /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
-  onnodehover?:
-    | ((index: number | null, event?: MouseEvent) => void)
-    | undefined;
-} = $props();
+  let {
+    components = [],
+    connections = [],
+    boxes = {},
+    annotations = [],
+    projectId = null,
+    diagramPath = null,
+    selected = new Set<number>(),
+    linked = new Set<number>(),
+    onnodeclick,
+    onnodehover,
+  }: {
+    components: DiagramStaticComponent[];
+    connections: DiagramStaticConnection[];
+    boxes: Record<number, DiagramStaticBox>;
+    annotations?: DiagramStaticAnnotation[];
+    projectId?: string | null;
+    diagramPath?: string | null;
+    /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
+    selected?: Set<number>;
+    /** Component indices with a linked detail view (dimmed otherwise, click navigates). */
+    linked?: Set<number>;
+    /** Optional node interaction — wired to drill-down navigation by the embed page. */
+    onnodeclick?: ((index: number) => void) | undefined;
+    /** Optional hover callback — fired with the component index + mouse event on enter, then with `null` on leave. */
+    onnodehover?:
+      ((index: number | null, event?: MouseEvent) => void) | undefined;
+  } = $props();
 
-let bounds = $derived.by(() => {
-  const placed = Object.values(boxes);
-  const all = [...placed, ...annotations.map(annotationBounds)];
-  if (all.length === 0) return null;
-  return unionBox(all);
-});
-
-// The interactive editor, opened on this very diagram. `diagramPath` is the
-// path relative to `views/`, which is exactly what the modeling route's rest
-// param takes — so it goes in the URL as a path, not a query parameter.
-let fullDiagramUrl = $derived.by(() => {
-  if (!projectId) return null;
-  return resolve("/projects/[id]/modeling/[...view]", {
-    id: projectId,
-    view: diagramPath ?? "",
+  let bounds = $derived.by(() => {
+    const placed = Object.values(boxes);
+    const all = [...placed, ...annotations.map(annotationBounds)];
+    if (all.length === 0) return null;
+    return unionBox(all);
   });
-});
+
+  // The interactive editor, opened on this very diagram. `diagramPath` is the
+  // path relative to `views/`, which is exactly what the modeling route's rest
+  // param takes — so it goes in the URL as a path, not a query parameter.
+  let fullDiagramUrl = $derived.by(() => {
+    if (!projectId) return null;
+    return resolve("/projects/[id]/modeling/[...view]", {
+      id: projectId,
+      view: diagramPath ?? "",
+    });
+  });
 </script>
 
 <DiagramViewport stateKey={undefined} {bounds} viewportIdentity={diagramPath}>

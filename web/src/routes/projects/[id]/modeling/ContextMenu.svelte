@@ -1,38 +1,38 @@
 <script lang="ts">
-// Right-click context menu for the Modeling canvas. Presentation-only: every
-// row is a label (left) plus an optional keyboard shortcut hint (right,
-// greyed). All behavior lives in ModelingPage.svelte — this component only reports
-// which item was picked (or that the menu should close).
-export interface ContextMenuItem {
-  label: string;
-  /** Hint shown right-aligned, e.g. "H" or "Del". Not wired here. */
-  shortcut?: string | undefined;
-  /** Red tint for destructive rows (annotation/connection delete). */
-  dangerous?: boolean | undefined;
-  action: () => void;
-}
+  // Right-click context menu for the Modeling canvas. Presentation-only: every
+  // row is a label (left) plus an optional keyboard shortcut hint (right,
+  // greyed). All behavior lives in ModelingPage.svelte — this component only reports
+  // which item was picked (or that the menu should close).
+  export interface ContextMenuItem {
+    label: string;
+    /** Hint shown right-aligned, e.g. "H" or "Del". Not wired here. */
+    shortcut?: string | undefined;
+    /** Red tint for destructive rows (annotation/connection delete). */
+    dangerous?: boolean | undefined;
+    action: () => void;
+  }
 
-interface Props {
-  /** Viewport (client) coordinates of the click. Clamped into the window. */
-  x: number;
-  y: number;
-  items: ContextMenuItem[];
-  onclose: () => void;
-}
+  interface Props {
+    /** Viewport (client) coordinates of the click. Clamped into the window. */
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+    onclose: () => void;
+  }
 
-let { x, y, items, onclose }: Props = $props();
+  let { x, y, items, onclose }: Props = $props();
 
-const MENU_WIDTH = 260;
-let clampedX = $derived(
-  typeof window === "undefined"
-    ? x
-    : Math.max(8, Math.min(x, window.innerWidth - MENU_WIDTH - 8)),
-);
-let clampedY = $derived(
-  typeof window === "undefined"
-    ? y
-    : Math.max(8, Math.min(y, window.innerHeight - items.length * 36 - 24)),
-);
+  const MENU_WIDTH = 260;
+  let clampedX = $derived(
+    typeof window === "undefined"
+      ? x
+      : Math.max(8, Math.min(x, window.innerWidth - MENU_WIDTH - 8)),
+  );
+  let clampedY = $derived(
+    typeof window === "undefined"
+      ? y
+      : Math.max(8, Math.min(y, window.innerHeight - items.length * 36 - 24)),
+  );
 </script>
 
 <svelte:window

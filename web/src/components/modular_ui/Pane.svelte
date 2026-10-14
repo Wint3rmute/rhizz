@@ -1,64 +1,64 @@
 <script lang="ts">
-// A side panel of a modular workspace: owns its header (title + hide
-// control), its width, and its restore rail. The panel content arrives as
-// `children` and is left unchanged.
-//
-// Hiding never unmounts the content: the section stays in the DOM with
-// `display: none`, so component state (search text, scroll, open tabs,
-// half-typed edits) survives hide/restore. The restore rail is a slim bar
-// that is only visible while hidden — and the whole bar is the expand
-// control (one large click target, not a fiddly icon button).
-import type { Snippet } from "svelte";
-import type { PaneSide } from "./paneLayout";
+  // A side panel of a modular workspace: owns its header (title + hide
+  // control), its width, and its restore rail. The panel content arrives as
+  // `children` and is left unchanged.
+  //
+  // Hiding never unmounts the content: the section stays in the DOM with
+  // `display: none`, so component state (search text, scroll, open tabs,
+  // half-typed edits) survives hide/restore. The restore rail is a slim bar
+  // that is only visible while hidden — and the whole bar is the expand
+  // control (one large click target, not a fiddly icon button).
+  import type { Snippet } from "svelte";
+  import type { PaneSide } from "./paneLayout";
 
-let {
-  scope,
-  title,
-  side,
-  width,
-  hidden = false,
-  responsive = true,
-  tourTarget = undefined,
-  onhide,
-  onshow,
-  children,
-}: {
-  /**
-   * Test-id namespace for the panel and its controls, e.g. `"inventory"`
-   * renders `inventory-pane-left` and `inventory-pane-rail-left`.
-   */
-  scope: string;
-  /** Panel title, shown in the header and naming the hide/show controls. */
-  title: string;
-  /** Which side of the workspace the panel stands on. */
-  side: PaneSide;
-  /** Panel width in pixels (applied from `md:` up; full width below). */
-  width: number;
-  /** When true the panel is hidden and the restore rail shows instead. */
-  hidden?: boolean;
-  /**
-   * When false the panel keeps its pixel width below `md:` too, instead of
-   * stacking full-width. For pages whose row never stacks (Modeling keeps
-   * its fixed sidebars on small screens) so mobile renders exactly as
-   * before.
-   */
-  responsive?: boolean;
-  /**
-   * Tour anchor (`data-tour`) for the panel, when a guided-tour stop
-   * spotlights it.
-   */
-  tourTarget?: string | undefined;
-  /** Hides the panel (width is preserved for the restore). */
-  onhide: () => void;
-  /** Restores the panel at its preserved width. */
-  onshow: () => void;
-  /** Panel content — stays mounted across hide/restore. */
-  children: Snippet;
-} = $props();
+  let {
+    scope,
+    title,
+    side,
+    width,
+    hidden = false,
+    responsive = true,
+    tourTarget = undefined,
+    onhide,
+    onshow,
+    children,
+  }: {
+    /**
+     * Test-id namespace for the panel and its controls, e.g. `"inventory"`
+     * renders `inventory-pane-left` and `inventory-pane-rail-left`.
+     */
+    scope: string;
+    /** Panel title, shown in the header and naming the hide/show controls. */
+    title: string;
+    /** Which side of the workspace the panel stands on. */
+    side: PaneSide;
+    /** Panel width in pixels (applied from `md:` up; full width below). */
+    width: number;
+    /** When true the panel is hidden and the restore rail shows instead. */
+    hidden?: boolean;
+    /**
+     * When false the panel keeps its pixel width below `md:` too, instead of
+     * stacking full-width. For pages whose row never stacks (Modeling keeps
+     * its fixed sidebars on small screens) so mobile renders exactly as
+     * before.
+     */
+    responsive?: boolean;
+    /**
+     * Tour anchor (`data-tour`) for the panel, when a guided-tour stop
+     * spotlights it.
+     */
+    tourTarget?: string | undefined;
+    /** Hides the panel (width is preserved for the restore). */
+    onhide: () => void;
+    /** Restores the panel at its preserved width. */
+    onshow: () => void;
+    /** Panel content — stays mounted across hide/restore. */
+    children: Snippet;
+  } = $props();
 
-const panelId = $derived(`${scope}-pane-${side}`);
-const hideLabel = $derived(`Hide ${title}`);
-const showLabel = $derived(`Show ${title}`);
+  const panelId = $derived(`${scope}-pane-${side}`);
+  const hideLabel = $derived(`Hide ${title}`);
+  const showLabel = $derived(`Show ${title}`);
 </script>
 
 <!-- Restore rail: a slim bar while the panel is hidden. The whole bar is

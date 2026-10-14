@@ -50,15 +50,16 @@ async function waitForStory(page: Page): Promise<void> {
     if (cls.contains("sb-show-errordisplay")) return "error";
     return cls.contains("sb-show-main") ? "main" : false;
   });
-  expect(await shown.jsonValue(), "story rendered without error").toBe(
-    "main",
-  );
+  expect(await shown.jsonValue(), "story rendered without error").toBe("main");
   // Play functions run after the first render; wait for every story render
   // to reach a terminal phase ("finished" in Storybook 10).
   await page.waitForFunction(() => {
-    const renders = (window as unknown as {
-      __STORYBOOK_PREVIEW__?: { storyRenders?: { phase?: RenderPhase }[] };
-    }).__STORYBOOK_PREVIEW__?.storyRenders ?? [];
+    const renders =
+      (
+        window as unknown as {
+          __STORYBOOK_PREVIEW__?: { storyRenders?: { phase?: RenderPhase }[] };
+        }
+      ).__STORYBOOK_PREVIEW__?.storyRenders ?? [];
     const done = ["finished", "completed", "errored", "aborted"];
     return renders.every((r) => r.phase && done.includes(r.phase));
   });
@@ -101,8 +102,10 @@ async function waitForStableLayout(page: Page): Promise<void> {
       const root = document.documentElement;
       const svg = document.querySelector("svg");
       const box = svg?.getBoundingClientRect();
-      return `${root.scrollWidth}x${root.scrollHeight}:` +
-        `${box?.width ?? 0}x${box?.height ?? 0}`;
+      return (
+        `${root.scrollWidth}x${root.scrollHeight}:` +
+        `${box?.width ?? 0}x${box?.height ?? 0}`
+      );
     });
     stable = current === previous ? stable + 1 : 0;
     if (stable >= 2) return;
@@ -113,18 +116,22 @@ async function waitForStableLayout(page: Page): Promise<void> {
 
 async function storyViewport(page: Page): Promise<string | undefined> {
   return page.evaluate(() => {
-    const story = (window as unknown as {
-      __STORYBOOK_PREVIEW__?: {
-        currentRender?: {
-          story?: {
-            storyGlobals?: { viewport?: { value?: string } };
-            parameters?: { viewport?: { defaultViewport?: string } };
+    const story = (
+      window as unknown as {
+        __STORYBOOK_PREVIEW__?: {
+          currentRender?: {
+            story?: {
+              storyGlobals?: { viewport?: { value?: string } };
+              parameters?: { viewport?: { defaultViewport?: string } };
+            };
           };
         };
-      };
-    }).__STORYBOOK_PREVIEW__?.currentRender?.story;
-    return story?.storyGlobals?.viewport?.value ??
-      story?.parameters?.viewport?.defaultViewport;
+      }
+    ).__STORYBOOK_PREVIEW__?.currentRender?.story;
+    return (
+      story?.storyGlobals?.viewport?.value ??
+      story?.parameters?.viewport?.defaultViewport
+    );
   });
 }
 

@@ -58,16 +58,14 @@ describe("paletteScopeForPath", () => {
   });
 
   it("never offers the inventory section outside the inventory page", () => {
-    for (
-      const path of [
-        "/projects/p/code",
-        "/projects/p/modeling",
-        "/projects/p/explore",
-        "/projects/p/overview",
-        "/projects/p/embed/main.hcl",
-        "/",
-      ]
-    ) {
+    for (const path of [
+      "/projects/p/code",
+      "/projects/p/modeling",
+      "/projects/p/explore",
+      "/projects/p/overview",
+      "/projects/p/embed/main.hcl",
+      "/",
+    ]) {
       expect(
         paletteScopeForPath(path).inventory,
         `${path} must not offer inventory rows`,

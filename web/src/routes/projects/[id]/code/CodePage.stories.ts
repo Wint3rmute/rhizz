@@ -87,8 +87,8 @@ async function ensureCodeProject(): Promise<Project> {
   // every story opens the default workspace.
   codePanes.forget();
   const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.id === SEEDED_PROJECT_ID
+  const stale = existing.find(
+    (candidate) => candidate.id === SEEDED_PROJECT_ID,
   );
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
@@ -169,8 +169,9 @@ export const Default: Story = {
       );
     });
     // The sidebar lists the seeded files.
-    await expect(canvas.getByRole("button", { name: "main.hcl" }))
-      .toBeVisible();
+    await expect(
+      canvas.getByRole("button", { name: "main.hcl" }),
+    ).toBeVisible();
     await expect(canvas.getByText("battery.md")).toBeVisible();
   },
 };

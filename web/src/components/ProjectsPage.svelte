@@ -1,153 +1,153 @@
 <script lang="ts">
-import { goto } from "$app/navigation";
-import { resolve } from "$app/paths";
-import ScrollingBackground from "./ScrollingBackground.svelte";
-import TipsPanel from "./TipsPanel.svelte";
-import {
-  createProjectWithFiles,
-  createProjectWithMainFile,
-  projectStore,
-} from "../ProjectState.svelte";
-import { EMPTY_PROJECT_HCL } from "../emptyProject";
-import { seedExampleProjectDiagrams } from "../example_system";
-import { pendTourStart } from "../tour/tourRequest.svelte";
-import { toastState } from "../ToastState.svelte";
-import {
-  type ExampleProject,
-  get_example_projects,
-} from "../rhizz_wasm_wrapper";
-import type { Project } from "../vfs/types";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import ScrollingBackground from "./ScrollingBackground.svelte";
+  import TipsPanel from "./TipsPanel.svelte";
+  import {
+    createProjectWithFiles,
+    createProjectWithMainFile,
+    projectStore,
+  } from "../ProjectState.svelte";
+  import { EMPTY_PROJECT_HCL } from "../emptyProject";
+  import { seedExampleProjectDiagrams } from "../example_system";
+  import { pendTourStart } from "../tour/tourRequest.svelte";
+  import { toastState } from "../ToastState.svelte";
+  import {
+    type ExampleProject,
+    get_example_projects,
+  } from "../rhizz_wasm_wrapper";
+  import type { Project } from "../vfs/types";
 
-// The unified projects/landing page. Rendered both at `/` (the landing
-// page) and at `/projects` (the classic route the navbar links to) — a
-// single source of truth for project listing, creation, rename/delete and
-// the "learn by example" flow.
-//
-// `projects`/`loading` are an optional injection seam for Storybook (and
-// future component tests): when supplied they fully take over the
-// rendered state and the store is never read; when absent (the real app)
-// the component reads live from `projectStore` exactly like the former
-// route-local page did.
-interface Props {
-  projects?: Project[] | null;
-  // `null` (or absent) means "uncontrolled": read live from the store.
-  loading?: boolean | null;
-  // Which tip the Tips panel shows. `null` (or absent) means
-  // "uncontrolled": a random tip per mount — the app passes nothing,
-  // stories pin an index so VRT baselines stay deterministic.
-  tipIndex?: number | null;
-}
-
-let { projects = null, loading = null, tipIndex = null }: Props = $props();
-
-// Where the "Read the book" card sends you: the mdBook build of `book/`,
-// published via GitHub Pages.
-const BOOK_URL = "https://wint3rmute.github.io/rhizz/book/";
-
-let localProjects = $state<Project[]>([]);
-let localLoading = $state(true);
-let showExampleModal = $state(false);
-let exampleProjects = $state<ExampleProject[]>([]);
-
-let effectiveProjects = $derived(projects ?? localProjects);
-let effectiveLoading = $derived(loading ?? localLoading);
-
-async function refresh() {
-  const loaded = await projectStore.listProjects();
-  // Most recently touched first — the store bumps a project's updatedAt
-  // on every node mutation (see vfs/operations.ts), so this surfaces
-  // whatever was last worked on.
-  localProjects = loaded.toSorted((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt)
-  );
-  localLoading = false;
-}
-
-$effect(() => {
-  // Skip the store read entirely when the caller supplied explicit
-  // `projects` (Storybook): the effect stays subscribed to the prop so
-  // switching between controlled/uncontrolled stays consistent.
-  if (projects === null) void refresh();
-});
-
-async function openProject(project: Project) {
-  await goto(resolve("/projects/[id]/overview", { id: project.id }));
-}
-
-async function createEmpty() {
-  const name = prompt("Project name?", "Untitled project");
-  if (!name) return;
-  // First project ever: arm the guided tour to open on arrival.
-  const firstEver = effectiveProjects.length === 0;
-  // A project's address is the slug of its name, so a name whose slug is
-  // taken (or unusable) is refused by the store — report it and stay here
-  // rather than navigating to a project that doesn't exist.
-  const project = await tryProjectChange(() =>
-    createProjectWithMainFile(name, EMPTY_PROJECT_HCL)
-  );
-  if (!project) return;
-  if (firstEver) pendTourStart();
-  await refresh();
-  await openProject(project);
-}
-
-function openExampleModal() {
-  exampleProjects = get_example_projects();
-  showExampleModal = true;
-}
-
-async function selectExample(example: ExampleProject) {
-  showExampleModal = false;
-  const name = prompt("Project name?", example.name);
-  if (!name) return;
-  const firstEver = effectiveProjects.length === 0;
-  const project = await tryProjectChange(() =>
-    createProjectWithFiles(name, example.files)
-  );
-  if (!project) return;
-  if (firstEver) pendTourStart();
-  if (example.id === "single-file") {
-    await seedExampleProjectDiagrams(project.id);
+  // The unified projects/landing page. Rendered both at `/` (the landing
+  // page) and at `/projects` (the classic route the navbar links to) — a
+  // single source of truth for project listing, creation, rename/delete and
+  // the "learn by example" flow.
+  //
+  // `projects`/`loading` are an optional injection seam for Storybook (and
+  // future component tests): when supplied they fully take over the
+  // rendered state and the store is never read; when absent (the real app)
+  // the component reads live from `projectStore` exactly like the former
+  // route-local page did.
+  interface Props {
+    projects?: Project[] | null;
+    // `null` (or absent) means "uncontrolled": read live from the store.
+    loading?: boolean | null;
+    // Which tip the Tips panel shows. `null` (or absent) means
+    // "uncontrolled": a random tip per mount — the app passes nothing,
+    // stories pin an index so VRT baselines stay deterministic.
+    tipIndex?: number | null;
   }
-  await refresh();
-  await openProject(project);
-}
 
-async function renameProject(project: Project) {
-  const name = prompt("New name?", project.name);
-  if (!name || name === project.name) return;
-  // Renaming re-derives the address, so it can collide exactly like a
-  // create does — and the project keeps its old address when it does.
-  await tryProjectChange(() => projectStore.renameProject(project.id, name));
-  await refresh();
-}
+  let { projects = null, loading = null, tipIndex = null }: Props = $props();
 
-// Runs a project create/rename, turning the store's refusal (a taken or
-// unusable address) into a toast the user can act on. Returns the project as
-// it now stands, or null when the action was refused — so a caller can skip
-// the navigation that would have followed.
-async function tryProjectChange(
-  action: () => Promise<Project | void>,
-): Promise<Project | null> {
-  try {
-    return (await action()) ?? null;
-  } catch (error) {
-    toastState.show(
-      error instanceof Error ? error.message : String(error),
-      "error",
+  // Where the "Read the book" card sends you: the mdBook build of `book/`,
+  // published via GitHub Pages.
+  const BOOK_URL = "https://wint3rmute.github.io/rhizz/book/";
+
+  let localProjects = $state<Project[]>([]);
+  let localLoading = $state(true);
+  let showExampleModal = $state(false);
+  let exampleProjects = $state<ExampleProject[]>([]);
+
+  let effectiveProjects = $derived(projects ?? localProjects);
+  let effectiveLoading = $derived(loading ?? localLoading);
+
+  async function refresh() {
+    const loaded = await projectStore.listProjects();
+    // Most recently touched first — the store bumps a project's updatedAt
+    // on every node mutation (see vfs/operations.ts), so this surfaces
+    // whatever was last worked on.
+    localProjects = loaded.toSorted((a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt),
     );
-    return null;
+    localLoading = false;
   }
-}
 
-async function deleteProject(project: Project) {
-  const confirmed = confirm(
-    `Delete "${project.name}"? This can't be undone.`,
-  );
-  if (!confirmed) return;
-  await projectStore.deleteProject(project.id);
-  await refresh();
-}
+  $effect(() => {
+    // Skip the store read entirely when the caller supplied explicit
+    // `projects` (Storybook): the effect stays subscribed to the prop so
+    // switching between controlled/uncontrolled stays consistent.
+    if (projects === null) void refresh();
+  });
+
+  async function openProject(project: Project) {
+    await goto(resolve("/projects/[id]/overview", { id: project.id }));
+  }
+
+  async function createEmpty() {
+    const name = prompt("Project name?", "Untitled project");
+    if (!name) return;
+    // First project ever: arm the guided tour to open on arrival.
+    const firstEver = effectiveProjects.length === 0;
+    // A project's address is the slug of its name, so a name whose slug is
+    // taken (or unusable) is refused by the store — report it and stay here
+    // rather than navigating to a project that doesn't exist.
+    const project = await tryProjectChange(() =>
+      createProjectWithMainFile(name, EMPTY_PROJECT_HCL),
+    );
+    if (!project) return;
+    if (firstEver) pendTourStart();
+    await refresh();
+    await openProject(project);
+  }
+
+  function openExampleModal() {
+    exampleProjects = get_example_projects();
+    showExampleModal = true;
+  }
+
+  async function selectExample(example: ExampleProject) {
+    showExampleModal = false;
+    const name = prompt("Project name?", example.name);
+    if (!name) return;
+    const firstEver = effectiveProjects.length === 0;
+    const project = await tryProjectChange(() =>
+      createProjectWithFiles(name, example.files),
+    );
+    if (!project) return;
+    if (firstEver) pendTourStart();
+    if (example.id === "single-file") {
+      await seedExampleProjectDiagrams(project.id);
+    }
+    await refresh();
+    await openProject(project);
+  }
+
+  async function renameProject(project: Project) {
+    const name = prompt("New name?", project.name);
+    if (!name || name === project.name) return;
+    // Renaming re-derives the address, so it can collide exactly like a
+    // create does — and the project keeps its old address when it does.
+    await tryProjectChange(() => projectStore.renameProject(project.id, name));
+    await refresh();
+  }
+
+  // Runs a project create/rename, turning the store's refusal (a taken or
+  // unusable address) into a toast the user can act on. Returns the project as
+  // it now stands, or null when the action was refused — so a caller can skip
+  // the navigation that would have followed.
+  async function tryProjectChange(
+    action: () => Promise<Project | void>,
+  ): Promise<Project | null> {
+    try {
+      return (await action()) ?? null;
+    } catch (error) {
+      toastState.show(
+        error instanceof Error ? error.message : String(error),
+        "error",
+      );
+      return null;
+    }
+  }
+
+  async function deleteProject(project: Project) {
+    const confirmed = confirm(
+      `Delete "${project.name}"? This can't be undone.`,
+    );
+    if (!confirmed) return;
+    await projectStore.deleteProject(project.id);
+    await refresh();
+  }
 </script>
 
 <div class="flex-1 w-full bg-base-100 overflow-y-auto">
@@ -159,174 +159,181 @@ async function deleteProject(project: Project) {
     <!-- Empty state doubles as the landing page: a full-width hero with a
          call-to-action to create a new project, either completely new
          or based on one of the bundled examples. -->
-    <div class="relative h-full min-h-[70vh] flex items-center justify-center overflow-hidden">
+    <div
+      class="relative h-full min-h-[70vh] flex items-center justify-center overflow-hidden"
+    >
       <!-- Slowly scrolling background of product screenshots, larger than
            the hero card and filling the whole landing area behind it. -->
       <ScrollingBackground />
 
       <!-- Solid card holding the hero text and CTAs, sitting on top of the
            scrolling background. -->
-      <div class="relative card bg-base-100 shadow-2xl border border-base-content/10 max-w-2xl w-full mx-4">
+      <div
+        class="relative card bg-base-100 shadow-2xl border border-base-content/10 max-w-2xl w-full mx-4"
+      >
         <div class="card-body items-center text-center p-8 sm:p-12">
-            <div class="text-5xl mb-4">🗂️</div>
-            <h1 class="text-3xl font-bold text-base-content">Rhizz</h1>
-            <p class="text-base-content py-4 max-w-xl">
-              Model your system architecture and verify it. Build your system in
-              an interactive diagrams editor or write it as code (or have AI
-              write it). Explore architecture as interactive, nested diagrams,
-              Detect missing pieces, improve your systems completion metrics.
-              All open source, all owned by you.
-            </p>
-            <!-- Two columns, not three: New project spans both (`col-span-2`)
+          <div class="text-5xl mb-4">🗂️</div>
+          <h1 class="text-3xl font-bold text-base-content">Rhizz</h1>
+          <p class="text-base-content py-4 max-w-xl">
+            Model your system architecture and verify it. Build your system in
+            an interactive diagrams editor or write it as code (or have AI write
+            it). Explore architecture as interactive, nested diagrams, Detect
+            missing pieces, improve your systems completion metrics. All open
+            source, all owned by you.
+          </p>
+          <!-- Two columns, not three: New project spans both (`col-span-2`)
                  and takes the row on its own, because it is the one action
                  most visitors want. The two secondary ways in — an example
                  system and the book — split the row beneath it, which also
                  reads better than a row of three equal cards where the
                  primary was the same size as the alternatives to it. -->
-            <div class="grid gap-4 sm:grid-cols-2 w-full max-w-2xl">
-              <button
-                class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20 sm:col-span-2"
-                onclick={createEmpty}
-              >
-                <div class="text-2xl mb-2">✨</div>
-                <div class="font-semibold">New project</div>
-                <p class="text-xs opacity-80 mt-1">
-                  Start from a blank
-                  <code class="font-mono text-xs">system.hcl</code> and build
-                  your own model.
-                </p>
-              </button>
-              <button
-                class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
-                onclick={openExampleModal}
-              >
-                <div class="text-2xl mb-2">🚀</div>
-                <div class="font-semibold text-base-content">
-                  Learn by example
-                </div>
-                <p class="text-xs text-base-content/70 mt-1">
-                  Explore example systems - moon rocket, a drone, web app and
-                  more.
-                </p>
-              </button>
-              <!-- Third way in: the book. An <a> rather than a <button> — it
+          <div class="grid gap-4 sm:grid-cols-2 w-full max-w-2xl">
+            <button
+              class="card bg-primary text-primary-content shadow hover:bg-primary-focus transition text-left p-5 cursor-pointer border border-primary/20 sm:col-span-2"
+              onclick={createEmpty}
+            >
+              <div class="text-2xl mb-2">✨</div>
+              <div class="font-semibold">New project</div>
+              <p class="text-xs opacity-80 mt-1">
+                Start from a blank
+                <code class="font-mono text-xs">system.hcl</code> and build your own
+                model.
+              </p>
+            </button>
+            <button
+              class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
+              onclick={openExampleModal}
+            >
+              <div class="text-2xl mb-2">🚀</div>
+              <div class="font-semibold text-base-content">
+                Learn by example
+              </div>
+              <p class="text-xs text-base-content/70 mt-1">
+                Explore example systems - moon rocket, a drone, web app and
+                more.
+              </p>
+            </button>
+            <!-- Third way in: the book. An <a> rather than a <button> — it
                    leaves the app, and only a link gets middle-click, a sane
                    focus order and the browser's own "open in new tab". Styled
                    from the example card above so the two secondary cards read
                    as one set. -->
-              <a
-                class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
-                href={BOOK_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <div class="text-2xl mb-2">📖</div>
-                <div class="font-semibold text-base-content">Read the book</div>
-                <p class="text-xs text-base-content/70 mt-1">
-                  A guided tour of modeling in Rhizz - from basic to advanced concepts.
-                </p>
-              </a>
-            </div>
+            <a
+              class="card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10"
+              href={BOOK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <div class="text-2xl mb-2">📖</div>
+              <div class="font-semibold text-base-content">Read the book</div>
+              <p class="text-xs text-base-content/70 mt-1">
+                A guided tour of modeling in Rhizz - from basic to advanced
+                concepts.
+              </p>
+            </a>
           </div>
         </div>
       </div>
-    {:else}
-      <div class="relative min-h-[70vh]">
-        <!-- Scrolling screenshot background fills the space around the list. -->
-        <ScrollingBackground />
+    </div>
+  {:else}
+    <div class="relative min-h-[70vh]">
+      <!-- Scrolling screenshot background fills the space around the list. -->
+      <ScrollingBackground />
 
-        <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <!-- Solid card holding the projects list, same style as the landing
+      <div class="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <!-- Solid card holding the projects list, same style as the landing
                hero card, sitting on top of the scrolling background. -->
-          <div class="card bg-base-100 shadow-2xl border border-base-content/10 min-h-[100vh]">
-            <div class="card-body p-6 sm:p-8 flex flex-col grow">
-              <!-- Stacks below `sm` so the actions sit under the heading
+        <div
+          class="card bg-base-100 shadow-2xl border border-base-content/10 min-h-[100vh]"
+        >
+          <div class="card-body p-6 sm:p-8 flex flex-col grow">
+            <!-- Stacks below `sm` so the actions sit under the heading
                    instead of overflowing a narrow viewport; `sm:flex-row`
                    restores the original side-by-side layout. -->
-              <div
-                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6"
-              >
-                <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
-                <div class="flex flex-col gap-2 sm:flex-row">
-                  <button class="btn btn-outline" onclick={openExampleModal}>
-                    New from example
-                  </button>
-                  <button class="btn btn-primary" onclick={createEmpty}>
-                    New project
-                  </button>
-                </div>
+            <div
+              class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6"
+            >
+              <h1 class="text-2xl font-semibold text-base-content">Projects</h1>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <button class="btn btn-outline" onclick={openExampleModal}>
+                  New from example
+                </button>
+                <button class="btn btn-primary" onclick={createEmpty}>
+                  New project
+                </button>
               </div>
+            </div>
 
-              <ul class="space-y-2">
-                {#each effectiveProjects as project (project.id)}
-                  <li
-                    class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
+            <ul class="space-y-2">
+              {#each effectiveProjects as project (project.id)}
+                <li
+                  class="card bg-base-200 shadow flex-row items-center px-4 py-3 gap-4"
+                >
+                  <button
+                    class="flex-1 text-left cursor-pointer"
+                    onclick={() => openProject(project)}
                   >
-                    <button
-                      class="flex-1 text-left cursor-pointer"
-                      onclick={() => openProject(project)}
-                    >
-                      <div class="font-semibold text-base-content">
-                        {project.name}
-                      </div>
-                      <div class="text-xs text-base-content/50">
-                        Updated {new Date(project.updatedAt).toLocaleString()}
-                      </div>
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-sm"
-                      onclick={() => renameProject(project)}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-sm text-error"
-                      onclick={() => deleteProject(project)}
-                    >
-                      Delete
-                    </button>
-                  </li>
-                {/each}
-              </ul>
+                    <div class="font-semibold text-base-content">
+                      {project.name}
+                    </div>
+                    <div class="text-xs text-base-content/50">
+                      Updated {new Date(project.updatedAt).toLocaleString()}
+                    </div>
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    onclick={() => renameProject(project)}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-sm text-error"
+                    onclick={() => deleteProject(project)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              {/each}
+            </ul>
 
-              <!-- mt-auto pushes the divider + tips to the bottom of the
+            <!-- mt-auto pushes the divider + tips to the bottom of the
                    full-height card, so on short lists the panel rests at the
                    viewport bottom (where sticky then holds it during scroll)
                    instead of floating mid-card. -->
-              <div class="divider mt-auto"></div>
-              <TipsPanel index={tipIndex} />
-            </div>
+            <div class="divider mt-auto"></div>
+            <TipsPanel index={tipIndex} />
           </div>
         </div>
       </div>
-    {/if}
+    </div>
+  {/if}
 </div>
 
 {#if showExampleModal}
   <dialog class="modal modal-open">
-  <div
-    class="modal-box max-w-2xl bg-base-100 text-base-content border border-base-content/10 shadow-2xl"
-  >
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="font-bold text-lg text-base-content">
+    <div
+      class="modal-box max-w-2xl bg-base-100 text-base-content border border-base-content/10 shadow-2xl"
+    >
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-bold text-lg text-base-content">
           Choose an Example Architecture
         </h3>
-      <button
-        class="btn btn-sm btn-circle btn-ghost"
-        onclick={() => (showExampleModal = false)}
-        aria-label="Close"
-      >
+        <button
+          class="btn btn-sm btn-circle btn-ghost"
+          onclick={() => (showExampleModal = false)}
+          aria-label="Close"
+        >
           ✕
         </button>
-    </div>
-    <p class="text-sm text-base-content/70 mb-4">
-        Select a template system from the bundled examples to initialize
-        your new workspace.
+      </div>
+      <p class="text-sm text-base-content/70 mb-4">
+        Select a template system from the bundled examples to initialize your
+        new workspace.
       </p>
 
-    <div
-      class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto p-1"
-    >
+      <div
+        class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto p-1"
+      >
         {#each exampleProjects as example (example.id)}
           <button
             class="card bg-base-200 hover:bg-base-300 hover:border-primary/50 transition text-left p-4 cursor-pointer border border-base-content/10 flex flex-col justify-between"
@@ -350,15 +357,17 @@ async function deleteProject(project: Project) {
         {/each}
       </div>
 
-    <div class="modal-action mt-4">
-      <button class="btn btn-ghost btn-sm"
-        onclick={() => (showExampleModal = false)}>
+      <div class="modal-action mt-4">
+        <button
+          class="btn btn-ghost btn-sm"
+          onclick={() => (showExampleModal = false)}
+        >
           Cancel
         </button>
+      </div>
     </div>
-  </div>
-  <form method="dialog" class="modal-backdrop">
-    <button onclick={() => (showExampleModal = false)}>close</button>
-  </form>
-</dialog>
+    <form method="dialog" class="modal-backdrop">
+      <button onclick={() => (showExampleModal = false)}>close</button>
+    </form>
+  </dialog>
 {/if}

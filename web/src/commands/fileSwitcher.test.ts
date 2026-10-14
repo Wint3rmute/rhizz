@@ -167,10 +167,9 @@ describe("fileItems", () => {
     expect(fileItems([...ENTRIES].reverse(), ALL).map((i) => i.label)).toEqual(
       fileItems(ENTRIES, ALL).map((i) => i.label),
     );
-    expect(fileItems([...ENTRIES].reverse(), VIEWS).map((i) => i.label))
-      .toEqual(
-        fileItems(ENTRIES, VIEWS).map((i) => i.label),
-      );
+    expect(
+      fileItems([...ENTRIES].reverse(), VIEWS).map((i) => i.label),
+    ).toEqual(fileItems(ENTRIES, VIEWS).map((i) => i.label));
   });
 });
 

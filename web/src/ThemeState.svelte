@@ -1,107 +1,108 @@
 <script module lang="ts">
-// Shared, app-wide daisyUI theme state. A module-only file (no markup),
-// following the same pattern as ViewEditorState.svelte/KeyboardState.svelte
-// \u2014 any component can import and read/toggle it without prop-drilling.
-//
-// Two levels of state:
-//   - `selection` ("auto" | "light" | "dark") is what the user has chosen;
-//     "auto" (the default) means "follow the browser's preference". Only a
-//     manual interaction pins a concrete value.
-//   - `resolved` ("light" | "dark") is what is actually applied to the
-//     page; daisyUI never sees "auto" in <html data-theme>.
-//
-// The pure logic lives in ./theme.ts so it can be unit-tested without a
-// DOM; this module owns the browser side effects (matchMedia, <html
-// data-theme>, localStorage) only.
+  // Shared, app-wide daisyUI theme state. A module-only file (no markup),
+  // following the same pattern as ViewEditorState.svelte/KeyboardState.svelte
+  // \u2014 any component can import and read/toggle it without prop-drilling.
+  //
+  // Two levels of state:
+  //   - `selection` ("auto" | "light" | "dark") is what the user has chosen;
+  //     "auto" (the default) means "follow the browser's preference". Only a
+  //     manual interaction pins a concrete value.
+  //   - `resolved` ("light" | "dark") is what is actually applied to the
+  //     page; daisyUI never sees "auto" in <html data-theme>.
+  //
+  // The pure logic lives in ./theme.ts so it can be unit-tested without a
+  // DOM; this module owns the browser side effects (matchMedia, <html
+  // data-theme>, localStorage) only.
 
-import {
-  chromeColorFor,
-  loadSelection,
-  nextSelectionOnToggle,
-  type ResolvedTheme,
-  resolveTheme,
-  THEME_STORAGE_KEY,
-  type ThemeSelection,
-} from "./theme";
-import { safeGetItem, safeSetItem } from "./safeStorage";
+  import {
+    chromeColorFor,
+    loadSelection,
+    nextSelectionOnToggle,
+    type ResolvedTheme,
+    resolveTheme,
+    THEME_STORAGE_KEY,
+    type ThemeSelection,
+  } from "./theme";
+  import { safeGetItem, safeSetItem } from "./safeStorage";
 
-function readInitialSelection(): ThemeSelection {
-  // safeGetItem: cross-site iframes with blocked third-party storage throw
-  // on any localStorage touch — fall back to following the OS theme.
-  return loadSelection(safeGetItem(THEME_STORAGE_KEY));
-}
-
-function systemPrefersDark(): boolean {
-  if (
-    typeof window === "undefined" || typeof window.matchMedia !== "function"
-  ) {
-    return false;
+  function readInitialSelection(): ThemeSelection {
+    // safeGetItem: cross-site iframes with blocked third-party storage throw
+    // on any localStorage touch — fall back to following the OS theme.
+    return loadSelection(safeGetItem(THEME_STORAGE_KEY));
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
 
-let selection = $state<ThemeSelection>(readInitialSelection());
-// Tracked separately (not read from matchMedia inside a derived) so the
-// media-query "change" listener can push updates into the reactive graph.
-let prefersDark = $state<boolean>(systemPrefersDark());
+  function systemPrefersDark(): boolean {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return false;
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
 
-function resolve(): ResolvedTheme {
-  return resolveTheme(selection, prefersDark);
-}
+  let selection = $state<ThemeSelection>(readInitialSelection());
+  // Tracked separately (not read from matchMedia inside a derived) so the
+  // media-query "change" listener can push updates into the reactive graph.
+  let prefersDark = $state<boolean>(systemPrefersDark());
 
-if (typeof window !== "undefined") {
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  media.addEventListener("change", (event) => {
-    prefersDark = event.matches;
-  });
+  function resolve(): ResolvedTheme {
+    return resolveTheme(selection, prefersDark);
+  }
 
-  // $effect.root creates an effect scope outside any component's
-  // lifecycle, which is what lets a plain module (not a mounted
-  // component) react to state changes. Keeps <html data-theme="..."> and
-  // localStorage in sync with `selection`/`prefersDark`, including
-  // setting them once for the initial value on load.
-  $effect.root(() => {
-    $effect(() => {
-      const resolved = resolve();
-      document.documentElement.dataset.theme = resolved;
-      applyChromeColor(resolved);
-      safeSetItem(THEME_STORAGE_KEY, selection);
+  if (typeof window !== "undefined") {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    media.addEventListener("change", (event) => {
+      prefersDark = event.matches;
     });
-  });
-}
 
-// Pins the browser's own chrome (toolbar, address bar) to the page's
-// background. Without it the browser infers that colour from painted content
-// and re-infers on every repaint, so anything that repaints the viewport —
-// opening the palette, for one — visibly shifts the toolbar. A `<meta>` has
-// to be a literal colour string, so the value comes from chromeColorFor
-// rather than from the CSS custom property.
-function applyChromeColor(resolved: ResolvedTheme): void {
-  const meta = document.querySelector<HTMLMetaElement>(
-    'meta[name="theme-color"]',
-  );
-  if (meta === null) return;
-  const next = chromeColorFor(resolved);
-  if (meta.content !== next) meta.content = next;
-}
+    // $effect.root creates an effect scope outside any component's
+    // lifecycle, which is what lets a plain module (not a mounted
+    // component) react to state changes. Keeps <html data-theme="..."> and
+    // localStorage in sync with `selection`/`prefersDark`, including
+    // setting them once for the initial value on load.
+    $effect.root(() => {
+      $effect(() => {
+        const resolved = resolve();
+        document.documentElement.dataset.theme = resolved;
+        applyChromeColor(resolved);
+        safeSetItem(THEME_STORAGE_KEY, selection);
+      });
+    });
+  }
 
-/** The theme currently applied to the page ("light" | "dark"). */
-export function getTheme(): ResolvedTheme {
-  return resolve();
-}
+  // Pins the browser's own chrome (toolbar, address bar) to the page's
+  // background. Without it the browser infers that colour from painted content
+  // and re-infers on every repaint, so anything that repaints the viewport —
+  // opening the palette, for one — visibly shifts the toolbar. A `<meta>` has
+  // to be a literal colour string, so the value comes from chromeColorFor
+  // rather than from the CSS custom property.
+  function applyChromeColor(resolved: ResolvedTheme): void {
+    const meta = document.querySelector<HTMLMetaElement>(
+      'meta[name="theme-color"]',
+    );
+    if (meta === null) return;
+    const next = chromeColorFor(resolved);
+    if (meta.content !== next) meta.content = next;
+  }
 
-/** The user's selection ("auto" | "light" | "dark"). */
-export function getSelection(): ThemeSelection {
-  return selection;
-}
+  /** The theme currently applied to the page ("light" | "dark"). */
+  export function getTheme(): ResolvedTheme {
+    return resolve();
+  }
 
-/** Explicitly pin (or unpin to auto) the theme selection. */
-export function setSelection(next: ThemeSelection) {
-  selection = next;
-}
+  /** The user's selection ("auto" | "light" | "dark"). */
+  export function getSelection(): ThemeSelection {
+    return selection;
+  }
 
-/** Toggle light/dark — always pins an explicit value (leaves auto). */
-export function toggleTheme() {
-  selection = nextSelectionOnToggle(resolve());
-}
+  /** Explicitly pin (or unpin to auto) the theme selection. */
+  export function setSelection(next: ThemeSelection) {
+    selection = next;
+  }
+
+  /** Toggle light/dark — always pins an explicit value (leaves auto). */
+  export function toggleTheme() {
+    selection = nextSelectionOnToggle(resolve());
+  }
 </script>

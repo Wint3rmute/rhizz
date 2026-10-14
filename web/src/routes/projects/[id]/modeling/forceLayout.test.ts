@@ -118,10 +118,7 @@ describe("runForceLayout", () => {
       { index: 12, box: { x: 200, y: 0, width: 100, height: 100 } },
     ];
     const result = runForceLayout(nodes, []);
-    expect(result.map((r) => r.index).sort((a, b) => a - b)).toEqual([
-      5,
-      12,
-    ]);
+    expect(result.map((r) => r.index).sort((a, b) => a - b)).toEqual([5, 12]);
   });
 
   it("nudges a diagonally-connected pair towards horizontal/vertical alignment", () => {
@@ -154,8 +151,9 @@ describe("runForceLayout", () => {
 
     // Should not throw or behave differently just because alignStrength
     // is explicitly 0 rather than omitted.
-    expect(() => runForceLayout(nodes, edges, { alignStrength: 0 }))
-      .not.toThrow();
+    expect(() =>
+      runForceLayout(nodes, edges, { alignStrength: 0 }),
+    ).not.toThrow();
   });
 
   it("doesn't change the final converged result, only how gradually it's revealed", () => {

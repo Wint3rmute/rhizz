@@ -1,0 +1,11 @@
+build
+dist
+node_modules
+storybook-static
+test-results
+vrt-report
+playwright-report
+coverage
+.svelte-kit
+.eslintcache
+package-lock.json
