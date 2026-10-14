@@ -14,6 +14,10 @@
 .env.*
 !.env.example
 
+# Nix build outputs (`nix build .#<package>`)
+/result
+/result-*
+
 # Python bytecode (book preprocessor + tests)
 __pycache__/
 
