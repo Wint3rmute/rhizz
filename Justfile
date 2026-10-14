@@ -37,8 +37,19 @@ coverage:
     {{run}} sh -c 'RUSTC_BOOTSTRAP=1 cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info'
     {{run}} sh -c 'cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml'
 
+# Builds the wasm package via its Nix derivation (nix/wasm.nix) — the same
+# build CI runs — and syncs the result into crates/rhizz-wasm/pkg/, the
+# `file:` dependency of web/. Requires nix; there is no non-nix fallback
+# (the flake pins wasm-pack and a matching wasm-bindgen-cli).
+#
+# NOTE: `nix build .#` snapshots the git tree, so edits to already-tracked
+# files are picked up but a brand-new source file must be `git add`ed first.
 wasm:
-    {{run}} wasm-pack build crates/rhizz-wasm --target web --release
+    nix build .#rhizz-wasm-pkg
+    rm -rf crates/rhizz-wasm/pkg
+    mkdir -p crates/rhizz-wasm/pkg
+    cp -rL result/. crates/rhizz-wasm/pkg/
+    chmod -R u+w crates/rhizz-wasm/pkg
 
 # Frontend artifacts first, so rhizz-server's build.rs (run when rhizz-cli
 # compiles its dependency) embeds the real UI. The wasm pkg is a file:
