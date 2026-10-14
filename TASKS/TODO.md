@@ -16,6 +16,77 @@ How to work on this file:
 
 ---
 
+## Task <N> — Build the whole app (and its Docker image) via Nix
+
+On branch `build/nix-npm-build`. Stage 1 is done: `packages.rhizz-wasm-pkg`
+(`nix/wasm.nix`) builds the wasm package hermetically, and `just wasm` now
+builds through it. This task finishes the pipeline so that the server binary —
+and the Docker image around it — are produced by Nix:
+
+```
+rhizz-wasm-pkg → crates/rhizz-wasm/pkg   (done)
+rhizz-web      → web/build                (buildNpmPackage)
+rhizz          → bin/rhizz                (rustPlatform, embeds web/build)
+docker-image   → OCI image                (dockerTools)
+```
+
+Each stage is its own `packages.<system>` attribute and its own commit; every
+stage consumes the previous one's output. Keep `devShells` untouched and the
+`just` recipes working throughout. **CI is deliberately out of scope** for this
+task — do not touch `.github/workflows` (a follow-up is listed below).
+
+### Decisions to settle first
+
+- **npm dependency hashing**: `importNpmLock` (derives the FOD from
+  `web/package-lock.json`, so Dependabot bumps need no hand-maintained hash) vs
+  `buildNpmPackage`'s `npmDepsHash`. Prefer `importNpmLock`.
+- **How `rhizz-server/build.rs` finds the frontend**: it hardcodes
+  `../../web/build`. Either copy the `rhizz-web` output there in `preBuild` (no
+  Rust change) or add a `RHIZZ_WEB_BUILD_DIR` env hook. Prefer the copy first.
+- **Rust dependency vendoring**: stay with `cargoLock.lockFile` (as the wasm
+  stage already does); reach for `crane` only if dep-rebuild caching proves too
+  coarse.
+
+### Steps
+
+- [ ] **2. Frontend derivation (`packages.rhizz-web`).** `pkgs.buildNpmPackage`
+  over `web/`, consuming `rhizz-wasm-pkg` as the
+  `file:../crates/rhizz-wasm/pkg/` dependency (place the derivation output in
+  the source tree before the install phase). Build with
+  `VITE_RHIZZ_SERVER_URL=/`; leave Sentry unset so the tokenless "no source
+  maps" path is taken. Respect `web/.npmrc` (`legacy-peer-deps=true`). Output
+  `web/build` (`404.html` + `_app/`). Storybook is **not** part of this stage
+  (it is only needed for VRT). Verify: `nix build .#rhizz-web`, load the SPA,
+  and compare against `cd web && npm run build`.
+- [ ] **3. Backend binary (`packages.rhizz`).** `rustPlatform.buildRustPackage`
+  for `rhizz-cli`, embedding step 2's `web/build` (and with
+  `crates/rhizz-wasm/pkg` present so the workspace manifest resolves). Vendored
+  deps via `cargoLock.lockFile`; `SPEC/` and `examples/` must be in `src`
+  because `rhizz-core`'s build script embeds them via `include_str!`. Verify:
+  `nix build .#rhizz`; `rhizz web` serves the embedded UI.
+- [ ] **4. Docker image (`packages.docker-image`).**
+  `pkgs.dockerTools.buildLayeredImage`, preferably built from `scratch` rather
+  than the Debian base (the Nix binary's RPATH lives in `/nix/store`, so the
+  store closure is all it needs). Contents: the `rhizz` binary, `cacert`, and
+  `/data` seeded from `examples/`. Config: `RHIZZ_ADDR=0.0.0.0:8080`,
+  `RHIZZ_DATA_DIR=/data`, `CMD rhizz web`, expose `8080`. Verify: `docker load`
+  + run, then compare behaviour against the current Dockerfile image.
+- [ ] **5. (Deferred) CI + retire the Dockerfile.** Explicitly a follow-up:
+  switch the `wasm`/new build jobs to `nix build`, add a binary cache for
+  cross-run speed, point `docker.yml` at `.#docker-image`, and delete the
+  Dockerfile once parity is confirmed. Listed so it is not forgotten.
+
+### Definition of done
+
+- `nix build .#rhizz-wasm-pkg .#rhizz-web .#rhizz .#docker-image` all succeed.
+- The `.#rhizz` binary serves the same UI as `just build` +
+  `cargo build --release -p rhizz-cli`.
+- `.#docker-image` runs and serves the example projects from `/data`.
+- `just test`, `just lint`, `just build` still pass — nothing in the dev
+  workflow regressed.
+
+---
+
 ## Task <N> — Finish the Deno → Node/npm migration (incremental plan)
 
 The toolchain switch is in `refactor/remove-deno` (`web/package-lock.json`
