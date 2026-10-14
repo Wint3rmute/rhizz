@@ -90,7 +90,7 @@ test("inventory add buttons create systems and components", async ({ page }) => 
   // Components is the default tab, so its button shows first. It opens
   // the shared creation modal locked to new definitions — no reuse mode.
   const addComponent = page.getByTestId("inventory-add-entity");
-  await expect(addComponent).toHaveText("+ New Component");
+  await expect(addComponent).toHaveText("+ New");
   await addComponent.click();
   const modal = page.getByTestId("create-component-modal");
   await expect(modal).toBeVisible();
@@ -103,11 +103,11 @@ test("inventory add buttons create systems and components", async ({ page }) => 
   await expect(page).toHaveURL(`/projects/${id}/inventory/e2e-comp`);
   await page.getByText("e2e-comp").first().click();
 
-  // The Systems tab offers the system-worded button instead. It opens a
+  // The Systems tab offers the same "+ New" button. It opens a
   // name-only creation modal in the same style as the component one.
   await page.getByRole("tab", { name: "Systems" }).click();
   const addSystem = page.getByTestId("inventory-add-entity");
-  await expect(addSystem).toHaveText("+ New System");
+  await expect(addSystem).toHaveText("+ New");
   await addSystem.click();
   const sysModal = page.getByTestId("create-system-modal");
   await expect(sysModal).toBeVisible();
