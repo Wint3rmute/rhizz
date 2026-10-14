@@ -1,22 +1,21 @@
 name: audit
 
-# Split out of the `rust` workflow so the trigger can be narrowed to the one
-# file that actually determines the result. cargo-audit checks the lockfile
-# against the RustSec advisory database, so a run is only informative when the
-# resolved dependency set changes — i.e. when Cargo.lock changes. A PR that
-# touches only sources cannot introduce a new advisory, so it does not need
-# this job, and skipping it saves a runner per PR.
+# Split out of the `rust` workflow so its trigger can be narrowed without
+# also suppressing fmt/clippy/coverage. Gated on branch rather than on paths:
+# cargo-audit resolves Cargo.lock against the *current* RustSec advisory
+# database, so its result changes even when nothing in the repo does. A paths
+# filter on Cargo.lock would only re-check when the lockfile moves, leaving a
+# newly published advisory against an existing dependency undetected until the
+# next dependency bump — potentially months. Running on every push to main
+# re-checks the whole set regularly, at the cost of one runner per merge.
 #
-# NOT gated on `Cargo.toml` too: a dependency edit that leaves the lock
-# unchanged resolves to the same crate versions, which the previous run has
-# already covered.
+# The deliberate gap: a PR that *adds* a vulnerable dependency is not caught
+# until after it merges. That is the price of "only on main"; adding back a
+# `pull_request` trigger with `paths: [Cargo.lock]` would close it (and is
+# strictly more coverage), or a `schedule:` would cover quiet periods.
 on:
   push:
     branches: [main, master]
-    paths: [Cargo.lock]
-  pull_request:
-    branches: [main, master]
-    paths: [Cargo.lock]
   workflow_dispatch:
 
 concurrency:
