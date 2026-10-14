@@ -109,7 +109,7 @@ See [frontend.md](frontend.md) for the web-frontend-specific notes
   matching `CompileResult`.
 - Serialisation between Rust and JS is handled by `serde-wasm-bindgen`; no JSON
   stringification is required on the JavaScript side.
-- Built with `wasm-pack build --target web` (ES modules for browsers/Deno) or
+- Built with `wasm-pack build --target web` (ES modules for browsers/Node) or
   `--target nodejs` (CommonJS). The `pkg/` output is a self-contained npm
   package including `.wasm`, JS bindings, and TypeScript type declarations.
 - Contains no I/O of its own; callers supply HCL content as strings (read from
@@ -141,7 +141,7 @@ const result = compile_sources([
 ### Building
 
 ```bash
-# Browser / Deno (ES modules)
+# Browser / Node (ES modules)
 wasm-pack build crates/rhizz-wasm --target web
 ```
 

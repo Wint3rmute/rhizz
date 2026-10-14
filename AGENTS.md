@@ -60,10 +60,11 @@ just test     # run all tests (Rust + Vitest)
 just build    # build release binaries, WASM package, and web frontend
 ```
 
-**Do not directly call `cargo` or `deno` commands**; use `just` instead. It comes
+**Do not directly call `cargo` or `npm` commands**; use `just` instead. It comes
 with a predefined set of correct commands for the project.
 
-**NEVER USE `npm`, NEVER USE `npx`. Use `deno` and `dx`.**
+**NEVER USE `npx`.** Use `npm run <script>` (or `npm ci`) inside `web/`. Do not
+use `npx`, `pnpm`, or `yarn`, so the lockfile stays the single source of truth.
 
 ## Frontend
 

@@ -6,7 +6,7 @@ Browser-based system modeler & explorer. Pure SPA — no API, no external backen
 
 | Layer          | Technology                                |
 | -------------- | ----------------------------------------- |
-| Runtime        | Deno                                      |
+| Runtime        | Node.js 24 (npm)                          |
 | Language       | TypeScript                                |
 | UI framework   | Svelte 5                                  |
 | Build tool     | Vite                                      |
@@ -21,8 +21,8 @@ model logic lives in `rhizz-core`, the frontend owns only I/O and presentation.
 
 ```
 web/
-├── deno.json                 # Deno tasks: dev, build, preview
-├── package.json              # npm dependencies
+├── package.json              # npm dependencies and scripts: dev, build, preview
+├── package-lock.json         # locked dependency tree (`npm ci`)
 ├── vite.config.ts            # Svelte plugin + rhizz-wasm alias
 ├── index.html
 └── src/                      # Source code
@@ -160,16 +160,16 @@ symlinks, directories that are not projects).
 cd web
 
 # Install dependencies
-deno install
+npm ci
 
 # Development server
-deno task dev
+npm run dev
 
-# Production build (output: web/dist/)
-deno task build
+# Production build (output: web/build/)
+npm run build
 
 # Preview production build
-deno task preview
+npm run preview
 ```
 
 The WASM binary must exist before building

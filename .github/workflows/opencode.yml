@@ -35,7 +35,7 @@ jobs:
 
       # The Justfile wraps every recipe in `nix develop --command` whenever
       # Nix is present, so exposing the devshell's PATH is enough: `just`,
-      # `cargo`, `deno`, … resolve, and the shell hook (Playwright browsers,
+      # `cargo`, `npm`, … resolve, and the shell hook (Playwright browsers,
       # LLVM tools, VRT fonts) is re-applied per recipe. GITHUB_PATH expects
       # one path per line, hence the `tr`.
       - name: Put the flake devshell on PATH

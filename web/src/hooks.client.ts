@@ -22,7 +22,7 @@ if (dsn !== undefined && dsn !== "") {
     // https://docs.sentry.io/platforms/javascript/configuration/options/#traces-sample-rate
     tracesSampleRate: 1.0,
 
-    // Vite's mode is "development" for `deno task dev` and "production" for a
+    // Vite's mode is "development" for `npm run dev` and "production" for a
     // build — the same split the SDK infers on its own, stated explicitly so
     // the value is visible in the config.
     environment: import.meta.env.MODE,

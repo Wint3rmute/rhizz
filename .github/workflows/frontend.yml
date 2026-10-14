@@ -14,7 +14,7 @@ concurrency:
 # All toolchains come from flake.nix (pinned via flake.lock): every job
 # installs Nix, warms /nix/store from cache, then runs the same `just`
 # recipes and tool commands developers run locally. No per-tool setup
-# actions (rust-toolchain, setup-deno, mdbook, wasm-pack installer) remain.
+# actions (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
 
 jobs:
   # Build the wasm package once, hand it to every job that needs it.
@@ -58,35 +58,32 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command deno install
+      - run: nix develop --command npm ci
         working-directory: ./web
 
-      # web/.eslintcache (written by `deno run lint`) is pure derived state:
+      # web/.eslintcache (written by `npm run lint`) is pure derived state:
       # a function of file contents + eslint config + version. It is only
       # reusable across runs with `--cache-strategy content` (the default
       # `metadata` keys on mtime, which a fresh checkout invalidates
       # wholesale) — hence the strategy in the `lint` script. Cold lint of
       # this tree is ~7 min, so restoring it is the difference between that
       # and seconds. Keyed on the inputs that make a restored cache useless:
-      # the eslint config plus the Deno lockfile / package.json pinning
+      # the eslint config plus the npm lockfile / package.json pinning
       # eslint's version. Linted sources are deliberately NOT part of the key
       # — a PR that edits one file should still reuse the other ~170.
       - uses: actions/cache@v4
         with:
           path: web/.eslintcache
-          key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/deno.lock', 'web/package.json') }}
+          key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/package-lock.json', 'web/package.json') }}
           restore-keys: eslint-${{ runner.os }}-
 
-      - run: nix develop --command deno fmt --check
+      - run: nix develop --command npm run lint
         working-directory: ./web
 
-      - run: nix develop --command deno run lint
+      - run: nix develop --command npm run check
         working-directory: ./web
 
-      - run: nix develop --command deno run check
-        working-directory: ./web
-
-  # Vitest suite (`deno run test`, incl. the Storybook browser project).
+  # Vitest suite (`npm run test`, incl. the Storybook browser project).
   # Split out of `lint` so the long test run doesn't block lint/typecheck.
   # Browsers come from the flake (PLAYWRIGHT_BROWSERS_PATH).
   test:
@@ -108,10 +105,10 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command deno install
+      - run: nix develop --command npm ci
         working-directory: ./web
 
-      - run: nix develop --command deno run test
+      - run: nix develop --command npm run test
         working-directory: ./web
 
   # Full-app browser tests via @playwright/test (web/e2e). Chromium comes
@@ -136,7 +133,7 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command deno install
+      - run: nix develop --command npm ci
         working-directory: ./web
 
       # Fail fast when the installed Playwright driver expects browser
@@ -146,7 +143,7 @@ jobs:
       - run: |
           nix develop --command python3 -c '
           import glob, json, os, sys
-          match = glob.glob("node_modules/.deno/playwright-core@*/node_modules/playwright-core/browsers.json")
+          match = glob.glob("node_modules/playwright-core/browsers.json")
           expected = set()
           for path in match:
               for b in json.load(open(path))["browsers"]:
@@ -159,7 +156,7 @@ jobs:
           '
         working-directory: ./web
 
-      - run: nix develop --command deno run test:e2e
+      - run: nix develop --command npm run test:e2e
         working-directory: ./web
 
       - uses: actions/upload-artifact@v7
@@ -194,13 +191,13 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command deno install
+      - run: nix develop --command npm ci
         working-directory: ./web
 
       # The wasm pkg comes from the artifact above, so only Storybook is built
       # here (`vrt-quick` skips the wasm rebuild). No app build: VRT serves
       # storybook-static/ alone (see vrt/serve.ts).
-      - run: nix develop --command deno run build-storybook
+      - run: nix develop --command npm run build-storybook
         working-directory: ./web
 
       - run: nix develop --command just vrt-quick

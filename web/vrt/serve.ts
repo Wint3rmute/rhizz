@@ -1,9 +1,13 @@
 // Tiny dependency-free static server for the built Storybook
 // (`storybook-static/`), used as the VRT run's `webServer`.
-//   deno run --allow-net --allow-read vrt/serve.ts <dir> <port>
-import { extname, join, normalize } from "node:path";
+//   node vrt/serve.ts <dir> <port>
+// Node runs .ts directly (type stripping), so no build step is needed.
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize, resolve } from "node:path";
 
-const [root = "storybook-static", port = "6199"] = Deno.args;
+const [root = "storybook-static", port = "6199"] = process.argv.slice(2);
+const rootDir = resolve(root);
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -17,21 +21,21 @@ const TYPES: Record<string, string> = {
   ".wasm": "application/wasm",
 };
 
-Deno.serve({ port: Number(port), hostname: "127.0.0.1" }, async (req) => {
-  let path = decodeURIComponent(new URL(req.url).pathname);
+createServer(async (req, res) => {
+  let path = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname);
   if (path.endsWith("/")) path += "index.html";
-  const file = normalize(join(root, path));
-  if (!file.startsWith(normalize(root))) {
-    return new Response("forbidden", { status: 403 });
+  const file = normalize(join(rootDir, path));
+  if (!file.startsWith(rootDir)) {
+    res.writeHead(403, { "content-type": "text/plain" }).end("forbidden");
+    return;
   }
   try {
-    const body = await Deno.readFile(file);
-    return new Response(body, {
-      headers: {
-        "content-type": TYPES[extname(file)] ?? "application/octet-stream",
-      },
+    const body = await readFile(file);
+    res.writeHead(200, {
+      "content-type": TYPES[extname(file)] ?? "application/octet-stream",
     });
+    res.end(body);
   } catch {
-    return new Response("not found", { status: 404 });
+    res.writeHead(404, { "content-type": "text/plain" }).end("not found");
   }
-});
+}).listen(Number(port), "127.0.0.1");
