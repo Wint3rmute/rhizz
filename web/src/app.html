@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <!-- Before the theme script below, which has to be able to find and
@@ -19,7 +19,11 @@
           var value = null;
           if (typeof stored === "string") {
             var trimmed = stored.trim();
-            if (trimmed === "auto" || trimmed === "light" || trimmed === "dark") {
+            if (
+              trimmed === "auto" ||
+              trimmed === "light" ||
+              trimmed === "dark"
+            ) {
               value = trimmed;
             } else {
               try {

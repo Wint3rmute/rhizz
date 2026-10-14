@@ -45,8 +45,6 @@ describe("projectSlug", () => {
   });
 
   it("gives two different names different slugs (no gratuitous collisions)", () => {
-    expect(projectSlug("Drone System")).not.toBe(
-      projectSlug("Social Media"),
-    );
+    expect(projectSlug("Drone System")).not.toBe(projectSlug("Social Media"));
   });
 });

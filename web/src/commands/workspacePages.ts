@@ -12,11 +12,7 @@ import { TOUR_TARGETS } from "../tour/tourTargets";
  * routes), which it cannot do if the resolved string is stored instead.
  */
 export type WorkspacePageId =
-  | "overview"
-  | "modeling"
-  | "inventory"
-  | "explore"
-  | "code";
+  "overview" | "modeling" | "inventory" | "explore" | "code";
 
 export interface WorkspacePage {
   id: WorkspacePageId;

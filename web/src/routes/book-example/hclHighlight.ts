@@ -9,12 +9,7 @@
 // heredocs are not special-cased (none of the book examples use them).
 
 export type HclTokenClass =
-  | "keyword"
-  | "string"
-  | "comment"
-  | "number"
-  | "attr"
-  | "plain";
+  "keyword" | "string" | "comment" | "number" | "attr" | "plain";
 
 export interface HclToken {
   text: string;

@@ -66,11 +66,13 @@ describe("buildPathTree", () => {
       {
         name: "a",
         isDirectory: true,
-        children: [{
-          name: "b",
-          isDirectory: true,
-          children: [{ name: "c.hcl", isDirectory: false, children: [] }],
-        }],
+        children: [
+          {
+            name: "b",
+            isDirectory: true,
+            children: [{ name: "c.hcl", isDirectory: false, children: [] }],
+          },
+        ],
       },
     ]);
   });

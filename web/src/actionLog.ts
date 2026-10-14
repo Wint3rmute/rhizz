@@ -50,23 +50,23 @@ export interface SystemPatch {
 export type ModelAction =
   | { op: "add_system"; label: string; full_name: string }
   | {
-    op: "add_component_definition";
-    label: string;
-    leaf: boolean;
-    full_name: string;
-    tags: string[];
-    icon?: string | undefined;
-    color?: string | undefined;
-    border?: string | undefined;
-    font?: string | undefined;
-    ports: PortData[];
-  }
+      op: "add_component_definition";
+      label: string;
+      leaf: boolean;
+      full_name: string;
+      tags: string[];
+      icon?: string | undefined;
+      color?: string | undefined;
+      border?: string | undefined;
+      font?: string | undefined;
+      ports: PortData[];
+    }
   | {
-    op: "add_instance";
-    parentPath: string;
-    label: string;
-    source: string;
-  }
+      op: "add_instance";
+      parentPath: string;
+      label: string;
+      source: string;
+    }
   | { op: "rename_component"; path: string; newLabel: string }
   | { op: "delete_component"; path: string }
   | { op: "delete_system"; path: string }
@@ -74,12 +74,12 @@ export type ModelAction =
   | { op: "update_component"; path: string; patch: ComponentPatch }
   | { op: "update_system"; path: string; patch: SystemPatch }
   | {
-    op: "add_connection";
-    scopePath: string;
-    label: string;
-    from: string;
-    to: string;
-  }
+      op: "add_connection";
+      scopePath: string;
+      label: string;
+      from: string;
+      to: string;
+    }
   | { op: "delete_connection"; scopePath: string; label: string };
 
 export interface ActionLog {
@@ -120,18 +120,19 @@ function tsString(s: string): string {
 // literal are preserved as-is, so the emitted source stays as readable as the
 // HCL itself. Backticks and ${ are escaped so the literal is unambiguous.
 function tsTemplate(s: string): string {
-  return `\`${
-    s.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${")
-  }\``;
+  return `\`${s
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`")
+    .replace(/\$\{/g, "\\${")}\``;
 }
 
 // Renders a single `ModelAction` as one `applyModelMutation` call against
 // an in-memory file map. Every action the Rust dispatcher reports has a
 // model-op equivalent, so the trace replays 1:1.
 export function encodeCall(action: ModelAction, fileVar: string): string {
-  return `await applyModelMutation(${fileVar}, "system.hcl", await ${fileVar}.readFile("system.hcl"), ${
-    JSON.stringify(toMutationOp(action))
-  });`;
+  return `await applyModelMutation(${fileVar}, "system.hcl", await ${fileVar}.readFile("system.hcl"), ${JSON.stringify(
+    toMutationOp(action),
+  )});`;
 }
 
 function toMutationOp(action: ModelAction): unknown {
@@ -247,9 +248,9 @@ export function asTestScript(
     ``,
     `describe("model editor replay", () => {`,
     `  it(${tsString(testName)}, async () => {`,
-    `    const files = new Map<string, string>([["system.hcl", ${
-      tsTemplate(baseline)
-    }]]);`,
+    `    const files = new Map<string, string>([["system.hcl", ${tsTemplate(
+      baseline,
+    )}]]);`,
     `    const fs = {`,
     `      readFile: (filePath: string) =>`,
     `        Promise.resolve(files.get(filePath) ?? ""),`,

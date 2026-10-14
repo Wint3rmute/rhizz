@@ -75,7 +75,9 @@ test("inspector edit undoes via the unified manager", async ({ page }) => {
   await openDiagram(page);
   await createComponent(page, "e2e-visual");
 
-  const label = page.getByTestId("diagram-canvas").getByText("e2e-visual")
+  const label = page
+    .getByTestId("diagram-canvas")
+    .getByText("e2e-visual")
     .first();
   const box = await label.boundingBox();
   if (!box) throw new Error("created node has no bounding box");

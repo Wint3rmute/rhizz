@@ -103,9 +103,7 @@ async function projectWithAPreviewedView(page: Page): Promise<string> {
   await expect(page).toHaveURL(
     `/projects/${id}/modeling/flight-controller.hcl`,
   );
-  await page.goto(
-    `/projects/${id}/code?file=${encodeURIComponent(VIEW_FILE)}`,
-  );
+  await page.goto(`/projects/${id}/code?file=${encodeURIComponent(VIEW_FILE)}`);
   await replaceEditorContent(page, VIEW_HCL);
   // Asserted on the rendered lines, so a mangled edit fails on the edit rather
   // than later on a canvas that never got its nodes.
@@ -115,7 +113,9 @@ async function projectWithAPreviewedView(page: Page): Promise<string> {
   return id;
 }
 
-test("clicking a node in the preview focuses that component, and the URL follows", async ({ page }) => {
+test("clicking a node in the preview focuses that component, and the URL follows", async ({
+  page,
+}) => {
   const id = await projectWithAPreviewedView(page);
   await page.goto(`/projects/${id}/inventory/flight-controller`);
   const diagram = page.getByTestId("inventory-diagram");
@@ -146,7 +146,9 @@ test("clicking a node in the preview focuses that component, and the URL follows
   await expect(page.getByTestId("inventory-empty-diagram")).toBeVisible();
 });
 
-test("clicking the node already shown is not a navigation", async ({ page }) => {
+test("clicking the node already shown is not a navigation", async ({
+  page,
+}) => {
   const id = await projectWithAPreviewedView(page);
   await page.goto(`/projects/${id}/inventory/flight-controller`);
   const diagram = page.getByTestId("inventory-diagram");

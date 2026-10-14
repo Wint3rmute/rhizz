@@ -63,7 +63,9 @@ async function openInspector(
   await modal.getByRole("button", { name: "Create Definition" }).click();
   await expect(modal).toBeHidden();
 
-  const node = page.getByTestId("diagram-canvas").getByText("e2e-scopes")
+  const node = page
+    .getByTestId("diagram-canvas")
+    .getByText("e2e-scopes")
     .first();
   const box = await node.boundingBox();
   if (!box) throw new Error("created node has no bounding box");
@@ -72,7 +74,9 @@ async function openInspector(
   return id;
 }
 
-test("the inspector's two panels name the file each half writes to", async ({ page }) => {
+test("the inspector's two panels name the file each half writes to", async ({
+  page,
+}) => {
   await openInspector(page, "E2E inspector panels");
 
   // Both panels are present, and the split is by *destination* — which is the
@@ -81,10 +85,13 @@ test("the inspector's two panels name the file each half writes to", async ({ pa
   const view = page.getByTestId("view-attributes");
   await expect(component).toBeVisible();
   await expect(view).toBeVisible();
-  await expect(page.getByTestId("component-attributes-heading"))
-    .toHaveAttribute("data-tip", /system\.hcl/);
-  await expect(page.getByTestId("view-attributes-heading"))
-    .toHaveAttribute("data-tip", /views\//);
+  await expect(
+    page.getByTestId("component-attributes-heading"),
+  ).toHaveAttribute("data-tip", /system\.hcl/);
+  await expect(page.getByTestId("view-attributes-heading")).toHaveAttribute(
+    "data-tip",
+    /views\//,
+  );
 
   // The alignment control is in the view panel and the color select is not —
   // the visible half of the same distinction the tooltips describe.
@@ -93,7 +100,9 @@ test("the inspector's two panels name the file each half writes to", async ({ pa
   await expect(view.locator("#comp-color-input")).toHaveCount(0);
 });
 
-test("a style edit rewrites the model and an alignment edit rewrites the view", async ({ page }) => {
+test("a style edit rewrites the model and an alignment edit rewrites the view", async ({
+  page,
+}) => {
   const id = await openInspector(page, "E2E inspector destinations");
 
   await page.locator("#comp-color-input").selectOption("warning");
@@ -102,10 +111,13 @@ test("a style edit rewrites the model and an alignment edit rewrites the view", 
   // The layout write is debounced (500ms, Task 118), so wait for the view
   // file to carry the alignment rather than reading it straight away.
   await expect
-    .poll(async () => {
-      const files = await storedFiles(page);
-      return files["views/main.hcl"] ?? "";
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        return files["views/main.hcl"] ?? "";
+      },
+      { timeout: 10_000 },
+    )
     .toContain('text_align = "top-left"');
 
   const files = await storedFiles(page);
@@ -119,7 +131,9 @@ test("a style edit rewrites the model and an alignment edit rewrites the view", 
   expect(model).not.toContain("text_align");
 });
 
-test("the Inventory Style tab writes to the model, not the view", async ({ page }) => {
+test("the Inventory Style tab writes to the model, not the view", async ({
+  page,
+}) => {
   const id = await openInspector(page, "E2E inventory style write");
   await page.locator("#comp-color-input").selectOption("accent");
 
@@ -135,10 +149,13 @@ test("the Inventory Style tab writes to the model, not the view", async ({ page 
   await pane.locator("#comp-border-input").selectOption("dotted");
 
   await expect
-    .poll(async () => {
-      const files = await storedFiles(page);
-      return files["main.hcl"] ?? files["system.hcl"] ?? "";
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        return files["main.hcl"] ?? files["system.hcl"] ?? "";
+      },
+      { timeout: 10_000 },
+    )
     .toMatch(/border\s+= "dotted"/);
 
   const files = await storedFiles(page);
@@ -157,7 +174,9 @@ test("the Inventory Style tab writes to the model, not the view", async ({ page 
   expect(view).not.toMatch(/accent/);
 });
 
-test("a system icon edit rewrites the model, full name and icon only", async ({ page }) => {
+test("a system icon edit rewrites the model, full name and icon only", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E system style write");
   await page.goto(`/projects/${id}/inventory/main`);
 
@@ -180,10 +199,13 @@ test("a system icon edit rewrites the model, full name and icon only", async ({ 
   await fullName.blur();
 
   await expect
-    .poll(async () => {
-      const files = await storedFiles(page);
-      return files["main.hcl"] ?? files["system.hcl"] ?? "";
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        return files["main.hcl"] ?? files["system.hcl"] ?? "";
+      },
+      { timeout: 10_000 },
+    )
     .toMatch(/full_name = "Main test system"/);
 
   const files = await storedFiles(page);

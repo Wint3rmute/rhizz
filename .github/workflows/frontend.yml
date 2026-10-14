@@ -18,6 +18,11 @@ concurrency:
 
 jobs:
   # Build the wasm package once, hand it to every job that needs it.
+  #
+  # `just wasm` builds it through its Nix derivation (nix/wasm.nix) and syncs
+  # the output into crates/rhizz-wasm/pkg/, so this job runs the same
+  # reproducible build developers get locally — no wasm-pack downloaded at
+  # runtime, wasm-bindgen-cli is pinned by the flake.
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -76,6 +81,9 @@ jobs:
           path: web/.eslintcache
           key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/package-lock.json', 'web/package.json') }}
           restore-keys: eslint-${{ runner.os }}-
+
+      - run: nix develop --command npm run format:check
+        working-directory: ./web
 
       - run: nix develop --command npm run lint
         working-directory: ./web

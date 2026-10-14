@@ -19,10 +19,7 @@ describe("readProjectDocs", () => {
     const fs = await makeFs();
     await fs.mkdir(`${DOCS_DIR}/home-monitor/controller`, { recursive: true });
     await fs.writeFile(`${DOCS_DIR}/home-monitor/sensor.md`, "# Sensor");
-    await fs.writeFile(
-      `${DOCS_DIR}/home-monitor/controller/mcu.md`,
-      "# MCU",
-    );
+    await fs.writeFile(`${DOCS_DIR}/home-monitor/controller/mcu.md`, "# MCU");
 
     const docs = await readProjectDocs(fs);
     expect(docs).toEqual([
@@ -44,14 +41,13 @@ describe("readProjectDocs", () => {
 
 describe("withFullNameHeader", () => {
   it("prepends the full name as an L1 header", () => {
-    expect(withFullNameHeader("Stores charge.", "Main power source"))
-      .toBe("# Main power source\n\nStores charge.");
+    expect(withFullNameHeader("Stores charge.", "Main power source")).toBe(
+      "# Main power source\n\nStores charge.",
+    );
   });
 
   it("leaves content without a full name untouched", () => {
     expect(withFullNameHeader("Stores charge.", "")).toBe("Stores charge.");
-    expect(withFullNameHeader("Stores charge.", "   ")).toBe(
-      "Stores charge.",
-    );
+    expect(withFullNameHeader("Stores charge.", "   ")).toBe("Stores charge.");
   });
 });

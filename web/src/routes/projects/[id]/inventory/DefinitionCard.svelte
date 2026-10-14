@@ -1,49 +1,47 @@
 <script lang="ts">
-// One entity card in the Inventory Browser sidebar: icon, label, completion
-// + level badges, and a short full name. Purely presentational.
-import { resolveIcon } from "../../../../iconHelper";
-import {
-  completionBadge,
-  definitionDepth,
-  type InventoryDefinition,
-} from "./inventory";
+  // One entity card in the Inventory Browser sidebar: icon, label, completion
+  // + level badges, and a short full name. Purely presentational.
+  import { resolveIcon } from "../../../../iconHelper";
+  import {
+    completionBadge,
+    definitionDepth,
+    type InventoryDefinition,
+  } from "./inventory";
 
-let {
-  definition,
-  selected = false,
-  showLevel = true,
-  onselect,
-}: {
-  definition: InventoryDefinition;
-  selected?: boolean;
-  /** Systems are not leveled — hide the `L…` badge for them. */
-  showLevel?: boolean;
-  onselect?: (label: string) => void;
-} = $props();
+  let {
+    definition,
+    selected = false,
+    showLevel = true,
+    onselect,
+  }: {
+    definition: InventoryDefinition;
+    selected?: boolean;
+    /** Systems are not leveled — hide the `L…` badge for them. */
+    showLevel?: boolean;
+    onselect?: (label: string) => void;
+  } = $props();
 
-let icon = $derived(resolveIcon(definition.icon));
-let depth = $derived(definitionDepth(definition));
-let badge = $derived(completionBadge(definition));
+  let icon = $derived(resolveIcon(definition.icon));
+  let depth = $derived(definitionDepth(definition));
+  let badge = $derived(completionBadge(definition));
 
-let badgeClass = $derived(
-  badge.kind === "specified"
-    ? "badge-success"
-    : badge.kind === "partial"
-    ? "badge-warning"
-    : "badge-ghost",
-);
-let badgeText = $derived(
-  badge.kind === "draft" ? "Draft" : `${badge.percent}% Specified`,
-);
+  let badgeClass = $derived(
+    badge.kind === "specified"
+      ? "badge-success"
+      : badge.kind === "partial"
+        ? "badge-warning"
+        : "badge-ghost",
+  );
+  let badgeText = $derived(
+    badge.kind === "draft" ? "Draft" : `${badge.percent}% Specified`,
+  );
 </script>
 
 <button
   type="button"
-  class="w-full text-left rounded-lg border p-3 transition-colors {
-    selected
-      ? 'bg-base-200 border-primary/60 ring-1 ring-primary/40'
-      : 'bg-base-100 border-base-300 hover:bg-base-200/60'
-  }"
+  class="w-full text-left rounded-lg border p-3 transition-colors {selected
+    ? 'bg-base-200 border-primary/60 ring-1 ring-primary/40'
+    : 'bg-base-100 border-base-300 hover:bg-base-200/60'}"
   onclick={() => onselect?.(definition.label)}
   aria-pressed={selected}
   data-testid="inventory-card"

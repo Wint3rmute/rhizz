@@ -47,9 +47,11 @@ describe("blendScenes", () => {
   it("moves and resizes a node that exists in both scenes", () => {
     const from = scene({ nodes: [node("a", 0, 0)] });
     const to = scene({
-      nodes: [node("a", 100, 40, {
-        box: { x: 100, y: 40, width: 200, height: 80, textAlign: "center" },
-      })],
+      nodes: [
+        node("a", 100, 40, {
+          box: { x: 100, y: 40, width: 200, height: 80, textAlign: "center" },
+        }),
+      ],
     });
     const mid = blendScenes(from, to, 0.5);
     expect(mid.nodes).toHaveLength(1);
@@ -105,26 +107,30 @@ describe("blendScenes", () => {
 
   it("fades every note out and in, even when both views use note-0", () => {
     const from = scene({
-      notes: [{
-        id: "note-0",
-        index: 0,
-        text: "old",
-        x: 0,
-        y: 0,
-        scale: 1,
-        selected: false,
-      }],
+      notes: [
+        {
+          id: "note-0",
+          index: 0,
+          text: "old",
+          x: 0,
+          y: 0,
+          scale: 1,
+          selected: false,
+        },
+      ],
     });
     const to = scene({
-      notes: [{
-        id: "note-0",
-        index: 0,
-        text: "new",
-        x: 40,
-        y: 10,
-        scale: 1,
-        selected: false,
-      }],
+      notes: [
+        {
+          id: "note-0",
+          index: 0,
+          text: "new",
+          x: 40,
+          y: 10,
+          scale: 1,
+          selected: false,
+        },
+      ],
     });
     const mid = blendScenes(from, to, 0.5);
     expect(mid.notes.map((note) => note.id)).toEqual([
@@ -148,26 +154,28 @@ describe("camera", () => {
   });
 
   it("lerps the camera", () => {
-    expect(blendCamera(
-      { x: 0, y: 0, zoom: 1 },
-      { x: 100, y: 40, zoom: 2 },
-      0.5,
-    )).toEqual({ x: 50, y: 20, zoom: 1.5 });
+    expect(
+      blendCamera({ x: 0, y: 0, zoom: 1 }, { x: 100, y: 40, zoom: 2 }, 0.5),
+    ).toEqual({ x: 50, y: 20, zoom: 1.5 });
   });
 
   it("bounds include notes as well as nodes", () => {
-    const bounds = sceneBounds(scene({
-      nodes: [node("a", 0, 0)],
-      notes: [{
-        id: "n",
-        index: 0,
-        text: "far",
-        x: 500,
-        y: 0,
-        scale: 1,
-        selected: false,
-      }],
-    }));
+    const bounds = sceneBounds(
+      scene({
+        nodes: [node("a", 0, 0)],
+        notes: [
+          {
+            id: "n",
+            index: 0,
+            text: "far",
+            x: 500,
+            y: 0,
+            scale: 1,
+            selected: false,
+          },
+        ],
+      }),
+    );
     expect(bounds?.x).toBeLessThanOrEqual(0);
     expect(bounds?.width).toBeGreaterThan(400);
   });

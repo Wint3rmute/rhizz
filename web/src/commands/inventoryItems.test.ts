@@ -17,9 +17,7 @@ import {
 // 13 definitions plus instances and a system that must be offered too —
 // while instances must NOT be (see inventoryEntities above).
 const MODEL: RawModelPayload = {
-  systems: [
-    { label: "demo-system", full_name: "Demo system", tags: ["demo"] },
-  ],
+  systems: [{ label: "demo-system", full_name: "Demo system", tags: ["demo"] }],
   components: [
     {
       label: "battery",
@@ -106,8 +104,7 @@ describe("inventoryEntities", () => {
       inventoryEntities({
         components: [{ label: "battery" }],
         definitions: [0, 7],
-      })
-        .map((e) => e.label),
+      }).map((e) => e.label),
     ).toEqual(["battery"]);
   });
 
@@ -155,10 +152,9 @@ describe("inventoryItems", () => {
   });
 
   it("puts them in their own section, alongside the other two", () => {
-    expect(new Set(inventoryItems(entities, () => {}).map((i) => i.group)))
-      .toEqual(
-        new Set([INVENTORY_GROUP]),
-      );
+    expect(
+      new Set(inventoryItems(entities, () => {}).map((i) => i.group)),
+    ).toEqual(new Set([INVENTORY_GROUP]));
   });
 
   it("shows the full name only when there is one", () => {
@@ -194,13 +190,15 @@ describe("inventoryItems", () => {
     // another icon set is a value the model legitimately holds. It must not
     // become an empty <svg> on the row.
     const [broken] = inventoryItems(
-      [{
-        label: "x",
-        fullName: "",
-        tags: [],
-        kind: "component",
-        icon: "not-an-icon",
-      }],
+      [
+        {
+          label: "x",
+          fullName: "",
+          tags: [],
+          kind: "component",
+          icon: "not-an-icon",
+        },
+      ],
       () => {},
     );
     expect(broken?.icon).toBeNull();

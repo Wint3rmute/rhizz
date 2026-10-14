@@ -63,7 +63,9 @@ export function createDiagramTransition() {
     onCamera = opts.moveCamera ? applyCamera : undefined;
     const now = typeof performance === "undefined" ? 0 : performance.now();
     const displayed = untrack(() =>
-      tween ? frameAt(tween, now) : { scene, camera: opts.fromCamera ?? camera }
+      tween
+        ? frameAt(tween, now)
+        : { scene, camera: opts.fromCamera ?? camera },
     );
     const result = advance(
       displayed,

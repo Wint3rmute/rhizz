@@ -1,126 +1,128 @@
 <script lang="ts">
-import { resolveIcon, searchIcons } from "../iconHelper";
+  import { resolveIcon, searchIcons } from "../iconHelper";
 
-interface Props {
-  value?: string;
-  placeholder?: string;
-  label?: string;
-  id?: string;
-  onchange?: (value: string) => void;
-}
-
-let {
-  value = $bindable(""),
-  placeholder = "e.g. microchip, server, database, wifi",
-  label = "Icon (FontAwesome)",
-  id = "icon-autocomplete-input",
-  onchange,
-}: Props = $props();
-
-let isOpen = $state(false);
-let highlightedIndex = $state(-1);
-let listElement: HTMLUListElement | null = $state(null);
-
-let suggestions = $derived(isOpen ? searchIcons(value, 10) : []);
-let activeIcon = $derived(resolveIcon(value));
-
-$effect(() => {
-  // Reset highlighted index when suggestions change
-  if (suggestions.length > 0) {
-    if (highlightedIndex >= suggestions.length) {
-      highlightedIndex = 0;
-    }
-  } else {
-    highlightedIndex = -1;
-  }
-});
-
-function handleSelect(iconName: string) {
-  value = iconName;
-  isOpen = false;
-  highlightedIndex = -1;
-  onchange?.(iconName);
-}
-
-function handleInput(e: Event) {
-  const inputVal = (e.target as HTMLInputElement).value;
-  value = inputVal;
-  isOpen = true;
-  highlightedIndex = 0;
-  onchange?.(inputVal.trim());
-}
-
-function handleKeyDown(e: KeyboardEvent) {
-  if (!isOpen || suggestions.length === 0) {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      isOpen = true;
-      highlightedIndex = 0;
-      e.preventDefault();
-    }
-    return;
+  interface Props {
+    value?: string;
+    placeholder?: string;
+    label?: string;
+    id?: string;
+    onchange?: (value: string) => void;
   }
 
-  switch (e.key) {
-    case "ArrowDown":
-      e.preventDefault();
-      highlightedIndex = (highlightedIndex + 1) % suggestions.length;
-      scrollToHighlighted();
-      break;
-    case "ArrowUp":
-      e.preventDefault();
-      highlightedIndex = (highlightedIndex - 1 + suggestions.length) %
-        suggestions.length;
-      scrollToHighlighted();
-      break;
-    case "Enter":
-      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
-        const suggestion = suggestions[highlightedIndex];
-        if (suggestion) {
-          e.preventDefault();
-          handleSelect(suggestion.name);
-        }
+  let {
+    value = $bindable(""),
+    placeholder = "e.g. microchip, server, database, wifi",
+    label = "Icon (FontAwesome)",
+    id = "icon-autocomplete-input",
+    onchange,
+  }: Props = $props();
+
+  let isOpen = $state(false);
+  let highlightedIndex = $state(-1);
+  let listElement: HTMLUListElement | null = $state(null);
+
+  let suggestions = $derived(isOpen ? searchIcons(value, 10) : []);
+  let activeIcon = $derived(resolveIcon(value));
+
+  $effect(() => {
+    // Reset highlighted index when suggestions change
+    if (suggestions.length > 0) {
+      if (highlightedIndex >= suggestions.length) {
+        highlightedIndex = 0;
       }
-      break;
-    case "Tab":
-      if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
-        const suggestion = suggestions[highlightedIndex];
-        if (suggestion) {
-          handleSelect(suggestion.name);
-        }
-      } else if (suggestions.length > 0) {
-        const first = suggestions[0];
-        if (first) {
-          handleSelect(first.name);
-        }
-      }
-      break;
-    case "Escape":
-      e.preventDefault();
-      isOpen = false;
+    } else {
       highlightedIndex = -1;
-      break;
-  }
-}
+    }
+  });
 
-function scrollToHighlighted() {
-  if (!listElement) return;
-  const items = listElement.querySelectorAll("li");
-  if (highlightedIndex >= 0 && highlightedIndex < items.length) {
-    items[highlightedIndex]?.scrollIntoView({ block: "nearest" });
-  }
-}
-
-function handleBlur() {
-  // Delay closing so click on suggestion item registers first
-  setTimeout(() => {
+  function handleSelect(iconName: string) {
+    value = iconName;
     isOpen = false;
     highlightedIndex = -1;
-  }, 180);
-}
+    onchange?.(iconName);
+  }
+
+  function handleInput(e: Event) {
+    const inputVal = (e.target as HTMLInputElement).value;
+    value = inputVal;
+    isOpen = true;
+    highlightedIndex = 0;
+    onchange?.(inputVal.trim());
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (!isOpen || suggestions.length === 0) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        isOpen = true;
+        highlightedIndex = 0;
+        e.preventDefault();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        highlightedIndex = (highlightedIndex + 1) % suggestions.length;
+        scrollToHighlighted();
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        highlightedIndex =
+          (highlightedIndex - 1 + suggestions.length) % suggestions.length;
+        scrollToHighlighted();
+        break;
+      case "Enter":
+        if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+          const suggestion = suggestions[highlightedIndex];
+          if (suggestion) {
+            e.preventDefault();
+            handleSelect(suggestion.name);
+          }
+        }
+        break;
+      case "Tab":
+        if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+          const suggestion = suggestions[highlightedIndex];
+          if (suggestion) {
+            handleSelect(suggestion.name);
+          }
+        } else if (suggestions.length > 0) {
+          const first = suggestions[0];
+          if (first) {
+            handleSelect(first.name);
+          }
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        isOpen = false;
+        highlightedIndex = -1;
+        break;
+    }
+  }
+
+  function scrollToHighlighted() {
+    if (!listElement) return;
+    const items = listElement.querySelectorAll("li");
+    if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+      items[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  function handleBlur() {
+    // Delay closing so click on suggestion item registers first
+    setTimeout(() => {
+      isOpen = false;
+      highlightedIndex = -1;
+    }, 180);
+  }
 </script>
 
-<div class="form-control relative w-full"
-  data-testid="icon-autocomplete-wrapper">
+<div
+  class="form-control relative w-full"
+  data-testid="icon-autocomplete-wrapper"
+>
   {#if label}
     <label class="label py-1" for={id}>
       <span

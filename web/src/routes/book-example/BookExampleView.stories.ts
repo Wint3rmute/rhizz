@@ -154,9 +154,7 @@ export const CodeTab: Story = {
       await canvas.findByRole("tab", { name: "system.hcl" }),
     );
     await findCodeWith(canvasElement, 'protocol "temp-bus"');
-    await expect(
-      canvasElement.querySelector(".hcl-keyword"),
-    ).not.toBeNull();
+    await expect(canvasElement.querySelector(".hcl-keyword")).not.toBeNull();
     await expect(canvasElement.querySelector(".hcl-string")).not.toBeNull();
   },
 };
@@ -165,13 +163,13 @@ export const CodeTab: Story = {
 const warningFiles: BookPayloadFile[] = SAMPLE_FILES.map((file) =>
   file.path === "system.hcl"
     ? {
-      path: file.path,
-      content: file.content.replace(
-        '  full_name = "Reading collector"\n',
-        "",
-      ),
-    }
-    : file
+        path: file.path,
+        content: file.content.replace(
+          '  full_name = "Reading collector"\n',
+          "",
+        ),
+      }
+    : file,
 );
 
 export const WarningsShownDirectly: Story = {
@@ -187,8 +185,8 @@ export const WarningsShownDirectly: Story = {
 
 // A lone file hides the top bar entirely: just code plus diagnostics,
 // like a plain ```rhizz block.
-const singleFile: BookPayloadFile[] = SAMPLE_FILES.filter((file) =>
-  file.path === "system.hcl"
+const singleFile: BookPayloadFile[] = SAMPLE_FILES.filter(
+  (file) => file.path === "system.hcl",
 );
 
 export const SingleFile: Story = {

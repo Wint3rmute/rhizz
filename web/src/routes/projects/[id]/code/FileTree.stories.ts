@@ -76,7 +76,8 @@ export const Default: Story = {
     // Per-row hover actions: hidden until the row is hovered (CSS
     // `group-hover/row:flex`), same as real mouse use — userEvent.hover
     // triggers that before clicking through to the underlying action.
-    const droneRow = canvas.getByRole("button", { name: "drone.hcl" })
+    const droneRow = canvas
+      .getByRole("button", { name: "drone.hcl" })
       .closest("div");
     if (!droneRow) throw new Error("drone row not found");
     await userEvent.hover(droneRow);

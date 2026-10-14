@@ -1,54 +1,54 @@
 <script lang="ts">
-// One diagram node's box: its border/fill, the selection outline, and the
-// icon+label block. This is the whole of what the interactive canvas and the
-// static/embed renderers have in common, so it lives here once — callers own
-// the surrounding positioned <g> (transform, event handlers) and any
-// interaction chrome around it (resize/port handles, reparent highlight).
-//
-// Icon and label placement comes from geometry.nodeLabelLayout, a pure
-// function, so the three text alignments can't drift between renderers.
-import type { ResolvedIcon } from "../../../../iconHelper";
-import { nodeLabelLayout, type TextAlign } from "./geometry";
-import {
-  borderStyleToSvg,
-  fontStyleToSvg,
-  SELECTION_OUTLINE_DASHARRAY,
-  SELECTION_OUTLINE_OPACITY,
-  selectionOutlineRect,
-} from "./visuals";
+  // One diagram node's box: its border/fill, the selection outline, and the
+  // icon+label block. This is the whole of what the interactive canvas and the
+  // static/embed renderers have in common, so it lives here once — callers own
+  // the surrounding positioned <g> (transform, event handlers) and any
+  // interaction chrome around it (resize/port handles, reparent highlight).
+  //
+  // Icon and label placement comes from geometry.nodeLabelLayout, a pure
+  // function, so the three text alignments can't drift between renderers.
+  import type { ResolvedIcon } from "../../../../iconHelper";
+  import { nodeLabelLayout, type TextAlign } from "./geometry";
+  import {
+    borderStyleToSvg,
+    fontStyleToSvg,
+    SELECTION_OUTLINE_DASHARRAY,
+    SELECTION_OUTLINE_OPACITY,
+    selectionOutlineRect,
+  } from "./visuals";
 
-let {
-  label,
-  width,
-  height,
-  textAlign = "center",
-  icon = null,
-  color,
-  border,
-  font,
-  selected = false,
-}: {
-  label: string;
-  width: number;
-  height: number;
-  textAlign?: TextAlign;
-  /** Resolved FontAwesome glyph, or null to render the label alone. */
-  icon?: ResolvedIcon | null;
-  /** Model-level visuals; mapped to SVG presentation values by ./visuals. */
-  color?: string | undefined;
-  border?: string | undefined;
-  font?: string | undefined;
-  /** Draws the dotted primary outline on top of the node's own border. */
-  selected?: boolean;
-} = $props();
+  let {
+    label,
+    width,
+    height,
+    textAlign = "center",
+    icon = null,
+    color,
+    border,
+    font,
+    selected = false,
+  }: {
+    label: string;
+    width: number;
+    height: number;
+    textAlign?: TextAlign;
+    /** Resolved FontAwesome glyph, or null to render the label alone. */
+    icon?: ResolvedIcon | null;
+    /** Model-level visuals; mapped to SVG presentation values by ./visuals. */
+    color?: string | undefined;
+    border?: string | undefined;
+    font?: string | undefined;
+    /** Draws the dotted primary outline on top of the node's own border. */
+    selected?: boolean;
+  } = $props();
 
-let borderSvg = $derived(borderStyleToSvg({ color, border }));
-let fontSvg = $derived(fontStyleToSvg(font));
-let layout = $derived(
-  nodeLabelLayout(textAlign, label, width, height, icon !== null),
-);
-let iconBox = $derived(layout.icon);
-let outline = $derived(selectionOutlineRect(width, height));
+  let borderSvg = $derived(borderStyleToSvg({ color, border }));
+  let fontSvg = $derived(fontStyleToSvg(font));
+  let layout = $derived(
+    nodeLabelLayout(textAlign, label, width, height, icon !== null),
+  );
+  let iconBox = $derived(layout.icon);
+  let outline = $derived(selectionOutlineRect(width, height));
 </script>
 
 <g>

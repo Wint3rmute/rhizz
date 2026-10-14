@@ -142,9 +142,8 @@ export function definitionLabelForNode(
   // `source` is "" as often as it is absent, and both mean "not an instance",
   // so this cannot be a `??`: the empty string has to fall through too.
   const source = component.source;
-  const label = source === undefined || source === ""
-    ? component.label
-    : source;
+  const label =
+    source === undefined || source === "" ? component.label : source;
   if (label === undefined) return null;
   return definitionLabels.includes(label) ? label : null;
 }

@@ -67,7 +67,9 @@ async function shiftClickBox(page: Page, box: Rect) {
   await page.keyboard.up("Shift");
 }
 
-test("arrow keys move the selected component one step per press", async ({ page }) => {
+test("arrow keys move the selected component one step per press", async ({
+  page,
+}) => {
   const canvas = await openDiagram(page);
   await createComponent(page, "e2e-nudge");
 
@@ -86,7 +88,9 @@ test("arrow keys move the selected component one step per press", async ({ page 
   expect(moved.width).toBeCloseTo(start.width, 0);
 });
 
-test("arrow keys move a multi-component selection rigidly", async ({ page }) => {
+test("arrow keys move a multi-component selection rigidly", async ({
+  page,
+}) => {
   const canvas = await openDiagram(page);
   await createComponent(page, "e2e-first");
   // Creating while a node is selected would nest the new one inside it, and a
@@ -126,12 +130,8 @@ test("arrow keys move a multi-component selection rigidly", async ({ page }) => 
   expect(secondMoved.x - second.x).toBeCloseTo(10, 0);
   expect(secondMoved.y - second.y).toBeCloseTo(-10, 0);
   // Rigid: the offset between the two nodes is unchanged.
-  expect(
-    (secondMoved.x - firstMoved.x) - (second.x - first.x),
-  ).toBeCloseTo(0, 0);
-  expect(
-    (secondMoved.y - firstMoved.y) - (second.y - first.y),
-  ).toBeCloseTo(0, 0);
+  expect(secondMoved.x - firstMoved.x - (second.x - first.x)).toBeCloseTo(0, 0);
+  expect(secondMoved.y - firstMoved.y - (second.y - first.y)).toBeCloseTo(0, 0);
 });
 
 test("every arrow press is its own undo point", async ({ page }) => {
@@ -174,7 +174,9 @@ test("arrow keys move a selected note", async ({ page }) => {
   expect(moved.y - start.y).toBeCloseTo(0, 0);
 });
 
-test("arrow keys do not move anything while typing in the inspector", async ({ page }) => {
+test("arrow keys do not move anything while typing in the inspector", async ({
+  page,
+}) => {
   const canvas = await openDiagram(page);
   await createComponent(page, "e2e-typing");
   const label = canvas.getByText("e2e-typing").first();

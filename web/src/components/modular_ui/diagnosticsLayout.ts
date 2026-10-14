@@ -53,18 +53,19 @@ export function coerceDiagnosticsLayout(value: unknown): DiagnosticsLayout {
     return { ...DIAGNOSTICS_LAYOUT_DEFAULTS };
   }
   const record = value as Record<string, unknown>;
-  const height = typeof record.height === "number"
-    ? clampDiagnosticsHeight(record.height)
-    : DIAGNOSTICS_LAYOUT_DEFAULTS.height;
-  const expanded = typeof record.expanded === "boolean"
-    ? record.expanded
-    : false;
+  const height =
+    typeof record.height === "number"
+      ? clampDiagnosticsHeight(record.height)
+      : DIAGNOSTICS_LAYOUT_DEFAULTS.height;
+  const expanded =
+    typeof record.expanded === "boolean" ? record.expanded : false;
   return { height, expanded };
 }
 
-function layoutStore():
-  | Pick<Storage, "getItem" | "setItem" | "removeItem">
-  | null {
+function layoutStore(): Pick<
+  Storage,
+  "getItem" | "setItem" | "removeItem"
+> | null {
   try {
     if (typeof localStorage === "undefined") return null;
     return localStorage;

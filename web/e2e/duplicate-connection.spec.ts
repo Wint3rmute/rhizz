@@ -41,7 +41,9 @@ async function storedFiles(page: import("@playwright/test").Page) {
 // refused with a message, not silently swallowed (or worse, replacing the
 // first). Drives the real canvas flow — drag handle to node, name prompt —
 // and reads the model file back, so it pins the outcome, not the control.
-test("a duplicate connection name is refused with a message", async ({ page }) => {
+test("a duplicate connection name is refused with a message", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E duplicate connection");
 
   // Three components on the default view: the creation modal places each
@@ -75,7 +77,9 @@ test("a duplicate connection name is refused with a message", async ({ page }) =
     page.getByTestId("modeling-pane-right").getByRole("button", { name });
 
   async function nodeCenter(name: string): Promise<{ x: number; y: number }> {
-    const box = await canvas.getByText(name, { exact: true }).first()
+    const box = await canvas
+      .getByText(name, { exact: true })
+      .first()
       .boundingBox();
     if (!box) throw new Error(`no box for ${name}`);
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -125,11 +129,14 @@ test("a duplicate connection name is refused with a message", async ({ page }) =
 
   await dragConnect("conn-a", "conn-b");
   await expect
-    .poll(async () => {
-      const files = await storedFiles(page);
-      const model = files["main.hcl"] ?? files["system.hcl"] ?? "";
-      return model.includes('connection "test-connection"');
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        const model = files["main.hcl"] ?? files["system.hcl"] ?? "";
+        return model.includes('connection "test-connection"');
+      },
+      { timeout: 10_000 },
+    )
     .toBe(true);
 
   // The same name for a second connection: refused with a message naming

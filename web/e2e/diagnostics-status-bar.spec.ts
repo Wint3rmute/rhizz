@@ -19,7 +19,9 @@ async function openProject(page, name = "E2E status bar") {
   return id;
 }
 
-test("diagnostics status bar shows on overview, code, and modeling", async ({ page }) => {
+test("diagnostics status bar shows on overview, code, and modeling", async ({
+  page,
+}) => {
   const id = await openProject(page);
   const bar = page.getByTestId("diagnostics-status-bar");
 
@@ -44,7 +46,9 @@ test("diagnostics status bar shows on overview, code, and modeling", async ({ pa
   ).toHaveAttribute("aria-expanded", "false");
 });
 
-test("diagnostics panel height adjusts by dragging its top edge", async ({ page }) => {
+test("diagnostics panel height adjusts by dragging its top edge", async ({
+  page,
+}) => {
   const id = await openProject(page, "E2E bar resize");
   await page.goto(`/projects/${id}/overview`);
   const bar = page.getByTestId("diagnostics-status-bar");
@@ -93,9 +97,12 @@ test("diagnostics splitter answers the keyboard", async ({ page }) => {
   await page.goto(`/projects/${id}/overview`);
   const panel = page.getByTestId("diagnostics-panel");
 
-  await page.getByTestId("diagnostics-status-bar").getByRole("button", {
-    name: "Expand diagnostics",
-  }).click();
+  await page
+    .getByTestId("diagnostics-status-bar")
+    .getByRole("button", {
+      name: "Expand diagnostics",
+    })
+    .click();
   await expect(panel).toBeVisible();
   const before = (await panel.boundingBox())?.height;
   if (!before) throw new Error("the panel should be laid out");
@@ -111,7 +118,9 @@ test("diagnostics splitter answers the keyboard", async ({ page }) => {
   expect(after).toBeGreaterThan(before);
 });
 
-test("diagnostics panel stops at a share of the viewport height", async ({ page }) => {
+test("diagnostics panel stops at a share of the viewport height", async ({
+  page,
+}) => {
   const id = await openProject(page, "E2E bar viewport cap");
   await page.goto(`/projects/${id}/overview`);
   const viewport = page.viewportSize();
@@ -119,9 +128,12 @@ test("diagnostics panel stops at a share of the viewport height", async ({ page 
   const expected = viewport.height * 0.7;
   const panel = page.getByTestId("diagnostics-panel");
 
-  await page.getByTestId("diagnostics-status-bar").getByRole("button", {
-    name: "Expand diagnostics",
-  }).click();
+  await page
+    .getByTestId("diagnostics-status-bar")
+    .getByRole("button", {
+      name: "Expand diagnostics",
+    })
+    .click();
   await expect(panel).toBeVisible();
 
   // Drag far past the top edge: the 70%-of-viewport cap binds before the
@@ -162,7 +174,9 @@ test("diagnostics expanded panel survives a reload", async ({ page }) => {
 // far left, the strictness control at its far right. Both used to sit in the
 // navbar, so the navbar must not keep a copy — one score and one level
 // control, each in the place the bar says it is.
-test("the score badge and strictness control live in the bar, not the navbar", async ({ page }) => {
+test("the score badge and strictness control live in the bar, not the navbar", async ({
+  page,
+}) => {
   // An example, not an empty project: the score badge only renders while a
   // score exists, and only Modeling publishes one.
   const id = await createFromExample(
@@ -201,14 +215,16 @@ test("the score badge and strictness control live in the bar, not the navbar", a
   }
   // The toggle covers the strip edge to edge…
   expect(toggleBox.x).toBeLessThanOrEqual(barBox.x);
-  expect(toggleBox.x + toggleBox.width)
-    .toBeGreaterThanOrEqual(barBox.x + barBox.width - 1);
+  expect(toggleBox.x + toggleBox.width).toBeGreaterThanOrEqual(
+    barBox.x + barBox.width - 1,
+  );
   // …the badge starts the content row (inside the toggle, not left of it)…
   expect(badgeBox.x).toBeGreaterThanOrEqual(toggleBox.x);
   // …and the select ends the row within the bar's own right padding
   // (`lg:px-8` at this viewport), so nothing sits between it and the edge.
-  expect(barBox.x + barBox.width - (selectBox.x + selectBox.width))
-    .toBeLessThan(40);
+  expect(
+    barBox.x + barBox.width - (selectBox.x + selectBox.width),
+  ).toBeLessThan(40);
   // The select is the toggle's one exclusion: DOM-wise it stays outside the
   // button, so it remains its own control rather than part of the toggle.
   const selectInsideToggle = await bar

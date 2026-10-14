@@ -4,7 +4,9 @@ import { createFromExample } from "./helpers";
 // System-bound views: each diagram is bound to one system at creation and
 // the binding is immutable — the header shows it read-only and the
 // Components explorer only shows that system's tree.
-test("view stays bound to its system when the model holds several", async ({ page }) => {
+test("view stays bound to its system when the model holds several", async ({
+  page,
+}) => {
   // The drone example ships two systems ("quadcopter" and "ground-control")
   // with views/main.hcl bound to "quadcopter", so the multi-system case
   // comes from a fixture rather than from a UI action.

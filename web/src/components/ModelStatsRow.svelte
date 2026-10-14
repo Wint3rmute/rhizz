@@ -1,27 +1,27 @@
 <script lang="ts">
-interface Props {
-  systemCount: number;
-  componentCount: number;
-  leafCount: number;
-  compositeCount: number;
-  portCount: number;
-  portsPct: number;
-  connectionCount: number;
-  connectionsPct: number;
-  overallPct: number;
-}
+  interface Props {
+    systemCount: number;
+    componentCount: number;
+    leafCount: number;
+    compositeCount: number;
+    portCount: number;
+    portsPct: number;
+    connectionCount: number;
+    connectionsPct: number;
+    overallPct: number;
+  }
 
-let {
-  systemCount,
-  componentCount,
-  leafCount,
-  compositeCount,
-  portCount,
-  portsPct,
-  connectionCount,
-  connectionsPct,
-  overallPct,
-}: Props = $props();
+  let {
+    systemCount,
+    componentCount,
+    leafCount,
+    compositeCount,
+    portCount,
+    portsPct,
+    connectionCount,
+    connectionsPct,
+    overallPct,
+  }: Props = $props();
 </script>
 
 <div class="stats stats-vertical sm:stats-horizontal shadow bg-base-200 w-full">
@@ -136,11 +136,14 @@ let {
     </div>
     <div class="stat-title text-base-content/60">Completion</div>
     <div
-      class="stat-value {overallPct >= 80 ? 'text-success' : overallPct >= 50 ? 'text-warning' : 'text-error'}"
+      class="stat-value {overallPct >= 80
+        ? 'text-success'
+        : overallPct >= 50
+          ? 'text-warning'
+          : 'text-error'}"
     >
       {overallPct}%
     </div>
-    <div
-      class="stat-desc text-base-content/50">Overall completion score</div>
+    <div class="stat-desc text-base-content/50">Overall completion score</div>
   </div>
 </div>

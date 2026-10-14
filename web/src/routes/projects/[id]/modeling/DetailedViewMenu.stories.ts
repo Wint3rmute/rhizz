@@ -87,8 +87,8 @@ async function ensureDetailProject(): Promise<Project> {
   // model) on load, so an existing project can't be trusted to still match
   // the fixture below (same reasoning as OpenViewUrl.stories.ts).
   const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.id === DETAIL_PROJECT_ID
+  const stale = existing.find(
+    (candidate) => candidate.id === DETAIL_PROJECT_ID,
   );
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);

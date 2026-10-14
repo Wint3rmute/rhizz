@@ -22,10 +22,7 @@ export default ts.config(
   },
   {
     files: ["src/**/*.ts", "src/**/*.tsx", "src/**/*.mts", "src/**/*.cts"],
-    extends: [
-      ts.configs.strictTypeChecked,
-      ts.configs.stylisticTypeChecked,
-    ],
+    extends: [ts.configs.strictTypeChecked, ts.configs.stylisticTypeChecked],
   },
   {
     files: ["**/*.svelte", "**/*.svelte.ts", "**/*.svelte.js"],
@@ -48,16 +45,22 @@ export default ts.config(
       // purely to exclude it from `rest`, without `a` itself being
       // flagged as unused — used throughout vfs/types.test.ts to build
       // "this object minus one required field" fixtures.
-      "@typescript-eslint/no-unused-vars": ["error", {
-        args: "after-used",
-        ignoreRestSiblings: true,
-      }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          args: "after-used",
+          ignoreRestSiblings: true,
+        },
+      ],
       // Empty arrow functions are used deliberately as no-op stubs for
       // Storybook prop defaults and `vi.spyOn().mockImplementation()`;
       // empty methods/class methods are still flagged.
-      "@typescript-eslint/no-empty-function": ["error", {
-        allow: ["arrowFunctions"],
-      }],
+      "@typescript-eslint/no-empty-function": [
+        "error",
+        {
+          allow: ["arrowFunctions"],
+        },
+      ],
     },
   },
   {
@@ -82,11 +85,14 @@ export default ts.config(
       "@typescript-eslint/switch-exhaustiveness-check": "error",
       // Allow explicit `<Type>`/`as Type` casts (banned `any`/`!` are
       // enforced by their own rules above).
-      "@typescript-eslint/consistent-type-assertions": ["error", {
-        assertionStyle: "as",
-        arrayLiteralTypeAssertions: "allow-as-parameter",
-        objectLiteralTypeAssertions: "allow-as-parameter",
-      }],
+      "@typescript-eslint/consistent-type-assertions": [
+        "error",
+        {
+          assertionStyle: "as",
+          arrayLiteralTypeAssertions: "allow-as-parameter",
+          objectLiteralTypeAssertions: "allow-as-parameter",
+        },
+      ],
       // No TODO/FIXME/XXX markers or `debugger` left behind.
       "no-warning-comments": "error",
       "no-debugger": "error",

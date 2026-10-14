@@ -15,10 +15,9 @@ export function findComponentDiagram(
   componentLabel: string,
   qualifiedPath: string,
 ): Dirent | undefined {
-  return entries.find(
-    (entry) => withoutHclSuffix(entry.path) === qualifiedPath,
-  ) ?? entries.find(
-    (entry) => withoutHclSuffix(entry.name) === componentLabel,
+  return (
+    entries.find((entry) => withoutHclSuffix(entry.path) === qualifiedPath) ??
+    entries.find((entry) => withoutHclSuffix(entry.name) === componentLabel)
   );
 }
 
