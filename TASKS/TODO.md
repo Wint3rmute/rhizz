@@ -67,9 +67,11 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
   `.eslintcache` (clean with and without it), and the `$types` include (adding
   it changed nothing, so it was reverted). If they return, run `npm run sync`
   first.
-- [ ] **6. Reintroduce formatting.** `deno fmt` has no replacement. Choose a
-  formatter, measure the drift (Prettier defaults flag ~130 files), and land
-  the reformat as its own commit with no other changes.
+- [x] **6. Reintroduce formatting.** Result: Prettier 3 with the Svelte plugin,
+  default settings. The reformat (210 files) landed as its own commit; a
+  token-stream check confirmed the TS/JS changes are whitespace and punctuation
+  only. `format:check` runs in the CI lint job (#396). Measured drift: 207
+  files, not the ~130 estimated earlier, because `.svelte` files are included.
 - [x] **7. Verify the Dockerfile build.** Result: the `docker` workflow on
   `main` (run 38578075822) builds the image. The frontend stage runs `npm ci`
   and `npm run build` on `node:24-bookworm`, and the image exports.
