@@ -157,11 +157,8 @@ blocks are keyed by name, so one name must refer to one declaration.
 - Document the rule in the E001 SPEC page. Check `examples/` for names that
   break under the rule and rename them.
 
-Still open:
-
-- Sidebar row when only some copies are drawn (one instance placed, another
-  not). Proposed: the row is listed and checked if any copy is drawn, and
-  hiding applies to all copies.
+- Sidebar: a name is listed and checked if any of its copies is drawn. Hiding
+  applies to all copies. Copies that are not drawn have no visible effect.
 
 Steps (in order):
 
