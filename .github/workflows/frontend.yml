@@ -11,18 +11,27 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-# All toolchains come from flake.nix (pinned via flake.lock): every job
-# installs Nix, warms /nix/store from cache, then runs the same `just`
-# recipes and tool commands developers run locally. No per-tool setup
-# actions (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
+# Toolchains come from flake.nix (pinned via flake.lock): jobs install Nix,
+# warm /nix/store from cache, then run either a Nix derivation or the same
+# `just` recipes developers run locally. No per-tool setup actions
+# (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
+#
+# The two build jobs (`wasm`, `build`) call `nix build` on their derivation
+# directly rather than `nix develop --command just ...`: their recipes need no
+# toolchain, so entering the devshell would only realize its ~2.7 GiB of
+# Playwright browsers, clippy, rustfmt and mdbook to obtain `just`. The
+# remaining jobs genuinely need the devshell.
 
 jobs:
   # Build the wasm package once, hand it to every job that needs it.
   #
-  # `just wasm` builds it through its Nix derivation (nix/wasm.nix) and syncs
-  # the output into crates/rhizz-wasm/pkg/, so this job runs the same
-  # reproducible build developers get locally — no wasm-pack downloaded at
-  # runtime, wasm-bindgen-cli is pinned by the flake.
+  # The derivation only — deliberately no devshell. `just wasm` would work
+  # too, but `nix develop --command just wasm` realizes the whole shared
+  # devshell first: measured at 1191 paths / ~2.7 GiB more than this
+  # derivation needs (Playwright browsers, clippy, rustfmt, mdbook — none of
+  # which the wasm build touches). The only devshell-provided thing the
+  # recipe actually uses is `just` itself; every command below is base-image
+  # coreutils. The same numbers apply to the `build` job.
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +46,18 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - run: nix develop --command just wasm
+      - run: nix build .#rhizz-wasm-pkg
+
+      # Mirrors the tail of `just wasm` (see Justfile): the derivation's
+      # output is a read-only store path, so it has to be dereferenced and
+      # made writable to land in the tree the artifact upload reads from.
+      # `crates/rhizz-wasm/pkg/` is neither committed nor gitignored, so a
+      # fresh checkout has no such directory.
+      - run: |
+          rm -rf crates/rhizz-wasm/pkg
+          mkdir -p crates/rhizz-wasm/pkg
+          cp -rL result/. crates/rhizz-wasm/pkg/
+          chmod -R u+w crates/rhizz-wasm/pkg
 
       - uses: actions/upload-artifact@v7
         with:
@@ -52,6 +72,11 @@ jobs:
   # Runs on its own so a frontend failure is unambiguous, with no Rust
   # toolchain in the way. `needs: wasm` so the shared rhizz-wasm-pkg
   # derivation is a cache hit rather than being built twice in parallel.
+  #
+  # The derivation only, for the same reason as `wasm` above — the recipe's
+  # `web-build` tail only copies the store output into web/build/, which
+  # nothing in this job consumes. (`just build` still runs the full recipe
+  # locally, where the copy does matter.)
   build:
     needs: wasm
     runs-on: ubuntu-latest
@@ -67,11 +92,7 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      # The same recipe `just build` runs, so CI cannot drift from the local
-      # build. It resolves rhizz-wasm-pkg itself; the `wasm` job above just
-      # warms that derivation first, so this is a cache hit instead of a
-      # duplicate concurrent build.
-      - run: nix develop --command just web-build
+      - run: nix build .#rhizz-web
 
   lint:
     needs: wasm
