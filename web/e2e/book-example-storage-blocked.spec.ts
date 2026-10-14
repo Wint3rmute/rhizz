@@ -7,7 +7,9 @@ import { expect, test } from "@playwright/test";
 // binding itself. That used to crash module init (ProjectState,
 // ThemeState, WarningLevelState) and left the iframe rendering only its
 // empty app background, while the same URL worked fine standalone.
-test("book embed renders with third-party storage blocked", async ({ page }) => {
+test("book embed renders with third-party storage blocked", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "localStorage", {
       get() {

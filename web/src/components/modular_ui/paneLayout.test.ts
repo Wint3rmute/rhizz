@@ -93,9 +93,7 @@ describe("coerce", () => {
   });
 
   it("clamps out-of-range widths instead of rejecting the entry", () => {
-    expect(
-      store.coerce({ leftWidth: 1, rightWidth: 9999 }),
-    ).toEqual(
+    expect(store.coerce({ leftWidth: 1, rightWidth: 9999 })).toEqual(
       layout({
         leftWidth: DEFAULT_PANE_MIN_WIDTH,
         rightWidth: DEFAULT_PANE_MAX_WIDTH,
@@ -111,15 +109,13 @@ describe("coerce", () => {
         leftHidden: "yes",
         rightHidden: true,
       }),
-    ).toEqual(
-      layout({ leftWidth: 300, rightHidden: true }),
-    );
+    ).toEqual(layout({ leftWidth: 300, rightHidden: true }));
   });
 
   it("preserves hidden flags", () => {
-    expect(
-      store.coerce({ leftHidden: true, rightHidden: true }),
-    ).toEqual(layout({ leftHidden: true, rightHidden: true }));
+    expect(store.coerce({ leftHidden: true, rightHidden: true })).toEqual(
+      layout({ leftHidden: true, rightHidden: true }),
+    );
   });
 
   it("honours custom defaults", () => {
@@ -128,14 +124,12 @@ describe("coerce", () => {
       defaultLeftWidth: 256,
       defaultRightWidth: 256,
     });
-    expect(custom.coerce({})).toEqual(
-      {
-        leftWidth: 256,
-        rightWidth: 256,
-        leftHidden: false,
-        rightHidden: false,
-      },
-    );
+    expect(custom.coerce({})).toEqual({
+      leftWidth: 256,
+      rightWidth: 256,
+      leftHidden: false,
+      rightHidden: false,
+    });
   });
 });
 
@@ -237,10 +231,7 @@ describe("layout storage", () => {
 
   it("clamps stored widths on read", () => {
     const data = stubStore();
-    data.set(
-      store.key,
-      JSON.stringify({ leftWidth: 1, rightWidth: 9999 }),
-    );
+    data.set(store.key, JSON.stringify({ leftWidth: 1, rightWidth: 9999 }));
     expect(store.read()).toEqual(
       layout({
         leftWidth: DEFAULT_PANE_MIN_WIDTH,

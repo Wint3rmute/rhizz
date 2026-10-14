@@ -116,7 +116,9 @@ function touchProject(
   projectId: string,
   now: string,
 ): Project[] {
-  return projects.map((p) => p.id === projectId ? { ...p, updatedAt: now } : p);
+  return projects.map((p) =>
+    p.id === projectId ? { ...p, updatedAt: now } : p,
+  );
 }
 
 // Validates that `parentId` (if given) refers to an existing directory
@@ -230,7 +232,7 @@ export function renameProject(
       ...data,
       projects: data.projects.map((p) => (p.id === id ? renamed : p)),
       nodes: data.nodes.map((n) =>
-        n.projectId === id ? { ...n, projectId: nextId } : n
+        n.projectId === id ? { ...n, projectId: nextId } : n,
       ),
     },
     project: renamed,
@@ -324,7 +326,7 @@ export function updateFileContent(
     updatedAt: now,
   };
   const nodes = data.nodes.map((n) =>
-    n.projectId === projectId && n.id === fileId ? updated : n
+    n.projectId === projectId && n.id === fileId ? updated : n,
   );
 
   return {
@@ -344,7 +346,7 @@ export function renameNode(
   const node = findNode(data, projectId, nodeId);
   assertNoSiblingWithName(data, projectId, node.parentId, name, nodeId);
   const nodes = data.nodes.map((n) =>
-    n.projectId === projectId && n.id === nodeId ? { ...n, name } : n
+    n.projectId === projectId && n.id === nodeId ? { ...n, name } : n,
   );
 
   return {
@@ -363,13 +365,7 @@ export function moveNode(
 ): VfsData {
   const node = findNode(data, projectId, nodeId);
   assertValidParent(data, projectId, newParentId);
-  assertNoSiblingWithName(
-    data,
-    projectId,
-    newParentId,
-    node.name,
-    nodeId,
-  );
+  assertNoSiblingWithName(data, projectId, newParentId, node.name, nodeId);
 
   if (wouldCreateCycle(projectId, nodeId, newParentId, data.nodes)) {
     throw new Error(
@@ -380,7 +376,7 @@ export function moveNode(
   const nodes = data.nodes.map((n) =>
     n.projectId === projectId && n.id === nodeId
       ? { ...n, parentId: newParentId }
-      : n
+      : n,
   );
 
   return {

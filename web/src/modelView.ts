@@ -122,9 +122,7 @@ export type RawComponent = NonNullable<RawModelPayload["components"]>[number];
 /** One entry of {@link RawModelPayload}'s port arena. */
 export type RawPort = NonNullable<RawModelPayload["ports"]>[number];
 /** One entry of {@link RawModelPayload}'s connection arena. */
-export type RawConnection = NonNullable<
-  RawModelPayload["connections"]
->[number];
+export type RawConnection = NonNullable<RawModelPayload["connections"]>[number];
 
 function toRole(role: string | undefined): PortData["role"] {
   const normalized = role?.toLowerCase();
@@ -164,13 +162,15 @@ export function componentDataByKey(
       source: component.source === "" ? undefined : component.source,
       full_name: component.full_name ?? "",
       icon: component.icon ?? "",
-      color: component.color === "" || component.color === undefined
-        ? DEFAULT_COLOR
-        : component.color,
+      color:
+        component.color === "" || component.color === undefined
+          ? DEFAULT_COLOR
+          : component.color,
       border: toBorderStyle(component.border),
-      font: component.font === "" || component.font === undefined
-        ? DEFAULT_FONT
-        : component.font,
+      font:
+        component.font === "" || component.font === undefined
+          ? DEFAULT_FONT
+          : component.font,
       tags: component.tags ?? [],
       leaf: component.leaf ?? false,
       ports: (component.ports ?? []).map((portIndex) => {

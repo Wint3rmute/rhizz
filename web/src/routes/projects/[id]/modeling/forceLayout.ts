@@ -181,17 +181,19 @@ export function createForceLayout(
       return [{ source, target }];
     });
 
-  const simulation: Simulation<SimNode, SimulationLinkDatum<SimNode>> =
-    forceSimulation(simNodes)
-      .force("charge", forceManyBody().strength(chargeStrength))
-      .force("link", forceLink(simLinks).distance(linkDistance))
-      .force(
-        "collide",
-        forceCollide<SimNode>((n) => n.radius + collidePadding),
-      )
-      .force("center", forceCenter(centerX, centerY))
-      .force("align", forceOrthogonalAlign(simLinks, alignStrength))
-      .stop();
+  const simulation: Simulation<
+    SimNode,
+    SimulationLinkDatum<SimNode>
+  > = forceSimulation(simNodes)
+    .force("charge", forceManyBody().strength(chargeStrength))
+    .force("link", forceLink(simLinks).distance(linkDistance))
+    .force(
+      "collide",
+      forceCollide<SimNode>((n) => n.radius + collidePadding),
+    )
+    .force("center", forceCenter(centerX, centerY))
+    .force("align", forceOrthogonalAlign(simLinks, alignStrength))
+    .stop();
 
   // Tracks the last position actually *returned* for each node (as
   // opposed to the simulation's own internal, unramped position) — the
@@ -206,9 +208,8 @@ export function createForceLayout(
 
   function extractResults(): LayoutResult[] {
     tickCount += 1;
-    const rampFactor = warmupTicks > 0
-      ? Math.min(1, tickCount / warmupTicks)
-      : 1;
+    const rampFactor =
+      warmupTicks > 0 ? Math.min(1, tickCount / warmupTicks) : 1;
 
     return simNodes.map((n) => {
       const box = boxByIndex.get(n.componentIndex);
@@ -220,8 +221,10 @@ export function createForceLayout(
       let x = trueX;
       let y = trueY;
       if (rampFactor < 1) {
-        const prev = lastDisplayed.get(n.componentIndex) ??
-          { x: trueX, y: trueY };
+        const prev = lastDisplayed.get(n.componentIndex) ?? {
+          x: trueX,
+          y: trueY,
+        };
         x = prev.x + (trueX - prev.x) * rampFactor;
         y = prev.y + (trueY - prev.y) * rampFactor;
       }

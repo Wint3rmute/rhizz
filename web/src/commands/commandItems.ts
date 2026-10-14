@@ -16,9 +16,7 @@ import { WORKSPACE_PAGES } from "./workspacePages";
 
 export const NAVIGATE_GROUP = "Navigate";
 
-export function commandItems(
-  onPage: (pageId: string) => void,
-): PaletteItem[] {
+export function commandItems(onPage: (pageId: string) => void): PaletteItem[] {
   return WORKSPACE_PAGES.map<PaletteItem>((page) => ({
     id: `command:page:${page.id}`,
     label: `Go to ${page.label}`,

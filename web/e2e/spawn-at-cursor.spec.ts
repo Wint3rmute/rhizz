@@ -78,7 +78,9 @@ test("C spawns a component centered under the pointer", async ({ page }) => {
   expect(nodeBox.y + nodeBox.height / 2).toBeCloseTo(point.y, -1);
 });
 
-test("pointer off the canvas falls back to the viewport center", async ({ page }) => {
+test("pointer off the canvas falls back to the viewport center", async ({
+  page,
+}) => {
   const canvas = await openDiagram(page);
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas has no bounding box");

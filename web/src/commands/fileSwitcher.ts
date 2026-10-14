@@ -23,8 +23,7 @@ import type { PaletteScope } from "./paletteScope";
  * its project-relative path, which the code page reads off `?file=`.
  */
 export type FileTarget =
-  | { kind: "view"; view: string }
-  | { kind: "file"; path: string };
+  { kind: "view"; view: string } | { kind: "file"; path: string };
 
 /** Whether this path is a view file, i.e. a `.hcl` directly under `views/`. */
 function isViewPath(path: string): boolean {

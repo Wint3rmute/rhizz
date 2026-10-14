@@ -131,7 +131,8 @@ system "computer-setup" {
       // Two view blocks -> E016.
       {
         filename: "views/combined.hcl",
-        content: 'view "combined" { system = "computer-setup" }\n' +
+        content:
+          'view "combined" { system = "computer-setup" }\n' +
           'view "other" { system = "computer-setup" }\n',
       },
       // Unknown view system -> E006.
@@ -142,7 +143,8 @@ system "computer-setup" {
       // Unknown node path -> W016 (non-blocking).
       {
         filename: "views/overview.hcl",
-        content: 'view "overview" {\n' +
+        content:
+          'view "overview" {\n' +
           '  system = "computer-setup"\n' +
           '  node "computer-setup/ghost" {\n' +
           "    x = 1\n" +
@@ -197,11 +199,11 @@ system "demo" {
     // instances, so the instance indices are 2 and 3 — never assume the
     // definition indices.
     const componentsNow = model.components();
-    const c1Idx = componentsNow.findIndex((c) =>
-      c.label === "c1" && c.parent_system_index !== undefined
+    const c1Idx = componentsNow.findIndex(
+      (c) => c.label === "c1" && c.parent_system_index !== undefined,
     );
-    const c2Idx = componentsNow.findIndex((c) =>
-      c.label === "c2" && c.parent_system_index !== undefined
+    const c2Idx = componentsNow.findIndex(
+      (c) => c.label === "c2" && c.parent_system_index !== undefined,
     );
     expect(c1Idx).toBeGreaterThanOrEqual(0);
     expect(c2Idx).toBeGreaterThanOrEqual(0);
@@ -212,13 +214,13 @@ system "demo" {
     expect(wasmConns[0]?.label).toBe("link");
 
     // Explicit mapping to plain object for computeVisibleConnections
-    const mappedConns = wasmConns.map((
-      c: { from: number; to: number; label: string },
-    ) => ({
-      from: c.from,
-      to: c.to,
-      label: c.label,
-    }));
+    const mappedConns = wasmConns.map(
+      (c: { from: number; to: number; label: string }) => ({
+        from: c.from,
+        to: c.to,
+        label: c.label,
+      }),
+    );
     expect(mappedConns[0]).toEqual({
       from: c1Idx,
       to: c2Idx,
@@ -321,9 +323,10 @@ system "demo" {
     // `fc` has no full name (W004, component level) and `loopback`
     // connects `fc` to itself (W005, business level) — one warning of each
     // gated kind, so a level change is observable in both directions.
-    const gatedWarnings = [{
-      filename: "system.hcl",
-      content: `component "fc" {
+    const gatedWarnings = [
+      {
+        filename: "system.hcl",
+        content: `component "fc" {
   leaf = true
 }
 
@@ -338,13 +341,15 @@ system "drone" {
   }
 }
 `,
-    }];
+      },
+    ];
 
     // Two instances sharing a label in one system — E001, an error, which no
     // warning level may ever hide.
-    const broken = [{
-      filename: "system.hcl",
-      content: `component "motor" {
+    const broken = [
+      {
+        filename: "system.hcl",
+        content: `component "motor" {
   full_name = "Brushless motor"
 }
 
@@ -357,13 +362,16 @@ system "drone" {
   }
 }
 `,
-    }];
+      },
+    ];
 
     function codes(
       sources: { filename: string; content: string }[],
       level?: WarningLevel,
     ): string[] {
-      return compile_system(sources, level).diagnostics().map((d) => d.code);
+      return compile_system(sources, level)
+        .diagnostics()
+        .map((d) => d.code);
     }
 
     it("forwards the level to WASM, hiding component warnings at business", () => {
@@ -403,8 +411,9 @@ system "drone" {
     });
 
     it("rejects an unknown level with a JsError", () => {
-      expect(() => compile_system(gatedWarnings, "verbose" as WarningLevel))
-        .toThrow(/unknown warning level 'verbose'/);
+      expect(() =>
+        compile_system(gatedWarnings, "verbose" as WarningLevel),
+      ).toThrow(/unknown warning level 'verbose'/);
     });
   });
 });

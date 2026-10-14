@@ -155,9 +155,10 @@ export const Sourced: Story = {
     // it now lives inside the shared style block, and a provenance link below
     // the border and font pickers read as a style value.
     await expect(
-      canvas.getByTestId("component-source").compareDocumentPosition(
-        canvas.getByLabelText(/full name/i),
-      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      canvas
+        .getByTestId("component-source")
+        .compareDocumentPosition(canvas.getByLabelText(/full name/i)) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     // Named by the definition, not by the instance's own label — the link has
     // to address the definition, so `fc` must not leak into the href.

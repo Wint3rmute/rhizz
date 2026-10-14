@@ -34,7 +34,9 @@ async function createComponent(page, label: string) {
   await expect(canvas.getByText(label).first()).toBeVisible();
 }
 
-test("embed navigates back and forth through linked views", async ({ page }) => {
+test("embed navigates back and forth through linked views", async ({
+  page,
+}) => {
   const id = await openDiagram(page);
   await createComponent(page, "e2e-nav-widget");
   await createComponent(page, "e2e-nav-plain");
@@ -64,9 +66,7 @@ test("embed navigates back and forth through linked views", async ({ page }) => 
   await emptyState
     .getByRole("button", { name: "Create a view for this component" })
     .click();
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-nav-widget.hcl`,
-  );
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-nav-widget.hcl`);
 
   // Open the main diagram in embed mode: both nodes are placed there.
   await page.goto(`/projects/${id}/embed/main.hcl`);
@@ -86,7 +86,7 @@ test("embed navigates back and forth through linked views", async ({ page }) => 
   // and their SVG hit rects overlap, so a real mouse click can land on the
   // wrong node — the URL assertion below is what proves the wiring.
   await linked.evaluate((el: SVGElement) =>
-    el.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true })),
   );
   await expect(page).toHaveURL(/\/embed\/e2e-nav-widget\.hcl/);
 
@@ -100,9 +100,10 @@ test("embed navigates back and forth through linked views", async ({ page }) => 
   await page
     .getByRole("link", { name: /e2e-nav-plain, no detailed view/i })
     .evaluate((el: SVGElement) =>
-      el.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
-  await expect(page.getByText(/no detailed view for e2e-nav-plain created/i))
-    .toBeVisible();
+  await expect(
+    page.getByText(/no detailed view for e2e-nav-plain created/i),
+  ).toBeVisible();
   expect(page.url()).toBe(urlBefore);
 });

@@ -10,9 +10,7 @@ describe("hclHighlight", () => {
       "string",
       "plain",
     ]);
-    expect(tokens.map((token) => token.text).join("")).toBe(
-      'system "demo" {',
-    );
+    expect(tokens.map((token) => token.text).join("")).toBe('system "demo" {');
   });
 
   it("treats full-line and trailing comments as comments", () => {
@@ -27,9 +25,7 @@ describe("hclHighlight", () => {
   });
 
   it("does not treat # inside strings as a comment", () => {
-    expect(highlightHcl('"a#b"')).toEqual([
-      { text: '"a#b"', cls: "string" },
-    ]);
+    expect(highlightHcl('"a#b"')).toEqual([{ text: '"a#b"', cls: "string" }]);
   });
 
   it("keeps escaped quotes inside one string token", () => {
@@ -77,8 +73,10 @@ describe("hclHighlight", () => {
       "  leaf = true",
       "}",
     ].join("\n");
-    expect(highlightHcl(source).map((token) => token.text).join("")).toBe(
-      source,
-    );
+    expect(
+      highlightHcl(source)
+        .map((token) => token.text)
+        .join(""),
+    ).toBe(source);
   });
 });

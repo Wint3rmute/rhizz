@@ -22,7 +22,8 @@ export function normalizeIconName(name: string): string {
   if (clean.startsWith("fa-")) {
     clean = clean.slice(3);
   } else if (
-    clean.startsWith("fa") && clean.length > 2 &&
+    clean.startsWith("fa") &&
+    clean.length > 2 &&
     clean.charAt(2) === clean.charAt(2).toUpperCase()
   ) {
     clean = clean.slice(2);
@@ -92,9 +93,7 @@ export const ALL_ICON_NAMES: string[] = Object.keys(solidIcons)
   )
   .map((key) => {
     const nameWithoutFa = key.slice(2);
-    return nameWithoutFa
-      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-      .toLowerCase();
+    return nameWithoutFa.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
   })
   .sort();
 

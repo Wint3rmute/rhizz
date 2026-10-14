@@ -41,8 +41,9 @@ export const SeededOverview: Story = {
     async () => {
       await init();
       const existing = await projectStore.listProjects();
-      const project = existing.find((item) => item.id === PROJECT_ID) ??
-        await createProjectWithMainFile(PROJECT_NAME, EXAMPLE_SYSTEM_HCL);
+      const project =
+        existing.find((item) => item.id === PROJECT_ID) ??
+        (await createProjectWithMainFile(PROJECT_NAME, EXAMPLE_SYSTEM_HCL));
       const fs = openProjectFs(projectStore, project.id);
       const layout = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
       if (!layout) throw new Error("example overview layout missing");

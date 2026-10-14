@@ -22,7 +22,9 @@
     "storybook": "storybook dev --config-dir .storybook",
     "build-storybook": "svelte-kit sync && storybook build --config-dir .storybook --output-dir storybook-static",
     "lint": "svelte-kit sync && eslint . --cache --cache-location .eslintcache --cache-strategy content",
-    "eslint": "eslint . --cache --cache-location .eslintcache --cache-strategy content"
+    "eslint": "eslint . --cache --cache-location .eslintcache --cache-strategy content",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
@@ -67,6 +69,8 @@
     "globals": "^17.11.0",
     "monaco-editor": "^0.55.1",
     "playwright": "^1.63.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-svelte": "3.5.2",
     "storybook": "^10.6.2",
     "svelte": "^5.57.1",
     "svelte-check": "^4.7.6",

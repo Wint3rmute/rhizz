@@ -16,7 +16,9 @@ test("a new project is addressed by the slug of its name", async ({ page }) => {
   await expect(page.getByText("Drone System")).toBeVisible();
 });
 
-test("creating a second project with the same slug is refused", async ({ page }) => {
+test("creating a second project with the same slug is refused", async ({
+  page,
+}) => {
   await page.goto("/");
   // One handler for both creations, driven by this variable — two
   // `page.on("dialog")` registrations would fight over the same dialog.

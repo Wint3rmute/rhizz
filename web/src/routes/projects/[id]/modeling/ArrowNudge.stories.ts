@@ -71,10 +71,7 @@ async function ensureProject(): Promise<Project> {
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
   }
-  return await createProjectWithMainFile(
-    PROJECT_NAME,
-    DEMO_HCL,
-  );
+  return await createProjectWithMainFile(PROJECT_NAME, DEMO_HCL);
 }
 
 const meta = {
@@ -168,10 +165,12 @@ export const MultiSelectionMovesRigidly: Story = {
     await expect(alphaMoved.x - onGrid(alphaStart.x)).toBe(STEP);
     await expect(betaMoved.x - onGrid(betaStart.x)).toBe(STEP);
     // Rigid: the same delta for both, so the offset between them is unchanged.
-    await expect((betaMoved.x - alphaMoved.x) - (betaStart.x - alphaStart.x))
-      .toBe(0);
-    await expect((betaMoved.y - alphaMoved.y) - (betaStart.y - alphaStart.y))
-      .toBe(0);
+    await expect(
+      betaMoved.x - alphaMoved.x - (betaStart.x - alphaStart.x),
+    ).toBe(0);
+    await expect(
+      betaMoved.y - alphaMoved.y - (betaStart.y - alphaStart.y),
+    ).toBe(0);
   },
 };
 

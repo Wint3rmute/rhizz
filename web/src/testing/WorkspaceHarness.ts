@@ -43,28 +43,28 @@ export interface ComponentVisualSnapshot {
 export type WorkspaceAction =
   | { type: "select-component"; component: string }
   | {
-    type: "set-node-visuals";
-    component: string;
-    color?: string | undefined;
-    border?: "solid" | "dashed" | "dotted" | undefined;
-    font?: string | undefined;
-  }
+      type: "set-node-visuals";
+      component: string;
+      color?: string | undefined;
+      border?: "solid" | "dashed" | "dotted" | undefined;
+      font?: string | undefined;
+    }
   | { type: "move-node"; component: string; x: number; y: number }
   | { type: "add-diagram-view"; name: string }
   | {
-    type: "create-component";
-    label: string;
-    parentKey?: string | undefined;
-    sourceLabel?: string | undefined;
-  }
+      type: "create-component";
+      label: string;
+      parentKey?: string | undefined;
+      sourceLabel?: string | undefined;
+    }
   | { type: "delete-component"; component: string }
   | {
-    type: "add-connection";
-    scopePath: string;
-    label: string;
-    from: string;
-    to: string;
-  }
+      type: "add-connection";
+      scopePath: string;
+      label: string;
+      from: string;
+      to: string;
+    }
   | { type: "delete-connection"; label: string }
   | { type: "undo" }
   | { type: "redo" };
@@ -114,8 +114,8 @@ export class WorkspaceHarness {
 
   static async fromExample(id: ExampleId): Promise<WorkspaceHarness> {
     await ensureWasm();
-    const example = get_example_projects().find((candidate) =>
-      candidate.id === id
+    const example = get_example_projects().find(
+      (candidate) => candidate.id === id,
     );
     if (!example) throw new Error(`Example project ${id} not found`);
 
@@ -186,24 +186,18 @@ export class WorkspaceHarness {
         if (!this.componentKeys.includes(action.component)) {
           throw new Error(`Component ${action.component} not found`);
         }
-        await this.executeLayoutTransaction(
-          `move ${action.component}`,
-          () => {
-            this.#layout.set(action.component, {
-              x: action.x,
-              y: action.y,
-            });
-          },
-        );
+        await this.executeLayoutTransaction(`move ${action.component}`, () => {
+          this.#layout.set(action.component, {
+            x: action.x,
+            y: action.y,
+          });
+        });
         return;
       case "add-diagram-view":
-        await this.executeLayoutTransaction(
-          `view ${action.name}`,
-          () => {
-            this.#diagrams.add(action.name);
-            this.#activeDiagram = action.name;
-          },
-        );
+        await this.executeLayoutTransaction(`view ${action.name}`, () => {
+          this.#diagrams.add(action.name);
+          this.#activeDiagram = action.name;
+        });
         return;
       case "create-component":
         await this.executeModelTransaction(
@@ -318,10 +312,7 @@ export class WorkspaceHarness {
     active: string;
     selected: string | null;
   }): Promise<void> {
-    await this.fs.writeFile(
-      snapshot.primaryPath,
-      snapshot.primaryContent,
-    );
+    await this.fs.writeFile(snapshot.primaryPath, snapshot.primaryContent);
     this.#layout = new Map(snapshot.layout);
     this.#diagrams = new Set(snapshot.diagrams);
     this.#activeDiagram = snapshot.active;
@@ -445,8 +436,8 @@ export class WorkspaceHarness {
     // instance (or a definition that is instantiated) rewrites a shared
     // definition and changes every component in that group. Owners are the
     // components that carry their own visuals (no `source`).
-    return this.componentKeys.filter((_key, index) =>
-      !this.#components[index]?.source
+    return this.componentKeys.filter(
+      (_key, index) => !this.#components[index]?.source,
     );
   }
 
@@ -482,7 +473,8 @@ export class WorkspaceHarness {
 
   blockingErrorCodes(): string[] {
     const output = compile_system([...this.#sources]);
-    return output.diagnostics()
+    return output
+      .diagnostics()
       .filter((diagnostic) => diagnostic.code.startsWith("E"))
       .map((diagnostic) => diagnostic.code);
   }
@@ -499,7 +491,8 @@ export class WorkspaceHarness {
     const output = compile_system([...this.#sources]);
     const model = output.model();
     if (!model) {
-      const errors = output.diagnostics()
+      const errors = output
+        .diagnostics()
         .filter((diagnostic) => diagnostic.code.startsWith("E"))
         .map((diagnostic) => diagnostic.code)
         .join(", ");
@@ -512,13 +505,16 @@ export class WorkspaceHarness {
 
   roundTripSnapshot(): WorkspaceSnapshot {
     if (this.#canonicalHcl === "") return this.snapshot();
-    const output = compile_system([{
-      filename: "roundtrip.hcl",
-      content: this.#canonicalHcl,
-    }]);
+    const output = compile_system([
+      {
+        filename: "roundtrip.hcl",
+        content: this.#canonicalHcl,
+      },
+    ]);
     const model = output.model();
     if (!model) {
-      const errors = output.diagnostics()
+      const errors = output
+        .diagnostics()
         .filter((diagnostic) => diagnostic.code.startsWith("E"))
         .map((diagnostic) => diagnostic.code)
         .join(", ");
@@ -548,9 +544,11 @@ export class WorkspaceHarness {
 
   private async primaryHclFile(): Promise<string> {
     const entries = await this.fs.readdir(".", { recursive: true });
-    const files = entries.filter((entry) =>
-      entry.isFile() && entry.name.endsWith(".hcl") &&
-      !entry.path.startsWith("views/")
+    const files = entries.filter(
+      (entry) =>
+        entry.isFile() &&
+        entry.name.endsWith(".hcl") &&
+        !entry.path.startsWith("views/"),
     );
     const preferred = ["system.hcl", "systems.hcl", "main.hcl", "project.hcl"]
       .map((name) => files.find((entry) => entry.name === name))

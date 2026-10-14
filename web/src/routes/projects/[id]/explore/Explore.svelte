@@ -1,108 +1,107 @@
 <script lang="ts">
-import { goto } from "$app/navigation";
-import { resolve } from "$app/paths";
-import { page } from "$app/state";
-import {
-  getCurrentProjectId,
-  projectStore,
-} from "../../../../ProjectState.svelte";
-import { type Dirent, openProjectFs } from "../../../../vfs/fs";
-import FileTree from "../code/FileTree.svelte";
-import DiagramViewer from "../modeling/DiagramViewer.svelte";
-import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
-import {
-  readDiagramLayoutFile,
-  VIEW_LAYOUT_DIR,
-} from "../modeling/persistence";
-import { TOUR_TARGETS } from "../../../../tour/tourTargets";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import { page } from "$app/state";
+  import {
+    getCurrentProjectId,
+    projectStore,
+  } from "../../../../ProjectState.svelte";
+  import { type Dirent, openProjectFs } from "../../../../vfs/fs";
+  import FileTree from "../code/FileTree.svelte";
+  import DiagramViewer from "../modeling/DiagramViewer.svelte";
+  import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
+  import {
+    readDiagramLayoutFile,
+    VIEW_LAYOUT_DIR,
+  } from "../modeling/persistence";
+  import { TOUR_TARGETS } from "../../../../tour/tourTargets";
 
-let {
-  projectId = null,
-  embedBaseUrl = null,
-}: {
-  projectId?: string | null;
-  embedBaseUrl?: string | null;
-} = $props();
+  let {
+    projectId = null,
+    embedBaseUrl = null,
+  }: {
+    projectId?: string | null;
+    embedBaseUrl?: string | null;
+  } = $props();
 
-let effectiveProjectId = $derived(projectId ?? getCurrentProjectId());
-let diagramEntries = $state<Dirent[]>([]);
-let selectedDiagramPath = $state<string | null>(null);
+  let effectiveProjectId = $derived(projectId ?? getCurrentProjectId());
+  let diagramEntries = $state<Dirent[]>([]);
+  let selectedDiagramPath = $state<string | null>(null);
 
-function navigateToDiagram(path: string, replace = false) {
-  // `page.url` is readonly, so the `diagram` param is set on a mutable copy
-  // that is then serialized into the `goto` target.
-  const url = new URL(page.url.href);
-  if (url.searchParams.get("diagram") === path) return;
-  url.searchParams.set("diagram", path);
-  void goto(`${url.pathname}${url.search}${url.hash}`, {
-    replace,
-    reset: false,
-  });
-}
-
-$effect(() => {
-  const id = effectiveProjectId;
-  if (!id) {
-    diagramEntries = [];
-    selectedDiagramPath = null;
-    return;
+  function navigateToDiagram(path: string, replace = false) {
+    // `page.url` is readonly, so the `diagram` param is set on a mutable copy
+    // that is then serialized into the `goto` target.
+    const url = new URL(page.url.href);
+    if (url.searchParams.get("diagram") === path) return;
+    url.searchParams.set("diagram", path);
+    void goto(`${url.pathname}${url.search}${url.hash}`, {
+      replace,
+      reset: false,
+    });
   }
 
-  let cancelled = false;
-  const fs = openProjectFs(projectStore, id);
-  fs.readdir(VIEW_LAYOUT_DIR)
-    .then(async (entries) => {
-      const files = entries.filter(
-        (entry) => entry.isFile() && entry.name.endsWith(".hcl"),
-      );
-      // Only layouts with at least one placed node are viewable here. A
-      // `view` file carrying just a `filter` block (see the worked examples)
-      // has no canvas content — filters are applied by other renderers, not
-      // this viewer — so it would open as a blank diagram. It stays available
-      // in the Modeling editor.
-      const renderable = (
-        await Promise.all(
-          files.map(async (file) => ({
-            file,
-            layout: await readDiagramLayoutFile(
-              fs,
-              `${VIEW_LAYOUT_DIR}/${file.path}`,
-            ),
-          })),
-        )
-      )
-        .filter(({ layout }) => Object.keys(layout.checked).length > 0)
-        .map(({ file }) => file);
-      if (cancelled) return;
-      diagramEntries = renderable;
-
-      const urlParam = page.url.searchParams.get("diagram");
-      const matchingParam = urlParam && renderable.some((e) =>
-          e.path === urlParam
-        )
-        ? urlParam
-        : null;
-      const first = renderable[0]?.path ?? null;
-      selectedDiagramPath = matchingParam ?? first;
-      if (!matchingParam && first) navigateToDiagram(first, true);
-    })
-    .catch(() => {
-      if (cancelled) return;
+  $effect(() => {
+    const id = effectiveProjectId;
+    if (!id) {
       diagramEntries = [];
       selectedDiagramPath = null;
-    });
+      return;
+    }
 
-  return () => {
-    cancelled = true;
-  };
-});
+    let cancelled = false;
+    const fs = openProjectFs(projectStore, id);
+    fs.readdir(VIEW_LAYOUT_DIR)
+      .then(async (entries) => {
+        const files = entries.filter(
+          (entry) => entry.isFile() && entry.name.endsWith(".hcl"),
+        );
+        // Only layouts with at least one placed node are viewable here. A
+        // `view` file carrying just a `filter` block (see the worked examples)
+        // has no canvas content — filters are applied by other renderers, not
+        // this viewer — so it would open as a blank diagram. It stays available
+        // in the Modeling editor.
+        const renderable = (
+          await Promise.all(
+            files.map(async (file) => ({
+              file,
+              layout: await readDiagramLayoutFile(
+                fs,
+                `${VIEW_LAYOUT_DIR}/${file.path}`,
+              ),
+            })),
+          )
+        )
+          .filter(({ layout }) => Object.keys(layout.checked).length > 0)
+          .map(({ file }) => file);
+        if (cancelled) return;
+        diagramEntries = renderable;
 
-$effect(() => {
-  const urlParam = page.url.searchParams.get("diagram");
-  if (urlParam && diagramEntries.some((entry) => entry.path === urlParam)) {
-    selectedDiagramPath = urlParam;
-  }
-});
+        const urlParam = page.url.searchParams.get("diagram");
+        const matchingParam =
+          urlParam && renderable.some((e) => e.path === urlParam)
+            ? urlParam
+            : null;
+        const first = renderable[0]?.path ?? null;
+        selectedDiagramPath = matchingParam ?? first;
+        if (!matchingParam && first) navigateToDiagram(first, true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        diagramEntries = [];
+        selectedDiagramPath = null;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  $effect(() => {
+    const urlParam = page.url.searchParams.get("diagram");
+    if (urlParam && diagramEntries.some((entry) => entry.path === urlParam)) {
+      selectedDiagramPath = urlParam;
+    }
+  });
 </script>
 
 <div class="flex flex-col md:flex-row flex-1 w-full h-full overflow-hidden">
@@ -112,7 +111,8 @@ $effect(() => {
         <div class="card-body items-center text-center">
           <h2 class="card-title">No project selected</h2>
           <p class="text-base-content/60 text-sm">
-            Select or create a project from the Projects page to explore its diagrams.
+            Select or create a project from the Projects page to explore its
+            diagrams.
           </p>
           <a href={resolve("/projects")} class="btn btn-primary mt-2">
             Back to projects
@@ -134,7 +134,9 @@ $effect(() => {
       class="w-full shrink-0 bg-base-100 text-base-content border-b border-base-300 p-2 md:w-64 md:border-b-0 md:border-r md:p-4 flex flex-col"
     >
       <!-- Mobile: horizontal scrollable diagrams selection -->
-      <div class="flex md:hidden items-center gap-2 overflow-x-auto py-1 scroll-smooth">
+      <div
+        class="flex md:hidden items-center gap-2 overflow-x-auto py-1 scroll-smooth"
+      >
         <span
           class="font-semibold text-xs text-base-content/70 uppercase tracking-wide shrink-0"
         >
@@ -147,7 +149,10 @@ $effect(() => {
             {#each diagramEntries as entry (entry.path)}
               <button
                 type="button"
-                class="btn btn-xs shrink-0 whitespace-nowrap {selectedDiagramPath === entry.path ? 'btn-primary' : 'btn-ghost'}"
+                class="btn btn-xs shrink-0 whitespace-nowrap {selectedDiagramPath ===
+                entry.path
+                  ? 'btn-primary'
+                  : 'btn-ghost'}"
                 aria-current={selectedDiagramPath === entry.path
                   ? "true"
                   : undefined}
@@ -174,9 +179,12 @@ $effect(() => {
         {:else}
           <FileTree
             entries={diagramEntries}
-            bind:selectedPath={() => selectedDiagramPath, (path) => {
-              if (path) navigateToDiagram(path);
-            }}
+            bind:selectedPath={
+              () => selectedDiagramPath,
+              (path) => {
+                if (path) navigateToDiagram(path);
+              }
+            }
           />
         {/if}
       </div>
@@ -187,9 +195,7 @@ $effect(() => {
         task, and on mobile that strip is precious vertical space.
       -->
       {#if selectedDiagramPath}
-        <div
-          class="hidden md:block shrink-0 pt-3 border-t border-base-300"
-        >
+        <div class="hidden md:block shrink-0 pt-3 border-t border-base-300">
           <EmbedDiagramButton
             projectId={effectiveProjectId}
             diagramPath={selectedDiagramPath}
@@ -210,7 +216,9 @@ $effect(() => {
           onOpenDiagram={navigateToDiagram}
         />
       {:else}
-        <div class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center">
+        <div
+          class="flex h-full w-full items-center justify-center text-xs sm:text-sm text-base-content/60 p-4 text-center"
+        >
           Select a diagram to explore it.
         </div>
       {/if}

@@ -68,9 +68,8 @@ export function wouldCreateCycle(
     if (current.id === nodeId) return true;
     if (seen.has(current.id)) return false; // defensive: unrelated pre-existing cycle
     seen.add(current.id);
-    current = current.parentId === null
-      ? undefined
-      : byId.get(current.parentId);
+    current =
+      current.parentId === null ? undefined : byId.get(current.parentId);
   }
   return false;
 }
@@ -88,10 +87,7 @@ export function splitPath(path: string): string[] {
 // Resolves a path to the node at that path, or `undefined` if any
 // segment along the way doesn't exist (or the path is the project root
 // itself, which has no corresponding FsNode).
-export function resolveNode(
-  nodes: FsNode[],
-  path: string,
-): FsNode | undefined {
+export function resolveNode(nodes: FsNode[], path: string): FsNode | undefined {
   let parentId: string | null = null;
   let found: FsNode | undefined;
   for (const segment of splitPath(path)) {
@@ -123,9 +119,10 @@ export function resolveDirectory(
 // "basename"), e.g. "components/imu.hcl" -> { dirname: "components",
 // basename: "imu.hcl" }. A single-segment path's dirname is "" (the
 // project root). Throws for an empty/root path, which has no basename.
-export function splitBasename(
-  path: string,
-): { dirname: string; basename: string } {
+export function splitBasename(path: string): {
+  dirname: string;
+  basename: string;
+} {
   const segments = splitPath(path);
   const basename = segments[segments.length - 1];
   if (basename === undefined) {

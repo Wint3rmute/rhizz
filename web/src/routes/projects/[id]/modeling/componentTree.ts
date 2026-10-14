@@ -76,9 +76,11 @@ export function buildSystemSubtree(
 ): TreeNode[] {
   const systemIndex = systems.findIndex((s) => s.label === systemLabel);
   if (systemIndex === -1) return [];
-  return buildComponentTree(systems, components).find(
-    (n) => n.id === `sys:${String(systemIndex)}`,
-  )?.children ?? [];
+  return (
+    buildComponentTree(systems, components).find(
+      (n) => n.id === `sys:${String(systemIndex)}`,
+    )?.children ?? []
+  );
 }
 
 /**
@@ -136,8 +138,9 @@ export function buildComponentTree(
         component.parent_component_index,
       )?.children;
     } else if (component.parent_system_index !== undefined) {
-      parentChildren = systemNodeByIndex.get(component.parent_system_index)
-        ?.children;
+      parentChildren = systemNodeByIndex.get(
+        component.parent_system_index,
+      )?.children;
     }
 
     if (parentChildren) {

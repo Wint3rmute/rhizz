@@ -34,8 +34,7 @@ describe("Explore diagram navigation", () => {
   it("returns undefined when no detail diagram exists", () => {
     expect(
       findComponentDiagram([file("overview.hcl")], "engine", "drone/engine"),
-    )
-      .toBeUndefined();
+    ).toBeUndefined();
   });
 });
 
