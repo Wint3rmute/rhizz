@@ -75,7 +75,7 @@ test("renaming a project re-addresses it", async ({ page }) => {
 async function skipTour(page: Page) {
   const tour = page.getByRole("alertdialog");
   if (await tour.isVisible()) {
-    await tour.getByRole("button", { name: "skip tour" }).click();
+    await tour.getByRole("button", { name: "Skip" }).click();
     await expect(tour).toBeHidden();
   }
 }

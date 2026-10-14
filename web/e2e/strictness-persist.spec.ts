@@ -15,7 +15,7 @@ async function openProject(page, name = "E2E strictness") {
   // file reuse the same browser context, so dismiss conditionally.
   const tourDialog = page.getByRole("alertdialog");
   if (await tourDialog.isVisible()) {
-    await tourDialog.getByRole("button", { name: "skip tour" }).click();
+    await tourDialog.getByRole("button", { name: "Skip" }).click();
     await expect(tourDialog).toBeHidden();
   }
   const id = new URL(page.url()).pathname.split("/")[2];

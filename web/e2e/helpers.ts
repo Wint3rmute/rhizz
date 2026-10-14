@@ -3,7 +3,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 export async function skipTourIfPresent(page: Page): Promise<void> {
   const tourDialog = page.getByRole("alertdialog");
   if (await tourDialog.isVisible()) {
-    await tourDialog.getByRole("button", { name: "skip tour" }).click();
+    await tourDialog.getByRole("button", { name: "Skip" }).click();
     await expect(tourDialog).toBeHidden();
   }
 }

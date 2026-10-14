@@ -45,7 +45,7 @@ for (const source of ["example", "empty"] as const) {
     await expectInViewport(dialog);
 
     // Walk every stop; each step navigates to its page before spotlighting.
-    const next = page.getByRole("button", { name: "next step" });
+    const next = dialog.getByRole("button", { name: "Next" });
     const titles = [
       "Navbar",
       "Up next: Overview",
