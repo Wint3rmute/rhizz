@@ -65,8 +65,12 @@ test("component right-click shows menu; Hide removes from view, keeps model", as
   await expect(menu).toBeHidden();
   await expect(canvas.getByText("e2e-ctx").first()).toBeHidden();
 
-  // View-only removal: the reusable-definition row survives.
-  await expect(page.locator('li[title="e2e-ctx"]')).toBeVisible();
+  // View-only removal: the component's tree row survives, unchecked — the
+  // model keeps the component, only the view placement is gone.
+  const tree = page.getByTestId("modeling-pane-right");
+  const row = tree.locator("li", { hasText: "e2e-ctx" }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("checkbox").first()).not.toBeChecked();
 
   // Undo restores the node on canvas.
   await page.getByTestId("diagram-canvas").click({ position: { x: 5, y: 5 } });
