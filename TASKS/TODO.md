@@ -140,18 +140,28 @@ Requirements:
   checkboxes.
 - **Spec:** update the view section of `SPEC.md` / `SPEC/` to describe `hidden`.
 
-Connection labels must be unique within a system. View `connection` blocks are
-keyed by bare label, so the label must identify one connection in the system.
+A connection is identified by its name within a system. View `connection`
+blocks are keyed by name, so one name must refer to one declaration.
 
-- Today `process_connections_in_scope` (`crates/rhizz-core/src/resolve.rs:602`)
-  rejects duplicate labels only within one scope, using E001. Two connections
-  with the same label in different scopes of one system are accepted. Extend the
-  check to the whole system and report both scopes in the message, reusing E001.
-- Before implementing, verify the reuse case. Connections declared inside a
-  component definition (`resolve.rs:391`) may be shared by several instances of
-  that component in one system. Confirm whether those count as duplicates, and
-  whether an existing project with two instances would start failing. Document
-  the result in the diagnostic's SPEC page and fix any example that breaks.
+- Each instance of a component gets its own copy of the connections declared in
+  its definition (`resolve.rs:412`, `resolve.rs:391`). Copies of one declaration
+  share a name and are one connection for hiding and for the sidebar.
+- Reject a name used by two different declarations in one system with E001,
+  reporting both locations. Examples: `data` in two component definitions, or a
+  system-level `data` next to a component's `data`.
+- Do not reject copies of the same declaration. The current per-scope check in
+  `process_connections_in_scope` (`resolve.rs:602`) allows them, and so must the
+  new whole-system check.
+- Record which declaration each connection came from, so the check can tell
+  copies from different declarations apart.
+- Document the rule in the E001 SPEC page. Check `examples/` for names that
+  break under the rule and rename them.
+
+Still open:
+
+- Sidebar row when only some copies are drawn (one instance placed, another
+  not). Proposed: the row is listed and checked if any copy is drawn, and
+  hiding applies to all copies.
 
 Steps (in order):
 
