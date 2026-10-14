@@ -1,0 +1,41 @@
+name: audit
+
+# Split out of the `rust` workflow so the trigger can be narrowed to the one
+# file that actually determines the result. cargo-audit checks the lockfile
+# against the RustSec advisory database, so a run is only informative when the
+# resolved dependency set changes — i.e. when Cargo.lock changes. A PR that
+# touches only sources cannot introduce a new advisory, so it does not need
+# this job, and skipping it saves a runner per PR.
+#
+# NOT gated on `Cargo.toml` too: a dependency edit that leaves the lock
+# unchanged resolves to the same crate versions, which the previous run has
+# already covered.
+on:
+  push:
+    branches: [main, master]
+    paths: [Cargo.lock]
+  pull_request:
+    branches: [main, master]
+    paths: [Cargo.lock]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Unlike the jobs in `rust.yml`, this one does not use flake.nix: the action
+  # ships its own pinned cargo-audit and queries the advisory DB directly, so
+  # there is no devshell to enter and nothing for the Nix cache to warm.
+  cargo-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: read
