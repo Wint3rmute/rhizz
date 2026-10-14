@@ -65,8 +65,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command:
-      `deno run --allow-net --allow-read vrt/serve.ts storybook-static ${PORT}`,
+    command: `node vrt/serve.ts storybook-static ${PORT}`,
     url: `http://127.0.0.1:${PORT}/iframe.html`,
     reuseExistingServer: true,
   },

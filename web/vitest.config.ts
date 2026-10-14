@@ -1,10 +1,9 @@
 // Vitest-only config, split out of vite.config.ts on purpose: the
 // @storybook/addon-vitest plugin touches Node worker APIs (process.channel)
-// at import time, which Deno's Node-compat layer (`dx`) does not implement.
-// Keeping it out of vite.config.ts means `vite dev`/`vite build` load
-// cleanly under both plain Node and `dx` (Deno). Vitest prefers
-// vitest.config.ts over vite.config.ts automatically; `extends: true` in
-// each project inherits the shared plugins below.
+// at import time. Keeping it out of vite.config.ts means `vite dev` and
+// `vite build` never load it. Vitest prefers vitest.config.ts over
+// vite.config.ts automatically; `extends: true` in each project inherits the
+// shared plugins below.
 import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";

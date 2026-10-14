@@ -749,6 +749,6 @@ workflow preference.
 ### `rhizz-wasm`
 
 A WebAssembly frontend that exposes the same compile pipeline to JavaScript
-environments (browsers, Deno, Node.js). Callers supply HCL source content as
+environments (browsers, Node.js). Callers supply HCL source content as
 strings and receive back a compiled model and diagnostics — identical in
 structure to what the CLI and the web application produce.

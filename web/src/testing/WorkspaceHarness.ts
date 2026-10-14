@@ -1,4 +1,4 @@
-import init, { type ComponentJS } from "rhizz";
+import type { ComponentJS } from "rhizz";
 import type { ComponentData } from "../modelView";
 import {
   compile_system,
@@ -17,13 +17,14 @@ import {
 } from "../history/TransactionManager";
 import { openProjectFs, type ProjectFs } from "../vfs/fs";
 import { InMemoryProjectStore } from "../vfs/vfsStore";
+import { initWasmForTests } from "./wasmInit";
 
 export type ExampleId = "drone" | "software-house" | "apollo-11";
 
 let wasmReady: Promise<unknown> | null = null;
 
 function ensureWasm(): Promise<unknown> {
-  wasmReady ??= init();
+  wasmReady ??= initWasmForTests();
   return wasmReady;
 }
 

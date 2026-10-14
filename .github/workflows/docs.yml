@@ -14,7 +14,7 @@ concurrency:
 # All toolchains come from flake.nix (pinned via flake.lock): every job
 # installs Nix, warms /nix/store from cache, then runs the same `just`
 # recipes and tool commands developers run locally. No per-tool setup
-# actions (rust-toolchain, setup-deno, mdbook, wasm-pack installer) remain.
+# actions (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
 
 jobs:
   # Builds the mdBook with the current compiler and verifies that the

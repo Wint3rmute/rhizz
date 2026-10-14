@@ -26,7 +26,7 @@ const PLACEHOLDER_HTML: &str = r#"<!doctype html>
     <h1>rhizz web is running</h1>
     <p>The web frontend is not embedded in this binary.</p>
     <p>Rebuild with <code>just build</code> (or run
-    <code>cd web &amp;&amp; deno run build</code> first) to bundle the editor UI.</p>
+    <code>cd web &amp;&amp; npm run build</code> first) to bundle the editor UI.</p>
   </body>
 </html>
 "#;

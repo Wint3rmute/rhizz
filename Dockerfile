@@ -12,21 +12,19 @@
 # frontend talks to the same-origin `/api/vfs` (the VFS persistence API) rather
 # than a hardcoded host.
 # ─────────────────────────────────────────────────────────────────────────────
-# Pinned Deno binary, matching flake.nix / local toolchain (`deno --version`).
-# `:bin-*` is the minimal variant meant for `COPY --from`. Never use `:latest`
-# here: a floating tag re-introduces the npm-style drift that broke the
-# frontend build (see `@storybook/addon-vitest` / vitest peer conflict).
-FROM denoland/deno:bin-2.9.6 AS deno
+# Node 24 matches the devshell in flake.nix. Copied from the official image
+# (same Debian bookworm base as the Rust image) rather than installed by a
+# remote script.
+FROM node:24-bookworm AS node
 FROM rust:1-bookworm AS frontend
 
 WORKDIR /app
 
-COPY --from=deno /deno /usr/local/bin/deno
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
 # Rust toolchain is already present; add the wasm32 target + wasm-pack.
-# The frontend build runs via Deno (`deno install` + `deno run build`, same as
-# CI) which handles npm compat for `vite build`, so no separate Node install
-# is needed.
 RUN rustup target add wasm32-unknown-unknown \
     && cargo install wasm-pack --locked
 
@@ -42,9 +40,9 @@ COPY examples examples
 COPY Cargo.toml Cargo.lock ./
 RUN wasm-pack build crates/rhizz-wasm --target web --release
 
-# Build the frontend with the VFS-sync env var set. Uses Deno (same as CI),
-# with `deno.lock` as the source of truth — not `npm install`, whose strict
-# peer resolution breaks on `@storybook/addon-vitest` / vitest mismatches.
+# Build the frontend with the VFS-sync env var set. Uses npm (same as CI),
+# with `web/package-lock.json` as the source of truth: `npm ci` installs
+# exactly the locked tree and never rewrites the lockfile.
 #
 # VITE_SENTRY_DSN is baked in the same way and defaults to empty: without it
 # the Sentry SDK is never initialized, so the image ships an app that reports
@@ -59,13 +57,13 @@ ARG SENTRY_AUTH_TOKEN=""
 ARG SENTRY_ORG=""
 ARG SENTRY_PROJECT=""
 RUN cd web \
-    && deno install \
+    && npm ci \
     && VITE_RHIZZ_SERVER_URL=/ \
        VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
        SENTRY_AUTH_TOKEN="$SENTRY_AUTH_TOKEN" \
        SENTRY_ORG="$SENTRY_ORG" \
        SENTRY_PROJECT="$SENTRY_PROJECT" \
-       deno run build
+       npm run build
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — build the backend, embedding the frontend artifacts.

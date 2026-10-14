@@ -23,7 +23,7 @@ import type { Project } from "./vfs/types";
 // Storage backend switch: with VITE_RHIZZ_SERVER_URL set, the whole VFS
 // persists through the rhizz-server HTTP API; without it (the default),
 // everything stays in the browser via localStorage. Build-time env var —
-// e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 deno run build`.
+// e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 npm run build`.
 const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
 // Probing one key (rather than evaluating `globalThis.localStorage`)
 // detects blocked third-party storage: cross-site iframes with storage

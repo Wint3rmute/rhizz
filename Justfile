@@ -18,15 +18,14 @@ run := if has_nix == "true" { "nix develop --command" } else { "" }
 
 format:
     {{run}} cargo fmt --all
-    {{run}} deno fmt web
 
 lint:
-    {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && deno task sync && deno task eslint && deno task check-only'
+    {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && npm run sync && npm run eslint && npm run check-only'
 
 test: wasm
     {{run}} cargo test --quiet --all
-    {{run}} sh -c 'cd web && deno run test'
-    {{run}} sh -c 'cd web && dx playwright test'
+    {{run}} sh -c 'cd web && npm run test'
+    {{run}} sh -c 'cd web && npm run test:e2e'
 
 # Single instrumented coverage pass, mirroring CI: runs all tests (incl.
 # doctests, hence RUSTC_BOOTSTRAP) under llvm-cov, enforces the 80% line
@@ -51,8 +50,8 @@ wasm:
 # written node_modules/$app/tsconfig.json, and both tools read tsconfig.json
 # before anything syncs.
 build: wasm
-    {{run}} sh -c 'cd web && dx vite build'
-    {{run}} sh -c 'cd web && deno run build-storybook'
+    {{run}} sh -c 'cd web && npm run build'
+    {{run}} sh -c 'cd web && npm run build-storybook'
     {{run}} cargo build --release --all-targets
 
 # Builds the mdBook (book/). The preprocessor (crates/rhizz-book) compiles
@@ -80,26 +79,26 @@ book-serve:
 # gallery to web/vrt-report/index.html (open it straight from disk).
 # Extra args go to Playwright, e.g. `just vrt -g navbar`.
 vrt *args: wasm
-    {{run}} sh -c 'cd web && deno run build-storybook --quiet'
-    {{run}} sh -c 'cd web && dx playwright test -c playwright.vrt.config.ts {{args}}'
+    {{run}} sh -c 'cd web && npm run build-storybook -- --quiet'
+    {{run}} sh -c 'cd web && npm run test:vrt -- {{args}}'
 
 # Same as `vrt`, but skips the wasm + Storybook rebuild.
 vrt-quick *args:
-    {{run}} sh -c 'cd web && dx playwright test -c playwright.vrt.config.ts {{args}}'
+    {{run}} sh -c 'cd web && npm run test:vrt -- {{args}}'
 
 # Re-baselines every changed/new screenshot (review the gallery first!).
 vrt-accept *args:
-    {{run}} sh -c 'cd web && dx playwright test -c playwright.vrt.config.ts --update-snapshots=all {{args}}'
+    {{run}} sh -c 'cd web && npm run test:vrt:accept -- {{args}}'
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
-    {{run}} sh -c 'cd web && deno install && deno run dev'
+    {{run}} sh -c 'cd web && npm ci && npm run dev'
 
 # Starts a storybook server. If you're an AI, never use this. It will just hang forever.
 # Syncs first for the same reason `build` does.
 storybook:
-    {{run}} sh -c 'cd web && deno task sync'
-    {{run}} sh -c 'cd web && dx storybook dev'
+    {{run}} sh -c 'cd web && npm run sync'
+    {{run}} sh -c 'cd web && npm run storybook'
 
 # Serves the UI with examples/ as the server's data dir: each example is a
 # directory of plain HCL, which is exactly what the server persists, so the
@@ -113,6 +112,6 @@ storybook:
 #
 # If you're an AI, never use this. It will just hang forever.
 serve: wasm
-    {{run}} sh -c 'cd web && VITE_RHIZZ_SERVER_URL=/ dx vite build'
+    {{run}} sh -c 'cd web && VITE_RHIZZ_SERVER_URL=/ npm run build'
     {{run}} cargo build --release -p rhizz-cli
     {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-cli -- web
