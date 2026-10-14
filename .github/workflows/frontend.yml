@@ -51,8 +51,9 @@ jobs:
       # Mirrors the tail of `just wasm` (see Justfile): the derivation's
       # output is a read-only store path, so it has to be dereferenced and
       # made writable to land in the tree the artifact upload reads from.
-      # `crates/rhizz-wasm/pkg/` is neither committed nor gitignored, so a
-      # fresh checkout has no such directory.
+      # Nothing under crates/rhizz-wasm/pkg/ is committed (the pkg ships its
+      # own `*` .gitignore, so git hides it), and a fresh checkout has no such
+      # directory at all — hence the mkdir rather than a plain copy.
       - run: |
           rm -rf crates/rhizz-wasm/pkg
           mkdir -p crates/rhizz-wasm/pkg
