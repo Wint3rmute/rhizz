@@ -67,7 +67,11 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - run: nix build .#rhizz-web
+      # The same recipe `just build` runs, so CI cannot drift from the local
+      # build. It resolves rhizz-wasm-pkg itself; the `wasm` job above just
+      # warms that derivation first, so this is a cache hit instead of a
+      # duplicate concurrent build.
+      - run: nix develop --command just web-build
 
   lint:
     needs: wasm
