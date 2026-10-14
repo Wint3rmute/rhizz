@@ -42,6 +42,10 @@
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "dompurify": "3.4.17",
+    "postcss-selector-parser": "7.1.6"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.63.0",

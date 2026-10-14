@@ -73,8 +73,20 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
 - [ ] **7. Verify the Dockerfile build.** The frontend stage now copies Node 24
   from `node:24-bookworm`. Build the image on a machine with Docker and confirm
   `npm run build` succeeds inside it.
-- [ ] **8. Triage `npm audit`.** Four moderate findings predate the switch.
-  Review and fix or document each.
+- [x] **8. Triage `npm audit`.** Result: 4 moderate findings, 0 after the
+  fix. Two were real, two were stale metadata:
+  - `dompurify@3.2.7` (under `monaco-editor`, runtime path): pinned to
+    `3.4.17` via `overrides`. Monaco's own latest (`0.57.0`) still resolves to
+    `3.4.15`, which is vulnerable, so a Monaco bump would not clear it.
+  - `postcss-selector-parser@6.0.10` (under `@tailwindcss/typography`, build
+    time only): pinned to `7.1.6` via `overrides`. The built CSS is identical
+    (172 `.prose` rules, 183,129 bytes, same hash) with and without it.
+  - `@tailwindcss/typography` itself was a false positive; its range came from
+    the parser above. npm's suggested fix (`0.5.4`) would be a downgrade.
+  - Verified: `npm run build`, unit 59/59. e2e is flaky on both trees: the
+    command-palette tests failed in 2 of 5 runs with the overrides and 1 of 4
+    without. Different palette tests each time, all passing when rerun alone,
+    so this is a pre-existing timing flake, tracked as its own follow-up.
 
 ---
 
