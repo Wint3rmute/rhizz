@@ -16,6 +16,13 @@ How to work on this file:
 
 ---
 
+## Task <N> - Allow filtering out only components/system with defined views in inventory/
+
+The inventory page of the project always displays all components/systems
+(depending on what's selected). I want to add an additional checkbox which would
+filter out only systems with a view defined. No idea how to lay it out on the
+current page, suggest something.
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
