@@ -94,84 +94,26 @@ on the old path (step 5).
 
 ---
 
-## Task <N> — Finish the Deno → Node/npm migration (incremental plan)
+## Task <N> — Re-baseline VRT after the formatting commit
 
-The toolchain switch is in `refactor/remove-deno` (`web/package-lock.json`
-replaces `deno.lock`; the Justfile, CI, Dockerfile, flake and AGENTS.md run
-npm on Node 24). Remaining work is split into small tasks, smallest blast
-radius first. Each is independently verifiable and lands as its own commit.
-
-Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
-`lint` pass; `test` fails 2 of 1056 (`InventoryPage.stories.ts`:
-"Detail Pane Stacks Below The Diagram", "Panes Open By Default"). `e2e` and
-`visual-regressions` are not yet resolved and VRT is out of scope.
-
-- [x] **1. Fix the two viewport-dependent Inventory play tests.** Result: the
-  test browser is 1200px wide, not the ~414px the stories assumed (probed
-  locally under `nix develop` and reproduced the CI failure exactly). Both
-  stories now pin a named 414px `narrowPane` viewport via a shared
-  `NARROW_VIEWPORT`. Inventory stories: 22/22 pass. Full storybook project:
-  169/170; the one remaining failure is `Navbar > Project Open`, the known
-  macOS `Ctrl+P` vs `⌘P` tooltip assertion, which passes on Linux CI.
-- [x] **2. Remove the Node teardown error.** Result: not reproducible on the
-  current tree. The combined run (`vitest run`, unit + storybook) exits 1 only
-  because of the Navbar tooltip test, with no `closeBrowserProvider` line and
-  no hang (13.9s). The error came from the pre-pin tree: the Deno lock pinned
-  `@storybook/addon-vitest@10.5.10` (vitest 3.2.7), while npm resolved 10.6.2
-  against vitest 5. Left the current pins alone since they run clean; re-check
-  if the storybook project starts printing the error again.
-- [x] **3. Make `e2e` green under npm.** Result: 127/127 pass locally
-  (`nix develop`, `node node_modules/@playwright/test/cli.js test`, 1.1 min;
-  was 7 pass / 120 fail). Fixed three things:
-  - `webServer` ran bare `vite`, which is not on `PATH` under npm (exit 127).
-    Now `npm run dev -- --port 5199`.
-  - Tour button labels are `Skip` and `Next`, not `skip tour` / `next step`
-    (19 + 1 call sites). Matches `OnboardingTour.svelte`.
-  - `expectInViewport` read the card box once, right after the Navbar heading
-    mounted, before the tour positioned it (y = -720 for ~150ms, then y = 83).
-    It now polls until containment holds. A negative control confirmed an
-    off-screen box still fails. This was a real test race, not a regression
-    from `main`: `main`'s CI run passed on the first attempt, which is why it
-    looked fine there. Skip VRT.
-- [x] **4. Move the spike to FINISHED and close it out.** Done: the Node vs.
-  Deno numbers are in `FINISHED.md`, and the spike section is removed from
-  this file.
-- [x] **5. Fix the 10 ESLint errors** in SvelteKit `+page.ts`/`+layout.ts`.
-  Result: not reproducible, so no code change. `npm run lint` (sync, then
-  eslint) and `npm run eslint` both exit 0 with 0 problems locally, and the
-  `lint` job passes on the latest CI run. The errors came from stale generated
-  state in the local tree, not from the code. Ruled out along the way: the
-  TypeScript and typescript-eslint versions (they match the Deno lock), the
-  `.eslintcache` (clean with and without it), and the `$types` include (adding
-  it changed nothing, so it was reverted). If they return, run `npm run sync`
-  first.
-- [ ] **6. Reintroduce formatting.** `deno fmt` has no replacement. Choose a
-  formatter, measure the drift (Prettier defaults flag ~130 files), and land
-  the reformat as its own commit with no other changes.
-- [x] **7. Verify the Dockerfile build.** Result: the `docker` workflow on
-  `main` (run 38578075822) builds the image. The frontend stage runs `npm ci`
-  and `npm run build` on `node:24-bookworm`, and the image exports.
-- [x] **8. Triage `npm audit`.** Result: 4 moderate findings, 0 after the
-  fix. Two were real, two were stale metadata:
-  - `dompurify@3.2.7` (under `monaco-editor`, runtime path): pinned to
-    `3.4.17` via `overrides`. Monaco's own latest (`0.57.0`) still resolves to
-    `3.4.15`, which is vulnerable, so a Monaco bump would not clear it.
-  - `postcss-selector-parser@6.0.10` (under `@tailwindcss/typography`, build
-    time only): pinned to `7.1.6` via `overrides`. The built CSS is identical
-    (172 `.prose` rules, 183,129 bytes, same hash) with and without it.
-  - `@tailwindcss/typography` itself was a false positive; its range came from
-    the parser above. npm's suggested fix (`0.5.4`) would be a downgrade.
-  - Verified: `npm run build`, unit 59/59. e2e is flaky on both trees: the
-    command-palette tests failed in 2 of 5 runs with the overrides and 1 of 4
-    without. Different palette tests each time, all passing when rerun alone,
-    so this is a pre-existing timing flake, tracked as its own follow-up.
-- [x] **9. Remove all non-idiomatic constructs in `package.json`** - all `override`
-  options or very precise dependency pinning which was the part of this migration
-  shall be removed. Result: the 41 exact pins are caret ranges (same resolved
-  versions). The two `overrides` stay as audit fixes; see the note at the bottom
-  of this file for when they can go.
+`main` (`4bccef2`, formatting) fails 3 screenshots that passed before it:
+`components-monacoeditor--markdown-unwrapped-overflows` (dark and light) and
+`pages-code--default--light`. The formatting-only changes checked so far (float
+literals, a collapsed call in `MonacoEditor.svelte`) are no-ops, so the cause
+is not yet isolated. Do not accept new baselines until the gallery has been
+reviewed. Then re-baseline on Linux or with `--update-snapshots` in CI.
 
 ---
+
+## Task <N> — Palette e2e flake
+
+Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
+overrides, 1 of 4 without). A different test fails each time, and each passes
+when rerun alone. Find the timing dependency in the palette tests or component
+and make them deterministic.
+
+---
+
 
 ## Task <N> - During view transitions, connection arrows don't fade out
 
