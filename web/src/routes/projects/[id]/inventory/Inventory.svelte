@@ -677,11 +677,7 @@ async function handleCreateView(): Promise<void> {
             onclick={() => void handleAddEntity()}
             data-testid="inventory-add-entity"
           >
-            {creatingEntity
-              ? "Creating…"
-              : activeTab === InventoryTab.Systems
-              ? "+ New System"
-              : "+ New Component"}
+            {creatingEntity ? "Creating…" : "+ New"}
           </button>
         {/if}
       </div>

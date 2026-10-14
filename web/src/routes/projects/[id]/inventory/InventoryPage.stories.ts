@@ -229,10 +229,8 @@ export const SystemsTab: Story = {
     }
     await expect(canvas.getByText("demo-system")).toBeTruthy();
     await expect(canvas.getByText("aux-system")).toBeTruthy();
-    // The add button follows the tab: systems here, components there.
-    await expect(
-      canvas.getByRole("button", { name: "+ New System" }),
-    ).toBeTruthy();
+    // The add button stays "+ New" whichever tab is active.
+    await expect(canvas.getByRole("button", { name: "+ New" })).toBeTruthy();
   },
 };
 
@@ -243,9 +241,7 @@ export const AddComponentOpensDefinitionModal: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "+ New Component" }),
-    );
+    await userEvent.click(canvas.getByRole("button", { name: "+ New" }));
     const modal = within(
       await canvas.findByTestId("create-component-modal"),
     );
@@ -267,7 +263,7 @@ export const AddSystemOpensCreationModal: Story = {
       canvas.getByRole("tab", { name: "Systems" }),
     );
     await userEvent.click(
-      canvas.getByRole("button", { name: "+ New System" }),
+      canvas.getByRole("button", { name: "+ New" }),
     );
     const modal = within(
       await canvas.findByTestId("create-system-modal"),
