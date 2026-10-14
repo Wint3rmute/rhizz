@@ -32,8 +32,9 @@ docker-image   → OCI image                (dockerTools)
 
 Each stage is its own `packages.<system>` attribute and its own commit; every
 stage consumes the previous one's output. Keep `devShells` untouched and the
-`just` recipes working throughout. **CI is deliberately out of scope** for this
-task — do not touch `.github/workflows` (a follow-up is listed below).
+`just` recipes working throughout. The `frontend` workflow's `wasm` and `build`
+jobs already run the Nix derivations; `docker.yml` and the Dockerfile are still
+on the old path (step 5).
 
 ### Decisions to settle first
 
@@ -59,7 +60,10 @@ task — do not touch `.github/workflows` (a follow-up is listed below).
   `--ignore-scripts`. Output is `web/build`. Verified: `nix build .#rhizz-web`
   emits `404.html` + `_app/` with asset filenames (incl. the wasm chunk)
   byte-for-byte identical to `cd web && VITE_RHIZZ_SERVER_URL=/ npm run build`;
-  `404.html` differs only in SvelteKit's per-build random `version`.
+  `404.html` differs only in SvelteKit's per-build random `version`. Wired into
+  `just build` as the `web-build` recipe (replacing `npm run build`), so the
+  embedded UI is what production ships, and into CI as the `frontend / build`
+  job.
 - [ ] **3. Backend binary (`packages.rhizz`).** `rustPlatform.buildRustPackage`
   for `rhizz-cli`, embedding step 2's `web/build` (and with
   `crates/rhizz-wasm/pkg` present so the workspace manifest resolves). Vendored
@@ -73,10 +77,11 @@ task — do not touch `.github/workflows` (a follow-up is listed below).
   `/data` seeded from `examples/`. Config: `RHIZZ_ADDR=0.0.0.0:8080`,
   `RHIZZ_DATA_DIR=/data`, `CMD rhizz web`, expose `8080`. Verify: `docker load`
   + run, then compare behaviour against the current Dockerfile image.
-- [ ] **5. (Deferred) CI + retire the Dockerfile.** Explicitly a follow-up:
-  switch the `wasm`/new build jobs to `nix build`, add a binary cache for
-  cross-run speed, point `docker.yml` at `.#docker-image`, and delete the
-  Dockerfile once parity is confirmed. Listed so it is not forgotten.
+- [ ] **5. (Deferred) Retire the Dockerfile.** Explicitly a follow-up: point
+  `docker.yml` at `.#docker-image` (the Dockerfile's frontend/backend stages
+  duplicate stages 2–3 by hand), add a binary cache for cross-run speed, and
+  delete the Dockerfile once parity is confirmed. Listed so it is not
+  forgotten.
 
 ### Definition of done
 

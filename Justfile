@@ -52,17 +52,35 @@ wasm:
     cp -rL result/. crates/rhizz-wasm/pkg/
     chmod -R u+w crates/rhizz-wasm/pkg
 
+# Builds the web app into web/build/ via its Nix derivation (nix/web.nix) —
+# the same artifact the Docker image consumes — so what gets embedded is what
+# production ships. It also makes the build hermetic: it uses the locked
+# dependency graph rather than whatever happens to be in the devshell's
+# node_modules (which is what `npm run build` silently used).
+#
+# The cost is speed: ~28s for a one-line change, against ~6s for
+# `npm run build`. Use `just dev` for the fast loop.
+#
+# Same caveat as `wasm`: `nix build .#` snapshots the git tree, so a brand-new
+# source file must be `git add`ed before it appears in the build.
+web-build:
+    nix build .#rhizz-web
+    rm -rf web/build
+    mkdir -p web/build
+    cp -rL result/. web/build/
+    chmod -R u+w web/build
+
 # Frontend artifacts first, so rhizz-server's build.rs (run when rhizz-cli
 # compiles its dependency) embeds the real UI. The wasm pkg is a file:
 # dependency of web/, and vite populates web/build.
 #
-# Both builds go through a package.json script rather than a bare `vite build` /
-# `storybook build`, because those scripts run `svelte-kit sync` first:
-# tsconfig.json extends `$app/tsconfig`, which only exists once sync has
-# written node_modules/$app/tsconfig.json, and both tools read tsconfig.json
+# The app build goes through `web-build` above; Storybook does not have a
+# derivation, so it stays on npm. It goes through a package.json script rather
+# than a bare `storybook build` because the script runs `svelte-kit sync`
+# first: tsconfig.json extends `$app/tsconfig`, which only exists once sync has
+# written node_modules/$app/tsconfig.json, and the tool reads tsconfig.json
 # before anything syncs.
-build: wasm
-    {{run}} sh -c 'cd web && npm run build'
+build: web-build
     {{run}} sh -c 'cd web && npm run build-storybook'
     {{run}} cargo build --release --all-targets
 
@@ -116,14 +134,14 @@ storybook:
 # directory of plain HCL, which is exactly what the server persists, so the
 # examples come up as editable projects — and edits land in the working tree.
 #
-# The frontend is rebuilt with VITE_RHIZZ_SERVER_URL=/ first, and that is not
+# The frontend is built with VITE_RHIZZ_SERVER_URL=/ first, and that is not
 # optional: the rhizz binary embeds web/build at compile time (rhizz-server's
 # build.rs), and a frontend built without that variable talks to localStorage
 # instead of /api/vfs — the API would serve the examples to nobody. `/` means
-# "my own origin", which is the server itself.
+# "my own origin", which is the server itself. `web-build` bakes exactly that
+# value in, so the recipe just depends on it.
 #
 # If you're an AI, never use this. It will just hang forever.
-serve: wasm
-    {{run}} sh -c 'cd web && VITE_RHIZZ_SERVER_URL=/ npm run build'
+serve: web-build
     {{run}} cargo build --release -p rhizz-cli
     {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-cli -- web
