@@ -66,6 +66,7 @@ for (const source of ["example", "empty"] as const) {
       // Titles render as the card heading; getByText would also match
       // description prose (e.g. "Code" appears in its own description).
       await expect(dialog.getByRole("heading", { name: title })).toBeVisible();
+
       // Visibility is not enough: the card must sit fully in the viewport,
       // not float half off-screen on any stop.
       await expectInViewport(dialog);

@@ -46,13 +46,24 @@ export async function createFromExample(
 // `toBeVisible` alone passes for a card floating half off-screen. Asserts
 // full containment (not just intersection) against the live viewport size,
 // with a 1px rounding tolerance for sub-pixel placement math.
+//
+// Polls rather than sampling once: the tour positions its card after the
+// target mounts, so a box read right after the heading appears can still be
+// the pre-placement position (y = -720 on the first stop). A card that stays
+// off-screen still fails once the poll times out.
 export async function expectInViewport(target: Locator): Promise<void> {
-  const box = await target.boundingBox();
-  if (!box) throw new Error("tour card has no bounding box");
   const viewport = target.page().viewportSize();
   if (!viewport) throw new Error("page has no viewport size");
-  expect(box.x).toBeGreaterThanOrEqual(-1);
-  expect(box.y).toBeGreaterThanOrEqual(-1);
-  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
-  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+  await expect
+    .poll(async () => {
+      const box = await target.boundingBox();
+      if (!box) return null;
+      return {
+        left: box.x >= -1,
+        top: box.y >= -1,
+        right: box.x + box.width <= viewport.width + 1,
+        bottom: box.y + box.height <= viewport.height + 1,
+      };
+    })
+    .toEqual({ left: true, top: true, right: true, bottom: true });
 }

@@ -42,14 +42,19 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
   `@storybook/addon-vitest@10.5.10` (vitest 3.2.7), while npm resolved 10.6.2
   against vitest 5. Left the current pins alone since they run clean; re-check
   if the storybook project starts printing the error again.
-- [ ] **3. Make `e2e` green under npm.** Result so far: 126/127 pass locally
+- [x] **3. Make `e2e` green under npm.** Result: 127/127 pass locally
   (`nix develop`, `node node_modules/@playwright/test/cli.js test`, 1.1 min;
-  was 7 pass / 120 fail). Fixed: `webServer` ran bare `vite`, which is not on
-  `PATH` under npm (now `npm run dev -- --port 5199`); the tour labels are
-  `Skip` and `Next`, not `skip tour` / `next step` (19 + 1 call sites). Still
-  open: `tour.spec.ts > first project (empty)` fails on `expectInViewport`
-  (card at y = -720). The tour component is identical to `main`, so this is
-  likely pre-existing, but `main` has not been measured for it yet. Skip VRT.
+  was 7 pass / 120 fail). Fixed three things:
+  - `webServer` ran bare `vite`, which is not on `PATH` under npm (exit 127).
+    Now `npm run dev -- --port 5199`.
+  - Tour button labels are `Skip` and `Next`, not `skip tour` / `next step`
+    (19 + 1 call sites). Matches `OnboardingTour.svelte`.
+  - `expectInViewport` read the card box once, right after the Navbar heading
+    mounted, before the tour positioned it (y = -720 for ~150ms, then y = 83).
+    It now polls until containment holds. A negative control confirmed an
+    off-screen box still fails. This was a real test race, not a regression
+    from `main`: `main`'s CI run passed on the first attempt, which is why it
+    looked fine there. Skip VRT.
 - [ ] **4. Move the spike to FINISHED and close it out.** Record the Node vs.
   Deno numbers from the spike in `FINISHED.md` (this section is the source).
 - [ ] **5. Fix the 10 ESLint errors** in SvelteKit `+page.ts`/`+layout.ts`
