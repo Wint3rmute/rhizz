@@ -58,9 +58,15 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
 - [x] **4. Move the spike to FINISHED and close it out.** Done: the Node vs.
   Deno numbers are in `FINISHED.md`, and the spike section is removed from
   this file.
-- [ ] **5. Fix the 10 ESLint errors** in SvelteKit `+page.ts`/`+layout.ts`
-  (`no-unsafe-member-access` on `any`). Likely a stale `.svelte-kit` tsconfig
-  or `$types` resolution; verify with `npm run sync && npm run eslint`.
+- [x] **5. Fix the 10 ESLint errors** in SvelteKit `+page.ts`/`+layout.ts`.
+  Result: not reproducible, so no code change. `npm run lint` (sync, then
+  eslint) and `npm run eslint` both exit 0 with 0 problems locally, and the
+  `lint` job passes on the latest CI run. The errors came from stale generated
+  state in the local tree, not from the code. Ruled out along the way: the
+  TypeScript and typescript-eslint versions (they match the Deno lock), the
+  `.eslintcache` (clean with and without it), and the `$types` include (adding
+  it changed nothing, so it was reverted). If they return, run `npm run sync`
+  first.
 - [ ] **6. Reintroduce formatting.** `deno fmt` has no replacement. Choose a
   formatter, measure the drift (Prettier defaults flag ~130 files), and land
   the reformat as its own commit with no other changes.
