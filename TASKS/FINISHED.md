@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Migrate the web frontend from Deno to Node/npm
+
+The web frontend, its tooling, CI, the container build and the Nix dev shell
+now run on Node 24 and npm. `web/package-lock.json` replaced `deno.lock`, and
+Deno and `dx` are gone from the repository.
+
+- **Plan:** nine tasks, smallest blast radius first, each checked off with its
+  result recorded in the PR that landed it (#392 to #397).
+- **What changed:** Justfile recipes and CI call `npm run`; the Dockerfile's
+  frontend stage uses `node:24-bookworm`; `vrt/serve.ts` is a `node:http`
+  server; WASM loads from disk under Node (`src/testing/wasmInit.ts`).
+- **Dependencies:** Storybook moved to 10.6.2, which removed the
+  `legacy-peer-deps` workaround. Exact pins became caret ranges. Two
+  `overrides` stay as audit fixes (`dompurify`, `postcss-selector-parser`);
+  the note at the bottom of `TODO.md` says when each can go.
+- **Formatting:** Prettier 3 with the Svelte plugin, default settings, enforced
+  by `format:check` in the CI lint job.
+- **Verified on `main`:** `wasm`, `lint`, `test`, `e2e`, `docs`, `rust`, and the
+  `docker` workflow (the Node-based image build) pass.
+- **Open:** the formatting commit left 3 VRT screenshots failing on `main`. The
+  cause is not isolated, and the re-baseline is tracked in `TODO.md`. The palette
+  e2e flake is tracked there too.
+- **Left as history:** `audit/architecture.md` still describes the Deno setup,
+  as a record of the audit at the time.
+
+---
+
 ## (Experimental) Task <N> — Spike a Node/npm test toolchain to replace Deno
 
 Time-boxed experiment: does a Node/npm toolchain run the whole web test suite
