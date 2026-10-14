@@ -114,13 +114,10 @@ async function ensureGridProject(): Promise<Project> {
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
   }
-  return createProjectWithFiles(
-    GRID_PROJECT_NAME,
-    [
-      { path: "system.hcl", content: GRID_SYSTEM_HCL },
-      { path: "views/main.hcl", content: GRID_VIEWS_HCL },
-    ],
-  );
+  return createProjectWithFiles(GRID_PROJECT_NAME, [
+    { path: "system.hcl", content: GRID_SYSTEM_HCL },
+    { path: "views/main.hcl", content: GRID_VIEWS_HCL },
+  ]);
 }
 
 const meta = {
@@ -140,9 +137,10 @@ function backgroundRect(canvasElement: HTMLElement): Element | null {
   // pattern (url(#Grid-…)) while *not* being inside a pattern itself — the
   // tile <rect>s nested in each coarser pattern also carry such fills.
   return (
-    Array.from(canvasElement.querySelectorAll("rect")).find((r) =>
-      r.closest("pattern") === null &&
-      (r.getAttribute("fill") ?? "").startsWith("url(#Grid-")
+    Array.from(canvasElement.querySelectorAll("rect")).find(
+      (r) =>
+        r.closest("pattern") === null &&
+        (r.getAttribute("fill") ?? "").startsWith("url(#Grid-"),
     ) ?? null
   );
 }
@@ -174,10 +172,12 @@ export const GridGraduationsEnabled: Story = {
     // The coarser pattern stacks on the finer one (fill chain), and the
     // background rect fills with the coarsest level.
     const g100 = canvasElement.querySelector("#Grid-g100");
-    await expect(g100?.querySelector("rect")?.getAttribute("fill"))
-      .toBe("url(#Grid-g10)");
-    await expect(backgroundRect(canvasElement)?.getAttribute("fill"))
-      .toBe("url(#Grid-g100)");
+    await expect(g100?.querySelector("rect")?.getAttribute("fill")).toBe(
+      "url(#Grid-g10)",
+    );
+    await expect(backgroundRect(canvasElement)?.getAttribute("fill")).toBe(
+      "url(#Grid-g100)",
+    );
 
     // The two placed components render. The sidebar hierarchy tree also lists each component, so multiple matches
     // are expected — assert at least one rendered instance of each label.
@@ -199,8 +199,9 @@ export const GridToggledOff: Story = {
 
     // Starts enabled, like the previous story.
     await canvas.findByRole("button", { name: "Toggle Grid" });
-    await expect(backgroundRect(canvasElement)?.getAttribute("fill"))
-      .toBe("url(#Grid-g100)");
+    await expect(backgroundRect(canvasElement)?.getAttribute("fill")).toBe(
+      "url(#Grid-g100)",
+    );
 
     const toggle = await canvas.findByRole("button", { name: "Toggle Grid" });
     toggle.click();

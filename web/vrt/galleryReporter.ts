@@ -116,8 +116,10 @@ class GalleryReporter implements Reporter {
         : undefined;
       if (area) entry.ratio = entry.pixels / area;
     }
-    const size = /Expected an image (\d+px by \d+px), received (\d+px by \d+px)/
-      .exec(message);
+    const size =
+      /Expected an image (\d+px by \d+px), received (\d+px by \d+px)/.exec(
+        message,
+      );
     if (size?.[1] && size[2]) entry.sizeChange = `${size[1]} → ${size[2]}`;
 
     if (result.status === "passed") {
@@ -134,8 +136,7 @@ class GalleryReporter implements Reporter {
       entry.status = "changed";
     } else {
       entry.status = "error";
-      entry.error = message.split("\n").find((l) => l.trim()) ??
-        result.status;
+      entry.error = message.split("\n").find((l) => l.trim()) ?? result.status;
     }
     this.entries.push(entry);
   }
@@ -169,27 +170,29 @@ class GalleryReporter implements Reporter {
   }
 
   private card(e: Entry): string {
-    const badge = e.status === "changed"
-      ? e.pixels !== undefined
-        ? `<span class="badge changed">${e.pixels.toLocaleString("en-US")} px${
-          e.ratio === undefined ? "" : ` · ${(e.ratio * 100).toFixed(3)}%`
-        }</span>`
-        : `<span class="badge changed">${esc(e.sizeChange ?? "changed")}</span>`
-      : `<span class="badge ${e.status}">${e.status}</span>`;
-    const sizeNote = e.sizeChange && e.pixels !== undefined
-      ? `<span class="muted">size ${esc(e.sizeChange)}</span>`
-      : "";
+    const badge =
+      e.status === "changed"
+        ? e.pixels !== undefined
+          ? `<span class="badge changed">${e.pixels.toLocaleString("en-US")} px${
+              e.ratio === undefined ? "" : ` · ${(e.ratio * 100).toFixed(3)}%`
+            }</span>`
+          : `<span class="badge changed">${esc(e.sizeChange ?? "changed")}</span>`
+        : `<span class="badge ${e.status}">${e.status}</span>`;
+    const sizeNote =
+      e.sizeChange && e.pixels !== undefined
+        ? `<span class="muted">size ${esc(e.sizeChange)}</span>`
+        : "";
     const head = `<header>
         <div><h2>${esc(e.title)}</h2>
-        <code>${esc(e.storyId)}</code> <span class="theme ${esc(e.theme)}">${
-      esc(e.theme)
-    }</span> ${sizeNote}</div>
+        <code>${esc(e.storyId)}</code> <span class="theme ${esc(e.theme)}">${esc(
+          e.theme,
+        )}</span> ${sizeNote}</div>
         ${badge}
       </header>`;
     const accept = e.actual
-      ? `<button class="copy" data-copy="${
-        esc(this.acceptCommand(e))
-      }">Copy accept command</button>`
+      ? `<button class="copy" data-copy="${esc(
+          this.acceptCommand(e),
+        )}">Copy accept command</button>`
       : "";
 
     if (e.status === "changed" && e.expected && e.actual) {
@@ -215,8 +218,8 @@ class GalleryReporter implements Reporter {
           <figure><figcaption>new</figcaption><img src="${e.actual}" alt="actual"></figure>
         </div>
         <div class="view diff">${
-        e.diff ? `<img src="${e.diff}" alt="diff">` : "<p>No diff image.</p>"
-      }</div>
+          e.diff ? `<img src="${e.diff}" alt="diff">` : "<p>No diff image.</p>"
+        }</div>
       </article>`;
     }
     if (e.status === "new" && e.actual) {
@@ -234,10 +237,11 @@ class GalleryReporter implements Reporter {
     const order: Status[] = ["changed", "new", "error"];
     const flagged = this.entries
       .filter((e) => e.status !== "unchanged")
-      .sort((a, b) =>
-        order.indexOf(a.status) - order.indexOf(b.status) ||
-        (b.pixels ?? 0) - (a.pixels ?? 0) ||
-        a.snapshotName.localeCompare(b.snapshotName)
+      .sort(
+        (a, b) =>
+          order.indexOf(a.status) - order.indexOf(b.status) ||
+          (b.pixels ?? 0) - (a.pixels ?? 0) ||
+          a.snapshotName.localeCompare(b.snapshotName),
       );
     const unchanged = this.entries
       .filter((e) => e.status === "unchanged")
@@ -245,15 +249,18 @@ class GalleryReporter implements Reporter {
     const count = (s: Status) =>
       this.entries.filter((e) => e.status === s).length;
 
-    const thumbs = unchanged.map((e) =>
-      `<a class="thumb" href="${
-        esc(e.baseline ?? "")
-      }" target="_blank" title="${esc(`${e.title} (${e.theme})`)}">
+    const thumbs = unchanged
+      .map(
+        (e) =>
+          `<a class="thumb" href="${esc(
+            e.baseline ?? "",
+          )}" target="_blank" title="${esc(`${e.title} (${e.theme})`)}">
         <img loading="lazy" src="${esc(e.baseline ?? "")}" alt="">
-        <span>${esc(e.title)} <em class="theme ${esc(e.theme)}">${
-        esc(e.theme)
-      }</em></span></a>`
-    ).join("");
+        <span>${esc(e.title)} <em class="theme ${esc(e.theme)}">${esc(
+          e.theme,
+        )}</em></span></a>`,
+      )
+      .join("");
 
     return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -268,16 +275,16 @@ class GalleryReporter implements Reporter {
     <button data-filter="new">New <b>${count("new")}</b></button>
     <button data-filter="error">Errors <b>${count("error")}</b></button>
   </div>
-  <span class="muted">${count("unchanged")} unchanged · ${
-      new Date().toLocaleString("en-GB")
-    }</span>
+  <span class="muted">${count("unchanged")} unchanged · ${new Date().toLocaleString(
+    "en-GB",
+  )}</span>
 </header>
 <main>
   ${
-      flagged.length
-        ? flagged.map((e) => this.card(e)).join("\n")
-        : `<p class="empty">No visual changes. ✨</p>`
-    }
+    flagged.length
+      ? flagged.map((e) => this.card(e)).join("\n")
+      : `<p class="empty">No visual changes. ✨</p>`
+  }
   <details class="unchanged">
     <summary>Unchanged (${unchanged.length})</summary>
     <div class="grid">${thumbs}</div>

@@ -7,19 +7,9 @@
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": true,
     "noFallthroughCasesInSwitch": true,
-    "types": [
-      "svelte",
-      "@sveltejs/kit",
-      "$app/types"
-    ],
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ]
+    "types": ["svelte", "@sveltejs/kit", "$app/types"],
+    "lib": ["dom", "dom.iterable", "esnext"]
   },
-  "include": [
-    "src/**/*"
-  ],
+  "include": ["src/**/*"],
   "extends": "$app/tsconfig"
 }

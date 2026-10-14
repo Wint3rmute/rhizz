@@ -1,7 +1,9 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @plugin "daisyui" {
-  themes: dark --default, light;
+  themes:
+    dark --default,
+    light;
 }
 
 /* One look for inline code spans, shared by every Markdown renderer: the HTML

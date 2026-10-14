@@ -37,7 +37,9 @@ async function createComponent(page, label: string) {
   await expect(canvas.getByText(label).first()).toBeVisible();
 }
 
-test("delete removes the node from the view but keeps it in the model", async ({ page }) => {
+test("delete removes the node from the view but keeps it in the model", async ({
+  page,
+}) => {
   const id = await openDiagram(page);
   await createComponent(page, "e2e-vanish");
 
@@ -71,6 +73,5 @@ test("delete removes the node from the view but keeps it in the model", async ({
   await page.goto(`/projects/${id}/code`);
   const editor = page.locator(".monaco-editor");
   await expect(editor).toBeVisible();
-  await expect(editor.getByText('instance "e2e-vanish"').first())
-    .toBeVisible();
+  await expect(editor.getByText('instance "e2e-vanish"').first()).toBeVisible();
 });

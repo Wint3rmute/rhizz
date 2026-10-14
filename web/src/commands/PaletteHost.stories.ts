@@ -304,8 +304,9 @@ export const EscapeCloses: Story = {
   play: async ({ canvasElement }) => {
     await openVia();
     const canvas = within(canvasElement);
-    await expect(await canvas.findByTestId("command-palette"))
-      .toBeInTheDocument();
+    await expect(
+      await canvas.findByTestId("command-palette"),
+    ).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await expect(
       canvas.queryByTestId("command-palette"),

@@ -82,7 +82,9 @@ async function selectMixed(page: Page) {
   return { canvas, node, note };
 }
 
-test("a component and a note can be selected together, and move together", async ({ page }) => {
+test("a component and a note can be selected together, and move together", async ({
+  page,
+}) => {
   const { node, note } = await selectMixed(page);
   const nodeBefore = await boxOf(node);
   const noteBefore = await boxOf(note);
@@ -93,7 +95,9 @@ test("a component and a note can be selected together, and move together", async
   expect((await boxOf(note)).x - noteBefore.x).toBeCloseTo(10, 0);
 });
 
-test("Delete removes the whole mixed selection in one undo point", async ({ page }) => {
+test("Delete removes the whole mixed selection in one undo point", async ({
+  page,
+}) => {
   const { node, note } = await selectMixed(page);
 
   await page.keyboard.press("Delete");
@@ -107,7 +111,9 @@ test("Delete removes the whole mixed selection in one undo point", async ({ page
   await expect(note).toBeVisible();
 });
 
-test("right-clicking a selected component keeps the note in the selection", async ({ page }) => {
+test("right-clicking a selected component keeps the note in the selection", async ({
+  page,
+}) => {
   const { canvas, node, note } = await selectMixed(page);
 
   await page.mouse.click(
@@ -152,15 +158,19 @@ test("dragging the note moves the whole mixed selection", async ({ page }) => {
   expect(nodeMoved.x - nodeBefore.x).toBeCloseTo(80, 0);
   expect(nodeMoved.y - nodeBefore.y).toBeCloseTo(40, 0);
   // …rigidly.
-  expect(
-    (nodeMoved.x - nodeBefore.x) - (noteMoved.x - noteBefore.x),
-  ).toBeCloseTo(0, 0);
-  expect(
-    (nodeMoved.y - nodeBefore.y) - (noteMoved.y - noteBefore.y),
-  ).toBeCloseTo(0, 0);
+  expect(nodeMoved.x - nodeBefore.x - (noteMoved.x - noteBefore.x)).toBeCloseTo(
+    0,
+    0,
+  );
+  expect(nodeMoved.y - nodeBefore.y - (noteMoved.y - noteBefore.y)).toBeCloseTo(
+    0,
+    0,
+  );
 });
 
-test("dragging the component moves the whole mixed selection", async ({ page }) => {
+test("dragging the component moves the whole mixed selection", async ({
+  page,
+}) => {
   const { node, note } = await selectMixed(page);
   const nodeBefore = await boxOf(node);
   const noteBefore = await boxOf(note);

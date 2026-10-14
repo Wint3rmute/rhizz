@@ -76,7 +76,9 @@ test("markdown note renders styled runs, not raw syntax", async ({ page }) => {
   await expect(canvas.getByText("- fast")).toBeHidden();
 });
 
-test("double-clicking a note focuses the inspector editor", async ({ page }) => {
+test("double-clicking a note focuses the inspector editor", async ({
+  page,
+}) => {
   await openModeling(page);
   const canvas = page.getByTestId("diagram-canvas");
 

@@ -53,7 +53,12 @@ describe("labelSegments", () => {
 
   it("keeps several matched runs in order", () => {
     // Fuse's ranges are inclusive, so [0, 0] is one character.
-    expect(labelSegments("main.hcl", [[0, 0], [5, 5]])).toEqual([
+    expect(
+      labelSegments("main.hcl", [
+        [0, 0],
+        [5, 5],
+      ]),
+    ).toEqual([
       { text: "m", matched: true },
       { text: "ain.", matched: false },
       { text: "h", matched: true },
@@ -63,13 +68,22 @@ describe("labelSegments", () => {
 
   it("merges ranges that overlap or touch, so no empty run survives", () => {
     // [0, 1] and [1, 2] are contiguous, and [2, 3] reaches them.
-    expect(labelSegments("abcd", [[0, 1], [1, 2], [2, 3]])).toEqual([
-      { text: "abcd", matched: true },
-    ]);
+    expect(
+      labelSegments("abcd", [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+      ]),
+    ).toEqual([{ text: "abcd", matched: true }]);
   });
 
   it("keeps runs separate when a real gap separates them", () => {
-    expect(labelSegments("abcd", [[0, 0], [2, 3]])).toEqual([
+    expect(
+      labelSegments("abcd", [
+        [0, 0],
+        [2, 3],
+      ]),
+    ).toEqual([
       { text: "a", matched: true },
       { text: "b", matched: false },
       { text: "cd", matched: true },
@@ -396,9 +410,9 @@ describe("isPaletteShortcut", () => {
 
   it("ignores the chord without a modifier, or with Alt held", () => {
     expect(isPaletteShortcut(press("p"))).toBe(false);
-    expect(
-      isPaletteShortcut(press("p", { ctrlKey: true, altKey: true })),
-    ).toBe(false);
+    expect(isPaletteShortcut(press("p", { ctrlKey: true, altKey: true }))).toBe(
+      false,
+    );
   });
 
   it("ignores any other key", () => {
@@ -408,25 +422,21 @@ describe("isPaletteShortcut", () => {
 
 describe("paletteShortcutHint", () => {
   it("spells the Apple platforms' chord with symbols", () => {
-    for (
-      const ua of [
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-        "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)",
-      ]
-    ) {
+    for (const ua of [
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+      "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)",
+    ]) {
       expect(paletteShortcutHint(ua)).toBe("⌘P");
     }
   });
 
   it("spells everything else's chord with words", () => {
-    for (
-      const ua of [
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "",
-      ]
-    ) {
+    for (const ua of [
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "",
+    ]) {
       expect(paletteShortcutHint(ua)).toBe("Ctrl+P");
     }
   });

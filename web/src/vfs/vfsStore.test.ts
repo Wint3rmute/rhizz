@@ -39,11 +39,12 @@ function makeFakeFetch(options: FakeFetchOptions = {}): FakeServerFetch {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-      ? input.href
-      : input.url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     const method = init?.method ?? "GET";
     const body = typeof init?.body === "string" ? init.body : null;
     calls.push({ method, url, body });
@@ -325,9 +326,7 @@ describe("ambiguous ids in a stored blob", () => {
   };
 
   it("keeps one node when a blob has two at the same id", async () => {
-    const map = new Map<string, string>([
-      ["ambiguous", JSON.stringify(blob)],
-    ]);
+    const map = new Map<string, string>([["ambiguous", JSON.stringify(blob)]]);
     const stores = [
       new LocalStorageProjectStore(
         {
@@ -469,7 +468,8 @@ describe("VfsProjectStore read cache", () => {
       store.createFile(project.id, null, "b.hcl", ""),
     ]);
 
-    const names = (await store.listNodes(project.id)).map((n) => n.name)
+    const names = (await store.listNodes(project.id))
+      .map((n) => n.name)
       .toSorted();
     expect(names).toEqual(["a.hcl", "b.hcl"]);
   });

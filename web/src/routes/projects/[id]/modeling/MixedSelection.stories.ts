@@ -64,10 +64,7 @@ async function ensureProject(): Promise<Project> {
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
   }
-  return await createProjectWithMainFile(
-    PROJECT_NAME,
-    DEMO_HCL,
-  );
+  return await createProjectWithMainFile(PROJECT_NAME, DEMO_HCL);
 }
 
 const meta = {
@@ -99,14 +96,10 @@ function noteHitBox(note: Element): Element {
 // spawns, and selecting a note drops a selected component, so the mixed
 // selection is built from here: click the component, then shift-click the
 // note.
-async function nodeWithSelectedNote(
-  canvasElement: HTMLElement,
-): Promise<{
+async function nodeWithSelectedNote(canvasElement: HTMLElement): Promise<{
   node: SVGGElement;
   note: Element;
-  user: ReturnType<
-    typeof userEvent.setup
-  >;
+  user: ReturnType<typeof userEvent.setup>;
 }> {
   const scoped = within(canvasElement);
   await pinCanvasSize(canvasElement);
@@ -163,8 +156,7 @@ export const ArrowsMoveBoth: Story = {
     // The canvas keys its notes by position, so a moved note is a brand new
     // <text> — re-query instead of holding on to the old element.
     const after = Number(
-      scoped.getByText("New note").closest("text")?.getAttribute("x") ??
-        "NaN",
+      scoped.getByText("New note").closest("text")?.getAttribute("x") ?? "NaN",
     );
     await expect(after - grid(before)).toBe(10);
   },
@@ -201,9 +193,7 @@ export const DraggingTheNoteMovesBoth: Story = {
 
     // The canvas keys its notes by position, so a moved note is a brand new
     // <text> — re-query instead of holding on to the old element.
-    const noteAfter = rectOf(
-      within(canvasElement).getByText("New note"),
-    );
+    const noteAfter = rectOf(within(canvasElement).getByText("New note"));
     await expect(nodeOrigin(node).x - nodeBefore.x).toBe(DELTA.x);
     await expect(noteAfter.x - noteBefore.x).toBe(DELTA.x);
   },

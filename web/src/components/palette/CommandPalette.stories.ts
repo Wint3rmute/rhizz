@@ -249,13 +249,10 @@ export const NoMatches: Story = {
   args: { emptyMessage: "No matching commands" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(
-      canvas.getByTestId("command-palette-input"),
-      "zzzzzz",
+    await userEvent.type(canvas.getByTestId("command-palette-input"), "zzzzzz");
+    await expect(canvas.getByTestId("command-palette-empty")).toHaveTextContent(
+      "No matching commands",
     );
-    await expect(
-      canvas.getByTestId("command-palette-empty"),
-    ).toHaveTextContent("No matching commands");
     await expect(canvas.queryAllByRole("option")).toHaveLength(0);
   },
 };
@@ -337,7 +334,7 @@ const LONG_ITEMS: PaletteItem[] = [
       id: `${group}:${String(i)}`,
       label: `${group} row ${String(i)}`,
       group,
-    }))
+    })),
   ),
 ];
 
@@ -356,9 +353,9 @@ export const ScrollsHighlightIntoView: Story = {
     // Precondition: the list really does overflow, or nothing is tested.
     if (list.scrollHeight <= list.clientHeight) {
       throw new Error(
-        `list does not overflow: scrollHeight ${
-          String(list.scrollHeight)
-        } <= clientHeight ${String(list.clientHeight)}`,
+        `list does not overflow: scrollHeight ${String(
+          list.scrollHeight,
+        )} <= clientHeight ${String(list.clientHeight)}`,
       );
     }
 
@@ -381,9 +378,9 @@ export const ScrollsHighlightIntoView: Story = {
       return (
         `row ${String(index)} "${highlighted.textContent.trim()}" sits at ` +
         `${row.top.toFixed(0)}..${row.bottom.toFixed(0)}, outside the window ` +
-        `${view.top.toFixed(0)}..${view.bottom.toFixed(0)} (scrollTop ${
-          String(list.scrollTop)
-        })`
+        `${view.top.toFixed(0)}..${view.bottom.toFixed(0)} (scrollTop ${String(
+          list.scrollTop,
+        )})`
       );
     };
 

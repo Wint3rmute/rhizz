@@ -1,59 +1,62 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
-import { page } from "$app/state";
-import { onDestroy } from "svelte";
-import ProjectModelProvider from "../../../components/ProjectModelProvider.svelte";
-import ProjectStatusBar from "../../../components/ProjectStatusBar.svelte";
-import {
-  clearCurrentProject,
-  getCurrentProject,
-  setCurrentProject,
-} from "../../../ProjectState.svelte";
-import ProjectTour from "../../../tour/ProjectTour.svelte";
-import PaletteHost from "../../../commands/PaletteHost.svelte";
-import { formatPageTitle, pageLabelForPath } from "../../../commands/pageTitle";
-import type { LayoutProps } from "./$types";
+  import { resolve } from "$app/paths";
+  import { page } from "$app/state";
+  import { onDestroy } from "svelte";
+  import ProjectModelProvider from "../../../components/ProjectModelProvider.svelte";
+  import ProjectStatusBar from "../../../components/ProjectStatusBar.svelte";
+  import {
+    clearCurrentProject,
+    getCurrentProject,
+    setCurrentProject,
+  } from "../../../ProjectState.svelte";
+  import ProjectTour from "../../../tour/ProjectTour.svelte";
+  import PaletteHost from "../../../commands/PaletteHost.svelte";
+  import {
+    formatPageTitle,
+    pageLabelForPath,
+  } from "../../../commands/pageTitle";
+  import type { LayoutProps } from "./$types";
 
-let { data, children }: LayoutProps = $props();
+  let { data, children }: LayoutProps = $props();
 
-// Reloads the active project's metadata into the shared ProjectState
-// whenever the route's [id] param changes (including the very first
-// load) — this is what lets Navbar (which lives outside this layout,
-// in the root +layout.svelte) know which project is active without
-// prop-drilling. The project's *compiled model* is loaded separately by the
-// ProjectModelProvider below; the two are deliberately split, because Navbar
-// needs only metadata and the pages need the model.
-let loadedId: string | null = null;
-let loading = $state(true);
+  // Reloads the active project's metadata into the shared ProjectState
+  // whenever the route's [id] param changes (including the very first
+  // load) — this is what lets Navbar (which lives outside this layout,
+  // in the root +layout.svelte) know which project is active without
+  // prop-drilling. The project's *compiled model* is loaded separately by the
+  // ProjectModelProvider below; the two are deliberately split, because Navbar
+  // needs only metadata and the pages need the model.
+  let loadedId: string | null = null;
+  let loading = $state(true);
 
-// Leaving all project routes unmounts this layout: drop the active
-// project so nothing (navbar links, tour flow) keeps acting on it.
-onDestroy(() => {
-  clearCurrentProject();
-});
-
-$effect(() => {
-  const id = data.projectId;
-  if (id === loadedId) return;
-  loadedId = id;
-  loading = true;
-  setCurrentProject(id).then(() => {
-    loading = false;
+  // Leaving all project routes unmounts this layout: drop the active
+  // project so nothing (navbar links, tour flow) keeps acting on it.
+  onDestroy(() => {
+    clearCurrentProject();
   });
-});
 
-// Diagram embeds are project-scoped, so they sit under this layout like
-// every other project route — but they are chromeless iframe surfaces, not
-// pages you navigate around in, so they drop the status bar.
-let isEmbed = $derived(page.url.pathname.includes("/embed/"));
+  $effect(() => {
+    const id = data.projectId;
+    if (id === loadedId) return;
+    loadedId = id;
+    loading = true;
+    setCurrentProject(id).then(() => {
+      loading = false;
+    });
+  });
 
-let project = $derived(getCurrentProject());
+  // Diagram embeds are project-scoped, so they sit under this layout like
+  // every other project route — but they are chromeless iframe surfaces, not
+  // pages you navigate around in, so they drop the status bar.
+  let isEmbed = $derived(page.url.pathname.includes("/embed/"));
 
-// Browser tab: "Rhizz: <project> - <page>", reactive to navigation and
-// renames. Falls back to the static <title> in app.html off project pages.
-let tabTitle = $derived(
-  formatPageTitle(project?.name ?? null, pageLabelForPath(page.url.pathname)),
-);
+  let project = $derived(getCurrentProject());
+
+  // Browser tab: "Rhizz: <project> - <page>", reactive to navigation and
+  // renames. Falls back to the static <title> in app.html off project pages.
+  let tabTitle = $derived(
+    formatPageTitle(project?.name ?? null, pageLabelForPath(page.url.pathname)),
+  );
 </script>
 
 <svelte:head>
@@ -66,18 +69,18 @@ let tabTitle = $derived(
   </div>
 {:else if project === null}
   <div class="flex-1 flex items-center justify-center">
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body items-center text-center">
-      <h2 class="card-title">Project not found</h2>
-      <p class="text-base-content/60 text-sm">
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body items-center text-center">
+        <h2 class="card-title">Project not found</h2>
+        <p class="text-base-content/60 text-sm">
           No project exists with id "{data.projectId}".
         </p>
-      <a href={resolve("/projects")} class="btn btn-primary mt-2">
+        <a href={resolve("/projects")} class="btn btn-primary mt-2">
           Back to projects
         </a>
+      </div>
     </div>
   </div>
-</div>
 {:else}
   <!-- One compiled model per open project, shared by every page and by the
        status bar, so they can never describe different compiles. -->

@@ -38,13 +38,9 @@ describe("tourSteps", () => {
       }
       return step.href;
     });
-    const order = [
-      "overview",
-      "modeling",
-      "inventory",
-      "explore",
-      "code",
-    ].map((page) => hrefs.findIndex((href) => href.endsWith(`/${page}`)));
+    const order = ["overview", "modeling", "inventory", "explore", "code"].map(
+      (page) => hrefs.findIndex((href) => href.endsWith(`/${page}`)),
+    );
     for (const index of order) expect(index).toBeGreaterThanOrEqual(0);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });

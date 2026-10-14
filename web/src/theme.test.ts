@@ -113,9 +113,9 @@ describe("chromeColorFor", () => {
 
     it("uses the same two colours in the pre-paint script's ternary", () => {
       expect(appHtml).toContain(
-        `theme === "dark" ? "${chromeColorFor("dark")}" : "${
-          chromeColorFor("light")
-        }"`,
+        `theme === "dark" ? "${chromeColorFor("dark")}" : "${chromeColorFor(
+          "light",
+        )}"`,
       );
     });
 

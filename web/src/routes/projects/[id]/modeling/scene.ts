@@ -73,11 +73,11 @@ export interface DiagramNote {
 export type DiagramOverlay =
   | { type: "marquee"; box: Box }
   | {
-    type: "rubber-band";
-    from: { x: number; y: number };
-    to: { x: number; y: number };
-    orientation: ConnectionOrientation;
-  };
+      type: "rubber-band";
+      from: { x: number; y: number };
+      to: { x: number; y: number };
+      orientation: ConnectionOrientation;
+    };
 
 export interface DiagramScene {
   nodes: DiagramNode[];
@@ -182,7 +182,7 @@ export function buildReadOnlyScene(input: {
       return edge;
     }),
     notes: (input.annotations ?? []).map((ann, index) =>
-      noteOf(ann, index, false)
+      noteOf(ann, index, false),
     ),
     overlays: [],
   };
@@ -246,8 +246,8 @@ export function buildEditorScene(input: {
 
   return {
     nodes: input.nodes.map((node) => {
-      const showConnect = connectHandles === "all" ||
-        connectHandles.has(node.index);
+      const showConnect =
+        connectHandles === "all" || connectHandles.has(node.index);
       const built: DiagramNode = {
         id: node.id,
         index: node.index,
@@ -283,7 +283,7 @@ export function buildEditorScene(input: {
       return built;
     }),
     notes: input.notes.map((note, index) =>
-      noteOf(note, index, input.selectedNoteIndexes.has(index))
+      noteOf(note, index, input.selectedNoteIndexes.has(index)),
     ),
     overlays,
   };

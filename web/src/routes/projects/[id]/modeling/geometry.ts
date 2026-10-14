@@ -516,13 +516,13 @@ export function elbowPath(
   return [
     `M ${String(x0)},${String(y0)}`,
     `L ${String(x1)},${String(y1)}`,
-    `A ${String(rc)},${String(rc)} 0 0,${String(sweep(t1))} ${String(x2)},${
-      String(y2)
-    }`,
+    `A ${String(rc)},${String(rc)} 0 0,${String(sweep(t1))} ${String(x2)},${String(
+      y2,
+    )}`,
     `L ${String(x3)},${String(y3)}`,
-    `A ${String(rc)},${String(rc)} 0 0,${String(sweep(t2 as 0 | 1))} ${
-      String(x4)
-    },${String(y4)}`,
+    `A ${String(rc)},${String(rc)} 0 0,${String(sweep(t2 as 0 | 1))} ${String(
+      x4,
+    )},${String(y4)}`,
     `L ${String(x5)},${String(y5)}`,
   ].join(" ");
 }
@@ -567,7 +567,8 @@ export function findReparentTarget(
   let maxDepth = -1;
 
   for (const { index, box, depth } of candidates) {
-    const containsCenter = center.x >= box.x &&
+    const containsCenter =
+      center.x >= box.x &&
       center.x <= box.x + box.width &&
       center.y >= box.y &&
       center.y <= box.y + box.height;
@@ -872,11 +873,15 @@ export function computeLcaConnection(
   const toComp = toRelParts.join("/");
 
   const from = sourcePortLabel
-    ? (fromComp ? `${fromComp}/${sourcePortLabel}` : sourcePortLabel)
+    ? fromComp
+      ? `${fromComp}/${sourcePortLabel}`
+      : sourcePortLabel
     : fromComp;
 
   const to = targetPortLabel
-    ? (toComp ? `${toComp}/${targetPortLabel}` : targetPortLabel)
+    ? toComp
+      ? `${toComp}/${targetPortLabel}`
+      : targetPortLabel
     : toComp;
 
   return {

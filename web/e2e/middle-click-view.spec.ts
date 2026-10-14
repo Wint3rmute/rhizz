@@ -60,7 +60,9 @@ function viewRow(page: Page, path: string): Locator {
   return tree.getByRole("button", { name: path, exact: true });
 }
 
-test("middle-clicking a node creates its detail view, then jumps to it", async ({ page }) => {
+test("middle-clicking a node creates its detail view, then jumps to it", async ({
+  page,
+}) => {
   const { id, canvas } = await openDiagram(page, "E2E middle click view");
   await createComponent(page, "e2e-middle");
 
@@ -68,9 +70,7 @@ test("middle-clicking a node creates its detail view, then jumps to it", async (
 
   // No view of this component existed, so the gesture made one, opened it and
   // put the component on it — exactly what `V` and the context-menu row do.
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-middle.hcl`,
-  );
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-middle.hcl`);
   await expect(canvas.getByText("e2e-middle").first()).toBeVisible();
   await expect(viewRow(page, "e2e-middle.hcl")).toHaveAttribute(
     "aria-current",
@@ -83,13 +83,13 @@ test("middle-clicking a node creates its detail view, then jumps to it", async (
   await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);
   await middleClickNode(page, canvas, "e2e-middle");
 
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-middle.hcl`,
-  );
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-middle.hcl`);
   await expect(canvas.getByText("e2e-middle").first()).toBeVisible();
 });
 
-test("middle-clicking a node's border dot opens that node's detail view", async ({ page }) => {
+test("middle-clicking a node's border dot opens that node's detail view", async ({
+  page,
+}) => {
   const { id, canvas } = await openDiagram(page, "E2E middle click port");
   await createComponent(page, "e2e-port");
 
@@ -98,7 +98,8 @@ test("middle-clicking a node's border dot opens that node's detail view", async 
   // start drawing a connection from any button. They sit exactly where the
   // pointer lands on a node, so middle click has to reach the node *through*
   // them — otherwise the gesture has a hole in the most obvious place.
-  const dot = canvas.locator('[data-testid="diagram-side-handle"] circle')
+  const dot = canvas
+    .locator('[data-testid="diagram-side-handle"] circle')
     .first();
   await expect(dot).toBeVisible();
   const box = await dot.boundingBox();
@@ -110,7 +111,9 @@ test("middle-clicking a node's border dot opens that node's detail view", async 
   await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-port.hcl`);
 });
 
-test("middle-drag on empty canvas still pans, and navigates nowhere", async ({ page }) => {
+test("middle-drag on empty canvas still pans, and navigates nowhere", async ({
+  page,
+}) => {
   const { id, canvas } = await openDiagram(page, "E2E middle click pan");
   await createComponent(page, "e2e-pan");
 
