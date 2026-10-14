@@ -79,7 +79,7 @@ describe("buildGraduatedGridPatterns", () => {
       buildGraduatedGridPatterns([
         { multiple: 10, strokeWidth: 1, strokeOpacity: 0.1 },
         { multiple: 25, strokeWidth: 1, strokeOpacity: 0.1 },
-      ])
+      ]),
     ).toThrow(/not a multiple of the base spacing/);
   });
 

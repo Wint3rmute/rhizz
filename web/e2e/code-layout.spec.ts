@@ -40,7 +40,9 @@ test("code page puts the file sidebar beside the editor", async ({ page }) => {
   expect(editorBox.y).toBeLessThan(filesBox.y + filesBox.height);
 });
 
-test("code page editor fills the height down to the status bar", async ({ page }) => {
+test("code page editor fills the height down to the status bar", async ({
+  page,
+}) => {
   await openCodePage(page, "E2E code full height");
 
   const editor = page.locator(".monaco-editor").first();
@@ -54,13 +56,16 @@ test("code page editor fills the height down to the status bar", async ({ page }
   }
 
   // No gap between the editor and the bottom bar (1px for sub-pixel rounding).
-  expect(Math.abs(editorBox.y + editorBox.height - barBox.y))
-    .toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(editorBox.y + editorBox.height - barBox.y),
+  ).toBeLessThanOrEqual(1);
   // The editor is tall, not a fixed-height strip.
   expect(editorBox.height).toBeGreaterThan(300);
 });
 
-test("code page hides and restores the file sidebar without unmounting it", async ({ page }) => {
+test("code page hides and restores the file sidebar without unmounting it", async ({
+  page,
+}) => {
   await openCodePage(page, "E2E code hide");
 
   await page.getByRole("button", { name: "Hide Files" }).click();
@@ -72,7 +77,9 @@ test("code page hides and restores the file sidebar without unmounting it", asyn
   await expect(page.locator(".monaco-editor").first()).toBeVisible();
 });
 
-test("code page editor sits on the same bright tone as the file sidebar", async ({ page }) => {
+test("code page editor sits on the same bright tone as the file sidebar", async ({
+  page,
+}) => {
   await openCodePage(page, "E2E code colors");
 
   // Computed colours come back in whatever notation the browser picked
@@ -110,7 +117,8 @@ test("code page editor sits on the same bright tone as the file sidebar", async 
 
   const main = page.getByTestId("code-workspace").locator("main");
   const sidebar = page.getByTestId("code-pane-left");
-  const surface = page.locator(".monaco-editor .monaco-editor-background")
+  const surface = page
+    .locator(".monaco-editor .monaco-editor-background")
     .first();
 
   expect(await background(main)).toBe(panel);

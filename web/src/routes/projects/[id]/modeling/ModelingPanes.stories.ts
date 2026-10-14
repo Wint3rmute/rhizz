@@ -58,13 +58,10 @@ async function ensurePanesProject(): Promise<Project> {
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
   }
-  return createProjectWithFiles(
-    PANES_PROJECT_NAME,
-    [
-      { path: "system.hcl", content: PANES_SYSTEM_HCL },
-      { path: "views/main.hcl", content: PANES_VIEWS_HCL },
-    ],
-  );
+  return createProjectWithFiles(PANES_PROJECT_NAME, [
+    { path: "system.hcl", content: PANES_SYSTEM_HCL },
+    { path: "views/main.hcl", content: PANES_VIEWS_HCL },
+  ]);
 }
 
 const meta = {
@@ -127,9 +124,7 @@ export const PanesHideAndRestore: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "Hide Inspector" }),
     );
-    await expect(
-      canvas.getByTestId("modeling-pane-left"),
-    ).not.toBeVisible();
+    await expect(canvas.getByTestId("modeling-pane-left")).not.toBeVisible();
     const rail = canvas.getByTestId("modeling-pane-rail-left");
     await expect(rail).toBeVisible();
     await expect(rail.getAttribute("aria-label")).toBe("Show Inspector");
@@ -138,9 +133,7 @@ export const PanesHideAndRestore: Story = {
     ).not.toBeVisible();
 
     await userEvent.click(rail);
-    await expect(
-      canvas.getByTestId("modeling-pane-left"),
-    ).toBeVisible();
+    await expect(canvas.getByTestId("modeling-pane-left")).toBeVisible();
     // The inspector content is back, not reset: the Diagrams picker still
     // lists the open view.
     await expect(
@@ -161,9 +154,7 @@ export const ComponentsPaneHideAndRestore: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "Hide Components" }),
     );
-    await expect(
-      canvas.getByTestId("modeling-pane-right"),
-    ).not.toBeVisible();
+    await expect(canvas.getByTestId("modeling-pane-right")).not.toBeVisible();
     const rail = canvas.getByTestId("modeling-pane-rail-right");
     await expect(rail).toBeVisible();
     await expect(rail.getAttribute("aria-label")).toBe("Show Components");
@@ -172,10 +163,9 @@ export const ComponentsPaneHideAndRestore: Story = {
     ).not.toBeVisible();
 
     await userEvent.click(rail);
-    await expect(
-      canvas.getByTestId("modeling-pane-right"),
-    ).toBeVisible();
-    await expect(canvas.getByTestId("diagram-system-label"))
-      .toHaveTextContent("system: demo");
+    await expect(canvas.getByTestId("modeling-pane-right")).toBeVisible();
+    await expect(canvas.getByTestId("diagram-system-label")).toHaveTextContent(
+      "system: demo",
+    );
   },
 };

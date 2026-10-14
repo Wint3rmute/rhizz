@@ -19,16 +19,15 @@ const MAX_ENCODED_LENGTH = 500_000;
 function isSafeHclPath(path: string): boolean {
   if (!path.endsWith(".hcl")) return false;
   if (path.startsWith("/") || path.startsWith("\\")) return false;
-  return !path.split("/").some((segment) =>
-    segment === "" || segment === "." || segment === ".."
-  );
+  return !path
+    .split("/")
+    .some((segment) => segment === "" || segment === "." || segment === "..");
 }
 
 const BookPayloadFileSchema = z.object({
-  path: z.string().min(1).max(MAX_BOOK_FILE_PATH_LENGTH).refine(
-    isSafeHclPath,
-    { message: "path must be a relative .hcl path without '..' segments" },
-  ),
+  path: z.string().min(1).max(MAX_BOOK_FILE_PATH_LENGTH).refine(isSafeHclPath, {
+    message: "path must be a relative .hcl path without '..' segments",
+  }),
   content: z.string().max(MAX_BOOK_FILE_CONTENT_LENGTH),
 });
 
@@ -55,16 +54,16 @@ function issueDetail(error: z.ZodError): string {
 }
 
 async function deflateRaw(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
-  const stream = new Blob([data]).stream().pipeThrough(
-    new CompressionStream("deflate"),
-  );
+  const stream = new Blob([data])
+    .stream()
+    .pipeThrough(new CompressionStream("deflate"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 async function inflateRaw(data: Uint8Array<ArrayBuffer>): Promise<string> {
-  const stream = new Blob([data]).stream().pipeThrough(
-    new DecompressionStream("deflate"),
-  );
+  const stream = new Blob([data])
+    .stream()
+    .pipeThrough(new DecompressionStream("deflate"));
   return await new Response(stream).text();
 }
 
@@ -74,10 +73,10 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i += CHUNK) {
     binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
   }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(
-    /=+$/,
-    "",
-  );
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 }
 
 function base64UrlToBytes(raw: string): Uint8Array<ArrayBuffer> {

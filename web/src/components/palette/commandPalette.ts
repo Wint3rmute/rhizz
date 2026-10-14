@@ -259,15 +259,17 @@ function subsequenceRows(
       covers: covered.size / Math.max(item.label.length, 1),
     });
   }
-  return found
-    // Denser first. `sort` is stable, so rows covering equally much keep the
-    // order they were listed in — the palette's own order, which is the one
-    // the empty query shows and so the one the user already knows.
-    .sort((a, b) => b.covers - a.covers)
-    .map(({ item, ranges }) => ({
-      item,
-      segments: labelSegments(item.label, ranges),
-    }));
+  return (
+    found
+      // Denser first. `sort` is stable, so rows covering equally much keep the
+      // order they were listed in — the palette's own order, which is the one
+      // the empty query shows and so the one the user already knows.
+      .sort((a, b) => b.covers - a.covers)
+      .map(({ item, ranges }) => ({
+        item,
+        segments: labelSegments(item.label, ranges),
+      }))
+  );
 }
 
 /**
@@ -286,10 +288,7 @@ function subsequenceRows(
  * shares. "comp MPS" scored worse than the noise it was ranked against, at
  * every threshold, and found nothing.
  */
-export function paletteRows(
-  index: PaletteIndex,
-  query: string,
-): PaletteRow[] {
+export function paletteRows(index: PaletteIndex, query: string): PaletteRow[] {
   const needle = query.trim();
   if (needle === "") {
     return index.items.map((item) => ({

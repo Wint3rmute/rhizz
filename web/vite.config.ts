@@ -23,20 +23,23 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const authToken = env.SENTRY_AUTH_TOKEN;
 
-  const sentry = authToken === undefined ? { autoUploadSourceMaps: false } : {
-    authToken,
-    org: env.SENTRY_ORG,
-    project: env.SENTRY_PROJECT,
-    // adapter-static writes to `build/`, and the plugin's automatic cleanup
-    // glob points at `.svelte-kit/output/`, so the uploaded maps have to be
-    // deleted explicitly — otherwise the static output (and the binary that
-    // embeds it) ships the sources Sentry just received.
-    sourcemaps: { filesToDeleteAfterUpload: ["./build/**/*.map"] },
-    // Set explicitly rather than left to detection: the plugin would
-    // otherwise guess from package.json and find the `@sveltejs/adapter-auto`
-    // devDependency, which it maps to Vercel.
-    adapter: "other",
-  };
+  const sentry =
+    authToken === undefined
+      ? { autoUploadSourceMaps: false }
+      : {
+          authToken,
+          org: env.SENTRY_ORG,
+          project: env.SENTRY_PROJECT,
+          // adapter-static writes to `build/`, and the plugin's automatic cleanup
+          // glob points at `.svelte-kit/output/`, so the uploaded maps have to be
+          // deleted explicitly — otherwise the static output (and the binary that
+          // embeds it) ships the sources Sentry just received.
+          sourcemaps: { filesToDeleteAfterUpload: ["./build/**/*.map"] },
+          // Set explicitly rather than left to detection: the plugin would
+          // otherwise guess from package.json and find the `@sveltejs/adapter-auto`
+          // devDependency, which it maps to Vercel.
+          adapter: "other",
+        };
 
   return {
     plugins: [

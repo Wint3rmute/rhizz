@@ -32,7 +32,9 @@ async function createComponent(page, label: string) {
   await expect(canvas.getByText(label).first()).toBeVisible();
 }
 
-test("component right-click shows menu; Hide removes from view, keeps model", async ({ page }) => {
+test("component right-click shows menu; Hide removes from view, keeps model", async ({
+  page,
+}) => {
   await openDiagram(page);
   await createComponent(page, "e2e-ctx");
 
@@ -46,8 +48,9 @@ test("component right-click shows menu; Hide removes from view, keeps model", as
 
   const menu = page.getByTestId("context-menu");
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /hide from this view/i }))
-    .toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /hide from this view/i }),
+  ).toBeVisible();
   await expect(
     menu.getByRole("menuitem", { name: /jump to documentation/i }),
   ).toBeVisible();
@@ -73,7 +76,9 @@ test("component right-click shows menu; Hide removes from view, keeps model", as
 
 // The detail-view row is the same row either way — it opens the view if the
 // component has one and creates it if not, and says which before you click.
-test("the detail-view row creates a view once, then jumps to it", async ({ page }) => {
+test("the detail-view row creates a view once, then jumps to it", async ({
+  page,
+}) => {
   const id = await openDiagram(page, "E2E detail view menu");
   await createComponent(page, "e2e-detail");
 
@@ -197,7 +202,9 @@ async function selectTwoComponents(page: Page, canvas: Locator) {
   await shiftClickAt(page, canvas.getByText("e2e-pick-b").first());
 }
 
-test("the new-view row copies the selection into a new view and moves there", async ({ page }) => {
+test("the new-view row copies the selection into a new view and moves there", async ({
+  page,
+}) => {
   const id = await openDiagram(page, "E2E view from selection");
   const canvas = page.getByTestId("diagram-canvas");
   const menu = page.getByTestId("context-menu");
@@ -289,7 +296,9 @@ test("S does the same from the keyboard", async ({ page }) => {
   await expect(canvas.getByText("e2e-leave-out")).toHaveCount(0);
 });
 
-test("an annotation in the selection comes across into the new view", async ({ page }) => {
+test("an annotation in the selection comes across into the new view", async ({
+  page,
+}) => {
   const id = await openDiagram(page, "E2E view from selection with note");
   const canvas = page.getByTestId("diagram-canvas");
   const menu = page.getByTestId("context-menu");
@@ -320,9 +329,11 @@ test("an annotation in the selection comes across into the new view", async ({ p
   page.removeAllListeners("dialog");
   page.once("dialog", (dialog) => void dialog.accept("with-note"));
   await rightClickAt(page, canvas.getByText("e2e-note-a").first());
-  await menu.getByRole("menuitem", {
-    name: /create new view from selection/i,
-  }).click();
+  await menu
+    .getByRole("menuitem", {
+      name: /create new view from selection/i,
+    })
+    .click();
 
   await expect(page).toHaveURL(`/projects/${id}/modeling/with-note.hcl`);
   // The components came across...
@@ -332,7 +343,9 @@ test("an annotation in the selection comes across into the new view", async ({ p
   await expect(note).toBeVisible();
 });
 
-test("empty canvas right-click shows canvas menu with shortcuts", async ({ page }) => {
+test("empty canvas right-click shows canvas menu with shortcuts", async ({
+  page,
+}) => {
   await openDiagram(page);
   const canvas = page.getByTestId("diagram-canvas");
   // Low on the canvas, clear of the top-anchored floating toolbar — a
@@ -341,16 +354,21 @@ test("empty canvas right-click shows canvas menu with shortcuts", async ({ page 
 
   const menu = page.getByTestId("context-menu");
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /new component/i }))
-    .toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /new annotation/i }))
-    .toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /zoom to fill/i }))
-    .toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /reset view/i }))
-    .toBeVisible();
-  await expect(menu.getByRole("menuitem", { name: /toggle grid/i }))
-    .toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /new component/i }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /new annotation/i }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /zoom to fill/i }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /reset view/i }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("menuitem", { name: /toggle grid/i }),
+  ).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();

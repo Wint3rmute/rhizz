@@ -1,53 +1,53 @@
 <script lang="ts">
-import type { DiagnosticJS } from "rhizz";
-import DiagnosticRow from "../../components/DiagnosticRow.svelte";
+  import type { DiagnosticJS } from "rhizz";
+  import DiagnosticRow from "../../components/DiagnosticRow.svelte";
 
-export type VerdictStatus = "ok" | "warn" | "error";
+  export type VerdictStatus = "ok" | "warn" | "error";
 
-export interface VerdictStatRow {
-  label: string;
-  complete: number;
-  total: number;
-}
+  export interface VerdictStatRow {
+    label: string;
+    complete: number;
+    total: number;
+  }
 
-export interface VerdictStats {
-  rows: VerdictStatRow[];
-  overall: number;
-}
+  export interface VerdictStats {
+    rows: VerdictStatRow[];
+    overall: number;
+  }
 
-type VerdictDiagnostic = Pick<DiagnosticJS, "code" | "message">;
+  type VerdictDiagnostic = Pick<DiagnosticJS, "code" | "message">;
 
-let {
-  status,
-  head,
-  errors = [],
-  warnings = [],
-  stats = null,
-  warningLevel = null,
-  levelPinned = false,
-}: {
-  status: VerdictStatus;
-  head: string;
-  errors?: VerdictDiagnostic[];
-  warnings?: VerdictDiagnostic[];
-  stats?: VerdictStats | null;
-  /** Strictness the verdict was compiled at; shown as a badge so embed readers see the mode. */
-  warningLevel?: string | null;
-  /** True when the level was pinned per-embed (book `?level=`), not inherited from the app preset. */
-  levelPinned?: boolean;
-} = $props();
+  let {
+    status,
+    head,
+    errors = [],
+    warnings = [],
+    stats = null,
+    warningLevel = null,
+    levelPinned = false,
+  }: {
+    status: VerdictStatus;
+    head: string;
+    errors?: VerdictDiagnostic[];
+    warnings?: VerdictDiagnostic[];
+    stats?: VerdictStats | null;
+    /** Strictness the verdict was compiled at; shown as a badge so embed readers see the mode. */
+    warningLevel?: string | null;
+    /** True when the level was pinned per-embed (book `?level=`), not inherited from the app preset. */
+    levelPinned?: boolean;
+  } = $props();
 
-const glyph = $derived(
-  status === "ok" ? "✅" : status === "warn" ? "⚠️" : "❌",
-);
+  const glyph = $derived(
+    status === "ok" ? "✅" : status === "warn" ? "⚠️" : "❌",
+  );
 
-const alertClass = $derived(
-  status === "ok"
-    ? "alert-success"
-    : status === "warn"
-    ? "alert-warning"
-    : "alert-error",
-);
+  const alertClass = $derived(
+    status === "ok"
+      ? "alert-success"
+      : status === "warn"
+        ? "alert-warning"
+        : "alert-error",
+  );
 </script>
 
 <div role="alert" class="alert alert-soft {alertClass} block text-sm">
@@ -58,7 +58,8 @@ const alertClass = $derived(
         class="whitespace-nowrap text-xs font-medium opacity-70"
         title={levelPinned
           ? `Strictness pinned to ${warningLevel} by this example — warnings below that detail are hidden`
-          : `Strictness ${warningLevel} from the app preset — warnings below that detail are hidden`}>
+          : `Strictness ${warningLevel} from the app preset — warnings below that detail are hidden`}
+      >
         Strictness: {warningLevel}
       </span>
     {/if}
@@ -81,20 +82,24 @@ const alertClass = $derived(
     <ul class="w-full list-none flex flex-wrap gap-x-6 gap-y-1 m-0 px-4 pt-2">
       {#each stats.rows as row (row.label)}
         <li>
-          <span class="opacity-70">{row.label}</span><b class="ml-1">{row.complete}/{row.total}</b>
+          <span class="opacity-70">{row.label}</span><b class="ml-1"
+            >{row.complete}/{row.total}</b
+          >
         </li>
       {/each}
       <li>
-        <span class="opacity-70">Overall</span><b class="ml-1">{stats.overall.toFixed(1)}%</b>
+        <span class="opacity-70">Overall</span><b class="ml-1"
+          >{stats.overall.toFixed(1)}%</b
+        >
       </li>
     </ul>
   {/if}
 </div>
 
 <style>
-/* `alert-soft` paints text in the raw status color, unreadable on a light
+  /* `alert-soft` paints text in the raw status color, unreadable on a light
    background. Darken it there; the dark theme already reads fine. */
-:global(html[data-theme="light"]) .alert-soft {
-  color: color-mix(in oklab, var(--alert-color) 55%, black);
-}
+  :global(html[data-theme="light"]) .alert-soft {
+    color: color-mix(in oklab, var(--alert-color) 55%, black);
+  }
 </style>

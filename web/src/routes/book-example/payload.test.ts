@@ -19,18 +19,16 @@ const FILES = [
 /** Test-only helper: deflate + base64url a raw JSON value, bypassing validation. */
 async function encodeRawJson(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
-  const stream = new Blob([bytes]).stream().pipeThrough(
-    new CompressionStream("deflate"),
-  );
-  const compressed = new Uint8Array(
-    await new Response(stream).arrayBuffer(),
-  );
+  const stream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new CompressionStream("deflate"));
+  const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
   let binary = "";
   for (const byte of compressed) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(
-    /=+$/,
-    "",
-  );
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 }
 
 describe("book-example payload codec", () => {
@@ -71,9 +69,7 @@ describe("book-example payload codec", () => {
 
   it("rejects a well-formed payload with an unknown version", async () => {
     const encoded = await encodeRawJson({ version: 2, files: FILES });
-    await expect(decodeBookPayload(encoded)).rejects.toThrow(
-      BookPayloadError,
-    );
+    await expect(decodeBookPayload(encoded)).rejects.toThrow(BookPayloadError);
   });
 
   it("rejects a well-formed payload with an absolute file path", async () => {
@@ -81,9 +77,7 @@ describe("book-example payload codec", () => {
       version: 1,
       files: [{ path: "/etc/passwd.hcl", content: "x" }],
     });
-    await expect(decodeBookPayload(encoded)).rejects.toThrow(
-      BookPayloadError,
-    );
+    await expect(decodeBookPayload(encoded)).rejects.toThrow(BookPayloadError);
   });
 
   it("rejects oversized input before decoding", async () => {
@@ -104,9 +98,9 @@ describe("book-example payload codec", () => {
       "notes.md",
     ];
     for (const path of bad) {
-      await expect(
-        encodeBookPayload([{ path, content: "x" }]),
-      ).rejects.toThrow(BookPayloadError);
+      await expect(encodeBookPayload([{ path, content: "x" }])).rejects.toThrow(
+        BookPayloadError,
+      );
     }
   });
 });

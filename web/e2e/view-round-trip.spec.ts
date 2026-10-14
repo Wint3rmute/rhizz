@@ -64,9 +64,8 @@ async function storedFiles(page: import("@playwright/test").Page) {
 function viewFacts(hcl: string) {
   const filterStart = hcl.indexOf("filter {");
   const filterEnd = filterStart === -1 ? -1 : hcl.indexOf("}", filterStart);
-  const filterBody = filterStart === -1
-    ? undefined
-    : hcl.slice(filterStart, filterEnd);
+  const filterBody =
+    filterStart === -1 ? undefined : hcl.slice(filterStart, filterEnd);
   return {
     system: /system\s*=\s*"([^"]*)"/.exec(hcl)?.[1],
     fullName: /full_name\s*=\s*"([^"]*)"/.exec(hcl)?.[1],
@@ -130,7 +129,9 @@ test("browsing views does not rewrite them", async ({ page }) => {
   }
 });
 
-test("an edit still persists, and keeps the view's own attributes", async ({ page }) => {
+test("an edit still persists, and keeps the view's own attributes", async ({
+  page,
+}) => {
   const project = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -140,10 +141,7 @@ test("an edit still persists, and keeps the view's own attributes", async ({ pag
   await skipTourIfPresent(page);
 
   // Open a filtered view, so an edit has attributes it does not own to lose.
-  await page
-    .locator("button", { hasText: "fc-internals.hcl" })
-    .first()
-    .click();
+  await page.locator("button", { hasText: "fc-internals.hcl" }).first().click();
   await expect(page).toHaveURL(/fc-internals\.hcl$/);
   await page.waitForTimeout(1000);
 

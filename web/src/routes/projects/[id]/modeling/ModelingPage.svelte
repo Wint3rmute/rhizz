@@ -1,3014 +1,2577 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
-import { goto } from "$app/navigation";
-import {
-  clamp_zoom,
-  create_editor_state,
-  reset_view,
-} from "../../../../ViewEditorState.svelte";
-import { isModifierHeld, isSpaceHeld } from "../../../../KeyboardState.svelte";
-import { SvelteSet } from "svelte/reactivity";
-import { onDestroy, tick, untrack } from "svelte";
-import persisted from "../../../../Persisted.svelte";
-import { toastState } from "../../../../ToastState.svelte";
-import { createDebounced } from "../../../../debounce";
-import { getProjectModel } from "../../../../ProjectModel.svelte";
-import { projectStore } from "../../../../ProjectState.svelte";
-import { primaryHclPath } from "../../../../vfs/compile";
-import { type Dirent, openProjectFs, type ProjectFs } from "../../../../vfs/fs";
-import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-import { page } from "$app/state";
-import FileTree from "../code/FileTree.svelte";
-import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
-import { componentInSystem, systemIndexOfComponent } from "./componentTree";
-import { type DetailViewTarget, detailViewTarget } from "../explore/navigation";
-import DiagramToolbar from "./DiagramToolbar.svelte";
-import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
-import AnnotationInspector from "./AnnotationInspector.svelte";
-import NodeInspector from "./NodeInspector.svelte";
-import CreateComponentModal from "./CreateComponentModal.svelte";
-import NewViewModal from "./NewViewModal.svelte";
-import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
-import Pane from "../../../../components/modular_ui/Pane.svelte";
-import Splitter from "../../../../components/modular_ui/Splitter.svelte";
-import {
-  SIDE_PANEL_WIDTH_FRACTION,
-  viewportCap,
-} from "../../../../components/modular_ui/viewport";
-import { modelingPanes } from "./panes";
-import {
-  type ComponentData,
-  componentDataByKey,
-  definitionOptions,
-  type PortData,
-} from "../../../../modelView";
+  import { resolve } from "$app/paths";
+  import { goto } from "$app/navigation";
+  import {
+    clamp_zoom,
+    create_editor_state,
+    reset_view,
+  } from "../../../../ViewEditorState.svelte";
+  import {
+    isModifierHeld,
+    isSpaceHeld,
+  } from "../../../../KeyboardState.svelte";
+  import { SvelteSet } from "svelte/reactivity";
+  import { onDestroy, tick, untrack } from "svelte";
+  import persisted from "../../../../Persisted.svelte";
+  import { toastState } from "../../../../ToastState.svelte";
+  import { createDebounced } from "../../../../debounce";
+  import { getProjectModel } from "../../../../ProjectModel.svelte";
+  import { projectStore } from "../../../../ProjectState.svelte";
+  import { primaryHclPath } from "../../../../vfs/compile";
+  import {
+    type Dirent,
+    openProjectFs,
+    type ProjectFs,
+  } from "../../../../vfs/fs";
+  import { TOUR_TARGETS } from "../../../../tour/tourTargets";
+  import { page } from "$app/state";
+  import FileTree from "../code/FileTree.svelte";
+  import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
+  import { componentInSystem, systemIndexOfComponent } from "./componentTree";
+  import {
+    type DetailViewTarget,
+    detailViewTarget,
+  } from "../explore/navigation";
+  import DiagramToolbar from "./DiagramToolbar.svelte";
+  import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
+  import AnnotationInspector from "./AnnotationInspector.svelte";
+  import NodeInspector from "./NodeInspector.svelte";
+  import CreateComponentModal from "./CreateComponentModal.svelte";
+  import NewViewModal from "./NewViewModal.svelte";
+  import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
+  import Pane from "../../../../components/modular_ui/Pane.svelte";
+  import Splitter from "../../../../components/modular_ui/Splitter.svelte";
+  import {
+    SIDE_PANEL_WIDTH_FRACTION,
+    viewportCap,
+  } from "../../../../components/modular_ui/viewport";
+  import { modelingPanes } from "./panes";
+  import {
+    type ComponentData,
+    componentDataByKey,
+    definitionOptions,
+    type PortData,
+  } from "../../../../modelView";
 
-import {
-  type Annotation,
-  type DiagramLayout,
-  emptyDiagramLayout,
-  layoutFromSelection,
-  readDiagramLayoutFile,
-  type StoredBox,
-  type StoredConnection,
-  VIEW_LAYOUT_DIR,
-  viewPathFromName,
-  viewPathTaken,
-  writeDiagramLayoutFile,
-} from "./persistence";
-import type { ViewFilterDefinition } from "../../../../rhizz_wasm_wrapper";
-import {
-  createHistoryStack,
-  pushHistory,
-  redoHistory,
-  undoHistory,
-} from "./history";
-import { applyModelMutation } from "../../../../history/applyMutation";
-import type { ModelMutationOp } from "../../../../history/applyMutation";
-import { TransactionManager } from "../../../../history/TransactionManager";
-import {
-  createForceLayout,
-  groupBySiblings,
-  type LayoutEdge,
-  type LayoutNode,
-} from "./forceLayout";
-import {
-  annotationBounds,
-  boxContains,
-  clampWithin,
-  computeLcaConnection,
-  computePortPositions,
-  computeRenderOrder,
-  computeResizedBox,
-  depthOf,
-  findConnectTarget,
-  findReparentTarget,
-  MIN_NODE_SIZE,
-  normalizeAnnotationScale,
-  type ResizeHandle,
-  unionBox,
-} from "./geometry";
-import type { Box, ConnectionSide, TextAlign } from "./geometry";
-import DiagramCanvas from "./DiagramCanvas.svelte";
-import { fitCamera, sceneBounds } from "./blend";
-import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
-import { createDiagramTransition } from "./transition.svelte";
-import {
-  type BorderStyle,
-  COLOR_OPTIONS,
-  type ComponentColor,
-  type ComponentFont,
-  DEFAULT_COLOR,
-  DEFAULT_FONT,
-} from "./visuals";
-import {
-  buildGraduatedGridPatterns,
-  GRID_BASE_SPACING,
-  GRID_GRADUATIONS,
-} from "./grid";
-import { nodeTopLeftAt, pickSpawnAnchor } from "./spawnPlacement";
-import { readLastView, rememberLastView, resolveViewToOpen } from "./lastView";
-import { asTestScript, createActionLog } from "../../../../actionLog";
-import { copyToClipboard } from "../../../../clipboard";
-import { renderMarkdownInline } from "../../../../components/markdownRenderer";
-import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
-import { subscribeToMutations } from "../../../../mutationObserver";
+  import {
+    type Annotation,
+    type DiagramLayout,
+    emptyDiagramLayout,
+    layoutFromSelection,
+    readDiagramLayoutFile,
+    type StoredBox,
+    type StoredConnection,
+    VIEW_LAYOUT_DIR,
+    viewPathFromName,
+    viewPathTaken,
+    writeDiagramLayoutFile,
+  } from "./persistence";
+  import type { ViewFilterDefinition } from "../../../../rhizz_wasm_wrapper";
+  import {
+    createHistoryStack,
+    pushHistory,
+    redoHistory,
+    undoHistory,
+  } from "./history";
+  import { applyModelMutation } from "../../../../history/applyMutation";
+  import type { ModelMutationOp } from "../../../../history/applyMutation";
+  import { TransactionManager } from "../../../../history/TransactionManager";
+  import {
+    createForceLayout,
+    groupBySiblings,
+    type LayoutEdge,
+    type LayoutNode,
+  } from "./forceLayout";
+  import {
+    annotationBounds,
+    boxContains,
+    clampWithin,
+    computeLcaConnection,
+    computePortPositions,
+    computeRenderOrder,
+    computeResizedBox,
+    depthOf,
+    findConnectTarget,
+    findReparentTarget,
+    MIN_NODE_SIZE,
+    normalizeAnnotationScale,
+    type ResizeHandle,
+    unionBox,
+  } from "./geometry";
+  import type { Box, ConnectionSide, TextAlign } from "./geometry";
+  import DiagramCanvas from "./DiagramCanvas.svelte";
+  import { fitCamera, sceneBounds } from "./blend";
+  import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
+  import { createDiagramTransition } from "./transition.svelte";
+  import {
+    type BorderStyle,
+    COLOR_OPTIONS,
+    type ComponentColor,
+    type ComponentFont,
+    DEFAULT_COLOR,
+    DEFAULT_FONT,
+  } from "./visuals";
+  import {
+    buildGraduatedGridPatterns,
+    GRID_BASE_SPACING,
+    GRID_GRADUATIONS,
+  } from "./grid";
+  import { nodeTopLeftAt, pickSpawnAnchor } from "./spawnPlacement";
+  import {
+    readLastView,
+    rememberLastView,
+    resolveViewToOpen,
+  } from "./lastView";
+  import { asTestScript, createActionLog } from "../../../../actionLog";
+  import { copyToClipboard } from "../../../../clipboard";
+  import { renderMarkdownInline } from "../../../../components/markdownRenderer";
+  import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
+  import { subscribeToMutations } from "../../../../mutationObserver";
 
-const editor_state = create_editor_state("DIAGRAM_VIEW");
-let root_svg: SVGElement;
-const stage = createDiagramTransition();
-// Set immediately before a layout load or undo applies, consumed by the
-// effect that presents editorScene. Not reactive: the scene change is what
-// re-runs that effect.
-let presentMode: "cut" | "nodes" | "view" = "cut";
-let seenDiagram = false;
+  const editor_state = create_editor_state("DIAGRAM_VIEW");
+  let root_svg: SVGElement;
+  const stage = createDiagramTransition();
+  // Set immediately before a layout load or undo applies, consumed by the
+  // effect that presents editorScene. Not reactive: the scene change is what
+  // re-runs that effect.
+  let presentMode: "cut" | "nodes" | "view" = "cut";
+  let seenDiagram = false;
 
-// Records every durable model mutation the user makes on this canvas (see
-// actionLog.ts). Mutations are captured through the opt-in module-level
-// mutation observer rather than per-handler calls, so the trace covers every
-// route and the page stays free of scattered logging. Cleared when a new
-// project is loaded.
-const actionLog = createActionLog();
-let copiedDebug = $state(false);
+  // Records every durable model mutation the user makes on this canvas (see
+  // actionLog.ts). Mutations are captured through the opt-in module-level
+  // mutation observer rather than per-handler calls, so the trace covers every
+  // route and the page stays free of scattered logging. Cleared when a new
+  // project is loaded.
+  const actionLog = createActionLog();
+  let copiedDebug = $state(false);
 
-// Pre-session baseline of the primary system HCL, captured once when the action
-// log is cleared (project load) — i.e. the state *before* any logged mutation.
-// Used by handleCopyDebug as the replay seed; the current on-disk content would
-// already include the session's mutations and double-apply them.
-let debugBaselineHcl = "";
+  // Pre-session baseline of the primary system HCL, captured once when the action
+  // log is cleared (project load) — i.e. the state *before* any logged mutation.
+  // Used by handleCopyDebug as the replay seed; the current on-disk content would
+  // already include the session's mutations and double-apply them.
+  let debugBaselineHcl = "";
 
-subscribeToMutations((action) => {
-  actionLog.record(action);
-});
-
-async function handleCopyDebug(): Promise<void> {
-  // Seed the replay from the pre-session baseline captured at project load,
-  // NOT the current on-disk content (which already includes this session's
-  // mutations and would double-apply them). The expected final state is the
-  // current on-disk canonical HCL.
-  const baselineHcl = debugBaselineHcl;
-  const { content: finalHcl } = await readMainContent();
-  const script = asTestScript(actionLog.actions(), finalHcl, {
-    baselineHcl,
+  subscribeToMutations((action) => {
+    actionLog.record(action);
   });
-  // Also echoed to the console so a developer can grab it without the
-  // clipboard (and so it survives a page reload).
-  console.log(script);
-  copiedDebug = await copyToClipboard(script);
-  setTimeout(() => {
-    copiedDebug = false;
-  }, 2000);
-}
 
-// Tracks the canvas's rendered pixel size so the SVG viewBox can match it
-// exactly (1 SVG unit == 1 pixel), keeping the canvas filling all
-// available space with no letterboxing regardless of viewport size.
-let canvas_width = $state(800);
-let canvas_height = $state(600);
-
-// Background grid: a chain of nested SVG patterns, one per "graduation"
-// level, built from the constants in grid.ts. Tweak the ladder there and the
-// canvas follows — no other code depends on the specific values. The
-// GRID_BASE_SPACING matches the default node size snapped to the finest
-// level, so the grid doubles as a snapping guide.
-const gridPatterns = buildGraduatedGridPatterns(
-  GRID_GRADUATIONS,
-  GRID_BASE_SPACING,
-  "Grid",
-);
-// The pattern id the canvas rect fills with — the coarsest level, which
-// draws every finer level beneath it.
-const gridFillId = gridPatterns[gridPatterns.length - 1]?.id ?? "Grid";
-
-let {
-  projectId,
-  requestedView = "",
-}: {
-  projectId: string;
-  /** The view named by the route path, relative to `views/` ("" = none). */
-  requestedView?: string;
-} = $props();
-
-// The compiled model is shared with the status bar and every other page;
-// mutations below call `projectModel.reload()` to refresh it.
-const projectModel = getProjectModel();
-
-let fs = $derived(openProjectFs(projectStore, projectId));
-
-// ── Modular side panels ─────────────────────────────────────────────────────
-// Inspector (+ diagram picker) on the left, component tree on the right:
-// widths + hidden flags in one serializable store, persisted across
-// reloads. Hiding keeps panels mounted (`display: none`), so canvas size
-// only changes on explicit user action — never on selection change.
-let paneLayout = $state(modelingPanes.read());
-
-$effect(() => {
-  modelingPanes.write(paneLayout);
-});
-
-let sources = $derived(projectModel.sources);
-
-let output = $derived(projectModel.output);
-let model = $derived(projectModel.model);
-let systems = $derived(model ? model.systems() : []);
-let components = $derived(model ? model.components() : []);
-let connections = $derived(model ? model.connections() : []);
-
-let compileErrors = $derived.by(() => {
-  return (output?.diagnostics() ?? []).filter((d) => d.level === "Error");
-});
-let firstError = $derived(compileErrors[0] ?? null);
-let errorCount = $derived(output?.error_count() ?? 0);
-
-// Structurally-stable persistence keys for every component, index-aligned
-// with `components` and computed by rhizz-core (`Model::component_keys`), so
-// the editor and the compiler's view validation (W016) agree by construction.
-// Unlike a component's arena index, a key only changes if the component (or an
-// ancestor) is renamed or reparented.
-let componentKeys = $derived(model ? model.component_keys() : []);
-
-function getComponentKey(index: number): string {
-  return componentKeyAt(componentKeys, index);
-}
-
-// Reverse lookup from a persistence key back to the component's current
-// arena index, rebuilt whenever the model changes. Entries in
-// `checked`/`savedLayout` whose key isn't found here belong to a component
-// that no longer exists (renamed, removed, or reparented) and are simply
-// not rendered.
-let keyToIndex = $derived(componentKeyIndex(model));
-
-// The set of arena indices currently placed on the canvas, derived from
-// `checked` (keyed by structural componentKey) via the reverse key→index map.
-let checkedIndices = $derived.by(() => {
-  const placed = new SvelteSet<number>();
-  for (const key of Object.keys(checked)) {
-    const index = keyToIndex.get(key);
-    if (index !== undefined) placed.add(index);
+  async function handleCopyDebug(): Promise<void> {
+    // Seed the replay from the pre-session baseline captured at project load,
+    // NOT the current on-disk content (which already includes this session's
+    // mutations and would double-apply them). The expected final state is the
+    // current on-disk canonical HCL.
+    const baselineHcl = debugBaselineHcl;
+    const { content: finalHcl } = await readMainContent();
+    const script = asTestScript(actionLog.actions(), finalHcl, {
+      baselineHcl,
+    });
+    // Also echoed to the console so a developer can grab it without the
+    // clipboard (and so it survives a page reload).
+    console.log(script);
+    copiedDebug = await copyToClipboard(script);
+    setTimeout(() => {
+      copiedDebug = false;
+    }, 2000);
   }
-  return placed;
-});
 
-// Default node size, in world (SVG) units, for newly-placed nodes and for
-// backfilling entries persisted before per-node sizing existed.
-const DEFAULT_NODE_WIDTH = 100;
-const DEFAULT_NODE_HEIGHT = 100;
+  // Tracks the canvas's rendered pixel size so the SVG viewBox can match it
+  // exactly (1 SVG unit == 1 pixel), keeping the canvas filling all
+  // available space with no letterboxing regardless of viewport size.
+  let canvas_width = $state(800);
+  let canvas_height = $state(600);
 
-// User-selectable snap grid sizes, in world units, offered by the
-// dropdown next to the "Snap to Grid" button. A fixed set (rather than a
-// free-form numeric input) keeps the choices "nice" round numbers that
-// also line up with the grid's graduation levels in grid.ts.
-const SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const;
-const DEFAULT_SNAP_GRID_SIZE: number = SNAP_GRID_SIZE_OPTIONS[0];
-
-// How many world units position/size snap to when "snap to grid" (below)
-// is enabled. Separate from the grid's base spacing so it can be tuned
-// independently. Persisted (unlike gridVisible/snapEnabled below) since
-// it's more of a per-project preference than a transient editing mode —
-// adjustable via the dropdown next to the "Snap to Grid" button.
-let snapGridSize = persisted("DIAGRAM_SNAP_GRID_SIZE", DEFAULT_SNAP_GRID_SIZE);
-
-// Whether the background grid is drawn. Toggled via the "Toggle Grid"
-// button; not persisted — it's a transient display preference, not part
-// of the saved diagram. Purely visual: the underlying rect stays in place
-// either way, since it's also the hit-target for panning/marquee-select on
-// empty canvas (see the <rect> using this below).
-let gridVisible = $state(true);
-
-// Whether dragging/resizing snaps position/size to snapGridSize-unit
-// increments. Toggled via the "Snap to Grid" button; not persisted — it's
-// a transient editing mode, not part of the saved diagram.
-// (snapGridSize itself, above, is persisted.)
-// Enabled by default; holding Ctrl/Cmd temporarily disables it.
-let snapEnabled = $state(true);
-
-// Whether snapping is actually in effect right now: the toggle is on AND
-// the modifier key (Ctrl/Cmd) is not currently held as a quick temporary
-// override. A $derived (rather than inlining the check into snap()) so the
-// "Snap to Grid" button can also reflect the live modifier-key override,
-// not just the persistent toggle.
-let snapActive = $derived(snapEnabled && !isModifierHeld());
-
-// Center of the current viewport in world (SVG) coordinates — the fallback
-// spawn point whenever there is no canvas pointer to spawn under, so an
-// entity appears where the user is looking instead of a fixed point that may
-// be off-screen.
-function viewportCenter(): { x: number; y: number } {
-  return {
-    x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom,
-    y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom,
-  };
-}
-
-// Top-left corner of a default-sized node box centered on the viewport
-// center. Used as the fallback placement for a component that has no
-// remembered or explicitly requested position.
-function viewportCenterBox(): { x: number; y: number } {
-  return nodeTopLeftAt(
-    viewportCenter(),
-    DEFAULT_NODE_WIDTH,
-    DEFAULT_NODE_HEIGHT,
+  // Background grid: a chain of nested SVG patterns, one per "graduation"
+  // level, built from the constants in grid.ts. Tweak the ladder there and the
+  // canvas follows — no other code depends on the specific values. The
+  // GRID_BASE_SPACING matches the default node size snapped to the finest
+  // level, so the grid doubles as a snapping guide.
+  const gridPatterns = buildGraduatedGridPatterns(
+    GRID_GRADUATIONS,
+    GRID_BASE_SPACING,
+    "Grid",
   );
-}
+  // The pattern id the canvas rect fills with — the coarsest level, which
+  // draws every finer level beneath it.
+  const gridFillId = gridPatterns[gridPatterns.length - 1]?.id ?? "Grid";
 
-// Last pointer position while it is over the canvas, in client (screen)
-// coordinates — null as soon as it leaves (a shortcut pressed with the
-// pointer over a sidebar has no canvas position to place under). Tracked in
-// client rather than world coordinates on purpose: it is converted on demand
-// (see spawnAnchor below), so wheel-zooming the view under a motionless
-// pointer still spawns where the pointer *is* on screen.
-let cursorClient = $state<{ x: number; y: number } | null>(null);
+  let {
+    projectId,
+    requestedView = "",
+  }: {
+    projectId: string;
+    /** The view named by the route path, relative to `views/` ("" = none). */
+    requestedView?: string;
+  } = $props();
 
-// Where an entity spawned without a position of its own lands: under the
-// pointer while it is over the canvas, else the viewport center. Shared by
-// every such spawn path (the `C`/`N` shortcuts, the toolbar buttons), so a
-// keyboard-driven workflow can aim once and keep spawning in place.
-function spawnAnchor(): { x: number; y: number } {
-  return pickSpawnAnchor(
-    cursorClient === null
+  // The compiled model is shared with the status bar and every other page;
+  // mutations below call `projectModel.reload()` to refresh it.
+  const projectModel = getProjectModel();
+
+  let fs = $derived(openProjectFs(projectStore, projectId));
+
+  // ── Modular side panels ─────────────────────────────────────────────────────
+  // Inspector (+ diagram picker) on the left, component tree on the right:
+  // widths + hidden flags in one serializable store, persisted across
+  // reloads. Hiding keeps panels mounted (`display: none`), so canvas size
+  // only changes on explicit user action — never on selection change.
+  let paneLayout = $state(modelingPanes.read());
+
+  $effect(() => {
+    modelingPanes.write(paneLayout);
+  });
+
+  let sources = $derived(projectModel.sources);
+
+  let output = $derived(projectModel.output);
+  let model = $derived(projectModel.model);
+  let systems = $derived(model ? model.systems() : []);
+  let components = $derived(model ? model.components() : []);
+  let connections = $derived(model ? model.connections() : []);
+
+  let compileErrors = $derived.by(() => {
+    return (output?.diagnostics() ?? []).filter((d) => d.level === "Error");
+  });
+  let firstError = $derived(compileErrors[0] ?? null);
+  let errorCount = $derived(output?.error_count() ?? 0);
+
+  // Structurally-stable persistence keys for every component, index-aligned
+  // with `components` and computed by rhizz-core (`Model::component_keys`), so
+  // the editor and the compiler's view validation (W016) agree by construction.
+  // Unlike a component's arena index, a key only changes if the component (or an
+  // ancestor) is renamed or reparented.
+  let componentKeys = $derived(model ? model.component_keys() : []);
+
+  function getComponentKey(index: number): string {
+    return componentKeyAt(componentKeys, index);
+  }
+
+  // Reverse lookup from a persistence key back to the component's current
+  // arena index, rebuilt whenever the model changes. Entries in
+  // `checked`/`savedLayout` whose key isn't found here belong to a component
+  // that no longer exists (renamed, removed, or reparented) and are simply
+  // not rendered.
+  let keyToIndex = $derived(componentKeyIndex(model));
+
+  // The set of arena indices currently placed on the canvas, derived from
+  // `checked` (keyed by structural componentKey) via the reverse key→index map.
+  let checkedIndices = $derived.by(() => {
+    const placed = new SvelteSet<number>();
+    for (const key of Object.keys(checked)) {
+      const index = keyToIndex.get(key);
+      if (index !== undefined) placed.add(index);
+    }
+    return placed;
+  });
+
+  // Default node size, in world (SVG) units, for newly-placed nodes and for
+  // backfilling entries persisted before per-node sizing existed.
+  const DEFAULT_NODE_WIDTH = 100;
+  const DEFAULT_NODE_HEIGHT = 100;
+
+  // User-selectable snap grid sizes, in world units, offered by the
+  // dropdown next to the "Snap to Grid" button. A fixed set (rather than a
+  // free-form numeric input) keeps the choices "nice" round numbers that
+  // also line up with the grid's graduation levels in grid.ts.
+  const SNAP_GRID_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+  const DEFAULT_SNAP_GRID_SIZE: number = SNAP_GRID_SIZE_OPTIONS[0];
+
+  // How many world units position/size snap to when "snap to grid" (below)
+  // is enabled. Separate from the grid's base spacing so it can be tuned
+  // independently. Persisted (unlike gridVisible/snapEnabled below) since
+  // it's more of a per-project preference than a transient editing mode —
+  // adjustable via the dropdown next to the "Snap to Grid" button.
+  let snapGridSize = persisted(
+    "DIAGRAM_SNAP_GRID_SIZE",
+    DEFAULT_SNAP_GRID_SIZE,
+  );
+
+  // Whether the background grid is drawn. Toggled via the "Toggle Grid"
+  // button; not persisted — it's a transient display preference, not part
+  // of the saved diagram. Purely visual: the underlying rect stays in place
+  // either way, since it's also the hit-target for panning/marquee-select on
+  // empty canvas (see the <rect> using this below).
+  let gridVisible = $state(true);
+
+  // Whether dragging/resizing snaps position/size to snapGridSize-unit
+  // increments. Toggled via the "Snap to Grid" button; not persisted — it's
+  // a transient editing mode, not part of the saved diagram.
+  // (snapGridSize itself, above, is persisted.)
+  // Enabled by default; holding Ctrl/Cmd temporarily disables it.
+  let snapEnabled = $state(true);
+
+  // Whether snapping is actually in effect right now: the toggle is on AND
+  // the modifier key (Ctrl/Cmd) is not currently held as a quick temporary
+  // override. A $derived (rather than inlining the check into snap()) so the
+  // "Snap to Grid" button can also reflect the live modifier-key override,
+  // not just the persistent toggle.
+  let snapActive = $derived(snapEnabled && !isModifierHeld());
+
+  // Center of the current viewport in world (SVG) coordinates — the fallback
+  // spawn point whenever there is no canvas pointer to spawn under, so an
+  // entity appears where the user is looking instead of a fixed point that may
+  // be off-screen.
+  function viewportCenter(): { x: number; y: number } {
+    return {
+      x: editor_state.view.x + canvas_width / 2 / editor_state.view.zoom,
+      y: editor_state.view.y + canvas_height / 2 / editor_state.view.zoom,
+    };
+  }
+
+  // Top-left corner of a default-sized node box centered on the viewport
+  // center. Used as the fallback placement for a component that has no
+  // remembered or explicitly requested position.
+  function viewportCenterBox(): { x: number; y: number } {
+    return nodeTopLeftAt(
+      viewportCenter(),
+      DEFAULT_NODE_WIDTH,
+      DEFAULT_NODE_HEIGHT,
+    );
+  }
+
+  // Last pointer position while it is over the canvas, in client (screen)
+  // coordinates — null as soon as it leaves (a shortcut pressed with the
+  // pointer over a sidebar has no canvas position to place under). Tracked in
+  // client rather than world coordinates on purpose: it is converted on demand
+  // (see spawnAnchor below), so wheel-zooming the view under a motionless
+  // pointer still spawns where the pointer *is* on screen.
+  let cursorClient = $state<{ x: number; y: number } | null>(null);
+
+  // Where an entity spawned without a position of its own lands: under the
+  // pointer while it is over the canvas, else the viewport center. Shared by
+  // every such spawn path (the `C`/`N` shortcuts, the toolbar buttons), so a
+  // keyboard-driven workflow can aim once and keep spawning in place.
+  function spawnAnchor(): { x: number; y: number } {
+    return pickSpawnAnchor(
+      cursorClient === null
+        ? null
+        : svgPoint(root_svg, cursorClient.x, cursorClient.y),
+      viewportCenter(),
+    );
+  }
+
+  // Rounds `value` to the nearest multiple of snapGridSize, or returns it
+  // unchanged when snapping is off. Falls back to the default grid size
+  // rather than trusting the persisted value is still a valid, positive
+  // option (e.g. if localStorage is hand-edited to 0 or a negative number).
+  function snap(value: number): number {
+    if (!snapActive) return value;
+    const gridSize =
+      snapGridSize.value > 0 ? snapGridSize.value : DEFAULT_SNAP_GRID_SIZE;
+    return Math.round(value / gridSize) * gridSize;
+  }
+
+  // Default text alignment for newly-placed nodes and for backfilling
+  // entries persisted before per-node text alignment existed.
+  const DEFAULT_TEXT_ALIGN: TextAlign = "center";
+
+  // Which components are currently placed on the canvas, keyed by
+  // `Model::component_keys()` (a structurally-stable path of labels — see
+  // above), not by arena index: component labels are only unique within a
+  // parent scope (SPEC.md §2.3), so a bare label can't be used as a key once
+  // components are nested, but arena indices shift whenever components are
+  // reordered or inserted earlier in the HCL source, silently reattaching persisted
+  // positions to the wrong component (see TASKS/FINISHED.md Task 39). If a component
+  // is unchecked, it's not present here — but its last-known box is kept in
+  // savedLayout below, so re-checking it later restores it to where it was
+  // instead of resetting to the default position. Persisted into the active
+  // project's VFS (see the load/save $effects below), so the diagram layout
+  // travels with the project instead of being shared across every project
+  // in the browser (TASKS/FINISHED.md Task 60).
+  let checked = $state<Record<string, StoredBox>>({});
+
+  // Remembers every component's last-known box, even after it's unchecked
+  // (removed from `checked`) — entries here are never deleted, only updated.
+  // Read from when re-checking a component (see the sidebar checkbox
+  // handler) so a component's layout survives being temporarily removed
+  // from the canvas. Persisted separately from `checked` since the two have
+  // different lifetimes (checked entries disappear on uncheck; these don't).
+  let savedLayout = $state<Record<string, StoredBox>>({});
+
+  // The view block's own attributes (`full_name`, `tags`, the selection
+  // `filter`). The canvas has no say over them, but the save effect writes the
+  // whole view back, so they have to survive a load→save round trip — otherwise
+  // merely *opening* a view deletes them. See DiagramLayout's docs.
+  let carriedMeta = $state<{
+    fullName?: string | undefined;
+    tags?: string[] | undefined;
+    filter?: ViewFilterDefinition | undefined;
+  }>({});
+  let savedConnections = $state<Record<string, StoredConnection>>({});
+  let annotations = $state<Annotation[]>([]);
+  // Indices into `annotations` currently selected (for drag/delete).
+  // SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
+  // tracked and the outline re-renders — mirrors the node `selectedKeys`.
+  let selectedAnnotations = new SvelteSet<number>();
+  // The single selected annotation's index (null unless exactly one is
+  // selected) and object (undefined when none, or when the index went stale).
+  // The inspector edits exactly one annotation; multi-select stays canvas-only.
+  let selectedAnnotationIndex = $derived(
+    selectedAnnotations.size === 1
+      ? (selectedAnnotations.values().next().value ?? null)
+      : null,
+  );
+  let selectedAnnotation = $derived(
+    selectedAnnotationIndex === null
+      ? undefined
+      : annotations[selectedAnnotationIndex],
+  );
+  // Ref to the mounted annotation inspector, so double-clicking a note can
+  // move focus into its text editor (null while no annotation is selected).
+  let annotationInspector = $state<AnnotationInspector | null>(null);
+
+  // Which diagram (a `views/<name>.hcl` file) is currently open on the
+  // canvas, relative to VIEW_LAYOUT_DIR — e.g. "main.hcl" — exactly like
+  // the editor's own `selectedPath` is relative to the project root. `null`
+  // means no diagram exists yet (or none is selected), in which case the
+  // canvas below simply has nothing placed on it.
+  let selectedDiagramPath = $state<string | null>(null);
+  let diagramEntries = $state<Dirent[]>([]);
+
+  // The system this view is bound to. Immutable after creation — set once on
+  // diagram load from the file's `view.system`, never edited via UI (delete +
+  // recreate, or hand-edit in Code, to re-bind). `""` means unlinked/legacy.
+  let selectedSystem = $state<string>("");
+
+  // Effective system shown by this view: the file's bound system, falling back
+  // to the first model system for legacy/unlinked views (`system == ""`).
+  // Dangling views (bound system not in model) keep their bound label so the
+  // file round-trips unchanged until fixed in Code or recreated.
+  let effectiveSystem = $derived(selectedSystem || systems[0]?.label || "");
+  // Arena index of the effective system in the current model, or -1.
+  let selectedSystemIndex = $derived(
+    systems.findIndex((s) => s.label === effectiveSystem),
+  );
+  let isSystemDangling = $derived(
+    selectedDiagramPath !== null &&
+      selectedSystem !== "" &&
+      systems.length > 0 &&
+      systems.findIndex((s) => s.label === selectedSystem) === -1,
+  );
+
+  // Arena indices of components belonging to the effective system (transitive
+  // via parent links). Used to filter canvas, explorer, and connections list.
+  let systemComponentIndices = $derived.by(() => {
+    if (selectedSystemIndex === -1) return new SvelteSet<number>();
+    const out = new SvelteSet<number>();
+    components.forEach((_c, i) => {
+      if (componentInSystem(components, i, selectedSystemIndex)) out.add(i);
+    });
+    return out;
+  });
+
+  // Placed nodes whose component no longer belongs to this view's system
+  // (legacy mixed diagrams). Hidden, never deleted — unchecking prunes them.
+  let hiddenForeignCount = $derived.by(() => {
+    let n = 0;
+    for (const key of Object.keys(checked)) {
+      const index = keyToIndex.get(key);
+      if (index !== undefined && !systemComponentIndices.has(index)) n += 1;
+    }
+    return n;
+  });
+
+  // Connections sidebar, filtered to this view's system (both endpoints inside).
+  let systemConnections = $derived.by(() => {
+    if (selectedSystemIndex === -1) return connections;
+    return connections.filter(
+      (c) =>
+        systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to),
+    );
+  });
+
+  let fullDiagramPath = $derived(
+    selectedDiagramPath === null
       ? null
-      : svgPoint(root_svg, cursorClient.x, cursorClient.y),
-    viewportCenter(),
+      : `${VIEW_LAYOUT_DIR}/${selectedDiagramPath}`,
   );
-}
 
-// Rounds `value` to the nearest multiple of snapGridSize, or returns it
-// unchanged when snapping is off. Falls back to the default grid size
-// rather than trusting the persisted value is still a valid, positive
-// option (e.g. if localStorage is hand-edited to 0 or a negative number).
-function snap(value: number): number {
-  if (!snapActive) return value;
-  const gridSize = snapGridSize.value > 0
-    ? snapGridSize.value
-    : DEFAULT_SNAP_GRID_SIZE;
-  return Math.round(value / gridSize) * gridSize;
-}
-
-// Default text alignment for newly-placed nodes and for backfilling
-// entries persisted before per-node text alignment existed.
-const DEFAULT_TEXT_ALIGN: TextAlign = "center";
-
-// Which components are currently placed on the canvas, keyed by
-// `Model::component_keys()` (a structurally-stable path of labels — see
-// above), not by arena index: component labels are only unique within a
-// parent scope (SPEC.md §2.3), so a bare label can't be used as a key once
-// components are nested, but arena indices shift whenever components are
-// reordered or inserted earlier in the HCL source, silently reattaching persisted
-// positions to the wrong component (see TASKS/FINISHED.md Task 39). If a component
-// is unchecked, it's not present here — but its last-known box is kept in
-// savedLayout below, so re-checking it later restores it to where it was
-// instead of resetting to the default position. Persisted into the active
-// project's VFS (see the load/save $effects below), so the diagram layout
-// travels with the project instead of being shared across every project
-// in the browser (TASKS/FINISHED.md Task 60).
-let checked = $state<Record<string, StoredBox>>({});
-
-// Remembers every component's last-known box, even after it's unchecked
-// (removed from `checked`) — entries here are never deleted, only updated.
-// Read from when re-checking a component (see the sidebar checkbox
-// handler) so a component's layout survives being temporarily removed
-// from the canvas. Persisted separately from `checked` since the two have
-// different lifetimes (checked entries disappear on uncheck; these don't).
-let savedLayout = $state<Record<string, StoredBox>>({});
-
-// The view block's own attributes (`full_name`, `tags`, the selection
-// `filter`). The canvas has no say over them, but the save effect writes the
-// whole view back, so they have to survive a load→save round trip — otherwise
-// merely *opening* a view deletes them. See DiagramLayout's docs.
-let carriedMeta = $state<{
-  fullName?: string | undefined;
-  tags?: string[] | undefined;
-  filter?: ViewFilterDefinition | undefined;
-}>({});
-let savedConnections = $state<Record<string, StoredConnection>>({});
-let annotations = $state<Annotation[]>([]);
-// Indices into `annotations` currently selected (for drag/delete).
-// SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
-// tracked and the outline re-renders — mirrors the node `selectedKeys`.
-let selectedAnnotations = new SvelteSet<number>();
-// The single selected annotation's index (null unless exactly one is
-// selected) and object (undefined when none, or when the index went stale).
-// The inspector edits exactly one annotation; multi-select stays canvas-only.
-let selectedAnnotationIndex = $derived(
-  selectedAnnotations.size === 1
-    ? (selectedAnnotations.values().next().value ?? null)
-    : null,
-);
-let selectedAnnotation = $derived(
-  selectedAnnotationIndex === null
-    ? undefined
-    : annotations[selectedAnnotationIndex],
-);
-// Ref to the mounted annotation inspector, so double-clicking a note can
-// move focus into its text editor (null while no annotation is selected).
-let annotationInspector = $state<AnnotationInspector | null>(null);
-
-// Which diagram (a `views/<name>.hcl` file) is currently open on the
-// canvas, relative to VIEW_LAYOUT_DIR — e.g. "main.hcl" — exactly like
-// the editor's own `selectedPath` is relative to the project root. `null`
-// means no diagram exists yet (or none is selected), in which case the
-// canvas below simply has nothing placed on it.
-let selectedDiagramPath = $state<string | null>(null);
-let diagramEntries = $state<Dirent[]>([]);
-
-// The system this view is bound to. Immutable after creation — set once on
-// diagram load from the file's `view.system`, never edited via UI (delete +
-// recreate, or hand-edit in Code, to re-bind). `""` means unlinked/legacy.
-let selectedSystem = $state<string>("");
-
-// Effective system shown by this view: the file's bound system, falling back
-// to the first model system for legacy/unlinked views (`system == ""`).
-// Dangling views (bound system not in model) keep their bound label so the
-// file round-trips unchanged until fixed in Code or recreated.
-let effectiveSystem = $derived(selectedSystem || systems[0]?.label || "");
-// Arena index of the effective system in the current model, or -1.
-let selectedSystemIndex = $derived(
-  systems.findIndex((s) => s.label === effectiveSystem),
-);
-let isSystemDangling = $derived(
-  selectedDiagramPath !== null && selectedSystem !== "" && systems.length > 0 &&
-    systems.findIndex((s) => s.label === selectedSystem) === -1,
-);
-
-// Arena indices of components belonging to the effective system (transitive
-// via parent links). Used to filter canvas, explorer, and connections list.
-let systemComponentIndices = $derived.by(() => {
-  if (selectedSystemIndex === -1) return new SvelteSet<number>();
-  const out = new SvelteSet<number>();
-  components.forEach((_c, i) => {
-    if (componentInSystem(components, i, selectedSystemIndex)) out.add(i);
-  });
-  return out;
-});
-
-// Placed nodes whose component no longer belongs to this view's system
-// (legacy mixed diagrams). Hidden, never deleted — unchecking prunes them.
-let hiddenForeignCount = $derived.by(() => {
-  let n = 0;
-  for (const key of Object.keys(checked)) {
-    const index = keyToIndex.get(key);
-    if (index !== undefined && !systemComponentIndices.has(index)) n += 1;
-  }
-  return n;
-});
-
-// Connections sidebar, filtered to this view's system (both endpoints inside).
-let systemConnections = $derived.by(() => {
-  if (selectedSystemIndex === -1) return connections;
-  return connections.filter((c) =>
-    systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to)
-  );
-});
-
-let fullDiagramPath = $derived(
-  selectedDiagramPath === null
-    ? null
-    : `${VIEW_LAYOUT_DIR}/${selectedDiagramPath}`,
-);
-
-async function refreshDiagramEntries(): Promise<void> {
-  try {
-    diagramEntries = await fs.readdir(VIEW_LAYOUT_DIR, {
-      recursive: true,
-    });
-  } catch {
-    // No diagram has ever been saved for this project yet, so
-    // VIEW_LAYOUT_DIR itself doesn't exist (ENOENT) — there's simply
-    // nothing to list.
-    diagramEntries = [];
-  }
-}
-
-// Picks a sensible default diagram to open: the first ".hcl" file found
-// (in practice "main.hcl" — see the auto-seed below), or `null` if the
-// project has no diagrams at all yet.
-function firstDiagramPath(): string | null {
-  return (
-    diagramEntries.find(
-      (e) => e.isFile() && e.name.endsWith(".hcl"),
-    )?.path ?? null
-  );
-}
-
-// ── The open view lives in the URL path ────────────────────────────────────
-//
-// `/projects/<id>/modeling/<view path relative to views/>`, so the address bar
-// always names what the canvas shows: it can be shared, bookmarked, and the
-// browser's back/forward buttons move between views. `selectedDiagramPath`
-// stays the source of truth for rendering and the URL mirrors it in both
-// directions — user actions go through selectView, the URL is only ever
-// *adopted* (see the effect below), so the two can never fight.
-
-// `?diagram=` links handed out before the view moved into the path carry the
-// `views/` prefix and sometimes don't; the rest param never does. Both are
-// normalized to a path relative to VIEW_LAYOUT_DIR.
-function normalizeViewPath(raw: string | null | undefined): string {
-  const value = raw ?? "";
-  return value.startsWith(`${VIEW_LAYOUT_DIR}/`)
-    ? value.slice(VIEW_LAYOUT_DIR.length + 1)
-    : value;
-}
-
-// The view the route asks for: the path segment, or — for a link shared by an
-// older build — the legacy query parameter. `""` when neither is present.
-function requestedViewPath(): string {
-  return normalizeViewPath(requestedView) ||
-    normalizeViewPath(page.url.searchParams.get("diagram"));
-}
-
-function viewUrl(path: string | null): string {
-  return resolve("/projects/[id]/modeling/[...view]", {
-    id: projectId,
-    view: path ?? "",
-  });
-}
-
-// Opens `path` (or nothing, for the bare page) and makes the URL name it.
-// `replace` rewrites the current history entry instead of pushing a new one —
-// used when the URL is being canonicalised (a bare page, a renamed or deleted
-// view) rather than moved to by the user.
-//
-// Every settled view is remembered per project (see lastView.ts), so the next
-// bare-page arrival (navbar link, "Go to Modeling") can reopen it instead of
-// always falling back to the first view. `null` never clears the memory: a
-// transient "nothing open" (project switch, delete) is immediately followed
-// by a fallback selection, which is what gets recorded.
-function selectView(path: string | null, replace = false): void {
-  selectedDiagramPath = path;
-  if (path !== null) rememberLastView(projectId, path);
-  const target = viewUrl(path);
-  // Canonicalising a URL that already says this (the common case: the effect
-  // below runs on every entry load) must not push a duplicate history entry.
-  if (target === page.url.pathname) return;
-  void goto(target, {
-    replace,
-    reset: false,
-  });
-}
-
-// The project's view list has been read, so a path in the URL can finally be
-// resolved against it. Until then nothing may rewrite the URL — otherwise a
-// cold deep link would be replaced by the bare page before its own view was
-// even known to exist. Set by the per-project init effect below.
-let viewListReady = $state(false);
-
-// The last view path this page settled on. Non-reactive, like the load guards
-// around it: it exists so a navigation this page performed itself (selectView
-// writes the state first, the URL a tick later) is not mistaken for the user
-// pressing back — which would undo the very click that caused it.
-let lastHandledView: string | null = null;
-
-$effect(() => {
-  if (!viewListReady) return;
-  const requested = requestedViewPath();
-  // Already settled — this is our own navigation echoing back (or a filter of
-  // state changes re-running the effect), not a new place to go.
-  if (requested === lastHandledView) return;
-  lastHandledView = requested;
-  const isOpenable = requested !== "" &&
-    diagramEntries.some((e) => e.isFile() && e.path === requested);
-  if (isOpenable) {
-    // A shared link opens that view. Rewriting (rather than only setting the
-    // state) is what turns a legacy `?diagram=` link into its path form.
-    selectView(requested, true);
-    return;
-  }
-  // Nothing openable in the path — a bare page, or a view that has since been
-  // renamed or deleted. Reopen the last view settled in this project when it
-  // still exists (navbar / "Go to Modeling" land on the bare page, and the
-  // page itself unmounts on every navigation away, so in-memory state cannot
-  // carry this); else keep whatever is open, else the first view — and state
-  // it in the URL, so the address bar keeps naming the canvas.
-  selectView(
-    resolveViewToOpen({
-      requested: "",
-      remembered: readLastView(projectId),
-      open: selectedDiagramPath,
-      first: firstDiagramPath(),
-      exists: (viewPath) =>
-        diagramEntries.some((e) => e.isFile() && e.path === viewPath),
-    }),
-    true,
-  );
-});
-
-// (Re)loads the diagram file list once per project, when the project
-// first becomes available or changes identity (e.g. after switching
-// projects).
-let loadedDiagramProjectId: string | null = null;
-$effect(() => {
-  const id = projectId;
-  if (id === loadedDiagramProjectId) return;
-  loadedDiagramProjectId = id;
-  selectedDiagramPath = null;
-  // The next project's list has to be read before its URL can be resolved
-  // (see viewListReady), so the URL is off-limits until then.
-  viewListReady = false;
-  actionLog.clear();
-  // Snapshot the pre-session content of the primary system HCL file so the
-  // debug replay seeds from the state before any of this session's mutations.
-  void readMainContent().then(({ content }) => {
-    debugBaselineHcl = content;
-  });
-  refreshDiagramEntries()
-    .then(async () => {
-      if (firstDiagramPath() === null) {
-        // A brand new project has no diagram files yet — seed one so
-        // there's always something selected/editable, mirroring how a
-        // fresh project always starts with a "main.hcl" (see
-        // ProjectState.svelte's createProjectWithMainFile) rather than an
-        // empty file list. Without this, checking a component onto the
-        // canvas before ever creating a diagram would silently never be
-        // persisted (fullDiagramPath stays null).
-        //
-        // The first view is linked to a system by default: prefer the
-        // first system, creating a "main" system when the model has none
-        // yet (e.g. projects created before the empty-project seed gained
-        // one), so a new user never starts with a dangling view. Systems
-        // come from a fresh full-project compile (never stale deriveds,
-        // never just the primary file), and a failing model is left
-        // untouched — the view seeds unlinked instead.
-        let systemName = "";
-        await projectModel.reload();
-        const baselineModel = projectModel.model;
-        if (baselineModel) {
-          const existing = baselineModel.systems();
-          if (existing.length === 0) {
-            const { path: targetPath, content: mainContent } =
-              await readMainContent();
-            const ensured = await applyModelMutation(
-              fs,
-              targetPath,
-              mainContent,
-              {
-                kind: "add_system",
-                label: "main",
-                full_name: "Main system",
-              },
-            );
-            if (ensured.applied) {
-              await projectModel.reload();
-            }
-          }
-          systemName = existing[0]?.label || "main";
-        }
-        await writeDiagramLayoutFile(
-          fs,
-          `${VIEW_LAYOUT_DIR}/main.hcl`,
-          emptyDiagramLayout(systemName),
-          systemName,
-        );
-        await refreshDiagramEntries();
-      }
-    })
-    .catch((err) => {
-      console.error("Failed to initialize diagram entries:", err);
-    })
-    .finally(() => {
-      // The list is known (or known to have failed) either way, so the URL
-      // can be resolved against it: the effect above opens the view the path
-      // asks for, else the first one, and writes that into the URL.
-      viewListReady = true;
-    });
-});
-
-// Guards the write-back $effect below against firing with stale/empty
-// data while the load for the *currently selected diagram* is still in
-// flight — reset to false whenever fullDiagramPath changes, flipped back
-// to true once that file has loaded. Without this, switching from one
-// diagram (or project) to another would briefly overwrite the
-// newly-selected file with the previous selection's (or an empty)
-// layout.
-let diagramLayoutLoaded = $state(false);
-let loadedDiagramPath: string | null = null;
-// Monotonic stamp bumped on any user diagram mutation (adding/moving a node,
-// editing an annotation). The load effect records the stamp when a read
-// starts and only applies the result if no mutation happened in the meantime
-// — so a slow read can never clobber edits made while it was in flight.
-let diagramEditStamp = 0;
-let loadStartStamp = 0;
-
-// Called by every user-diagram mutation path so the load race guard works.
-function noteDiagramEdited(): void {
-  diagramEditStamp += 1;
-}
-
-// Every layout write persists the whole VFS blob, so a drag (one write per
-// tick) used to be one full-blob transfer per frame — visible as a burst of
-// `vfs.size` samples in Sentry. Trailing debounce instead, and only for this
-// high-frequency source: the discrete transactions elsewhere
-// (runModelLayoutTransaction/applyModelMutation — create/rename/delete/
-// reparent) are undoable steps and stay immediate.
-//
-// The `fs` handle, the path, the detached snapshot and the system name are
-// captured per call, so the write that finally lands carries the newest
-// layout and targets the view that was open when the burst started.
-const LAYOUT_WRITE_DEBOUNCE_MS = 500;
-const scheduleLayoutWrite = createDebounced(
-  (
-    file: ProjectFs,
-    path: string,
-    layout: DiagramLayout,
-    systemName: string,
-  ) => {
-    void writeDiagramLayoutFile(file, path, layout, systemName);
-  },
-  LAYOUT_WRITE_DEBOUNCE_MS,
-);
-
-// Leaving the page is the other way a pending write could be lost, and the
-// last chance to flush it: the debounce timer is not tied to the component's
-// lifetime.
-onDestroy(() => scheduleLayoutWrite.flush());
-
-// …and a full document unload (a reload, a closed tab) never runs that
-// teardown at all — the timer dies with the document, taking the tail of the
-// last drag with it. `pagehide` is the one hook that fires on the way out of
-// *any* navigation, including reloads, and the write it starts resolves
-// within the microtask drain that follows the handler, before the new document
-// reads the store.
-function flushLayoutWrite(): void {
-  scheduleLayoutWrite.flush();
-}
-
-// Set by the load effect when its cut-to-fit had to wait for the model (see
-// there), consumed by the effect right after it.
-let cutToFitArmed = false;
-
-$effect(() => {
-  const path = fullDiagramPath;
-  if (path === loadedDiagramPath) return;
-  // Leaving a view must not swallow the tail of the one being left: its
-  // pending write lands here, before the load below replaces the canvas state
-  // and before any write for the newly selected view is scheduled. (Flushing
-  // later — after the switch — would write the old view's layout over the new
-  // one, or resurrect a view that is about to be renamed/deleted.)
-  scheduleLayoutWrite.flush();
-  loadedDiagramPath = path;
-  diagramLayoutLoaded = false;
-  loadStartStamp = diagramEditStamp;
-
-  if (path === null) {
-    checked = {};
-    savedLayout = {};
-    savedConnections = {};
-    annotations = [];
-    carriedMeta = {};
-    selectedSystem = "";
-    return;
-  }
-
-  void readDiagramLayoutFile(fs, path).then((layout) => {
-    // A stale load (e.g. rapid switching between diagrams) could resolve
-    // after a newer one already changed the selection — guard against
-    // overwriting the newer selection's state with the older one.
-    if (loadedDiagramPath !== path) return;
-    // If the user edited the diagram while this read was in flight, don't
-    // clobber their changes with the (possibly empty) file contents — but
-    // still mark the diagram as loaded so the save effect is armed and can
-    // persist the user's edits.
-    const editedDuringLoad = diagramEditStamp !== loadStartStamp;
-    const mode = seenDiagram ? "view" : "cut";
-    seenDiagram = true;
-    if (!editedDuringLoad) {
-      presentMode = mode;
-      checked = layout.checked;
-      // `DiagramLayout` no longer persists the editor's remembered layout;
-      // seed the page-local memory from the placed nodes.
-      savedLayout = { ...layout.checked };
-      savedConnections = layout.connections ?? {};
-      annotations = layout.annotations ?? [];
-      carriedMeta = {
-        fullName: layout.fullName,
-        tags: layout.tags,
-        filter: layout.filter,
-      };
-      selectedSystem = layout.system ?? "";
+  async function refreshDiagramEntries(): Promise<void> {
+    try {
+      diagramEntries = await fs.readdir(VIEW_LAYOUT_DIR, {
+        recursive: true,
+      });
+    } catch {
+      // No diagram has ever been saved for this project yet, so
+      // VIEW_LAYOUT_DIR itself doesn't exist (ENOENT) — there's simply
+      // nothing to list.
+      diagramEntries = [];
     }
-    diagramLayoutLoaded = true;
-    // First open cuts to a fit. Later switches let the transition glide
-    // the camera from wherever the user left it.
-    if (mode !== "cut") return;
-    // …unless there is nothing to fit *yet*. The layout file and the compiled
-    // model are two independent async reads, and the layout usually wins by a
-    // few hundred microseconds: the model's key→component map is what makes a
-    // placed node measurable, so a cut taken that early would fit nothing and
-    // silently leave the canvas at 1:1. Arm the cut instead and let the effect
-    // below perform it as soon as the nodes are there — a few hundred
-    // microseconds later, long before any user interaction. A view that really
-    // is empty carries no keys, so it never arms and later placements can't
-    // make the camera jump.
-    if (Object.keys(checked).length > 0 && renderOrder.length === 0) {
-      cutToFitArmed = true;
-    } else {
-      zoomToFill();
-    }
-  });
-});
-
-// Performs the cut the load effect had to arm — see the comment there.
-$effect(() => {
-  const placed = renderOrder;
-  if (!cutToFitArmed || placed.length === 0) return;
-  cutToFitArmed = false;
-  zoomToFill();
-});
-
-$effect(() => {
-  // $state.snapshot() deeply reads (and detaches from reactivity) every
-  // property of `checked`/`savedLayout` synchronously, right here in the
-  // effect body — which is what makes later in-place mutations like
-  // `checked[key] = {...}` cause this effect to re-run at all.
-  // The write is async *and* debounced, so if it (or JSON.stringify) were
-  // the thing reading those properties, that read would happen after an
-  // `await` and a timer, i.e. outside the synchronous window Svelte uses to
-  // record an effect's dependencies — leaving this effect subscribed only to
-  // `checked`/`savedLayout`'s own top-level references, never to writes
-  // into them.
-  const snapshot: DiagramLayout = {
-    system: effectiveSystem,
-    checked: $state.snapshot(checked),
-    connections: $state.snapshot(savedConnections),
-    annotations: $state.snapshot(annotations),
-    // Carried, not owned: read back from the file this view was loaded from.
-    fullName: carriedMeta.fullName,
-    tags: carriedMeta.tags,
-    filter: carriedMeta.filter,
-  };
-  // Subscribe to the effective system so legacy migration ("" -> first
-  // system) persists even before any canvas edit touches checked/etc.
-  void effectiveSystem;
-  const file = fs;
-  const path = fullDiagramPath;
-  // `loadedDiagramPath` is compared, not depended on: it is the plain
-  // (non-reactive) marker the load effect above sets synchronously, so this
-  // guard holds regardless of which of the two effects runs first within a
-  // flush — a view whose layout is still loading never receives the previous
-  // view's layout as a write.
-  if (!diagramLayoutLoaded || path === null || loadedDiagramPath !== path) {
-    return;
   }
-  scheduleLayoutWrite(file, path, snapshot, effectiveSystem || "main");
-});
 
-function reportDiagramError(error: unknown): void {
-  alert(error instanceof Error ? error.message : String(error));
-}
-
-// Strips leading/trailing slashes and rejects anything containing "/" or
-// only whitespace — prompt() collects a bare name (a new path segment),
-// never a nested path, matching the editor's own FileTree wiring.
-function sanitizeDiagramSegmentName(name: string): string | null {
-  const trimmed = name.trim();
-  if (trimmed === "" || trimmed.includes("/")) return null;
-  return trimmed;
-}
-
-function joinViewPath(parentPath: string, name: string): string {
-  return parentPath ? `${parentPath}/${name}` : name;
-}
-
-// New-view modal state. FileTree's "+ File" only supplies the parent folder;
-// the name + immutable system binding are collected in NewViewModal.
-let isNewViewModalOpen = $state(false);
-let newViewParentPath = $state("");
-
-function handleCreateDiagram(parentPath: string): void {
-  newViewParentPath = parentPath;
-  isNewViewModalOpen = true;
-}
-
-async function handleNewViewCreate(data: {
-  name: string;
-  system: string;
-}): Promise<void> {
-  isNewViewModalOpen = false;
-  const name = sanitizeDiagramSegmentName(data.name);
-  if (name === null) return;
-  // Immutable view binding: chosen once here, never edited via UI afterwards
-  // (delete + recreate, or hand-edit in Code, to re-bind).
-  const systemChoice = data.system.trim() || systems[0]?.label || "main";
-  if (
-    systems.length > 0 && !systems.some((s) => s.label === systemChoice)
-  ) {
-    reportDiagramError(
-      new Error(
-        `Unknown system "${systemChoice}". Available: ${
-          systems.map((s) => s.label).join(", ")
-        }`,
-      ),
+  // Picks a sensible default diagram to open: the first ".hcl" file found
+  // (in practice "main.hcl" — see the auto-seed below), or `null` if the
+  // project has no diagrams at all yet.
+  function firstDiagramPath(): string | null {
+    return (
+      diagramEntries.find((e) => e.isFile() && e.name.endsWith(".hcl"))?.path ??
+      null
     );
-    return;
   }
-  const path = joinViewPath(newViewParentPath, name);
-  try {
-    await writeDiagramLayoutFile(
-      fs,
-      `${VIEW_LAYOUT_DIR}/${path}`,
-      emptyDiagramLayout(systemChoice),
-      systemChoice,
-    );
-    await refreshDiagramEntries();
-    // A new view is a place the user moved to, so it pushes a history entry
-    // (back returns to the view they came from).
-    selectView(path);
-  } catch (error) {
-    reportDiagramError(error);
-  }
-}
 
-async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
-  const name = sanitizeDiagramSegmentName(
-    prompt("New folder name?", "untitled") ?? "",
-  );
-  if (name === null) return;
-  try {
-    await fs.mkdir(
-      `${VIEW_LAYOUT_DIR}/${joinViewPath(parentPath, name)}`,
-      { recursive: true },
-    );
-    await refreshDiagramEntries();
-  } catch (error) {
-    reportDiagramError(error);
-  }
-}
+  // ── The open view lives in the URL path ────────────────────────────────────
+  //
+  // `/projects/<id>/modeling/<view path relative to views/>`, so the address bar
+  // always names what the canvas shows: it can be shared, bookmarked, and the
+  // browser's back/forward buttons move between views. `selectedDiagramPath`
+  // stays the source of truth for rendering and the URL mirrors it in both
+  // directions — user actions go through selectView, the URL is only ever
+  // *adopted* (see the effect below), so the two can never fight.
 
-async function handleRenameDiagram(path: string): Promise<void> {
-  const segments = path.split("/");
-  const oldName = segments[segments.length - 1];
-  const parentPath = segments.slice(0, -1).join("/");
-  const name = sanitizeDiagramSegmentName(prompt("Rename to?", oldName) ?? "");
-  if (name === null || name === oldName) return;
-  const newPath = joinViewPath(parentPath, name);
-  // Land a pending layout write for this view *before* the rename: a write
-  // still queued when the rename lands would recreate the old path (writes
-  // create files that don't exist), leaving a stray duplicate view behind.
-  scheduleLayoutWrite.flush();
-  try {
-    await fs.rename(
-      `${VIEW_LAYOUT_DIR}/${path}`,
-      `${VIEW_LAYOUT_DIR}/${newPath}`,
-    );
-    // Renaming the open view rewrites its URL in place rather than pushing:
-    // the old path names nothing now, so leaving it in the history would only
-    // hand the user a dead link on back.
-    if (selectedDiagramPath === path) selectView(newPath, true);
-    await refreshDiagramEntries();
-  } catch (error) {
-    reportDiagramError(error);
+  // `?diagram=` links handed out before the view moved into the path carry the
+  // `views/` prefix and sometimes don't; the rest param never does. Both are
+  // normalized to a path relative to VIEW_LAYOUT_DIR.
+  function normalizeViewPath(raw: string | null | undefined): string {
+    const value = raw ?? "";
+    return value.startsWith(`${VIEW_LAYOUT_DIR}/`)
+      ? value.slice(VIEW_LAYOUT_DIR.length + 1)
+      : value;
   }
-}
 
-async function handleDeleteDiagram(path: string): Promise<void> {
-  if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
-  // Same reasoning as the rename: a write queued behind the delete would
-  // resurrect the view the user just threw away.
-  scheduleLayoutWrite.flush();
-  try {
-    await fs.rm(`${VIEW_LAYOUT_DIR}/${path}`, { recursive: true });
-    const wasOpen = selectedDiagramPath === path ||
-      selectedDiagramPath?.startsWith(`${path}/`);
-    if (!wasOpen) {
-      await refreshDiagramEntries();
+  // The view the route asks for: the path segment, or — for a link shared by an
+  // older build — the legacy query parameter. `""` when neither is present.
+  function requestedViewPath(): string {
+    return (
+      normalizeViewPath(requestedView) ||
+      normalizeViewPath(page.url.searchParams.get("diagram"))
+    );
+  }
+
+  function viewUrl(path: string | null): string {
+    return resolve("/projects/[id]/modeling/[...view]", {
+      id: projectId,
+      view: path ?? "",
+    });
+  }
+
+  // Opens `path` (or nothing, for the bare page) and makes the URL name it.
+  // `replace` rewrites the current history entry instead of pushing a new one —
+  // used when the URL is being canonicalised (a bare page, a renamed or deleted
+  // view) rather than moved to by the user.
+  //
+  // Every settled view is remembered per project (see lastView.ts), so the next
+  // bare-page arrival (navbar link, "Go to Modeling") can reopen it instead of
+  // always falling back to the first view. `null` never clears the memory: a
+  // transient "nothing open" (project switch, delete) is immediately followed
+  // by a fallback selection, which is what gets recorded.
+  function selectView(path: string | null, replace = false): void {
+    selectedDiagramPath = path;
+    if (path !== null) rememberLastView(projectId, path);
+    const target = viewUrl(path);
+    // Canonicalising a URL that already says this (the common case: the effect
+    // below runs on every entry load) must not push a duplicate history entry.
+    if (target === page.url.pathname) return;
+    void goto(target, {
+      replace,
+      reset: false,
+    });
+  }
+
+  // The project's view list has been read, so a path in the URL can finally be
+  // resolved against it. Until then nothing may rewrite the URL — otherwise a
+  // cold deep link would be replaced by the bare page before its own view was
+  // even known to exist. Set by the per-project init effect below.
+  let viewListReady = $state(false);
+
+  // The last view path this page settled on. Non-reactive, like the load guards
+  // around it: it exists so a navigation this page performed itself (selectView
+  // writes the state first, the URL a tick later) is not mistaken for the user
+  // pressing back — which would undo the very click that caused it.
+  let lastHandledView: string | null = null;
+
+  $effect(() => {
+    if (!viewListReady) return;
+    const requested = requestedViewPath();
+    // Already settled — this is our own navigation echoing back (or a filter of
+    // state changes re-running the effect), not a new place to go.
+    if (requested === lastHandledView) return;
+    lastHandledView = requested;
+    const isOpenable =
+      requested !== "" &&
+      diagramEntries.some((e) => e.isFile() && e.path === requested);
+    if (isOpenable) {
+      // A shared link opens that view. Rewriting (rather than only setting the
+      // state) is what turns a legacy `?diagram=` link into its path form.
+      selectView(requested, true);
       return;
     }
+    // Nothing openable in the path — a bare page, or a view that has since been
+    // renamed or deleted. Reopen the last view settled in this project when it
+    // still exists (navbar / "Go to Modeling" land on the bare page, and the
+    // page itself unmounts on every navigation away, so in-memory state cannot
+    // carry this); else keep whatever is open, else the first view — and state
+    // it in the URL, so the address bar keeps naming the canvas.
+    selectView(
+      resolveViewToOpen({
+        requested: "",
+        remembered: readLastView(projectId),
+        open: selectedDiagramPath,
+        first: firstDiagramPath(),
+        exists: (viewPath) =>
+          diagramEntries.some((e) => e.isFile() && e.path === viewPath),
+      }),
+      true,
+    );
+  });
+
+  // (Re)loads the diagram file list once per project, when the project
+  // first becomes available or changes identity (e.g. after switching
+  // projects).
+  let loadedDiagramProjectId: string | null = null;
+  $effect(() => {
+    const id = projectId;
+    if (id === loadedDiagramProjectId) return;
+    loadedDiagramProjectId = id;
     selectedDiagramPath = null;
-    await refreshDiagramEntries();
-    // Same reasoning as the rename: the open view is gone, so the URL is
-    // rewritten to the fallback rather than pushed as a dead entry.
-    selectView(firstDiagramPath(), true);
-  } catch (error) {
-    reportDiagramError(error);
-  }
-}
-
-// Writes `box` to both `checked` (the current on-canvas state) and
-// savedLayout (the remembered layout), merging over any existing fields.
-// Centralizing this in one place means every write site automatically
-// keeps the remembered layout up to date, instead of relying on each call
-// site to remember to mirror the write itself.
-function setNodeBox(index: number, box: Partial<StoredBox>) {
-  noteDiagramEdited();
-  const key = getComponentKey(index);
-  const checkedPrev = checked[key];
-  const savedPrev = savedLayout[key];
-  checked[key] = {
-    x: box.x ?? checkedPrev?.x ?? 0,
-    y: box.y ?? checkedPrev?.y ?? 0,
-    width: box.width ?? checkedPrev?.width,
-    height: box.height ?? checkedPrev?.height,
-    textAlign: box.textAlign ?? checkedPrev?.textAlign,
-  };
-  savedLayout[key] = {
-    x: box.x ?? savedPrev?.x ?? 0,
-    y: box.y ?? savedPrev?.y ?? 0,
-    width: box.width ?? savedPrev?.width,
-    height: box.height ?? savedPrev?.height,
-    textAlign: box.textAlign ?? savedPrev?.textAlign,
-  };
-}
-
-// Returns the placed node's box (position + size + text alignment), or null
-// if the component isn't currently checked. Backfills width/height/
-// textAlign with defaults for entries persisted before those features were
-// introduced.
-function nodeBox(index: number): {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  textAlign: TextAlign;
-} | null {
-  const pos = checked[getComponentKey(index)];
-  if (!pos) return null;
-  return {
-    x: pos.x,
-    y: pos.y,
-    width: pos.width ?? DEFAULT_NODE_WIDTH,
-    height: pos.height ?? DEFAULT_NODE_HEIGHT,
-    textAlign: pos.textAlign ?? DEFAULT_TEXT_ALIGN,
-  };
-}
-
-// Sets the text alignment of the currently selected node. Only meaningful
-// (and only exposed in the UI) when exactly one node is selected.
-function setSelectedTextAlign(align: TextAlign) {
-  if (primarySelected === null || primarySelected === undefined) return;
-  const box = checked[getComponentKey(primarySelected)];
-  if (!box) return;
-  if (box.textAlign === align) return; // no-op: skip a redundant undo point
-  recordUndoPoint();
-  setNodeBox(primarySelected, { textAlign: align });
-}
-
-// Places (checks) or unplaces (unchecks) a component on the canvas. This is
-// the single source of truth for the sidebar's checkbox — both the old flat
-// list and the new ComponentHierarchyTree route through it.
-function toggleComponentChecked(index: number) {
-  recordUndoPoint();
-  if (checked[getComponentKey(index)]) {
-    // Unplace.
-    delete checked[getComponentKey(index)];
-    // savedLayout[getComponentKey(index)] is intentionally left alone, so
-    // re-checking this component later restores it where it was.
-    deselect(index);
-    return;
-  }
-
-  // Restore the remembered layout if this component has been placed before
-  // (even if it was later unchecked); otherwise land it at the viewport
-  // center so it appears where the user is looking.
-  const remembered = savedLayout[getComponentKey(index)];
-  const fallback = viewportCenterBox();
-  let box: Box = {
-    x: remembered?.x ?? fallback.x,
-    y: remembered?.y ?? fallback.y,
-    width: remembered?.width ?? DEFAULT_NODE_WIDTH,
-    height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
-  };
-  const parentBox = activeParentBox(index);
-  if (parentBox) {
-    box = clampWithin(
-      box,
-      parentBox,
-      CHILD_CONTAINMENT_MARGIN,
-      CHILD_CONTAINMENT_TOP_MARGIN,
-    );
-  }
-  setNodeBox(index, {
-    ...box,
-    textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
+    // The next project's list has to be read before its URL can be resolved
+    // (see viewListReady), so the URL is off-limits until then.
+    viewListReady = false;
+    actionLog.clear();
+    // Snapshot the pre-session content of the primary system HCL file so the
+    // debug replay seeds from the state before any of this session's mutations.
+    void readMainContent().then(({ content }) => {
+      debugBaselineHcl = content;
+    });
+    refreshDiagramEntries()
+      .then(async () => {
+        if (firstDiagramPath() === null) {
+          // A brand new project has no diagram files yet — seed one so
+          // there's always something selected/editable, mirroring how a
+          // fresh project always starts with a "main.hcl" (see
+          // ProjectState.svelte's createProjectWithMainFile) rather than an
+          // empty file list. Without this, checking a component onto the
+          // canvas before ever creating a diagram would silently never be
+          // persisted (fullDiagramPath stays null).
+          //
+          // The first view is linked to a system by default: prefer the
+          // first system, creating a "main" system when the model has none
+          // yet (e.g. projects created before the empty-project seed gained
+          // one), so a new user never starts with a dangling view. Systems
+          // come from a fresh full-project compile (never stale deriveds,
+          // never just the primary file), and a failing model is left
+          // untouched — the view seeds unlinked instead.
+          let systemName = "";
+          await projectModel.reload();
+          const baselineModel = projectModel.model;
+          if (baselineModel) {
+            const existing = baselineModel.systems();
+            if (existing.length === 0) {
+              const { path: targetPath, content: mainContent } =
+                await readMainContent();
+              const ensured = await applyModelMutation(
+                fs,
+                targetPath,
+                mainContent,
+                {
+                  kind: "add_system",
+                  label: "main",
+                  full_name: "Main system",
+                },
+              );
+              if (ensured.applied) {
+                await projectModel.reload();
+              }
+            }
+            systemName = existing[0]?.label || "main";
+          }
+          await writeDiagramLayoutFile(
+            fs,
+            `${VIEW_LAYOUT_DIR}/main.hcl`,
+            emptyDiagramLayout(systemName),
+            systemName,
+          );
+          await refreshDiagramEntries();
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to initialize diagram entries:", err);
+      })
+      .finally(() => {
+        // The list is known (or known to have failed) either way, so the URL
+        // can be resolved against it: the effect above opens the view the path
+        // asks for, else the first one, and writes that into the URL.
+        viewListReady = true;
+      });
   });
-  // In case this component is itself the parent of children that were
-  // already placed on canvas before it was.
-  reclampChildren(index);
-}
 
-// Padding kept between a child node's edges and its active parent's edges,
-// in world units.
-const CHILD_CONTAINMENT_MARGIN = 10;
+  // Guards the write-back $effect below against firing with stale/empty
+  // data while the load for the *currently selected diagram* is still in
+  // flight — reset to false whenever fullDiagramPath changes, flipped back
+  // to true once that file has loaded. Without this, switching from one
+  // diagram (or project) to another would briefly overwrite the
+  // newly-selected file with the previous selection's (or an empty)
+  // layout.
+  let diagramLayoutLoaded = $state(false);
+  let loadedDiagramPath: string | null = null;
+  // Monotonic stamp bumped on any user diagram mutation (adding/moving a node,
+  // editing an annotation). The load effect records the stamp when a read
+  // starts and only applies the result if no mutation happened in the meantime
+  // — so a slow read can never clobber edits made while it was in flight.
+  let diagramEditStamp = 0;
+  let loadStartStamp = 0;
 
-// Extra padding reserved at a parent's *top* edge specifically, on top of
-// CHILD_CONTAINMENT_MARGIN, so a child can never be dragged/laid out over
-// the area where the parent's own title text is rendered (see
-// textPosition() in geometry.ts — the label sits near the top of the box
-// for the "top-center"/"top-left" alignments, and even for "center" a
-// child overlapping the exact middle would still obscure it). Sized to
-// comfortably clear a label line plus its own padding.
-const CHILD_CONTAINMENT_TOP_MARGIN = 28;
-
-// Returns the box of `index`'s parent component, but only if that parent is
-// itself currently placed on the canvas ("active") — a node with a parent
-// that isn't on canvas has nothing to be constrained by. Only considers the
-// direct parent — a node only ever needs to stay within its own immediate
-// parent's box; staying within *its* parent's ancestors transitively is
-// handled separately by reclampChildren's recursive cascade below, once a
-// middle ancestor's own box changes.
-function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
-  const parentIndex = components[index]?.parent_component_index;
-  if (parentIndex === undefined) return null;
-  return nodeBox(parentIndex);
-}
-
-// Re-clamps every currently-placed direct child of `parentIndex` against
-// the parent's current box, then recurses into each clamped child so
-// grandchildren (and deeper) are re-clamped against their own
-// just-updated parent in turn — cascading containment through the whole
-// ancestor chain, not just one level. Called after a parent is dragged or
-// resized so its descendants' constraint regions follow it live, and
-// after checking a new component (in case it's a parent of already-placed
-// children). Naturally bounded by what's actually on-screen, since a
-// component that isn't currently placed has no box to clamp or recurse
-// into.
-function reclampChildren(parentIndex: number) {
-  const parentBox = nodeBox(parentIndex);
-  if (!parentBox) return;
-  components.forEach((component, childIndex) => {
-    if (component.parent_component_index !== parentIndex) return;
-    const box = nodeBox(childIndex);
-    if (!box) return; // not currently placed on canvas
-    const clamped = clampWithin(
-      box,
-      parentBox,
-      CHILD_CONTAINMENT_MARGIN,
-      CHILD_CONTAINMENT_TOP_MARGIN,
-    );
-    setNodeBox(childIndex, clamped);
-    reclampChildren(childIndex);
-  });
-}
-
-// Currently selected nodes, tracked by stable qualified component key rather
-// than the compiled model's arena index. Arena indices are rebuilt on every
-// compile and may change even when the logical model is unchanged.
-const selectedKeys = new SvelteSet<string>();
-let selected = $derived.by(() => {
-  const indices = new SvelteSet<number>();
-  for (const key of selectedKeys) {
-    const index = keyToIndex.get(key);
-    if (index !== undefined) indices.add(index);
+  // Called by every user-diagram mutation path so the load race guard works.
+  function noteDiagramEdited(): void {
+    diagramEditStamp += 1;
   }
-  return indices;
-});
 
-function selectOnly(index: number) {
-  selectedKeys.clear();
-  selectedAnnotations.clear();
-  selectedKeys.add(getComponentKey(index));
-}
-
-function clearSelection() {
-  selectedKeys.clear();
-  selectedAnnotations.clear();
-}
-
-function selectAnnotation(index: number) {
-  selectedAnnotations.clear();
-  selectedKeys.clear();
-  selectedAnnotations.add(index);
-}
-
-// Adds a note. `pos` is the world-coordinate anchor of its text (the mouse
-// paths pass the click/right-click point); without one it spawns under the
-// pointer, or on the viewport center when the pointer is off-canvas.
-function addAnnotationHandler(pos?: { x: number; y: number }): void {
-  recordUndoPoint();
-  noteDiagramEdited();
-  const at = pos ?? spawnAnchor();
-  const idx = annotations.length;
-  annotations.push({ text: "New note", x: at.x, y: at.y });
-  selectAnnotation(idx);
-  // The inspector mounts on selection; focus its text editor next tick so
-  // typing flows straight in, like the old pop-up editor's autofocus.
-  void tick().then(() => annotationInspector?.focusText());
-}
-
-function deleteSelectedAnnotations(): void {
-  if (selectedAnnotations.size === 0) return;
-  recordUndoPoint();
-  removeSelectedAnnotations();
-}
-
-// The deletion itself, without the undo point — so deleteSelection() can
-// remove a note and a node together as a single undo point.
-function removeSelectedAnnotations(): void {
-  if (selectedAnnotations.size === 0) return;
-  noteDiagramEdited();
-  const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
-  for (const idx of toDelete) annotations.splice(idx, 1);
-  selectedAnnotations.clear();
-}
-
-// Delete/Backspace on the canvas: removes whatever is selected, whatever
-// kinds it holds. A note and a component can be selected together
-// (shift-click), and both removals are layout-only changes on the same
-// history stack — so they go as one undo point. A connection is only ever
-// selected on its own, and keeps its own path.
-function deleteSelection(): void {
-  const deletingNotes = selectedAnnotations.size > 0;
-  const deletingNode = selectedKey !== null;
-  if (!deletingNotes && !deletingNode) {
-    if (selectedConnection !== null) {
-      void handleDeleteSelectedConnection(true).catch(reportDiagramError);
-    }
-    return;
-  }
-  recordUndoPoint();
-  if (deletingNotes) removeSelectedAnnotations();
-  if (deletingNode) removeSelectedComponent();
-}
-
-// Apply a normalized scale from the annotation inspector: mutate only —
-// the undo point is recorded once per typing session (first value-changing
-// keystroke arms it, like the text editor), and persistence rides the
-// snapshot effect (blur stamps the edit).
-function handleAnnotationScaleChange(scale: number): void {
-  if (selectedAnnotationIndex === null) return;
-  const idx = selectedAnnotationIndex;
-  const current = annotations[idx];
-  if (!current || (current.scale ?? 1) === scale) return;
-  annotations[idx] = { ...current, scale };
-}
-
-function deselect(index: number) {
-  selectedKeys.delete(getComponentKey(index));
-}
-
-function select(index: number) {
-  // Extends the selection with a node (shift-click): the note selection is
-  // kept, so a component and a note can be selected together and the canvas
-  // operations that act on "the selection" — the arrow-key nudge, a drag,
-  // Delete — cover both kinds.
-  selectedKeys.add(getComponentKey(index));
-}
-
-// Snapshot of the diagram's persisted content — the unit of undo/redo
-// history. Deliberately excludes `selected` (transient UI state, not
-// diagram content, and not guaranteed to still make sense after
-// restoring an older/newer snapshot) and view/grid/snap preferences.
-// Annotations are persisted view content (views/*.hcl), so they ride
-// the same snapshot — otherwise add/delete/edit/drag/resize of a note
-// can never be undone.
-type DiagramSnapshot = {
-  checked: Record<string, StoredBox>;
-  savedLayout: Record<string, StoredBox>;
-  connections: Record<string, StoredConnection>;
-  annotations: Annotation[];
-};
-
-// How many undo steps (and, independently, redo steps) are kept.
-const UNDO_HISTORY_LIMIT = 100;
-const diagramHistory = createHistoryStack<DiagramSnapshot>();
-
-// Unified model+layout history. Each entry covers one `applyModelMutation`
-// HCL write *and* its canvas placement, so Ctrl+Z undoes both. Layout-only
-// gestures (drag/resize) stay on `diagramHistory` — the migration source.
-// Both stacks share one monotonic sequence so interleaved undo (drag after
-// create) reverts in true last-first order instead of preferring one stack.
-// There is no second TypeScript model on this path; all model writes go through
-// `applyModelMutation` inside the transaction.
-const unifiedHistory = new TransactionManager(UNDO_HISTORY_LIMIT);
-let historySeq = 0;
-const diagramUndoSeqs: number[] = [];
-const diagramRedoSeqs: number[] = [];
-const unifiedUndoSeqs: number[] = [];
-const unifiedRedoSeqs: number[] = [];
-
-function top(values: number[]): number | undefined {
-  return values[values.length - 1];
-}
-
-function snapshotDiagram(): DiagramSnapshot {
-  return {
-    checked: { ...checked },
-    savedLayout: { ...savedLayout },
-    connections: { ...savedConnections },
-    annotations: annotations.map((ann) => ({ ...ann })),
-  };
-}
-
-function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
-  presentMode = "nodes";
-  checked = { ...snapshot.checked };
-  savedLayout = { ...snapshot.savedLayout };
-  savedConnections = { ...(snapshot.connections || {}) };
-  annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
-  clearSelection();
-  selectedConnection = null;
-}
-
-// Records the diagram's current state as an undo point, right *before* a
-// discrete edit is about to change it — a drag/resize gesture starting, a
-// component being checked/unchecked, a text-alignment change, or an
-// auto-layout run. Must be called once per *gesture*, not once per
-// underlying setNodeBox() write: a whole drag, from mousedown to mouseup,
-// is one undo step, not one per mousemove event (see call sites).
-function recordUndoPoint() {
-  pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
-  diagramUndoSeqs.push(++historySeq);
-  while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-    diagramUndoSeqs.shift();
-  }
-  diagramRedoSeqs.length = 0;
-}
-
-async function undoUnifiedEntry(): Promise<boolean> {
-  if (!unifiedHistory.canUndo) return false;
-  if (await unifiedHistory.undo()) {
-    const seq = unifiedUndoSeqs.pop();
-    if (seq !== undefined) {
-      unifiedRedoSeqs.push(seq);
-      while (unifiedRedoSeqs.length > UNDO_HISTORY_LIMIT) {
-        unifiedRedoSeqs.shift();
-      }
-    }
-    await projectModel.reload();
-    presentMode = "nodes";
-    flashActivity("Undo");
-    return true;
-  }
-  unifiedUndoSeqs.pop();
-  return false;
-}
-
-function undoDiagramEntry(): boolean {
-  const previous = undoHistory(
-    diagramHistory,
-    snapshotDiagram(),
-    UNDO_HISTORY_LIMIT,
+  // Every layout write persists the whole VFS blob, so a drag (one write per
+  // tick) used to be one full-blob transfer per frame — visible as a burst of
+  // `vfs.size` samples in Sentry. Trailing debounce instead, and only for this
+  // high-frequency source: the discrete transactions elsewhere
+  // (runModelLayoutTransaction/applyModelMutation — create/rename/delete/
+  // reparent) are undoable steps and stay immediate.
+  //
+  // The `fs` handle, the path, the detached snapshot and the system name are
+  // captured per call, so the write that finally lands carries the newest
+  // layout and targets the view that was open when the burst started.
+  const LAYOUT_WRITE_DEBOUNCE_MS = 500;
+  const scheduleLayoutWrite = createDebounced(
+    (
+      file: ProjectFs,
+      path: string,
+      layout: DiagramLayout,
+      systemName: string,
+    ) => {
+      void writeDiagramLayoutFile(file, path, layout, systemName);
+    },
+    LAYOUT_WRITE_DEBOUNCE_MS,
   );
-  if (previous) {
-    applyDiagramSnapshot(previous);
-    const seq = diagramUndoSeqs.pop();
-    if (seq !== undefined) {
-      diagramRedoSeqs.push(seq);
-      while (diagramRedoSeqs.length > UNDO_HISTORY_LIMIT) {
-        diagramRedoSeqs.shift();
-      }
-    }
-    flashActivity("Undo");
-    return true;
-  }
-  diagramUndoSeqs.pop();
-  return false;
-}
 
-async function redoUnifiedEntry(): Promise<boolean> {
-  if (!unifiedHistory.canRedo) return false;
-  if (await unifiedHistory.redo()) {
-    const seq = unifiedRedoSeqs.pop();
-    if (seq !== undefined) {
-      unifiedUndoSeqs.push(seq);
+  // Leaving the page is the other way a pending write could be lost, and the
+  // last chance to flush it: the debounce timer is not tied to the component's
+  // lifetime.
+  onDestroy(() => scheduleLayoutWrite.flush());
+
+  // …and a full document unload (a reload, a closed tab) never runs that
+  // teardown at all — the timer dies with the document, taking the tail of the
+  // last drag with it. `pagehide` is the one hook that fires on the way out of
+  // *any* navigation, including reloads, and the write it starts resolves
+  // within the microtask drain that follows the handler, before the new document
+  // reads the store.
+  function flushLayoutWrite(): void {
+    scheduleLayoutWrite.flush();
+  }
+
+  // Set by the load effect when its cut-to-fit had to wait for the model (see
+  // there), consumed by the effect right after it.
+  let cutToFitArmed = false;
+
+  $effect(() => {
+    const path = fullDiagramPath;
+    if (path === loadedDiagramPath) return;
+    // Leaving a view must not swallow the tail of the one being left: its
+    // pending write lands here, before the load below replaces the canvas state
+    // and before any write for the newly selected view is scheduled. (Flushing
+    // later — after the switch — would write the old view's layout over the new
+    // one, or resurrect a view that is about to be renamed/deleted.)
+    scheduleLayoutWrite.flush();
+    loadedDiagramPath = path;
+    diagramLayoutLoaded = false;
+    loadStartStamp = diagramEditStamp;
+
+    if (path === null) {
+      checked = {};
+      savedLayout = {};
+      savedConnections = {};
+      annotations = [];
+      carriedMeta = {};
+      selectedSystem = "";
+      return;
+    }
+
+    void readDiagramLayoutFile(fs, path).then((layout) => {
+      // A stale load (e.g. rapid switching between diagrams) could resolve
+      // after a newer one already changed the selection — guard against
+      // overwriting the newer selection's state with the older one.
+      if (loadedDiagramPath !== path) return;
+      // If the user edited the diagram while this read was in flight, don't
+      // clobber their changes with the (possibly empty) file contents — but
+      // still mark the diagram as loaded so the save effect is armed and can
+      // persist the user's edits.
+      const editedDuringLoad = diagramEditStamp !== loadStartStamp;
+      const mode = seenDiagram ? "view" : "cut";
+      seenDiagram = true;
+      if (!editedDuringLoad) {
+        presentMode = mode;
+        checked = layout.checked;
+        // `DiagramLayout` no longer persists the editor's remembered layout;
+        // seed the page-local memory from the placed nodes.
+        savedLayout = { ...layout.checked };
+        savedConnections = layout.connections ?? {};
+        annotations = layout.annotations ?? [];
+        carriedMeta = {
+          fullName: layout.fullName,
+          tags: layout.tags,
+          filter: layout.filter,
+        };
+        selectedSystem = layout.system ?? "";
+      }
+      diagramLayoutLoaded = true;
+      // First open cuts to a fit. Later switches let the transition glide
+      // the camera from wherever the user left it.
+      if (mode !== "cut") return;
+      // …unless there is nothing to fit *yet*. The layout file and the compiled
+      // model are two independent async reads, and the layout usually wins by a
+      // few hundred microseconds: the model's key→component map is what makes a
+      // placed node measurable, so a cut taken that early would fit nothing and
+      // silently leave the canvas at 1:1. Arm the cut instead and let the effect
+      // below perform it as soon as the nodes are there — a few hundred
+      // microseconds later, long before any user interaction. A view that really
+      // is empty carries no keys, so it never arms and later placements can't
+      // make the camera jump.
+      if (Object.keys(checked).length > 0 && renderOrder.length === 0) {
+        cutToFitArmed = true;
+      } else {
+        zoomToFill();
+      }
+    });
+  });
+
+  // Performs the cut the load effect had to arm — see the comment there.
+  $effect(() => {
+    const placed = renderOrder;
+    if (!cutToFitArmed || placed.length === 0) return;
+    cutToFitArmed = false;
+    zoomToFill();
+  });
+
+  $effect(() => {
+    // $state.snapshot() deeply reads (and detaches from reactivity) every
+    // property of `checked`/`savedLayout` synchronously, right here in the
+    // effect body — which is what makes later in-place mutations like
+    // `checked[key] = {...}` cause this effect to re-run at all.
+    // The write is async *and* debounced, so if it (or JSON.stringify) were
+    // the thing reading those properties, that read would happen after an
+    // `await` and a timer, i.e. outside the synchronous window Svelte uses to
+    // record an effect's dependencies — leaving this effect subscribed only to
+    // `checked`/`savedLayout`'s own top-level references, never to writes
+    // into them.
+    const snapshot: DiagramLayout = {
+      system: effectiveSystem,
+      checked: $state.snapshot(checked),
+      connections: $state.snapshot(savedConnections),
+      annotations: $state.snapshot(annotations),
+      // Carried, not owned: read back from the file this view was loaded from.
+      fullName: carriedMeta.fullName,
+      tags: carriedMeta.tags,
+      filter: carriedMeta.filter,
+    };
+    // Subscribe to the effective system so legacy migration ("" -> first
+    // system) persists even before any canvas edit touches checked/etc.
+    void effectiveSystem;
+    const file = fs;
+    const path = fullDiagramPath;
+    // `loadedDiagramPath` is compared, not depended on: it is the plain
+    // (non-reactive) marker the load effect above sets synchronously, so this
+    // guard holds regardless of which of the two effects runs first within a
+    // flush — a view whose layout is still loading never receives the previous
+    // view's layout as a write.
+    if (!diagramLayoutLoaded || path === null || loadedDiagramPath !== path) {
+      return;
+    }
+    scheduleLayoutWrite(file, path, snapshot, effectiveSystem || "main");
+  });
+
+  function reportDiagramError(error: unknown): void {
+    alert(error instanceof Error ? error.message : String(error));
+  }
+
+  // Strips leading/trailing slashes and rejects anything containing "/" or
+  // only whitespace — prompt() collects a bare name (a new path segment),
+  // never a nested path, matching the editor's own FileTree wiring.
+  function sanitizeDiagramSegmentName(name: string): string | null {
+    const trimmed = name.trim();
+    if (trimmed === "" || trimmed.includes("/")) return null;
+    return trimmed;
+  }
+
+  function joinViewPath(parentPath: string, name: string): string {
+    return parentPath ? `${parentPath}/${name}` : name;
+  }
+
+  // New-view modal state. FileTree's "+ File" only supplies the parent folder;
+  // the name + immutable system binding are collected in NewViewModal.
+  let isNewViewModalOpen = $state(false);
+  let newViewParentPath = $state("");
+
+  function handleCreateDiagram(parentPath: string): void {
+    newViewParentPath = parentPath;
+    isNewViewModalOpen = true;
+  }
+
+  async function handleNewViewCreate(data: {
+    name: string;
+    system: string;
+  }): Promise<void> {
+    isNewViewModalOpen = false;
+    const name = sanitizeDiagramSegmentName(data.name);
+    if (name === null) return;
+    // Immutable view binding: chosen once here, never edited via UI afterwards
+    // (delete + recreate, or hand-edit in Code, to re-bind).
+    const systemChoice = data.system.trim() || systems[0]?.label || "main";
+    if (systems.length > 0 && !systems.some((s) => s.label === systemChoice)) {
+      reportDiagramError(
+        new Error(
+          `Unknown system "${systemChoice}". Available: ${systems
+            .map((s) => s.label)
+            .join(", ")}`,
+        ),
+      );
+      return;
+    }
+    const path = joinViewPath(newViewParentPath, name);
+    try {
+      await writeDiagramLayoutFile(
+        fs,
+        `${VIEW_LAYOUT_DIR}/${path}`,
+        emptyDiagramLayout(systemChoice),
+        systemChoice,
+      );
+      await refreshDiagramEntries();
+      // A new view is a place the user moved to, so it pushes a history entry
+      // (back returns to the view they came from).
+      selectView(path);
+    } catch (error) {
+      reportDiagramError(error);
+    }
+  }
+
+  async function handleCreateDiagramFolder(parentPath: string): Promise<void> {
+    const name = sanitizeDiagramSegmentName(
+      prompt("New folder name?", "untitled") ?? "",
+    );
+    if (name === null) return;
+    try {
+      await fs.mkdir(`${VIEW_LAYOUT_DIR}/${joinViewPath(parentPath, name)}`, {
+        recursive: true,
+      });
+      await refreshDiagramEntries();
+    } catch (error) {
+      reportDiagramError(error);
+    }
+  }
+
+  async function handleRenameDiagram(path: string): Promise<void> {
+    const segments = path.split("/");
+    const oldName = segments[segments.length - 1];
+    const parentPath = segments.slice(0, -1).join("/");
+    const name = sanitizeDiagramSegmentName(
+      prompt("Rename to?", oldName) ?? "",
+    );
+    if (name === null || name === oldName) return;
+    const newPath = joinViewPath(parentPath, name);
+    // Land a pending layout write for this view *before* the rename: a write
+    // still queued when the rename lands would recreate the old path (writes
+    // create files that don't exist), leaving a stray duplicate view behind.
+    scheduleLayoutWrite.flush();
+    try {
+      await fs.rename(
+        `${VIEW_LAYOUT_DIR}/${path}`,
+        `${VIEW_LAYOUT_DIR}/${newPath}`,
+      );
+      // Renaming the open view rewrites its URL in place rather than pushing:
+      // the old path names nothing now, so leaving it in the history would only
+      // hand the user a dead link on back.
+      if (selectedDiagramPath === path) selectView(newPath, true);
+      await refreshDiagramEntries();
+    } catch (error) {
+      reportDiagramError(error);
+    }
+  }
+
+  async function handleDeleteDiagram(path: string): Promise<void> {
+    if (!confirm(`Delete "${path}"? This can't be undone.`)) return;
+    // Same reasoning as the rename: a write queued behind the delete would
+    // resurrect the view the user just threw away.
+    scheduleLayoutWrite.flush();
+    try {
+      await fs.rm(`${VIEW_LAYOUT_DIR}/${path}`, { recursive: true });
+      const wasOpen =
+        selectedDiagramPath === path ||
+        selectedDiagramPath?.startsWith(`${path}/`);
+      if (!wasOpen) {
+        await refreshDiagramEntries();
+        return;
+      }
+      selectedDiagramPath = null;
+      await refreshDiagramEntries();
+      // Same reasoning as the rename: the open view is gone, so the URL is
+      // rewritten to the fallback rather than pushed as a dead entry.
+      selectView(firstDiagramPath(), true);
+    } catch (error) {
+      reportDiagramError(error);
+    }
+  }
+
+  // Writes `box` to both `checked` (the current on-canvas state) and
+  // savedLayout (the remembered layout), merging over any existing fields.
+  // Centralizing this in one place means every write site automatically
+  // keeps the remembered layout up to date, instead of relying on each call
+  // site to remember to mirror the write itself.
+  function setNodeBox(index: number, box: Partial<StoredBox>) {
+    noteDiagramEdited();
+    const key = getComponentKey(index);
+    const checkedPrev = checked[key];
+    const savedPrev = savedLayout[key];
+    checked[key] = {
+      x: box.x ?? checkedPrev?.x ?? 0,
+      y: box.y ?? checkedPrev?.y ?? 0,
+      width: box.width ?? checkedPrev?.width,
+      height: box.height ?? checkedPrev?.height,
+      textAlign: box.textAlign ?? checkedPrev?.textAlign,
+    };
+    savedLayout[key] = {
+      x: box.x ?? savedPrev?.x ?? 0,
+      y: box.y ?? savedPrev?.y ?? 0,
+      width: box.width ?? savedPrev?.width,
+      height: box.height ?? savedPrev?.height,
+      textAlign: box.textAlign ?? savedPrev?.textAlign,
+    };
+  }
+
+  // Returns the placed node's box (position + size + text alignment), or null
+  // if the component isn't currently checked. Backfills width/height/
+  // textAlign with defaults for entries persisted before those features were
+  // introduced.
+  function nodeBox(index: number): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    textAlign: TextAlign;
+  } | null {
+    const pos = checked[getComponentKey(index)];
+    if (!pos) return null;
+    return {
+      x: pos.x,
+      y: pos.y,
+      width: pos.width ?? DEFAULT_NODE_WIDTH,
+      height: pos.height ?? DEFAULT_NODE_HEIGHT,
+      textAlign: pos.textAlign ?? DEFAULT_TEXT_ALIGN,
+    };
+  }
+
+  // Sets the text alignment of the currently selected node. Only meaningful
+  // (and only exposed in the UI) when exactly one node is selected.
+  function setSelectedTextAlign(align: TextAlign) {
+    if (primarySelected === null || primarySelected === undefined) return;
+    const box = checked[getComponentKey(primarySelected)];
+    if (!box) return;
+    if (box.textAlign === align) return; // no-op: skip a redundant undo point
+    recordUndoPoint();
+    setNodeBox(primarySelected, { textAlign: align });
+  }
+
+  // Places (checks) or unplaces (unchecks) a component on the canvas. This is
+  // the single source of truth for the sidebar's checkbox — both the old flat
+  // list and the new ComponentHierarchyTree route through it.
+  function toggleComponentChecked(index: number) {
+    recordUndoPoint();
+    if (checked[getComponentKey(index)]) {
+      // Unplace.
+      delete checked[getComponentKey(index)];
+      // savedLayout[getComponentKey(index)] is intentionally left alone, so
+      // re-checking this component later restores it where it was.
+      deselect(index);
+      return;
+    }
+
+    // Restore the remembered layout if this component has been placed before
+    // (even if it was later unchecked); otherwise land it at the viewport
+    // center so it appears where the user is looking.
+    const remembered = savedLayout[getComponentKey(index)];
+    const fallback = viewportCenterBox();
+    let box: Box = {
+      x: remembered?.x ?? fallback.x,
+      y: remembered?.y ?? fallback.y,
+      width: remembered?.width ?? DEFAULT_NODE_WIDTH,
+      height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
+    };
+    const parentBox = activeParentBox(index);
+    if (parentBox) {
+      box = clampWithin(
+        box,
+        parentBox,
+        CHILD_CONTAINMENT_MARGIN,
+        CHILD_CONTAINMENT_TOP_MARGIN,
+      );
+    }
+    setNodeBox(index, {
+      ...box,
+      textAlign: remembered?.textAlign ?? DEFAULT_TEXT_ALIGN,
+    });
+    // In case this component is itself the parent of children that were
+    // already placed on canvas before it was.
+    reclampChildren(index);
+  }
+
+  // Padding kept between a child node's edges and its active parent's edges,
+  // in world units.
+  const CHILD_CONTAINMENT_MARGIN = 10;
+
+  // Extra padding reserved at a parent's *top* edge specifically, on top of
+  // CHILD_CONTAINMENT_MARGIN, so a child can never be dragged/laid out over
+  // the area where the parent's own title text is rendered (see
+  // textPosition() in geometry.ts — the label sits near the top of the box
+  // for the "top-center"/"top-left" alignments, and even for "center" a
+  // child overlapping the exact middle would still obscure it). Sized to
+  // comfortably clear a label line plus its own padding.
+  const CHILD_CONTAINMENT_TOP_MARGIN = 28;
+
+  // Returns the box of `index`'s parent component, but only if that parent is
+  // itself currently placed on the canvas ("active") — a node with a parent
+  // that isn't on canvas has nothing to be constrained by. Only considers the
+  // direct parent — a node only ever needs to stay within its own immediate
+  // parent's box; staying within *its* parent's ancestors transitively is
+  // handled separately by reclampChildren's recursive cascade below, once a
+  // middle ancestor's own box changes.
+  function activeParentBox(index: number): ReturnType<typeof nodeBox> | null {
+    const parentIndex = components[index]?.parent_component_index;
+    if (parentIndex === undefined) return null;
+    return nodeBox(parentIndex);
+  }
+
+  // Re-clamps every currently-placed direct child of `parentIndex` against
+  // the parent's current box, then recurses into each clamped child so
+  // grandchildren (and deeper) are re-clamped against their own
+  // just-updated parent in turn — cascading containment through the whole
+  // ancestor chain, not just one level. Called after a parent is dragged or
+  // resized so its descendants' constraint regions follow it live, and
+  // after checking a new component (in case it's a parent of already-placed
+  // children). Naturally bounded by what's actually on-screen, since a
+  // component that isn't currently placed has no box to clamp or recurse
+  // into.
+  function reclampChildren(parentIndex: number) {
+    const parentBox = nodeBox(parentIndex);
+    if (!parentBox) return;
+    components.forEach((component, childIndex) => {
+      if (component.parent_component_index !== parentIndex) return;
+      const box = nodeBox(childIndex);
+      if (!box) return; // not currently placed on canvas
+      const clamped = clampWithin(
+        box,
+        parentBox,
+        CHILD_CONTAINMENT_MARGIN,
+        CHILD_CONTAINMENT_TOP_MARGIN,
+      );
+      setNodeBox(childIndex, clamped);
+      reclampChildren(childIndex);
+    });
+  }
+
+  // Currently selected nodes, tracked by stable qualified component key rather
+  // than the compiled model's arena index. Arena indices are rebuilt on every
+  // compile and may change even when the logical model is unchanged.
+  const selectedKeys = new SvelteSet<string>();
+  let selected = $derived.by(() => {
+    const indices = new SvelteSet<number>();
+    for (const key of selectedKeys) {
+      const index = keyToIndex.get(key);
+      if (index !== undefined) indices.add(index);
+    }
+    return indices;
+  });
+
+  function selectOnly(index: number) {
+    selectedKeys.clear();
+    selectedAnnotations.clear();
+    selectedKeys.add(getComponentKey(index));
+  }
+
+  function clearSelection() {
+    selectedKeys.clear();
+    selectedAnnotations.clear();
+  }
+
+  function selectAnnotation(index: number) {
+    selectedAnnotations.clear();
+    selectedKeys.clear();
+    selectedAnnotations.add(index);
+  }
+
+  // Adds a note. `pos` is the world-coordinate anchor of its text (the mouse
+  // paths pass the click/right-click point); without one it spawns under the
+  // pointer, or on the viewport center when the pointer is off-canvas.
+  function addAnnotationHandler(pos?: { x: number; y: number }): void {
+    recordUndoPoint();
+    noteDiagramEdited();
+    const at = pos ?? spawnAnchor();
+    const idx = annotations.length;
+    annotations.push({ text: "New note", x: at.x, y: at.y });
+    selectAnnotation(idx);
+    // The inspector mounts on selection; focus its text editor next tick so
+    // typing flows straight in, like the old pop-up editor's autofocus.
+    void tick().then(() => annotationInspector?.focusText());
+  }
+
+  function deleteSelectedAnnotations(): void {
+    if (selectedAnnotations.size === 0) return;
+    recordUndoPoint();
+    removeSelectedAnnotations();
+  }
+
+  // The deletion itself, without the undo point — so deleteSelection() can
+  // remove a note and a node together as a single undo point.
+  function removeSelectedAnnotations(): void {
+    if (selectedAnnotations.size === 0) return;
+    noteDiagramEdited();
+    const toDelete = [...selectedAnnotations].sort((a, b) => b - a);
+    for (const idx of toDelete) annotations.splice(idx, 1);
+    selectedAnnotations.clear();
+  }
+
+  // Delete/Backspace on the canvas: removes whatever is selected, whatever
+  // kinds it holds. A note and a component can be selected together
+  // (shift-click), and both removals are layout-only changes on the same
+  // history stack — so they go as one undo point. A connection is only ever
+  // selected on its own, and keeps its own path.
+  function deleteSelection(): void {
+    const deletingNotes = selectedAnnotations.size > 0;
+    const deletingNode = selectedKey !== null;
+    if (!deletingNotes && !deletingNode) {
+      if (selectedConnection !== null) {
+        void handleDeleteSelectedConnection(true).catch(reportDiagramError);
+      }
+      return;
+    }
+    recordUndoPoint();
+    if (deletingNotes) removeSelectedAnnotations();
+    if (deletingNode) removeSelectedComponent();
+  }
+
+  // Apply a normalized scale from the annotation inspector: mutate only —
+  // the undo point is recorded once per typing session (first value-changing
+  // keystroke arms it, like the text editor), and persistence rides the
+  // snapshot effect (blur stamps the edit).
+  function handleAnnotationScaleChange(scale: number): void {
+    if (selectedAnnotationIndex === null) return;
+    const idx = selectedAnnotationIndex;
+    const current = annotations[idx];
+    if (!current || (current.scale ?? 1) === scale) return;
+    annotations[idx] = { ...current, scale };
+  }
+
+  function deselect(index: number) {
+    selectedKeys.delete(getComponentKey(index));
+  }
+
+  function select(index: number) {
+    // Extends the selection with a node (shift-click): the note selection is
+    // kept, so a component and a note can be selected together and the canvas
+    // operations that act on "the selection" — the arrow-key nudge, a drag,
+    // Delete — cover both kinds.
+    selectedKeys.add(getComponentKey(index));
+  }
+
+  // Snapshot of the diagram's persisted content — the unit of undo/redo
+  // history. Deliberately excludes `selected` (transient UI state, not
+  // diagram content, and not guaranteed to still make sense after
+  // restoring an older/newer snapshot) and view/grid/snap preferences.
+  // Annotations are persisted view content (views/*.hcl), so they ride
+  // the same snapshot — otherwise add/delete/edit/drag/resize of a note
+  // can never be undone.
+  type DiagramSnapshot = {
+    checked: Record<string, StoredBox>;
+    savedLayout: Record<string, StoredBox>;
+    connections: Record<string, StoredConnection>;
+    annotations: Annotation[];
+  };
+
+  // How many undo steps (and, independently, redo steps) are kept.
+  const UNDO_HISTORY_LIMIT = 100;
+  const diagramHistory = createHistoryStack<DiagramSnapshot>();
+
+  // Unified model+layout history. Each entry covers one `applyModelMutation`
+  // HCL write *and* its canvas placement, so Ctrl+Z undoes both. Layout-only
+  // gestures (drag/resize) stay on `diagramHistory` — the migration source.
+  // Both stacks share one monotonic sequence so interleaved undo (drag after
+  // create) reverts in true last-first order instead of preferring one stack.
+  // There is no second TypeScript model on this path; all model writes go through
+  // `applyModelMutation` inside the transaction.
+  const unifiedHistory = new TransactionManager(UNDO_HISTORY_LIMIT);
+  let historySeq = 0;
+  const diagramUndoSeqs: number[] = [];
+  const diagramRedoSeqs: number[] = [];
+  const unifiedUndoSeqs: number[] = [];
+  const unifiedRedoSeqs: number[] = [];
+
+  function top(values: number[]): number | undefined {
+    return values[values.length - 1];
+  }
+
+  function snapshotDiagram(): DiagramSnapshot {
+    return {
+      checked: { ...checked },
+      savedLayout: { ...savedLayout },
+      connections: { ...savedConnections },
+      annotations: annotations.map((ann) => ({ ...ann })),
+    };
+  }
+
+  function applyDiagramSnapshot(snapshot: DiagramSnapshot) {
+    presentMode = "nodes";
+    checked = { ...snapshot.checked };
+    savedLayout = { ...snapshot.savedLayout };
+    savedConnections = { ...(snapshot.connections || {}) };
+    annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
+    clearSelection();
+    selectedConnection = null;
+  }
+
+  // Records the diagram's current state as an undo point, right *before* a
+  // discrete edit is about to change it — a drag/resize gesture starting, a
+  // component being checked/unchecked, a text-alignment change, or an
+  // auto-layout run. Must be called once per *gesture*, not once per
+  // underlying setNodeBox() write: a whole drag, from mousedown to mouseup,
+  // is one undo step, not one per mousemove event (see call sites).
+  function recordUndoPoint() {
+    pushHistory(diagramHistory, snapshotDiagram(), UNDO_HISTORY_LIMIT);
+    diagramUndoSeqs.push(++historySeq);
+    while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+      diagramUndoSeqs.shift();
+    }
+    diagramRedoSeqs.length = 0;
+  }
+
+  async function undoUnifiedEntry(): Promise<boolean> {
+    if (!unifiedHistory.canUndo) return false;
+    if (await unifiedHistory.undo()) {
+      const seq = unifiedUndoSeqs.pop();
+      if (seq !== undefined) {
+        unifiedRedoSeqs.push(seq);
+        while (unifiedRedoSeqs.length > UNDO_HISTORY_LIMIT) {
+          unifiedRedoSeqs.shift();
+        }
+      }
+      await projectModel.reload();
+      presentMode = "nodes";
+      flashActivity("Undo");
+      return true;
+    }
+    unifiedUndoSeqs.pop();
+    return false;
+  }
+
+  function undoDiagramEntry(): boolean {
+    const previous = undoHistory(
+      diagramHistory,
+      snapshotDiagram(),
+      UNDO_HISTORY_LIMIT,
+    );
+    if (previous) {
+      applyDiagramSnapshot(previous);
+      const seq = diagramUndoSeqs.pop();
+      if (seq !== undefined) {
+        diagramRedoSeqs.push(seq);
+        while (diagramRedoSeqs.length > UNDO_HISTORY_LIMIT) {
+          diagramRedoSeqs.shift();
+        }
+      }
+      flashActivity("Undo");
+      return true;
+    }
+    diagramUndoSeqs.pop();
+    return false;
+  }
+
+  async function redoUnifiedEntry(): Promise<boolean> {
+    if (!unifiedHistory.canRedo) return false;
+    if (await unifiedHistory.redo()) {
+      const seq = unifiedRedoSeqs.pop();
+      if (seq !== undefined) {
+        unifiedUndoSeqs.push(seq);
+        while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+          unifiedUndoSeqs.shift();
+        }
+      }
+      await projectModel.reload();
+      presentMode = "nodes";
+      flashActivity("Redo");
+      return true;
+    }
+    return false;
+  }
+
+  function redoDiagramEntry(): boolean {
+    const next = redoHistory(
+      diagramHistory,
+      snapshotDiagram(),
+      UNDO_HISTORY_LIMIT,
+    );
+    if (next) {
+      applyDiagramSnapshot(next);
+      const seq = diagramRedoSeqs.pop();
+      if (seq !== undefined) {
+        diagramUndoSeqs.push(seq);
+        while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
+          diagramUndoSeqs.shift();
+        }
+      }
+      flashActivity("Redo");
+      return true;
+    }
+    return false;
+  }
+
+  // Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
+  // diagram-mutating interactions — restoring a snapshot while the
+  // animation loop is still writing every frame would just get immediately
+  // overwritten. Picks the most recent entry across both stacks by sequence,
+  // so a drag after a create reverts the drag first.
+  async function undoDiagramEdit() {
+    if (autoLayoutRunning) return;
+    const unifiedTop = top(unifiedUndoSeqs);
+    const diagramTop = top(diagramUndoSeqs);
+    if (
+      unifiedTop !== undefined &&
+      (diagramTop === undefined || unifiedTop > diagramTop)
+    ) {
+      if (await undoUnifiedEntry()) return;
+      undoDiagramEntry();
+      return;
+    }
+    if (diagramTop !== undefined) {
+      if (undoDiagramEntry()) return;
+    }
+    await undoUnifiedEntry();
+  }
+
+  // Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
+  async function redoDiagramEdit() {
+    if (autoLayoutRunning) return;
+    const unifiedTop = top(unifiedRedoSeqs);
+    const diagramTop = top(diagramRedoSeqs);
+    if (
+      unifiedTop !== undefined &&
+      (diagramTop === undefined || unifiedTop > diagramTop)
+    ) {
+      if (await redoUnifiedEntry()) return;
+      redoDiagramEntry();
+      return;
+    }
+    if (diagramTop !== undefined) {
+      if (redoDiagramEntry()) return;
+    }
+    await redoUnifiedEntry();
+  }
+
+  // Runs one model mutation plus its canvas placement as a single undoable
+  // transaction. Inverse ops invert the Rust dispatcher's higher-level ops
+  // via snapshots — undoing a create removes exactly what was created
+  // (container fallback, auto-created definition, redirection), undoing a
+  // delete restores scope/label — without hand-written inverses.
+  async function runModelLayoutTransaction(
+    label: string,
+    op: ModelMutationOp,
+    layoutApply?: (createdPath?: string) => void,
+  ): Promise<boolean> {
+    const diagramBefore = snapshotDiagram();
+    const { path: targetPath, content: systemBefore } = await readMainContent();
+    const tx = {
+      label,
+      do: async (): Promise<boolean> => {
+        const cur = await readMainContent();
+        const result = await applyModelMutation(fs, cur.path, cur.content, op);
+        if (!result.applied) return false;
+        await projectModel.reload();
+        layoutApply?.(result.path);
+        noteDiagramEdited();
+        return true;
+      },
+      undo: async (): Promise<void> => {
+        await fs.writeFile(targetPath, systemBefore);
+        await projectModel.reload();
+        applyDiagramSnapshot(diagramBefore);
+        noteDiagramEdited();
+      },
+    };
+    const applied = await unifiedHistory.execute(tx);
+    if (applied) {
+      unifiedUndoSeqs.push(++historySeq);
       while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
         unifiedUndoSeqs.shift();
       }
+      unifiedRedoSeqs.length = 0;
     }
-    await projectModel.reload();
-    presentMode = "nodes";
-    flashActivity("Redo");
-    return true;
-  }
-  return false;
-}
-
-function redoDiagramEntry(): boolean {
-  const next = redoHistory(
-    diagramHistory,
-    snapshotDiagram(),
-    UNDO_HISTORY_LIMIT,
-  );
-  if (next) {
-    applyDiagramSnapshot(next);
-    const seq = diagramRedoSeqs.pop();
-    if (seq !== undefined) {
-      diagramUndoSeqs.push(seq);
-      while (diagramUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-        diagramUndoSeqs.shift();
-      }
-    }
-    flashActivity("Redo");
-    return true;
-  }
-  return false;
-}
-
-// Ctrl/Cmd+Z. Blocked while auto-layout is running, same as the other
-// diagram-mutating interactions — restoring a snapshot while the
-// animation loop is still writing every frame would just get immediately
-// overwritten. Picks the most recent entry across both stacks by sequence,
-// so a drag after a create reverts the drag first.
-async function undoDiagramEdit() {
-  if (autoLayoutRunning) return;
-  const unifiedTop = top(unifiedUndoSeqs);
-  const diagramTop = top(diagramUndoSeqs);
-  if (
-    unifiedTop !== undefined &&
-    (diagramTop === undefined || unifiedTop > diagramTop)
-  ) {
-    if (await undoUnifiedEntry()) return;
-    undoDiagramEntry();
-    return;
-  }
-  if (diagramTop !== undefined) {
-    if (undoDiagramEntry()) return;
-  }
-  await undoUnifiedEntry();
-}
-
-// Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
-async function redoDiagramEdit() {
-  if (autoLayoutRunning) return;
-  const unifiedTop = top(unifiedRedoSeqs);
-  const diagramTop = top(diagramRedoSeqs);
-  if (
-    unifiedTop !== undefined &&
-    (diagramTop === undefined || unifiedTop > diagramTop)
-  ) {
-    if (await redoUnifiedEntry()) return;
-    redoDiagramEntry();
-    return;
-  }
-  if (diagramTop !== undefined) {
-    if (redoDiagramEntry()) return;
-  }
-  await redoUnifiedEntry();
-}
-
-// Runs one model mutation plus its canvas placement as a single undoable
-// transaction. Inverse ops invert the Rust dispatcher's higher-level ops
-// via snapshots — undoing a create removes exactly what was created
-// (container fallback, auto-created definition, redirection), undoing a
-// delete restores scope/label — without hand-written inverses.
-async function runModelLayoutTransaction(
-  label: string,
-  op: ModelMutationOp,
-  layoutApply?: (createdPath?: string) => void,
-): Promise<boolean> {
-  const diagramBefore = snapshotDiagram();
-  const { path: targetPath, content: systemBefore } = await readMainContent();
-  const tx = {
-    label,
-    do: async (): Promise<boolean> => {
-      const cur = await readMainContent();
-      const result = await applyModelMutation(fs, cur.path, cur.content, op);
-      if (!result.applied) return false;
-      await projectModel.reload();
-      layoutApply?.(result.path);
-      noteDiagramEdited();
-      return true;
-    },
-    undo: async (): Promise<void> => {
-      await fs.writeFile(targetPath, systemBefore);
-      await projectModel.reload();
-      applyDiagramSnapshot(diagramBefore);
-      noteDiagramEdited();
-    },
-  };
-  const applied = await unifiedHistory.execute(tx);
-  if (applied) {
-    unifiedUndoSeqs.push(++historySeq);
-    while (unifiedUndoSeqs.length > UNDO_HISTORY_LIMIT) {
-      unifiedUndoSeqs.shift();
-    }
-    unifiedRedoSeqs.length = 0;
-  }
-  return applied;
-}
-
-// Handles the diagram keyboard shortcuts. Scoped to this page (via the
-// <svelte:window> binding below), rather than living in the app-wide
-// KeyboardState.svelte module — ownership is explicit here: Ctrl+Z/Y routes
-// to the unified model+layout `TransactionManager` (with the legacy
-// layout-only stack as fallback), so model writes and canvas placement undo
-// together. A different page (e.g. the HCL text editor) wants its own,
-// unrelated undo behavior.
-//
-// The t/b/c/f attribute-cycling shortcuts only fire while the canvas has
-// focus (canvasFocused) and no modifier is held, so they never trigger
-// while typing in the inspector or the HCL editor.
-// Typing guard: canvas shortcuts must not fire while the user is editing
-// text (inspector inputs, modal fields, search boxes) — otherwise typing
-// "h" in a component name would hide the node.
-function isEditableTarget(event: KeyboardEvent): boolean {
-  const el = event.target as HTMLElement | null;
-  if (!el || typeof el.closest !== "function") return false;
-  return el.closest('input, textarea, select, [contenteditable="true"]') !==
-    null;
-}
-
-// Page-level guard for all canvas shortcuts. The old `canvasFocused` (SVG
-// DOM focus) requirement made shortcuts silently dead unless the SVG itself
-// held focus — in practice they only worked right after opening the context
-// menu, which focuses the canvas. Typing, open modals, and modifiers still
-// opt out.
-function shortcutsArmed(event: KeyboardEvent): boolean {
-  return (
-    !event.altKey &&
-    !event.shiftKey &&
-    !isCreateModalOpen &&
-    !isNewViewModalOpen &&
-    !isEditableTarget(event)
-  );
-}
-
-function onDiagramKeyDown(event: KeyboardEvent) {
-  const primary = event.ctrlKey || event.metaKey;
-  const key = event.key.toLowerCase();
-
-  if (primary) {
-    if (key === "z" && !event.shiftKey) {
-      event.preventDefault();
-      void undoDiagramEdit();
-    } else if (key === "y" || (key === "z" && event.shiftKey)) {
-      event.preventDefault();
-      void redoDiagramEdit();
-    }
-    return;
+    return applied;
   }
 
-  // Attribute cycling: fires anywhere on this page except while typing,
-  // in a modal, or with a modifier held (see shortcutsArmed above). The
-  // arrow-key nudge shares that guard, so the arrows belong to the text
-  // caret (or an open autocomplete) whenever the focus is in a text field.
-  if (shortcutsArmed(event)) {
-    const nudge = NUDGE_DIRECTIONS[key];
-    if (nudge) {
-      event.preventDefault();
-      nudgeSelection(nudge[0], nudge[1]);
-    } else if (key === "t" || key === "b" || key === "c" || key === "f") {
-      event.preventDefault();
-      cycleSelectedAttribute(key);
-    }
-  }
-
-  // Delete key: delete the selection — the selected notes and/or component,
-  // or the selected connection (never part of a mixed selection). Never
-  // fires while typing in the inspector or HCL editor.
-  if (
-    !isEditableTarget(event) &&
-    (event.key === "Delete" || event.key === "Backspace")
-  ) {
-    event.preventDefault();
-    deleteSelection();
-  }
-
-  // Context-menu shortcuts (global on this page, same guard as above): H hides
-  // the node from this view, O opens docs, V opens (or creates) the node's
-  // detail view, N/C/F/R/G mirror the empty-space menu (note/component/zoom/
-  // reset/grid).
-  // C/F double as color/font cycling with a selection — the cycling branch
-  // above already preventDefaulted, so only fire the menu meaning here when
-  // nothing is selected (below, `selected.size === 0`).
-  if (shortcutsArmed(event)) {
-    if (key === "h" || key === "d") {
-      event.preventDefault();
-      void hideSelectedFromView();
-    } else if (key === "o" || key === "j") {
-      event.preventDefault();
-      void handleOpenDocumentation().catch(reportDiagramError);
-    } else if (
-      key === "v" &&
-      primarySelected !== null &&
-      primarySelected !== undefined
-    ) {
-      // The detail view is a per-node thing, so with an empty or multi-node
-      // selection there is nothing for the key to mean.
-      event.preventDefault();
-      void handleDetailView(primarySelected).catch(reportDiagramError);
-    } else if (
-      key === "s" &&
-      (selected.size > 0 || selectedAnnotations.size > 0)
-    ) {
-      // The context menu's "new view from selection" row. Guarded on there
-      // being a selection at all, since with none the key could only write an
-      // empty view — the prompt would still appear, so the guard is the
-      // difference between asking a pointless question and staying quiet.
-      event.preventDefault();
-      void handleCreateViewFromSelection();
-    } else if (key === "n") {
-      event.preventDefault();
-      addAnnotationHandler();
-    } else if (key === "c") {
-      // C also cycles color when a node is selected (see above) — only
-      // create a component when nothing is selected, so one keypress never
-      // fires both actions.
-      if (selected.size === 0) {
-        event.preventDefault();
-        openCreateComponentModal();
-      }
-    } else if (key === "f") {
-      // Same clash as C: F cycles font with a selection, zooms without one.
-      if (selected.size === 0) {
-        event.preventDefault();
-        zoomToFill();
-      }
-    } else if (key === "r") {
-      event.preventDefault();
-      reset_view(editor_state);
-    } else if (key === "g") {
-      event.preventDefault();
-      gridVisible = !gridVisible;
-    }
-  }
-}
-
-async function hideSelectedFromView(): Promise<void> {
-  if (!selectedKey) return;
-  await handleDeleteSelectedComponent();
-}
-
-// The selected node's detail view: the one that already exists, or the
-// conventional path to create. One lookup drives both the context menu's row
-// label and what that row (and the `V` shortcut) does, so the promise the menu
-// makes and the action behind it can never disagree.
-function detailTarget(index: number): DetailViewTarget {
-  return detailViewTarget(
-    diagramEntries,
-    components[index]?.label ?? "",
-    getComponentKey(index),
-  );
-}
-
-// The detail view of the component at `index`: opens the existing one, or
-// creates it when there is none. `V` and the context-menu row share this, so
-// the shortcut means the same thing the menu offers.
-async function handleDetailView(index: number): Promise<void> {
-  const target = detailTarget(index);
-  if (target.kind === "jump") {
-    selectView(target.path);
-    return;
-  }
-  await createDetailedView(index, target.path);
-}
-
-// Creates `views/<path>` — the conventional detail view of the component at
-// `index` — and opens it.
-//
-// The component is placed on the new canvas, because the user asked for this
-// from a node they were looking at, and an empty view reads as "my node was
-// deleted". (Inventory's equivalent starts empty: there you are browsing
-// definitions rather than standing on one.)
-async function createDetailedView(
-  index: number,
-  path: string,
-): Promise<void> {
-  // A view's system binding is immutable after creation, so it has to be right
-  // the first time: the system the node itself lives in — the tree the user is
-  // looking at, and one that instantiates it — else whatever the open view is
-  // bound to.
-  const systemIndex = systemIndexOfComponent(components, index);
-  const ownSystem = systemIndex === undefined ? "" : (
-    systems[systemIndex]?.label ?? ""
-  );
-  const system = ownSystem || effectiveSystem || systems[0]?.label || "main";
-
-  const box = nodeBox(index);
-  const width = box?.width ?? DEFAULT_NODE_WIDTH;
-  const height = box?.height ?? DEFAULT_NODE_HEIGHT;
-  const layout = emptyDiagramLayout(system);
-  layout.checked[getComponentKey(index)] = {
-    ...nodeTopLeftAt(viewportCenter(), width, height),
-    width,
-    height,
-    textAlign: box?.textAlign ?? DEFAULT_TEXT_ALIGN,
-  };
-
-  await writeDiagramLayoutFile(
-    fs,
-    `${VIEW_LAYOUT_DIR}/${path}`,
-    layout,
-    system,
-  );
-  await refreshDiagramEntries();
-  selectView(path);
-}
-
-// A new view holding just the selected components, at the positions they have
-// here, and the canvas moves into it.
-//
-// The name is asked for with a native prompt rather than NewViewModal, which is
-// the one modal choice this action does not need: the system is not the user's
-// to pick here (see below), and the modal is the Diagrams tree's, where the
-// view is created *before* anything is placed on it.
-async function handleCreateViewFromSelection(): Promise<void> {
-  const name = prompt("New view name?", "selection");
-  // A name that cannot be one (blank, or a nested path — prompt() has no way
-  // to express nesting, which is the Diagrams tree's `+ Folder`) is a no-op,
-  // the same as the folder prompt next to it.
-  if (name === null) return;
-  const path = viewPathFromName(name);
-  if (path === null) return;
-  if (viewPathTaken(diagramEntries, path)) {
-    reportDiagramError(
-      new Error(`View "${path}" already exists. Pick another name.`),
+  // Handles the diagram keyboard shortcuts. Scoped to this page (via the
+  // <svelte:window> binding below), rather than living in the app-wide
+  // KeyboardState.svelte module — ownership is explicit here: Ctrl+Z/Y routes
+  // to the unified model+layout `TransactionManager` (with the legacy
+  // layout-only stack as fallback), so model writes and canvas placement undo
+  // together. A different page (e.g. the HCL text editor) wants its own,
+  // unrelated undo behavior.
+  //
+  // The t/b/c/f attribute-cycling shortcuts only fire while the canvas has
+  // focus (canvasFocused) and no modifier is held, so they never trigger
+  // while typing in the inspector or the HCL editor.
+  // Typing guard: canvas shortcuts must not fire while the user is editing
+  // text (inspector inputs, modal fields, search boxes) — otherwise typing
+  // "h" in a component name would hide the node.
+  function isEditableTarget(event: KeyboardEvent): boolean {
+    const el = event.target as HTMLElement | null;
+    if (!el || typeof el.closest !== "function") return false;
+    return (
+      el.closest('input, textarea, select, [contenteditable="true"]') !== null
     );
-    return;
   }
-  // A view's system binding is immutable after creation, so the new view takes
-  // the one the open view already has: the components on the canvas belong to
-  // that system, and asking again could only offer to bind them elsewhere.
-  const system = effectiveSystem || systems[0]?.label || "main";
-  // Annotations are selected by index into `annotations`, so the selection is
-  // resolved to the notes themselves here — the builder takes the notes, not
-  // the page's indices into them.
-  const notes = [...selectedAnnotations]
-    .map((index) => annotations[index])
-    .filter((note) => note !== undefined);
-  try {
+
+  // Page-level guard for all canvas shortcuts. The old `canvasFocused` (SVG
+  // DOM focus) requirement made shortcuts silently dead unless the SVG itself
+  // held focus — in practice they only worked right after opening the context
+  // menu, which focuses the canvas. Typing, open modals, and modifiers still
+  // opt out.
+  function shortcutsArmed(event: KeyboardEvent): boolean {
+    return (
+      !event.altKey &&
+      !event.shiftKey &&
+      !isCreateModalOpen &&
+      !isNewViewModalOpen &&
+      !isEditableTarget(event)
+    );
+  }
+
+  function onDiagramKeyDown(event: KeyboardEvent) {
+    const primary = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+
+    if (primary) {
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        void undoDiagramEdit();
+      } else if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        void redoDiagramEdit();
+      }
+      return;
+    }
+
+    // Attribute cycling: fires anywhere on this page except while typing,
+    // in a modal, or with a modifier held (see shortcutsArmed above). The
+    // arrow-key nudge shares that guard, so the arrows belong to the text
+    // caret (or an open autocomplete) whenever the focus is in a text field.
+    if (shortcutsArmed(event)) {
+      const nudge = NUDGE_DIRECTIONS[key];
+      if (nudge) {
+        event.preventDefault();
+        nudgeSelection(nudge[0], nudge[1]);
+      } else if (key === "t" || key === "b" || key === "c" || key === "f") {
+        event.preventDefault();
+        cycleSelectedAttribute(key);
+      }
+    }
+
+    // Delete key: delete the selection — the selected notes and/or component,
+    // or the selected connection (never part of a mixed selection). Never
+    // fires while typing in the inspector or HCL editor.
+    if (
+      !isEditableTarget(event) &&
+      (event.key === "Delete" || event.key === "Backspace")
+    ) {
+      event.preventDefault();
+      deleteSelection();
+    }
+
+    // Context-menu shortcuts (global on this page, same guard as above): H hides
+    // the node from this view, O opens docs, V opens (or creates) the node's
+    // detail view, N/C/F/R/G mirror the empty-space menu (note/component/zoom/
+    // reset/grid).
+    // C/F double as color/font cycling with a selection — the cycling branch
+    // above already preventDefaulted, so only fire the menu meaning here when
+    // nothing is selected (below, `selected.size === 0`).
+    if (shortcutsArmed(event)) {
+      if (key === "h" || key === "d") {
+        event.preventDefault();
+        void hideSelectedFromView();
+      } else if (key === "o" || key === "j") {
+        event.preventDefault();
+        void handleOpenDocumentation().catch(reportDiagramError);
+      } else if (
+        key === "v" &&
+        primarySelected !== null &&
+        primarySelected !== undefined
+      ) {
+        // The detail view is a per-node thing, so with an empty or multi-node
+        // selection there is nothing for the key to mean.
+        event.preventDefault();
+        void handleDetailView(primarySelected).catch(reportDiagramError);
+      } else if (
+        key === "s" &&
+        (selected.size > 0 || selectedAnnotations.size > 0)
+      ) {
+        // The context menu's "new view from selection" row. Guarded on there
+        // being a selection at all, since with none the key could only write an
+        // empty view — the prompt would still appear, so the guard is the
+        // difference between asking a pointless question and staying quiet.
+        event.preventDefault();
+        void handleCreateViewFromSelection();
+      } else if (key === "n") {
+        event.preventDefault();
+        addAnnotationHandler();
+      } else if (key === "c") {
+        // C also cycles color when a node is selected (see above) — only
+        // create a component when nothing is selected, so one keypress never
+        // fires both actions.
+        if (selected.size === 0) {
+          event.preventDefault();
+          openCreateComponentModal();
+        }
+      } else if (key === "f") {
+        // Same clash as C: F cycles font with a selection, zooms without one.
+        if (selected.size === 0) {
+          event.preventDefault();
+          zoomToFill();
+        }
+      } else if (key === "r") {
+        event.preventDefault();
+        reset_view(editor_state);
+      } else if (key === "g") {
+        event.preventDefault();
+        gridVisible = !gridVisible;
+      }
+    }
+  }
+
+  async function hideSelectedFromView(): Promise<void> {
+    if (!selectedKey) return;
+    await handleDeleteSelectedComponent();
+  }
+
+  // The selected node's detail view: the one that already exists, or the
+  // conventional path to create. One lookup drives both the context menu's row
+  // label and what that row (and the `V` shortcut) does, so the promise the menu
+  // makes and the action behind it can never disagree.
+  function detailTarget(index: number): DetailViewTarget {
+    return detailViewTarget(
+      diagramEntries,
+      components[index]?.label ?? "",
+      getComponentKey(index),
+    );
+  }
+
+  // The detail view of the component at `index`: opens the existing one, or
+  // creates it when there is none. `V` and the context-menu row share this, so
+  // the shortcut means the same thing the menu offers.
+  async function handleDetailView(index: number): Promise<void> {
+    const target = detailTarget(index);
+    if (target.kind === "jump") {
+      selectView(target.path);
+      return;
+    }
+    await createDetailedView(index, target.path);
+  }
+
+  // Creates `views/<path>` — the conventional detail view of the component at
+  // `index` — and opens it.
+  //
+  // The component is placed on the new canvas, because the user asked for this
+  // from a node they were looking at, and an empty view reads as "my node was
+  // deleted". (Inventory's equivalent starts empty: there you are browsing
+  // definitions rather than standing on one.)
+  async function createDetailedView(
+    index: number,
+    path: string,
+  ): Promise<void> {
+    // A view's system binding is immutable after creation, so it has to be right
+    // the first time: the system the node itself lives in — the tree the user is
+    // looking at, and one that instantiates it — else whatever the open view is
+    // bound to.
+    const systemIndex = systemIndexOfComponent(components, index);
+    const ownSystem =
+      systemIndex === undefined ? "" : (systems[systemIndex]?.label ?? "");
+    const system = ownSystem || effectiveSystem || systems[0]?.label || "main";
+
+    const box = nodeBox(index);
+    const width = box?.width ?? DEFAULT_NODE_WIDTH;
+    const height = box?.height ?? DEFAULT_NODE_HEIGHT;
+    const layout = emptyDiagramLayout(system);
+    layout.checked[getComponentKey(index)] = {
+      ...nodeTopLeftAt(viewportCenter(), width, height),
+      width,
+      height,
+      textAlign: box?.textAlign ?? DEFAULT_TEXT_ALIGN,
+    };
+
     await writeDiagramLayoutFile(
       fs,
       `${VIEW_LAYOUT_DIR}/${path}`,
-      layoutFromSelection(system, checked, selectedKeys, notes),
+      layout,
       system,
     );
     await refreshDiagramEntries();
     selectView(path);
-  } catch (error) {
-    reportDiagramError(error);
   }
-}
 
-// The single selected node, or null if zero or more than one are selected.
-// Used wherever an operation only makes sense for exactly one node (the
-// inspector's details/text-alignment controls).
-let primarySelected = $derived(
-  selected.size === 1 ? [...selected][0] : null,
-);
-let selectedBox = $derived(
-  primarySelected !== null && primarySelected !== undefined
-    ? nodeBox(primarySelected)
-    : null,
-);
-
-// Whether the canvas (the SVG) currently has keyboard focus. The t/b/c/f
-// attribute-cycling shortcuts below only fire while the canvas is focused,
-// so they never trigger while the user is typing in the inspector or the
-// HCL editor.
-let canvasFocused = $state(false);
-
-function focusCanvas() {
-  // Every canvas mousedown below calls preventDefault (needed to suppress
-  // text selection while dragging), which also kills the browser's implicit
-  // focus move — so focus explicitly. The Delete and t/b/c/f shortcuts
-  // require canvas focus, and without this a mouse user could select a node
-  // yet never trigger them.
-  root_svg?.focus({ preventScroll: true });
-}
-
-// The ordered value sets the t/b/c/f shortcuts cycle through, matching the
-// choices offered by the component inspector. The first entry is the
-// "unset" value (undefined), so cycling starts from the default.
-const TEXT_ALIGN_CYCLE: TextAlign[] = ["center", "top-center", "top-left"];
-const BORDER_CYCLE: BorderStyle[] = ["solid", "dashed", "dotted"];
-// COLOR_OPTIONS is imported from ./visuals. Each cycle starts at its
-// explicit default, so keyboard cycling can always return there — never
-// undefined, never stuck on the last value.
-const COLOR_CYCLE: ComponentColor[] = [DEFAULT_COLOR, ...COLOR_OPTIONS];
-const FONT_CYCLE: ComponentFont[] = [
-  DEFAULT_FONT,
-  "bold",
-  "italic",
-  "underline",
-];
-
-// Returns the next value after `current` in `cycle`, wrapping around to the
-// first. `current` may be undefined (the unset state).
-function nextInCycle<T>(cycle: readonly T[], current: T | undefined): T {
-  const idx = current === undefined ? -1 : cycle.indexOf(current);
-  return cycle[(idx + 1) % cycle.length] as T;
-}
-
-// Cycles the selected component's attribute on the t/b/c/f shortcuts.
-// Only fires when exactly one node is selected and the canvas has focus.
-function cycleSelectedAttribute(key: string) {
-  if (primarySelected === null || primarySelected === undefined) return;
-  const comp = selectedComponentData;
-  if (!comp) return;
-
-  switch (key) {
-    case "t": {
-      const next = nextInCycle(TEXT_ALIGN_CYCLE, selectedBox?.textAlign);
-      setSelectedTextAlign(next);
-      break;
-    }
-    case "b": {
-      const next = nextInCycle(BORDER_CYCLE, comp.border);
-      // "solid" is the explicit default: it passes through as the clear
-      // signal, never undefined.
-      void handleUpdateSelectedComponent({ border: next }).catch(
-        reportDiagramError,
+  // A new view holding just the selected components, at the positions they have
+  // here, and the canvas moves into it.
+  //
+  // The name is asked for with a native prompt rather than NewViewModal, which is
+  // the one modal choice this action does not need: the system is not the user's
+  // to pick here (see below), and the modal is the Diagrams tree's, where the
+  // view is created *before* anything is placed on it.
+  async function handleCreateViewFromSelection(): Promise<void> {
+    const name = prompt("New view name?", "selection");
+    // A name that cannot be one (blank, or a nested path — prompt() has no way
+    // to express nesting, which is the Diagrams tree's `+ Folder`) is a no-op,
+    // the same as the folder prompt next to it.
+    if (name === null) return;
+    const path = viewPathFromName(name);
+    if (path === null) return;
+    if (viewPathTaken(diagramEntries, path)) {
+      reportDiagramError(
+        new Error(`View "${path}" already exists. Pick another name.`),
       );
-      break;
+      return;
     }
-    case "c": {
-      const next = nextInCycle(COLOR_CYCLE, comp.color);
-      void handleUpdateSelectedComponent({ color: next }).catch(
-        reportDiagramError,
+    // A view's system binding is immutable after creation, so the new view takes
+    // the one the open view already has: the components on the canvas belong to
+    // that system, and asking again could only offer to bind them elsewhere.
+    const system = effectiveSystem || systems[0]?.label || "main";
+    // Annotations are selected by index into `annotations`, so the selection is
+    // resolved to the notes themselves here — the builder takes the notes, not
+    // the page's indices into them.
+    const notes = [...selectedAnnotations]
+      .map((index) => annotations[index])
+      .filter((note) => note !== undefined);
+    try {
+      await writeDiagramLayoutFile(
+        fs,
+        `${VIEW_LAYOUT_DIR}/${path}`,
+        layoutFromSelection(system, checked, selectedKeys, notes),
+        system,
       );
-      break;
-    }
-    case "f": {
-      const next = nextInCycle(FONT_CYCLE, comp.font);
-      void handleUpdateSelectedComponent({
-        font: next,
-      }).catch(reportDiagramError);
-      break;
+      await refreshDiagramEntries();
+      selectView(path);
+    } catch (error) {
+      reportDiagramError(error);
     }
   }
-}
 
-// Which way each arrow key nudges the selection, as a unit direction in
-// world coordinates. ArrowUp decreases y: the canvas' y axis points down.
-const NUDGE_DIRECTIONS: Record<string, [number, number]> = {
-  arrowleft: [-1, 0],
-  arrowright: [1, 0],
-  arrowup: [0, -1],
-  arrowdown: [0, 1],
-};
-
-// How far one arrow press moves the selection, in world units: the active
-// snap grid while snapping is on (so a keyboard move lands on the same grid
-// a mouse move does), and the default 10-unit interval when it's off —
-// mirroring snap()'s fallback for a hand-edited/invalid persisted size.
-function nudgeStep(): number {
-  if (!snapActive) return DEFAULT_SNAP_GRID_SIZE;
-  return snapGridSize.value > 0 ? snapGridSize.value : DEFAULT_SNAP_GRID_SIZE;
-}
-
-// Moves the whole selection one step in the given direction, as a single
-// undo point. Nodes go through the drag's delta path, so a keyboard move is
-// indistinguishable from a one-frame drag: rigid across the selection, clamped
-// into each node's active parent, and persisted. Notes — the other
-// selectable kind — carry an absolute position of their own, so they move
-// directly (no containment involved).
-function nudgeSelection(dx: number, dy: number): void {
-  if (selected.size === 0 && selectedAnnotations.size === 0) return;
-  recordUndoPoint();
-  const step = nudgeStep();
-  if (selected.size > 0) {
-    const startPositions: Record<number, { x: number; y: number }> = {};
-    for (const index of selected) {
-      const box = nodeBox(index);
-      // Snapped up front, so each press ends on the grid while snapping is
-      // on — where a snapped drag would have left the node.
-      if (box) startPositions[index] = { x: snap(box.x), y: snap(box.y) };
-    }
-    applyGroupDelta(startPositions, dx * step, dy * step);
-  }
-  for (const index of selectedAnnotations) {
-    const note = annotations[index];
-    if (!note) continue;
-    annotations[index] = {
-      ...note,
-      x: snap(note.x) + dx * step,
-      y: snap(note.y) + dy * step,
-    };
-    noteDiagramEdited();
-  }
-}
-
-// All pointer-driven canvas interactions (drag, resize, pan, marquee
-// select) are mutually exclusive, so they're modeled as a single
-// discriminated union rather than four independently-nullable state
-// variables. This mirrors the interaction state machine used elsewhere in
-// the app (see the removed EditorState union that used to live in
-// ViewEditorState.svelte) and avoids having to reason about impossible
-// combinations (e.g. dragging AND panning at once).
-type Interaction =
-  | { type: "idle" }
-  | {
-    // Dragging any selected node moves the whole selection together:
-    // startPositions snapshots every selected node's position when the
-    // drag begins; each move event recomputes every node's position
-    // from its own snapshot plus the same delta the anchor (grabbed)
-    // node moved by, so the group moves rigidly with no incremental
-    // drift.
-    type: "dragging";
-    anchorIndex: number;
-    offsetX: number;
-    offsetY: number;
-    startPositions: Record<number, { x: number; y: number }>;
-    /** Selected annotations' start positions (absolute), keyed by index, moved alongside nodes. */
-    annotationStartPositions?: Record<number, { x: number; y: number }>;
-    /** The annotation index grabbed to start an annotation-only drag (delta base). */
-    annotationAnchor?: number;
-  }
-  | {
-    // Resizing any node via any of its 8 edge/corner handles.
-    type: "resizing";
-    anchorIndex: number;
-    handle: ResizeHandle;
-    startBox: Box;
-    startPointer: { x: number; y: number };
-    groupBox: Box;
-    startBoxes: Record<number, Box>;
-    /** When set, this is an annotation resize: index into annotations + its start scale. */
-    annotationResize?: { index: number; startScale: number };
-  }
-  | {
-    // Canvas pan. Started by the middle mouse button over empty canvas, or
-    // by the left button while Space is held — which is the only pan that
-    // works from over a node, the middle button belonging to the node itself
-    // there (see onNodeMouseDown). lastX/lastY track screen-space pointer
-    // position of the last move event.
-    type: "panning";
-    lastX: number;
-    lastY: number;
-  }
-  | {
-    // Marquee select: start point + current point, in world (SVG)
-    // coordinates. Started by dragging the left mouse button over empty
-    // canvas.
-    type: "marquee";
-    startX: number;
-    startY: number;
-    x: number;
-    y: number;
-  }
-  | {
-    type: "connecting";
-    sourceComponentIndex: number;
-    sourcePortLabel: string | null;
-    startSide?: ConnectionSide | undefined;
-    sourcePoint: { x: number; y: number };
-    currentPoint: { x: number; y: number };
-  };
-
-let interaction: Interaction = $state({ type: "idle" });
-
-let marqueeBox: Box | null = $derived.by(() => {
-  const current = interaction;
-  if (current.type !== "marquee") return null;
-  return {
-    x: Math.min(current.startX, current.x),
-    y: Math.min(current.startY, current.y),
-    width: Math.abs(current.x - current.startX),
-    height: Math.abs(current.y - current.startY),
-  };
-});
-
-function svgPoint(
-  svg: SVGElement,
-  clientX: number,
-  clientY: number,
-): { x: number; y: number } {
-  const pt = (svg as SVGSVGElement).createSVGPoint();
-  pt.x = clientX;
-  pt.y = clientY;
-  const ctm = (svg as SVGSVGElement).getScreenCTM();
-  if (!ctm) return { x: clientX, y: clientY };
-  const transformed = pt.matrixTransform(ctm.inverse());
-  return { x: transformed.x, y: transformed.y };
-}
-
-let reparentTargetIndex = $state<number | null>(null);
-
-function isDescendantOf(index: number, possibleAncestor: number): boolean {
-  let cur = parentOf(index);
-  while (cur !== undefined) {
-    if (cur === possibleAncestor) return true;
-    cur = parentOf(cur);
-  }
-  return false;
-}
-
-async function getPrimaryHclPath(): Promise<string> {
-  try {
-    return primaryHclPath(await fs.readdir(".", { recursive: true }));
-  } catch {
-    return "main.hcl";
-  }
-}
-
-async function readMainContent(): Promise<{ path: string; content: string }> {
-  const targetPath = await getPrimaryHclPath();
-  try {
-    const content = await fs.readFile(targetPath);
-    return { path: targetPath, content };
-  } catch {
-    return {
-      path: targetPath,
-      content: sources.map((s) => s.content).join("\n"),
-    };
-  }
-}
-
-async function executeReparent(
-  sourceKey: string,
-  targetParentKey: string,
-): Promise<void> {
-  const label = sourceKey.split("/").at(-1);
-  const newKey = label ? `${targetParentKey}/${label}` : null;
-  await runModelLayoutTransaction(
-    `reparent ${sourceKey}`,
-    {
-      kind: "reparent_component",
-      sourcePath: sourceKey,
-      targetParentPath: targetParentKey,
-    },
-    () => {
-      if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
-    },
+  // The single selected node, or null if zero or more than one are selected.
+  // Used wherever an operation only makes sense for exactly one node (the
+  // inspector's details/text-alignment controls).
+  let primarySelected = $derived(selected.size === 1 ? [...selected][0] : null);
+  let selectedBox = $derived(
+    primarySelected !== null && primarySelected !== undefined
+      ? nodeBox(primarySelected)
+      : null,
   );
-}
 
-let availableParents = $derived.by(() => {
-  const options: {
-    key: string;
-    label: string;
-    isSystem: boolean;
-    path: string;
-  }[] = [];
+  // Whether the canvas (the SVG) currently has keyboard focus. The t/b/c/f
+  // attribute-cycling shortcuts below only fire while the canvas is focused,
+  // so they never trigger while the user is typing in the inspector or the
+  // HCL editor.
+  let canvasFocused = $state(false);
 
-  for (const sys of systems) {
-    options.push({
-      key: sys.label,
-      label: sys.label,
-      isSystem: true,
-      path: sys.label,
-    });
+  function focusCanvas() {
+    // Every canvas mousedown below calls preventDefault (needed to suppress
+    // text selection while dragging), which also kills the browser's implicit
+    // focus move — so focus explicitly. The Delete and t/b/c/f shortcuts
+    // require canvas focus, and without this a mouse user could select a node
+    // yet never trigger them.
+    root_svg?.focus({ preventScroll: true });
   }
 
-  components.forEach((comp, idx) => {
-    const key = getComponentKey(idx);
-    options.push({
-      key,
-      label: comp.label,
-      isSystem: false,
-      path: key,
-    });
+  // The ordered value sets the t/b/c/f shortcuts cycle through, matching the
+  // choices offered by the component inspector. The first entry is the
+  // "unset" value (undefined), so cycling starts from the default.
+  const TEXT_ALIGN_CYCLE: TextAlign[] = ["center", "top-center", "top-left"];
+  const BORDER_CYCLE: BorderStyle[] = ["solid", "dashed", "dotted"];
+  // COLOR_OPTIONS is imported from ./visuals. Each cycle starts at its
+  // explicit default, so keyboard cycling can always return there — never
+  // undefined, never stuck on the last value.
+  const COLOR_CYCLE: ComponentColor[] = [DEFAULT_COLOR, ...COLOR_OPTIONS];
+  const FONT_CYCLE: ComponentFont[] = [
+    DEFAULT_FONT,
+    "bold",
+    "italic",
+    "underline",
+  ];
+
+  // Returns the next value after `current` in `cycle`, wrapping around to the
+  // first. `current` may be undefined (the unset state).
+  function nextInCycle<T>(cycle: readonly T[], current: T | undefined): T {
+    const idx = current === undefined ? -1 : cycle.indexOf(current);
+    return cycle[(idx + 1) % cycle.length] as T;
+  }
+
+  // Cycles the selected component's attribute on the t/b/c/f shortcuts.
+  // Only fires when exactly one node is selected and the canvas has focus.
+  function cycleSelectedAttribute(key: string) {
+    if (primarySelected === null || primarySelected === undefined) return;
+    const comp = selectedComponentData;
+    if (!comp) return;
+
+    switch (key) {
+      case "t": {
+        const next = nextInCycle(TEXT_ALIGN_CYCLE, selectedBox?.textAlign);
+        setSelectedTextAlign(next);
+        break;
+      }
+      case "b": {
+        const next = nextInCycle(BORDER_CYCLE, comp.border);
+        // "solid" is the explicit default: it passes through as the clear
+        // signal, never undefined.
+        void handleUpdateSelectedComponent({ border: next }).catch(
+          reportDiagramError,
+        );
+        break;
+      }
+      case "c": {
+        const next = nextInCycle(COLOR_CYCLE, comp.color);
+        void handleUpdateSelectedComponent({ color: next }).catch(
+          reportDiagramError,
+        );
+        break;
+      }
+      case "f": {
+        const next = nextInCycle(FONT_CYCLE, comp.font);
+        void handleUpdateSelectedComponent({
+          font: next,
+        }).catch(reportDiagramError);
+        break;
+      }
+    }
+  }
+
+  // Which way each arrow key nudges the selection, as a unit direction in
+  // world coordinates. ArrowUp decreases y: the canvas' y axis points down.
+  const NUDGE_DIRECTIONS: Record<string, [number, number]> = {
+    arrowleft: [-1, 0],
+    arrowright: [1, 0],
+    arrowup: [0, -1],
+    arrowdown: [0, 1],
+  };
+
+  // How far one arrow press moves the selection, in world units: the active
+  // snap grid while snapping is on (so a keyboard move lands on the same grid
+  // a mouse move does), and the default 10-unit interval when it's off —
+  // mirroring snap()'s fallback for a hand-edited/invalid persisted size.
+  function nudgeStep(): number {
+    if (!snapActive) return DEFAULT_SNAP_GRID_SIZE;
+    return snapGridSize.value > 0 ? snapGridSize.value : DEFAULT_SNAP_GRID_SIZE;
+  }
+
+  // Moves the whole selection one step in the given direction, as a single
+  // undo point. Nodes go through the drag's delta path, so a keyboard move is
+  // indistinguishable from a one-frame drag: rigid across the selection, clamped
+  // into each node's active parent, and persisted. Notes — the other
+  // selectable kind — carry an absolute position of their own, so they move
+  // directly (no containment involved).
+  function nudgeSelection(dx: number, dy: number): void {
+    if (selected.size === 0 && selectedAnnotations.size === 0) return;
+    recordUndoPoint();
+    const step = nudgeStep();
+    if (selected.size > 0) {
+      const startPositions: Record<number, { x: number; y: number }> = {};
+      for (const index of selected) {
+        const box = nodeBox(index);
+        // Snapped up front, so each press ends on the grid while snapping is
+        // on — where a snapped drag would have left the node.
+        if (box) startPositions[index] = { x: snap(box.x), y: snap(box.y) };
+      }
+      applyGroupDelta(startPositions, dx * step, dy * step);
+    }
+    for (const index of selectedAnnotations) {
+      const note = annotations[index];
+      if (!note) continue;
+      annotations[index] = {
+        ...note,
+        x: snap(note.x) + dx * step,
+        y: snap(note.y) + dy * step,
+      };
+      noteDiagramEdited();
+    }
+  }
+
+  // All pointer-driven canvas interactions (drag, resize, pan, marquee
+  // select) are mutually exclusive, so they're modeled as a single
+  // discriminated union rather than four independently-nullable state
+  // variables. This mirrors the interaction state machine used elsewhere in
+  // the app (see the removed EditorState union that used to live in
+  // ViewEditorState.svelte) and avoids having to reason about impossible
+  // combinations (e.g. dragging AND panning at once).
+  type Interaction =
+    | { type: "idle" }
+    | {
+        // Dragging any selected node moves the whole selection together:
+        // startPositions snapshots every selected node's position when the
+        // drag begins; each move event recomputes every node's position
+        // from its own snapshot plus the same delta the anchor (grabbed)
+        // node moved by, so the group moves rigidly with no incremental
+        // drift.
+        type: "dragging";
+        anchorIndex: number;
+        offsetX: number;
+        offsetY: number;
+        startPositions: Record<number, { x: number; y: number }>;
+        /** Selected annotations' start positions (absolute), keyed by index, moved alongside nodes. */
+        annotationStartPositions?: Record<number, { x: number; y: number }>;
+        /** The annotation index grabbed to start an annotation-only drag (delta base). */
+        annotationAnchor?: number;
+      }
+    | {
+        // Resizing any node via any of its 8 edge/corner handles.
+        type: "resizing";
+        anchorIndex: number;
+        handle: ResizeHandle;
+        startBox: Box;
+        startPointer: { x: number; y: number };
+        groupBox: Box;
+        startBoxes: Record<number, Box>;
+        /** When set, this is an annotation resize: index into annotations + its start scale. */
+        annotationResize?: { index: number; startScale: number };
+      }
+    | {
+        // Canvas pan. Started by the middle mouse button over empty canvas, or
+        // by the left button while Space is held — which is the only pan that
+        // works from over a node, the middle button belonging to the node itself
+        // there (see onNodeMouseDown). lastX/lastY track screen-space pointer
+        // position of the last move event.
+        type: "panning";
+        lastX: number;
+        lastY: number;
+      }
+    | {
+        // Marquee select: start point + current point, in world (SVG)
+        // coordinates. Started by dragging the left mouse button over empty
+        // canvas.
+        type: "marquee";
+        startX: number;
+        startY: number;
+        x: number;
+        y: number;
+      }
+    | {
+        type: "connecting";
+        sourceComponentIndex: number;
+        sourcePortLabel: string | null;
+        startSide?: ConnectionSide | undefined;
+        sourcePoint: { x: number; y: number };
+        currentPoint: { x: number; y: number };
+      };
+
+  let interaction: Interaction = $state({ type: "idle" });
+
+  let marqueeBox: Box | null = $derived.by(() => {
+    const current = interaction;
+    if (current.type !== "marquee") return null;
+    return {
+      x: Math.min(current.startX, current.x),
+      y: Math.min(current.startY, current.y),
+      width: Math.abs(current.x - current.startX),
+      height: Math.abs(current.y - current.startY),
+    };
   });
 
-  return options;
-});
+  function svgPoint(
+    svg: SVGElement,
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } {
+    const pt = (svg as SVGSVGElement).createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = (svg as SVGSVGElement).getScreenCTM();
+    if (!ctm) return { x: clientX, y: clientY };
+    const transformed = pt.matrixTransform(ctm.inverse());
+    return { x: transformed.x, y: transformed.y };
+  }
 
-// The pool of reusable component definitions offered by "Use Existing
-// Component". Derives directly from the top-level definitions in the compiled
-// model, so a definition is offered even with zero current instances.
-let reusableDefinitions = $derived(definitionOptions(model));
+  let reparentTargetIndex = $state<number | null>(null);
 
-let isCreateModalOpen = $state(false);
-let createModalPosition = $state<{ x: number; y: number } | undefined>(
-  undefined,
-);
-let createModalDefaultParent = $state<string | undefined>(undefined);
+  function isDescendantOf(index: number, possibleAncestor: number): boolean {
+    let cur = parentOf(index);
+    while (cur !== undefined) {
+      if (cur === possibleAncestor) return true;
+      cur = parentOf(cur);
+    }
+    return false;
+  }
 
-// Opens the create-component modal. `pos` is the world-coordinate top-left
-// of the node to create (the double-click and right-click paths pass their
-// click point, centered on it); without one the node is placed under the
-// pointer, or on the viewport center when the pointer is off-canvas — which
-// is what the `C` shortcut and the toolbar button want.
-function openCreateComponentModal(
-  pos?: { x: number; y: number },
-  parentKey?: string,
-) {
-  let targetParent = parentKey;
-  if (!targetParent && selected.size === 1) {
-    const selIdx = selected.values().next().value;
-    if (selIdx !== undefined) {
-      targetParent = getComponentKey(selIdx);
+  async function getPrimaryHclPath(): Promise<string> {
+    try {
+      return primaryHclPath(await fs.readdir(".", { recursive: true }));
+    } catch {
+      return "main.hcl";
     }
   }
-  if (!targetParent) {
-    targetParent = effectiveSystem || systems[0]?.label || "main";
+
+  async function readMainContent(): Promise<{ path: string; content: string }> {
+    const targetPath = await getPrimaryHclPath();
+    try {
+      const content = await fs.readFile(targetPath);
+      return { path: targetPath, content };
+    } catch {
+      return {
+        path: targetPath,
+        content: sources.map((s) => s.content).join("\n"),
+      };
+    }
   }
 
-  createModalPosition = pos ??
-    nodeTopLeftAt(spawnAnchor(), DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT);
-  createModalDefaultParent = targetParent;
-  isCreateModalOpen = true;
-}
+  async function executeReparent(
+    sourceKey: string,
+    targetParentKey: string,
+  ): Promise<void> {
+    const label = sourceKey.split("/").at(-1);
+    const newKey = label ? `${targetParentKey}/${label}` : null;
+    await runModelLayoutTransaction(
+      `reparent ${sourceKey}`,
+      {
+        kind: "reparent_component",
+        sourcePath: sourceKey,
+        targetParentPath: targetParentKey,
+      },
+      () => {
+        if (newKey && selectedKeys.delete(sourceKey)) selectedKeys.add(newKey);
+      },
+    );
+  }
 
-function onNodeDblClick(event: MouseEvent, index: number) {
-  event.stopPropagation();
-  event.preventDefault();
-  const parentKey = getComponentKey(index);
-  const coords = svgPoint(root_svg, event.clientX, event.clientY);
-  openCreateComponentModal(
-    nodeTopLeftAt(coords, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
-    parentKey,
+  let availableParents = $derived.by(() => {
+    const options: {
+      key: string;
+      label: string;
+      isSystem: boolean;
+      path: string;
+    }[] = [];
+
+    for (const sys of systems) {
+      options.push({
+        key: sys.label,
+        label: sys.label,
+        isSystem: true,
+        path: sys.label,
+      });
+    }
+
+    components.forEach((comp, idx) => {
+      const key = getComponentKey(idx);
+      options.push({
+        key,
+        label: comp.label,
+        isSystem: false,
+        path: key,
+      });
+    });
+
+    return options;
+  });
+
+  // The pool of reusable component definitions offered by "Use Existing
+  // Component". Derives directly from the top-level definitions in the compiled
+  // model, so a definition is offered even with zero current instances.
+  let reusableDefinitions = $derived(definitionOptions(model));
+
+  let isCreateModalOpen = $state(false);
+  let createModalPosition = $state<{ x: number; y: number } | undefined>(
+    undefined,
   );
-}
+  let createModalDefaultParent = $state<string | undefined>(undefined);
 
-async function handleModalCreateComponent(data: {
-  label: string;
-  parentKey: string;
-  full_name: string;
-  tags: string[];
-  leaf: boolean;
-  ports: PortData[];
-  sourceLabel?: string;
-  textAlign?: TextAlign;
-  position?: { x: number; y: number };
-}): Promise<void> {
-  isCreateModalOpen = false;
-
-  // Container fallback (first system / fresh "main"), definition +
-  // instance creation, and instance-under-instance redirection all live in
-  // the dispatcher; the returned path is the created component's key.
-  // Model write + canvas placement are one unified transaction so Ctrl+Z
-  // undoes both.
-  const applied = await runModelLayoutTransaction(
-    `create ${data.label}`,
-    {
-      kind: "create_component",
-      label: data.label,
-      parentKey: data.parentKey,
-      ...(data.sourceLabel === undefined
-        ? {}
-        : { sourceLabel: data.sourceLabel }),
-      leaf: data.leaf,
-      full_name: data.full_name,
-      tags: data.tags,
-      ports: data.ports,
-    },
-    (createdPath) => {
-      const fullKey = createdPath ?? data.label;
-      if (!data.sourceLabel) {
-        const slash = fullKey.lastIndexOf("/");
-        const placementParent = slash === -1
-          ? fullKey
-          : fullKey.slice(0, slash);
-        toastState.show(
-          `Created definition "${data.label}" and placed it in ${placementParent}`,
-          "success",
-        );
+  // Opens the create-component modal. `pos` is the world-coordinate top-left
+  // of the node to create (the double-click and right-click paths pass their
+  // click point, centered on it); without one the node is placed under the
+  // pointer, or on the viewport center when the pointer is off-canvas — which
+  // is what the `C` shortcut and the toolbar button want.
+  function openCreateComponentModal(
+    pos?: { x: number; y: number },
+    parentKey?: string,
+  ) {
+    let targetParent = parentKey;
+    if (!targetParent && selected.size === 1) {
+      const selIdx = selected.values().next().value;
+      if (selIdx !== undefined) {
+        targetParent = getComponentKey(selIdx);
       }
-      const center = viewportCenterBox();
-      const worldX = data.position ? snap(data.position.x) : center.x;
-      const worldY = data.position ? snap(data.position.y) : center.y;
-      checked[fullKey] = {
-        x: worldX,
-        y: worldY,
-        width: DEFAULT_NODE_WIDTH,
-        height: DEFAULT_NODE_HEIGHT,
-        textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
-      };
-      savedLayout[fullKey] = { ...checked[fullKey] };
-      const newIndex = keyToIndex.get(fullKey);
-      if (newIndex !== undefined) {
-        selectOnly(newIndex);
-      }
-    },
-  );
-  if (!applied) return;
-}
+    }
+    if (!targetParent) {
+      targetParent = effectiveSystem || systems[0]?.label || "main";
+    }
 
-function onCanvasDblClick(event: MouseEvent) {
-  const target = event.target as HTMLElement | SVGElement;
-  if (target === root_svg || target.tagName === "rect") {
+    createModalPosition =
+      pos ??
+      nodeTopLeftAt(spawnAnchor(), DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT);
+    createModalDefaultParent = targetParent;
+    isCreateModalOpen = true;
+  }
+
+  function onNodeDblClick(event: MouseEvent, index: number) {
+    event.stopPropagation();
+    event.preventDefault();
+    const parentKey = getComponentKey(index);
     const coords = svgPoint(root_svg, event.clientX, event.clientY);
     openCreateComponentModal(
       nodeTopLeftAt(coords, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+      parentKey,
     );
   }
-}
 
-// Flat read-model of the compiled output: one `ComponentData` per canonical
-// component key, rebuilt whenever the model changes. This is the only shape
-// the canvas and the inspector need — they look components up *by key*, never
-// by walking a tree.
-let componentData = $derived(componentDataByKey(model));
+  async function handleModalCreateComponent(data: {
+    label: string;
+    parentKey: string;
+    full_name: string;
+    tags: string[];
+    leaf: boolean;
+    ports: PortData[];
+    sourceLabel?: string;
+    textAlign?: TextAlign;
+    position?: { x: number; y: number };
+  }): Promise<void> {
+    isCreateModalOpen = false;
 
-let selectedKey = $derived(
-  selectedKeys.size === 1 ? selectedKeys.values().next().value ?? null : null,
-);
-
-let selectedComponentData = $derived(
-  selectedKey ? componentData.get(selectedKey) ?? null : null,
-);
-
-async function handleUpdateSelectedComponent(
-  patch: Partial<ComponentData>,
-): Promise<void> {
-  if (!selectedKey) return;
-  const key = selectedKey;
-  await runModelLayoutTransaction(`update ${key}`, {
-    kind: "update_component",
-    path: key,
-    patch,
-  });
-}
-
-async function handleRenameSelectedComponent(newLabel: string): Promise<void> {
-  if (!selectedKey) return;
-  const parts = selectedKey.split("/").filter(Boolean);
-  const oldLabel = parts[parts.length - 1];
-  if (newLabel === oldLabel) return;
-  const parentPath = parts.slice(0, -1).join("/");
-  const newKey = `${parentPath}/${newLabel}`;
-  const oldKey = selectedKey;
-
-  // Routed through the store API (not a direct label assignment) so the
-  // sibling-collision check runs and the mutation observer records the
-  // rename for the action log.
-  await runModelLayoutTransaction(
-    `rename ${oldKey}`,
-    {
-      kind: "rename_component",
-      path: oldKey,
-      newLabel,
-    },
-    () => {
-      if (checked[oldKey]) {
-        checked[newKey] = checked[oldKey];
-        delete checked[oldKey];
-      }
-      if (savedLayout[oldKey]) {
-        savedLayout[newKey] = savedLayout[oldKey];
-        delete savedLayout[oldKey];
-      }
-      if (selectedKeys.delete(oldKey)) selectedKeys.add(newKey);
-    },
-  );
-}
-
-async function handleDeleteSelectedComponent(): Promise<void> {
-  if (!selectedKey) return;
-  // View-only removal: the model keeps the component, so re-checking its
-  // sidebar row restores the node where it was (savedLayout is preserved,
-  // exactly like unchecking). Recorded on the layout history, so Ctrl+Z
-  // brings the node back.
-  recordUndoPoint();
-  removeSelectedComponent();
-}
-
-// The removal itself, without the undo point — so deleteSelection() can
-// remove a component and a note together as a single undo point.
-function removeSelectedComponent(): void {
-  if (!selectedKey) return;
-  const keyToRemove = selectedKey;
-  delete checked[keyToRemove];
-  const index = keyToIndex.get(keyToRemove);
-  if (index !== undefined) deselect(index);
-  else clearSelection();
-}
-
-async function handleOpenDocumentation(): Promise<void> {
-  if (!selectedComponentData) return;
-  const label = selectedComponentData.label;
-  const docPath = `docs/${label}.md`;
-  try {
-    await fs.readFile(docPath);
-  } catch {
-    await fs.mkdir("docs", { recursive: true });
-    await fs.writeFile(docPath, `# ${label}\n`);
-  }
-  await goto(
-    `${resolve("/projects/[id]/code", { id: projectId })}?file=${
-      encodeURIComponent(docPath)
-    }`,
-  );
-}
-
-function onPortMouseDown(
-  event: MouseEvent,
-  compIndex: number,
-  portLabel: string | null,
-  worldPoint: { x: number; y: number },
-  startSide?: ConnectionSide,
-) {
-  // Only the left button draws a connection. Every other button belongs to
-  // what is underneath, and a port dot sits *on* the node's border — so the
-  // middle one has to fall through to the node's own mousedown (its detail
-  // view, see onNodeMouseDown) or the hole would be exactly where the pointer
-  // lands. A right-click lands on the node's context menu, which used to open
-  // over a connection this had already started drawing.
-  if (event.button !== 0) return;
-  event.stopPropagation();
-  event.preventDefault();
-  interaction = {
-    type: "connecting",
-    sourceComponentIndex: compIndex,
-    sourcePortLabel: portLabel,
-    startSide,
-    sourcePoint: worldPoint,
-    currentPoint: worldPoint,
-  };
-}
-
-function findHoveredTarget(
-  point: { x: number; y: number },
-  sourceIndex: number,
-): { compIndex: number; portLabel: string | null } | null {
-  const candidates = renderOrder.flatMap((i) => {
-    if (i === sourceIndex) return [];
-    const box = nodeBox(i);
-    if (!box) return [];
-    const key = getComponentKey(i);
-    const compData = componentData.get(key);
-    const ports = compData && compData.ports.length > 0
-      ? computePortPositions(box.width, box.height, compData.ports).map((
-        p,
-      ) => ({
-        label: p.label,
-        x: p.x,
-        y: p.y,
-      }))
-      : [];
-    return [{
-      index: i,
-      box,
-      depth: depthOf(i, parentOf),
-      ports,
-    }];
-  });
-
-  return findConnectTarget(point, sourceIndex, candidates);
-}
-
-async function handleCreateConnection(
-  sourceCompIndex: number,
-  sourcePortLabel: string | null,
-  targetCompIndex: number,
-  targetPortLabel: string | null,
-  startSide?: ConnectionSide,
-): Promise<void> {
-  if (sourceCompIndex === targetCompIndex) return;
-
-  const srcKey = getComponentKey(sourceCompIndex);
-  const targetKey = getComponentKey(targetCompIndex);
-
-  const srcParts = srcKey.split("/").filter(Boolean);
-  const targetParts = targetKey.split("/").filter(Boolean);
-
-  const srcCompLabel = srcParts[srcParts.length - 1];
-  const targetCompLabel = targetParts[targetParts.length - 1];
-
-  const lca = computeLcaConnection(
-    srcKey,
-    sourcePortLabel,
-    targetKey,
-    targetPortLabel,
-  );
-
-  if (!lca) {
-    alert("Cannot connect components across different systems.");
-    return;
-  }
-
-  const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
-  const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
-  if (!connLabel) return;
-
-  // The backend silently no-ops a same-scope duplicate (the op reports
-  // applied with unchanged HCL), so without this the draw gesture would
-  // accept the name and visibly do nothing.
-  if (connections.some((c) => c.label === connLabel)) {
-    alert(
-      `A connection named "${connLabel}" already exists. Choose a different name.`,
-    );
-    return;
-  }
-
-  await runModelLayoutTransaction(
-    `connect ${connLabel}`,
-    {
-      kind: "add_connection",
-      scopePath: lca.lcaScopePath,
-      label: connLabel,
-      from: lca.from,
-      to: lca.to,
-    },
-    () => {
-      if (startSide) {
-        savedConnections[connLabel] = { startSide };
-      }
-    },
-  );
-}
-
-// Open context menu state: null when closed, otherwise the click position
-// (client coords) plus the item rows to show.
-let contextMenu = $state<
-  { x: number; y: number; items: ContextMenuItem[] } | null
->(
-  null,
-);
-
-function closeContextMenu(): void {
-  contextMenu = null;
-}
-
-function openNodeContextMenu(event: MouseEvent, index: number): void {
-  event.stopPropagation();
-  event.preventDefault();
-  focusCanvas();
-  if (!selected.has(index)) selectOnly(index);
-  selectedConnection = null;
-  const target = detailTarget(index);
-  contextMenu = {
-    x: event.clientX,
-    y: event.clientY,
-    items: [
+    // Container fallback (first system / fresh "main"), definition +
+    // instance creation, and instance-under-instance redirection all live in
+    // the dispatcher; the returned path is the created component's key.
+    // Model write + canvas placement are one unified transaction so Ctrl+Z
+    // undoes both.
+    const applied = await runModelLayoutTransaction(
+      `create ${data.label}`,
       {
-        label: "Hide from this view",
-        shortcut: "H",
-        action: () => void hideSelectedFromView(),
+        kind: "create_component",
+        label: data.label,
+        parentKey: data.parentKey,
+        ...(data.sourceLabel === undefined
+          ? {}
+          : { sourceLabel: data.sourceLabel }),
+        leaf: data.leaf,
+        full_name: data.full_name,
+        tags: data.tags,
+        ports: data.ports,
       },
-      {
-        label: "Jump to documentation",
-        shortcut: "O",
-        action: () => void handleOpenDocumentation().catch(reportDiagramError),
-      },
-      {
-        label: target.kind === "create"
-          ? "Create a detailed view"
-          : "Jump to detailed view",
-        shortcut: "V",
-        action: () => void handleDetailView(index).catch(reportDiagramError),
-      },
-      {
-        // About the whole selection, not the node under the pointer.
-        label: "Create new view from selection",
-        shortcut: "S",
-        action: () => void handleCreateViewFromSelection(),
-      },
-    ],
-  };
-}
-
-function openAnnotationContextMenu(event: MouseEvent, index: number): void {
-  event.stopPropagation();
-  event.preventDefault();
-  focusCanvas();
-  if (!selectedAnnotations.has(index)) selectAnnotation(index);
-  selectedConnection = null;
-  contextMenu = {
-    x: event.clientX,
-    y: event.clientY,
-    items: [
-      {
-        label: "Delete",
-        shortcut: "Del",
-        dangerous: true,
-        action: () => deleteSelectedAnnotations(),
-      },
-    ],
-  };
-}
-
-function openConnectionContextMenu(event: MouseEvent, label: string): void {
-  event.stopPropagation();
-  event.preventDefault();
-  focusCanvas();
-  selectedConnection = label;
-  clearSelection();
-  contextMenu = {
-    x: event.clientX,
-    y: event.clientY,
-    items: [
-      {
-        label: "Delete",
-        shortcut: "Del",
-        dangerous: true,
-        action: () =>
-          void handleDeleteSelectedConnection().catch(reportDiagramError),
-      },
-    ],
-  };
-}
-
-function openCanvasContextMenu(event: MouseEvent): void {
-  event.preventDefault();
-  focusCanvas();
-  // Both "New …" rows spawn at the right-click point itself (explicitly,
-  // rather than through the tracked pointer, which the menu may already be
-  // covering) — the same placement as the `C`/`N` keys they advertise.
-  const world = svgPoint(root_svg, event.clientX, event.clientY);
-  contextMenu = {
-    x: event.clientX,
-    y: event.clientY,
-    items: [
-      {
-        label: "New component",
-        shortcut: "C",
-        action: () =>
-          openCreateComponentModal(
-            nodeTopLeftAt(world, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
-          ),
-      },
-      {
-        label: "New annotation",
-        shortcut: "N",
-        action: () => addAnnotationHandler(world),
-      },
-      { label: "Zoom to fill", shortcut: "F", action: () => zoomToFill() },
-      {
-        label: "Reset view",
-        shortcut: "R",
-        action: () => reset_view(editor_state),
-      },
-      {
-        label: "Toggle grid",
-        shortcut: "G",
-        action: () => {
-          gridVisible = !gridVisible;
-        },
-      },
-    ],
-  };
-}
-
-// The left button selects and drags a node (below); the left button while
-// Space is held pans, whatever is under the cursor — including directly over a
-// node, so it must be handled here too (not just in onCanvasMouseDown, which
-// only sees clicks on empty canvas).
-//
-// The middle button over a node is the pointer's `V`: it opens that node's
-// detail view, or creates one when the component has none. It is handled first,
-// before the guards below, for two reasons. It beats panning — middle-drag
-// from anywhere on the canvas still pans (onCanvasMouseDown), and panning over
-// a node is Space's job alone. And it deliberately touches nothing else: it
-// writes no position, so it needs neither an undo point nor the auto-layout
-// guard (that one exists because a *drag* would fight positions being
-// rewritten every frame), and it leaves the selection alone — the clicked
-// node is its own subject, the way a right-click selects only to feed the
-// rows below.
-function onNodeMouseDown(event: MouseEvent, index: number) {
-  if (event.button === 1) {
-    // The same preventDefault every other branch here makes: it is what
-    // suppresses text selection, and here it also suppresses the browser's
-    // own autoscroll, which would otherwise start on this very click.
-    event.preventDefault();
-    void handleDetailView(index).catch(reportDiagramError);
-    return;
-  }
-
-  selectedConnection = null;
-  // Auto-layout is actively writing node positions every frame; letting a
-  // drag/select start at the same time would silently fight it (clicks
-  // would visibly do nothing useful) — see the cursor style on <svg>
-  // below for the matching "busy" affordance.
-  if (autoLayoutRunning) return;
-  focusCanvas();
-  if (event.button === 0 && isSpaceHeld()) {
-    event.preventDefault();
-    interaction = {
-      type: "panning",
-      lastX: event.clientX,
-      lastY: event.clientY,
-    };
-    return;
-  }
-  if (event.button !== 0) return;
-  event.preventDefault();
-
-  // One undo point per drag *gesture* (not per mousemove) — recorded here,
-  // at mousedown, before anything moves.
-  recordUndoPoint();
-
-  // Shift+click toggles the node in/out of the selection (multi-select).
-  // A plain click on a node that isn't already part of the selection
-  // replaces the selection with just that node; clicking a node that's
-  // already selected (as part of a multi-selection) keeps the whole
-  // selection, so dragging it moves the whole group.
-  if (event.shiftKey) {
-    if (selected.has(index)) {
-      deselect(index);
-    } else {
-      select(index);
-    }
-  } else if (!selected.has(index)) {
-    selectOnly(index);
-  }
-
-  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  const startPositions = snapshotNodePositions();
-  const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
-  interaction = {
-    type: "dragging",
-    anchorIndex: index,
-    offsetX: svgCoords.x - anchorStart.x,
-    offsetY: svgCoords.y - anchorStart.y,
-    startPositions,
-    annotationStartPositions: snapshotAnnotationPositions(),
-  };
-}
-
-// Snapshot the currently selected annotations' positions for a group drag,
-// keyed by annotation index (stable for the whole drag).
-function snapshotAnnotationPositions(): Record<
-  number,
-  { x: number; y: number }
-> {
-  const map: Record<number, { x: number; y: number }> = {};
-  for (const i of selectedAnnotations) {
-    const a = annotations[i];
-    if (a) map[i] = { x: a.x, y: a.y };
-  }
-  return map;
-}
-
-// Mouse down on an annotation label: select it and start dragging it (and
-// any other selected annotations) with the same interaction as nodes.
-function onAnnotationMouseDown(event: MouseEvent, index: number): void {
-  event.stopPropagation();
-  selectedConnection = null;
-  if (autoLayoutRunning) return;
-  if (event.button !== 0) return;
-  event.preventDefault();
-  focusCanvas();
-  recordUndoPoint();
-
-  if (event.shiftKey) {
-    if (selectedAnnotations.has(index)) {
-      selectedAnnotations.delete(index);
-    } else {
-      // Extends the selection with a note (shift-click); the component
-      // selection is kept — see select().
-      selectedAnnotations.add(index);
-    }
-  } else if (!selectedAnnotations.has(index)) {
-    selectAnnotation(index);
-  }
-
-  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  const anchor = annotations[index] ?? { x: 0, y: 0 };
-  interaction = {
-    type: "dragging",
-    anchorIndex: -1, // no node anchor
-    offsetX: svgCoords.x - anchor.x,
-    offsetY: svgCoords.y - anchor.y,
-    // The selected components' positions, like a node drag snapshots. A
-    // component and a note can be selected together, and the selection
-    // drags as a group whichever kind is grabbed — the note is the delta
-    // base, but the components ride along (see the annotation branch of
-    // onSvgMouseMove).
-    startPositions: snapshotNodePositions(),
-    // The dragged annotation's index (delta base) + the snapshot of the
-    // whole annotation selection at drag start.
-    annotationAnchor: index,
-    annotationStartPositions: snapshotAnnotationPositions(),
-  };
-}
-
-// Snapshot of the selected components' positions for a group drag, keyed by
-// index. Shared by both mousedown handlers: a drag moves the whole selection,
-// so whichever kind starts it needs the other's positions too.
-function snapshotNodePositions(): Record<number, { x: number; y: number }> {
-  const map: Record<number, { x: number; y: number }> = {};
-  for (const i of selected) {
-    const box = checked[getComponentKey(i)];
-    if (box) map[i] = { x: box.x, y: box.y };
-  }
-  return map;
-}
-
-// Move every selected annotation by the same (deltaX, deltaY) from its own
-// drag-start snapshot — recomputed from the snapshot each event (like
-// applyGroupDelta), never accumulated, so there is no drift or flicker.
-function applyAnnotationDelta(deltaX: number, deltaY: number): void {
-  noteDiagramEdited();
-  const current = interaction;
-  if (current.type !== "dragging") return;
-  const starts = current.annotationStartPositions;
-  if (!starts) return;
-  for (const idxStr of Object.keys(starts)) {
-    const idx = Number(idxStr);
-    const start = starts[idx];
-    const a = annotations[idx];
-    if (!a || !start) continue;
-    annotations[idx] = {
-      ...a,
-      x: snap(start.x + deltaX),
-      y: snap(start.y + deltaY),
-    };
-  }
-}
-
-// Start resizing a selected annotation from one of its corner handles.
-// The drag changes the annotation's `scale` (100% = 1.0) — corner-pull
-// distance scales the font multiplier, mirroring how node resize handles
-// work but as a pure scale factor instead of a box.
-function onAnnotationResizeMouseDown(
-  event: MouseEvent,
-  index: number,
-  handle: ResizeHandle,
-): void {
-  event.stopPropagation();
-  if (autoLayoutRunning) return;
-  if (event.button !== 0) return;
-  event.preventDefault();
-  if (!selectedAnnotations.has(index)) selectAnnotation(index);
-  recordUndoPoint();
-  const a = annotations[index];
-  if (!a) return;
-  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  interaction = {
-    type: "resizing",
-    anchorIndex: -1,
-    handle,
-    startBox: { x: a.x, y: a.y, width: 0, height: 0 },
-    startPointer: svgCoords,
-    groupBox: { x: a.x, y: a.y, width: 0, height: 0 },
-    startBoxes: {},
-    annotationResize: { index, startScale: a.scale ?? 1 },
-  };
-}
-
-function onCanvasMouseDown(event: MouseEvent) {
-  selectedConnection = null;
-  // See onNodeMouseDown's matching guard above.
-  if (autoLayoutRunning) return;
-  focusCanvas();
-  if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
-    event.preventDefault();
-    interaction = {
-      type: "panning",
-      lastX: event.clientX,
-      lastY: event.clientY,
-    };
-    return;
-  }
-  if (event.button !== 0) return;
-
-  // Left-drag on empty canvas starts a marquee selection; the actual
-  // selection change happens on mouseup, once the drag's extent is known
-  // (see onSvgMouseUp).
-  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-  interaction = {
-    type: "marquee",
-    startX: svgCoords.x,
-    startY: svgCoords.y,
-    x: svgCoords.x,
-    y: svgCoords.y,
-  };
-}
-
-// Starts a resize from any edge or corner handle of a node. Stops propagation
-// so the handle's own mousedown doesn't also bubble up to the node's onmousedown.
-function onResizeHandleMouseDown(
-  event: MouseEvent,
-  index: number,
-  handle: ResizeHandle,
-) {
-  // See onNodeMouseDown's matching guard above.
-  if (autoLayoutRunning) return;
-  if (event.button !== 0) return;
-  // Let a space-held click bubble up to the node's own mousedown handler,
-  // which starts panning instead of a resize — keeps "how to start a pan"
-  // in one place.
-  if (isSpaceHeld()) return;
-  event.preventDefault();
-  event.stopPropagation();
-
-  // If node is not already part of the selection, select only this node
-  if (!selected.has(index)) selectOnly(index);
-
-  // One undo point per resize gesture, recorded before anything resizes.
-  recordUndoPoint();
-
-  const startBoxes: Record<number, Box> = {};
-  for (const i of selected) {
-    const box = nodeBox(i);
-    if (box) startBoxes[i] = box;
-  }
-  const groupBox = unionBox(Object.values(startBoxes));
-  const startBox = nodeBox(index) ?? {
-    x: 0,
-    y: 0,
-    width: DEFAULT_NODE_WIDTH,
-    height: DEFAULT_NODE_HEIGHT,
-  };
-  const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-
-  interaction = {
-    type: "resizing",
-    anchorIndex: index,
-    handle,
-    startBox,
-    startPointer: svgCoords,
-    groupBox,
-    startBoxes,
-  };
-}
-
-// Moves every node in `startPositions` (a snapshot of the whole selection
-// taken when the drag began) by the same (deltaX, deltaY) offset from its
-// own snapshot position — recomputed from the snapshot each event (not
-// accumulated incrementally) to avoid drift. Each node still respects its
-// own active-parent containment individually — if only some of the
-// selection is constrained, the group may not move/scale perfectly
-// rigidly/uniformly, but no node is ever allowed to escape its parent's
-// box — and cascades containment to its own descendants. Shared by both
-// applyGroupDelta and applyGroupScale below, since they only differ in
-// how `next` is computed (a positional delta vs. a size/position scale).
-function writeClampedToActiveParent(index: number, next: Box) {
-  const ownParentBox = activeParentBox(index);
-  const clamped = ownParentBox
-    ? clampWithin(
-      next,
-      ownParentBox,
-      CHILD_CONTAINMENT_MARGIN,
-      CHILD_CONTAINMENT_TOP_MARGIN,
-    )
-    : next;
-  setNodeBox(index, clamped);
-  reclampChildren(index);
-}
-
-// Moves every node in `startPositions` (a snapshot of the whole selection
-// taken when the drag began) by the same (deltaX, deltaY) offset from its
-// own snapshot position — recomputed from the snapshot each event (not
-// accumulated incrementally) to avoid drift. Shared by single- and
-// multi-node drags alike, since a single dragged node is just a
-// selection of one.
-function applyGroupDelta(
-  startPositions: Record<number, { x: number; y: number }>,
-  deltaX: number,
-  deltaY: number,
-) {
-  noteDiagramEdited();
-  for (const [indexStr, start] of Object.entries(startPositions)) {
-    const index = Number(indexStr);
-    const box = nodeBox(index);
-    if (!box) continue;
-    const next: Box = {
-      x: start.x + deltaX,
-      y: start.y + deltaY,
-      width: box.width,
-      height: box.height,
-    };
-    writeClampedToActiveParent(index, next);
-  }
-}
-
-// Scales every node in `startBoxes` (a snapshot of the whole selection
-// taken when the resize began) by (scaleX, scaleY), applied to both
-// position (relative to the selection's fixed top-left, `groupBox`) and
-// size. Shared by single- and multi-node resizes alike, since a single
-// resized node is just a selection of one.
-function applyGroupScale(
-  startBoxes: Record<number, Box>,
-  groupBox: Box,
-  scaleX: number,
-  scaleY: number,
-) {
-  for (const [indexStr, startBox] of Object.entries(startBoxes)) {
-    const index = Number(indexStr);
-    const relX = startBox.x - groupBox.x;
-    const relY = startBox.y - groupBox.y;
-    const next: Box = {
-      x: snap(groupBox.x + relX * scaleX),
-      y: snap(groupBox.y + relY * scaleY),
-      width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
-      height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
-    };
-    writeClampedToActiveParent(index, next);
-  }
-}
-
-function onSvgMouseMove(event: MouseEvent) {
-  // Remember where the pointer is, for the next keyboard-spawned entity
-  // (spawnAnchor). Updated on every move — including mid-drag, so an entity
-  // spawned right after a drag lands where it was dropped.
-  cursorClient = { x: event.clientX, y: event.clientY };
-  // Captured to a local const so TypeScript can narrow `current.type` per
-  // switch case below — narrowing directly on the live `interaction`
-  // $state binding doesn't work reliably across these branches.
-  const current = interaction;
-  switch (current.type) {
-    case "dragging": {
-      const anchorStart = current.startPositions[current.anchorIndex];
-      const anchorBox = nodeBox(current.anchorIndex);
-      if (anchorStart && anchorBox) {
-        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        let anchorNext: Box = {
-          x: snap(svgCoords.x - current.offsetX),
-          y: snap(svgCoords.y - current.offsetY),
-          width: anchorBox.width,
-          height: anchorBox.height,
+      (createdPath) => {
+        const fullKey = createdPath ?? data.label;
+        if (!data.sourceLabel) {
+          const slash = fullKey.lastIndexOf("/");
+          const placementParent =
+            slash === -1 ? fullKey : fullKey.slice(0, slash);
+          toastState.show(
+            `Created definition "${data.label}" and placed it in ${placementParent}`,
+            "success",
+          );
+        }
+        const center = viewportCenterBox();
+        const worldX = data.position ? snap(data.position.x) : center.x;
+        const worldY = data.position ? snap(data.position.y) : center.y;
+        checked[fullKey] = {
+          x: worldX,
+          y: worldY,
+          width: DEFAULT_NODE_WIDTH,
+          height: DEFAULT_NODE_HEIGHT,
+          textAlign: data.textAlign ?? DEFAULT_TEXT_ALIGN,
         };
-        const anchorParentBox = activeParentBox(current.anchorIndex);
-        if (anchorParentBox) {
-          anchorNext = clampWithin(
-            anchorNext,
-            anchorParentBox,
-            CHILD_CONTAINMENT_MARGIN,
-            CHILD_CONTAINMENT_TOP_MARGIN,
-          );
+        savedLayout[fullKey] = { ...checked[fullKey] };
+        const newIndex = keyToIndex.get(fullKey);
+        if (newIndex !== undefined) {
+          selectOnly(newIndex);
         }
-        // The whole selection moves by the same delta the anchor (grabbed)
-        // node moved by.
-        const deltaX = anchorNext.x - anchorStart.x;
-        const deltaY = anchorNext.y - anchorStart.y;
-        applyGroupDelta(current.startPositions, deltaX, deltaY);
-        applyAnnotationDelta(deltaX, deltaY);
+      },
+    );
+    if (!applied) return;
+  }
 
-        // Check potential drop/reparent target candidate only if Alt is held
-        if (event.altKey) {
-          const candidateBoxes: { index: number; box: Box; depth: number }[] =
-            [];
-          for (const i of renderOrder) {
-            if (i === current.anchorIndex || selected.has(i)) continue;
-            if (components[i]?.leaf) continue;
-            if (isDescendantOf(i, current.anchorIndex)) continue;
-            const b = nodeBox(i);
-            if (b) {
-              candidateBoxes.push({
-                index: i,
-                box: b,
-                depth: depthOf(i, parentOf),
-              });
-            }
-          }
-          const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
-          const currentParent = parentOf(current.anchorIndex);
-          if (foundTarget !== null && foundTarget !== currentParent) {
-            reparentTargetIndex = foundTarget;
-          } else {
-            reparentTargetIndex = null;
-          }
-        } else {
-          reparentTargetIndex = null;
+  function onCanvasDblClick(event: MouseEvent) {
+    const target = event.target as HTMLElement | SVGElement;
+    if (target === root_svg || target.tagName === "rect") {
+      const coords = svgPoint(root_svg, event.clientX, event.clientY);
+      openCreateComponentModal(
+        nodeTopLeftAt(coords, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+      );
+    }
+  }
+
+  // Flat read-model of the compiled output: one `ComponentData` per canonical
+  // component key, rebuilt whenever the model changes. This is the only shape
+  // the canvas and the inspector need — they look components up *by key*, never
+  // by walking a tree.
+  let componentData = $derived(componentDataByKey(model));
+
+  let selectedKey = $derived(
+    selectedKeys.size === 1
+      ? (selectedKeys.values().next().value ?? null)
+      : null,
+  );
+
+  let selectedComponentData = $derived(
+    selectedKey ? (componentData.get(selectedKey) ?? null) : null,
+  );
+
+  async function handleUpdateSelectedComponent(
+    patch: Partial<ComponentData>,
+  ): Promise<void> {
+    if (!selectedKey) return;
+    const key = selectedKey;
+    await runModelLayoutTransaction(`update ${key}`, {
+      kind: "update_component",
+      path: key,
+      patch,
+    });
+  }
+
+  async function handleRenameSelectedComponent(
+    newLabel: string,
+  ): Promise<void> {
+    if (!selectedKey) return;
+    const parts = selectedKey.split("/").filter(Boolean);
+    const oldLabel = parts[parts.length - 1];
+    if (newLabel === oldLabel) return;
+    const parentPath = parts.slice(0, -1).join("/");
+    const newKey = `${parentPath}/${newLabel}`;
+    const oldKey = selectedKey;
+
+    // Routed through the store API (not a direct label assignment) so the
+    // sibling-collision check runs and the mutation observer records the
+    // rename for the action log.
+    await runModelLayoutTransaction(
+      `rename ${oldKey}`,
+      {
+        kind: "rename_component",
+        path: oldKey,
+        newLabel,
+      },
+      () => {
+        if (checked[oldKey]) {
+          checked[newKey] = checked[oldKey];
+          delete checked[oldKey];
         }
-      } else if (
-        current.anchorIndex === -1 && current.annotationStartPositions
-      ) {
-        // Annotation-anchored drag (a note was grabbed): compute the delta
-        // from the grabbed note's DRAG-START snapshot (like nodes do),
-        // never from its live position, so each move is a clean delta off a
-        // fixed base — no feedback, no runaway/flicker, cursor-accurate.
-        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        const anchorStart = current.annotationStartPositions[
-          current.annotationAnchor ?? -1
-        ];
-        if (anchorStart) {
-          const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
-          const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
-          applyAnnotationDelta(deltaX, deltaY);
-          // A mixed selection drags as a group whichever kind was grabbed:
-          // the same delta moves the selected components too, each clamped
-          // into its own active parent just as in a node-anchored drag.
-          applyGroupDelta(current.startPositions, deltaX, deltaY);
+        if (savedLayout[oldKey]) {
+          savedLayout[newKey] = savedLayout[oldKey];
+          delete savedLayout[oldKey];
         }
-      }
+        if (selectedKeys.delete(oldKey)) selectedKeys.add(newKey);
+      },
+    );
+  }
+
+  async function handleDeleteSelectedComponent(): Promise<void> {
+    if (!selectedKey) return;
+    // View-only removal: the model keeps the component, so re-checking its
+    // sidebar row restores the node where it was (savedLayout is preserved,
+    // exactly like unchecking). Recorded on the layout history, so Ctrl+Z
+    // brings the node back.
+    recordUndoPoint();
+    removeSelectedComponent();
+  }
+
+  // The removal itself, without the undo point — so deleteSelection() can
+  // remove a component and a note together as a single undo point.
+  function removeSelectedComponent(): void {
+    if (!selectedKey) return;
+    const keyToRemove = selectedKey;
+    delete checked[keyToRemove];
+    const index = keyToIndex.get(keyToRemove);
+    if (index !== undefined) deselect(index);
+    else clearSelection();
+  }
+
+  async function handleOpenDocumentation(): Promise<void> {
+    if (!selectedComponentData) return;
+    const label = selectedComponentData.label;
+    const docPath = `docs/${label}.md`;
+    try {
+      await fs.readFile(docPath);
+    } catch {
+      await fs.mkdir("docs", { recursive: true });
+      await fs.writeFile(docPath, `# ${label}\n`);
+    }
+    await goto(
+      `${resolve("/projects/[id]/code", { id: projectId })}?file=${encodeURIComponent(
+        docPath,
+      )}`,
+    );
+  }
+
+  function onPortMouseDown(
+    event: MouseEvent,
+    compIndex: number,
+    portLabel: string | null,
+    worldPoint: { x: number; y: number },
+    startSide?: ConnectionSide,
+  ) {
+    // Only the left button draws a connection. Every other button belongs to
+    // what is underneath, and a port dot sits *on* the node's border — so the
+    // middle one has to fall through to the node's own mousedown (its detail
+    // view, see onNodeMouseDown) or the hole would be exactly where the pointer
+    // lands. A right-click lands on the node's context menu, which used to open
+    // over a connection this had already started drawing.
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    event.preventDefault();
+    interaction = {
+      type: "connecting",
+      sourceComponentIndex: compIndex,
+      sourcePortLabel: portLabel,
+      startSide,
+      sourcePoint: worldPoint,
+      currentPoint: worldPoint,
+    };
+  }
+
+  function findHoveredTarget(
+    point: { x: number; y: number },
+    sourceIndex: number,
+  ): { compIndex: number; portLabel: string | null } | null {
+    const candidates = renderOrder.flatMap((i) => {
+      if (i === sourceIndex) return [];
+      const box = nodeBox(i);
+      if (!box) return [];
+      const key = getComponentKey(i);
+      const compData = componentData.get(key);
+      const ports =
+        compData && compData.ports.length > 0
+          ? computePortPositions(box.width, box.height, compData.ports).map(
+              (p) => ({
+                label: p.label,
+                x: p.x,
+                y: p.y,
+              }),
+            )
+          : [];
+      return [
+        {
+          index: i,
+          box,
+          depth: depthOf(i, parentOf),
+          ports,
+        },
+      ];
+    });
+
+    return findConnectTarget(point, sourceIndex, candidates);
+  }
+
+  async function handleCreateConnection(
+    sourceCompIndex: number,
+    sourcePortLabel: string | null,
+    targetCompIndex: number,
+    targetPortLabel: string | null,
+    startSide?: ConnectionSide,
+  ): Promise<void> {
+    if (sourceCompIndex === targetCompIndex) return;
+
+    const srcKey = getComponentKey(sourceCompIndex);
+    const targetKey = getComponentKey(targetCompIndex);
+
+    const srcParts = srcKey.split("/").filter(Boolean);
+    const targetParts = targetKey.split("/").filter(Boolean);
+
+    const srcCompLabel = srcParts[srcParts.length - 1];
+    const targetCompLabel = targetParts[targetParts.length - 1];
+
+    const lca = computeLcaConnection(
+      srcKey,
+      sourcePortLabel,
+      targetKey,
+      targetPortLabel,
+    );
+
+    if (!lca) {
+      alert("Cannot connect components across different systems.");
       return;
     }
-    case "resizing": {
-      if (current.annotationResize) {
-        // Annotation resize: the corner drag maps (deltaX, deltaY) to a new
-        // font scale — startScale + fractional distance, normalized to the
-        // 0.5 floor and 2 decimals (same as the inspector input).
-        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        const deltaX = svgCoords.x - current.startPointer.x;
-        const deltaY = svgCoords.y - current.startPointer.y;
-        const a = annotations[current.annotationResize.index];
-        if (a) {
-          const start = current.annotationResize.startScale;
-          const scale = normalizeAnnotationScale(
-            start + (deltaX + deltaY) / 100,
-          );
-          annotations[current.annotationResize.index] = {
-            ...a,
-            scale,
-          };
-        }
-        return;
-      }
-      const anchorStart = current.startBox;
-      if (anchorStart) {
-        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-        const deltaX = svgCoords.x - current.startPointer.x;
-        const deltaY = svgCoords.y - current.startPointer.y;
 
-        if (selected.size <= 1) {
-          const resizedBox = computeResizedBox(
-            anchorStart,
-            current.handle,
-            deltaX,
-            deltaY,
-            MIN_NODE_SIZE,
-          );
-          const next: Box = {
-            x: snap(resizedBox.x),
-            y: snap(resizedBox.y),
-            width: snap(resizedBox.width),
-            height: snap(resizedBox.height),
-          };
-          writeClampedToActiveParent(current.anchorIndex, next);
-        } else {
-          const resizedBox = computeResizedBox(
-            anchorStart,
-            current.handle,
-            deltaX,
-            deltaY,
-            MIN_NODE_SIZE,
-          );
-          const scaleX = resizedBox.width / anchorStart.width;
-          const scaleY = resizedBox.height / anchorStart.height;
-          applyGroupScale(current.startBoxes, current.groupBox, scaleX, scaleY);
-        }
-      }
+    const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
+    const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
+    if (!connLabel) return;
+
+    // The backend silently no-ops a same-scope duplicate (the op reports
+    // applied with unchanged HCL), so without this the draw gesture would
+    // accept the name and visibly do nothing.
+    if (connections.some((c) => c.label === connLabel)) {
+      alert(
+        `A connection named "${connLabel}" already exists. Choose a different name.`,
+      );
       return;
     }
-    case "panning": {
-      const dxScreen = event.clientX - current.lastX;
-      const dyScreen = event.clientY - current.lastY;
-      const zoom = editor_state.view.zoom;
-      editor_state.view.x -= dxScreen / zoom;
-      editor_state.view.y -= dyScreen / zoom;
+
+    await runModelLayoutTransaction(
+      `connect ${connLabel}`,
+      {
+        kind: "add_connection",
+        scopePath: lca.lcaScopePath,
+        label: connLabel,
+        from: lca.from,
+        to: lca.to,
+      },
+      () => {
+        if (startSide) {
+          savedConnections[connLabel] = { startSide };
+        }
+      },
+    );
+  }
+
+  // Open context menu state: null when closed, otherwise the click position
+  // (client coords) plus the item rows to show.
+  let contextMenu = $state<{
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+  } | null>(null);
+
+  function closeContextMenu(): void {
+    contextMenu = null;
+  }
+
+  function openNodeContextMenu(event: MouseEvent, index: number): void {
+    event.stopPropagation();
+    event.preventDefault();
+    focusCanvas();
+    if (!selected.has(index)) selectOnly(index);
+    selectedConnection = null;
+    const target = detailTarget(index);
+    contextMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "Hide from this view",
+          shortcut: "H",
+          action: () => void hideSelectedFromView(),
+        },
+        {
+          label: "Jump to documentation",
+          shortcut: "O",
+          action: () =>
+            void handleOpenDocumentation().catch(reportDiagramError),
+        },
+        {
+          label:
+            target.kind === "create"
+              ? "Create a detailed view"
+              : "Jump to detailed view",
+          shortcut: "V",
+          action: () => void handleDetailView(index).catch(reportDiagramError),
+        },
+        {
+          // About the whole selection, not the node under the pointer.
+          label: "Create new view from selection",
+          shortcut: "S",
+          action: () => void handleCreateViewFromSelection(),
+        },
+      ],
+    };
+  }
+
+  function openAnnotationContextMenu(event: MouseEvent, index: number): void {
+    event.stopPropagation();
+    event.preventDefault();
+    focusCanvas();
+    if (!selectedAnnotations.has(index)) selectAnnotation(index);
+    selectedConnection = null;
+    contextMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "Delete",
+          shortcut: "Del",
+          dangerous: true,
+          action: () => deleteSelectedAnnotations(),
+        },
+      ],
+    };
+  }
+
+  function openConnectionContextMenu(event: MouseEvent, label: string): void {
+    event.stopPropagation();
+    event.preventDefault();
+    focusCanvas();
+    selectedConnection = label;
+    clearSelection();
+    contextMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "Delete",
+          shortcut: "Del",
+          dangerous: true,
+          action: () =>
+            void handleDeleteSelectedConnection().catch(reportDiagramError),
+        },
+      ],
+    };
+  }
+
+  function openCanvasContextMenu(event: MouseEvent): void {
+    event.preventDefault();
+    focusCanvas();
+    // Both "New …" rows spawn at the right-click point itself (explicitly,
+    // rather than through the tracked pointer, which the menu may already be
+    // covering) — the same placement as the `C`/`N` keys they advertise.
+    const world = svgPoint(root_svg, event.clientX, event.clientY);
+    contextMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "New component",
+          shortcut: "C",
+          action: () =>
+            openCreateComponentModal(
+              nodeTopLeftAt(world, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+            ),
+        },
+        {
+          label: "New annotation",
+          shortcut: "N",
+          action: () => addAnnotationHandler(world),
+        },
+        { label: "Zoom to fill", shortcut: "F", action: () => zoomToFill() },
+        {
+          label: "Reset view",
+          shortcut: "R",
+          action: () => reset_view(editor_state),
+        },
+        {
+          label: "Toggle grid",
+          shortcut: "G",
+          action: () => {
+            gridVisible = !gridVisible;
+          },
+        },
+      ],
+    };
+  }
+
+  // The left button selects and drags a node (below); the left button while
+  // Space is held pans, whatever is under the cursor — including directly over a
+  // node, so it must be handled here too (not just in onCanvasMouseDown, which
+  // only sees clicks on empty canvas).
+  //
+  // The middle button over a node is the pointer's `V`: it opens that node's
+  // detail view, or creates one when the component has none. It is handled first,
+  // before the guards below, for two reasons. It beats panning — middle-drag
+  // from anywhere on the canvas still pans (onCanvasMouseDown), and panning over
+  // a node is Space's job alone. And it deliberately touches nothing else: it
+  // writes no position, so it needs neither an undo point nor the auto-layout
+  // guard (that one exists because a *drag* would fight positions being
+  // rewritten every frame), and it leaves the selection alone — the clicked
+  // node is its own subject, the way a right-click selects only to feed the
+  // rows below.
+  function onNodeMouseDown(event: MouseEvent, index: number) {
+    if (event.button === 1) {
+      // The same preventDefault every other branch here makes: it is what
+      // suppresses text selection, and here it also suppresses the browser's
+      // own autoscroll, which would otherwise start on this very click.
+      event.preventDefault();
+      void handleDetailView(index).catch(reportDiagramError);
+      return;
+    }
+
+    selectedConnection = null;
+    // Auto-layout is actively writing node positions every frame; letting a
+    // drag/select start at the same time would silently fight it (clicks
+    // would visibly do nothing useful) — see the cursor style on <svg>
+    // below for the matching "busy" affordance.
+    if (autoLayoutRunning) return;
+    focusCanvas();
+    if (event.button === 0 && isSpaceHeld()) {
+      event.preventDefault();
       interaction = {
         type: "panning",
         lastX: event.clientX,
@@ -3016,646 +2579,1130 @@ function onSvgMouseMove(event: MouseEvent) {
       };
       return;
     }
-    case "connecting": {
-      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    if (event.button !== 0) return;
+    event.preventDefault();
+
+    // One undo point per drag *gesture* (not per mousemove) — recorded here,
+    // at mousedown, before anything moves.
+    recordUndoPoint();
+
+    // Shift+click toggles the node in/out of the selection (multi-select).
+    // A plain click on a node that isn't already part of the selection
+    // replaces the selection with just that node; clicking a node that's
+    // already selected (as part of a multi-selection) keeps the whole
+    // selection, so dragging it moves the whole group.
+    if (event.shiftKey) {
+      if (selected.has(index)) {
+        deselect(index);
+      } else {
+        select(index);
+      }
+    } else if (!selected.has(index)) {
+      selectOnly(index);
+    }
+
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    const startPositions = snapshotNodePositions();
+    const anchorStart = startPositions[index] ?? { x: 0, y: 0 };
+    interaction = {
+      type: "dragging",
+      anchorIndex: index,
+      offsetX: svgCoords.x - anchorStart.x,
+      offsetY: svgCoords.y - anchorStart.y,
+      startPositions,
+      annotationStartPositions: snapshotAnnotationPositions(),
+    };
+  }
+
+  // Snapshot the currently selected annotations' positions for a group drag,
+  // keyed by annotation index (stable for the whole drag).
+  function snapshotAnnotationPositions(): Record<
+    number,
+    { x: number; y: number }
+  > {
+    const map: Record<number, { x: number; y: number }> = {};
+    for (const i of selectedAnnotations) {
+      const a = annotations[i];
+      if (a) map[i] = { x: a.x, y: a.y };
+    }
+    return map;
+  }
+
+  // Mouse down on an annotation label: select it and start dragging it (and
+  // any other selected annotations) with the same interaction as nodes.
+  function onAnnotationMouseDown(event: MouseEvent, index: number): void {
+    event.stopPropagation();
+    selectedConnection = null;
+    if (autoLayoutRunning) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    focusCanvas();
+    recordUndoPoint();
+
+    if (event.shiftKey) {
+      if (selectedAnnotations.has(index)) {
+        selectedAnnotations.delete(index);
+      } else {
+        // Extends the selection with a note (shift-click); the component
+        // selection is kept — see select().
+        selectedAnnotations.add(index);
+      }
+    } else if (!selectedAnnotations.has(index)) {
+      selectAnnotation(index);
+    }
+
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    const anchor = annotations[index] ?? { x: 0, y: 0 };
+    interaction = {
+      type: "dragging",
+      anchorIndex: -1, // no node anchor
+      offsetX: svgCoords.x - anchor.x,
+      offsetY: svgCoords.y - anchor.y,
+      // The selected components' positions, like a node drag snapshots. A
+      // component and a note can be selected together, and the selection
+      // drags as a group whichever kind is grabbed — the note is the delta
+      // base, but the components ride along (see the annotation branch of
+      // onSvgMouseMove).
+      startPositions: snapshotNodePositions(),
+      // The dragged annotation's index (delta base) + the snapshot of the
+      // whole annotation selection at drag start.
+      annotationAnchor: index,
+      annotationStartPositions: snapshotAnnotationPositions(),
+    };
+  }
+
+  // Snapshot of the selected components' positions for a group drag, keyed by
+  // index. Shared by both mousedown handlers: a drag moves the whole selection,
+  // so whichever kind starts it needs the other's positions too.
+  function snapshotNodePositions(): Record<number, { x: number; y: number }> {
+    const map: Record<number, { x: number; y: number }> = {};
+    for (const i of selected) {
+      const box = checked[getComponentKey(i)];
+      if (box) map[i] = { x: box.x, y: box.y };
+    }
+    return map;
+  }
+
+  // Move every selected annotation by the same (deltaX, deltaY) from its own
+  // drag-start snapshot — recomputed from the snapshot each event (like
+  // applyGroupDelta), never accumulated, so there is no drift or flicker.
+  function applyAnnotationDelta(deltaX: number, deltaY: number): void {
+    noteDiagramEdited();
+    const current = interaction;
+    if (current.type !== "dragging") return;
+    const starts = current.annotationStartPositions;
+    if (!starts) return;
+    for (const idxStr of Object.keys(starts)) {
+      const idx = Number(idxStr);
+      const start = starts[idx];
+      const a = annotations[idx];
+      if (!a || !start) continue;
+      annotations[idx] = {
+        ...a,
+        x: snap(start.x + deltaX),
+        y: snap(start.y + deltaY),
+      };
+    }
+  }
+
+  // Start resizing a selected annotation from one of its corner handles.
+  // The drag changes the annotation's `scale` (100% = 1.0) — corner-pull
+  // distance scales the font multiplier, mirroring how node resize handles
+  // work but as a pure scale factor instead of a box.
+  function onAnnotationResizeMouseDown(
+    event: MouseEvent,
+    index: number,
+    handle: ResizeHandle,
+  ): void {
+    event.stopPropagation();
+    if (autoLayoutRunning) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    if (!selectedAnnotations.has(index)) selectAnnotation(index);
+    recordUndoPoint();
+    const a = annotations[index];
+    if (!a) return;
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    interaction = {
+      type: "resizing",
+      anchorIndex: -1,
+      handle,
+      startBox: { x: a.x, y: a.y, width: 0, height: 0 },
+      startPointer: svgCoords,
+      groupBox: { x: a.x, y: a.y, width: 0, height: 0 },
+      startBoxes: {},
+      annotationResize: { index, startScale: a.scale ?? 1 },
+    };
+  }
+
+  function onCanvasMouseDown(event: MouseEvent) {
+    selectedConnection = null;
+    // See onNodeMouseDown's matching guard above.
+    if (autoLayoutRunning) return;
+    focusCanvas();
+    if (event.button === 1 || (event.button === 0 && isSpaceHeld())) {
+      event.preventDefault();
       interaction = {
-        ...current,
-        currentPoint: svgCoords,
+        type: "panning",
+        lastX: event.clientX,
+        lastY: event.clientY,
       };
       return;
     }
-    case "marquee": {
-      const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
-      interaction = { ...current, x: svgCoords.x, y: svgCoords.y };
-      return;
-    }
-    case "idle":
-      return;
+    if (event.button !== 0) return;
+
+    // Left-drag on empty canvas starts a marquee selection; the actual
+    // selection change happens on mouseup, once the drag's extent is known
+    // (see onSvgMouseUp).
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+    interaction = {
+      type: "marquee",
+      startX: svgCoords.x,
+      startY: svgCoords.y,
+      x: svgCoords.x,
+      y: svgCoords.y,
+    };
   }
-}
 
-function onSvgMouseLeave() {
-  // The pointer left the canvas: drop the spawn anchor, so a shortcut
-  // pressed from a sidebar falls back to the viewport center instead of
-  // dropping an entity where the pointer used to be.
-  cursorClient = null;
-  onSvgMouseUp();
-}
-
-function onSvgMouseUp() {
-  const current = interaction;
-  if (current.type === "connecting") {
-    const target = findHoveredTarget(
-      current.currentPoint,
-      current.sourceComponentIndex,
-    );
-    if (target) {
-      void handleCreateConnection(
-        current.sourceComponentIndex,
-        current.sourcePortLabel,
-        target.compIndex,
-        target.portLabel,
-        current.startSide,
-      ).catch(reportDiagramError);
-    }
-  }
-  if (current.type === "dragging") {
-    if (reparentTargetIndex !== null) {
-      const srcKey = getComponentKey(current.anchorIndex);
-      const targetKey = getComponentKey(reparentTargetIndex);
-      reparentTargetIndex = null;
-      void executeReparent(srcKey, targetKey).catch(reportDiagramError);
-    }
-  }
-  if (current.type === "marquee") {
-    // A marquee with negligible size is just a click: clear the selection
-    // (matches the old "click empty canvas to deselect" behavior).
-    // Otherwise, commit whatever the live preview (marqueeCandidates) was
-    // already showing.
-    const box = marqueeBox;
-    clearSelection();
-    if (box && (box.width > 2 || box.height > 2)) {
-      for (const index of marqueeCandidates) select(index);
-      for (const i of marqueeAnnotationCandidates) selectedAnnotations.add(i);
-    }
-  }
-  interaction = { type: "idle" };
-}
-
-// Zooms in/out on the mouse wheel, keeping the point under the cursor
-// visually fixed while the rest of the canvas scales around it.
-function onWheel(event: WheelEvent) {
-  event.preventDefault();
-  const zoom = editor_state.view.zoom;
-  const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
-  const newZoom = clamp_zoom(zoom * factor);
-  if (newZoom === zoom) return;
-
-  const mouseSvg = svgPoint(root_svg, event.clientX, event.clientY);
-  const oldWidth = canvas_width / zoom;
-  const oldHeight = canvas_height / zoom;
-  const fracX = (mouseSvg.x - editor_state.view.x) / oldWidth;
-  const fracY = (mouseSvg.y - editor_state.view.y) / oldHeight;
-
-  const newWidth = canvas_width / newZoom;
-  const newHeight = canvas_height / newZoom;
-
-  editor_state.view.zoom = newZoom;
-  editor_state.view.x = mouseSvg.x - fracX * newWidth;
-  editor_state.view.y = mouseSvg.y - fracY * newHeight;
-}
-
-let selectedConnection = $state<string | null>(null);
-
-let selectedConnectionData = $derived.by(() => {
-  if (!selectedConnection) return null;
-  const conn = connections.find((c) => c.label === selectedConnection);
-  if (!conn) return null;
-  const fromKey = getComponentKey(conn.from);
-  const toKey = getComponentKey(conn.to);
-  const fromCompLabel = components[conn.from]?.label ?? fromKey;
-  const toCompLabel = components[conn.to]?.label ?? toKey;
-  return {
-    label: conn.label,
-    from: fromKey,
-    to: toKey,
-    fromCompLabel,
-    toCompLabel,
-    startSide: savedConnections[conn.label]?.startSide,
-    endSide: savedConnections[conn.label]?.endSide,
-  };
-});
-
-// The five routing choices the connection inspector offers for each endpoint:
-// "Auto" (no override, the router picks a side) plus the four border sides.
-const SIDE_OPTIONS: {
-  value: ConnectionSide | undefined;
-  label: string;
-}[] = [
-  { value: undefined, label: "Auto" },
-  { value: "top", label: "Top" },
-  { value: "right", label: "Right" },
-  { value: "bottom", label: "Bottom" },
-  { value: "left", label: "Left" },
-];
-
-function setConnectionStartSide(side: ConnectionSide | undefined) {
-  if (!selectedConnection) return;
-  recordUndoPoint();
-  const existing = savedConnections[selectedConnection] || {};
-  if (side) {
-    savedConnections[selectedConnection] = { ...existing, startSide: side };
-  } else {
-    const updated = { ...existing };
-    delete updated.startSide;
-    if (updated.endSide) {
-      savedConnections[selectedConnection] = updated;
-    } else {
-      delete savedConnections[selectedConnection];
-    }
-  }
-}
-
-function setConnectionEndSide(side: ConnectionSide | undefined) {
-  if (!selectedConnection) return;
-  recordUndoPoint();
-  const existing = savedConnections[selectedConnection] || {};
-  if (side) {
-    savedConnections[selectedConnection] = { ...existing, endSide: side };
-  } else {
-    const updated = { ...existing };
-    delete updated.endSide;
-    if (updated.startSide) {
-      savedConnections[selectedConnection] = updated;
-    } else {
-      delete savedConnections[selectedConnection];
-    }
-  }
-}
-
-async function handleDeleteSelectedConnection(
-  skipConfirm = false,
-): Promise<void> {
-  if (!selectedConnection) return;
-  const label = selectedConnection;
-  if (
-    !skipConfirm &&
-    !confirm(
-      `Delete connection "${label}"? This will remove it from the system model.`,
-    )
+  // Starts a resize from any edge or corner handle of a node. Stops propagation
+  // so the handle's own mousedown doesn't also bubble up to the node's onmousedown.
+  function onResizeHandleMouseDown(
+    event: MouseEvent,
+    index: number,
+    handle: ResizeHandle,
   ) {
-    return;
+    // See onNodeMouseDown's matching guard above.
+    if (autoLayoutRunning) return;
+    if (event.button !== 0) return;
+    // Let a space-held click bubble up to the node's own mousedown handler,
+    // which starts panning instead of a resize — keeps "how to start a pan"
+    // in one place.
+    if (isSpaceHeld()) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    // If node is not already part of the selection, select only this node
+    if (!selected.has(index)) selectOnly(index);
+
+    // One undo point per resize gesture, recorded before anything resizes.
+    recordUndoPoint();
+
+    const startBoxes: Record<number, Box> = {};
+    for (const i of selected) {
+      const box = nodeBox(i);
+      if (box) startBoxes[i] = box;
+    }
+    const groupBox = unionBox(Object.values(startBoxes));
+    const startBox = nodeBox(index) ?? {
+      x: 0,
+      y: 0,
+      width: DEFAULT_NODE_WIDTH,
+      height: DEFAULT_NODE_HEIGHT,
+    };
+    const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+
+    interaction = {
+      type: "resizing",
+      anchorIndex: index,
+      handle,
+      startBox,
+      startPointer: svgCoords,
+      groupBox,
+      startBoxes,
+    };
   }
-  // Scope search lives in the dispatcher (`delete_connection_by_label`).
-  await runModelLayoutTransaction(
-    `disconnect ${label}`,
-    {
-      kind: "delete_connection_by_label",
-      label,
-    },
-    () => {
-      delete savedConnections[label];
-      selectedConnection = null;
-    },
-  );
-}
 
-// Looks up a component's direct parent index, for depthOf below.
-function parentOf(index: number): number | undefined {
-  return components[index]?.parent_component_index;
-}
-
-// Indices of currently-placed nodes, ordered shallowest-first so parents
-// are always painted before their children — otherwise a child could end
-// up visually hidden behind its parent's fill, depending on arbitrary
-// arena order.
-let renderOrder = $derived(
-  computeRenderOrder(
-    Object.keys(checked)
-      .map((key) => keyToIndex.get(key))
-      .filter((index): index is number => index !== undefined)
-      .filter((index) =>
-        selectedSystemIndex === -1 || systemComponentIndices.has(index)
-      ),
-    parentOf,
-  ),
-);
-
-// Nodes that would be selected if the marquee were released right now —
-// i.e. nodes whose full bounding box is enclosed by the marquee rectangle.
-// Drives the live selection preview while dragging; committed as-is by
-// onSvgMouseUp once the mouse is released.
-let marqueeCandidates: Set<number> = $derived.by(() => {
-  if (!marqueeBox) return new Set();
-  const box = marqueeBox;
-  // Built fresh and returned as-is on every recomputation; reactivity
-  // already comes from the surrounding $derived.by, not from mutating
-  // this Set later.
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const candidates = new Set<number>();
-  for (const index of renderOrder) {
-    const box2 = nodeBox(index);
-    if (box2 && boxContains(box, box2)) candidates.add(index);
-  }
-  return candidates;
-});
-
-// Hit-box of an annotation, matching the geometry used for rendering and
-// click hit-testing exactly (so marquee selection, the highlight state and
-// the visible box all agree). Delegates to the shared annotationBounds so
-// "zoom to fill" and the static renderers can't drift from hit-testing.
-function annotationHitBox(
-  ann: Annotation,
-): { x: number; y: number; width: number; height: number } {
-  return annotationBounds(ann);
-}
-
-// Annotations caught by the current marquee box (live preview), parallel to
-// marqueeCandidates for nodes.
-let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
-  if (!marqueeBox) return new Set();
-  const box = marqueeBox;
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const candidates = new Set<number>();
-  annotations.forEach((ann, i) => {
-    if (boxContains(box, annotationHitBox(ann))) candidates.add(i);
-  });
-  return candidates;
-});
-
-// The scene DiagramCanvas draws. Highlighted sets include the live marquee
-// preview; connect handles follow the committed selection, or every node
-// while a connection drag is active. Paths are not stored here — the canvas
-// recomputes them from these boxes.
-let editorScene = $derived.by(() => {
-  const current = interaction;
-  const nodes = renderOrder.flatMap((index) => {
-    const box = nodeBox(index);
-    const component = components[index];
-    if (!box || !component) return [];
-    const compKey = getComponentKey(index);
-    const compData = componentData.get(compKey);
-    return [{
-      id: compKey,
-      index,
-      label: component.label,
-      box,
-      parentIndex: component.parent_component_index,
-      icon: compData?.icon ?? component.icon,
-      color: compData?.color || component.color,
-      border: compData?.border ?? component.border,
-      font: compData?.font ?? component.font,
-      ports: compData && compData.ports.length > 0 ? compData.ports : [],
-    }];
-  });
-  const edges: EditorSceneEdgeInput[] = connections
-    .filter((conn) =>
-      selectedSystemIndex === -1 ||
-      (systemComponentIndices.has(conn.from) &&
-        systemComponentIndices.has(conn.to))
-    )
-    .map((conn) => {
-      const edge: EditorSceneEdgeInput = {
-        from: conn.from,
-        to: conn.to,
-        label: conn.label,
-        fromKey: getComponentKey(conn.from),
-        toKey: getComponentKey(conn.to),
-      };
-      const saved = savedConnections[conn.label];
-      if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
-      if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
-      return edge;
-    });
-  return buildEditorScene({
-    nodes,
-    edges,
-    notes: annotations,
-    selectedNodeIndexes: current.type === "marquee"
-      ? marqueeCandidates
-      : selected,
-    connectHandles: current.type === "connecting" ? "all" : selected,
-    selectedNoteIndexes: current.type === "marquee"
-      ? marqueeAnnotationCandidates
-      : selectedAnnotations,
-    reparentTargetIndex,
-    selectedEdgeLabel: selectedConnection,
-    marquee: marqueeBox,
-    rubberBand: current.type === "connecting"
-      ? {
-        from: current.sourcePoint,
-        to: current.currentPoint,
-        orientation: "horizontal",
-      }
-      : null,
-  });
-});
-
-// View switches tween nodes and the camera. Undo/redo tween nodes only.
-// Drags and auto-layout cut, otherwise the picture would lag the cursor.
-$effect(() => {
-  const scene = editorScene;
-  if (!diagramLayoutLoaded) return;
-  // Layout keys are in, but the model has not mapped them to nodes yet.
-  // Fitting now would aim the camera at an empty (or annotation-only) scene.
-  if (
-    presentMode === "view" &&
-    Object.keys(checked).length > 0 &&
-    scene.nodes.length === 0
-  ) return;
-  const mode = presentMode;
-  presentMode = "cut";
-  const bounds = sceneBounds(scene);
-  const fit = bounds && canvas_width > 0 && canvas_height > 0
-    ? fitCamera(bounds, { width: canvas_width, height: canvas_height })
-    : null;
-  // show() writes the stage. Untrack so that write is not a dependency of
-  // this effect — otherwise opening the page retriggers it until Svelte stops.
-  untrack(() => {
-    // A later derived update (compile, selection) must not cut an in-flight
-    // view or undo tween. The next explicit edit still cuts once it settles.
-    if (mode === "cut" && stage.settling) return;
-    stage.show(
-      scene,
-      fit,
-      {
-        transition: mode !== "cut",
-        moveCamera: mode === "view",
-        // zoomToFill and pan write editor_state directly. The stage camera
-        // stays at the origin until the first tween, which is the jump.
-        fromCamera: {
-          x: editor_state.view.x,
-          y: editor_state.view.y,
-          zoom: editor_state.view.zoom,
-        },
-      },
-      (next) => {
-        if (
-          editor_state.view.x === next.x &&
-          editor_state.view.y === next.y &&
-          editor_state.view.zoom === next.zoom
-        ) return;
-        editor_state.view.x = next.x;
-        editor_state.view.y = next.y;
-        editor_state.view.zoom = next.zoom;
-      },
-    );
-  });
-});
-
-$effect(() => () => stage.destroy());
-
-// Fraction of the viewport the diagram's bounding box should fill (in
-// whichever axis is more constraining, so it fits fully in both) when
-// "Zoom to Fill" is used.
-const ZOOM_TO_FILL_FRACTION = 0.8;
-
-// Zooms and pans so every currently-placed node's AND annotation's combined
-// bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
-// annotations far from the node cluster are never panned out of view.
-// No-op if nothing is placed on canvas.
-function zoomToFill() {
-  const nodeBoxes = renderOrder
-    .map((index) => nodeBox(index))
-    .filter(
-      (box): box is NonNullable<ReturnType<typeof nodeBox>> => box !== null,
-    );
-  const annotationBoxes = annotations.map(annotationBounds);
-  const boxes = [...nodeBoxes, ...annotationBoxes];
-  if (boxes.length === 0) return;
-  const bounds = unionBox(boxes);
-
-  const zoomX = (canvas_width * ZOOM_TO_FILL_FRACTION) / bounds.width;
-  const zoomY = (canvas_height * ZOOM_TO_FILL_FRACTION) / bounds.height;
-  const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
-
-  editor_state.view.zoom = newZoom;
-  editor_state.view.x = bounds.x + bounds.width / 2 -
-    canvas_width / newZoom / 2;
-  editor_state.view.y = bounds.y + bounds.height / 2 -
-    canvas_height / newZoom / 2;
-}
-
-// Auto-layout animation budget: stop once the simulation has settled
-// (alpha below this threshold), or after this many animation frames,
-// whichever comes first — so a pathological/never-converging case can't
-// spin forever.
-const AUTO_LAYOUT_ALPHA_MIN = 0.005;
-const AUTO_LAYOUT_MAX_FRAMES = 300;
-
-// Also stops early once every node's combined movement in a single frame
-// (summed Euclidean distance, in world units) drops below this —
-// catches layouts that have practically stopped moving well before their
-// alpha decays below AUTO_LAYOUT_ALPHA_MIN (small groups in particular
-// can visually settle almost immediately while alpha keeps decaying for
-// many more frames with no visible effect). Only checked after warmup
-// (see AUTO_LAYOUT_WARMUP_TICKS below) finishes, since forces — and thus
-// movement — are deliberately near-zero during the ramp-up itself.
-const AUTO_LAYOUT_MIN_MOVEMENT = 0.5;
-
-// Fraction of the frame budget spent ramping forces up from ~0 to full
-// strength, instead of applying at full strength from frame 1 — avoids
-// the sharp jump an instant full-strength start would otherwise cause.
-const AUTO_LAYOUT_WARMUP_FRACTION = 0.1;
-const AUTO_LAYOUT_WARMUP_TICKS = Math.round(
-  AUTO_LAYOUT_MAX_FRAMES * AUTO_LAYOUT_WARMUP_FRACTION,
-);
-
-// Whether an auto-layout animation is currently running — disables the
-// "Auto Layout" button so a second run can't start and race the first
-// one over the same node positions.
-let autoLayoutRunning = $state(false);
-
-// Runs a force-directed auto-layout pass over the target set of nodes:
-// the current selection if non-empty, otherwise every currently-placed
-// node at any level. The target set is partitioned into sibling groups
-// (groupBySiblings, keyed by immediate parent) and each group gets its
-// own independent simulation, confined around its own parent's current
-// box (or its own combined bounding box, for a top-level group or an
-// orphaned nested group whose parent isn't itself placed) — rather than
-// one flat simulation mixing unrelated hierarchy levels together. See
-// TASKS/FINISHED.md Task 50 for why: a node shouldn't be repelled by/attracted to
-// a node it isn't actually a sibling of. Every result is still written
-// through the same clamp-to-active-parent-and-cascade path a live drag
-// uses, regardless of grouping, as a containment safety net. All groups'
-// simulations are driven together, frame-by-frame, via
-// requestAnimationFrame, rather than jumping straight to the converged
-// layout.
-function runAutoLayout() {
-  if (autoLayoutRunning) return;
-
-  const targetIndices = selected.size > 0 ? [...selected] : renderOrder;
-
-  const layoutNodes: LayoutNode[] = targetIndices.flatMap((index) => {
-    const box = nodeBox(index);
-    return box ? [{ index, box }] : [];
-  });
-  if (layoutNodes.length < 2) return; // nothing meaningful to arrange
-
-  // One undo point for the whole auto-layout run, recorded before the
-  // animation starts — not per-frame.
-  recordUndoPoint();
-
-  const groups = groupBySiblings(layoutNodes, parentOf);
-  const groupLayouts = [...groups.entries()].map(
-    ([parentIndex, groupNodes]) => {
-      const groupIndexSet = new Set(groupNodes.map((n) => n.index));
-      const groupEdges: LayoutEdge[] = connections
-        .filter(
-          (conn) => groupIndexSet.has(conn.from) && groupIndexSet.has(conn.to),
+  // Moves every node in `startPositions` (a snapshot of the whole selection
+  // taken when the drag began) by the same (deltaX, deltaY) offset from its
+  // own snapshot position — recomputed from the snapshot each event (not
+  // accumulated incrementally) to avoid drift. Each node still respects its
+  // own active-parent containment individually — if only some of the
+  // selection is constrained, the group may not move/scale perfectly
+  // rigidly/uniformly, but no node is ever allowed to escape its parent's
+  // box — and cascades containment to its own descendants. Shared by both
+  // applyGroupDelta and applyGroupScale below, since they only differ in
+  // how `next` is computed (a positional delta vs. a size/position scale).
+  function writeClampedToActiveParent(index: number, next: Box) {
+    const ownParentBox = activeParentBox(index);
+    const clamped = ownParentBox
+      ? clampWithin(
+          next,
+          ownParentBox,
+          CHILD_CONTAINMENT_MARGIN,
+          CHILD_CONTAINMENT_TOP_MARGIN,
         )
-        .map((conn) => ({ from: conn.from, to: conn.to }));
+      : next;
+    setNodeBox(index, clamped);
+    reclampChildren(index);
+  }
 
-      // Centers each group's simulation on its own parent's current box
-      // (if that parent is itself placed on canvas), so a nested group
-      // stays roughly where its parent already is; falls back to the
-      // group's own combined bounding box otherwise (top-level, or a
-      // nested group whose parent isn't shown).
-      const parentBox = parentIndex !== undefined ? nodeBox(parentIndex) : null;
-      const bounds = parentBox ?? unionBox(groupNodes.map((n) => n.box));
-      const centerX = bounds.x + bounds.width / 2;
-      const centerY = bounds.y + bounds.height / 2;
-
-      return createForceLayout(groupNodes, groupEdges, {
-        centerX,
-        centerY,
-        warmupTicks: AUTO_LAYOUT_WARMUP_TICKS,
-      });
-    },
-  );
-
-  autoLayoutRunning = true;
-  let frame = 0;
-
-  // Seeded from each node's starting box, so the very first frame's
-  // movement is measured against where it actually began — updated to
-  // that frame's result at the end of every step() below. Plain,
-  // non-reactive local state (never rendered/read outside this closure),
-  // so it doesn't need SvelteMap's reactivity.
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const previousPositions = new Map<number, { x: number; y: number }>(
-    layoutNodes.map((n) => [n.index, { x: n.box.x, y: n.box.y }]),
-  );
-
-  function step() {
-    frame += 1;
-
-    let allSettled = true;
-    const allResults: { index: number; x: number; y: number }[] = [];
-    for (const layout of groupLayouts) {
-      allResults.push(...layout.tick());
-      if (layout.alpha() >= AUTO_LAYOUT_ALPHA_MIN) allSettled = false;
-    }
-
-    let totalMovement = 0;
-    for (const result of allResults) {
-      const previous = previousPositions.get(result.index);
-      if (previous) {
-        totalMovement += Math.hypot(
-          result.x - previous.x,
-          result.y - previous.y,
-        );
-      }
-      previousPositions.set(result.index, { x: result.x, y: result.y });
-    }
-    const barelyMoving = frame > AUTO_LAYOUT_WARMUP_TICKS &&
-      totalMovement < AUTO_LAYOUT_MIN_MOVEMENT;
-
-    // Only snap the final settling frame, not every intermediate one:
-    // snapping every frame while snapping is active would force the
-    // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
-    // settling smoothly. Since every frame overwrites the previous one's
-    // written position anyway, only the last write actually matters for
-    // the visible result — so it's the only one that needs to respect
-    // the grid.
-    const converged = allSettled || barelyMoving ||
-      frame >= AUTO_LAYOUT_MAX_FRAMES;
-
-    for (const result of allResults) {
-      const box = nodeBox(result.index);
+  // Moves every node in `startPositions` (a snapshot of the whole selection
+  // taken when the drag began) by the same (deltaX, deltaY) offset from its
+  // own snapshot position — recomputed from the snapshot each event (not
+  // accumulated incrementally) to avoid drift. Shared by single- and
+  // multi-node drags alike, since a single dragged node is just a
+  // selection of one.
+  function applyGroupDelta(
+    startPositions: Record<number, { x: number; y: number }>,
+    deltaX: number,
+    deltaY: number,
+  ) {
+    noteDiagramEdited();
+    for (const [indexStr, start] of Object.entries(startPositions)) {
+      const index = Number(indexStr);
+      const box = nodeBox(index);
       if (!box) continue;
-      writeClampedToActiveParent(result.index, {
-        x: converged ? snap(result.x) : result.x,
-        y: converged ? snap(result.y) : result.y,
+      const next: Box = {
+        x: start.x + deltaX,
+        y: start.y + deltaY,
         width: box.width,
         height: box.height,
-      });
-    }
-
-    if (converged) {
-      autoLayoutRunning = false;
-    } else {
-      requestAnimationFrame(step);
+      };
+      writeClampedToActiveParent(index, next);
     }
   }
 
-  requestAnimationFrame(step);
-}
+  // Scales every node in `startBoxes` (a snapshot of the whole selection
+  // taken when the resize began) by (scaleX, scaleY), applied to both
+  // position (relative to the selection's fixed top-left, `groupBox`) and
+  // size. Shared by single- and multi-node resizes alike, since a single
+  // resized node is just a selection of one.
+  function applyGroupScale(
+    startBoxes: Record<number, Box>,
+    groupBox: Box,
+    scaleX: number,
+    scaleY: number,
+  ) {
+    for (const [indexStr, startBox] of Object.entries(startBoxes)) {
+      const index = Number(indexStr);
+      const relX = startBox.x - groupBox.x;
+      const relY = startBox.y - groupBox.y;
+      const next: Box = {
+        x: snap(groupBox.x + relX * scaleX),
+        y: snap(groupBox.y + relY * scaleY),
+        width: snap(Math.max(MIN_NODE_SIZE, startBox.width * scaleX)),
+        height: snap(Math.max(MIN_NODE_SIZE, startBox.height * scaleY)),
+      };
+      writeClampedToActiveParent(index, next);
+    }
+  }
 
-// Small "what's happening right now" hint shown in the canvas's
-// bottom-right corner — purely informational, no effect on behavior.
-// Deliberately skips "panning" (purely a viewport/navigation action, not
-// an edit — a text label for it would just be noise) and
-// "idle"/"marquee-not-yet-started" (nothing to announce).
-// A one-shot "pulse" label (e.g. "Undo"/"Redo") for actions that
-// complete instantly rather than persisting as an interaction state—
-// unlike dragging/resizing/etc., there's no ongoing state to derive a
-// label from, so flashActivity() below sets this directly. It's cleared
-// again on the very next tick (not immediately), so `currentActivity`
-// briefly sees it as "active" — just like a real interaction state —
-// letting the exact same sustain/fade-out effect further down handle the
-// rest, rather than needing a second parallel mechanism.
-let pulseActivity: string | null = $state(null);
+  function onSvgMouseMove(event: MouseEvent) {
+    // Remember where the pointer is, for the next keyboard-spawned entity
+    // (spawnAnchor). Updated on every move — including mid-drag, so an entity
+    // spawned right after a drag lands where it was dropped.
+    cursorClient = { x: event.clientX, y: event.clientY };
+    // Captured to a local const so TypeScript can narrow `current.type` per
+    // switch case below — narrowing directly on the live `interaction`
+    // $state binding doesn't work reliably across these branches.
+    const current = interaction;
+    switch (current.type) {
+      case "dragging": {
+        const anchorStart = current.startPositions[current.anchorIndex];
+        const anchorBox = nodeBox(current.anchorIndex);
+        if (anchorStart && anchorBox) {
+          const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+          let anchorNext: Box = {
+            x: snap(svgCoords.x - current.offsetX),
+            y: snap(svgCoords.y - current.offsetY),
+            width: anchorBox.width,
+            height: anchorBox.height,
+          };
+          const anchorParentBox = activeParentBox(current.anchorIndex);
+          if (anchorParentBox) {
+            anchorNext = clampWithin(
+              anchorNext,
+              anchorParentBox,
+              CHILD_CONTAINMENT_MARGIN,
+              CHILD_CONTAINMENT_TOP_MARGIN,
+            );
+          }
+          // The whole selection moves by the same delta the anchor (grabbed)
+          // node moved by.
+          const deltaX = anchorNext.x - anchorStart.x;
+          const deltaY = anchorNext.y - anchorStart.y;
+          applyGroupDelta(current.startPositions, deltaX, deltaY);
+          applyAnnotationDelta(deltaX, deltaY);
 
-function flashActivity(label: string) {
-  pulseActivity = label;
-}
+          // Check potential drop/reparent target candidate only if Alt is held
+          if (event.altKey) {
+            const candidateBoxes: { index: number; box: Box; depth: number }[] =
+              [];
+            for (const i of renderOrder) {
+              if (i === current.anchorIndex || selected.has(i)) continue;
+              if (components[i]?.leaf) continue;
+              if (isDescendantOf(i, current.anchorIndex)) continue;
+              const b = nodeBox(i);
+              if (b) {
+                candidateBoxes.push({
+                  index: i,
+                  box: b,
+                  depth: depthOf(i, parentOf),
+                });
+              }
+            }
+            const foundTarget = findReparentTarget(anchorNext, candidateBoxes);
+            const currentParent = parentOf(current.anchorIndex);
+            if (foundTarget !== null && foundTarget !== currentParent) {
+              reparentTargetIndex = foundTarget;
+            } else {
+              reparentTargetIndex = null;
+            }
+          } else {
+            reparentTargetIndex = null;
+          }
+        } else if (
+          current.anchorIndex === -1 &&
+          current.annotationStartPositions
+        ) {
+          // Annotation-anchored drag (a note was grabbed): compute the delta
+          // from the grabbed note's DRAG-START snapshot (like nodes do),
+          // never from its live position, so each move is a clean delta off a
+          // fixed base — no feedback, no runaway/flicker, cursor-accurate.
+          const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+          const anchorStart =
+            current.annotationStartPositions[current.annotationAnchor ?? -1];
+          if (anchorStart) {
+            const deltaX = svgCoords.x - current.offsetX - anchorStart.x;
+            const deltaY = svgCoords.y - current.offsetY - anchorStart.y;
+            applyAnnotationDelta(deltaX, deltaY);
+            // A mixed selection drags as a group whichever kind was grabbed:
+            // the same delta moves the selected components too, each clamped
+            // into its own active parent just as in a node-anchored drag.
+            applyGroupDelta(current.startPositions, deltaX, deltaY);
+          }
+        }
+        return;
+      }
+      case "resizing": {
+        if (current.annotationResize) {
+          // Annotation resize: the corner drag maps (deltaX, deltaY) to a new
+          // font scale — startScale + fractional distance, normalized to the
+          // 0.5 floor and 2 decimals (same as the inspector input).
+          const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+          const deltaX = svgCoords.x - current.startPointer.x;
+          const deltaY = svgCoords.y - current.startPointer.y;
+          const a = annotations[current.annotationResize.index];
+          if (a) {
+            const start = current.annotationResize.startScale;
+            const scale = normalizeAnnotationScale(
+              start + (deltaX + deltaY) / 100,
+            );
+            annotations[current.annotationResize.index] = {
+              ...a,
+              scale,
+            };
+          }
+          return;
+        }
+        const anchorStart = current.startBox;
+        if (anchorStart) {
+          const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+          const deltaX = svgCoords.x - current.startPointer.x;
+          const deltaY = svgCoords.y - current.startPointer.y;
 
-$effect(() => {
-  if (pulseActivity === null) return;
-  const id = setTimeout(() => {
-    pulseActivity = null;
-  }, 0);
-  return () => clearTimeout(id);
-});
+          if (selected.size <= 1) {
+            const resizedBox = computeResizedBox(
+              anchorStart,
+              current.handle,
+              deltaX,
+              deltaY,
+              MIN_NODE_SIZE,
+            );
+            const next: Box = {
+              x: snap(resizedBox.x),
+              y: snap(resizedBox.y),
+              width: snap(resizedBox.width),
+              height: snap(resizedBox.height),
+            };
+            writeClampedToActiveParent(current.anchorIndex, next);
+          } else {
+            const resizedBox = computeResizedBox(
+              anchorStart,
+              current.handle,
+              deltaX,
+              deltaY,
+              MIN_NODE_SIZE,
+            );
+            const scaleX = resizedBox.width / anchorStart.width;
+            const scaleY = resizedBox.height / anchorStart.height;
+            applyGroupScale(
+              current.startBoxes,
+              current.groupBox,
+              scaleX,
+              scaleY,
+            );
+          }
+        }
+        return;
+      }
+      case "panning": {
+        const dxScreen = event.clientX - current.lastX;
+        const dyScreen = event.clientY - current.lastY;
+        const zoom = editor_state.view.zoom;
+        editor_state.view.x -= dxScreen / zoom;
+        editor_state.view.y -= dyScreen / zoom;
+        interaction = {
+          type: "panning",
+          lastX: event.clientX,
+          lastY: event.clientY,
+        };
+        return;
+      }
+      case "connecting": {
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        interaction = {
+          ...current,
+          currentPoint: svgCoords,
+        };
+        return;
+      }
+      case "marquee": {
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        interaction = { ...current, x: svgCoords.x, y: svgCoords.y };
+        return;
+      }
+      case "idle":
+        return;
+    }
+  }
 
-let currentActivity = $derived.by((): string | null => {
-  if (pulseActivity !== null) return pulseActivity;
-  if (autoLayoutRunning) return "Calculating…";
-  switch (interaction.type) {
-    case "idle":
-      return null;
-    case "dragging":
-      return "Dragging";
-    case "connecting":
-      return "Connecting";
-    case "resizing":
-      return "Resizing";
-    case "panning":
-      return "Panning";
-    case "marquee": {
-      // A marquee this small is really just a click (same threshold
-      // onSvgMouseUp uses to decide whether to commit a selection) —
-      // most commonly a click on empty canvas to *deselect*, which isn't
-      // meaningfully "selecting" anything and shouldn't announce itself
-      // as such.
+  function onSvgMouseLeave() {
+    // The pointer left the canvas: drop the spawn anchor, so a shortcut
+    // pressed from a sidebar falls back to the viewport center instead of
+    // dropping an entity where the pointer used to be.
+    cursorClient = null;
+    onSvgMouseUp();
+  }
+
+  function onSvgMouseUp() {
+    const current = interaction;
+    if (current.type === "connecting") {
+      const target = findHoveredTarget(
+        current.currentPoint,
+        current.sourceComponentIndex,
+      );
+      if (target) {
+        void handleCreateConnection(
+          current.sourceComponentIndex,
+          current.sourcePortLabel,
+          target.compIndex,
+          target.portLabel,
+          current.startSide,
+        ).catch(reportDiagramError);
+      }
+    }
+    if (current.type === "dragging") {
+      if (reparentTargetIndex !== null) {
+        const srcKey = getComponentKey(current.anchorIndex);
+        const targetKey = getComponentKey(reparentTargetIndex);
+        reparentTargetIndex = null;
+        void executeReparent(srcKey, targetKey).catch(reportDiagramError);
+      }
+    }
+    if (current.type === "marquee") {
+      // A marquee with negligible size is just a click: clear the selection
+      // (matches the old "click empty canvas to deselect" behavior).
+      // Otherwise, commit whatever the live preview (marqueeCandidates) was
+      // already showing.
       const box = marqueeBox;
-      if (!box || (box.width <= 2 && box.height <= 2)) return null;
-      return "Selecting";
+      clearSelection();
+      if (box && (box.width > 2 || box.height > 2)) {
+        for (const index of marqueeCandidates) select(index);
+        for (const i of marqueeAnnotationCandidates) selectedAnnotations.add(i);
+      }
     }
-    default:
-      return null;
+    interaction = { type: "idle" };
   }
-});
 
-// Fade timing for the hint below, in ms — kept as separate tweakable
-// constants (rather than baked into Tailwind duration classes) so they
-// can be adjusted without touching markup.
-const ACTIVITY_HINT_FADE_IN_MS = 100;
-const ACTIVITY_HINT_SUSTAIN_MS = 500;
-const ACTIVITY_HINT_FADE_OUT_MS = 400;
+  // Zooms in/out on the mouse wheel, keeping the point under the cursor
+  // visually fixed while the rest of the canvas scales around it.
+  function onWheel(event: WheelEvent) {
+    event.preventDefault();
+    const zoom = editor_state.view.zoom;
+    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = clamp_zoom(zoom * factor);
+    if (newZoom === zoom) return;
 
-let activityHintLabel: string | null = $state(null);
-let activityHintVisible = $state(false);
+    const mouseSvg = svgPoint(root_svg, event.clientX, event.clientY);
+    const oldWidth = canvas_width / zoom;
+    const oldHeight = canvas_height / zoom;
+    const fracX = (mouseSvg.x - editor_state.view.x) / oldWidth;
+    const fracY = (mouseSvg.y - editor_state.view.y) / oldHeight;
 
-// Shows the hint immediately when a new activity starts. When it ends,
-// keeps showing the *last* label for ACTIVITY_HINT_SUSTAIN_MS before
-// starting the (slower) fade-out — cancelled automatically (via this
-// effect's cleanup, which Svelte runs before every re-execution) if a
-// new activity begins before that sustain period elapses, so quick
-// back-to-back activities never visibly flicker out and back in.
-$effect(() => {
-  const label = currentActivity;
-  if (label !== null) {
-    activityHintLabel = label;
-    activityHintVisible = true;
-    return;
+    const newWidth = canvas_width / newZoom;
+    const newHeight = canvas_height / newZoom;
+
+    editor_state.view.zoom = newZoom;
+    editor_state.view.x = mouseSvg.x - fracX * newWidth;
+    editor_state.view.y = mouseSvg.y - fracY * newHeight;
   }
-  const timeout = setTimeout(() => {
-    activityHintVisible = false;
-  }, ACTIVITY_HINT_SUSTAIN_MS);
-  return () => clearTimeout(timeout);
-});
+
+  let selectedConnection = $state<string | null>(null);
+
+  let selectedConnectionData = $derived.by(() => {
+    if (!selectedConnection) return null;
+    const conn = connections.find((c) => c.label === selectedConnection);
+    if (!conn) return null;
+    const fromKey = getComponentKey(conn.from);
+    const toKey = getComponentKey(conn.to);
+    const fromCompLabel = components[conn.from]?.label ?? fromKey;
+    const toCompLabel = components[conn.to]?.label ?? toKey;
+    return {
+      label: conn.label,
+      from: fromKey,
+      to: toKey,
+      fromCompLabel,
+      toCompLabel,
+      startSide: savedConnections[conn.label]?.startSide,
+      endSide: savedConnections[conn.label]?.endSide,
+    };
+  });
+
+  // The five routing choices the connection inspector offers for each endpoint:
+  // "Auto" (no override, the router picks a side) plus the four border sides.
+  const SIDE_OPTIONS: {
+    value: ConnectionSide | undefined;
+    label: string;
+  }[] = [
+    { value: undefined, label: "Auto" },
+    { value: "top", label: "Top" },
+    { value: "right", label: "Right" },
+    { value: "bottom", label: "Bottom" },
+    { value: "left", label: "Left" },
+  ];
+
+  function setConnectionStartSide(side: ConnectionSide | undefined) {
+    if (!selectedConnection) return;
+    recordUndoPoint();
+    const existing = savedConnections[selectedConnection] || {};
+    if (side) {
+      savedConnections[selectedConnection] = { ...existing, startSide: side };
+    } else {
+      const updated = { ...existing };
+      delete updated.startSide;
+      if (updated.endSide) {
+        savedConnections[selectedConnection] = updated;
+      } else {
+        delete savedConnections[selectedConnection];
+      }
+    }
+  }
+
+  function setConnectionEndSide(side: ConnectionSide | undefined) {
+    if (!selectedConnection) return;
+    recordUndoPoint();
+    const existing = savedConnections[selectedConnection] || {};
+    if (side) {
+      savedConnections[selectedConnection] = { ...existing, endSide: side };
+    } else {
+      const updated = { ...existing };
+      delete updated.endSide;
+      if (updated.startSide) {
+        savedConnections[selectedConnection] = updated;
+      } else {
+        delete savedConnections[selectedConnection];
+      }
+    }
+  }
+
+  async function handleDeleteSelectedConnection(
+    skipConfirm = false,
+  ): Promise<void> {
+    if (!selectedConnection) return;
+    const label = selectedConnection;
+    if (
+      !skipConfirm &&
+      !confirm(
+        `Delete connection "${label}"? This will remove it from the system model.`,
+      )
+    ) {
+      return;
+    }
+    // Scope search lives in the dispatcher (`delete_connection_by_label`).
+    await runModelLayoutTransaction(
+      `disconnect ${label}`,
+      {
+        kind: "delete_connection_by_label",
+        label,
+      },
+      () => {
+        delete savedConnections[label];
+        selectedConnection = null;
+      },
+    );
+  }
+
+  // Looks up a component's direct parent index, for depthOf below.
+  function parentOf(index: number): number | undefined {
+    return components[index]?.parent_component_index;
+  }
+
+  // Indices of currently-placed nodes, ordered shallowest-first so parents
+  // are always painted before their children — otherwise a child could end
+  // up visually hidden behind its parent's fill, depending on arbitrary
+  // arena order.
+  let renderOrder = $derived(
+    computeRenderOrder(
+      Object.keys(checked)
+        .map((key) => keyToIndex.get(key))
+        .filter((index): index is number => index !== undefined)
+        .filter(
+          (index) =>
+            selectedSystemIndex === -1 || systemComponentIndices.has(index),
+        ),
+      parentOf,
+    ),
+  );
+
+  // Nodes that would be selected if the marquee were released right now —
+  // i.e. nodes whose full bounding box is enclosed by the marquee rectangle.
+  // Drives the live selection preview while dragging; committed as-is by
+  // onSvgMouseUp once the mouse is released.
+  let marqueeCandidates: Set<number> = $derived.by(() => {
+    if (!marqueeBox) return new Set();
+    const box = marqueeBox;
+    // Built fresh and returned as-is on every recomputation; reactivity
+    // already comes from the surrounding $derived.by, not from mutating
+    // this Set later.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const candidates = new Set<number>();
+    for (const index of renderOrder) {
+      const box2 = nodeBox(index);
+      if (box2 && boxContains(box, box2)) candidates.add(index);
+    }
+    return candidates;
+  });
+
+  // Hit-box of an annotation, matching the geometry used for rendering and
+  // click hit-testing exactly (so marquee selection, the highlight state and
+  // the visible box all agree). Delegates to the shared annotationBounds so
+  // "zoom to fill" and the static renderers can't drift from hit-testing.
+  function annotationHitBox(ann: Annotation): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } {
+    return annotationBounds(ann);
+  }
+
+  // Annotations caught by the current marquee box (live preview), parallel to
+  // marqueeCandidates for nodes.
+  let marqueeAnnotationCandidates: Set<number> = $derived.by(() => {
+    if (!marqueeBox) return new Set();
+    const box = marqueeBox;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const candidates = new Set<number>();
+    annotations.forEach((ann, i) => {
+      if (boxContains(box, annotationHitBox(ann))) candidates.add(i);
+    });
+    return candidates;
+  });
+
+  // The scene DiagramCanvas draws. Highlighted sets include the live marquee
+  // preview; connect handles follow the committed selection, or every node
+  // while a connection drag is active. Paths are not stored here — the canvas
+  // recomputes them from these boxes.
+  let editorScene = $derived.by(() => {
+    const current = interaction;
+    const nodes = renderOrder.flatMap((index) => {
+      const box = nodeBox(index);
+      const component = components[index];
+      if (!box || !component) return [];
+      const compKey = getComponentKey(index);
+      const compData = componentData.get(compKey);
+      return [
+        {
+          id: compKey,
+          index,
+          label: component.label,
+          box,
+          parentIndex: component.parent_component_index,
+          icon: compData?.icon ?? component.icon,
+          color: compData?.color || component.color,
+          border: compData?.border ?? component.border,
+          font: compData?.font ?? component.font,
+          ports: compData && compData.ports.length > 0 ? compData.ports : [],
+        },
+      ];
+    });
+    const edges: EditorSceneEdgeInput[] = connections
+      .filter(
+        (conn) =>
+          selectedSystemIndex === -1 ||
+          (systemComponentIndices.has(conn.from) &&
+            systemComponentIndices.has(conn.to)),
+      )
+      .map((conn) => {
+        const edge: EditorSceneEdgeInput = {
+          from: conn.from,
+          to: conn.to,
+          label: conn.label,
+          fromKey: getComponentKey(conn.from),
+          toKey: getComponentKey(conn.to),
+        };
+        const saved = savedConnections[conn.label];
+        if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
+        if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
+        return edge;
+      });
+    return buildEditorScene({
+      nodes,
+      edges,
+      notes: annotations,
+      selectedNodeIndexes:
+        current.type === "marquee" ? marqueeCandidates : selected,
+      connectHandles: current.type === "connecting" ? "all" : selected,
+      selectedNoteIndexes:
+        current.type === "marquee"
+          ? marqueeAnnotationCandidates
+          : selectedAnnotations,
+      reparentTargetIndex,
+      selectedEdgeLabel: selectedConnection,
+      marquee: marqueeBox,
+      rubberBand:
+        current.type === "connecting"
+          ? {
+              from: current.sourcePoint,
+              to: current.currentPoint,
+              orientation: "horizontal",
+            }
+          : null,
+    });
+  });
+
+  // View switches tween nodes and the camera. Undo/redo tween nodes only.
+  // Drags and auto-layout cut, otherwise the picture would lag the cursor.
+  $effect(() => {
+    const scene = editorScene;
+    if (!diagramLayoutLoaded) return;
+    // Layout keys are in, but the model has not mapped them to nodes yet.
+    // Fitting now would aim the camera at an empty (or annotation-only) scene.
+    if (
+      presentMode === "view" &&
+      Object.keys(checked).length > 0 &&
+      scene.nodes.length === 0
+    )
+      return;
+    const mode = presentMode;
+    presentMode = "cut";
+    const bounds = sceneBounds(scene);
+    const fit =
+      bounds && canvas_width > 0 && canvas_height > 0
+        ? fitCamera(bounds, { width: canvas_width, height: canvas_height })
+        : null;
+    // show() writes the stage. Untrack so that write is not a dependency of
+    // this effect — otherwise opening the page retriggers it until Svelte stops.
+    untrack(() => {
+      // A later derived update (compile, selection) must not cut an in-flight
+      // view or undo tween. The next explicit edit still cuts once it settles.
+      if (mode === "cut" && stage.settling) return;
+      stage.show(
+        scene,
+        fit,
+        {
+          transition: mode !== "cut",
+          moveCamera: mode === "view",
+          // zoomToFill and pan write editor_state directly. The stage camera
+          // stays at the origin until the first tween, which is the jump.
+          fromCamera: {
+            x: editor_state.view.x,
+            y: editor_state.view.y,
+            zoom: editor_state.view.zoom,
+          },
+        },
+        (next) => {
+          if (
+            editor_state.view.x === next.x &&
+            editor_state.view.y === next.y &&
+            editor_state.view.zoom === next.zoom
+          )
+            return;
+          editor_state.view.x = next.x;
+          editor_state.view.y = next.y;
+          editor_state.view.zoom = next.zoom;
+        },
+      );
+    });
+  });
+
+  $effect(() => () => stage.destroy());
+
+  // Fraction of the viewport the diagram's bounding box should fill (in
+  // whichever axis is more constraining, so it fits fully in both) when
+  // "Zoom to Fill" is used.
+  const ZOOM_TO_FILL_FRACTION = 0.8;
+
+  // Zooms and pans so every currently-placed node's AND annotation's combined
+  // bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
+  // annotations far from the node cluster are never panned out of view.
+  // No-op if nothing is placed on canvas.
+  function zoomToFill() {
+    const nodeBoxes = renderOrder
+      .map((index) => nodeBox(index))
+      .filter(
+        (box): box is NonNullable<ReturnType<typeof nodeBox>> => box !== null,
+      );
+    const annotationBoxes = annotations.map(annotationBounds);
+    const boxes = [...nodeBoxes, ...annotationBoxes];
+    if (boxes.length === 0) return;
+    const bounds = unionBox(boxes);
+
+    const zoomX = (canvas_width * ZOOM_TO_FILL_FRACTION) / bounds.width;
+    const zoomY = (canvas_height * ZOOM_TO_FILL_FRACTION) / bounds.height;
+    const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
+
+    editor_state.view.zoom = newZoom;
+    editor_state.view.x =
+      bounds.x + bounds.width / 2 - canvas_width / newZoom / 2;
+    editor_state.view.y =
+      bounds.y + bounds.height / 2 - canvas_height / newZoom / 2;
+  }
+
+  // Auto-layout animation budget: stop once the simulation has settled
+  // (alpha below this threshold), or after this many animation frames,
+  // whichever comes first — so a pathological/never-converging case can't
+  // spin forever.
+  const AUTO_LAYOUT_ALPHA_MIN = 0.005;
+  const AUTO_LAYOUT_MAX_FRAMES = 300;
+
+  // Also stops early once every node's combined movement in a single frame
+  // (summed Euclidean distance, in world units) drops below this —
+  // catches layouts that have practically stopped moving well before their
+  // alpha decays below AUTO_LAYOUT_ALPHA_MIN (small groups in particular
+  // can visually settle almost immediately while alpha keeps decaying for
+  // many more frames with no visible effect). Only checked after warmup
+  // (see AUTO_LAYOUT_WARMUP_TICKS below) finishes, since forces — and thus
+  // movement — are deliberately near-zero during the ramp-up itself.
+  const AUTO_LAYOUT_MIN_MOVEMENT = 0.5;
+
+  // Fraction of the frame budget spent ramping forces up from ~0 to full
+  // strength, instead of applying at full strength from frame 1 — avoids
+  // the sharp jump an instant full-strength start would otherwise cause.
+  const AUTO_LAYOUT_WARMUP_FRACTION = 0.1;
+  const AUTO_LAYOUT_WARMUP_TICKS = Math.round(
+    AUTO_LAYOUT_MAX_FRAMES * AUTO_LAYOUT_WARMUP_FRACTION,
+  );
+
+  // Whether an auto-layout animation is currently running — disables the
+  // "Auto Layout" button so a second run can't start and race the first
+  // one over the same node positions.
+  let autoLayoutRunning = $state(false);
+
+  // Runs a force-directed auto-layout pass over the target set of nodes:
+  // the current selection if non-empty, otherwise every currently-placed
+  // node at any level. The target set is partitioned into sibling groups
+  // (groupBySiblings, keyed by immediate parent) and each group gets its
+  // own independent simulation, confined around its own parent's current
+  // box (or its own combined bounding box, for a top-level group or an
+  // orphaned nested group whose parent isn't itself placed) — rather than
+  // one flat simulation mixing unrelated hierarchy levels together. See
+  // TASKS/FINISHED.md Task 50 for why: a node shouldn't be repelled by/attracted to
+  // a node it isn't actually a sibling of. Every result is still written
+  // through the same clamp-to-active-parent-and-cascade path a live drag
+  // uses, regardless of grouping, as a containment safety net. All groups'
+  // simulations are driven together, frame-by-frame, via
+  // requestAnimationFrame, rather than jumping straight to the converged
+  // layout.
+  function runAutoLayout() {
+    if (autoLayoutRunning) return;
+
+    const targetIndices = selected.size > 0 ? [...selected] : renderOrder;
+
+    const layoutNodes: LayoutNode[] = targetIndices.flatMap((index) => {
+      const box = nodeBox(index);
+      return box ? [{ index, box }] : [];
+    });
+    if (layoutNodes.length < 2) return; // nothing meaningful to arrange
+
+    // One undo point for the whole auto-layout run, recorded before the
+    // animation starts — not per-frame.
+    recordUndoPoint();
+
+    const groups = groupBySiblings(layoutNodes, parentOf);
+    const groupLayouts = [...groups.entries()].map(
+      ([parentIndex, groupNodes]) => {
+        const groupIndexSet = new Set(groupNodes.map((n) => n.index));
+        const groupEdges: LayoutEdge[] = connections
+          .filter(
+            (conn) =>
+              groupIndexSet.has(conn.from) && groupIndexSet.has(conn.to),
+          )
+          .map((conn) => ({ from: conn.from, to: conn.to }));
+
+        // Centers each group's simulation on its own parent's current box
+        // (if that parent is itself placed on canvas), so a nested group
+        // stays roughly where its parent already is; falls back to the
+        // group's own combined bounding box otherwise (top-level, or a
+        // nested group whose parent isn't shown).
+        const parentBox =
+          parentIndex !== undefined ? nodeBox(parentIndex) : null;
+        const bounds = parentBox ?? unionBox(groupNodes.map((n) => n.box));
+        const centerX = bounds.x + bounds.width / 2;
+        const centerY = bounds.y + bounds.height / 2;
+
+        return createForceLayout(groupNodes, groupEdges, {
+          centerX,
+          centerY,
+          warmupTicks: AUTO_LAYOUT_WARMUP_TICKS,
+        });
+      },
+    );
+
+    autoLayoutRunning = true;
+    let frame = 0;
+
+    // Seeded from each node's starting box, so the very first frame's
+    // movement is measured against where it actually began — updated to
+    // that frame's result at the end of every step() below. Plain,
+    // non-reactive local state (never rendered/read outside this closure),
+    // so it doesn't need SvelteMap's reactivity.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const previousPositions = new Map<number, { x: number; y: number }>(
+      layoutNodes.map((n) => [n.index, { x: n.box.x, y: n.box.y }]),
+    );
+
+    function step() {
+      frame += 1;
+
+      let allSettled = true;
+      const allResults: { index: number; x: number; y: number }[] = [];
+      for (const layout of groupLayouts) {
+        allResults.push(...layout.tick());
+        if (layout.alpha() >= AUTO_LAYOUT_ALPHA_MIN) allSettled = false;
+      }
+
+      let totalMovement = 0;
+      for (const result of allResults) {
+        const previous = previousPositions.get(result.index);
+        if (previous) {
+          totalMovement += Math.hypot(
+            result.x - previous.x,
+            result.y - previous.y,
+          );
+        }
+        previousPositions.set(result.index, { x: result.x, y: result.y });
+      }
+      const barelyMoving =
+        frame > AUTO_LAYOUT_WARMUP_TICKS &&
+        totalMovement < AUTO_LAYOUT_MIN_MOVEMENT;
+
+      // Only snap the final settling frame, not every intermediate one:
+      // snapping every frame while snapping is active would force the
+      // whole animation to jump in SNAP_GRID_SIZE-sized steps instead of
+      // settling smoothly. Since every frame overwrites the previous one's
+      // written position anyway, only the last write actually matters for
+      // the visible result — so it's the only one that needs to respect
+      // the grid.
+      const converged =
+        allSettled || barelyMoving || frame >= AUTO_LAYOUT_MAX_FRAMES;
+
+      for (const result of allResults) {
+        const box = nodeBox(result.index);
+        if (!box) continue;
+        writeClampedToActiveParent(result.index, {
+          x: converged ? snap(result.x) : result.x,
+          y: converged ? snap(result.y) : result.y,
+          width: box.width,
+          height: box.height,
+        });
+      }
+
+      if (converged) {
+        autoLayoutRunning = false;
+      } else {
+        requestAnimationFrame(step);
+      }
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  // Small "what's happening right now" hint shown in the canvas's
+  // bottom-right corner — purely informational, no effect on behavior.
+  // Deliberately skips "panning" (purely a viewport/navigation action, not
+  // an edit — a text label for it would just be noise) and
+  // "idle"/"marquee-not-yet-started" (nothing to announce).
+  // A one-shot "pulse" label (e.g. "Undo"/"Redo") for actions that
+  // complete instantly rather than persisting as an interaction state—
+  // unlike dragging/resizing/etc., there's no ongoing state to derive a
+  // label from, so flashActivity() below sets this directly. It's cleared
+  // again on the very next tick (not immediately), so `currentActivity`
+  // briefly sees it as "active" — just like a real interaction state —
+  // letting the exact same sustain/fade-out effect further down handle the
+  // rest, rather than needing a second parallel mechanism.
+  let pulseActivity: string | null = $state(null);
+
+  function flashActivity(label: string) {
+    pulseActivity = label;
+  }
+
+  $effect(() => {
+    if (pulseActivity === null) return;
+    const id = setTimeout(() => {
+      pulseActivity = null;
+    }, 0);
+    return () => clearTimeout(id);
+  });
+
+  let currentActivity = $derived.by((): string | null => {
+    if (pulseActivity !== null) return pulseActivity;
+    if (autoLayoutRunning) return "Calculating…";
+    switch (interaction.type) {
+      case "idle":
+        return null;
+      case "dragging":
+        return "Dragging";
+      case "connecting":
+        return "Connecting";
+      case "resizing":
+        return "Resizing";
+      case "panning":
+        return "Panning";
+      case "marquee": {
+        // A marquee this small is really just a click (same threshold
+        // onSvgMouseUp uses to decide whether to commit a selection) —
+        // most commonly a click on empty canvas to *deselect*, which isn't
+        // meaningfully "selecting" anything and shouldn't announce itself
+        // as such.
+        const box = marqueeBox;
+        if (!box || (box.width <= 2 && box.height <= 2)) return null;
+        return "Selecting";
+      }
+      default:
+        return null;
+    }
+  });
+
+  // Fade timing for the hint below, in ms — kept as separate tweakable
+  // constants (rather than baked into Tailwind duration classes) so they
+  // can be adjusted without touching markup.
+  const ACTIVITY_HINT_FADE_IN_MS = 100;
+  const ACTIVITY_HINT_SUSTAIN_MS = 500;
+  const ACTIVITY_HINT_FADE_OUT_MS = 400;
+
+  let activityHintLabel: string | null = $state(null);
+  let activityHintVisible = $state(false);
+
+  // Shows the hint immediately when a new activity starts. When it ends,
+  // keeps showing the *last* label for ACTIVITY_HINT_SUSTAIN_MS before
+  // starting the (slower) fade-out — cancelled automatically (via this
+  // effect's cleanup, which Svelte runs before every re-execution) if a
+  // new activity begins before that sustain period elapses, so quick
+  // back-to-back activities never visibly flicker out and back in.
+  $effect(() => {
+    const label = currentActivity;
+    if (label !== null) {
+      activityHintLabel = label;
+      activityHintVisible = true;
+      return;
+    }
+    const timeout = setTimeout(() => {
+      activityHintVisible = false;
+    }, ACTIVITY_HINT_SUSTAIN_MS);
+    return () => clearTimeout(timeout);
+  });
 </script>
 
 {#snippet connectionSidePicker(
@@ -3667,11 +3714,12 @@ $effect(() => {
        plus the four border sides. Keyed on the label because `value` is
        undefined for "Auto". -->
   <div class="space-y-1.5 pt-1">
-  <span
-    class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+    <span
+      class="text-xs font-semibold uppercase tracking-wider text-base-content/70"
+    >
       {title}
     </span>
-  <div class="grid grid-cols-5 gap-1 w-full">
+    <div class="grid grid-cols-5 gap-1 w-full">
       {#each SIDE_OPTIONS as option (option.label)}
         <button
           class="btn btn-xs {current === option.value
@@ -3683,13 +3731,10 @@ $effect(() => {
         </button>
       {/each}
     </div>
-</div>
+  </div>
 {/snippet}
 
-<svelte:window
-  onkeydown={onDiagramKeyDown}
-  onpagehide={flushLayoutWrite}
-/>
+<svelte:window onkeydown={onDiagramKeyDown} onpagehide={flushLayoutWrite} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
   <!--
@@ -3712,103 +3757,119 @@ $effect(() => {
   >
     <div class="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col">
       {#if selected.size > 1}
-      <p class="text-sm text-base-content/70">
-        {selected.size} components selected.
-      </p>
-      <p class="text-sm text-base-content/50 mt-1">
-        Drag any of them to move the whole selection, or drag a handle to
-        resize the whole selection proportionally.
-      </p>
-    {:else if selectedKey && selectedComponentData}
-      <NodeInspector
-        componentKey={selectedKey}
-        component={selectedComponentData}
-        {projectId}
-        textAlign={selectedBox?.textAlign ?? DEFAULT_TEXT_ALIGN}
-        onupdate={(patch) =>
-          void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}
-        onrename={(newLabel) =>
-          void handleRenameSelectedComponent(newLabel).catch(reportDiagramError)}
-        onsettextalign={(align) => setSelectedTextAlign(align)}
-        ondelete={() =>
-          void handleDeleteSelectedComponent().catch(reportDiagramError)}
-        onopendocumentation={() =>
-          void handleOpenDocumentation().catch(reportDiagramError)}
-      />
-    {:else if selectedAnnotation}
-      <AnnotationInspector
-        bind:this={annotationInspector}
-        annotation={selectedAnnotation}
-        ontexteditstart={() => recordUndoPoint()}
-        ontextcommitted={() => noteDiagramEdited()}
-        onscaleeditstart={() => recordUndoPoint()}
-        onscalechange={(scale) => handleAnnotationScaleChange(scale)}
-        onscalecommitted={() => noteDiagramEdited()}
-      />
-    {:else if selectedConnectionData}
-      <div class="space-y-4 text-sm" data-testid="connection-inspector">
-        <div>
-          <div class="text-[11px] text-base-content/50 font-mono uppercase">Connection</div>
-          <h4 class="text-base font-bold text-base-content truncate">{selectedConnectionData.label}</h4>
-        </div>
-
-        <div class="space-y-2 bg-base-200 p-2.5 rounded-box border border-base-300 text-xs font-mono">
-          <div class="flex items-center justify-between">
-            <span class="text-base-content/60">From:</span>
-            <span class="font-semibold truncate max-w-[150px]">{selectedConnectionData.from}</span>
+        <p class="text-sm text-base-content/70">
+          {selected.size} components selected.
+        </p>
+        <p class="text-sm text-base-content/50 mt-1">
+          Drag any of them to move the whole selection, or drag a handle to
+          resize the whole selection proportionally.
+        </p>
+      {:else if selectedKey && selectedComponentData}
+        <NodeInspector
+          componentKey={selectedKey}
+          component={selectedComponentData}
+          {projectId}
+          textAlign={selectedBox?.textAlign ?? DEFAULT_TEXT_ALIGN}
+          onupdate={(patch) =>
+            void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}
+          onrename={(newLabel) =>
+            void handleRenameSelectedComponent(newLabel).catch(
+              reportDiagramError,
+            )}
+          onsettextalign={(align) => setSelectedTextAlign(align)}
+          ondelete={() =>
+            void handleDeleteSelectedComponent().catch(reportDiagramError)}
+          onopendocumentation={() =>
+            void handleOpenDocumentation().catch(reportDiagramError)}
+        />
+      {:else if selectedAnnotation}
+        <AnnotationInspector
+          bind:this={annotationInspector}
+          annotation={selectedAnnotation}
+          ontexteditstart={() => recordUndoPoint()}
+          ontextcommitted={() => noteDiagramEdited()}
+          onscaleeditstart={() => recordUndoPoint()}
+          onscalechange={(scale) => handleAnnotationScaleChange(scale)}
+          onscalecommitted={() => noteDiagramEdited()}
+        />
+      {:else if selectedConnectionData}
+        <div class="space-y-4 text-sm" data-testid="connection-inspector">
+          <div>
+            <div class="text-[11px] text-base-content/50 font-mono uppercase">
+              Connection
+            </div>
+            <h4 class="text-base font-bold text-base-content truncate">
+              {selectedConnectionData.label}
+            </h4>
           </div>
-          <div class="flex items-center justify-between">
-            <span class="text-base-content/60">To:</span>
-            <span class="font-semibold truncate max-w-[150px]">{selectedConnectionData.to}</span>
+
+          <div
+            class="space-y-2 bg-base-200 p-2.5 rounded-box border border-base-300 text-xs font-mono"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/60">From:</span>
+              <span class="font-semibold truncate max-w-[150px]"
+                >{selectedConnectionData.from}</span
+              >
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/60">To:</span>
+              <span class="font-semibold truncate max-w-[150px]"
+                >{selectedConnectionData.to}</span
+              >
+            </div>
           </div>
+
+          {@render connectionSidePicker(
+            `${selectedConnectionData.fromCompLabel} starting point`,
+            selectedConnectionData.startSide,
+            setConnectionStartSide,
+          )}
+
+          {@render connectionSidePicker(
+            `${selectedConnectionData.toCompLabel} starting point`,
+            selectedConnectionData.endSide,
+            setConnectionEndSide,
+          )}
+
+          <div class="divider my-2"></div>
+          <button
+            class="btn btn-xs btn-outline btn-error w-full"
+            onclick={() =>
+              void handleDeleteSelectedConnection().catch(reportDiagramError)}
+          >
+            Delete connection
+          </button>
         </div>
+      {:else}
+        <p class="text-base-content/50 text-sm">
+          Select a component or connection on the canvas to edit its properties.
+        </p>
+      {/if}
 
-        {@render connectionSidePicker(
-          `${selectedConnectionData.fromCompLabel} starting point`,
-          selectedConnectionData.startSide,
-          setConnectionStartSide,
-        )}
+      <div class="divider"></div>
 
-        {@render connectionSidePicker(
-          `${selectedConnectionData.toCompLabel} starting point`,
-          selectedConnectionData.endSide,
-          setConnectionEndSide,
-        )}
-
-        <div class="divider my-2"></div>
-        <button
-          class="btn btn-xs btn-outline btn-error w-full"
-          onclick={() => void handleDeleteSelectedConnection().catch(reportDiagramError)}
-        >
-          Delete connection
-        </button>
-      </div>
-    {:else}
-      <p class="text-base-content/50 text-sm">
-        Select a component or connection on the canvas to edit its properties.
-      </p>
-    {/if}
-
-    <div class="divider"></div>
-
-    <h3
-      class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-    >
-      Diagrams
-    </h3>
-    <FileTree
-      entries={diagramEntries}
-      bind:selectedPath={() => selectedDiagramPath, (path) => {
-        // Picking a view is a navigation (see the URL section above), not just
-        // a local selection — hence the function binding rather than a plain
-        // `bind:selectedPath`.
-        if (path) selectView(path);
-      }}
-      oncreatefile={handleCreateDiagram}
-      oncreatedirectory={handleCreateDiagramFolder}
-      onrename={handleRenameDiagram}
-      ondelete={handleDeleteDiagram}
-    />
+      <h3
+        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+      >
+        Diagrams
+      </h3>
+      <FileTree
+        entries={diagramEntries}
+        bind:selectedPath={
+          () => selectedDiagramPath,
+          (path) => {
+            // Picking a view is a navigation (see the URL section above), not just
+            // a local selection — hence the function binding rather than a plain
+            // `bind:selectedPath`.
+            if (path) selectView(path);
+          }
+        }
+        oncreatefile={handleCreateDiagram}
+        oncreatedirectory={handleCreateDiagramFolder}
+        onrename={handleRenameDiagram}
+        ondelete={handleDeleteDiagram}
+      />
     </div>
   </Pane>
 
@@ -3845,9 +3906,8 @@ $effect(() => {
         width="100%"
         height="100%"
         xmlns="http://www.w3.org/2000/svg"
-        viewBox="{editor_state.view.x} {editor_state.view
-                    .y} {canvas_width / editor_state.view.zoom} {canvas_height /
-                    editor_state.view.zoom}"
+        viewBox="{editor_state.view.x} {editor_state.view.y} {canvas_width /
+          editor_state.view.zoom} {canvas_height / editor_state.view.zoom}"
         tabindex="0"
         onfocus={() => (canvasFocused = true)}
         onblur={() => (canvasFocused = false)}
@@ -3935,7 +3995,7 @@ $effect(() => {
           busy={autoLayoutRunning}
           frozen={stage.settling}
           onNodePointerDown={onNodeMouseDown}
-          onNodeDblClick={onNodeDblClick}
+          {onNodeDblClick}
           onNodeContextMenu={openNodeContextMenu}
           onPortPointerDown={onPortMouseDown}
           onResizePointerDown={onResizeHandleMouseDown}
@@ -3977,9 +4037,8 @@ $effect(() => {
               Model failed to compile
             </h3>
             <p class="text-sm text-base-content/70 mb-3">
-              {errorCount} error{errorCount > 1
-                ? "s"
-                : ""} detected in the system model. Check the code in the editor!
+              {errorCount} error{errorCount > 1 ? "s" : ""} detected in the system
+              model. Check the code in the editor!
             </p>
             {#if firstError}
               <div
@@ -4017,7 +4076,9 @@ $effect(() => {
 
       <div
         class="absolute bottom-2 right-2 z-10 pointer-events-none bg-base-100 border border-base-300 rounded-box shadow px-3 py-1 text-sm text-base-content/80"
-        style="opacity: {activityHintVisible ? 1 : 0}; transition-property: opacity; transition-duration: {activityHintVisible
+        style="opacity: {activityHintVisible
+          ? 1
+          : 0}; transition-property: opacity; transition-duration: {activityHintVisible
           ? ACTIVITY_HINT_FADE_IN_MS
           : ACTIVITY_HINT_FADE_OUT_MS}ms;"
       >
@@ -4061,103 +4122,113 @@ $effect(() => {
     <div class="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden p-4">
       <div class="flex flex-col flex-1 min-h-0 overflow-y-auto">
         {#if selectedDiagramPath !== null}
-        <div
-          class="font-semibold text-sm mb-1 text-base-content uppercase tracking-wide"
-          data-testid="diagram-system-label"
-          title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind."
-        >
-          {#if isSystemDangling}
-            <span class="text-warning">system: {selectedSystem} (missing)</span>
-          {:else if effectiveSystem !== ""}
-            system: {effectiveSystem}
-          {/if}
-        </div>
-      {/if}
-
-      {#if selectedDiagramPath === null}
-        <p class="text-base-content/50 text-sm">
-          No diagram selected.<br />Create one from the Diagrams sidebar.
-        </p>
-      {:else if components.length === 0}
-        <p class="text-base-content/50 text-sm">
-          No components found.<br />Open the editor and define some systems.
-        </p>
-      {:else if isSystemDangling}
-        <p class="text-warning text-sm" data-testid="dangling-system-hint">
-          Bound system "{selectedSystem}" not found.<br />Fix <span class="font-mono">system =</span> in Code, or delete and recreate this diagram.
-        </p>
-      {:else}
-        <ComponentHierarchyTree
-          {systems}
-          {components}
-          {selected}
-          filterSystemLabel={effectiveSystem}
-          isChecked={(index) => checkedIndices.has(index)}
-          onToggleChecked={(index) => toggleComponentChecked(index)}
-        />
-        {#if hiddenForeignCount > 0}
-          <p class="text-xs text-warning mt-2">+{hiddenForeignCount} placed node{hiddenForeignCount === 1 ? "" : "s"} from other systems hidden.</p>
+          <div
+            class="font-semibold text-sm mb-1 text-base-content uppercase tracking-wide"
+            data-testid="diagram-system-label"
+            title="This tree shows components of this system only. The view is bound to it (immutable after creation) — delete and recreate, or hand-edit in Code, to re-bind."
+          >
+            {#if isSystemDangling}
+              <span class="text-warning"
+                >system: {selectedSystem} (missing)</span
+              >
+            {:else if effectiveSystem !== ""}
+              system: {effectiveSystem}
+            {/if}
+          </div>
         {/if}
-      {/if}
 
-      <div class="divider"></div>
-
-      <h3
-        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-      >
-        Definitions
-      </h3>
-
-      {#if reusableDefinitions.length === 0}
-        <p class="text-xs text-base-content/50 italic">
-          No reusable definitions yet — create one with "New Component
-          Definition".
-        </p>
-      {:else}
-        <ul class="space-y-1">
-          {#each reusableDefinitions as def (def.sourceLabel)}
-            <li
-              class="flex items-center gap-2 text-sm truncate font-mono"
-              title={def.label}
-            >
-              <span class="truncate">{def.label}</span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+        {#if selectedDiagramPath === null}
+          <p class="text-base-content/50 text-sm">
+            No diagram selected.<br />Create one from the Diagrams sidebar.
+          </p>
+        {:else if components.length === 0}
+          <p class="text-base-content/50 text-sm">
+            No components found.<br />Open the editor and define some systems.
+          </p>
+        {:else if isSystemDangling}
+          <p class="text-warning text-sm" data-testid="dangling-system-hint">
+            Bound system "{selectedSystem}" not found.<br />Fix
+            <span class="font-mono">system =</span> in Code, or delete and recreate
+            this diagram.
+          </p>
+        {:else}
+          <ComponentHierarchyTree
+            {systems}
+            {components}
+            {selected}
+            filterSystemLabel={effectiveSystem}
+            isChecked={(index) => checkedIndices.has(index)}
+            onToggleChecked={(index) => toggleComponentChecked(index)}
+          />
+          {#if hiddenForeignCount > 0}
+            <p class="text-xs text-warning mt-2">
+              +{hiddenForeignCount} placed node{hiddenForeignCount === 1
+                ? ""
+                : "s"} from other systems hidden.
+            </p>
+          {/if}
+        {/if}
 
         <div class="divider"></div>
 
-      <h3
-        class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-      >
-        Connections
-      </h3>
+        <h3
+          class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+        >
+          Definitions
+        </h3>
 
-      <ul class="space-y-1">
-        {#each systemConnections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
-          <li class="flex items-center gap-2 text-sm truncate" title={connection.label}>
-            {connection.label}
-          </li>
-        {/each}
-      </ul>
-    </div>
+        {#if reusableDefinitions.length === 0}
+          <p class="text-xs text-base-content/50 italic">
+            No reusable definitions yet — create one with "New Component
+            Definition".
+          </p>
+        {:else}
+          <ul class="space-y-1">
+            {#each reusableDefinitions as def (def.sourceLabel)}
+              <li
+                class="flex items-center gap-2 text-sm truncate font-mono"
+                title={def.label}
+              >
+                <span class="truncate">{def.label}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+
+        <div class="divider"></div>
+
+        <h3
+          class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
+        >
+          Connections
+        </h3>
+
+        <ul class="space-y-1">
+          {#each systemConnections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
+            <li
+              class="flex items-center gap-2 text-sm truncate"
+              title={connection.label}
+            >
+              {connection.label}
+            </li>
+          {/each}
+        </ul>
+      </div>
 
       <!-- Embed Diagram + Copy Debug Info buttons -->
       <div class="pt-3 border-t border-base-300 shrink-0 space-y-2">
         <button
           type="button"
-          class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug ? 'btn-success' : ''}"
+          class="btn btn-outline btn-sm w-full flex items-center justify-center gap-1.5 {copiedDebug
+            ? 'btn-success'
+            : ''}"
           onclick={() => void handleCopyDebug().catch(reportDiagramError)}
           title="Copy the session's model mutations as a replayable TypeScript test"
         >
           <span aria-hidden="true">🚧</span>
-          <span>{copiedDebug ? '✓ Copied' : 'Copy Debug Info'}</span>
+          <span>{copiedDebug ? "✓ Copied" : "Copy Debug Info"}</span>
         </button>
-        <EmbedDiagramButton
-          projectId={projectId}
-          diagramPath={selectedDiagramPath}
-        />
+        <EmbedDiagramButton {projectId} diagramPath={selectedDiagramPath} />
       </div>
     </div>
   </Pane>
@@ -4165,7 +4236,7 @@ $effect(() => {
 
 <NewViewModal
   isOpen={isNewViewModalOpen}
-  systems={systems}
+  {systems}
   defaultSystem={systems[0]?.label || "main"}
   oncreate={(data) => void handleNewViewCreate(data).catch(reportDiagramError)}
   onclose={() => (isNewViewModalOpen = false)}
@@ -4177,6 +4248,7 @@ $effect(() => {
   {reusableDefinitions}
   defaultParentKey={createModalDefaultParent}
   initialPosition={createModalPosition}
-  oncreate={(data) => void handleModalCreateComponent(data).catch(reportDiagramError)}
+  oncreate={(data) =>
+    void handleModalCreateComponent(data).catch(reportDiagramError)}
   onclose={() => (isCreateModalOpen = false)}
 />

@@ -44,17 +44,17 @@ export function runProjectStoreContractTests(
         await store.createProject("Drone System");
         // Same slug, different name — a second project here would collide on
         // the URL and the server-side file, so it is refused outright.
-        await expect(
-          store.createProject("drone system!"),
-        ).rejects.toThrow(DuplicateProjectError);
+        await expect(store.createProject("drone system!")).rejects.toThrow(
+          DuplicateProjectError,
+        );
         expect(await store.listProjects()).toHaveLength(1);
       });
 
       it("rejects a name with no characters usable in an address", async () => {
         const store = makeStore();
-        await expect(
-          store.createProject("???"),
-        ).rejects.toThrow(InvalidProjectNameError);
+        await expect(store.createProject("???")).rejects.toThrow(
+          InvalidProjectNameError,
+        );
         expect(await store.listProjects()).toEqual([]);
       });
 
@@ -109,9 +109,9 @@ export function runProjectStoreContractTests(
       it("rejects a rename to a name with no usable address", async () => {
         const store = makeStore();
         const project = await store.createProject("Drone System");
-        await expect(
-          store.renameProject(project.id, "***"),
-        ).rejects.toThrow(InvalidProjectNameError);
+        await expect(store.renameProject(project.id, "***")).rejects.toThrow(
+          InvalidProjectNameError,
+        );
         expect(await store.listProjects()).toEqual([project]);
       });
 
@@ -135,11 +135,7 @@ export function runProjectStoreContractTests(
       it("creates a root-level directory and file", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
-        const dir = await store.createDirectory(
-          project.id,
-          null,
-          "components",
-        );
+        const dir = await store.createDirectory(project.id, null, "components");
         const file = await store.createFile(
           project.id,
           null,
@@ -157,12 +153,7 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "components");
-        const file = await store.createFile(
-          project.id,
-          dir.id,
-          "imu.hcl",
-          "",
-        );
+        const file = await store.createFile(project.id, dir.id, "imu.hcl", "");
         expect(file.parentId).toBe(dir.id);
       });
 
@@ -176,12 +167,7 @@ export function runProjectStoreContractTests(
       it("rejects creating a node whose parent is a file, not a directory", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
-        const file = await store.createFile(
-          project.id,
-          null,
-          "a.hcl",
-          "",
-        );
+        const file = await store.createFile(project.id, null, "a.hcl", "");
         await expect(
           store.createFile(project.id, file.id, "b.hcl", ""),
         ).rejects.toThrow();
@@ -263,12 +249,7 @@ export function runProjectStoreContractTests(
       it("renames a node", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
-        const file = await store.createFile(
-          project.id,
-          null,
-          "a.hcl",
-          "",
-        );
+        const file = await store.createFile(project.id, null, "a.hcl", "");
         await store.renameNode(project.id, file.id, "b.hcl");
         const [node] = await store.listNodes(project.id);
         expect(node?.name).toBe("b.hcl");
@@ -284,16 +265,18 @@ export function runProjectStoreContractTests(
         const project = await store.createProject("p");
         await store.createFile(project.id, null, "a.hcl", "");
         const b = await store.createFile(project.id, null, "b.hcl", "");
-        await expect(store.renameNode(project.id, b.id, "a.hcl")).rejects
-          .toThrow();
+        await expect(
+          store.renameNode(project.id, b.id, "a.hcl"),
+        ).rejects.toThrow();
       });
 
       it("allows renaming a node to its own current name (no-op)", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
         const file = await store.createFile(project.id, null, "a.hcl", "");
-        await expect(store.renameNode(project.id, file.id, "a.hcl")).resolves
-          .toBeUndefined();
+        await expect(
+          store.renameNode(project.id, file.id, "a.hcl"),
+        ).resolves.toBeUndefined();
       });
     });
 
@@ -302,12 +285,7 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        const file = await store.createFile(
-          project.id,
-          null,
-          "a.hcl",
-          "",
-        );
+        const file = await store.createFile(project.id, null, "a.hcl", "");
         await store.moveNode(project.id, file.id, dir.id);
         const nodes = await store.listNodes(project.id);
         expect(nodes.find((n) => n.id === file.id)?.parentId).toBe(dir.id);
@@ -317,12 +295,7 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        const file = await store.createFile(
-          project.id,
-          dir.id,
-          "a.hcl",
-          "",
-        );
+        const file = await store.createFile(project.id, dir.id, "a.hcl", "");
         await store.moveNode(project.id, file.id, null);
         const nodes = await store.listNodes(project.id);
         expect(nodes.find((n) => n.id === file.id)?.parentId).toBeNull();
@@ -332,8 +305,9 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        await expect(store.moveNode(project.id, dir.id, dir.id)).rejects
-          .toThrow();
+        await expect(
+          store.moveNode(project.id, dir.id, dir.id),
+        ).rejects.toThrow();
       });
 
       it("rejects moving a node under one of its own descendants (cycle)", async () => {
@@ -345,21 +319,18 @@ export function runProjectStoreContractTests(
           outer.id,
           "inner",
         );
-        await expect(store.moveNode(project.id, outer.id, inner.id)).rejects
-          .toThrow();
+        await expect(
+          store.moveNode(project.id, outer.id, inner.id),
+        ).rejects.toThrow();
       });
 
       it("rejects moving a node to an unknown parent", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
-        const file = await store.createFile(
-          project.id,
-          null,
-          "a.hcl",
-          "",
-        );
-        await expect(store.moveNode(project.id, file.id, "nope")).rejects
-          .toThrow();
+        const file = await store.createFile(project.id, null, "a.hcl", "");
+        await expect(
+          store.moveNode(project.id, file.id, "nope"),
+        ).rejects.toThrow();
       });
 
       it("rejects moving a node into a directory that already has a child with the same name", async () => {
@@ -368,8 +339,9 @@ export function runProjectStoreContractTests(
         const dir = await store.createDirectory(project.id, null, "dir");
         await store.createFile(project.id, dir.id, "a.hcl", "");
         const rootFile = await store.createFile(project.id, null, "a.hcl", "");
-        await expect(store.moveNode(project.id, rootFile.id, dir.id)).rejects
-          .toThrow();
+        await expect(
+          store.moveNode(project.id, rootFile.id, dir.id),
+        ).rejects.toThrow();
       });
     });
 
@@ -387,12 +359,7 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        const other = await store.createFile(
-          project.id,
-          null,
-          "keep.hcl",
-          "",
-        );
+        const other = await store.createFile(project.id, null, "keep.hcl", "");
         await store.deleteNode(project.id, dir.id);
         const nodes = await store.listNodes(project.id);
         expect(nodes.map((n) => n.id)).toEqual([other.id]);
@@ -408,12 +375,7 @@ export function runProjectStoreContractTests(
       it("bumps revision and updatedAt on updateFileContent", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
-        const file = await store.createFile(
-          project.id,
-          null,
-          "a.hcl",
-          "v0",
-        );
+        const file = await store.createFile(project.id, null, "a.hcl", "v0");
         expect(file.revision).toBe(0);
 
         await store.updateFileContent(project.id, file.id, "v1");
@@ -437,19 +399,15 @@ export function runProjectStoreContractTests(
         const store = makeStore();
         const project = await store.createProject("p");
         const dir = await store.createDirectory(project.id, null, "dir");
-        await expect(store.updateFileContent(project.id, dir.id, "x")).rejects
-          .toThrow();
+        await expect(
+          store.updateFileContent(project.id, dir.id, "x"),
+        ).rejects.toThrow();
       });
 
       it("touches the owning project's updatedAt on a node mutation", async () => {
         const store = makeStore();
         const project = await store.createProject("p");
-        const file = await store.createFile(
-          project.id,
-          null,
-          "a.hcl",
-          "",
-        );
+        const file = await store.createFile(project.id, null, "a.hcl", "");
         await store.updateFileContent(project.id, file.id, "changed");
         const [updatedProject] = await store.listProjects();
         expect(updatedProject?.updatedAt).not.toBe(project.updatedAt);
@@ -476,12 +434,7 @@ export function runProjectStoreContractTests(
           await store.createDirectory(project.id, null, "views");
           const [dir] = await store.listNodes(project.id);
           if (dir?.kind !== "directory") throw new Error("no directory");
-          await store.createFile(
-            project.id,
-            dir.id,
-            "main.hcl",
-            "original",
-          );
+          await store.createFile(project.id, dir.id, "main.hcl", "original");
         }
         return { store, alpha, beta };
       }
@@ -562,10 +515,12 @@ export function runProjectStoreContractTests(
         await expect(
           store.updateFileContent(beta.id, alphaFile.id, "hijacked"),
         ).rejects.toThrow();
-        await expect(store.renameNode(beta.id, alphaFile.id, "x.hcl")).rejects
-          .toThrow();
-        await expect(store.moveNode(beta.id, alphaFile.id, null)).rejects
-          .toThrow();
+        await expect(
+          store.renameNode(beta.id, alphaFile.id, "x.hcl"),
+        ).rejects.toThrow();
+        await expect(
+          store.moveNode(beta.id, alphaFile.id, null),
+        ).rejects.toThrow();
         await expect(store.deleteNode(beta.id, alphaFile.id)).rejects.toThrow();
 
         // …and nothing in the project that owns the id moved.
@@ -622,11 +577,12 @@ function makeFakeServerFetch(): (
 ) => Promise<Response> {
   let stored: unknown = null;
   return (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-      ? input.href
-      : input.url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     if (!url.endsWith("/api/vfs")) {
       return Promise.resolve(new Response("not found", { status: 404 }));
     }

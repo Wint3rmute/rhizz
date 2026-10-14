@@ -149,8 +149,9 @@ system "demo" {
     expect(view.get("mcu")?.ports.map((p) => p.role)).toEqual(["consumer"]);
     expect(view.get("sensor")?.ports[0]?.protocol).toBe("i2c");
     expect(
-      compile_system([{ filename: "system.hcl", content: systemHcl }])
-        .error_count(),
+      compile_system([
+        { filename: "system.hcl", content: systemHcl },
+      ]).error_count(),
     ).toBe(0);
   });
 
@@ -219,9 +220,10 @@ describe("definitionOptions", () => {
   });
 
   it("lists top-level definitions, sorted by label, even with zero instances", () => {
-    const model = modelOf([{
-      filename: "system.hcl",
-      content: `component "zeppelin" {
+    const model = modelOf([
+      {
+        filename: "system.hcl",
+        content: `component "zeppelin" {
   leaf = true
   icon = "cloud"
 }
@@ -231,7 +233,8 @@ component "anchor" {
 system "main" {
 }
 `,
-    }]);
+      },
+    ]);
     expect(definitionOptions(model)).toEqual([
       { sourceLabel: "anchor", label: "anchor", icon: undefined },
       { sourceLabel: "zeppelin", label: "zeppelin", icon: "cloud" },
@@ -239,9 +242,10 @@ system "main" {
   });
 
   it("omits placed instances, which are not reusable definitions", () => {
-    const model = modelOf([{
-      filename: "system.hcl",
-      content: `component "sensor" {
+    const model = modelOf([
+      {
+        filename: "system.hcl",
+        content: `component "sensor" {
   leaf = true
 }
 system "main" {
@@ -250,7 +254,8 @@ system "main" {
   }
 }
 `,
-    }]);
+      },
+    ]);
     expect(definitionOptions(model).map((d) => d.sourceLabel)).toEqual([
       "sensor",
     ]);

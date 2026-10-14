@@ -13,12 +13,7 @@ function dir(id: string, name: string, parentId: string | null): FsDirectory {
   return { id, projectId: "p1", parentId, name, kind: "directory" };
 }
 
-function file(
-  id: string,
-  name: string,
-  parentId: string | null,
-  content = "",
-) {
+function file(id: string, name: string, parentId: string | null, content = "") {
   return {
     id,
     projectId: "p1",
@@ -104,22 +99,21 @@ describe("wouldCreateCycle", () => {
   it("is true when a node is moved under itself", () => {
     expect(
       wouldCreateCycle("p1", "dir-components", "dir-components", fixture()),
-    )
-      .toBe(true);
+    ).toBe(true);
   });
 
   it("is true when a node is moved under one of its own descendants", () => {
     // Moving "components" under its own child "imu.hcl" would create a
     // cycle.
-    expect(wouldCreateCycle("p1", "dir-components", "file-imu", fixture()))
-      .toBe(
-        true,
-      );
+    expect(
+      wouldCreateCycle("p1", "dir-components", "file-imu", fixture()),
+    ).toBe(true);
   });
 
   it("is false when moving under an unrelated node", () => {
-    expect(wouldCreateCycle("p1", "dir-components", "dir-views", fixture()))
-      .toBe(false);
+    expect(
+      wouldCreateCycle("p1", "dir-components", "dir-views", fixture()),
+    ).toBe(false);
   });
 });
 

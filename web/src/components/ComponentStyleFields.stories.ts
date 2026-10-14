@@ -91,9 +91,7 @@ export const FullNameCommitsOnBlur: Story = {
     await expect(emitted).toEqual([]);
 
     await userEvent.tab();
-    await expect(emitted).toEqual([
-      { full_name: "BME280 temperature sensor" },
-    ]);
+    await expect(emitted).toEqual([{ full_name: "BME280 temperature sensor" }]);
   },
 };
 

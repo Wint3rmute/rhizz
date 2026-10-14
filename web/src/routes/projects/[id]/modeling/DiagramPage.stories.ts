@@ -74,8 +74,8 @@ async function ensureBrokenProject(): Promise<Project> {
   // file (and possibly the model) on load, so an existing project can't
   // be trusted to still match the fixture below.
   const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.id === BROKEN_PROJECT_ID
+  const stale = existing.find(
+    (candidate) => candidate.id === BROKEN_PROJECT_ID,
   );
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
@@ -91,8 +91,8 @@ async function ensureLongErrorProject(): Promise<Project> {
   // Same hermetic-fixture reasoning as ensureBrokenProject above.
   modelingPanes.forget();
   const existing = await projectStore.listProjects();
-  const stale = existing.find((candidate) =>
-    candidate.id === LONG_ERROR_PROJECT_ID
+  const stale = existing.find(
+    (candidate) => candidate.id === LONG_ERROR_PROJECT_ID,
   );
   if (stale !== undefined) {
     await projectStore.deleteProject(stale.id);
@@ -128,10 +128,10 @@ export const DuplicateProjectBlock: Story = {
     await expect(
       await canvas.findByRole("heading", { name: "Model failed to compile" }),
     ).toBeInTheDocument();
-    await expect(canvas.getByText(/1 error detected in the system model/))
-      .toBeInTheDocument();
-    await expect(canvas.getByText("[E010]"))
-      .toBeInTheDocument();
+    await expect(
+      canvas.getByText(/1 error detected in the system model/),
+    ).toBeInTheDocument();
+    await expect(canvas.getByText("[E010]")).toBeInTheDocument();
 
     const editorLink = canvas.getByRole("link", { name: "Open Code to Fix" });
     await expect(editorLink).toHaveAttribute(

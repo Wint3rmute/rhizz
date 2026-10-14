@@ -144,10 +144,10 @@ describe("filterDefinitions", () => {
 
   it("matches query against tags too", () => {
     expect(
-      filterDefinitions(
-        all,
-        { tab: InventoryTab.Components, query: "propulsion" },
-      ),
+      filterDefinitions(all, {
+        tab: InventoryTab.Components,
+        query: "propulsion",
+      }),
     ).toEqual([sm]);
   });
 
@@ -366,12 +366,7 @@ describe("instancePathsForDefinition", () => {
     { label: "spare", source: "mcu", parent: { System: 1 } },
     { label: "mcu" },
   ];
-  const keys = [
-    "controller",
-    "demo/main-chip",
-    "other/spare",
-    "mcu",
-  ];
+  const keys = ["controller", "demo/main-chip", "other/spare", "mcu"];
 
   it("lists the key of every instance sourced from the definition", () => {
     expect(instancePathsForDefinition(components, keys, "mcu")).toEqual([
