@@ -728,6 +728,9 @@ fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
     if let Some(side) = conn.end_side {
         let _ = writeln!(out, "    end_side   = {}", escape_string(side.as_str()));
     }
+    if conn.hidden {
+        let _ = writeln!(out, "    hidden = true");
+    }
     out.push_str("  }\n");
 }
 
@@ -794,6 +797,7 @@ struct RawNodeAttrs {
 struct RawConnectionLayoutAttrs {
     start_side: Option<String>,
     end_side: Option<String>,
+    hidden: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -897,6 +901,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             connection: conn_label,
                             start_side: parse_connection_side(ca.start_side.as_deref()),
                             end_side: parse_connection_side(ca.end_side.as_deref()),
+                            hidden: ca.hidden.unwrap_or(false),
                         });
                     }
                     "annotation" => {
@@ -1820,5 +1825,58 @@ system "main" {
         let err = parse_views(hcl).expect_err("unknown node attr should fail");
         let full = format!("{err:#}");
         assert!(full.contains("typo"), "got: {full}");
+    }
+
+    #[test]
+    fn hidden_connection_round_trips_through_views_hcl() {
+        let hcl = r#"view "overview" {
+  system = "s"
+
+  connection "fc-to-prop" {
+    hidden = true
+  }
+}
+"#;
+        let views = parse_views(hcl).expect("parse hidden connection");
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].connections.len(), 1);
+        assert_eq!(views[0].connections[0].connection, "fc-to-prop");
+        assert!(
+            views[0].connections[0].hidden,
+            "hidden should parse as true"
+        );
+        let serialized = serialize_views(&views);
+        assert!(
+            serialized.contains("hidden = true"),
+            "hidden=true emitted: {serialized}"
+        );
+        let reparsed = parse_views(&serialized).expect("reparse");
+        assert_eq!(reparsed, views, "hidden round trip must be stable");
+    }
+
+    #[test]
+    fn hidden_false_is_omitted_from_canonical_hcl() {
+        let views = vec![ViewDefinition {
+            label: "overview".to_owned(),
+            full_name: String::new(),
+            tags: vec![],
+            system: "s".to_owned(),
+            filter: ViewFilterDefinition::default(),
+            nodes: vec![],
+            connections: vec![ConnectionLayout {
+                connection: "fc-to-prop".to_owned(),
+                start_side: None,
+                end_side: None,
+                hidden: false,
+            }],
+            annotations: vec![],
+        }];
+        let serialized = serialize_views(&views);
+        assert!(
+            !serialized.contains("hidden"),
+            "hidden=false omitted: {serialized}"
+        );
+        let reparsed = parse_views(&serialized).expect("reparse");
+        assert_eq!(reparsed, views, "hidden=false round trip must be stable");
     }
 }

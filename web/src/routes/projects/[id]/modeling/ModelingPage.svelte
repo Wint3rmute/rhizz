@@ -102,6 +102,10 @@
   import DiagramCanvas from "./DiagramCanvas.svelte";
   import { fitCamera, sceneBounds } from "./blend";
   import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
+  import {
+    drawnConnections,
+    sidebarConnectionRows,
+  } from "./connectionVisibility";
   import { createDiagramTransition } from "./transition.svelte";
   import {
     type BorderStyle,
@@ -470,14 +474,32 @@
     return n;
   });
 
-  // Connections sidebar, filtered to this view's system (both endpoints inside).
-  let systemConnections = $derived.by(() => {
-    if (selectedSystemIndex === -1) return connections;
-    return connections.filter(
-      (c) =>
-        systemComponentIndices.has(c.from) && systemComponentIndices.has(c.to),
-    );
-  });
+  // Whether a connection name is hidden in this view (per-view setting,
+  // keyed by name so all copies of one declaration hide together).
+  function isConnectionHidden(label: string): boolean {
+    return savedConnections[label]?.hidden === true;
+  }
+
+  // Whether a component belongs to this view's system. With no system bound
+  // (`-1`, legacy/unlinked views) everything counts as in-system.
+  function isInViewSystem(index: number): boolean {
+    if (selectedSystemIndex === -1) return true;
+    return systemComponentIndices.has(index);
+  }
+
+  // Connections sidebar: every system connection with both endpoints placed
+  // in the view, grouped by name. A name is listed when any copy is placed
+  // and checked when any copy is drawn (placed, in-system, not hidden), so
+  // hidden connections stay listed, unchecked, and can be shown again.
+  // Shares the drawn predicate with the canvas edge list below.
+  let systemConnections = $derived.by(() =>
+    sidebarConnectionRows(
+      connections,
+      checkedIndices,
+      isInViewSystem,
+      isConnectionHidden,
+    ),
+  );
 
   let fullDiagramPath = $derived(
     selectedDiagramPath === null
@@ -1103,6 +1125,30 @@
     // In case this component is itself the parent of children that were
     // already placed on canvas before it was.
     reclampChildren(index);
+  }
+
+  // Shows or hides a connection in this view. Keyed by name, so all copies
+  // of one declaration hide together. Removing an endpoint component from
+  // the view does not clear the flag — re-checking the component restores
+  // the hidden state. Same save and undo path as component checkboxes:
+  // the mutation lands in `savedConnections` (watched by the save effect)
+  // behind one undo point.
+  function toggleConnectionShown(label: string, shown: boolean) {
+    const prev = savedConnections[label];
+    const hidden = prev?.hidden === true;
+    if (shown === !hidden) return; // no-op: skip a redundant undo point
+    recordUndoPoint();
+    noteDiagramEdited();
+    if (shown) {
+      const { hidden: _hidden, ...rest } = prev ?? {};
+      if (Object.keys(rest).length === 0) {
+        delete savedConnections[label];
+      } else {
+        savedConnections[label] = rest;
+      }
+      return;
+    }
+    savedConnections[label] = { ...prev, hidden: true };
   }
 
   // Padding kept between a child node's edges and its active parent's edges,
@@ -3327,26 +3373,27 @@
         },
       ];
     });
-    const edges: EditorSceneEdgeInput[] = connections
-      .filter(
-        (conn) =>
-          selectedSystemIndex === -1 ||
-          (systemComponentIndices.has(conn.from) &&
-            systemComponentIndices.has(conn.to)),
-      )
-      .map((conn) => {
-        const edge: EditorSceneEdgeInput = {
-          from: conn.from,
-          to: conn.to,
-          label: conn.label,
-          fromKey: getComponentKey(conn.from),
-          toKey: getComponentKey(conn.to),
-        };
-        const saved = savedConnections[conn.label];
-        if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
-        if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
-        return edge;
-      });
+    // Canvas edges share the drawn predicate with the sidebar above: placed
+    // in the view's system and not hidden. Hidden applies by name, so all
+    // copies of a hidden connection are skipped together.
+    const edges: EditorSceneEdgeInput[] = drawnConnections(
+      connections,
+      checkedIndices,
+      isInViewSystem,
+      isConnectionHidden,
+    ).map((conn) => {
+      const edge: EditorSceneEdgeInput = {
+        from: conn.from,
+        to: conn.to,
+        label: conn.label,
+        fromKey: getComponentKey(conn.from),
+        toKey: getComponentKey(conn.to),
+      };
+      const saved = savedConnections[conn.label];
+      if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
+      if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
+      return edge;
+    });
     return buildEditorScene({
       nodes,
       edges,
@@ -4203,16 +4250,35 @@
           Connections
         </h3>
 
-        <ul class="space-y-1">
-          {#each systemConnections as connection (`${connection.label}-${connection.from}-${connection.to}`)}
-            <li
-              class="flex items-center gap-2 text-sm truncate"
-              title={connection.label}
-            >
-              {connection.label}
-            </li>
-          {/each}
-        </ul>
+        {#if systemConnections.length === 0}
+          <p class="text-xs text-base-content/50 italic">
+            No connections between placed components yet — place both endpoints
+            of a connection to show it here.
+          </p>
+        {:else}
+          <ul class="space-y-1">
+            {#each systemConnections as connection (connection.label)}
+              <li
+                class="flex items-center gap-2 text-sm truncate"
+                title={connection.label}
+                data-testid={`connection-row-${connection.label}`}
+              >
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-xs shrink-0"
+                  checked={connection.shown}
+                  onchange={(event) =>
+                    toggleConnectionShown(
+                      connection.label,
+                      event.currentTarget.checked,
+                    )}
+                  aria-label={`Show connection ${connection.label}`}
+                />
+                <span class="truncate">{connection.label}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
       </div>
 
       <!-- Embed Diagram + Copy Debug Info buttons -->

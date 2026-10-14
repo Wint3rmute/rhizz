@@ -106,6 +106,11 @@ Views are not part of `Model`. Each `views/*.hcl` file yields one
 layouts, annotations) validated per step 8 above. `filter` is parsed and
 round-tripped but not applied by any renderer yet.
 
+A view `connection` block carries routing (`start_side`/`end_side`) and a
+per-view `hidden` flag (omitted when `false`). Connections are keyed by name
+within a system: copies of one declaration share the name and hide together,
+while two different declarations sharing a name in one system fail with E001.
+
 ## Design notes
 
 - Owned `String`s throughout — the HCL source doesn't outlive parsing.
