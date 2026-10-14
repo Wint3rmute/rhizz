@@ -49,15 +49,17 @@ task — do not touch `.github/workflows` (a follow-up is listed below).
 
 ### Steps
 
-- [ ] **2. Frontend derivation (`packages.rhizz-web`).** `pkgs.buildNpmPackage`
+- [x] **2. Frontend derivation (`packages.rhizz-web`).** `pkgs.buildNpmPackage`
   over `web/`, consuming `rhizz-wasm-pkg` as the
-  `file:../crates/rhizz-wasm/pkg/` dependency (place the derivation output in
-  the source tree before the install phase). Build with
-  `VITE_RHIZZ_SERVER_URL=/`; leave Sentry unset so the tokenless "no source
-  maps" path is taken. Respect `web/.npmrc` (`legacy-peer-deps=true`). Output
-  `web/build` (`404.html` + `_app/`). Storybook is **not** part of this stage
-  (it is only needed for VRT). Verify: `nix build .#rhizz-web`, load the SPA,
-  and compare against `cd web && npm run build`.
+  `file:../crates/rhizz-wasm/pkg/` dependency. Result: `nix/web.nix` uses
+  `importNpmLock` (no `npmDepsHash`) and points the two local `file:` lock
+  entries at the wasm derivation via `packageSourceOverrides` — no source-tree
+  placement needed. Builds with `VITE_RHIZZ_SERVER_URL=/`, Sentry unset; a
+  `preBuild` `npm run sync` compensates for `npmConfigHook`'s
+  `--ignore-scripts`. Output is `web/build`. Verified: `nix build .#rhizz-web`
+  emits `404.html` + `_app/` with asset filenames (incl. the wasm chunk)
+  byte-for-byte identical to `cd web && VITE_RHIZZ_SERVER_URL=/ npm run build`;
+  `404.html` differs only in SvelteKit's per-build random `version`.
 - [ ] **3. Backend binary (`packages.rhizz`).** `rustPlatform.buildRustPackage`
   for `rhizz-cli`, embedding step 2's `web/build` (and with
   `crates/rhizz-wasm/pkg` present so the workspace manifest resolves). Vendored

@@ -27,9 +27,16 @@
             "examples"
             "examples/.*"
           ];
+
+          rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
         in
         {
-          rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
+          inherit rhizz-wasm-pkg;
+
+          rhizz-web = pkgs.callPackage ./nix/web.nix {
+            src = ./web;
+            inherit rhizz-wasm-pkg;
+          };
         });
 
       devShells = forAllSystems (system:
