@@ -87,9 +87,11 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
     command-palette tests failed in 2 of 5 runs with the overrides and 1 of 4
     without. Different palette tests each time, all passing when rerun alone,
     so this is a pre-existing timing flake, tracked as its own follow-up.
-- [ ] **9. Remove all non-idiomatic constructs in `package.json`** - all `override`
+- [x] **9. Remove all non-idiomatic constructs in `package.json`** - all `override`
   options or very precise dependency pinning which was the part of this migration
-  shall be removed
+  shall be removed. Result: the 41 exact pins are caret ranges (same resolved
+  versions). The two `overrides` stay as audit fixes; see the note at the bottom
+  of this file for when they can go.
 
 ---
 
