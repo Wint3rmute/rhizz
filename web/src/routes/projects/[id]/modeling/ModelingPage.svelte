@@ -4135,7 +4135,7 @@
   </div>
 
   <!--
-    Right panel: component tree (+ definitions, connections) and the embed
+    Right panel: component tree (+ connections) and the embed
     action, pinned at the bottom. A `Pane`, so it hides behind a rail and
     drag-resizes — while staying mounted (`display: none`).
   -->
@@ -4214,32 +4214,6 @@
                 : "s"} from other systems hidden.
             </p>
           {/if}
-        {/if}
-
-        <div class="divider"></div>
-
-        <h3
-          class="font-semibold text-sm mb-3 text-base-content/70 uppercase tracking-wide"
-        >
-          Definitions
-        </h3>
-
-        {#if reusableDefinitions.length === 0}
-          <p class="text-xs text-base-content/50 italic">
-            No reusable definitions yet — create one with "New Component
-            Definition".
-          </p>
-        {:else}
-          <ul class="space-y-1">
-            {#each reusableDefinitions as def (def.sourceLabel)}
-              <li
-                class="flex items-center gap-2 text-sm truncate font-mono"
-                title={def.label}
-              >
-                <span class="truncate">{def.label}</span>
-              </li>
-            {/each}
-          </ul>
         {/if}
 
         <div class="divider"></div>
