@@ -115,8 +115,8 @@ async function openRow(
   const rows: HTMLElement[] = canvas.getAllByRole("button", {
     name: /^[a-z-]+\.hcl$/,
   });
-  return rows.find((row: HTMLElement) =>
-    row.getAttribute("aria-current") === "true"
+  return rows.find(
+    (row: HTMLElement) => row.getAttribute("aria-current") === "true",
   );
 }
 

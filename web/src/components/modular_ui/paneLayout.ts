@@ -41,9 +41,10 @@ export interface PaneLayoutOptions {
 /** Which side of the workspace a panel stands on. */
 export type PaneSide = "left" | "right";
 
-function layoutStore():
-  | Pick<Storage, "getItem" | "setItem" | "removeItem">
-  | null {
+function layoutStore(): Pick<
+  Storage,
+  "getItem" | "setItem" | "removeItem"
+> | null {
   try {
     if (typeof localStorage === "undefined") return null;
     return localStorage;
@@ -90,18 +91,18 @@ export function createPaneLayout(options: PaneLayoutOptions) {
       return { ...defaults };
     }
     const record = value as Record<string, unknown>;
-    const leftWidth = typeof record.leftWidth === "number"
-      ? clampWidth(record.leftWidth)
-      : defaults.leftWidth;
-    const rightWidth = typeof record.rightWidth === "number"
-      ? clampWidth(record.rightWidth)
-      : defaults.rightWidth;
-    const leftHidden = typeof record.leftHidden === "boolean"
-      ? record.leftHidden
-      : false;
-    const rightHidden = typeof record.rightHidden === "boolean"
-      ? record.rightHidden
-      : false;
+    const leftWidth =
+      typeof record.leftWidth === "number"
+        ? clampWidth(record.leftWidth)
+        : defaults.leftWidth;
+    const rightWidth =
+      typeof record.rightWidth === "number"
+        ? clampWidth(record.rightWidth)
+        : defaults.rightWidth;
+    const leftHidden =
+      typeof record.leftHidden === "boolean" ? record.leftHidden : false;
+    const rightHidden =
+      typeof record.rightHidden === "boolean" ? record.rightHidden : false;
     return { leftWidth, rightWidth, leftHidden, rightHidden };
   }
 

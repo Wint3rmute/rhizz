@@ -1,9 +1,9 @@
 <script lang="ts">
-import { renderMarkdown } from "./markdownRenderer";
+  import { renderMarkdown } from "./markdownRenderer";
 
-let { content = "" }: { content?: string } = $props();
+  let { content = "" }: { content?: string } = $props();
 
-let html = $derived(renderMarkdown(content));
+  let html = $derived(renderMarkdown(content));
 </script>
 
 <div class="markdown prose prose-sm max-w-none text-base-content">

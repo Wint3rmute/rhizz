@@ -36,15 +36,13 @@ function memoryFs(files: Record<string, string> = {}) {
 
 async function seedDemo(fs: ReturnType<typeof memoryFs>): Promise<void> {
   let baseline = "";
-  for (
-    const op of [
-      { kind: "add_component_definition", label: "compA" },
-      { kind: "add_component_definition", label: "compB" },
-      { kind: "add_system", label: "demo" },
-      { kind: "add_instance", parentPath: "demo", label: "a", source: "compA" },
-      { kind: "add_instance", parentPath: "demo", label: "b", source: "compB" },
-    ] as const
-  ) {
+  for (const op of [
+    { kind: "add_component_definition", label: "compA" },
+    { kind: "add_component_definition", label: "compB" },
+    { kind: "add_system", label: "demo" },
+    { kind: "add_instance", parentPath: "demo", label: "a", source: "compA" },
+    { kind: "add_instance", parentPath: "demo", label: "b", source: "compB" },
+  ] as const) {
     const result = await applyModelMutation(fs, "system.hcl", baseline, op);
     if (!result.applied) throw new Error(`seed op failed: ${op.kind}`);
     const next = fs.store.get("system.hcl");
@@ -217,67 +215,61 @@ describe("applyModelMutation", () => {
   it("builds nested instances with relative endpoints that compile", async () => {
     const fs = memoryFs();
     let baseline = "";
-    for (
-      const op of [
-        { kind: "add_component_definition", label: "antenna" },
-        { kind: "add_component_definition", label: "rf" },
-        { kind: "add_component_definition", label: "dsp" },
-        { kind: "add_component_definition", label: "baseband" },
-        { kind: "add_system", label: "mobile" },
-        {
-          kind: "add_instance",
-          parentPath: "mobile",
-          label: "antenna",
-          source: "antenna",
-        },
-        {
-          kind: "add_instance",
-          parentPath: "mobile",
-          label: "baseband",
-          source: "baseband",
-        },
-        {
-          kind: "add_instance",
-          parentPath: "baseband",
-          label: "rf",
-          source: "rf",
-        },
-        {
-          kind: "add_instance",
-          parentPath: "baseband",
-          label: "dsp",
-          source: "dsp",
-        },
-        {
-          kind: "add_connection",
-          scopePath: "mobile",
-          label: "rf-antenna",
-          from: "baseband/rf",
-          to: "antenna",
-        },
-        {
-          kind: "add_connection",
-          scopePath: "mobile",
-          label: "rf-dsp",
-          from: "baseband/rf",
-          to: "baseband/dsp",
-        },
-      ] as const
-    ) {
-      const result = await applyModelMutation(
-        fs,
-        "system.hcl",
-        baseline,
-        op,
-      );
+    for (const op of [
+      { kind: "add_component_definition", label: "antenna" },
+      { kind: "add_component_definition", label: "rf" },
+      { kind: "add_component_definition", label: "dsp" },
+      { kind: "add_component_definition", label: "baseband" },
+      { kind: "add_system", label: "mobile" },
+      {
+        kind: "add_instance",
+        parentPath: "mobile",
+        label: "antenna",
+        source: "antenna",
+      },
+      {
+        kind: "add_instance",
+        parentPath: "mobile",
+        label: "baseband",
+        source: "baseband",
+      },
+      {
+        kind: "add_instance",
+        parentPath: "baseband",
+        label: "rf",
+        source: "rf",
+      },
+      {
+        kind: "add_instance",
+        parentPath: "baseband",
+        label: "dsp",
+        source: "dsp",
+      },
+      {
+        kind: "add_connection",
+        scopePath: "mobile",
+        label: "rf-antenna",
+        from: "baseband/rf",
+        to: "antenna",
+      },
+      {
+        kind: "add_connection",
+        scopePath: "mobile",
+        label: "rf-dsp",
+        from: "baseband/rf",
+        to: "baseband/dsp",
+      },
+    ] as const) {
+      const result = await applyModelMutation(fs, "system.hcl", baseline, op);
       if (!result.applied) throw new Error(`seed op failed: ${op.kind}`);
       baseline = fs.store.get("system.hcl") ?? "";
     }
     expect(baseline).toContain('from         = "/mobile/baseband/rf"');
     expect(baseline).not.toContain("baseband:rf");
     expect(
-      compile_system([{ filename: "system.hcl", content: baseline }])
-        .error_count(),
+      compile_system([
+        { filename: "system.hcl", content: baseline },
+      ]).error_count(),
     ).toBe(0);
   });
 
@@ -347,18 +339,16 @@ describe("applyModelMutation", () => {
   it("create_component under an instance persists in the definition body", async () => {
     const fs = memoryFs();
     let baseline = "";
-    for (
-      const op of [
-        { kind: "add_component_definition", label: "sensor" },
-        { kind: "add_system", label: "main" },
-        {
-          kind: "add_instance",
-          parentPath: "main",
-          label: "sensor",
-          source: "sensor",
-        },
-      ] as const
-    ) {
+    for (const op of [
+      { kind: "add_component_definition", label: "sensor" },
+      { kind: "add_system", label: "main" },
+      {
+        kind: "add_instance",
+        parentPath: "main",
+        label: "sensor",
+        source: "sensor",
+      },
+    ] as const) {
       const seeded = await applyModelMutation(fs, "system.hcl", baseline, op);
       if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
       baseline = fs.store.get("system.hcl") ?? "";
@@ -383,32 +373,30 @@ describe("applyModelMutation", () => {
     // silently dropped the connection — instance blocks carry only `source`.
     const fs = memoryFs();
     let baseline = "";
-    for (
-      const op of [
-        { kind: "add_component_definition", label: "drone" },
-        { kind: "add_component_definition", label: "battery" },
-        { kind: "add_component_definition", label: "flight-controller" },
-        { kind: "add_system", label: "main" },
-        {
-          kind: "add_instance",
-          parentPath: "main",
-          label: "drone",
-          source: "drone",
-        },
-        {
-          kind: "add_instance",
-          parentPath: "drone",
-          label: "battery",
-          source: "battery",
-        },
-        {
-          kind: "add_instance",
-          parentPath: "drone",
-          label: "flight-controller",
-          source: "flight-controller",
-        },
-      ] as const
-    ) {
+    for (const op of [
+      { kind: "add_component_definition", label: "drone" },
+      { kind: "add_component_definition", label: "battery" },
+      { kind: "add_component_definition", label: "flight-controller" },
+      { kind: "add_system", label: "main" },
+      {
+        kind: "add_instance",
+        parentPath: "main",
+        label: "drone",
+        source: "drone",
+      },
+      {
+        kind: "add_instance",
+        parentPath: "drone",
+        label: "battery",
+        source: "battery",
+      },
+      {
+        kind: "add_instance",
+        parentPath: "drone",
+        label: "flight-controller",
+        source: "flight-controller",
+      },
+    ] as const) {
       const seeded = await applyModelMutation(fs, "system.hcl", baseline, op);
       if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
       baseline = fs.store.get("system.hcl") ?? "";

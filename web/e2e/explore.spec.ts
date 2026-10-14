@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { createFromExample } from "./helpers";
 
-test("explore renders a drone diagram, toast, and embed modal", async ({ page }) => {
+test("explore renders a drone diagram, toast, and embed modal", async ({
+  page,
+}) => {
   const id = await createFromExample(
     page,
     /Quadcopter Drone/,
@@ -28,8 +30,9 @@ test("explore renders a drone diagram, toast, and embed modal", async ({ page })
   await expect(openRow).toHaveText(/^ground-station\.hcl$/);
 
   await goggles.click();
-  await expect(page.getByText("No detailed view for goggles created"))
-    .toBeVisible();
+  await expect(
+    page.getByText("No detailed view for goggles created"),
+  ).toBeVisible();
 
   // The embed action lives at the bottom of that same sidebar.
   const embed = sidebar.getByRole("button", { name: /embed diagram/i });
@@ -54,15 +57,18 @@ test("explore hides the embed action on mobile", async ({ page }) => {
   await expect(sidebar).toBeVisible();
   // Copying an embed snippet is an authoring aid, not a phone task, and
   // the strip is precious vertical space there.
-  await expect(sidebar.getByRole("button", { name: /embed diagram/i }))
-    .toHaveCount(0);
+  await expect(
+    sidebar.getByRole("button", { name: /embed diagram/i }),
+  ).toHaveCount(0);
   // The diagram is still reachable: chips pick it, the canvas renders it.
   await expect(
     page.getByRole("link", { name: /goggles, no detailed view/i }),
   ).toBeVisible();
 });
 
-test("explore opens a layout-bearing view, not a filter-only one", async ({ page }) => {
+test("explore opens a layout-bearing view, not a filter-only one", async ({
+  page,
+}) => {
   const id = await createFromExample(
     page,
     /Software House/,

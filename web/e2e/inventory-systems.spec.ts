@@ -42,21 +42,19 @@ async function storedFiles(page: import("@playwright/test").Page) {
 // it previews the same-named diagram when one exists, and otherwise offers
 // to create it — bound to the system itself.
 
-test("inventory systems tab previews the same-named diagram, or offers to create it", async ({ page }) => {
+test("inventory systems tab previews the same-named diagram, or offers to create it", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E inventory systems");
 
   await page.goto(`/projects/${id}/inventory`);
   // The filter is Components / Systems / Interfaces now — no "All".
-  await expect(
-    page.getByRole("tab", { name: "Components" }),
-  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Components" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Systems" })).toBeVisible();
-  await expect(
-    page.getByRole("tab", { name: "Interfaces" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("tab", { name: "All", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Interfaces" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "All", exact: true })).toHaveCount(
+    0,
+  );
 
   await page.getByRole("tab", { name: "Systems" }).click();
   await page.getByText("main").first().click();
@@ -83,7 +81,9 @@ test("inventory systems tab previews the same-named diagram, or offers to create
   await expect(page.getByTestId("inventory-empty-diagram")).toBeHidden();
 });
 
-test("inventory add buttons create systems and components", async ({ page }) => {
+test("inventory add buttons create systems and components", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E inventory add");
 
   await page.goto(`/projects/${id}/inventory`);
@@ -131,7 +131,9 @@ test("inventory add buttons create systems and components", async ({ page }) => 
   await expect(page.getByTestId("inventory-add-entity")).toHaveCount(0);
 });
 
-test("inventory detail pane keeps the active tab when switching entities", async ({ page }) => {
+test("inventory detail pane keeps the active tab when switching entities", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E inventory tab keeps");
   await page.goto(`/projects/${id}/inventory`);
 
@@ -147,20 +149,24 @@ test("inventory detail pane keeps the active tab when switching entities", async
 
   const pane = page.getByTestId("inventory-detail-pane");
   await page.getByRole("tab", { name: "Metadata" }).click();
-  await expect(
-    pane.getByRole("tab", { name: "Metadata" }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(pane.getByRole("tab", { name: "Metadata" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   // Switching the focused entity keeps the tab — the pane now shows the
   // newly focused component's metadata, not the Description tab.
   await page.getByText("tab-comp-a").first().click();
-  await expect(
-    pane.getByRole("tab", { name: "Metadata" }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(pane.getByRole("tab", { name: "Metadata" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page).toHaveURL(`/projects/${id}/inventory/tab-comp-a`);
 });
 
-test("inventory Delete tab removes systems and components from the model", async ({ page }) => {
+test("inventory Delete tab removes systems and components from the model", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E inventory delete");
 
   // A component with no instances deletes through the type-to-confirm gate.
@@ -183,10 +189,13 @@ test("inventory Delete tab removes systems and components from the model", async
 
   // The block is gone from the model file, and the selection falls back.
   await expect
-    .poll(async () => {
-      const files = await storedFiles(page);
-      return files["main.hcl"] ?? files["system.hcl"] ?? "";
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        return files["main.hcl"] ?? files["system.hcl"] ?? "";
+      },
+      { timeout: 10_000 },
+    )
     .not.toContain('component "doomed-comp"');
   await expect(page).toHaveURL(`/projects/${id}/inventory`);
 
@@ -198,9 +207,12 @@ test("inventory Delete tab removes systems and components from the model", async
   await pane.getByTestId("inventory-delete-confirm").click();
 
   await expect
-    .poll(async () => {
-      const files = await storedFiles(page);
-      return files["main.hcl"] ?? files["system.hcl"] ?? "";
-    }, { timeout: 10_000 })
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        return files["main.hcl"] ?? files["system.hcl"] ?? "";
+      },
+      { timeout: 10_000 },
+    )
     .not.toContain('system "main"');
 });

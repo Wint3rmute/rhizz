@@ -189,8 +189,9 @@ async function ensureProjectWithDiagrams(
   // only has to look the project up by the same rule to stay idempotent.
   const id = projectSlug(name);
   const existing = await projectStore.listProjects();
-  const project = existing.find((p) => p.id === id) ??
-    await createProjectWithMainFile(name, hclContent);
+  const project =
+    existing.find((p) => p.id === id) ??
+    (await createProjectWithMainFile(name, hclContent));
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(diagrams)) {
     await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
@@ -206,10 +207,7 @@ async function ensureSeededProject(): Promise<Project> {
 }
 
 async function ensureManyDiagramsProject(): Promise<Project> {
-  return ensureProjectWithDiagrams(
-    MANY_DIAGRAMS_PROJECT_NAME,
-    manyDiagramsMap,
-  );
+  return ensureProjectWithDiagrams(MANY_DIAGRAMS_PROJECT_NAME, manyDiagramsMap);
 }
 
 async function ensureCrossLevelProject(): Promise<Project> {

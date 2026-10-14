@@ -40,38 +40,38 @@ export interface ComponentDefinitionOptions {
 export type ModelMutationOp =
   | { kind: "add_system"; label: string; full_name?: string }
   | {
-    kind: "add_component_definition";
-    label: string;
-    options?: ComponentDefinitionOptions;
-  }
+      kind: "add_component_definition";
+      label: string;
+      options?: ComponentDefinitionOptions;
+    }
   | { kind: "add_instance"; parentPath: string; label: string; source: string }
   | {
-    kind: "create_component";
-    label: string;
-    parentKey?: string;
-    sourceLabel?: string;
-    leaf?: boolean;
-    full_name?: string;
-    tags?: string[];
-    ports?: PortData[];
-  }
+      kind: "create_component";
+      label: string;
+      parentKey?: string;
+      sourceLabel?: string;
+      leaf?: boolean;
+      full_name?: string;
+      tags?: string[];
+      ports?: PortData[];
+    }
   | {
-    kind: "reparent_component";
-    sourcePath: string;
-    targetParentPath: string;
-  }
+      kind: "reparent_component";
+      sourcePath: string;
+      targetParentPath: string;
+    }
   | { kind: "rename_component"; path: string; newLabel: string }
   | { kind: "update_component"; path: string; patch: Partial<ComponentData> }
   | { kind: "update_system"; path: string; patch: SystemPatch }
   | { kind: "delete_component"; path: string }
   | { kind: "delete_system"; path: string }
   | {
-    kind: "add_connection";
-    scopePath: string;
-    label: string;
-    from: string;
-    to: string;
-  }
+      kind: "add_connection";
+      scopePath: string;
+      label: string;
+      from: string;
+      to: string;
+    }
   | { kind: "delete_connection"; scopePath: string; label: string }
   | { kind: "delete_connection_by_label"; label: string };
 

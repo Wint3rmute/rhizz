@@ -21,11 +21,12 @@ describe("readProjectSources", () => {
     await fs.writeFile("drone.hcl", 'system "drone" {}');
 
     const sources = await readProjectSources(fs);
-    expect(sources.toSorted((a, b) => a.filename.localeCompare(b.filename)))
-      .toEqual([
-        { filename: "components/imu.hcl", content: 'component "imu" {}' },
-        { filename: "drone.hcl", content: 'system "drone" {}' },
-      ]);
+    expect(
+      sources.toSorted((a, b) => a.filename.localeCompare(b.filename)),
+    ).toEqual([
+      { filename: "components/imu.hcl", content: 'component "imu" {}' },
+      { filename: "drone.hcl", content: 'system "drone" {}' },
+    ]);
   });
 
   it("excludes non-.hcl files", async () => {
@@ -147,8 +148,9 @@ describe("primaryHclPath", () => {
       dirent("system.hcl", "file"),
     ];
     expect(primaryHclPath(entries)).toBe("system.hcl");
-    expect(primaryHclPath(entries.filter((e) => e.name !== "system.hcl")))
-      .toBe("main.hcl");
+    expect(primaryHclPath(entries.filter((e) => e.name !== "system.hcl"))).toBe(
+      "main.hcl",
+    );
   });
 
   it("never lets the metadata-only project.hcl shadow a real system file", () => {

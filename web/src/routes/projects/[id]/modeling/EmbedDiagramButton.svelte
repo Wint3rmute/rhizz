@@ -1,60 +1,61 @@
 <script lang="ts">
-import { resolve } from "$app/paths";
-import { copyToClipboard } from "../../../../clipboard";
+  import { resolve } from "$app/paths";
+  import { copyToClipboard } from "../../../../clipboard";
 
-let {
-  projectId,
-  diagramPath = null,
-  disabled = false,
-  baseUrl = null,
-}: {
-  projectId: string;
-  diagramPath?: string | null;
-  disabled?: boolean;
-  baseUrl?: string | null;
-} = $props();
+  let {
+    projectId,
+    diagramPath = null,
+    disabled = false,
+    baseUrl = null,
+  }: {
+    projectId: string;
+    diagramPath?: string | null;
+    disabled?: boolean;
+    baseUrl?: string | null;
+  } = $props();
 
-let isModalOpen = $state(false);
-let copiedType = $state<"link" | "iframe" | null>(null);
+  let isModalOpen = $state(false);
+  let copiedType = $state<"link" | "iframe" | null>(null);
 
-function normalizeDiagramName(path: string | null): string {
-  if (!path) return "main.hcl";
-  return path;
-}
-
-let embedPath = $derived.by(() => {
-  const norm = normalizeDiagramName(diagramPath);
-  return resolve("/projects/[id]/embed/[...diagram]", {
-    id: projectId,
-    diagram: norm,
-  });
-});
-
-let fullEmbedUrl = $derived.by(() => {
-  // baseUrl lets callers pin a deterministic origin (e.g. in Storybook, where
-  // window.location.origin changes between runs and would make visual
-  // regression snapshots unstable). Falls back to the real origin in browsers.
-  const origin = baseUrl ??
-    (typeof window !== "undefined" ? window.location.origin : undefined);
-  if (origin === undefined) return embedPath;
-  try {
-    return new URL(embedPath, origin).toString();
-  } catch {
-    return embedPath;
+  function normalizeDiagramName(path: string | null): string {
+    if (!path) return "main.hcl";
+    return path;
   }
-});
 
-let iframeSnippet = $derived.by(() => {
-  return `<iframe src="${fullEmbedUrl}" width="100%" height="500" style="border: 1px solid #ccc; border-radius: 8px;" allowfullscreen></iframe>`;
-});
+  let embedPath = $derived.by(() => {
+    const norm = normalizeDiagramName(diagramPath);
+    return resolve("/projects/[id]/embed/[...diagram]", {
+      id: projectId,
+      diagram: norm,
+    });
+  });
 
-async function copy(text: string, type: "link" | "iframe"): Promise<void> {
-  if (!await copyToClipboard(text)) return;
-  copiedType = type;
-  setTimeout(() => {
-    copiedType = null;
-  }, 2000);
-}
+  let fullEmbedUrl = $derived.by(() => {
+    // baseUrl lets callers pin a deterministic origin (e.g. in Storybook, where
+    // window.location.origin changes between runs and would make visual
+    // regression snapshots unstable). Falls back to the real origin in browsers.
+    const origin =
+      baseUrl ??
+      (typeof window !== "undefined" ? window.location.origin : undefined);
+    if (origin === undefined) return embedPath;
+    try {
+      return new URL(embedPath, origin).toString();
+    } catch {
+      return embedPath;
+    }
+  });
+
+  let iframeSnippet = $derived.by(() => {
+    return `<iframe src="${fullEmbedUrl}" width="100%" height="500" style="border: 1px solid #ccc; border-radius: 8px;" allowfullscreen></iframe>`;
+  });
+
+  async function copy(text: string, type: "link" | "iframe"): Promise<void> {
+    if (!(await copyToClipboard(text))) return;
+    copiedType = type;
+    setTimeout(() => {
+      copiedType = null;
+    }, 2000);
+  }
 </script>
 
 <button
@@ -70,88 +71,103 @@ async function copy(text: string, type: "link" | "iframe"): Promise<void> {
 
 {#if isModalOpen}
   <div class="modal modal-open">
-  <div class="modal-box max-w-lg bg-base-100 border border-base-300 shadow-2xl">
     <div
-      class="flex items-center justify-between pb-2 border-b border-base-300 mb-4">
-      <h3 class="font-bold text-base flex items-center gap-2">
-          <span>🔗</span> Embed Diagram: <span class="font-mono text-primary text-sm">{normalizeDiagramName(diagramPath)}</span>
-        </h3>
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm btn-circle"
-        onclick={() => (isModalOpen = false)}
+      class="modal-box max-w-lg bg-base-100 border border-base-300 shadow-2xl"
+    >
+      <div
+        class="flex items-center justify-between pb-2 border-b border-base-300 mb-4"
       >
+        <h3 class="font-bold text-base flex items-center gap-2">
+          <span>🔗</span> Embed Diagram:
+          <span class="font-mono text-primary text-sm"
+            >{normalizeDiagramName(diagramPath)}</span
+          >
+        </h3>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-circle"
+          onclick={() => (isModalOpen = false)}
+        >
           ✕
         </button>
-    </div>
+      </div>
 
-    <div class="flex flex-col gap-4 text-sm">
-      <!-- Direct URL -->
-      <div class="flex flex-col gap-1.5">
-        <span
-          class="font-semibold text-xs uppercase tracking-wide text-base-content/70">
+      <div class="flex flex-col gap-4 text-sm">
+        <!-- Direct URL -->
+        <div class="flex flex-col gap-1.5">
+          <span
+            class="font-semibold text-xs uppercase tracking-wide text-base-content/70"
+          >
             Direct Embed URL
           </span>
-        <div class="join w-full">
-          <input
-            type="text"
-            readonly
-            class="input input-bordered input-sm join-item flex-1 font-mono text-xs bg-base-200"
-            value={fullEmbedUrl}
-          />
-          <button
-            type="button"
-            class="btn btn-sm join-item {copiedType === 'link' ? 'btn-success' : 'btn-primary'}"
-            onclick={() => void copy(fullEmbedUrl, 'link')}
-          >
-              {copiedType === 'link' ? '✓ Copied' : 'Copy'}
+          <div class="join w-full">
+            <input
+              type="text"
+              readonly
+              class="input input-bordered input-sm join-item flex-1 font-mono text-xs bg-base-200"
+              value={fullEmbedUrl}
+            />
+            <button
+              type="button"
+              class="btn btn-sm join-item {copiedType === 'link'
+                ? 'btn-success'
+                : 'btn-primary'}"
+              onclick={() => void copy(fullEmbedUrl, "link")}
+            >
+              {copiedType === "link" ? "✓ Copied" : "Copy"}
             </button>
+          </div>
         </div>
-      </div>
 
-      <!-- iframe Snippet -->
-      <div class="flex flex-col gap-1.5">
-        <span
-          class="font-semibold text-xs uppercase tracking-wide text-base-content/70">
+        <!-- iframe Snippet -->
+        <div class="flex flex-col gap-1.5">
+          <span
+            class="font-semibold text-xs uppercase tracking-wide text-base-content/70"
+          >
             HTML &lt;iframe&gt; Embed Code
           </span>
-        <textarea
-          readonly
-          rows="3"
-          class="textarea textarea-bordered textarea-sm w-full font-mono text-xs bg-base-200 resize-none"
-          value={iframeSnippet}
-        ></textarea>
-        <div class="flex justify-end">
-          <button
-            type="button"
-            class="btn btn-sm {copiedType === 'iframe' ? 'btn-success' : 'btn-secondary'}"
-            onclick={() => void copy(iframeSnippet, 'iframe')}
-          >
-              {copiedType === 'iframe' ? '✓ Copied Embed Code' : 'Copy <iframe> Code'}
+          <textarea
+            readonly
+            rows="3"
+            class="textarea textarea-bordered textarea-sm w-full font-mono text-xs bg-base-200 resize-none"
+            value={iframeSnippet}
+          ></textarea>
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="btn btn-sm {copiedType === 'iframe'
+                ? 'btn-success'
+                : 'btn-secondary'}"
+              onclick={() => void copy(iframeSnippet, "iframe")}
+            >
+              {copiedType === "iframe"
+                ? "✓ Copied Embed Code"
+                : "Copy <iframe> Code"}
             </button>
+          </div>
         </div>
-      </div>
 
-      <!-- Preview Action -->
-      <div
-        class="pt-2 flex items-center justify-between border-t border-base-300">
-        <span class="text-xs text-base-content/60">
+        <!-- Preview Action -->
+        <div
+          class="pt-2 flex items-center justify-between border-t border-base-300"
+        >
+          <span class="text-xs text-base-content/60">
             Embeds are read-only with pan/zoom.
           </span>
-        <a
-          href={embedPath}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-ghost btn-xs text-primary flex items-center gap-1"
-        >
-          <span>Preview in new tab</span>
-          <span aria-hidden="true">↗</span>
-        </a>
+          <a
+            href={embedPath}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-ghost btn-xs text-primary flex items-center gap-1"
+          >
+            <span>Preview in new tab</span>
+            <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </div>
     </div>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="modal-backdrop" onclick={() => (isModalOpen = false)}></div>
   </div>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="modal-backdrop" onclick={() => (isModalOpen = false)}></div>
-</div>
 {/if}

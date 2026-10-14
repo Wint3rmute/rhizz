@@ -83,11 +83,7 @@ if (dsn !== undefined && dsn !== "") {
     // API wherever the app is deployed (including https://rhizz.fly.dev,
     // listed explicitly so the production origin keeps working even if the
     // pattern above ever changes).
-    tracePropagationTargets: [
-      "localhost",
-      "https://rhizz.fly.dev",
-      /\/api\//,
-    ],
+    tracePropagationTargets: ["localhost", "https://rhizz.fly.dev", /\/api\//],
   });
 
   // Announced *after* init, never before: the consoleLoggingIntegration above

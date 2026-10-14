@@ -194,10 +194,7 @@ export function openProjectFs(
       const node = resolveNode(nodes, path);
       if (node === undefined) {
         if (options.force) return;
-        throw new VfsError(
-          "ENOENT",
-          `no such file or directory, rm '${path}'`,
-        );
+        throw new VfsError("ENOENT", `no such file or directory, rm '${path}'`);
       }
 
       if (isDirectory(node) && !options.recursive) {

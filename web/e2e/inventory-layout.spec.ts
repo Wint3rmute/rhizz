@@ -30,7 +30,9 @@ async function paneWidth(page, testId: string): Promise<number> {
   return box.width;
 }
 
-test("inventory puts both panels beside the diagram preview", async ({ page }) => {
+test("inventory puts both panels beside the diagram preview", async ({
+  page,
+}) => {
   await openInventory(page, "E2E inventory panes");
 
   const left = page.getByTestId("inventory-pane-left");
@@ -62,7 +64,9 @@ test("inventory puts both panels beside the diagram preview", async ({ page }) =
   expect(rightBox.width).toBeLessThanOrEqual(385);
 });
 
-test("inventory hides and restores each panel without unmounting it", async ({ page }) => {
+test("inventory hides and restores each panel without unmounting it", async ({
+  page,
+}) => {
   await openInventory(page, "E2E inventory hide");
 
   const search = page.getByLabel("Search inventory");
@@ -94,7 +98,9 @@ test("inventory hides and restores each panel without unmounting it", async ({ p
   await expect(page.getByTestId("inventory-detail-pane")).toBeVisible();
 });
 
-test("inventory resizes panels by dragging their splitter", async ({ page }) => {
+test("inventory resizes panels by dragging their splitter", async ({
+  page,
+}) => {
   await openInventory(page, "E2E inventory resize");
 
   const before = await paneWidth(page, "inventory-pane-left");
@@ -114,8 +120,8 @@ test("inventory resizes panels by dragging their splitter", async ({ page }) => 
 
   // The drag crossed cards and text on its way — none of it may end up
   // selected (the splitter holds a selection guard while dragging).
-  const selected = await page.evaluate(() =>
-    window.getSelection()?.toString() ?? ""
+  const selected = await page.evaluate(
+    () => window.getSelection()?.toString() ?? "",
   );
   expect(selected).toBe("");
 
@@ -149,7 +155,9 @@ test("inventory splitter answers the keyboard", async ({ page }) => {
   expect(after).toBeGreaterThan(before);
 });
 
-test("inventory restore rails expand on any click and show a pointer", async ({ page }) => {
+test("inventory restore rails expand on any click and show a pointer", async ({
+  page,
+}) => {
   await openInventory(page, "E2E inventory rail");
 
   await page.getByRole("button", { name: "Hide Inventory Browser" }).click();
@@ -163,7 +171,9 @@ test("inventory restore rails expand on any click and show a pointer", async ({ 
   await expect(page.getByTestId("inventory-pane-left")).toBeVisible();
 });
 
-test("inventory panels stop at a share of the viewport width", async ({ page }) => {
+test("inventory panels stop at a share of the viewport width", async ({
+  page,
+}) => {
   await openInventory(page, "E2E inventory viewport cap");
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("page has no viewport size");

@@ -42,7 +42,7 @@ describe("WorkspaceHarness", () => {
   it("dispatches deterministic actions and checks workspace invariants", async () => {
     const workspace = await WorkspaceHarness.fromExample("drone");
     const key = workspace.componentKeys.find((candidate) =>
-      candidate.endsWith("/flight-controller")
+      candidate.endsWith("/flight-controller"),
     );
     if (!key) throw new Error("drone flight controller not found");
 
@@ -94,7 +94,7 @@ describe("WorkspaceHarness", () => {
     workspace.assertInvariants();
     expect(workspace.snapshot().canonicalHcl).toContain('component "sensor"');
     const createdKey = workspace.componentKeys.find((key) =>
-      key.endsWith("/sensor")
+      key.endsWith("/sensor"),
     );
     if (!createdKey) throw new Error("created sensor not found");
     expect(workspace.layoutPosition(createdKey)).toEqual({
@@ -112,7 +112,7 @@ describe("WorkspaceHarness", () => {
     workspace.assertInvariants();
     expect(workspace.snapshot().canonicalHcl).toContain('component "sensor"');
     const restoredKey = workspace.componentKeys.find((key) =>
-      key.endsWith("/sensor")
+      key.endsWith("/sensor"),
     );
     if (!restoredKey) throw new Error("redone sensor not found");
     expect(workspace.layoutPosition(restoredKey)).toEqual({
@@ -128,7 +128,7 @@ describe("WorkspaceHarness", () => {
       label: "cpu",
     });
     const createdKey = workspace.componentKeys.find((key) =>
-      key.endsWith("/cpu")
+      key.endsWith("/cpu"),
     );
     if (!createdKey) throw new Error("created cpu not found");
     const withCpu = workspace.snapshot().canonicalHcl;
@@ -138,9 +138,7 @@ describe("WorkspaceHarness", () => {
       component: createdKey,
     });
     workspace.assertInvariants();
-    expect(workspace.snapshot().canonicalHcl).not.toContain(
-      'instance "cpu"',
-    );
+    expect(workspace.snapshot().canonicalHcl).not.toContain('instance "cpu"');
 
     await workspace.dispatch({ type: "undo" });
     workspace.assertInvariants();
@@ -148,15 +146,13 @@ describe("WorkspaceHarness", () => {
 
     await workspace.dispatch({ type: "redo" });
     workspace.assertInvariants();
-    expect(workspace.snapshot().canonicalHcl).not.toContain(
-      'instance "cpu"',
-    );
+    expect(workspace.snapshot().canonicalHcl).not.toContain('instance "cpu"');
   });
 
   it("keeps drag/resize undo working alongside model transactions", async () => {
     const workspace = await WorkspaceHarness.fromExample("drone");
     const key = workspace.componentKeys.find((candidate) =>
-      candidate.endsWith("/flight-controller")
+      candidate.endsWith("/flight-controller"),
     );
     if (!key) throw new Error("drone flight controller not found");
 

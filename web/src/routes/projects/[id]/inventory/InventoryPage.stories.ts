@@ -146,11 +146,11 @@ async function ensureInventoryProject(): Promise<Project> {
   // project loader forgets the last modeling view).
   inventoryPanes.forget();
   const existing = await projectStore.listProjects();
-  const project = existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
-    await createProjectWithFiles(
-      SEEDED_PROJECT_NAME,
-      [{ path: "main.hcl", content: INVENTORY_HCL }],
-    );
+  const project =
+    existing.find((p) => p.id === SEEDED_PROJECT_ID) ??
+    (await createProjectWithFiles(SEEDED_PROJECT_NAME, [
+      { path: "main.hcl", content: INVENTORY_HCL },
+    ]));
   const fs = openProjectFs(projectStore, project.id);
   for (const [dName, layout] of Object.entries(DEFINITION_DIAGRAMS)) {
     await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/${dName}`, layout);
@@ -184,11 +184,12 @@ async function ensureInventoryProject(): Promise<Project> {
 async function ensureEmptyProject(): Promise<Project> {
   inventoryPanes.forget();
   const existing = await projectStore.listProjects();
-  return existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
-    await createProjectWithFiles(
-      EMPTY_PROJECT_NAME,
-      [{ path: "main.hcl", content: 'project {\n  name    = "empty"\n}\n' }],
-    );
+  return (
+    existing.find((p) => p.id === EMPTY_PROJECT_ID) ??
+    (await createProjectWithFiles(EMPTY_PROJECT_NAME, [
+      { path: "main.hcl", content: 'project {\n  name    = "empty"\n}\n' },
+    ]))
+  );
 }
 
 // Below `md` (768px). The test browser runs at 1200px, so the narrow-layout
@@ -229,9 +230,7 @@ export const SystemsTab: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("tab", { name: "Systems" }),
-    );
+    await userEvent.click(canvas.getByRole("tab", { name: "Systems" }));
     // Both fixture systems are listed, each without the L1 level badge —
     // systems are not leveled, so the card hides it.
     const cards = await canvas.findAllByTestId("inventory-card");
@@ -254,9 +253,7 @@ export const AddComponentOpensDefinitionModal: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "+ New" }));
-    const modal = within(
-      await canvas.findByTestId("create-component-modal"),
-    );
+    const modal = within(await canvas.findByTestId("create-component-modal"));
     await expect(modal.getByText("Create New Component")).toBeTruthy();
     await expect(
       modal.queryByRole("button", { name: "Use Existing Component" }),
@@ -271,15 +268,9 @@ export const AddSystemOpensCreationModal: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("tab", { name: "Systems" }),
-    );
-    await userEvent.click(
-      canvas.getByRole("button", { name: "+ New" }),
-    );
-    const modal = within(
-      await canvas.findByTestId("create-system-modal"),
-    );
+    await userEvent.click(canvas.getByRole("tab", { name: "Systems" }));
+    await userEvent.click(canvas.getByRole("button", { name: "+ New" }));
+    const modal = within(await canvas.findByTestId("create-system-modal"));
     await expect(modal.getByText("Create New System")).toBeTruthy();
     await expect(
       modal.getByRole("button", { name: "Create System" }),
@@ -311,15 +302,9 @@ export const SystemMissingDiagram: Story = {
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(
-      canvas.getByTestId("inventory-empty-diagram"),
-    ).toBeTruthy();
-    await expect(
-      canvas.getByText(/views\/aux-system\.hcl/),
-    ).toBeTruthy();
-    await expect(
-      canvas.getByTestId("inventory-create-view"),
-    ).toBeTruthy();
+    await expect(canvas.getByTestId("inventory-empty-diagram")).toBeTruthy();
+    await expect(canvas.getByText(/views\/aux-system\.hcl/)).toBeTruthy();
+    await expect(canvas.getByTestId("inventory-create-view")).toBeTruthy();
     await expect(
       canvas.getByRole("button", { name: "Create a view for this system" }),
     ).toBeTruthy();
@@ -331,15 +316,9 @@ export const MissingDefaultDiagram: Story = {
     const canvas = within(canvasElement);
     const card = canvas.getByText("draft-module");
     await userEvent.click(card);
-    await expect(
-      canvas.getByTestId("inventory-empty-diagram"),
-    ).toBeTruthy();
-    await expect(
-      canvas.getByText(/views\/draft-module\.hcl/),
-    ).toBeTruthy();
-    await expect(
-      canvas.getByTestId("inventory-create-view"),
-    ).toBeTruthy();
+    await expect(canvas.getByTestId("inventory-empty-diagram")).toBeTruthy();
+    await expect(canvas.getByText(/views\/draft-module\.hcl/)).toBeTruthy();
+    await expect(canvas.getByTestId("inventory-create-view")).toBeTruthy();
     await expect(
       canvas.getByRole("button", { name: "Create a view for this component" }),
     ).toBeTruthy();
@@ -385,8 +364,9 @@ async function openDocEditor(canvas: ReturnType<typeof within>) {
   // Monaco's input, by the aria label it gives itself (the default of its
   // `ariaLabel` option) — this version also keeps a hidden IME textarea.
   await waitFor(() => {
-    void expect(host.querySelector('[aria-label="Editor content"]'))
-      .toBeTruthy();
+    void expect(
+      host.querySelector('[aria-label="Editor content"]'),
+    ).toBeTruthy();
   });
 }
 
@@ -397,17 +377,13 @@ export const DocumentationTab: Story = {
     // battery is selected by default; its seeded docs/battery.md renders
     // as Markdown in the Description tab (read-only here — e2e covers save).
     await canvas.findByTestId("inventory-doc-viewer");
-    await expect(
-      canvas.getByRole("heading", { name: "Battery" }),
-    ).toBeTruthy();
+    await expect(canvas.getByRole("heading", { name: "Battery" })).toBeTruthy();
 
     // "Edit" swaps the rendered doc for the app's editor — the same Monaco
     // component the Code page uses for these very files.
     await openDocEditor(canvas);
     await userEvent.click(canvas.getByTestId("inventory-doc-cancel-button"));
-    await expect(
-      canvas.getByRole("heading", { name: "Battery" }),
-    ).toBeTruthy();
+    await expect(canvas.getByRole("heading", { name: "Battery" })).toBeTruthy();
   },
 };
 
@@ -429,8 +405,8 @@ export const DeepLinkedEntity: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const cards = await canvas.findAllByTestId("inventory-card");
-    const pressed = cards.filter((card) =>
-      card.getAttribute("aria-pressed") === "true"
+    const pressed = cards.filter(
+      (card) => card.getAttribute("aria-pressed") === "true",
     );
     await expect(pressed).toHaveLength(1);
     await expect(pressed[0]).toHaveTextContent("draft-module");
@@ -462,7 +438,6 @@ export const DetailPaneStacksBelowTheDiagram: Story = {
     const diagram = await canvas.findByTestId("inventory-diagram");
     const pane = canvas.getByTestId("inventory-detail-pane");
     const workspace = canvas.getByTestId("inventory-workspace");
-
 
     await expect(getComputedStyle(workspace).flexDirection).toBe("column");
     // The 1px slack absorbs sub-pixel rounding of the stacked heights.
@@ -506,8 +481,9 @@ export const EveryTabFitsInThePane: Story = {
     const tabs = within(list).getAllByRole("tab");
     await expect(tabs).toHaveLength(names.length);
     for (const name of names) {
-      await expect(within(list).getByRole("tab", { name: new RegExp(name) }))
-        .toBeTruthy();
+      await expect(
+        within(list).getByRole("tab", { name: new RegExp(name) }),
+      ).toBeTruthy();
     }
 
     // The row is its own scroll container, so an overlong tab list stays
@@ -536,10 +512,10 @@ export const DocumentationEditorOpen: Story = {
     const canvas = within(canvasElement);
     await openDocEditor(canvas);
     // The save status and Done stay reachable below it.
-    await expect(canvas.getByTestId("inventory-doc-save-status"))
-      .toBeTruthy();
-    await expect(canvas.getByTestId("inventory-doc-cancel-button"))
-      .toBeTruthy();
+    await expect(canvas.getByTestId("inventory-doc-save-status")).toBeTruthy();
+    await expect(
+      canvas.getByTestId("inventory-doc-cancel-button"),
+    ).toBeTruthy();
   },
 };
 
@@ -582,8 +558,7 @@ export const StyleTabEditsTheComponent: Story = {
     // within a block, so an exact `color        = "warning"` would be
     // asserting a formatter property instead of the edit.
     const readModel = async (): Promise<string> =>
-      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
-        .readFile("main.hcl");
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID).readFile("main.hcl");
 
     await waitFor(async () => {
       const hcl = await readModel();
@@ -632,13 +607,14 @@ export const StyleTabEditsTheSystem: Story = {
     await userEvent.type(iconInput, "microchip");
     // The dropdown offers the match; picking it commits the patch.
     await userEvent.click(
-      within(await canvas.findByTestId("icon-suggestions-list"))
-        .getByRole("option", { name: /microchip/i }),
+      within(await canvas.findByTestId("icon-suggestions-list")).getByRole(
+        "option",
+        { name: /microchip/i },
+      ),
     );
 
     const readModel = async (): Promise<string> =>
-      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
-        .readFile("main.hcl");
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID).readFile("main.hcl");
 
     await waitFor(async () => {
       const hcl = await readModel();
@@ -670,9 +646,7 @@ export const DeleteTabBlockedForUsedComponent: Story = {
     await expect(
       tab.getByLabelText(/type "battery" to confirm/i),
     ).toBeDisabled();
-    await expect(
-      tab.getByTestId("inventory-delete-confirm"),
-    ).toBeDisabled();
+    await expect(tab.getByTestId("inventory-delete-confirm")).toBeDisabled();
   },
 };
 
@@ -703,8 +677,7 @@ export const DeleteTabDeletesUnusedComponent: Story = {
     await userEvent.click(confirm);
 
     const readModel = async (): Promise<string> =>
-      await openProjectFs(projectStore, SEEDED_PROJECT_ID)
-        .readFile("main.hcl");
+      await openProjectFs(projectStore, SEEDED_PROJECT_ID).readFile("main.hcl");
     await waitFor(async () => {
       const hcl = await readModel();
       await expect(hcl).not.toContain('component "draft-module"');
@@ -730,9 +703,7 @@ export const DeleteTabBlockedForSystemWithViews: Story = {
     await expect(
       tab.getByLabelText(/type "demo-system" to confirm/i),
     ).toBeDisabled();
-    await expect(
-      tab.getByTestId("inventory-delete-confirm"),
-    ).toBeDisabled();
+    await expect(tab.getByTestId("inventory-delete-confirm")).toBeDisabled();
   },
 };
 
@@ -793,44 +764,34 @@ export const PanesHideAndRestore: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "Hide Inventory Browser" }),
     );
-    await expect(
-      canvas.getByTestId("inventory-pane-left"),
-    ).not.toBeVisible();
+    await expect(canvas.getByTestId("inventory-pane-left")).not.toBeVisible();
     // The whole rail is the expand control, not just the chevron — restore
     // through the rail itself.
     const rail = canvas.getByTestId("inventory-pane-rail-left");
     await expect(rail).toBeVisible();
-    await expect(
-      rail.getAttribute("aria-label"),
-    ).toBe("Show Inventory Browser");
+    await expect(rail.getAttribute("aria-label")).toBe(
+      "Show Inventory Browser",
+    );
     // The splitter goes with its panel — there is nothing to resize.
     await expect(
       canvas.getByTestId("inventory-splitter-left"),
     ).not.toBeVisible();
 
     await userEvent.click(rail);
-    await expect(
-      canvas.getByTestId("inventory-pane-left"),
-    ).toBeVisible();
+    await expect(canvas.getByTestId("inventory-pane-left")).toBeVisible();
     // State survived: the panel was hidden, never unmounted.
     await expect(canvas.getByLabelText("Search inventory")).toHaveValue(
       "battery",
     );
 
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Hide Details" }),
-    );
-    await expect(
-      canvas.getByTestId("inventory-pane-right"),
-    ).not.toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Hide Details" }));
+    await expect(canvas.getByTestId("inventory-pane-right")).not.toBeVisible();
     const showDetails = canvas.getByRole("button", {
       name: "Show Details",
     });
     await expect(showDetails).toBeVisible();
     await userEvent.click(showDetails);
-    await expect(
-      canvas.getByTestId("inventory-pane-right"),
-    ).toBeVisible();
+    await expect(canvas.getByTestId("inventory-pane-right")).toBeVisible();
     // The open entity follows too — restoring shows the same tab, not a
     // reset pane.
     await expect(
@@ -852,12 +813,8 @@ export const PanesHiddenShowsRails: Story = {
     );
     const rail = canvas.getByTestId("inventory-pane-rail-left");
     await expect(rail).toBeVisible();
-    await expect(
-      canvas.getByTestId("inventory-pane-left"),
-    ).not.toBeVisible();
+    await expect(canvas.getByTestId("inventory-pane-left")).not.toBeVisible();
     // The diagram takes the freed space; the details side is untouched.
-    await expect(
-      canvas.getByTestId("inventory-pane-right"),
-    ).toBeVisible();
+    await expect(canvas.getByTestId("inventory-pane-right")).toBeVisible();
   },
 };

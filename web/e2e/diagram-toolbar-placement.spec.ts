@@ -6,7 +6,9 @@ import { skipTourIfPresent } from "./helpers";
 // away from the model it acts on. The anchoring is one positioning class
 // and nothing else in the app depends on it, so without this the bar
 // would drift back to the bottom the next time anyone touched its styling.
-test("the diagram toolbar is pinned to the top of the canvas", async ({ page }) => {
+test("the diagram toolbar is pinned to the top of the canvas", async ({
+  page,
+}) => {
   await page.goto("/");
   const create = page.getByRole("button", { name: "New project" }).first();
   await expect(create).toBeVisible();

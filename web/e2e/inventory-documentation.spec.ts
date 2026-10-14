@@ -37,9 +37,9 @@ async function openInventory(page, name = "E2E inventory docs") {
 
 /** The doc editor: its Monaco host, and the rendered lines inside it. */
 function docEditor(page) {
-  const host = page.getByTestId("inventory-doc-editor").locator(
-    ".monaco-editor",
-  );
+  const host = page
+    .getByTestId("inventory-doc-editor")
+    .locator(".monaco-editor");
   return {
     host,
     lines: host.locator(".view-lines"),
@@ -51,7 +51,9 @@ function docEditor(page) {
   };
 }
 
-test("inventory writes documentation from the Description tab", async ({ page }) => {
+test("inventory writes documentation from the Description tab", async ({
+  page,
+}) => {
   await openInventory(page);
   const pane = page.getByTestId("inventory-detail-pane");
   await expect(pane).toBeVisible();
@@ -84,8 +86,9 @@ test("inventory writes documentation from the Description tab", async ({ page })
   await page.getByTestId("inventory-doc-cancel-button").click();
   await expect(host).toBeHidden();
   await expect(viewer).toBeVisible();
-  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
-    .toBeVisible();
+  await expect(
+    viewer.getByRole("heading", { name: "E2E widget" }),
+  ).toBeVisible();
   await expect(viewer).toContainText("Does things.");
   await expect(page.getByText("**things**")).toBeHidden();
   const docLink = viewer.getByRole("link", { name: "docs" });
@@ -98,8 +101,9 @@ test("inventory writes documentation from the Description tab", async ({ page })
   await page.reload();
   await page.getByText("e2e-docs").first().click();
   await expect(viewer).toBeVisible();
-  await expect(viewer.getByRole("heading", { name: "E2E widget" }))
-    .toBeVisible();
+  await expect(
+    viewer.getByRole("heading", { name: "E2E widget" }),
+  ).toBeVisible();
 
   // Edit reopens prefilled with what was saved — asserted on the rendered
   // lines, which is the only place the content exists in Monaco's DOM.

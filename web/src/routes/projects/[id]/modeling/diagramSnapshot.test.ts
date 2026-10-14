@@ -56,10 +56,7 @@ describe("annotation undo/redo (unified layout history)", () => {
     expect(undone).not.toBeNull();
     if (undone === null) throw new Error("expected undo entry");
     current = applyDiagramSnapshotContent(undone);
-    expect(current.annotations.map((a) => a.text)).toEqual([
-      "keep",
-      "remove",
-    ]);
+    expect(current.annotations.map((a) => a.text)).toEqual(["keep", "remove"]);
   });
 
   it("editing annotation text is undone", () => {

@@ -135,14 +135,16 @@ export function blendScenes(
   for (const node of from.nodes) {
     const match = takeMatch(incoming, (item) => item.id, node.id);
     if (match) {
-      nodes.push(restingNode(
-        match,
-        {
-          ...lerpBox(node.box, match.box, t),
-          textAlign: match.box.textAlign,
-        },
-        1,
-      ));
+      nodes.push(
+        restingNode(
+          match,
+          {
+            ...lerpBox(node.box, match.box, t),
+            textAlign: match.box.textAlign,
+          },
+          1,
+        ),
+      );
     } else {
       nodes.push(restingNode(node, node.box, 1 - t));
     }
@@ -222,9 +224,8 @@ export function advance(
   tween: Tween | null;
 } {
   const keepCamera = displayed.camera;
-  const targetCamera = opts.moveCamera && desired.camera
-    ? desired.camera
-    : keepCamera;
+  const targetCamera =
+    opts.moveCamera && desired.camera ? desired.camera : keepCamera;
   if (!opts.transition || opts.reducedMotion) {
     return {
       scene: desired.scene,
@@ -238,9 +239,8 @@ export function advance(
     fromScene: current.scene,
     toScene: desired.scene,
     fromCamera: current.camera,
-    toCamera: opts.moveCamera && desired.camera
-      ? desired.camera
-      : current.camera,
+    toCamera:
+      opts.moveCamera && desired.camera ? desired.camera : current.camera,
     moveCamera: opts.moveCamera && desired.camera !== null,
     startedAt: opts.now,
     duration: TRANSITION_MS,
