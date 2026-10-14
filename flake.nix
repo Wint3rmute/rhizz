@@ -8,6 +8,30 @@
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
     in
     {
+      # Nix build pipeline (see nix/). These are additive: the devshell and the
+      # `just` recipes keep working unchanged. Only the inputs each stage needs
+      # are included, so a change to (say) web/ does not rebuild the wasm crate.
+      packages = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          # Build inputs for the Rust stages: the workspace manifests plus
+          # everything `rhizz-core`'s build script reads via include_str! and
+          # `cargo:rerun-if-changed` (SPEC/diagnostics, examples/).
+          rustSrc = pkgs.lib.sourceByRegex ./. [
+            "Cargo\\.toml"
+            "Cargo\\.lock"
+            "crates"
+            "crates/.*"
+            "SPEC"
+            "SPEC/.*"
+            "examples"
+            "examples/.*"
+          ];
+        in
+        {
+          rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
+        });
+
       devShells = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
