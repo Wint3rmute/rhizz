@@ -28,10 +28,13 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
 "Detail Pane Stacks Below The Diagram", "Panes Open By Default"). `e2e` and
 `visual-regressions` are not yet resolved and VRT is out of scope.
 
-- [ ] **1. Fix the two viewport-dependent Inventory play tests.** The stories
-  assume the test browser is ~414px wide (below `md`). Pin the viewport in the
-  story `parameters` so the assertion no longer depends on runner size.
-  Blast radius: one stories file. Verify: `npm run test` storybook project.
+- [x] **1. Fix the two viewport-dependent Inventory play tests.** Result: the
+  test browser is 1200px wide, not the ~414px the stories assumed (probed
+  locally under `nix develop` and reproduced the CI failure exactly). Both
+  stories now pin a named 414px `narrowPane` viewport via a shared
+  `NARROW_VIEWPORT`. Inventory stories: 22/22 pass. Full storybook project:
+  169/170; the one remaining failure is `Navbar > Project Open`, the known
+  macOS `Ctrl+P` vs `⌘P` tooltip assertion, which passes on Linux CI.
 - [ ] **2. Remove the Node teardown error.** The storybook project prints
   `browser.closeBrowserProvider is not a function` on exit. Find the mismatched
   `@vitest/browser-playwright` / `vitest` pin and align it. Verify: the

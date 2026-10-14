@@ -191,6 +191,18 @@ async function ensureEmptyProject(): Promise<Project> {
     );
 }
 
+// Below `md` (768px). The test browser runs at 1200px, so the narrow-layout
+// assertions need an explicit narrow viewport to be deterministic.
+const NARROW_VIEWPORT = {
+  defaultViewport: "narrowPane",
+  viewports: {
+    narrowPane: {
+      name: "Narrow pane",
+      styles: { width: "414px", height: "896px" },
+    },
+  },
+};
+
 const meta = {
   title: "Pages/Inventory",
   component: Inventory,
@@ -436,19 +448,21 @@ export const DeepLinkedEntity: Story = {
 };
 
 // The workspace is a row of panels beside the diagram preview — but that is
-// an `md:` arrangement and this browser is ~414px wide, so the side-by-side
-// geometry cannot be measured here. It is pinned by this file's VRT baselines
+// an `md:` arrangement, so the side-by-side geometry cannot be measured at the
+// narrow viewport this story pins. It is pinned by this file's VRT baselines
 // (1280 wide) and by the e2e spec. What is measurable is the narrow fallback:
 // below `md` the workspace stacks vertically and the pane goes back under the
 // diagram. Asserted as the workspace's computed flex-direction *and* the two
 // rects not overlapping, so neither can drift on its own.
 export const DetailPaneStacksBelowTheDiagram: Story = {
+  parameters: { viewport: NARROW_VIEWPORT },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const diagram = await canvas.findByTestId("inventory-diagram");
     const pane = canvas.getByTestId("inventory-detail-pane");
     const workspace = canvas.getByTestId("inventory-workspace");
+
 
     await expect(getComputedStyle(workspace).flexDirection).toBe("column");
     // The 1px slack absorbs sub-pixel rounding of the stacked heights.
@@ -727,11 +741,12 @@ export const DeleteTabBlockedForSystemWithViews: Story = {
 // because hiding must never unmount content.
 //
 // Splitters are `hidden md:flex` by design (a horizontal drag is meaningless
-// once the panes stack full-width), and this browser is ~414px wide, so no
+// once the panes stack full-width), and this story pins a narrow viewport, so no
 // slider can be found here — asserted absent, not present. Splitter dragging
 // and keyboard nudges live at desktop width and are covered by
 // e2e/inventory-layout.spec.ts instead.
 export const PanesOpenByDefault: Story = {
+  parameters: { viewport: NARROW_VIEWPORT },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
