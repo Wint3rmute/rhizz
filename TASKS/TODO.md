@@ -114,7 +114,6 @@ and make them deterministic.
 
 ---
 
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the

@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 // Delete on the Modeling page removes the node from the current view only:
-// the canvas hides it, but the model keeps the component — the reusable
-// definition row survives, Code still shows its HCL, and Ctrl+Z
-// undoes the removal.
+// the canvas hides it, but the model keeps the component — the tree row
+// survives unchecked, Code still shows its HCL, and Ctrl+Z undoes the removal.
 async function openDiagram(page, name = "E2E delete view") {
   await page.goto("/");
   const create = page.getByRole("button", { name: "New project" }).first();
@@ -58,8 +57,12 @@ test("delete removes the node from the view but keeps it in the model", async ({
   await page.keyboard.press("Delete");
   await expect(canvas.getByText("e2e-vanish").first()).toBeHidden();
 
-  // The model keeps the component: its reusable-definition row survives.
-  await expect(page.locator('li[title="e2e-vanish"]')).toBeVisible();
+  // The model keeps the component: its tree row survives, unchecked — only
+  // the view placement is gone.
+  const tree = page.getByTestId("modeling-pane-right");
+  const row = tree.locator("li", { hasText: "e2e-vanish" }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("checkbox").first()).not.toBeChecked();
 
   // Undo restores the node on canvas, redo removes it from the view again.
   await page.keyboard.press("Control+z");

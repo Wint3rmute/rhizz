@@ -375,6 +375,13 @@ pub struct ConnectionEndpoint {
 pub struct Connection {
     /// Unique label within its parent scope.
     pub label: String,
+    /// Which declaration this connection was cloned from, e.g.
+    /// `"system:quadcopter"` or `"component:flight-controller"`.
+    /// Copies of one declaration share the same value, so a whole-system
+    /// duplicate check can tell copies apart from different declarations
+    /// that happen to share a name. Never serialized to HCL.
+    #[serde(default)]
+    pub decl: String,
     /// Full official name, expanding abbreviations.
     pub full_name: String,
     /// Filtering tags.
@@ -518,6 +525,9 @@ pub struct ConnectionLayout {
     /// Optional ending side ("top", "bottom", "left", "right").
     #[serde(default)]
     pub end_side: Option<ConnectionSide>,
+    /// Per-view visibility flag. Omitted from canonical HCL when `false`.
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 /// A text annotation placed at an absolute position on a view canvas.

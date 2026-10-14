@@ -228,6 +228,54 @@ describe("HCL View conversion and persistence", () => {
     });
   });
 
+  it("persists hidden connections and omits the flag when false", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+        "sys/b": { x: 200, y: 20, width: 100, height: 50 },
+      },
+      connections: {
+        "hidden-link": { hidden: true },
+        "shown-link": { startSide: "top" as const },
+      },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).toContain('connection "hidden-link"');
+    expect(content).toContain("hidden = true");
+    expect(content).not.toContain("hidden = false");
+
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.connections?.["hidden-link"]).toEqual({ hidden: true });
+    expect(read.connections?.["shown-link"]).toEqual({ startSide: "top" });
+  });
+
+  it("round-trips hidden alongside routing sides", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+        "sys/b": { x: 200, y: 20, width: 100, height: 50 },
+      },
+      connections: {
+        "link-ab": {
+          startSide: "bottom" as const,
+          endSide: "left" as const,
+          hidden: true,
+        },
+      },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.connections?.["link-ab"]).toEqual({
+      startSide: "bottom",
+      endSide: "left",
+      hidden: true,
+    });
+  });
+
   it("creates the containing directory on first write", async () => {
     const fs = await projectFs();
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());

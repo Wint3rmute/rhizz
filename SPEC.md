@@ -442,6 +442,26 @@ parsed and round-tripped, but no renderer applies it. See §9.
 | `components`    | list(string) | no       | `[]` (all)       | Whitelist of component labels to include                                  |
 | `show_messages` | bool         | no       | `true`           | Whether to list messages (from connected ports) as connection edge labels |
 
+**`connection` sub-block (zero or more per view):**
+
+Per-view routing and visibility for one system connection, keyed by the
+connection's name within its system. A connection is drawn when both
+endpoint components are placed in the view, belong to the view's system,
+and the connection is not hidden. Copies of one declaration (each instance
+clones its definition's connections) share a name and hide together; two
+different declarations sharing a name in one system are rejected (E001).
+
+| Attribute    | Type   | Required | Default | Description                                              |
+| ------------ | ------ | -------- | ------- | -------------------------------------------------------- |
+| `start_side` | string | no       | —       | Border side the edge leaves (`top`, `bottom`, `left`, `right`) |
+| `end_side`   | string | no       | —       | Border side the edge arrives at (same values)            |
+| `hidden`     | bool   | no       | `false` | When `true`, the connection is not drawn in this view    |
+
+- `hidden` is omitted from canonical output when `false`.
+- Hiding is per-view and survives an endpoint component being removed from
+  the view and placed again.
+- Unknown attributes are rejected (E000), as in every other block.
+
 **`annotation` sub-block (zero or more per view):**
 
 A free-standing text note placed at an absolute position on the canvas. Unlike

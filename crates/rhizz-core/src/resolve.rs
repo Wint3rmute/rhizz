@@ -220,7 +220,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     // Phase B: system-level connections (systems are implicitly level 0).
     for sw in pending_systems {
         let scope = Scope::System(sw.sid);
-        let conn_ids = process_connections_in_scope(&mut r, &sw.connections, scope, 0, &sw.label);
+        let decl = format!("system:{}", sw.label);
+        let conn_ids =
+            process_connections_in_scope(&mut r, &sw.connections, scope, 0, &sw.label, &decl);
 
         // Resolve encapsulates now that all sibling connections are registered.
         for (lc, cid) in sw.connections.iter().zip(conn_ids.iter()) {
@@ -229,6 +231,70 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
         if let Some(system) = r.model.system_mut(sw.sid) {
             system.connections = conn_ids;
+        }
+    }
+
+    // ── E001: one connection name per system ─────────────────────────────────
+    // View `connection` blocks are keyed by name, so one name must refer to
+    // one declaration within a system. Copies of one declaration (each
+    // instance clones its definition's connections) share `decl` and are one
+    // connection for hiding and the sidebar; two different declarations
+    // sharing a name in one system are rejected.
+    {
+        let mut errors: Vec<String> = Vec::new();
+        // Snapshot per-system connection (label, decl) pairs first so the
+        // error push below does not fight the model borrow.
+        let mut per_system: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        for system in &r.model.systems {
+            let mut pairs: Vec<(String, String)> = Vec::new();
+            for cid in &system.connections {
+                if let Some(conn) = r.model.connections.get(cid.0) {
+                    pairs.push((conn.label.clone(), conn.decl.clone()));
+                }
+            }
+            let mut stack: Vec<ComponentId> = system.components.clone();
+            while let Some(cid) = stack.pop() {
+                let Some(comp) = r.model.components.get(cid.0) else {
+                    continue;
+                };
+                for ccid in &comp.connections.clone() {
+                    if let Some(conn) = r.model.connections.get(ccid.0) {
+                        pairs.push((conn.label.clone(), conn.decl.clone()));
+                    }
+                }
+                stack.extend(comp.children.clone());
+            }
+            per_system.push((system.label.clone(), pairs));
+        }
+        for (system_label, pairs) in &per_system {
+            let mut by_label: HashMap<&str, HashSet<&str>> = HashMap::new();
+            let mut order: Vec<&str> = Vec::new();
+            for (label, decl) in pairs {
+                let entry = by_label.entry(label.as_str()).or_default();
+                if entry.is_empty() {
+                    order.push(label.as_str());
+                }
+                entry.insert(decl.as_str());
+            }
+            for label in order {
+                if let Some(decls) = by_label.get(label)
+                    && decls.len() > 1
+                {
+                    let mut sorted: Vec<&&str> = decls.iter().collect();
+                    sorted.sort();
+                    let locations = sorted
+                        .iter()
+                        .map(|d| format!("`{d}`"))
+                        .collect::<Vec<_>>()
+                        .join(" and ");
+                    errors.push(format!(
+                        "duplicate connection label `{label}` in system `{system_label}` (declared in {locations})"
+                    ));
+                }
+            }
+        }
+        for msg in errors {
+            r.push_error(DiagnosticCode::E001, msg);
         }
     }
 
@@ -331,6 +397,14 @@ fn register_component_inner(
             .insert((parent_scope, label.to_owned()), cid);
     }
 
+    // Which declaration this body was cloned from. Copies of one declaration
+    // share the value, so the whole-system duplicate check can tell copies
+    // apart from different declarations that happen to share a name.
+    // `source` is moved into the component below, so compute first.
+    let decl = format!(
+        "component:{}",
+        source.clone().unwrap_or_else(|| label.to_owned())
+    );
     // Push placeholder; children/ports/connections filled in below.
     r.model.components.push(Component {
         label: label.to_owned(),
@@ -388,7 +462,8 @@ fn register_component_inner(
     }
 
     // Step 3: process connections in this component's scope.
-    let conn_ids = process_connections_in_scope(r, &body.connections, child_scope, level, label);
+    let conn_ids =
+        process_connections_in_scope(r, &body.connections, child_scope, level, label, &decl);
 
     // Step 4: resolve encapsulates for those connections.
     for (li, conn_id) in body.connections.iter().zip(conn_ids.iter()) {
@@ -590,6 +665,7 @@ fn process_connections_in_scope(
     scope: Scope,
     parent_level: i32,
     scope_name: &str,
+    decl: &str,
 ) -> Vec<ConnectionId> {
     let mut label_seen: HashSet<String> = HashSet::new();
     let mut conn_ids: Vec<ConnectionId> = Vec::new();
@@ -650,6 +726,7 @@ fn process_connections_in_scope(
 
         r.model.connections.push(Connection {
             label: lc.label.clone(),
+            decl: decl.to_owned(),
             full_name: lc.inner.full_name.clone().unwrap_or_default(),
             tags: lc.inner.tags.clone(),
             level,
@@ -1375,6 +1452,124 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E001),
             "expected E001, got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn e001_same_connection_name_from_two_definitions_in_one_system() {
+        // Two different component definitions each declare `data`; both are
+        // instantiated in one system, so the name is ambiguous for hiding.
+        let src = r#"
+            component "left" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "data" {
+                from = "a"
+                to   = "b"
+              }
+            }
+            component "right" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "data" {
+                from = "a"
+                to   = "b"
+              }
+            }
+            component "a" { leaf = true }
+            component "b" { leaf = true }
+            system "s" {
+              instance "l" { source = "left" }
+              instance "r" { source = "right" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(result.is_err(), "expected E001, got ok");
+        let diags = result.unwrap_err();
+        let e001: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E001)
+            .collect();
+        assert_eq!(e001.len(), 1, "expected one E001, got: {diags:?}");
+        assert!(
+            e001[0].message.contains("`data`")
+                && e001[0].message.contains("`s`")
+                && e001[0].message.contains("component:left")
+                && e001[0].message.contains("component:right"),
+            "message must name the connection, system and both declarations, got: {}",
+            e001[0].message
+        );
+    }
+
+    #[test]
+    fn e001_system_connection_next_to_component_connection_with_same_name() {
+        let src = r#"
+            component "sub" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "data" {
+                from = "a"
+                to   = "b"
+              }
+            }
+            component "a" { leaf = true }
+            component "b" { leaf = true }
+            system "s" {
+              instance "x" { source = "a" }
+              instance "y" { source = "b" }
+              instance "inner" { source = "sub" }
+              connection "data" {
+                from = "x"
+                to   = "y"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(result.is_err(), "expected E001, got ok");
+        let diags = result.unwrap_err();
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E001
+                && d.message.contains("`data`")
+                && d.message.contains("system:s")
+                && d.message.contains("component:sub")),
+            "expected E001 naming both declarations, got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn copies_of_one_declaration_share_a_connection_name() {
+        // The same definition instantiated twice clones its `data` connection
+        // twice; the copies share `decl` and must not raise E001.
+        let src = r#"
+            component "pair" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "data" {
+                from = "a"
+                to   = "b"
+              }
+            }
+            component "a" { leaf = true }
+            component "b" { leaf = true }
+            system "s" {
+              instance "l" { source = "pair" }
+              instance "r" { source = "pair" }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).expect("copies must not raise E001");
+        let datas: Vec<_> = model
+            .connections
+            .iter()
+            .filter(|c| c.label == "data")
+            .collect();
+        // The definition itself plus one copy per instance.
+        assert_eq!(datas.len(), 3, "definition + two copies expected");
+        assert!(
+            datas.iter().all(|c| c.decl == datas[0].decl),
+            "copies share one declaration: {datas:?}"
         );
     }
 

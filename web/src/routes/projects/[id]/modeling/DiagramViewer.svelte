@@ -162,7 +162,16 @@
   });
 
   let components = $derived(projectModel.components);
-  let connections = $derived(projectModel.connections);
+  // Read-only viewers skip connections hidden in this view (`connection
+  // "name" { hidden = true }`). Hiding is keyed by name, so all copies of
+  // one declaration are skipped together. Placement filtering stays in
+  // DiagramCanvas (edges without both endpoints placed are not drawn).
+  let connections = $derived.by(() => {
+    const all = projectModel.connections;
+    const hidden = layout.connections;
+    if (!hidden) return all;
+    return all.filter((conn) => hidden[conn.label]?.hidden !== true);
+  });
   let componentKeys = $derived(
     projectModel.model ? projectModel.model.component_keys() : [],
   );
