@@ -40,6 +40,8 @@ import {
   definitionLabelForNode,
   filterDefinitions,
   filterSystems,
+  filterWithViews,
+  hasDefaultView,
   instancePathsForDefinition,
   INVENTORY_TABS,
   type InventoryDefinition,
@@ -145,22 +147,21 @@ let systems = $derived.by<InventorySystem[]>(() =>
   }))
 );
 
+let onlyWithViews = $state(false);
+
 let filtered = $derived(
-  filterDefinitions(definitions, { tab: activeTab, query }).filter(
-    (d) => !onlyWithViews || hasDefaultView(d.label),
+  filterWithViews(
+    filterDefinitions(definitions, { tab: activeTab, query }),
+    onlyWithViews,
+    (d) => hasDefaultView(projectModel.sources, d.label),
   ),
 );
 
-function hasDefaultView(label: string): boolean {
-  const path = defaultViewPath(label);
-  return projectModel.sources.some((s) => s.filename === path);
-}
-
-let onlyWithViews = $state(false);
-
 let filteredSystems = $derived(
-  filterSystems(systems, query).filter(
-    (s) => !onlyWithViews || boundViews.some((v) => v.system === s.label),
+  filterWithViews(
+    filterSystems(systems, query),
+    onlyWithViews,
+    (s) => boundViews.some((v) => v.system === s.label),
   ),
 );
 

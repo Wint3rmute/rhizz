@@ -7,6 +7,8 @@ import {
   definitionLabelForNode,
   filterDefinitions,
   filterSystems,
+  filterWithViews,
+  hasDefaultView,
   instancePathsForDefinition,
   type InventoryDefinition,
   type InventorySystem,
@@ -181,6 +183,60 @@ describe("filterSystems", () => {
     expect(filterSystems([a, b], "A-SYSTEM")).toEqual([a]);
     expect(filterSystems([a, b], "propulsion")).toEqual([b]);
     expect(filterSystems([a, b], "zzz")).toEqual([]);
+  });
+});
+
+describe("filterWithViews", () => {
+  const cm = def({ label: "cm", full_name: "Command module" });
+  const sm = def({
+    label: "sm",
+    full_name: "Service module",
+    tags: ["propulsion"],
+  });
+  const all = [cm, sm];
+  const hasView = (d: InventoryDefinition): boolean => d.label === "cm";
+
+  it("returns every entity unchanged when unchecked", () => {
+    expect(filterWithViews(all, false, hasView)).toEqual(all);
+  });
+
+  it("keeps only entities the predicate accepts when checked", () => {
+    expect(filterWithViews(all, true, hasView)).toEqual([cm]);
+  });
+
+  it("composes with the search filter (intersection, not union)", () => {
+    const searched = filterDefinitions(all, {
+      tab: InventoryTab.Components,
+      query: "service",
+    });
+    // "service" matches sm, but sm has no view — the two filters intersect.
+    expect(filterWithViews(searched, true, hasView)).toEqual([]);
+  });
+});
+
+describe("hasDefaultView", () => {
+  const sources = [
+    { filename: "views/cm.hcl" },
+    { filename: "views/cm-extra.hcl" },
+    { filename: "docs/cm.md" },
+  ];
+
+  it("matches the exact views/<label>.hcl path", () => {
+    expect(hasDefaultView(sources, "cm")).toBe(true);
+    expect(hasDefaultView(sources, "cm-extra")).toBe(true);
+  });
+
+  it("rejects near-misses and other directories", () => {
+    expect(hasDefaultView(sources, "c")).toBe(false);
+    expect(hasDefaultView(sources, "nc")).toBe(false);
+    // `nested/views/cm.hcl` is not the conventional top-level path.
+    expect(hasDefaultView([{ filename: "nested/views/cm.hcl" }], "cm")).toBe(
+      false,
+    );
+  });
+
+  it("returns false for an empty source list", () => {
+    expect(hasDefaultView([], "cm")).toBe(false);
   });
 });
 
