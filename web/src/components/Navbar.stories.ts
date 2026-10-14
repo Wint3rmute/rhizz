@@ -8,6 +8,7 @@ import {
 } from "../ProjectState.svelte";
 import { projectSlug } from "../vfs/slug";
 import Navbar from "./Navbar.svelte";
+import { paletteShortcutHint } from "./palette/commandPalette";
 
 // Deterministic project id so seeding can stay lazy (and out of module
 // scope — top-level await in story files races the vitest-addon's test
@@ -90,11 +91,11 @@ export const ProjectOpen: Story = {
     const button = canvas.getByLabelText("Open the go-to palette");
     await expect(button).toBeInTheDocument();
     // Its tooltip spells the chord the way this platform writes it — a
-    // button that says "Ctrl" on a Mac teaches the wrong keystroke.
-    await expect(button).toHaveAttribute(
-      "title",
-      "Go to file or command (Ctrl+P)",
-    );
+    // button that says "Ctrl" on a Mac teaches the wrong keystroke. The
+    // expectation goes through the same helper as the component, so it
+    // holds on macOS (⌘P) and everywhere else (Ctrl+P).
+    const expected = `Go to file or command (${paletteShortcutHint(navigator.userAgent)})`;
+    await expect(button).toHaveAttribute("title", expected);
   },
 };
 
