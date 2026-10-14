@@ -114,6 +114,61 @@ async function waitForStableLayout(page: Page): Promise<void> {
   }
 }
 
+// Monaco paints two pieces of chrome asynchronously, and both are timing
+// dependent under load:
+//
+// - Scrollbars are *revealed* when the editor mounts and faded out by a JS
+//   timer (`scrollbar.ts` adds `.invisible.fade` after ~360ms; the 800ms CSS
+//   transition follows). A capture taken before the fade lands on a visible
+//   slider, one after it on the editor background — the same story silkscreens
+//   differently run to run.
+// - The overview ruler draws onto a canvas that Monaco clears and repaints
+//   whenever its settings change (the theme flip is one such change). A
+//   capture between the clear and the repaint catches a blank ruler.
+//
+// Playwright's own screenshot stabilisation only requires two identical frames
+// a moment apart, which both windows satisfy. So wait for each to reach its
+// resting state before the capture: every scrollbar faded, every overview
+// ruler painted. `canvas.decorationsOverviewRuler` is transparent until Monaco
+// paints it, so "has an opaque pixel" means "painted". Bounded, and a story
+// without an editor (no such nodes) returns immediately.
+async function waitForMonacoChrome(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const scrollbars = [
+          ...document.querySelectorAll(
+            ".monaco-scrollable-element > .scrollbar",
+          ),
+        ];
+        const faded = scrollbars.every((el) =>
+          el.classList.contains("invisible"),
+        );
+        const rulersPainted = [
+          ...document.querySelectorAll("canvas.decorationsOverviewRuler"),
+        ].every((node) => {
+          const canvas = node as HTMLCanvasElement;
+          if (canvas.width === 0 || canvas.height === 0) return true;
+          const data = canvas
+            .getContext("2d")
+            ?.getImageData(0, 0, canvas.width, canvas.height).data;
+          if (!data) return true;
+          for (let i = 3; i < data.length; i += 4) {
+            if (data[i] !== 0) return true;
+          }
+          return false;
+        });
+        return faded && rulersPainted;
+      },
+      undefined,
+      // Interval polling, not the default `raf`: a backgrounded page throttles
+      // requestAnimationFrame (and screenshots run under load), so an rAF poll
+      // can miss the fade for seconds.
+      { timeout: 5000, polling: 100 },
+    )
+    .catch(() => {});
+}
+
 async function storyViewport(page: Page): Promise<string | undefined> {
   return page.evaluate(() => {
     const story = (
@@ -169,6 +224,7 @@ for (const story of loadStories()) {
 
       await pinViewportHeight(page);
       await waitForStableLayout(page);
+      await waitForMonacoChrome(page);
 
       await expect(page).toHaveScreenshot(`${story.id}--${theme}.png`, {
         fullPage: true,
