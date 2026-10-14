@@ -146,10 +146,23 @@ let systems = $derived.by<InventorySystem[]>(() =>
 );
 
 let filtered = $derived(
-  filterDefinitions(definitions, { tab: activeTab, query }),
+  filterDefinitions(definitions, { tab: activeTab, query }).filter(
+    (d) => !onlyWithViews || hasDefaultView(d.label),
+  ),
 );
 
-let filteredSystems = $derived(filterSystems(systems, query));
+function hasDefaultView(label: string): boolean {
+  const path = defaultViewPath(label);
+  return projectModel.sources.some((s) => s.filename === path);
+}
+
+let onlyWithViews = $state(false);
+
+let filteredSystems = $derived(
+  filterSystems(systems, query).filter(
+    (s) => !onlyWithViews || boundViews.some((v) => v.system === s.label),
+  ),
+);
 
 // The rows the sidebar actually shows for the active tab.
 let visibleLabels = $derived(
@@ -655,24 +668,22 @@ async function handleCreateView(): Promise<void> {
               : "Interfaces"}
           </button>
         {/each}
+        {#if activeTab !== InventoryTab.Interfaces}
+          <button
+            type="button"
+            class="btn btn-primary btn-xs ml-auto"
+            disabled={creatingEntity}
+            onclick={() => void handleAddEntity()}
+            data-testid="inventory-add-entity"
+          >
+            {creatingEntity
+              ? "Creating…"
+              : activeTab === InventoryTab.Systems
+              ? "+ New System"
+              : "+ New Component"}
+          </button>
+        {/if}
       </div>
-
-      {#if activeTab !== InventoryTab.Interfaces}
-        <button
-          type="button"
-          class="btn btn-primary btn-sm w-full"
-          disabled={creatingEntity}
-          onclick={() => void handleAddEntity()}
-          data-testid="inventory-add-entity"
-        >
-          {creatingEntity
-            ? "Creating…"
-            : activeTab === InventoryTab.Systems
-            ? "+ New System"
-            : "+ New Component"}
-        </button>
-      {/if}
-      <div class="divider my-0"></div>
 
       <!-- Free-text search -->
       <input
@@ -682,6 +693,13 @@ async function handleCreateView(): Promise<void> {
         aria-label="Search inventory"
         bind:value={query}
       />
+
+      {#if activeTab !== InventoryTab.Interfaces}
+        <label class="label cursor-pointer justify-start gap-2 py-0">
+          <input type="checkbox" class="checkbox checkbox-sm" bind:checked={onlyWithViews} />
+          <span class="label-text text-sm">Only with defined views</span>
+        </label>
+      {/if}
 
       <!-- Entity list -->
       <div
