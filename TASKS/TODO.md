@@ -268,3 +268,22 @@ view. Please make it possible to navigate back and forth through linked views.
 - Requirements, spec, acceptance criteria as bullet points
 - Keep on increasing the task ID when creating new tasks
 - Don't remove this template, move it to the bottom instead
+
+---
+
+## Note — Remove the audit `overrides` when upstream is fixed
+
+The `overrides` in `web/package.json` pin two transitive dependencies to fixed
+versions. `npm audit fix` cannot replace them: without `--force` it moves
+`dompurify` down to the vulnerable 3.2.7, and with `--force` it only offers
+`monaco-editor@0.57.0`, which still resolves the vulnerable `dompurify@3.4.15`.
+
+- **`dompurify` (under `monaco-editor`, runtime path):** remove the override
+  once a Monaco release resolves `dompurify` to 3.4.17 or later. Check with
+  `npm view monaco-editor@<version> dependencies.dompurify`.
+- **`postcss-selector-parser` (under `@tailwindcss/typography`, build time):**
+  remove the override once `@tailwindcss/typography` depends on a parser
+  version outside the advisory range (below 7.1.6). Check with
+  `npm view @tailwindcss/typography@<version> dependencies`.
+
+After removing an override, run `npm audit` and confirm the finding stays clear.
