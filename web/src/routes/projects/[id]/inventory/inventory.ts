@@ -197,6 +197,34 @@ export function filterSystems(
   return systems.filter((s) => matchesSystemQuery(s, query));
 }
 
+/**
+ * Keeps only entities that have a defined view when `onlyWithViews` is set.
+ *
+ * The list is expected to be already search-filtered, so the view filter
+ * composes with the search query rather than duplicating it. `hasView` decides
+ * one entity; callers supply the rule for their kind — a definition's
+ * `views/<label>.hcl` file, a system's bound views — because the two answer
+ * the question differently.
+ */
+export function filterWithViews<T>(
+  entities: readonly T[],
+  onlyWithViews: boolean,
+  hasView: (entity: T) => boolean,
+): T[] {
+  if (!onlyWithViews) return [...entities];
+  return entities.filter(hasView);
+}
+
+/** Whether the project's sources contain a definition's default view file at
+ * the exact conventional path `views/<label>.hcl`. */
+export function hasDefaultView(
+  sources: readonly { filename: string }[],
+  label: string,
+): boolean {
+  const path = defaultViewPath(label);
+  return sources.some((source) => source.filename === path);
+}
+
 /** A system as an `InventoryDefinition` so it can reuse the card, diagram
  * preview (`views/<label>.hcl`) and detail pane. Systems have no ports or
  * children in the inventory sense — they are shown as a single specified
