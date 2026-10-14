@@ -108,6 +108,69 @@ and make them deterministic.
 ---
 
 
+## Task <N> — Show and hide connections per view
+
+Connections can be hidden per view, the same way component instances are shown
+and hidden today. The Modeling connections sidebar lists only connections between
+components that are shown in the diagram, each with a checkbox.
+
+Definitions:
+
+- A connection is **drawn** in a view when both endpoint components are placed
+  in the view, belong to the view's system, and the connection is not hidden.
+- Hidden is a per-view setting, stored in that view's `views/<label>.hcl`.
+
+Requirements:
+
+- **Storage:** new optional `hidden` boolean attribute on the view's
+  `connection` block, e.g. `connection "fc-to-prop" { hidden = true }`. Omitted
+  from the file when `false`. Add the field to `ViewConnection` in `rhizz-core`
+  and round-trip it through parse and serialize. Add it to `StoredConnection`
+  on the web side and round-trip it through `viewsToLayout` and `layoutToHcl`.
+- **Sidebar:** lists every system connection whose two endpoints are both placed
+  in the view. Each row has a checkbox; checked means shown. Hidden connections
+  stay listed, unchecked, so they can be shown again. Connections with an
+  unplaced endpoint are not listed.
+- **Canvas:** hidden connections are not drawn. The sidebar and the canvas use
+  one shared predicate, so they cannot disagree.
+- **Read-only viewers** (Explore, embed, Inventory) also skip hidden connections.
+- **Cascade:** `hidden` survives a component being unchecked and re-checked.
+  Removing a component from the view does not clear the flag.
+- **Undo:** toggling goes through the same save and undo path as component
+  checkboxes.
+- **Spec:** update the view section of `SPEC.md` / `SPEC/` to describe `hidden`.
+
+Connection labels must be unique within a system. View `connection` blocks are
+keyed by bare label, so the label must identify one connection in the system.
+
+- Today `process_connections_in_scope` (`crates/rhizz-core/src/resolve.rs:602`)
+  rejects duplicate labels only within one scope, using E001. Two connections
+  with the same label in different scopes of one system are accepted. Extend the
+  check to the whole system and report both scopes in the message, reusing E001.
+- Before implementing, verify the reuse case. Connections declared inside a
+  component definition (`resolve.rs:391`) may be shared by several instances of
+  that component in one system. Confirm whether those count as duplicates, and
+  whether an existing project with two instances would start failing. Document
+  the result in the diagnostic's SPEC page and fix any example that breaks.
+
+Steps (in order):
+
+1. Fix the sidebar. Introduce the shared "drawn" predicate and use it for both
+   the canvas edge list and `systemConnections`. No schema change.
+2. Add the `hidden` attribute end to end: Rust model and serializer, web layout,
+   sidebar checkbox, canvas and read-only filter.
+3. Tests, red first:
+   - Rust: round-trip for `hidden`, and it is omitted when `false`.
+   - Vitest: unit tests for the shared predicate and for the layout round-trip.
+   - Playwright: hiding a connection removes it from the canvas and unchecks it
+     in the sidebar; the state survives reload; unchecking and re-checking an
+     endpoint component keeps the connection hidden; the sidebar lists exactly
+     the drawn-or-hidden connections.
+   - Storybook or VRT only if the sidebar row look changes.
+- **Validation:** `just test`, `just lint`, `just build`, `just format`.
+
+---
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
