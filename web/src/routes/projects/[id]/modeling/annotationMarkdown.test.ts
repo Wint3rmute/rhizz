@@ -65,7 +65,7 @@ describe("annotationSvgLines", () => {
     expect(() =>
       annotationSvgLines(
         "| a | b |\n|---|---|\n| 1 | 2 |\n\n![alt](u)\n\n<div>hi</div>",
-      )
+      ),
     ).not.toThrow();
     expect(
       texts(annotationSvgLines("| a | b |\n|---|---|\n| 1 | 2 |")).join("\n"),
@@ -86,7 +86,8 @@ describe("annotationSvgLines", () => {
   });
 
   it("never throws on hostile input", () => {
-    expect(() => annotationSvgLines("**unclosed\n\n# \n\n- \n\n[bad](")).not
-      .toThrow();
+    expect(() =>
+      annotationSvgLines("**unclosed\n\n# \n\n- \n\n[bad]("),
+    ).not.toThrow();
   });
 });

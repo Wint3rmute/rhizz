@@ -146,20 +146,21 @@ export const FullStrip: Story = {
     // pointer cursor explicitly — the browser gives a bare `<button>` none.
     const toggle = bar.getByRole("button");
     await expect(getComputedStyle(toggle).cursor).toBe("pointer");
-    const barBox = canvas.getByTestId("diagnostics-status-bar")
+    const barBox = canvas
+      .getByTestId("diagnostics-status-bar")
       .getBoundingClientRect();
-    await expect(toggle.getBoundingClientRect().width)
-      .toBeCloseTo(barBox.width);
+    await expect(toggle.getBoundingClientRect().width).toBeCloseTo(
+      barBox.width,
+    );
     const hitAt = (x: number, y: number) =>
       document.elementFromPoint(x, y)?.closest("button");
     const countBadge = await bar.findByText("1 error");
     const countBox = countBadge.getBoundingClientRect();
     await expect(hitAt(countBox.x + 1, countBox.y + 1)).toBe(toggle);
-    await expect(hitAt(barBox.x + 2, barBox.y + barBox.height / 2))
-      .toBe(toggle);
-    await expect(toggle.contains(bar.getByLabelText("Strictness"))).toBe(
-      false,
+    await expect(hitAt(barBox.x + 2, barBox.y + barBox.height / 2)).toBe(
+      toggle,
     );
+    await expect(toggle.contains(bar.getByLabelText("Strictness"))).toBe(false);
   },
 };
 
@@ -189,7 +190,8 @@ export const NarrowStrip: Story = {
     // to survive being squeezed.
     await expect(bar.getByText("▴")).toBeVisible();
     // …and nothing spills past the bar's own right edge.
-    const rootBox = canvas.getByTestId("diagnostics-status-bar")
+    const rootBox = canvas
+      .getByTestId("diagnostics-status-bar")
       .getBoundingClientRect();
     const selectBox = bar.getByLabelText("Strictness").getBoundingClientRect();
     await expect(selectBox.right).toBeLessThanOrEqual(rootBox.right);

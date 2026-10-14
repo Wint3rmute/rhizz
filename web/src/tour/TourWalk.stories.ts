@@ -109,8 +109,9 @@ async function ensureWalkProject(): Promise<Project> {
   modelingPanes.forget();
   inventoryPanes.forget();
   const existing = await projectStore.listProjects();
-  const project = existing.find((p) => p.id === WALK_PROJECT_ID) ??
-    await createProjectWithMainFile(WALK_PROJECT_NAME, WALK_HCL);
+  const project =
+    existing.find((p) => p.id === WALK_PROJECT_ID) ??
+    (await createProjectWithMainFile(WALK_PROJECT_NAME, WALK_HCL));
   const fs = openProjectFs(projectStore, project.id);
   await writeDiagramLayoutFile(fs, `${VIEW_LAYOUT_DIR}/main.hcl`, WALK_LAYOUT);
   await setCurrentProject(project.id);
@@ -147,11 +148,7 @@ type Story = StoryObj<typeof meta>;
 // proves the machine resolved the step (target mounted) instead of
 // dropping into `tourInactive` (the empty-project dropout that motivated
 // this file closed the whole tour as TARGET.NOT_FOUND).
-function stepStory(
-  page: TourWalkPage,
-  stepId: string,
-  title: string,
-): Story {
+function stepStory(page: TourWalkPage, stepId: string, title: string): Story {
   return {
     args: { page, projectId: WALK_PROJECT_ID, stepId },
     play: async ({ canvasElement }) => {
@@ -241,22 +238,14 @@ export const ExplorePreview: Story = stepStory(
   "tour-explore-preview",
   "Up next: Explore",
 );
-export const Explore: Story = stepStory(
-  "explore",
-  "tour-explore",
-  "Explore",
-);
+export const Explore: Story = stepStory("explore", "tour-explore", "Explore");
 export const CodePreview: Story = stepStory(
   "overview",
   "tour-editor-preview",
   "Up next: Code",
 );
 export const Code: Story = stepStory("code", "tour-editor", "Code");
-export const Done: Story = stepStory(
-  "overview",
-  "tour-done",
-  "You're set 🚀",
-);
+export const Done: Story = stepStory("overview", "tour-done", "You're set 🚀");
 
 // Guards the story list against drifting from the tour itself: every
 // step id gets exactly one screenshot story above.

@@ -200,9 +200,10 @@ function blockLines(
       break;
     }
     case "text": {
-      const inner = token.tokens !== undefined
-        ? inlineSpans(token.tokens)
-        : styled(token.text ?? "");
+      const inner =
+        token.tokens !== undefined
+          ? inlineSpans(token.tokens)
+          : styled(token.text ?? "");
       for (const parts of splitLines(inner)) {
         out.push({ spans: parts, indent: capped });
       }
@@ -210,9 +211,10 @@ function blockLines(
     }
     case "list": {
       const ordered = token.ordered ?? false;
-      const startNum = typeof token.start === "number"
-        ? token.start
-        : Number.parseInt(token.start ?? "1", 10);
+      const startNum =
+        typeof token.start === "number"
+          ? token.start
+          : Number.parseInt(token.start ?? "1", 10);
       const base = Number.isNaN(startNum) ? 1 : startNum;
       (token.items ?? []).forEach((item, i) => {
         const bullet = ordered ? `${(base + i).toString()}. ` : "• ";

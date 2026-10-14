@@ -35,7 +35,9 @@ async function createFirstProject(
 }
 
 for (const source of ["example", "empty"] as const) {
-  test(`first project (${source}) auto-opens the tour; Next walks all pages to Done`, async ({ page }) => {
+  test(`first project (${source}) auto-opens the tour; Next walks all pages to Done`, async ({
+    page,
+  }) => {
     await createFirstProject(page, source);
 
     // First-run pending start: the welcome dialog opens on its own.
@@ -75,7 +77,8 @@ for (const source of ["example", "empty"] as const) {
     // Last stop offers Done; the tour closes and the page stays usable.
     await dialog.getByText("Done").click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole("link", { name: "Modeling" }).first())
-      .toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Modeling" }).first(),
+    ).toBeVisible();
   });
 }

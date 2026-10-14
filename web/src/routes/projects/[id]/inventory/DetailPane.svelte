@@ -1,197 +1,189 @@
 <script lang="ts">
-// Detail pane for the selected definition: one tab per facet of it.
-//
-// Fills the right `Pane` of the Inventory workspace, which owns the panel
-// header, width and hide/restore rail — this component only owns the tabs and
-// their content. The Description tab edits `docs/<label>.md` in the app's
-// `MonacoEditor`, the same component the Code page uses for these very files.
-import Markdown from "../../../../components/Markdown.svelte";
-import MonacoEditor from "../../../../components/MonacoEditor.svelte";
-import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
-import { SvelteSet } from "svelte/reactivity";
-// Type-only: the editor *type* without dragging the editor itself in, so
-// `DetailPane` does not become a second reason to load Monaco.
-import type * as monaco from "monaco-editor";
-import { onDestroy } from "svelte";
-import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
-import { createDebounced } from "../../../../debounce";
-import type { InventoryDefinition } from "./inventory";
-import { definitionDepth } from "./inventory";
-import {
-  DEFAULT_COLOR,
-  DEFAULT_FONT,
-  toBorderStyle,
-} from "../modeling/visuals";
+  // Detail pane for the selected definition: one tab per facet of it.
+  //
+  // Fills the right `Pane` of the Inventory workspace, which owns the panel
+  // header, width and hide/restore rail — this component only owns the tabs and
+  // their content. The Description tab edits `docs/<label>.md` in the app's
+  // `MonacoEditor`, the same component the Code page uses for these very files.
+  import Markdown from "../../../../components/Markdown.svelte";
+  import MonacoEditor from "../../../../components/MonacoEditor.svelte";
+  import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
+  import { SvelteSet } from "svelte/reactivity";
+  // Type-only: the editor *type* without dragging the editor itself in, so
+  // `DetailPane` does not become a second reason to load Monaco.
+  import type * as monaco from "monaco-editor";
+  import { onDestroy } from "svelte";
+  import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
+  import { createDebounced } from "../../../../debounce";
+  import type { InventoryDefinition } from "./inventory";
+  import { definitionDepth } from "./inventory";
+  import {
+    DEFAULT_COLOR,
+    DEFAULT_FONT,
+    toBorderStyle,
+  } from "../modeling/visuals";
 
-let {
-  definition,
-  docContent,
-  ondocsave,
-  onstylechange,
-  onsystemstylechange,
-  deleteBlockers,
-  deleteBlockerKind,
-  ondelete,
-}: {
-  definition: InventoryDefinition | null;
-  /** `docs/<label>.md` content: null when missing, undefined while loading. */
-  docContent: string | null | undefined;
-  /**
-   * Persist edited documentation to the VFS. The label travels with the
-   * text so a debounced write that lands after an entity switch still
-   * reaches the file it was typed for, not the newly selected one.
-   */
-  ondocsave: (label: string, content: string) => Promise<void>;
-  /**
-   * Persist a component-style edit to the system model. Omitted when the
-   * entity has no component to style (a system, which uses
-   * `onsystemstylechange` instead) — a tab whose controls would silently
-   * refuse is worse than no tab, because nothing on screen says the edit
-   * went nowhere.
-   */
-  onstylechange?: ((patch: ComponentPatch) => Promise<void>) | undefined;
-  /**
-   * Persist a system-style edit (`full_name` / `icon` only) to the system
-   * model. Omitted for components, which use `onstylechange` instead.
-   * Exactly one of the two is supplied for any shown entity.
-   */
-  onsystemstylechange?: ((patch: SystemPatch) => Promise<void>) | undefined;
-  /**
-   * Paths blocking deletion of the shown entity: instance keys for a
-   * component, bound view files for a system. Empty means deletion is
-   * allowed (behind the type-to-confirm gate below).
-   */
-  deleteBlockers: string[];
-  /** What the blockers are, for the blocked message wording. */
-  deleteBlockerKind: "instance" | "view";
-  /** Delete the shown entity from the system model. */
-  ondelete: () => Promise<void>;
-} = $props();
+  let {
+    definition,
+    docContent,
+    ondocsave,
+    onstylechange,
+    onsystemstylechange,
+    deleteBlockers,
+    deleteBlockerKind,
+    ondelete,
+  }: {
+    definition: InventoryDefinition | null;
+    /** `docs/<label>.md` content: null when missing, undefined while loading. */
+    docContent: string | null | undefined;
+    /**
+     * Persist edited documentation to the VFS. The label travels with the
+     * text so a debounced write that lands after an entity switch still
+     * reaches the file it was typed for, not the newly selected one.
+     */
+    ondocsave: (label: string, content: string) => Promise<void>;
+    /**
+     * Persist a component-style edit to the system model. Omitted when the
+     * entity has no component to style (a system, which uses
+     * `onsystemstylechange` instead) — a tab whose controls would silently
+     * refuse is worse than no tab, because nothing on screen says the edit
+     * went nowhere.
+     */
+    onstylechange?: ((patch: ComponentPatch) => Promise<void>) | undefined;
+    /**
+     * Persist a system-style edit (`full_name` / `icon` only) to the system
+     * model. Omitted for components, which use `onstylechange` instead.
+     * Exactly one of the two is supplied for any shown entity.
+     */
+    onsystemstylechange?: ((patch: SystemPatch) => Promise<void>) | undefined;
+    /**
+     * Paths blocking deletion of the shown entity: instance keys for a
+     * component, bound view files for a system. Empty means deletion is
+     * allowed (behind the type-to-confirm gate below).
+     */
+    deleteBlockers: string[];
+    /** What the blockers are, for the blocked message wording. */
+    deleteBlockerKind: "instance" | "view";
+    /** Delete the shown entity from the system model. */
+    ondelete: () => Promise<void>;
+  } = $props();
 
-type Tab =
-  | "Description"
-  | "Style"
-  | "Ports"
-  | "Requirements"
-  | "Metadata"
-  | "Delete";
+  type Tab =
+    "Description" | "Style" | "Ports" | "Requirements" | "Metadata" | "Delete";
 
-const TABS: readonly Tab[] = [
-  "Description",
-  "Ports",
-  "Requirements",
-  "Metadata",
-  "Delete",
-];
+  const TABS: readonly Tab[] = [
+    "Description",
+    "Ports",
+    "Requirements",
+    "Metadata",
+    "Delete",
+  ];
 
-let tabs = $derived<readonly Tab[]>(
-  onstylechange === undefined && onsystemstylechange === undefined
-    ? TABS
-    : ["Description", "Style", ...TABS.slice(1)],
-);
+  let tabs = $derived<readonly Tab[]>(
+    onstylechange === undefined && onsystemstylechange === undefined
+      ? TABS
+      : ["Description", "Style", ...TABS.slice(1)],
+  );
 
-// Monaco options for the documentation editor, as one object so the identity is
-// stable (see `MonacoEditor`: options are read at create time, untracked).
-const DOC_EDITOR_OPTIONS = {
-  // Prose wraps; Monaco's markdown configuration sets no `wordWrap`, so
-  // without this a paragraph is one long horizontal scroll in a pane that is
-  // two fifths of a row.
-  wordWrap: "on",
-  // No minimap: it is a map of a file you cannot scroll in a pane this narrow,
-  // and for a document of a few paragraphs it is dots. The Code page keeps its
-  // own, where files are long and the pane is wide.
-  minimap: { enabled: false },
-  // No occurrence highlighting: in Markdown it paints every other instance of
-  // the word under the cursor, which is noise in a document rather than a
-  // signal in code. It also keeps Monaco's word highlighter from scheduling
-  // its debounce work, which rejects a promise nobody awaits when the editor
-  // is disposed — an unhandled rejection that fails the story suite.
-  occurrencesHighlight: "off",
-} as const satisfies monaco.editor.IStandaloneEditorConstructionOptions;
+  // Monaco options for the documentation editor, as one object so the identity is
+  // stable (see `MonacoEditor`: options are read at create time, untracked).
+  const DOC_EDITOR_OPTIONS = {
+    // Prose wraps; Monaco's markdown configuration sets no `wordWrap`, so
+    // without this a paragraph is one long horizontal scroll in a pane that is
+    // two fifths of a row.
+    wordWrap: "on",
+    // No minimap: it is a map of a file you cannot scroll in a pane this narrow,
+    // and for a document of a few paragraphs it is dots. The Code page keeps its
+    // own, where files are long and the pane is wide.
+    minimap: { enabled: false },
+    // No occurrence highlighting: in Markdown it paints every other instance of
+    // the word under the cursor, which is noise in a document rather than a
+    // signal in code. It also keeps Monaco's word highlighter from scheduling
+    // its debounce work, which rejects a promise nobody awaits when the editor
+    // is disposed — an unhandled rejection that fails the story suite.
+    occurrencesHighlight: "off",
+  } as const satisfies monaco.editor.IStandaloneEditorConstructionOptions;
 
-let activeTab = $state<Tab>("Description");
+  let activeTab = $state<Tab>("Description");
 
-// The live Monaco instance while the doc editor is mounted. Only used to put
-// the cursor in the document when the editor opens — see the effect below.
-let docEditor = $state<monaco.editor.IStandaloneCodeEditor | undefined>(
-  undefined,
-);
+  // The live Monaco instance while the doc editor is mounted. Only used to put
+  // the cursor in the document when the editor opens — see the effect below.
+  let docEditor = $state<monaco.editor.IStandaloneCodeEditor | undefined>(
+    undefined,
+  );
 
-// Reset per-entity editor state when switching between definitions so a
-// half-typed doc edit or delete confirmation does not leak across
-// selections. The active tab is deliberately kept: switching the focused
-// entity swaps what the pane shows, not which facet of it is open.
-let lastLabel = $state<string | null>(null);
-let docMode = $state<"view" | "edit">("view");
-let editText = $state("");
-let deleteConfirmText = $state("");
-let deletingEntity = $state(false);
+  // Reset per-entity editor state when switching between definitions so a
+  // half-typed doc edit or delete confirmation does not leak across
+  // selections. The active tab is deliberately kept: switching the focused
+  // entity swaps what the pane shows, not which facet of it is open.
+  let lastLabel = $state<string | null>(null);
+  let docMode = $state<"view" | "edit">("view");
+  let editText = $state("");
+  let deleteConfirmText = $state("");
+  let deletingEntity = $state(false);
 
-// Edits auto-save once typing pauses — there is no Save button to forget.
-// The label is captured per call (not read live at write time), so a write
-// that lands after an entity switch still reaches the file it was typed
-// for. Switching entities flushes first for the same reason the Code page
-// flushes on file switch; unmount flushes for navigation away.
-const DOC_WRITE_DEBOUNCE_MS = 500;
-const scheduleDocSave = createDebounced(
-  (label: string, text: string) => {
+  // Edits auto-save once typing pauses — there is no Save button to forget.
+  // The label is captured per call (not read live at write time), so a write
+  // that lands after an entity switch still reaches the file it was typed
+  // for. Switching entities flushes first for the same reason the Code page
+  // flushes on file switch; unmount flushes for navigation away.
+  const DOC_WRITE_DEBOUNCE_MS = 500;
+  const scheduleDocSave = createDebounced((label: string, text: string) => {
     void ondocsave(label, text);
-  },
-  DOC_WRITE_DEBOUNCE_MS,
-);
-let lastScheduledDocText = $state<string | null>(null);
-$effect(() => {
-  const label = definition?.label ?? null;
-  if (label !== lastLabel) {
-    scheduleDocSave.flush();
-    lastLabel = label;
-    docMode = "view";
-    deleteConfirmText = "";
-    lastScheduledDocText = null;
+  }, DOC_WRITE_DEBOUNCE_MS);
+  let lastScheduledDocText = $state<string | null>(null);
+  $effect(() => {
+    const label = definition?.label ?? null;
+    if (label !== lastLabel) {
+      scheduleDocSave.flush();
+      lastLabel = label;
+      docMode = "view";
+      deleteConfirmText = "";
+      lastScheduledDocText = null;
+    }
+  });
+  onDestroy(() => scheduleDocSave.flush());
+
+  let portCount = $derived(definition?.ports.length ?? 0);
+  let depth = $derived(definition ? definitionDepth(definition) : 0);
+
+  // Opening the editor should put you *in* the document, not leave you to click
+  // into it first — the point of "Edit" is to start typing. The handle arrives a
+  // tick after `docMode` flips (the component mounts then), so this waits for
+  // whichever of the two is still missing.
+  $effect(() => {
+    if (docMode === "edit") docEditor?.focus();
+  });
+
+  function startDocEdit(): void {
+    editText = docContent ?? "";
+    lastScheduledDocText = editText;
+    docMode = "edit";
   }
-});
-onDestroy(() => scheduleDocSave.flush());
 
-let portCount = $derived(definition?.ports.length ?? 0);
-let depth = $derived(definition ? definitionDepth(definition) : 0);
+  // Schedules a save while editing, once per distinct text: comparing against
+  // the last scheduled text (rather than re-reading the file) means the
+  // load effect's own initial assignment never schedules a write.
+  $effect(() => {
+    const label = definition?.label;
+    if (docMode !== "edit" || label === undefined || label === null) return;
+    if (editText === lastScheduledDocText) return;
+    lastScheduledDocText = editText;
+    scheduleDocSave(label, editText);
+  });
 
-// Opening the editor should put you *in* the document, not leave you to click
-// into it first — the point of "Edit" is to start typing. The handle arrives a
-// tick after `docMode` flips (the component mounts then), so this waits for
-// whichever of the two is still missing.
-$effect(() => {
-  if (docMode === "edit") docEditor?.focus();
-});
-
-function startDocEdit(): void {
-  editText = docContent ?? "";
-  lastScheduledDocText = editText;
-  docMode = "edit";
-}
-
-// Schedules a save while editing, once per distinct text: comparing against
-// the last scheduled text (rather than re-reading the file) means the
-// load effect's own initial assignment never schedules a write.
-$effect(() => {
-  const label = definition?.label;
-  if (docMode !== "edit" || label === undefined || label === null) return;
-  if (editText === lastScheduledDocText) return;
-  lastScheduledDocText = editText;
-  scheduleDocSave(label, editText);
-});
-
-// Whether the editor holds unsaved text: the saved copy trails by the
-// debounce window, so a mismatch means a write is still in flight.
-let docDirty = $derived(editText !== (docContent ?? ""));
-function flattenTags(def: InventoryDefinition): string[] {
-  const tags = new SvelteSet<string>(def.tags);
-  const walk = (d: InventoryDefinition) => {
-    for (const t of d.tags) tags.add(t);
-    for (const c of d.children) walk(c);
-  };
-  walk(def);
-  return [...tags];
-}
+  // Whether the editor holds unsaved text: the saved copy trails by the
+  // debounce window, so a mismatch means a write is still in flight.
+  let docDirty = $derived(editText !== (docContent ?? ""));
+  function flattenTags(def: InventoryDefinition): string[] {
+    const tags = new SvelteSet<string>(def.tags);
+    const walk = (d: InventoryDefinition) => {
+      for (const t of d.tags) tags.add(t);
+      for (const c of d.children) walk(c);
+    };
+    walk(def);
+    return [...tags];
+  }
 </script>
 
 <div
@@ -211,31 +203,31 @@ function flattenTags(def: InventoryDefinition): string[] {
         right edge — unreachable, not merely scrolled. Measured at 1280 wide
         the row now fits outright (383px of 383).
       -->
-      <div
-        class="flex items-center border-b border-base-300 px-2 overflow-x-auto"
-        role="tablist"
-        aria-label="Entity details"
-      >
-        {#each tabs as tab (tab)}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab}
-            class="px-2 py-2 text-xs border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 {
-              activeTab === tab
-                ? tab === 'Delete'
-                  ? 'border-error text-error font-medium'
-                  : 'border-primary text-primary font-medium'
-                : tab === 'Delete'
-                ? 'border-transparent text-error/60 hover:text-error'
-                : 'border-transparent text-base-content/60 hover:text-base-content'
-            }"
-            onclick={() => (activeTab = tab)}
-          >
-            {tab}{#if tab === "Ports"} ({portCount}){/if}
-          </button>
-        {/each}
-      </div>
+    <div
+      class="flex items-center border-b border-base-300 px-2 overflow-x-auto"
+      role="tablist"
+      aria-label="Entity details"
+    >
+      {#each tabs as tab (tab)}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === tab}
+          class="px-2 py-2 text-xs border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 {activeTab ===
+          tab
+            ? tab === 'Delete'
+              ? 'border-error text-error font-medium'
+              : 'border-primary text-primary font-medium'
+            : tab === 'Delete'
+              ? 'border-transparent text-error/60 hover:text-error'
+              : 'border-transparent text-base-content/60 hover:text-base-content'}"
+          onclick={() => (activeTab = tab)}
+        >
+          {tab}{#if tab === "Ports"}
+            ({portCount}){/if}
+        </button>
+      {/each}
+    </div>
 
     <div class="flex-1 min-h-0 overflow-auto p-4 text-sm flex flex-col">
       {#if activeTab === "Description"}
@@ -278,9 +270,7 @@ function flattenTags(def: InventoryDefinition): string[] {
         {:else}
           <div data-testid="inventory-doc-viewer">
             {#if docContent === undefined}
-              <p class="text-base-content/50 italic">
-                Loading documentation…
-              </p>
+              <p class="text-base-content/50 italic">Loading documentation…</p>
             {:else if docContent === null}
               <p class="text-base-content/50 italic">
                 No documentation yet — write it here; it is stored as
@@ -297,7 +287,8 @@ function flattenTags(def: InventoryDefinition): string[] {
             {:else}
               <div class="flex items-center justify-between mb-2">
                 <span
-                  class="text-xs font-semibold uppercase tracking-wider text-base-content/70">
+                  class="text-xs font-semibold uppercase tracking-wider text-base-content/70"
+                >
                   Documentation
                 </span>
                 <button
@@ -322,25 +313,25 @@ function flattenTags(def: InventoryDefinition): string[] {
             nothing. Systems show full name + icon only (`mode="system"`):
             they carry no color/border/font in the model.
           -->
-          <div data-testid="inventory-style-fields">
-            <ComponentStyleFields
-              mode={onsystemstylechange !== undefined ? "system" : "component"}
-              style={{
-                full_name: definition.full_name,
-                icon: definition.icon,
-                color: definition.color || DEFAULT_COLOR,
-                border: toBorderStyle(definition.border),
-                font: definition.font || DEFAULT_FONT,
-              }}
-              onchange={(patch) =>
-                onsystemstylechange !== undefined
-                  ? void onsystemstylechange({
+        <div data-testid="inventory-style-fields">
+          <ComponentStyleFields
+            mode={onsystemstylechange !== undefined ? "system" : "component"}
+            style={{
+              full_name: definition.full_name,
+              icon: definition.icon,
+              color: definition.color || DEFAULT_COLOR,
+              border: toBorderStyle(definition.border),
+              font: definition.font || DEFAULT_FONT,
+            }}
+            onchange={(patch) =>
+              onsystemstylechange !== undefined
+                ? void onsystemstylechange({
                     full_name: patch.full_name,
                     icon: patch.icon,
                   })
-                  : void onstylechange?.(patch)}
-            />
-          </div>
+                : void onstylechange?.(patch)}
+          />
+        </div>
       {:else if activeTab === "Ports"}
         {#if definition.ports.length === 0}
           <p class="text-base-content/50 italic">
@@ -412,8 +403,8 @@ function flattenTags(def: InventoryDefinition): string[] {
           <p
             class="text-sm font-medium rounded-box border border-error/40 bg-error/10 px-3 py-2 text-error"
           >
-            Delete <code class="font-mono">{definition.label}</code> from
-            the system model? This cannot be undone.
+            Delete <code class="font-mono">{definition.label}</code> from the system
+            model? This cannot be undone.
           </p>
           <div class="form-control">
             <label class="label py-1" for="delete-confirm-input">
@@ -457,11 +448,14 @@ function flattenTags(def: InventoryDefinition): string[] {
               class="rounded-box border border-warning/40 bg-warning/10 px-3 py-2"
               data-testid="inventory-delete-blockers"
             >
-              <p class="text-xs font-semibold uppercase tracking-wider text-warning">
+              <p
+                class="text-xs font-semibold uppercase tracking-wider text-warning"
+              >
                 {#if deleteBlockerKind === "instance"}
                   Still used in the project — remove these first
                 {:else}
-                  Still has bound views — delete them first (Code page or Modeling's view list)
+                  Still has bound views — delete them first (Code page or
+                  Modeling's view list)
                 {/if}
               </p>
               <ul class="mt-1 text-sm">
@@ -473,7 +467,10 @@ function flattenTags(def: InventoryDefinition): string[] {
                     >
                       ⚠
                     </span>
-                    <span class="truncate min-w-0 flex-1 font-mono" title={blocker}>
+                    <span
+                      class="truncate min-w-0 flex-1 font-mono"
+                      title={blocker}
+                    >
                       {blocker}
                     </span>
                   </li>

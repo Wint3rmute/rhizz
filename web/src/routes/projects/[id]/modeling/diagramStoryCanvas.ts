@@ -61,24 +61,27 @@ export async function pinCanvasSize(
   // The element's rect is CSS-driven and resizes immediately, while the page
   // picks the new size up through its bound clientWidth/Height a tick later.
   let pinned: { left: number; top: number } | null = null;
-  await waitFor(async () => {
-    const [, , viewWidth, viewHeight] = viewBoxOf(canvas);
-    const { left, top, width, height } = canvas.getBoundingClientRect();
-    pinned ??= { left, top };
-    // …and the position itself has to hold still while the page catches up.
-    await expect(left, "canvas left").toBe(pinned.left);
-    await expect(top, "canvas top").toBe(pinned.top);
-    await expect(viewWidth, "viewBox width").toBeGreaterThan(0);
-    await expect(viewHeight, "viewBox height").toBeGreaterThan(0);
-    await expect(
-      Math.abs(viewWidth - width),
-      "viewBox width should match the element rect",
-    ).toBeLessThanOrEqual(1);
-    await expect(
-      Math.abs(viewHeight - height),
-      "viewBox height should match the element rect",
-    ).toBeLessThanOrEqual(1);
-  }, { timeout: SETTLE_TIMEOUT_MS });
+  await waitFor(
+    async () => {
+      const [, , viewWidth, viewHeight] = viewBoxOf(canvas);
+      const { left, top, width, height } = canvas.getBoundingClientRect();
+      pinned ??= { left, top };
+      // …and the position itself has to hold still while the page catches up.
+      await expect(left, "canvas left").toBe(pinned.left);
+      await expect(top, "canvas top").toBe(pinned.top);
+      await expect(viewWidth, "viewBox width").toBeGreaterThan(0);
+      await expect(viewHeight, "viewBox height").toBeGreaterThan(0);
+      await expect(
+        Math.abs(viewWidth - width),
+        "viewBox width should match the element rect",
+      ).toBeLessThanOrEqual(1);
+      await expect(
+        Math.abs(viewHeight - height),
+        "viewBox height should match the element rect",
+      ).toBeLessThanOrEqual(1);
+    },
+    { timeout: SETTLE_TIMEOUT_MS },
+  );
   return canvas;
 }
 
@@ -163,7 +166,7 @@ export function nodeOrigin(node: SVGGElement): { x: number; y: number } {
 // story-scoped query would match the node *and* its tree row.
 export function canvasTexts(canvasElement: HTMLElement): string[] {
   return [...canvasElement.querySelectorAll<SVGTextElement>("text")].map((t) =>
-    t.textContent.trim()
+    t.textContent.trim(),
   );
 }
 
@@ -174,9 +177,9 @@ export function buttonByLabel(
   canvasElement: HTMLElement,
   label: string,
 ): HTMLButtonElement {
-  for (
-    const button of canvasElement.querySelectorAll<HTMLButtonElement>("button")
-  ) {
+  for (const button of canvasElement.querySelectorAll<HTMLButtonElement>(
+    "button",
+  )) {
     if (button.textContent.trim() === label) return button;
   }
   throw new Error(`no button labeled "${label}"`);

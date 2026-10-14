@@ -18,6 +18,7 @@ run := if has_nix == "true" { "nix develop --command" } else { "" }
 
 format:
     {{run}} cargo fmt --all
+    {{run}} sh -c 'cd web && npm run format'
 
 lint:
     {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && npm run sync && npm run eslint && npm run check-only'

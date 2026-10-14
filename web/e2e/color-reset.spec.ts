@@ -34,7 +34,9 @@ async function createComponent(page, label: string) {
   await expect(canvas.getByText(label).first()).toBeVisible();
 }
 
-test("resetting color to Default clears the warning stroke", async ({ page }) => {
+test("resetting color to Default clears the warning stroke", async ({
+  page,
+}) => {
   await openDiagram(page);
   await createComponent(page, "e2e-color");
 

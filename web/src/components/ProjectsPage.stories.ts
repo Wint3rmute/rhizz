@@ -88,15 +88,18 @@ export const WithProjects: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole("heading", { name: "Projects" }))
-      .toBeInTheDocument();
+    await expect(
+      canvas.getByRole("heading", { name: "Projects" }),
+    ).toBeInTheDocument();
     for (const project of projects) {
       await expect(canvas.getByText(project.name)).toBeInTheDocument();
     }
-    await expect(canvas.getByRole("button", { name: "New project" }))
-      .toBeInTheDocument();
-    await expect(canvas.getByRole("button", { name: "New from example" }))
-      .toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "New project" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "New from example" }),
+    ).toBeInTheDocument();
     // Pinned tipIndex renders exactly one tip: the first entry. The tip is
     // Markdown-rendered, so assert on a plain fragment (markup splits the
     // text across elements).

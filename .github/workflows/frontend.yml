@@ -82,6 +82,9 @@ jobs:
           key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/package-lock.json', 'web/package.json') }}
           restore-keys: eslint-${{ runner.os }}-
 
+      - run: nix develop --command npm run format:check
+        working-directory: ./web
+
       - run: nix develop --command npm run lint
         working-directory: ./web
 

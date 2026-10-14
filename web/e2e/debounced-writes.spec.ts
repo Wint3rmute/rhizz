@@ -40,11 +40,14 @@ async function persistedVersions(page: Page, path: string): Promise<string[]> {
       const directories = new Map(
         nodes.filter((n) => n.kind === "directory").map((n) => [n.id, n.name]),
       );
-      const file = nodes.find((n) =>
-        n.kind === "file" && n.name === segments[segments.length - 1] &&
-        (segments.length === 1
-          ? n.parentId === null
-          : directories.get(n.parentId ?? "") === segments[segments.length - 2])
+      const file = nodes.find(
+        (n) =>
+          n.kind === "file" &&
+          n.name === segments[segments.length - 1] &&
+          (segments.length === 1
+            ? n.parentId === null
+            : directories.get(n.parentId ?? "") ===
+              segments[segments.length - 2]),
       );
       return file?.content ?? null;
     };
@@ -94,7 +97,9 @@ async function createComponent(page: Page, label: string): Promise<void> {
   ).toBeVisible();
 }
 
-test("a burst of canvas nudges persists as a single layout write", async ({ page }) => {
+test("a burst of canvas nudges persists as a single layout write", async ({
+  page,
+}) => {
   await instrumentVfsWrites(page);
   await openDiagram(page, "E2E debounce canvas");
   await createComponent(page, "e2e-debounce");
@@ -118,9 +123,9 @@ test("a burst of canvas nudges persists as a single layout write", async ({ page
 
   // The persisted layout catches up with the canvas — through a single write,
   // carrying the final position rather than an intermediate one.
-  await expect.poll(async () => xOf(await lastPersisted(page, VIEW))).toBe(
-    startX + 50,
-  );
+  await expect
+    .poll(async () => xOf(await lastPersisted(page, VIEW)))
+    .toBe(startX + 50);
   expect((await persistedVersions(page, VIEW)).length - before.length).toBe(1);
 });
 
@@ -140,7 +145,9 @@ test("a burst of typing persists as a single file write", async ({ page }) => {
   expect((await persistedVersions(page, MAIN)).length - before.length).toBe(1);
 });
 
-test("switching files mid-burst persists the edit instead of losing it", async ({ page }) => {
+test("switching files mid-burst persists the edit instead of losing it", async ({
+  page,
+}) => {
   await instrumentVfsWrites(page);
   const id = await createNewProject(page, "E2E debounce switch");
   await page.goto(`/projects/${id}/code`);

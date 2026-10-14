@@ -72,13 +72,14 @@ export function primaryHclPath(
   entries: Dirent[],
   fallback = "main.hcl",
 ): string {
-  const candidates = entries.filter((entry) =>
-    entry.isFile() &&
-    entry.name.endsWith(".hcl") &&
-    !entry.path.startsWith("views/")
+  const candidates = entries.filter(
+    (entry) =>
+      entry.isFile() &&
+      entry.name.endsWith(".hcl") &&
+      !entry.path.startsWith("views/"),
   );
-  const preferred = PRIMARY_HCL_CANDIDATES
-    .map((name) => candidates.find((entry) => entry.name === name))
-    .find((entry) => entry !== undefined);
+  const preferred = PRIMARY_HCL_CANDIDATES.map((name) =>
+    candidates.find((entry) => entry.name === name),
+  ).find((entry) => entry !== undefined);
   return preferred?.path ?? candidates[0]?.path ?? fallback;
 }

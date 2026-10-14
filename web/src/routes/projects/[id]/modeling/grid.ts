@@ -76,9 +76,9 @@ export function buildGraduatedGridPatterns(
   for (const g of sorted) {
     if (g.multiple % baseSpacing !== 0) {
       throw new RangeError(
-        `grid graduation multiple ${
-          String(g.multiple)
-        } is not a multiple of the base spacing ${String(baseSpacing)}`,
+        `grid graduation multiple ${String(
+          g.multiple,
+        )} is not a multiple of the base spacing ${String(baseSpacing)}`,
       );
     }
   }
@@ -91,9 +91,10 @@ export function buildGraduatedGridPatterns(
       stroke: colorToSvgStroke(g.stroke),
       strokeWidth: g.strokeWidth,
       strokeOpacity: g.strokeOpacity,
-      fill: previous !== undefined
-        ? `${idPrefix}-g${String(previous.multiple)}`
-        : undefined,
+      fill:
+        previous !== undefined
+          ? `${idPrefix}-g${String(previous.multiple)}`
+          : undefined,
     };
   });
 }

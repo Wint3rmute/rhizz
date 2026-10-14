@@ -47,18 +47,13 @@ describe("buildComponentTree", () => {
       {
         id: "sys:0",
         isExpandable: true,
-        children: [
-          { id: "0", isExpandable: false, children: [] },
-        ],
+        children: [{ id: "0", isExpandable: false, children: [] }],
       },
     ]);
   });
 
   it("is keyed by arena index, not label", () => {
-    const tree = buildComponentTree(
-      [],
-      [comp("a"), comp("b"), comp("a")],
-    );
+    const tree = buildComponentTree([], [comp("a"), comp("b"), comp("a")]);
     expect(tree.map((n) => n.id)).toEqual(["0", "1", "2"]);
   });
 
@@ -114,9 +109,10 @@ describe("buildComponentTree", () => {
   });
 
   it("treats a component whose parent isn't present as an orphan root", () => {
-    const tree = buildComponentTree([sys("drone")], [
-      comp("mcu", { parent_component_index: 99 }),
-    ]);
+    const tree = buildComponentTree(
+      [sys("drone")],
+      [comp("mcu", { parent_component_index: 99 })],
+    );
     expect(tree.length).toBe(2);
     expect(tree[0]?.id).toBe("sys:0"); // system root
     expect(tree[0]?.isExpandable).toBe(false);
@@ -165,11 +161,15 @@ describe("systemIndexOfComponent / componentInSystem", () => {
 
 describe("buildSystemSubtree", () => {
   it("returns only the selected system's children, hiding the system root", () => {
-    const subtree = buildSystemSubtree([sys("a"), sys("b")], [
-      comp("leaf-a", { parent_system_index: 0 }),
-      comp("composite", { parent_system_index: 1 }),
-      comp("child", { parent_component_index: 1 }),
-    ], "b");
+    const subtree = buildSystemSubtree(
+      [sys("a"), sys("b")],
+      [
+        comp("leaf-a", { parent_system_index: 0 }),
+        comp("composite", { parent_system_index: 1 }),
+        comp("child", { parent_component_index: 1 }),
+      ],
+      "b",
+    );
     expect(subtree.map((n) => n.id)).toEqual(["1"]);
     expect(subtree[0]?.children.map((c) => c.id)).toEqual(["2"]);
   });

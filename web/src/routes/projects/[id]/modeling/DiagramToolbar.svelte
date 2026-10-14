@@ -1,44 +1,44 @@
 <script lang="ts">
-// The floating toolbar at the top-centre of the diagrams canvas.
-// Deliberately has zero dependency on ViewEditorState/KeyboardState/
-// Persisted.svelte — every bit of state it needs is passed in as a prop
-// (bindable where the toolbar itself can change it) and every action is
-// a callback prop, so it can be rendered standalone (e.g. in a Storybook
-// story) without any of ModelingPage.svelte's canvas/persistence machinery.
-import { TOUR_TARGETS } from "../../../../tour/tourTargets";
-interface Props {
-  /** Whether "Snap to Grid" is toggled on. */
-  snapEnabled: boolean;
-  /** Whether snapping is actually in effect right now (toggle OR a live modifier-key override) — purely for the button's highlighted state. */
-  snapActive: boolean;
-  /** Currently selected snap grid size, in world units. */
-  snapGridSize: number;
-  /** Choices offered by the snap grid size dropdown. */
-  snapGridSizeOptions: readonly number[];
-  /** Whether the background grid is drawn. */
-  gridVisible: boolean;
-  /** Whether an auto-layout pass is currently running (disables/pulses the button). */
-  autoLayoutRunning: boolean;
-  onautolayout: () => void;
-  onzoomtofill: () => void;
-  onresetview: () => void;
-  onaddcomponent?: () => void;
-  onaddannotation?: () => void;
-}
+  // The floating toolbar at the top-centre of the diagrams canvas.
+  // Deliberately has zero dependency on ViewEditorState/KeyboardState/
+  // Persisted.svelte — every bit of state it needs is passed in as a prop
+  // (bindable where the toolbar itself can change it) and every action is
+  // a callback prop, so it can be rendered standalone (e.g. in a Storybook
+  // story) without any of ModelingPage.svelte's canvas/persistence machinery.
+  import { TOUR_TARGETS } from "../../../../tour/tourTargets";
+  interface Props {
+    /** Whether "Snap to Grid" is toggled on. */
+    snapEnabled: boolean;
+    /** Whether snapping is actually in effect right now (toggle OR a live modifier-key override) — purely for the button's highlighted state. */
+    snapActive: boolean;
+    /** Currently selected snap grid size, in world units. */
+    snapGridSize: number;
+    /** Choices offered by the snap grid size dropdown. */
+    snapGridSizeOptions: readonly number[];
+    /** Whether the background grid is drawn. */
+    gridVisible: boolean;
+    /** Whether an auto-layout pass is currently running (disables/pulses the button). */
+    autoLayoutRunning: boolean;
+    onautolayout: () => void;
+    onzoomtofill: () => void;
+    onresetview: () => void;
+    onaddcomponent?: () => void;
+    onaddannotation?: () => void;
+  }
 
-let {
-  snapEnabled = $bindable(),
-  snapActive,
-  snapGridSize = $bindable(),
-  snapGridSizeOptions,
-  gridVisible = $bindable(),
-  autoLayoutRunning,
-  onautolayout,
-  onzoomtofill,
-  onresetview,
-  onaddcomponent,
-  onaddannotation,
-}: Props = $props();
+  let {
+    snapEnabled = $bindable(),
+    snapActive,
+    snapGridSize = $bindable(),
+    snapGridSizeOptions,
+    gridVisible = $bindable(),
+    autoLayoutRunning,
+    onautolayout,
+    onzoomtofill,
+    onresetview,
+    onaddcomponent,
+    onaddannotation,
+  }: Props = $props();
 </script>
 
 <div
@@ -65,24 +65,24 @@ let {
     </select>
   </div>
   {#if onaddcomponent || onaddannotation}
-      {#if onaddcomponent}
-        <button
-          onclick={onaddcomponent}
-          class="btn btn-ghost btn-sm"
-          title="Add a new component to the model"
-        >
-          + Component
-        </button>
-      {/if}
-      {#if onaddannotation}
-        <button
-          onclick={onaddannotation}
-          class="btn btn-ghost btn-sm"
-          title="Add a text annotation to the canvas"
-        >
-          + Note
-        </button>
-      {/if}
+    {#if onaddcomponent}
+      <button
+        onclick={onaddcomponent}
+        class="btn btn-ghost btn-sm"
+        title="Add a new component to the model"
+      >
+        + Component
+      </button>
+    {/if}
+    {#if onaddannotation}
+      <button
+        onclick={onaddannotation}
+        class="btn btn-ghost btn-sm"
+        title="Add a text annotation to the canvas"
+      >
+        + Note
+      </button>
+    {/if}
   {/if}
   <button
     onclick={onautolayout}

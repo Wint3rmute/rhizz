@@ -15,14 +15,8 @@ export type FontStyle = "bold" | "italic" | "underline";
 export const DEFAULT_COLOR = "default";
 export const DEFAULT_FONT = "unstyled";
 
-export type ComponentColor =
-  | ColorOption
-  | typeof DEFAULT_COLOR
-  | (string & {});
-export type ComponentFont =
-  | FontStyle
-  | typeof DEFAULT_FONT
-  | (string & {});
+export type ComponentColor = ColorOption | typeof DEFAULT_COLOR | (string & {});
+export type ComponentFont = FontStyle | typeof DEFAULT_FONT | (string & {});
 
 // The limited set of color choices offered by the inspector. Each maps to a
 // daisyUI theme token, so the rendered color follows the active theme (and

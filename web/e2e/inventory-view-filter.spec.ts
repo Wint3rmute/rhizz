@@ -51,10 +51,12 @@ async function createViewFor(
   kind: "component" | "system",
 ): Promise<void> {
   await page.goto(`/projects/${id}/inventory/${label}`);
-  const buttonName = kind === "system"
-    ? "Create a view for this system"
-    : "Create a view for this component";
-  await page.getByTestId("inventory-empty-diagram")
+  const buttonName =
+    kind === "system"
+      ? "Create a view for this system"
+      : "Create a view for this component";
+  await page
+    .getByTestId("inventory-empty-diagram")
     .getByRole("button", { name: buttonName })
     .click();
   await expect(page).toHaveURL(`/projects/${id}/modeling/${label}.hcl`);
@@ -80,7 +82,8 @@ async function seedSystemViews(page: Page, name: string): Promise<string> {
 
 /** A card in the Inventory Browser sidebar (not the detail pane). */
 function card(page: Page, label: string) {
-  return page.getByTestId("inventory-pane-left")
+  return page
+    .getByTestId("inventory-pane-left")
     .getByTestId("inventory-card")
     .filter({ hasText: label });
 }
@@ -89,7 +92,9 @@ function viewFilter(page: Page) {
   return page.getByRole("checkbox", { name: "Only with defined views" });
 }
 
-test("the view filter shows on Components and Systems but not Interfaces", async ({ page }) => {
+test("the view filter shows on Components and Systems but not Interfaces", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E view filter visibility");
   await openInventory(page, id);
 
@@ -102,7 +107,9 @@ test("the view filter shows on Components and Systems but not Interfaces", async
   await expect(viewFilter(page)).toBeVisible();
 });
 
-test("filtering components keeps only definitions with a view file", async ({ page }) => {
+test("filtering components keeps only definitions with a view file", async ({
+  page,
+}) => {
   const id = await seedComponentViews(page, "E2E view filter components");
   await openInventory(page, id);
 
@@ -116,7 +123,9 @@ test("filtering components keeps only definitions with a view file", async ({ pa
   await expect(card(page, "no-view")).toHaveCount(0);
 });
 
-test("filtering systems keeps only systems bound to a view", async ({ page }) => {
+test("filtering systems keeps only systems bound to a view", async ({
+  page,
+}) => {
   const id = await seedSystemViews(page, "E2E view filter systems");
   await openInventory(page, id);
   await page.getByRole("tab", { name: "Systems" }).click();
@@ -148,7 +157,9 @@ test("the view filter state survives switching tabs", async ({ page }) => {
   await expect(viewFilter(page)).toBeChecked();
 });
 
-test("the add button sits in the tab row and still creates an entity", async ({ page }) => {
+test("the add button sits in the tab row and still creates an entity", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E add row");
   await openInventory(page, id);
 

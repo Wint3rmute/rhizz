@@ -67,9 +67,10 @@ describe("buildReadOnlyScene", () => {
       linked: new Set([0]),
     };
 
-    expect(
-      buildReadOnlyScene(input).nodes.map((node) => node.dimmed),
-    ).toEqual([false, false]);
+    expect(buildReadOnlyScene(input).nodes.map((node) => node.dimmed)).toEqual([
+      false,
+      false,
+    ]);
     expect(
       buildReadOnlyScene({ ...input, dimUnlinked: true }).nodes.map((node) => ({
         label: node.label,
@@ -87,22 +88,27 @@ describe("buildReadOnlyScene", () => {
       components: [{ label: "a" }, { label: "b" }],
       connections: [{ from: 0, to: 1, label: "bus", startSide: "right" }],
       boxes: { 0: box(0, 0) },
-      annotations: [{ text: "hi", x: 4, y: 8 }, {
-        text: "scaled",
-        x: 1,
-        y: 2,
-        scale: 2,
-      }],
+      annotations: [
+        { text: "hi", x: 4, y: 8 },
+        {
+          text: "scaled",
+          x: 1,
+          y: 2,
+          scale: 2,
+        },
+      ],
     });
 
-    expect(scene.edges).toEqual([{
-      id: diagramEdgeId("bus", 0, 1),
-      label: "bus",
-      from: 0,
-      to: 1,
-      startSide: "right",
-      selected: false,
-    }]);
+    expect(scene.edges).toEqual([
+      {
+        id: diagramEdgeId("bus", 0, 1),
+        label: "bus",
+        from: 0,
+        to: 1,
+        startSide: "right",
+        selected: false,
+      },
+    ]);
     expect(scene.notes).toEqual([
       {
         id: "note-0",

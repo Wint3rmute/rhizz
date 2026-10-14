@@ -13,7 +13,9 @@ function card(page: Page, label: string) {
   return page.getByTestId("inventory-card").filter({ hasText: label });
 }
 
-test("modeling remembers the last opened view across pages", async ({ page }) => {
+test("modeling remembers the last opened view across pages", async ({
+  page,
+}) => {
   const id = await createNewProject(page, "E2E remember view");
   await page.goto(`/projects/${id}/modeling`);
   await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);
@@ -33,32 +35,25 @@ test("modeling remembers the last opened view across pages", async ({ page }) =>
     "true",
   );
   await page.getByTestId("inventory-create-view").click();
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-second-view.hcl`,
-  );
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-second-view.hcl`);
 
   // Away to another page and back via the navbar: the open view survives.
   await page.getByRole("link", { name: "Inventory" }).first().click();
   await expect(page).toHaveURL(new RegExp(`/projects/${id}/inventory`));
   await page.getByRole("link", { name: "Modeling" }).first().click();
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-second-view.hcl`,
-  );
-  await expect(tree.getByRole("button", { name: "e2e-second-view.hcl" }))
-    .toHaveAttribute("aria-current", "true");
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-second-view.hcl`);
+  await expect(
+    tree.getByRole("button", { name: "e2e-second-view.hcl" }),
+  ).toHaveAttribute("aria-current", "true");
 
   // Same through the command palette's "Go to Modeling" row.
   await page.getByRole("link", { name: "Code" }).first().click();
   await expect(page).toHaveURL(new RegExp(`/projects/${id}/code`));
   await page.keyboard.press("ControlOrMeta+p");
   await page.getByRole("option", { name: "Go to Modeling" }).click();
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-second-view.hcl`,
-  );
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-second-view.hcl`);
 
   // A reload keeps the shareable URL — memory never overrides an address.
   await page.reload();
-  await expect(page).toHaveURL(
-    `/projects/${id}/modeling/e2e-second-view.hcl`,
-  );
+  await expect(page).toHaveURL(`/projects/${id}/modeling/e2e-second-view.hcl`);
 });

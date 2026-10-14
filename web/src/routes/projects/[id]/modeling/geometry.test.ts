@@ -341,12 +341,18 @@ function waypoints(d: string): { x: number; y: number }[] {
 describe("elbowPath", () => {
   it("draws a straight line when horizontal and the two points are already y-aligned", () => {
     const d = elbowPath(0, 50, 300, 50, "horizontal");
-    expect(waypoints(d)).toEqual([{ x: 0, y: 50 }, { x: 300, y: 50 }]);
+    expect(waypoints(d)).toEqual([
+      { x: 0, y: 50 },
+      { x: 300, y: 50 },
+    ]);
   });
 
   it("draws a straight line when vertical and the two points are already x-aligned", () => {
     const d = elbowPath(50, 0, 50, 300, "vertical");
-    expect(waypoints(d)).toEqual([{ x: 50, y: 0 }, { x: 50, y: 300 }]);
+    expect(waypoints(d)).toEqual([
+      { x: 50, y: 0 },
+      { x: 50, y: 300 },
+    ]);
   });
 
   it("horizontal orientation always starts and ends travelling horizontally (H-V-H)", () => {
@@ -485,35 +491,41 @@ describe("computeVisibleConnections", () => {
   });
 
   it("respects custom startSide on connection routing", () => {
-    const connTop = [{
-      from: 0,
-      to: 1,
-      label: "top-link",
-      startSide: "top" as ConnectionSide,
-    }];
+    const connTop = [
+      {
+        from: 0,
+        to: 1,
+        label: "top-link",
+        startSide: "top" as ConnectionSide,
+      },
+    ];
     const visTop = computeVisibleConnections(connTop, (i) => boxes[i]);
     expect(visTop[0]?.orientation).toBe("vertical");
     expect(visTop[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
     expect(visTop[0]?.b).toEqual({ x: 250, y: 0 }); // box 1 top midpoint (auto-oriented facing top)
 
-    const connBottom = [{
-      from: 0,
-      to: 1,
-      label: "bottom-link",
-      startSide: "bottom" as ConnectionSide,
-    }];
+    const connBottom = [
+      {
+        from: 0,
+        to: 1,
+        label: "bottom-link",
+        startSide: "bottom" as ConnectionSide,
+      },
+    ];
     const visBottom = computeVisibleConnections(connBottom, (i) => boxes[i]);
     expect(visBottom[0]?.orientation).toBe("vertical");
     expect(visBottom[0]?.a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
     expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
 
-    const connBoth = [{
-      from: 0,
-      to: 1,
-      label: "both-link",
-      startSide: "top" as ConnectionSide,
-      endSide: "right" as ConnectionSide,
-    }];
+    const connBoth = [
+      {
+        from: 0,
+        to: 1,
+        label: "both-link",
+        startSide: "top" as ConnectionSide,
+        endSide: "right" as ConnectionSide,
+      },
+    ];
     const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
     expect(visBoth[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
     expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
@@ -588,17 +600,16 @@ describe("boxSidePoint", () => {
 
 describe("computeResizeHandles", () => {
   it("returns all 8 handles, edges before corners", () => {
-    expect(computeResizeHandles(120, 80, 10, 6).map((h) => h.handle))
-      .toEqual([
-        "top",
-        "bottom",
-        "left",
-        "right",
-        "top-left",
-        "top-right",
-        "bottom-left",
-        "bottom-right",
-      ]);
+    expect(computeResizeHandles(120, 80, 10, 6).map((h) => h.handle)).toEqual([
+      "top",
+      "bottom",
+      "left",
+      "right",
+      "top-left",
+      "top-right",
+      "bottom-left",
+      "bottom-right",
+    ]);
   });
 
   it("centers edge strips on the border and insets them past the corners", () => {

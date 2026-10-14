@@ -131,12 +131,11 @@ describe("TransactionManager", () => {
           layout: [...layout.entries()],
         }),
       apply: async () => {
-        const result = await applyModelMutation(
-          mem,
-          "system.hcl",
-          baseline,
-          { kind: "create_component", label: "sensor", leaf: true },
-        );
+        const result = await applyModelMutation(mem, "system.hcl", baseline, {
+          kind: "create_component",
+          label: "sensor",
+          leaf: true,
+        });
         if (!result.applied || !result.path) return false;
         baseline = mem.store.get("system.hcl") ?? "";
         layout.set(result.path, { x: 100, y: 100 });
@@ -167,9 +166,7 @@ describe("TransactionManager", () => {
 
     // Ctrl+Y restores both the HCL definition and canvas coordinates.
     expect(await manager.redo()).toBe(true);
-    expect(mem.store.get("system.hcl") ?? "").toContain(
-      'component "sensor"',
-    );
+    expect(mem.store.get("system.hcl") ?? "").toContain('component "sensor"');
     expect(layout.get("main/sensor")).toEqual({ x: 100, y: 100 });
   });
 
@@ -177,18 +174,16 @@ describe("TransactionManager", () => {
     const mem = memoryFs();
     const manager = new TransactionManager();
     let baseline = "";
-    for (
-      const op of [
-        { kind: "add_component_definition", label: "cpu" },
-        { kind: "add_system", label: "main" },
-        {
-          kind: "add_instance",
-          parentPath: "main",
-          label: "cpu",
-          source: "cpu",
-        },
-      ] as const
-    ) {
+    for (const op of [
+      { kind: "add_component_definition", label: "cpu" },
+      { kind: "add_system", label: "main" },
+      {
+        kind: "add_instance",
+        parentPath: "main",
+        label: "cpu",
+        source: "cpu",
+      },
+    ] as const) {
       const seeded = await applyModelMutation(mem, "system.hcl", baseline, op);
       if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
       baseline = mem.store.get("system.hcl") ?? "";
@@ -198,12 +193,10 @@ describe("TransactionManager", () => {
       label: "delete main/cpu",
       snapshot: () => mem.store.get("system.hcl") ?? "",
       apply: async () => {
-        const result = await applyModelMutation(
-          mem,
-          "system.hcl",
-          baseline,
-          { kind: "delete_component", path: "main/cpu" },
-        );
+        const result = await applyModelMutation(mem, "system.hcl", baseline, {
+          kind: "delete_component",
+          path: "main/cpu",
+        });
         if (!result.applied) return false;
         baseline = mem.store.get("system.hcl") ?? "";
         return true;

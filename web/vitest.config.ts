@@ -31,40 +31,45 @@ export default defineConfig({
         functions: 70,
       },
     },
-    projects: [{
-      extends: true,
-      test: {
-        name: "unit_tests",
-        // Pure-function tests only for now, so no DOM environment is needed —
-        // add jsdom/happy-dom + @testing-library/svelte when actual component
-        // tests (rendering .svelte files) become the goal.
-        include: ["src/**/*.test.ts"],
-      },
-    }, {
-      extends: true,
-      plugins: [
-        // The plugin will run tests for the stories defined in your Storybook config
-        // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
-        storybookTest({
-          configDir: path.join(dirname, ".storybook"),
-        }),
-      ],
-      test: {
-        name: "storybook",
-        browser: {
-          enabled: true,
-          headless: true,
-          provider: playwright(),
-          instances: [{
-            browser: "chromium",
-            // Play functions assert settled geometry. Transitions honor this
-            // and cut instead of fading, same as the e2e browser.
-            context: {
-              reducedMotion: "reduce",
-            },
-          }],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit_tests",
+          // Pure-function tests only for now, so no DOM environment is needed —
+          // add jsdom/happy-dom + @testing-library/svelte when actual component
+          // tests (rendering .svelte files) become the goal.
+          include: ["src/**/*.test.ts"],
         },
       },
-    }],
+      {
+        extends: true,
+        plugins: [
+          // The plugin will run tests for the stories defined in your Storybook config
+          // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
+          storybookTest({
+            configDir: path.join(dirname, ".storybook"),
+          }),
+        ],
+        test: {
+          name: "storybook",
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            instances: [
+              {
+                browser: "chromium",
+                // Play functions assert settled geometry. Transitions honor this
+                // and cut instead of fading, same as the e2e browser.
+                context: {
+                  reducedMotion: "reduce",
+                },
+              },
+            ],
+          },
+        },
+      },
+    ],
   },
 });

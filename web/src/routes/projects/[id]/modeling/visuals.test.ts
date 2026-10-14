@@ -155,11 +155,11 @@ describe("borderStyleToSvg", () => {
   });
 
   it("maps explicit defaults to no stroke and no dash array", () => {
-    expect(
-      borderStyleToSvg({ color: DEFAULT_COLOR, border: "solid" }),
-    ).toEqual({
-      dasharray: undefined,
-      stroke: undefined,
-    });
+    expect(borderStyleToSvg({ color: DEFAULT_COLOR, border: "solid" })).toEqual(
+      {
+        dasharray: undefined,
+        stroke: undefined,
+      },
+    );
   });
 });

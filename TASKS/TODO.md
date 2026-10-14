@@ -141,9 +141,9 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
 - [ ] **6. Reintroduce formatting.** `deno fmt` has no replacement. Choose a
   formatter, measure the drift (Prettier defaults flag ~130 files), and land
   the reformat as its own commit with no other changes.
-- [ ] **7. Verify the Dockerfile build.** The frontend stage now copies Node 24
-  from `node:24-bookworm`. Build the image on a machine with Docker and confirm
-  `npm run build` succeeds inside it.
+- [x] **7. Verify the Dockerfile build.** Result: the `docker` workflow on
+  `main` (run 38578075822) builds the image. The frontend stage runs `npm ci`
+  and `npm run build` on `node:24-bookworm`, and the image exports.
 - [x] **8. Triage `npm audit`.** Result: 4 moderate findings, 0 after the
   fix. Two were real, two were stale metadata:
   - `dompurify@3.2.7` (under `monaco-editor`, runtime path): pinned to
@@ -158,9 +158,11 @@ Baseline (rebased commit, CI): `rust` and `docs` pass; `frontend` `wasm` and
     command-palette tests failed in 2 of 5 runs with the overrides and 1 of 4
     without. Different palette tests each time, all passing when rerun alone,
     so this is a pre-existing timing flake, tracked as its own follow-up.
-- [ ] **9. Remove all non-idiomatic constructs in `package.json`** - all `override`
+- [x] **9. Remove all non-idiomatic constructs in `package.json`** - all `override`
   options or very precise dependency pinning which was the part of this migration
-  shall be removed
+  shall be removed. Result: the 41 exact pins are caret ranges (same resolved
+  versions). The two `overrides` stay as audit fixes; see the note at the bottom
+  of this file for when they can go.
 
 ---
 
@@ -339,3 +341,22 @@ view. Please make it possible to navigate back and forth through linked views.
 - Requirements, spec, acceptance criteria as bullet points
 - Keep on increasing the task ID when creating new tasks
 - Don't remove this template, move it to the bottom instead
+
+---
+
+## Note — Remove the audit `overrides` when upstream is fixed
+
+The `overrides` in `web/package.json` pin two transitive dependencies to fixed
+versions. `npm audit fix` cannot replace them: without `--force` it moves
+`dompurify` down to the vulnerable 3.2.7, and with `--force` it only offers
+`monaco-editor@0.57.0`, which still resolves the vulnerable `dompurify@3.4.15`.
+
+- **`dompurify` (under `monaco-editor`, runtime path):** remove the override
+  once a Monaco release resolves `dompurify` to 3.4.17 or later. Check with
+  `npm view monaco-editor@<version> dependencies.dompurify`.
+- **`postcss-selector-parser` (under `@tailwindcss/typography`, build time):**
+  remove the override once `@tailwindcss/typography` depends on a parser
+  version outside the advisory range (below 7.1.6). Check with
+  `npm view @tailwindcss/typography@<version> dependencies`.
+
+After removing an override, run `npm audit` and confirm the finding stays clear.

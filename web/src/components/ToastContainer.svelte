@@ -1,18 +1,18 @@
 <script lang="ts">
-import {
-  type ToastLevel,
-  type ToastState,
-  toastState,
-} from "../ToastState.svelte";
+  import {
+    type ToastLevel,
+    type ToastState,
+    toastState,
+  } from "../ToastState.svelte";
 
-let { state = toastState }: { state?: ToastState } = $props();
+  let { state = toastState }: { state?: ToastState } = $props();
 
-const levelClasses: Record<ToastLevel, string> = {
-  info: "border-info/40",
-  warning: "border-warning/40",
-  error: "border-error/40",
-  success: "border-success/40",
-};
+  const levelClasses: Record<ToastLevel, string> = {
+    info: "border-info/40",
+    warning: "border-warning/40",
+    error: "border-error/40",
+    success: "border-success/40",
+  };
 </script>
 
 <div class="toast toast-top toast-end z-50" aria-live="polite">

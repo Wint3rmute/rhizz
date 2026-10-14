@@ -70,9 +70,7 @@ describe("coerceDiagnosticsLayout", () => {
     expect(coerceDiagnosticsLayout(undefined)).toEqual(
       DIAGNOSTICS_LAYOUT_DEFAULTS,
     );
-    expect(coerceDiagnosticsLayout(null)).toEqual(
-      DIAGNOSTICS_LAYOUT_DEFAULTS,
-    );
+    expect(coerceDiagnosticsLayout(null)).toEqual(DIAGNOSTICS_LAYOUT_DEFAULTS);
     expect(coerceDiagnosticsLayout("garbage")).toEqual(
       DIAGNOSTICS_LAYOUT_DEFAULTS,
     );
@@ -112,10 +110,7 @@ describe("resizeDiagnosticsPanel", () => {
     expect(resizeDiagnosticsPanel(layout(), 9999).height).toBe(
       DIAGNOSTICS_MAX_HEIGHT,
     );
-    const open = resizeDiagnosticsPanel(
-      layout({ expanded: true }),
-      300,
-    );
+    const open = resizeDiagnosticsPanel(layout({ expanded: true }), 300);
     expect(open.expanded).toBe(true);
   });
 });
