@@ -57,15 +57,9 @@ jobs:
 
       - run: nix develop --command cargo build --release --quiet
 
-  audit:
-    runs-on: ubuntu-latest
-    permissions:
-      checks: write
-    steps:
-      - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+# The `audit` job moved to its own workflow (audit.yml) so it can be gated on
+# Cargo.lock changes — a path filter applies to a whole workflow, not to a
+# single job, and narrowing this one would have suppressed the checks above.
 
 permissions:
   contents: read
