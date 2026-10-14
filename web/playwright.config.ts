@@ -16,7 +16,7 @@ export default defineConfig({
     reducedMotion: "reduce",
   },
   webServer: {
-    command: "vite dev --port 5199",
+    command: "npm run dev -- --port 5199",
     url: "http://localhost:5199",
     reuseExistingServer: !process.env.CI,
   },

@@ -12,7 +12,7 @@ async function openProject(page, name = "E2E status bar") {
   await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
   const tourDialog = page.getByRole("alertdialog");
   await expect(tourDialog).toBeVisible();
-  await tourDialog.getByRole("button", { name: "skip tour" }).click();
+  await tourDialog.getByRole("button", { name: "Skip" }).click();
   await expect(tourDialog).toBeHidden();
   const id = new URL(page.url()).pathname.split("/")[2];
   if (!id) throw new Error("project id missing from URL");
