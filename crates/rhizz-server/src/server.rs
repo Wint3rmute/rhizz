@@ -9,14 +9,14 @@ use std::path::PathBuf;
 
 use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, State};
-use axum::http::{Method, StatusCode, Uri, header};
+use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::{Json, Router, routing::any, routing::get};
+use axum::{Json, Router, routing::get, routing::post};
 use rust_embed::EmbeddedFile;
 use serde_json::Value;
 
 use crate::assets::StaticAssets;
-use crate::storage;
+use crate::{sentry, storage};
 
 /// Builds the complete axum router for the server.
 ///
@@ -29,7 +29,7 @@ pub fn app(data_dir: PathBuf) -> Router {
         .route("/api/vfs", get(get_vfs).put(put_vfs))
         .route(
             "/api/sentry",
-            any(sentry_tunnel).layer(DefaultBodyLimit::max(SENTRY_ENVELOPE_LIMIT)),
+            post(sentry_tunnel).layer(DefaultBodyLimit::max(SENTRY_ENVELOPE_LIMIT)),
         )
         .fallback(get(spa_fallback))
         .with_state(data_dir)
@@ -44,21 +44,26 @@ async fn healthz() -> &'static str {
 /// and profiles can exceed axum's 2 MB default.
 const SENTRY_ENVELOPE_LIMIT: usize = 10 * 1024 * 1024;
 
-/// Tunnel endpoint the browser SDK posts envelopes to (`tunnel` option). Still
-/// a stub: it accepts every method and body and only logs them, nothing is
-/// forwarded to Sentry yet.
-async fn sentry_tunnel(method: Method, headers: axum::http::HeaderMap, body: Bytes) -> StatusCode {
-    let content_type = headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
-    tracing::info!(
-        %method,
-        content_type,
-        bytes = body.len(),
-        "received sentry tunnel request"
-    );
-    StatusCode::OK
+/// Tunnel endpoint the browser SDK posts envelopes to (`tunnel` option). The
+/// envelope is checked to belong to our Sentry project, then forwarded as-is;
+/// Sentry's status is passed back so the SDK can back off on rate limits.
+async fn sentry_tunnel(body: Bytes) -> Response {
+    if let Err(error) = sentry::check_envelope(&body) {
+        tracing::warn!(%error, "rejected sentry envelope");
+        return (StatusCode::BAD_REQUEST, error.to_string()).into_response();
+    }
+    match sentry::forward(body).await {
+        Ok(status) => {
+            tracing::debug!(%status, "forwarded sentry envelope");
+            StatusCode::from_u16(status.as_u16())
+                .unwrap_or(StatusCode::BAD_GATEWAY)
+                .into_response()
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to forward sentry envelope");
+            StatusCode::BAD_GATEWAY.into_response()
+        }
+    }
 }
 
 /// The commit this binary was built from, injected by the build (see
@@ -366,7 +371,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sentry_tunnel_accepts_post_envelope() {
+    async fn sentry_tunnel_rejects_envelope_for_another_project() {
         let tmp = tempfile::tempdir().unwrap();
         let response = app_at(&tmp)
             .oneshot(
@@ -374,16 +379,18 @@ mod tests {
                     .method("POST")
                     .uri("/api/sentry")
                     .header(header::CONTENT_TYPE, "application/x-sentry-envelope")
-                    .body(Body::from("{\"event_id\":\"abc\"}\n{}\n{}"))
+                    .body(Body::from(
+                        "{\"dsn\":\"https://key@o1.ingest.sentry.io/1\"}\n{}",
+                    ))
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
-    async fn sentry_tunnel_accepts_any_method() {
+    async fn sentry_tunnel_only_accepts_post() {
         let tmp = tempfile::tempdir().unwrap();
         let response = app_at(&tmp)
             .oneshot(
@@ -395,7 +402,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[tokio::test]
@@ -412,7 +419,9 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        // Past axum's 2 MB default, so the 10 MB route limit must let it through
+        // to the handler, which rejects it as an invalid envelope.
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[cfg(rhizz_has_embedded_assets)]
