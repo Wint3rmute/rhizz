@@ -33,6 +33,26 @@ and the Dockerfile is gone. Fly deploys the image that CI pushes to ghcr.io.
 
 ---
 
+## Task <N> — Unify modeling selection (canvas, list, inspector)
+
+Selecting a component in the Components list highlighted it on the canvas but
+left the inspector on the previous component. Cause: the list wrote into the
+`selected` derived set in `ModelingPage.svelte`, a throwaway copy of the real
+selection (`selectedKeys`). The canvas read that copy, so it updated, while the
+inspector read `selectedKeys`, which never changed.
+
+- **Fix:** the single source is `selectedKeys`. `ComponentHierarchyTree` now
+  takes `selected` read-only and reports row clicks through
+  `onSelectComponent`; `ModelingPage` routes that through `selectOnly`, the
+  same path a canvas click uses. The tree no longer mutates shared state.
+- **Tests:** `e2e/modeling-focus-sync.spec.ts` (red first: the inspector stayed
+  on alpha after clicking beta in the list). The tree's Storybook story now
+  asserts the callback instead of the mutated set.
+- **Validation:** `just test` (Rust, Vitest, Playwright 129/129), `just lint`,
+  `just build`, `just format` pass.
+
+---
+
 ## Task <N> — Show and hide connections per view
 
 Connections can be hidden per view from the Modeling connections sidebar, the

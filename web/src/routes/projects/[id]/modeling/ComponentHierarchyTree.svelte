@@ -6,11 +6,10 @@
   // Each row is a placement-affordance let loose from the canvas:
   //   - a checkbox to place/unplace the component on the canvas,
   //   - a label that selects the node (drives the canvas highlight +
-  //     NodeInspector, synced through the `selected` SvelteSet),
+  //     NodeInspector, all driven by ModelingPage's selection),
   //   - a component icon when one is provided.
   // It does no I/O and owns no model state — everything is passed in, so all
   // readProjectSources/compile/write logic stays in ModelingPage.svelte.
-  import type { SvelteSet } from "svelte/reactivity";
   import Tree from "../../../../components/Tree.svelte";
   import type { TreeNode } from "../../../../components/treeTypes";
   import { resolveIcon } from "../../../../iconHelper";
@@ -25,14 +24,17 @@
     systems,
     components,
     selected,
+    onSelectComponent,
     onToggleChecked,
     isChecked,
     filterSystemLabel = null,
   }: {
     systems: ComponentTreeSystem[];
     components: ComponentTreeComponent[];
-    /** The canvas node selection (arena-index set); mutated in place for two-way sync. */
-    selected?: SvelteSet<number>;
+    /** The canvas node selection (arena indices). Read-only: changes go through `onSelectComponent`. */
+    selected: ReadonlySet<number>;
+    /** Fired when a component row is clicked; ModelingPage.svelte makes it the sole selection. */
+    onSelectComponent: (index: number) => void;
     /** When set, only this system's subtree is shown and the system root row is hidden. */
     filterSystemLabel?: string | null;
     /** True when the given arena index is currently placed on the canvas. */
@@ -47,22 +49,16 @@
       : buildComponentTree(systems, components),
   );
 
-  // The `Tree` shell highlights a single `selectedId`. Map it to/from the
-  // canvas's multi-select SvelteSet: when exactly one component is selected,
-  // that component's row is highlighted; clicking a row collapses the set to
-  // just that component (matching the canvas's click-to-single-select).
+  // The `Tree` shell highlights a single `selectedId`. When exactly one
+  // component is selected, that component's row is highlighted.
   let selectedIndex = $derived(
-    selected && selected.size === 1
-      ? String(selected.values().next().value ?? "")
-      : null,
+    selected.size === 1 ? String(selected.values().next().value ?? "") : null,
   );
 
-  function onSelectComponent(entry: TreeNode) {
-    if (!selected) return;
+  function onSelectRow(entry: TreeNode) {
     const index = nodeIndex(entry);
     if (index === null) return;
-    selected.clear();
-    selected.add(index);
+    onSelectComponent(index);
   }
 
   function nodeIndex(entry: TreeNode): number | null {
@@ -104,5 +100,5 @@
   emptyMessage="No components found."
   showExpandCollapseAll
   leading={compLeading}
-  onselect={onSelectComponent}
+  onselect={onSelectRow}
 />

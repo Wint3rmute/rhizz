@@ -4203,6 +4203,7 @@
             {systems}
             {components}
             {selected}
+            onSelectComponent={(index) => selectOnly(index)}
             filterSystemLabel={effectiveSystem}
             isChecked={(index) => checkedIndices.has(index)}
             onToggleChecked={(index) => toggleComponentChecked(index)}
