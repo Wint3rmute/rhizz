@@ -222,15 +222,19 @@ export const IconsAndTextAlignments: Story = {
     await expect(glyphs.length).toBe(3);
 
     for (const [i, node] of expectedIconNodes.entries()) {
+      const glyph = glyphs[i];
+      const text = bodies[i]?.querySelector("text");
+      // The renderer measures the label from the DOM, so the expectation must
+      // use the same measured width to match.
+      const measured = text?.getComputedTextLength() ?? 0;
       const expected = nodeLabelLayout(
         node.align,
         node.label,
         node.width,
         node.height,
         true,
+        measured,
       );
-      const glyph = glyphs[i];
-      const text = bodies[i]?.querySelector("text");
       await expect(glyph?.getAttribute("x")).toBe(String(expected.icon?.x));
       await expect(glyph?.getAttribute("y")).toBe(String(expected.icon?.y));
       await expect(glyph?.getAttribute("width")).toBe(
@@ -244,6 +248,17 @@ export const IconsAndTextAlignments: Story = {
       await expect(text?.getAttribute("dominant-baseline")).toBe(
         expected.text.baseline,
       );
+
+      // top-center: the icon+label row, measured as rendered, must be centered
+      // on the box (this is the regression the measurement fixes).
+      if (node.align === "top-center") {
+        const iconX = Number(glyph?.getAttribute("x"));
+        const rowLeft = iconX;
+        const rowRight = Number(text?.getAttribute("x")) + measured;
+        await expect(
+          Math.abs((rowLeft + rowRight) / 2 - node.width / 2),
+        ).toBeLessThan(0.5);
+      }
     }
 
     // Icon-less nodes fall back to the plain textPosition placement.

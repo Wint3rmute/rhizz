@@ -244,6 +244,28 @@ describe("nodeLabelLayout", () => {
     });
   });
 
+  it("uses the measured label width for top-center when provided", () => {
+    // Measured 50px label: total row = 50 + 14 + 4 = 68, startX = (100 - 68) / 2 = 16.
+    // The glyph-count estimate would give 29.75 instead.
+    const layout = nodeLabelLayout("top-center", "imu", 100, 60, true, 50);
+    expect(layout.icon).toEqual({ x: 16, y: 8, size: 14 });
+    expect(layout.text).toEqual({
+      x: 34,
+      y: TEXT_ALIGN_PADDING,
+      anchor: "start",
+      baseline: "hanging",
+    });
+  });
+
+  it("ignores the measured width for alignments other than top-center", () => {
+    expect(nodeLabelLayout("top-left", "imu", 100, 60, true, 50)).toEqual(
+      nodeLabelLayout("top-left", "imu", 100, 60, true),
+    );
+    expect(nodeLabelLayout("center", "imu", 100, 60, true, 50)).toEqual(
+      nodeLabelLayout("center", "imu", 100, 60, true),
+    );
+  });
+
   it("clamps a long top-center label to the node's left inset", () => {
     // A label wider than the node pins startX to the inset instead of
     // going negative.
