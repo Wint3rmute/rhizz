@@ -64,12 +64,20 @@ on the old path (step 5).
   `just build` as the `web-build` recipe (replacing `npm run build`), so the
   embedded UI is what production ships, and into CI as the `frontend / build`
   job.
-- [ ] **3. Backend binary (`packages.rhizz`).** `rustPlatform.buildRustPackage`
-  for `rhizz-cli`, embedding step 2's `web/build` (and with
-  `crates/rhizz-wasm/pkg` present so the workspace manifest resolves). Vendored
-  deps via `cargoLock.lockFile`; `SPEC/` and `examples/` must be in `src`
-  because `rhizz-core`'s build script embeds them via `include_str!`. Verify:
-  `nix build .#rhizz`; `rhizz web` serves the embedded UI.
+- [x] **3. Backend binary (`packages.rhizz`).** `rustPlatform.buildRustPackage`
+  for `rhizz-cli`, embedding step 2's `web/build`. Result: `nix/rhizz.nix`
+  copies the `rhizz-web` output into `web/build` in `preBuild`, so
+  `rhizz-server`'s hardcoded build.rs path finds it — no Rust change needed.
+  `cargoBuildFlags = [ "-p" "rhizz-cli" ]` mirrors the Dockerfile's
+  `cargo build --release -p rhizz-cli` (a bare build would also compile
+  rhizz-wasm and rhizz-book, which the binary does not link). Vendored deps via
+  `cargoLock.lockFile`; `rustSrc` carries `SPEC/` + `examples/` for
+  `rhizz-core`'s `include_str!`. Note: the plan's "`crates/rhizz-wasm/pkg`
+  present so the workspace manifest resolves" turned out unnecessary — the
+  crate's manifest has no path to `pkg/`, and `cargo build -p rhizz-cli`
+  resolves without it. Verified: `nix build .#rhizz`; the binary's served
+  `404.html` and every referenced `_app/` asset are byte-for-byte identical to
+  `nix build .#rhizz-web` (SHA-256 match).
 - [ ] **4. Docker image (`packages.docker-image`).**
   `pkgs.dockerTools.buildLayeredImage`, preferably built from `scratch` rather
   than the Debian base (the Nix binary's RPATH lives in `/nix/store`, so the

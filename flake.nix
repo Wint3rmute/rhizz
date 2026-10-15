@@ -29,13 +29,18 @@
           ];
 
           rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
-        in
-        {
-          inherit rhizz-wasm-pkg;
 
           rhizz-web = pkgs.callPackage ./nix/web.nix {
             src = ./web;
             inherit rhizz-wasm-pkg;
+          };
+        in
+        {
+          inherit rhizz-wasm-pkg rhizz-web;
+
+          rhizz = pkgs.callPackage ./nix/rhizz.nix {
+            src = rustSrc;
+            inherit rhizz-web;
           };
         });
 
