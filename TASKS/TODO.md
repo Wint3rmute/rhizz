@@ -78,13 +78,39 @@ on the old path (step 5).
   resolves without it. Verified: `nix build .#rhizz`; the binary's served
   `404.html` and every referenced `_app/` asset are byte-for-byte identical to
   `nix build .#rhizz-web` (SHA-256 match).
-- [ ] **4. Docker image (`packages.docker-image`).**
-  `pkgs.dockerTools.buildLayeredImage`, preferably built from `scratch` rather
-  than the Debian base (the Nix binary's RPATH lives in `/nix/store`, so the
-  store closure is all it needs). Contents: the `rhizz` binary, `cacert`, and
-  `/data` seeded from `examples/`. Config: `RHIZZ_ADDR=0.0.0.0:8080`,
-  `RHIZZ_DATA_DIR=/data`, `CMD rhizz web`, expose `8080`. Verify: `docker load`
-  + run, then compare behaviour against the current Dockerfile image.
+- [x] **4. Docker image (`packages.docker-image`).**
+  `pkgs.dockerTools.buildLayeredImage`, built `from scratch` rather than on the
+  Debian base (the Nix binary's RPATH lives in `/nix/store`, so the store
+  closure is all it needs; the base only contributed ca-certificates, which is
+  added explicitly). Result: `nix/docker.nix` takes the `rhizz` binary, the
+  `cacert`, and `/data` seeded from `examples/`, with config
+  `RHIZZ_ADDR=0.0.0.0:8080`, `RHIZZ_DATA_DIR=/data`, `CMD /bin/rhizz web`,
+  `ExposedPorts 8080/tcp`. Defined only for Linux — a Darwin build would pack a
+  Mach-O binary into an image that cannot run it. `podman` was added to the
+  devshell so the image can be verified without a Docker daemon.
+
+  Verified with rootless podman 5.8.8 (no Docker daemon on this host):
+  `podman load -i $(nix build .#docker-image --no-link --print-out-paths)`,
+  `podman run -p 8799:8080`. `/` serves the same 404.html shell as the
+  Dockerfile image, `/healthz` is 200, `/api/vfs` returns all six seeded
+  projects (`apollo-11`, `drone`, `single-file`, `social-media`,
+  `software-house`, `web-app`) with 51 nodes, and a PUT that renames a node
+  persists to disk — so the seeded projects are writable. Image config matches
+  the Dockerfile's contract exactly. 9 layers, 77.6 MB.
+
+  Two notes:
+  - **Seeding needs the `examples` directory itself, not a filter over the repo
+    root.** An earlier `sourceByRegex ./. [ "examples" "examples/.*" ]` left the
+    wrapper directory in place, and since the server walks a project directory
+    recursively, all six systems collapsed into one project named `examples`.
+  - **No `VITE_SENTRY_DSN`.** The Dockerfile baked one in via a build arg; the
+    Nix frontend derivation builds with Sentry unset, so this image reports
+    nothing. Closing that gap belongs with step 5.
+  - A full rebuild of the Dockerfile image was not performed for comparison
+    (no Docker daemon; `podman build` would re-run the Dockerfile's
+    `cargo install wasm-pack` plus a Rust release build). The comparison is
+    against the Dockerfile's declared runtime contract — env, CMD, exposed
+    port and `/data` seeding — all of which match.
 - [ ] **5. (Deferred) Retire the Dockerfile.** Explicitly a follow-up: point
   `docker.yml` at `.#docker-image` (the Dockerfile's frontend/backend stages
   duplicate stages 2–3 by hand), add a binary cache for cross-run speed, and

@@ -28,20 +28,40 @@
             "examples/.*"
           ];
 
+          # Seeded into the image's /data: the server treats a directory of
+          # HCL projects as its data dir, so these are the example systems a
+          # fresh container comes up with. Note this is the `examples`
+          # directory itself, not a filter over the repo root — the image
+          # copies its *contents* into /data, and one wrapper level would
+          # otherwise turn all six systems into a single project named
+          # "examples" (the server walks each project directory recursively).
+          examplesSrc = ./examples;
+
           rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
 
           rhizz-web = pkgs.callPackage ./nix/frontend.nix {
             src = ./web;
             inherit rhizz-wasm-pkg;
           };
-        in
-        {
-          inherit rhizz-wasm-pkg rhizz-web;
 
           rhizz = pkgs.callPackage ./nix/backend.nix {
             src = rustSrc;
             inherit rhizz-web;
           };
+
+          # A container image is inherently Linux: on Darwin the same
+          # derivation would pack a Mach-O binary into an image that cannot
+          # run it, so the attribute is only defined where it means something.
+          docker-image = pkgs.callPackage ./nix/docker.nix {
+            inherit rhizz;
+            examples = examplesSrc;
+          };
+        in
+        {
+          inherit rhizz-wasm-pkg rhizz-web rhizz;
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          inherit docker-image;
         });
 
       devShells = forAllSystems (system:
@@ -113,6 +133,12 @@
               playwright-driver.browsers
               flyctl
               gh
+              # Rootless container runtime for verifying `.#docker-image`
+              # without a Docker daemon: `podman load -i result` then
+              # `podman run`. Daemonless and runs in a user namespace, so it
+              # needs no privileged service. Note the published port is
+              # forwarded over IPv4 only — probe 127.0.0.1, not localhost.
+              podman
             ];
 
             # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
