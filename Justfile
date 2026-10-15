@@ -53,7 +53,7 @@ wasm:
     chmod -R u+w crates/rhizz-wasm/pkg
 
 # Builds the web app into web/build/ via its Nix derivation (nix/frontend.nix) —
-# the same artifact the Docker image consumes — so what gets embedded is what
+# the same artifact rhizz-server embeds — so what gets embedded is what
 # production ships. It also makes the build hermetic: it uses the locked
 # dependency graph rather than whatever happens to be in the devshell's
 # node_modules (which is what `npm run build` silently used).
