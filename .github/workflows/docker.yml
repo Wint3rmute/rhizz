@@ -6,15 +6,19 @@ name: docker
 # The derivation replaces the Dockerfile's three stages end to end, so this job
 # no longer needs a Docker build context: `nix build .#docker-image` compiles
 # the whole pipeline (wasm → frontend → binary → image) and emits a
-# docker-archive tarball. The Dockerfile is still on disk and still referenced
-# by fly.toml; retiring it is the task's step 5.
+# docker-archive tarball.
 #
-# TEMPORARY: `build/nix-docker-image` is listed below so this job exercises the
-# Nix image before it merges. Drop it once the branch lands — the workflow
-# should then build only on the default branch, as it did before.
+# The Dockerfile is still on disk and still used by `fly deploy`: fly.toml
+# builds from it, passing VITE_SENTRY_DSN as a build arg that this Nix image
+# does not carry. Retiring it, and with it the second image path, is the task's
+# remaining step.
+#
+# TEMPORARY: `build/retire-dockerfile` is listed below so the push is exercised
+# before it merges. Drop it once the branch lands — the workflow should then
+# build on the default branch only, as it did before.
 on:
   push:
-    branches: [main, build/nix-docker-image]
+    branches: [main, build/retire-dockerfile]
   workflow_dispatch:
 
 concurrency:
@@ -42,7 +46,7 @@ jobs:
 
       # The point of the job: `.#docker-image` consumes the whole pipeline
       # (rhizz-wasm-pkg → rhizz-web → rhizz → image), so a failure in any
-      # stage surfaces here. This replaces `docker/build-push-action`, which
+      # stage surfaces here. This replaced `docker/build-push-action`, which
       # could only build from a Dockerfile.
       - name: Build the image
         run: nix build .#docker-image
@@ -59,23 +63,23 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
-          # Tag the latest push to main as `latest` plus a full-length commit
-          # short SHA and a date stamp for traceability.
+          # `latest` is published from the default branch only, so a
+          # feature-branch build can never overwrite what production pulls.
+          # The short sha and date stamp are applied to every build, which
+          # keeps any pushed image traceable.
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
             type=raw,value={{ date 'YYYYMMDD-HHmmss' }}
 
-      # A Nix image arrives as a docker-archive tarball whose only tag is the
-      # derivation's own name/tag, so the metadata tags above have to be
-      # applied by hand. Pushing stays disabled, exactly as it was in the
-      # Dockerfile version (`# push: true`): this job verifies the image
-      # builds and does not publish it. Uncomment the block below to publish.
-      - name: Load the image
-        run: docker load -i result
-      # - name: Tag and push
-      #   run: |
-      #     for tag in ${{ steps.meta.outputs.tags }}; do
-      #       docker tag rhizz:latest "$tag"
-      #       docker push "$tag"
-      #     done
+      # The Nix image arrives as a docker-archive tarball whose only tag is the
+      # derivation's own name (`rhizz:latest`), so it is loaded first and the
+      # metadata tags above are applied by hand — `docker/build-push-action`
+      # used to do that from the Dockerfile.
+      - name: Load, tag and push the image
+        run: |
+          docker load -i result
+          printf '%s\n' "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            docker tag rhizz:latest "$tag"
+            docker push "$tag"
+          done

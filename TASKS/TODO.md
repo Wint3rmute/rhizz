@@ -111,11 +111,24 @@ on the old path (step 5).
     `cargo install wasm-pack` plus a Rust release build). The comparison is
     against the Dockerfile's declared runtime contract — env, CMD, exposed
     port and `/data` seeding — all of which match.
-- [ ] **5. (Deferred) Retire the Dockerfile.** Explicitly a follow-up: point
-  `docker.yml` at `.#docker-image` (the Dockerfile's frontend/backend stages
-  duplicate stages 2–3 by hand), add a binary cache for cross-run speed, and
-  delete the Dockerfile once parity is confirmed. Listed so it is not
-  forgotten.
+- [ ] **5. Retire the Dockerfile.** Partly done: `docker.yml` now pushes the
+  Nix-built image to ghcr.io, `latest` from the default branch only (every
+  build also gets a short-sha and date tag, so any pushed image is traceable).
+  What still blocks deleting the Dockerfile:
+  - **`fly deploy` builds from it.** `fly.toml` pins `[build] dockerfile`, so
+    retiring the Dockerfile means switching fly to the pushed image
+    (`[build] image = 'ghcr.io/wint3rmute/rhizz:latest'`). For fly to pull it
+    the ghcr package has to be public — packages pushed with `GITHUB_TOKEN`
+    default to private.
+  - **The Sentry DSN would be lost.** `VITE_SENTRY_DSN` is a `fly deploy` build
+    arg baked into the bundle; the Nix frontend builds with Sentry unset.
+    Plumbing it through `nix/frontend.nix` is a choice: the single shared
+    derivation (local builds then also report to Sentry as production) or a
+    second, image-only variant (local keeps sending nothing).
+  - **A binary cache for cross-run speed.** `magic-nix-cache-action` covers
+    `/nix/store` for the job it runs in; a persistent cache (Cachix/Attic) is
+    what makes the pipeline cheap across runs.
+  - Then delete the Dockerfile and `.dockerignore` once parity is confirmed.
 
 ### Definition of done
 
