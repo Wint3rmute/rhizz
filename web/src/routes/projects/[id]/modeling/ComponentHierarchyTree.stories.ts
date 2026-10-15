@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, fn, userEvent, within } from "storybook/test";
-import { SvelteSet } from "svelte/reactivity";
 import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
 
 const SYSTEMS = [{ label: "drone" }];
@@ -17,7 +16,8 @@ const meta = {
   args: {
     systems: SYSTEMS,
     components: COMPONENTS,
-    selected: new SvelteSet<number>(),
+    selected: new Set<number>(),
+    onSelectComponent: fn(),
     isChecked: (index: number) => index === 1,
     onToggleChecked: fn(),
   },
@@ -29,7 +29,7 @@ type Story = StoryObj<typeof meta>;
 
 // Exercises the hierarchy tree entirely on its own — no ModelingPage.svelte, no
 // model. Verifies nesting, expand/collapse, checkbox toggling, and selection
-// syncing through callback props + the selected SvelteSet.
+// reporting selection clicks through the onSelectComponent callback.
 export const Default: Story = {
   args: {},
   play: async ({ canvasElement, args }) => {
@@ -51,9 +51,10 @@ export const Default: Story = {
     if (target) await userEvent.click(target); // imu (index 2), currently unchecked
     await expect(args.onToggleChecked).toHaveBeenLastCalledWith(2);
 
-    // Selecting a component row collapses `selected` to that component.
+    // Clicking a component row reports that component; ModelingPage owns the
+    // selection, so the tree itself never mutates it.
     await userEvent.click(canvas.getByText("imu"));
-    await expect(args.selected?.has(2)).toBe(true);
+    await expect(args.onSelectComponent).toHaveBeenLastCalledWith(2);
   },
 };
 

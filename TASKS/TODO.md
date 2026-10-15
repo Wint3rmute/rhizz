@@ -16,17 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Re-baseline VRT after the formatting commit
-
-`main` (`4bccef2`, formatting) fails 3 screenshots that passed before it:
-`components-monacoeditor--markdown-unwrapped-overflows` (dark and light) and
-`pages-code--default--light`. The formatting-only changes checked so far (float
-literals, a collapsed call in `MonacoEditor.svelte`) are no-ops, so the cause
-is not yet isolated. Do not accept new baselines until the gallery has been
-reviewed. Then re-baseline on Linux or with `--update-snapshots` in CI.
-
----
-
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
@@ -109,30 +98,6 @@ Refactor the web architecture from isolated page routes to a unified, dockable m
   - Panes can be resized, split horizontally/vertically, and closed.
   - Layout configuration persists across page reloads.
   - Validated with `just test`, `just lint`, and `just build`.
-
----
-
-## (For later brainstorming) Task <N> - pin existing nodes when auto-laying-out newly-added ones
-
-Split out from Task 50 (now finished — see `FINISHED.md`) as the one
-remaining concrete piece of its original scope. `forceLayout.ts` already
-supports pinning a node in place via `fixed: true` on a `LayoutNode` (sets
-d3-force's `fx`/`fy`, ignored by all forces) — added specifically for this
-case, but nothing calls it that way yet.
-
-- When a component is checked onto the canvas (the sidebar checkbox's
-  "check" branch), instead of just placing it at a default/remembered
-  position, run a force-layout pass where every *other* currently-placed
-  sibling is `fixed: true` and only the newly-checked node is free to
-  move — so it settles into whatever gap is available near its
-  connections, without visibly disturbing anything else already placed.
-- Needs a concrete trigger decision: should this replace the current
-  "restore remembered position, or default to (100, 100)" behavior
-  unconditionally, or only when there's no remembered position to
-  restore (i.e. first-time placement only, not re-checking something
-  that was previously positioned)? Lean towards the latter — respecting
-  a remembered position take priority over auto-placing.
-- Validate with `deno task check`, `deno task build`, `deno task test`.
 
 ---
 
@@ -230,3 +195,26 @@ versions. `npm audit fix` cannot replace them: without `--force` it moves
   `npm view @tailwindcss/typography@<version> dependencies`.
 
 After removing an override, run `npm audit` and confirm the finding stays clear.
+
+## Task <N> - pressing a delete/backspace on connections on modeling should hide them
+
+Currently, when I press delete/backspace on connections on the modeling/ page,
+they get deleted. This is not the right behavior in a system modeler - they
+should only get hidden from the view, same as it currently happens with the
+component instances.
+
+
+## Task <N> - add a "delete" button on the component tree and in connections list
+
+I need a simple way to delete components and connections from the modeling/ page.
+
+The file tree displayed in the diagrams list (left side of modeling/ page) shows
+a trash icon when I hover over a diagram. I want the same behavior on the
+Components/Connections sidebar on the right of modeling/.
+
+When the "trash" icon is clicked on a component instance, this instance is
+removed from the system model, not merely hidden. There should be a confirmation
+dialog before that happens!
+
+Same goes for the connection - if trash icon next to it is clicked, it is
+removed from the system, not just hidden.
