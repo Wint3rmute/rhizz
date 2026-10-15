@@ -47,6 +47,9 @@
           rhizz = pkgs.callPackage ./nix/backend.nix {
             src = rustSrc;
             inherit rhizz-web;
+            # `shortRev` exists only for a clean git tree; `dirtyShortRev`
+            # marks a dirty one. Neither exists for a non-git source.
+            gitSha = self.shortRev or self.dirtyShortRev or "unknown";
           };
 
           # A container image is inherently Linux: on Darwin the same

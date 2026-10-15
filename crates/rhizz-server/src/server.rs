@@ -25,6 +25,7 @@ use crate::storage;
 pub fn app(data_dir: PathBuf) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
+        .route("/api/version", get(version))
         .route("/api/vfs", get(get_vfs).put(put_vfs))
         .route(
             "/api/sentry",
@@ -58,6 +59,18 @@ async fn sentry_tunnel(method: Method, headers: axum::http::HeaderMap, body: Byt
         "received sentry tunnel request"
     );
     StatusCode::OK
+}
+
+/// The commit this binary was built from, injected by the build (see
+/// `nix/backend.nix`). Local builds have no injected value and report `dev`.
+const GIT_SHA: &str = match option_env!("RHIZZ_GIT_SHA") {
+    Some(sha) => sha,
+    None => "dev",
+};
+
+/// Handles `GET /api/version`: the commit the running server was built from.
+async fn version() -> Json<Value> {
+    Json(serde_json::json!({ "git_sha": GIT_SHA }))
 }
 
 /// Fetches the entire VFS state (all projects + nodes), expanded from the
@@ -232,6 +245,27 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(&body[..], b"ok");
+    }
+
+    #[tokio::test]
+    async fn version_reports_the_build_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/version")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json, json!({ "git_sha": GIT_SHA }));
+        assert!(!GIT_SHA.is_empty());
     }
 
     #[tokio::test]

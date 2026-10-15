@@ -18,6 +18,9 @@
   rustPlatform,
   rhizz-web,
   src,
+  # Short commit the source was built from, shown in the UI via
+  # `/api/version`. Passed in from the flake so this derivation has no git dependency.
+  gitSha ? "dev",
 }:
 
 rustPlatform.buildRustPackage {
@@ -25,6 +28,10 @@ rustPlatform.buildRustPackage {
   version = "0.1.0";
 
   inherit src;
+
+  # Read by rhizz-server's `option_env!`. Setting it here rather than in
+  # `preBuild` means only this derivation rebuilds when the commit changes.
+  RHIZZ_GIT_SHA = gitSha;
 
   # Vendored from the workspace lockfile; no hash to maintain by hand.
   cargoLock.lockFile = "${src}/Cargo.lock";
