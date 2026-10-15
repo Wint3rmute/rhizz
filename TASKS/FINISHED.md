@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Build the whole app (and its Docker image) via Nix
+
+The server binary, the web frontend and the Docker image are all built by Nix,
+and the Dockerfile is gone. Fly deploys the image that CI pushes to ghcr.io.
+
+- **Pipeline:** `rhizz-wasm-pkg` (`nix/wasm.nix`) → `rhizz-web` (`nix/frontend.nix`,
+  `buildNpmPackage` with `importNpmLock`, so no hand-kept `npmDepsHash`) →
+  `rhizz` (`nix/backend.nix`, `rustPlatform`, copies `web/build` into place so
+  `rhizz-server`'s `build.rs` embeds it) → `docker-image` (`nix/docker.nix`,
+  `dockerTools.buildLayeredImage`, built from scratch on Linux only).
+- **Image contract:** `RHIZZ_ADDR=0.0.0.0:8080`, `RHIZZ_DATA_DIR=/data`,
+  `CMD /bin/rhizz web`, port 8080. `/data` is seeded from `examples/`, and
+  the seeded projects are writable.
+- **Sentry:** `nix/frontend.nix` sets `VITE_RHIZZ_DEPLOYMENT=prod`, so the
+  image reports to Sentry through the server tunnel. The DSN lives in
+  `web/src/hooks.client.ts`. `VITE_SENTRY_DSN` is gone.
+- **Deploy:** the `docker` workflow pushes the image (`latest` on `main` only,
+  plus sha and date tags) and runs `fly deploy --image` on the sha tag. The
+  ghcr package is public, so Fly can pull it.
+- **Retirement:** `Dockerfile`, `.dockerignore`, and the `[build]` section of
+  `fly.toml` were removed (PR #406).
+- **Verified:** the first `fly deploy --image` run on `main` succeeded, and
+  the deployed build works after PR #406 merged.
+- **Follow-up (not done):** a persistent binary cache (Cachix or Attic).
+  `magic-nix-cache-action` only covers the job it runs in, so cold runs rebuild
+  the Rust and npm dependencies.
+
+---
+
 ## Task <N> — Show and hide connections per view
 
 Connections can be hidden per view from the Modeling connections sidebar, the
