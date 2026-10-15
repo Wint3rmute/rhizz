@@ -44,8 +44,35 @@
 
   let borderSvg = $derived(borderStyleToSvg({ color, border }));
   let fontSvg = $derived(fontStyleToSvg(font));
+
+  // The rendered width of the label, measured from the DOM. Only the
+  // top-center layout needs it (to center the icon+label row), and it is
+  // undefined until the first measurement, in which case nodeLabelLayout
+  // falls back to a glyph-count estimate.
+  let labelEl: SVGTextElement | undefined = $state();
+  let measuredLabelWidth: number | undefined = $state();
+
+  $effect(() => {
+    // Re-measure when the text or its font changes; these are the only
+    // inputs that change the rendered glyph advances.
+    void label;
+    void fontSvg.fontWeight;
+    void fontSvg.fontStyle;
+    void fontSvg.textDecoration;
+    if (!labelEl) return;
+    const measured = labelEl.getComputedTextLength();
+    measuredLabelWidth = measured > 0 ? measured : undefined;
+  });
+
   let layout = $derived(
-    nodeLabelLayout(textAlign, label, width, height, icon !== null),
+    nodeLabelLayout(
+      textAlign,
+      label,
+      width,
+      height,
+      icon !== null,
+      measuredLabelWidth,
+    ),
   );
   let iconBox = $derived(layout.icon);
   let outline = $derived(selectionOutlineRect(width, height));
@@ -96,6 +123,7 @@
   {/if}
 
   <text
+    bind:this={labelEl}
     x={layout.text.x}
     y={layout.text.y}
     fill="var(--color-base-content)"
