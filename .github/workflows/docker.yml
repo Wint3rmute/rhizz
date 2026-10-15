@@ -9,14 +9,7 @@ name: docker
 # docker-archive tarball.
 #
 # The `deploy` job then runs `fly deploy --image` on that exact pushed tag, so
-# Fly never builds anything itself. The Dockerfile is still on disk: fly.toml
-# lists it under `[build]`, which `--image` overrides, so it is no longer used
-# by deploys. Its VITE_SENTRY_DSN build arg is also no longer applied; see the
-# TODO's step 5.
-#
-# TEMPORARY: `build/retire-dockerfile` is listed below so the push is exercised
-# before it merges. Drop it once the branch lands — the workflow should then
-# build on the default branch only, as it did before.
+# Fly never builds anything itself.
 on:
   push:
     branches: [main]

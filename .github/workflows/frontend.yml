@@ -66,9 +66,9 @@ jobs:
           path: crates/rhizz-wasm/pkg/
 
   # The app build, via its Nix derivation (nix/frontend.nix): the same `web/build`
-  # the Dockerfile and rhizz-server's build.rs consume. This is the only place
-  # the real frontend is built in CI — nothing else embeds it, so a broken
-  # build here would otherwise only surface in the docker workflow.
+  # rhizz-server's build.rs embeds. This is the only place the real frontend is
+  # built in CI — nothing else embeds it, so a broken build here would otherwise
+  # only surface in the docker workflow.
   #
   # Runs on its own so a frontend failure is unambiguous, with no Rust
   # toolchain in the way. `needs: wasm` so the shared rhizz-wasm-pkg
