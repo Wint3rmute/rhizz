@@ -39,6 +39,10 @@ export interface AnnotationLike {
 // hit-testing and the visible text can never drift apart.
 export const ANNOTATION_FONT_SIZE = 12;
 export const ANNOTATION_LINE_HEIGHT = 16;
+// Average advance of one annotation glyph at 1x scale, measured from the
+// rendered 12px system-ui text (~5.9px). Overestimating it inflates the fitted
+// zoom, so it's kept close to the measured value.
+const ANNOTATION_GLYPH_WIDTH = 6;
 
 // Floor for annotation font scale: neither the corner-drag resize nor the
 // inspector number input may collapse a note to nothing.
@@ -60,7 +64,7 @@ export function normalizeAnnotationScale(scale: number): number {
 // Extent box of a view annotation's text, measured from *rendered* Markdown
 // (syntax stripped via `annotationSvgLines`) so `**bold**` meters as 4 chars,
 // using the same geometry constants as the interactive canvas's hit-testing
-// (see annotationHitBox in ModelingPage.svelte): ~7.5px per char at 1x scale,
+// (see annotationHitBox in ModelingPage.svelte): ~6px per char at 1x scale,
 // 16px line height, 14px horizontal / 8px vertical padding, 40px minimum
 // width. "Zoom to fill" and the static renderers use this so a far-away
 // annotation is never clipped out of the fitted viewport.
@@ -71,7 +75,10 @@ export function annotationBounds(ann: AnnotationLike): Box {
     ...lines.map(
       (l) =>
         (l.indent ?? 0) * ANNOTATION_MD_INDENT_PX * scale +
-        annotationSvgLineText(l).length * 7.5 * (l.size ?? 1) * scale +
+        annotationSvgLineText(l).length *
+          ANNOTATION_GLYPH_WIDTH *
+          (l.size ?? 1) *
+          scale +
         14,
     ),
     40,

@@ -851,24 +851,24 @@ describe("computeLcaConnection", () => {
 
 describe("annotationBounds", () => {
   it("sizes a single-line annotation at default scale", () => {
-    // "XYZ" -> 3 chars * 7.5 + 14 = 36.5, clamped to the 40 minimum;
+    // "XYZ" -> 3 chars * 6 + 14 = 32, clamped to the 40 minimum;
     // one line -> 16 + 8 tall; anchored 4 left / 16 above (x, y).
     const bounds = annotationBounds({ text: "XYZ", x: 10, y: 100 });
     expect(bounds).toEqual({ x: 6, y: 84, width: 40, height: 24 });
   });
 
   it("grows with text length beyond the minimum width", () => {
-    // 16 chars * 7.5 + 14 = 134.
+    // 16 chars * 6 + 14 = 110.
     const bounds = annotationBounds({
       text: "abcdefghijklmnop",
       x: 0,
       y: 0,
     });
-    expect(bounds.width).toBe(134);
+    expect(bounds.width).toBe(110);
   });
 
   it("scales extents and offsets with scale", () => {
-    // "second" is the longest line: 6 chars * 7.5 * 2 + 14 = 104 wide;
+    // "second" is the longest line: 6 chars * 6 * 2 + 14 = 86 wide;
     // 2 lines * 16 * 2 + 8 = 72 tall; anchored 4 left / 16 * 2 = 32 above.
     const bounds = annotationBounds({
       text: "XYZ\nsecond",
@@ -876,7 +876,7 @@ describe("annotationBounds", () => {
       y: 100,
       scale: 2,
     });
-    expect(bounds).toEqual({ x: 6, y: 68, width: 104, height: 72 });
+    expect(bounds).toEqual({ x: 6, y: 68, width: 86, height: 72 });
   });
 
   it("treats missing scale as 1 (default)", () => {
