@@ -102,8 +102,11 @@ jobs:
 
       # Deploys the image the build job pushed. The `sha-<short>` tag is
       # produced by docker/metadata-action's `type=sha,format=short` rule above.
+      # The repository must be lowercased: ghcr and Fly reject uppercase image
+      # references (`github.repository` keeps the owner's casing).
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy --app rhizz --image "ghcr.io/${{ github.repository }}:sha-${GITHUB_SHA::7}"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA::7}"
+          flyctl deploy --app rhizz --image "$image"
