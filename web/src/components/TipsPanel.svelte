@@ -43,7 +43,7 @@
     "Hit **Auto Layout** to force-arrange the selection (or everything when nothing is selected).",
     "In **Explore**, click a linked node to drill into its detail view, then use **Back/Forward** buttons in your browser to climb back out.",
     "A `W012` warning means a top-level component is never used in any of your system models — either instantiate it or delete the dead definition.",
-    "Children stay clamped inside their parents when you drag or resize.",
+    "Child components stay clamped inside their parent components when you drag or resize.",
     "The **Modeling** sidebar mirrors the component hierarchy — expand it, check nodes onto the canvas, or click a label to inspect it.",
     "In the **Modeling** page, you can glance at the bottom-right hint to see your live canvas activity — Calculating, Resizing, Panning, Selecting.",
     "Keep multiple named views per project (`views/*.hcl`) and switch between them as you model.",
@@ -72,11 +72,9 @@
   let tip = $derived(tips[(index ?? randomIndex) % tips.length] ?? "");
 </script>
 
-<!-- Sticky: pinned to the viewport bottom while the project list scrolls
-     beneath it; falls back into normal flow once its own place is reached. -->
 <section
   aria-label="Tips"
-  class="alert alert-warning alert-soft text-base-content sticky bottom-4 z-10 shadow-sm"
+  class="alert alert-warning alert-soft text-base-content shadow-sm"
 >
   {#if starIcon}
     <svg
