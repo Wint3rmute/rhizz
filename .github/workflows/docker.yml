@@ -8,26 +8,28 @@ name: docker
 # the whole pipeline (wasm → frontend → binary → image) and emits a
 # docker-archive tarball.
 #
-# The Dockerfile is still on disk and still used by `fly deploy`: fly.toml
-# builds from it, passing VITE_SENTRY_DSN as a build arg that this Nix image
-# does not carry. Retiring it, and with it the second image path, is the task's
-# remaining step.
+# The `deploy` job then runs `fly deploy --image` on that exact pushed tag, so
+# Fly never builds anything itself. The Dockerfile is still on disk: fly.toml
+# lists it under `[build]`, which `--image` overrides, so it is no longer used
+# by deploys. Its VITE_SENTRY_DSN build arg is also no longer applied; see the
+# TODO's step 5.
 #
 # TEMPORARY: `build/retire-dockerfile` is listed below so the push is exercised
 # before it merges. Drop it once the branch lands — the workflow should then
 # build on the default branch only, as it did before.
 on:
   push:
-    branches: [main, build/retire-dockerfile]
+    branches: [main]
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Cancelling an in-flight build on a newer push is fine; cancelling a
+    # deploy is not, so this group lives on the build job, not the workflow.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read
       packages: write
@@ -83,3 +85,25 @@ jobs:
             docker tag rhizz:latest "$tag"
             docker push "$tag"
           done
+
+  deploy:
+    # Only the default branch deploys: feature-branch builds are pushed for
+    # inspection but must never reach production.
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    # Never cancelled once started, even if a newer push queues behind it.
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Deploys the image the build job pushed. The `sha-<short>` tag is
+      # produced by docker/metadata-action's `type=sha,format=short` rule above.
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy --app rhizz --image "ghcr.io/${{ github.repository }}:sha-${GITHUB_SHA::7}"
