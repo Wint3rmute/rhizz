@@ -3,6 +3,7 @@
   import { resolve } from "$app/paths";
   import ScrollingBackground from "./ScrollingBackground.svelte";
   import TipsPanel from "./TipsPanel.svelte";
+  import BuildInfo from "./BuildInfo.svelte";
   import {
     createProjectWithFiles,
     createProjectWithMainFile,
@@ -17,6 +18,7 @@
     get_example_projects,
   } from "../rhizz_wasm_wrapper";
   import type { Project } from "../vfs/types";
+  import type { BuildInfo as BuildInfoData } from "../buildInfo";
 
   // The unified projects/landing page. Rendered both at `/` (the landing
   // page) and at `/projects` (the classic route the navbar links to) — a
@@ -36,9 +38,17 @@
     // "uncontrolled": a random tip per mount — the app passes nothing,
     // stories pin an index so VRT baselines stay deterministic.
     tipIndex?: number | null;
+    // Build info for the footer. Absent means "uncontrolled": the BuildInfo
+    // component fetches it from the server itself. Stories inject a fixture.
+    buildInfo?: BuildInfoData | null;
   }
 
-  let { projects = null, loading = null, tipIndex = null }: Props = $props();
+  let {
+    projects = null,
+    loading = null,
+    tipIndex = null,
+    buildInfo,
+  }: Props = $props();
 
   // Where the "Read the book" card sends you: the mdBook build of `book/`,
   // published via GitHub Pages.
@@ -302,6 +312,7 @@
                    instead of floating mid-card. -->
             <div class="divider mt-auto"></div>
             <TipsPanel index={tipIndex} />
+            <BuildInfo {buildInfo} />
           </div>
         </div>
       </div>

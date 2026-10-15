@@ -85,6 +85,8 @@ export const MobileLandingStacks: Story = {
 export const WithProjects: Story = {
   args: {
     projects,
+    // Injected so the footer renders without a server to ask (see BuildInfo).
+    buildInfo: { git_sha: "07265fb" },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -104,6 +106,13 @@ export const WithProjects: Story = {
     // Markdown-rendered, so assert on a plain fragment (markup splits the
     // text across elements).
     await expect(canvas.getByText(/single search box/)).toBeInTheDocument();
+
+    // The build footer sits at the bottom of the list and links to its commit.
+    const build = canvas.getByRole("link", { name: /rhizz build 07265fb/ });
+    await expect(build).toHaveAttribute(
+      "href",
+      "https://github.com/Wint3rmute/rhizz/commit/07265fb",
+    );
   },
 };
 
