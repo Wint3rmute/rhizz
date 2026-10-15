@@ -12,9 +12,10 @@ concurrency:
   cancel-in-progress: true
 
 # All toolchains come from flake.nix (pinned via flake.lock): every job
-# installs Nix, warms /nix/store from cache, then runs the same `just`
-# recipes and tool commands developers run locally. No per-tool setup
-# actions (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
+# installs Nix, warms /nix/store from cache, then runs either a Nix derivation
+# or the same `just` recipes and tool commands developers run locally. No
+# per-tool setup actions (rust-toolchain, setup-node, mdbook, wasm-pack
+# installer) remain.
 
 jobs:
   # Was `rust` in the old monolithic workflow; renamed to avoid the
@@ -55,7 +56,14 @@ jobs:
           name: rust-coverage
           path: target/coverage/lcov.info
 
-      - run: nix develop --command cargo build --release --quiet
+      # The production server goes through its Nix derivation (nix/rhizz.nix),
+      # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-web → rhizz.
+      # This replaces the devshell's `cargo build --release`, which had no
+      # frontend to embed (web/build is gitignored and this job has no Node
+      # toolchain), so it only ever produced the placeholder shell page — the
+      # release build was never actually verified. No devshell here: the
+      # derivation brings its own toolchain.
+      - run: nix build .#rhizz
 
 # The `audit` job moved to its own workflow (audit.yml) so it can be gated on
 # Cargo.lock changes — a path filter applies to a whole workflow, not to a
