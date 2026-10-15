@@ -22,3 +22,6 @@ pub mod assets;
 
 /// Filesystem persistence for the VFS API: one directory per project.
 pub mod storage;
+
+/// Forwarding of browser Sentry envelopes to Sentry.
+mod sentry;
