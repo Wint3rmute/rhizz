@@ -52,7 +52,7 @@ on the old path (step 5).
 
 - [x] **2. Frontend derivation (`packages.rhizz-web`).** `pkgs.buildNpmPackage`
   over `web/`, consuming `rhizz-wasm-pkg` as the
-  `file:../crates/rhizz-wasm/pkg/` dependency. Result: `nix/web.nix` uses
+  `file:../crates/rhizz-wasm/pkg/` dependency. Result: `nix/frontend.nix` uses
   `importNpmLock` (no `npmDepsHash`) and points the two local `file:` lock
   entries at the wasm derivation via `packageSourceOverrides` — no source-tree
   placement needed. Builds with `VITE_RHIZZ_SERVER_URL=/`, Sentry unset; a
@@ -65,7 +65,7 @@ on the old path (step 5).
   embedded UI is what production ships, and into CI as the `frontend / build`
   job.
 - [x] **3. Backend binary (`packages.rhizz`).** `rustPlatform.buildRustPackage`
-  for `rhizz-cli`, embedding step 2's `web/build`. Result: `nix/rhizz.nix`
+  for `rhizz-cli`, embedding step 2's `web/build`. Result: `nix/backend.nix`
   copies the `rhizz-web` output into `web/build` in `preBuild`, so
   `rhizz-server`'s hardcoded build.rs path finds it — no Rust change needed.
   `cargoBuildFlags = [ "-p" "rhizz-cli" ]` mirrors the Dockerfile's

@@ -30,7 +30,7 @@
 
           rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
 
-          rhizz-web = pkgs.callPackage ./nix/web.nix {
+          rhizz-web = pkgs.callPackage ./nix/frontend.nix {
             src = ./web;
             inherit rhizz-wasm-pkg;
           };
@@ -38,7 +38,7 @@
         {
           inherit rhizz-wasm-pkg rhizz-web;
 
-          rhizz = pkgs.callPackage ./nix/rhizz.nix {
+          rhizz = pkgs.callPackage ./nix/backend.nix {
             src = rustSrc;
             inherit rhizz-web;
           };
