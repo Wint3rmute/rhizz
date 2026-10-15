@@ -372,8 +372,8 @@ const ICON_SIZE_CENTER = 18;
 const ICON_LABEL_GAP = 4;
 const CENTER_ICON_LIFT = 20;
 const CENTER_LABEL_DROP = 10;
-// Rough average advance of one label glyph, used to estimate the label's
-// rendered width so the top-center icon+label row can be centered as a unit.
+// Rough average advance of one label glyph. Only used as a fallback when the
+// rendered label width hasn't been measured yet (e.g. before first paint).
 const LABEL_GLYPH_WIDTH = 7.5;
 
 /**
@@ -382,9 +382,11 @@ const LABEL_GLYPH_WIDTH = 7.5;
  * can't drift apart, and so the placement rules are unit-testable without a
  * DOM.
  *
- * `label` is only needed for the "top-center" alignment, which centers the
- * icon *and* the estimated label width as one row; every other placement
- * depends only on the box size.
+ * `label` and `measuredLabelWidth` are only used for the "top-center"
+ * alignment, which centers the icon *and* the label as one row. The rendered
+ * label width is measured in the DOM by the caller; when it isn't available
+ * yet, the row width falls back to a glyph-count estimate. Every other
+ * placement depends only on the box size.
  */
 export function nodeLabelLayout(
   align: TextAlign,
@@ -392,6 +394,7 @@ export function nodeLabelLayout(
   width: number,
   height: number,
   hasIcon: boolean,
+  measuredLabelWidth?: number,
 ): NodeLabelLayout {
   if (!hasIcon) {
     return { icon: null, text: textPosition(align, width, height) };
@@ -409,9 +412,13 @@ export function nodeLabelLayout(
         },
       };
     case "top-center": {
+      const labelWidth =
+        measuredLabelWidth !== undefined && measuredLabelWidth > 0
+          ? measuredLabelWidth
+          : label.length * LABEL_GLYPH_WIDTH;
       const estimatedWidth = Math.min(
         width - 2 * ICON_INSET,
-        label.length * LABEL_GLYPH_WIDTH + ICON_SIZE_TOP + ICON_LABEL_GAP,
+        labelWidth + ICON_SIZE_TOP + ICON_LABEL_GAP,
       );
       const startX = Math.max(ICON_INSET, (width - estimatedWidth) / 2);
       return {
