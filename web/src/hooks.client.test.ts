@@ -150,6 +150,23 @@ describe("Sentry startup logging", () => {
   });
 });
 
+describe("Event tunnel", () => {
+  const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
+
+  it("sends every envelope to the same-origin server tunnel", async () => {
+    // Relative on purpose: the request stays on the app's own origin, so it is
+    // not blocked by ad blockers and needs no CSP entry for Sentry's ingest host.
+    const { options } = await loadHooks(withDsn);
+    expect(initConfig(options).tunnel).toBe("/api/sentry");
+  });
+
+  it("sets no tunnel when the build has no DSN", async () => {
+    const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
+    expect(mocks.sentry.init).not.toHaveBeenCalled();
+    expect(lines[0]).toContain("not initialized");
+  });
+});
+
 describe("Session Replay", () => {
   const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
 
