@@ -4,6 +4,17 @@
   import type { CategoryScore } from "../../../../components/CompletionBreakdown.svelte";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { TOUR_TARGETS } from "../../../../tour/tourTargets";
+  import { fetchBuildInfo, type BuildInfo } from "../../../../buildInfo";
+
+  // Only a rhizz-server build exposes `/api/version`; the browser-only build
+  // has no server to ask, so the footer stays hidden there.
+  const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
+  let buildInfo = $state<BuildInfo | null>(null);
+  if (serverUrl) {
+    void fetchBuildInfo(serverUrl).then((info) => {
+      buildInfo = info;
+    });
+  }
 
   // The compiled model is shared with the status bar and every other page (see
   // ProjectModel.svelte); the warning preset it compiles at is read inside the
@@ -231,6 +242,12 @@
               </div>
             </div>
           {/if}
+        {/if}
+
+        {#if buildInfo}
+          <footer class="text-xs text-base-content/50 font-mono">
+            rhizz build {buildInfo.git_sha}
+          </footer>
         {/if}
       </main>
     </div>
