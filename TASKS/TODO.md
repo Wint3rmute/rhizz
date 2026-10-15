@@ -101,30 +101,6 @@ Refactor the web architecture from isolated page routes to a unified, dockable m
 
 ---
 
-## (For later brainstorming) Task <N> - pin existing nodes when auto-laying-out newly-added ones
-
-Split out from Task 50 (now finished — see `FINISHED.md`) as the one
-remaining concrete piece of its original scope. `forceLayout.ts` already
-supports pinning a node in place via `fixed: true` on a `LayoutNode` (sets
-d3-force's `fx`/`fy`, ignored by all forces) — added specifically for this
-case, but nothing calls it that way yet.
-
-- When a component is checked onto the canvas (the sidebar checkbox's
-  "check" branch), instead of just placing it at a default/remembered
-  position, run a force-layout pass where every *other* currently-placed
-  sibling is `fixed: true` and only the newly-checked node is free to
-  move — so it settles into whatever gap is available near its
-  connections, without visibly disturbing anything else already placed.
-- Needs a concrete trigger decision: should this replace the current
-  "restore remembered position, or default to (100, 100)" behavior
-  unconditionally, or only when there's no remembered position to
-  restore (i.e. first-time placement only, not re-checking something
-  that was previously positioned)? Lean towards the latter — respecting
-  a remembered position take priority over auto-placing.
-- Validate with `deno task check`, `deno task build`, `deno task test`.
-
----
-
 ## (For around November) Task <N> - Migrate to Typescript 7
 
 TypeScript 7.0 (the native Go port) went GA on July 8, 2026 34. But
@@ -219,3 +195,26 @@ versions. `npm audit fix` cannot replace them: without `--force` it moves
   `npm view @tailwindcss/typography@<version> dependencies`.
 
 After removing an override, run `npm audit` and confirm the finding stays clear.
+
+## Task <N> - pressing a delete/backspace on connections on modeling should hide them
+
+Currently, when I press delete/backspace on connections on the modeling/ page,
+they get deleted. This is not the right behavior in a system modeler - they
+should only get hidden from the view, same as it currently happens with the
+component instances.
+
+
+## Task <N> - add a "delete" button on the component tree and in connections list
+
+I need a simple way to delete components and connections from the modeling/ page.
+
+The file tree displayed in the diagrams list (left side of modeling/ page) shows
+a trash icon when I hover over a diagram. I want the same behavior on the
+Components/Connections sidebar on the right of modeling/.
+
+When the "trash" icon is clicked on a component instance, this instance is
+removed from the system model, not merely hidden. There should be a confirmation
+dialog before that happens!
+
+Same goes for the connection - if trash icon next to it is clicked, it is
+removed from the system, not just hidden.
