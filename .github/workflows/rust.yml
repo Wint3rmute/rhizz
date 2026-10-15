@@ -56,7 +56,7 @@ jobs:
           name: rust-coverage
           path: target/coverage/lcov.info
 
-      # The production server goes through its Nix derivation (nix/rhizz.nix),
+      # The production server goes through its Nix derivation (nix/backend.nix),
       # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-web → rhizz.
       # This replaces the devshell's `cargo build --release`, which had no
       # frontend to embed (web/build is gitignored and this job has no Node
