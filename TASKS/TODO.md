@@ -16,14 +16,22 @@ How to work on this file:
 
 ---
 
-## Task <N> — Re-baseline VRT after the formatting commit
+## Task <N> - Weird focus rules on modeling/
 
-`main` (`4bccef2`, formatting) fails 3 screenshots that passed before it:
-`components-monacoeditor--markdown-unwrapped-overflows` (dark and light) and
-`pages-code--default--light`. The formatting-only changes checked so far (float
-literals, a collapsed call in `MonacoEditor.svelte`) are no-ops, so the cause
-is not yet isolated. Do not accept new baselines until the gallery has been
-reviewed. Then re-baseline on Linux or with `--update-snapshots` in CI.
+I found the following inconsistency in modeling:
+
+1. Open up any system model
+2. Navigate to modeling/
+3. Click on some component in the canvas
+4. The component gets focused in the canvas, the inspector and the components list on the right
+5. Click on some other component on the components list on the right
+6. The component gets focused in the canvas... but not in the inspector
+
+I'm guessing this is some kind of inconsistency related to focus, perhaps the
+focus mechanic is nested deeply inside frontend, possibly reimplemented in
+multiple places. Understand the issue and resolve it, focusing it on unifying
+where the focus is stored, so that the overall code is simpler and ideally
+shorter.
 
 ---
 
