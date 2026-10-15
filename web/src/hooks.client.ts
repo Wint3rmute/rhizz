@@ -5,17 +5,23 @@ import type { HandleClientError } from "@sveltejs/kit/hooks";
 // code can run — an error thrown during the first render is captured rather
 // than lost.
 //
-// The DSN comes from the build environment, like the VFS server URL does in
-// ProjectState.svelte, and is never committed. With no DSN the SDK is not
-// initialized at all: local development, Storybook, Vitest and the Playwright
-// suite then send nothing and keep working with no network access.
+// `VITE_RHIZZ_DEPLOYMENT` picks the mode, read at build time:
+//   - "prod": events are sent to Sentry through the rhizz server's tunnel.
+//   - anything else (including unset): nothing is sent, and no SDK is set up.
+//     Local development, Storybook, Vitest and the Playwright suite run this way.
 import * as Sentry from "@sentry/sveltekit";
 
-const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+const deployment = import.meta.env.VITE_RHIZZ_DEPLOYMENT as string | undefined;
 
-if (dsn !== undefined && dsn !== "") {
+// The Sentry project's public ingest key. It ships in every browser bundle
+// anyway, so it is committed here rather than passed in at build time. The
+// same value is in fly.toml.
+const PROD_DSN =
+  "https://c5757f769377fa9b99d42e5956213cbb@o4512171156045824.ingest.de.sentry.io/4512175383314512";
+
+if (deployment === "prod") {
   Sentry.init({
-    dsn,
+    dsn: PROD_DSN,
 
     // Every envelope (errors, logs, traces, replays, profiles, metrics) is posted
     // to the rhizz server, which forwards it to Sentry. Same-origin, so ad
@@ -27,10 +33,7 @@ if (dsn !== undefined && dsn !== "") {
     // https://docs.sentry.io/platforms/javascript/configuration/options/#traces-sample-rate
     tracesSampleRate: 1.0,
 
-    // Vite's mode is "development" for `npm run dev` and "production" for a
-    // build — the same split the SDK infers on its own, stated explicitly so
-    // the value is visible in the config.
-    environment: import.meta.env.MODE,
+    environment: "production",
     // No `release` here on purpose: `sentrySvelteKit()` in vite.config.ts
     // injects `window.SENTRY_RELEASE` into the build (from SENTRY_RELEASE, or
     // the git sha), which is the same release its source maps are uploaded
@@ -93,28 +96,19 @@ if (dsn !== undefined && dsn !== "") {
 
   // Announced *after* init, never before: the consoleLoggingIntegration above
   // is installed by init, so only a line printed after it can be forwarded.
-  // Printed earlier this would be the one startup message that cannot reach
-  // Sentry — invisible precisely when someone is asking why nothing arrives.
-  // So this line both reports the decision and demonstrates it: seeing it in
-  // Sentry's Logs tab is the end-to-end proof that forwarding is live.
-  //
-  // `environment` is included because it is one of the two ways a correctly
-  // initialized SDK still shows nothing — Sentry filters by it. The DSN is
-  // deliberately not logged.
+  // Seeing this line in Sentry's Logs tab is the end-to-end proof that
+  // forwarding is live.
   console.log(
     "Sentry: initialized, console logs are forwarded as Sentry logs",
-    {
-      environment: import.meta.env.MODE,
-    },
+    { environment: "production" },
   );
 } else {
-  // No DSN means no SDK at all, so unlike the line above this one can only
-  // ever be read in the browser console. That is the whole point: a build with
-  // no DSN explains "nothing shows up in Sentry" completely, and it is the
-  // first thing to check.
-  console.log("Sentry: not initialized, this build has no VITE_SENTRY_DSN", {
-    environment: import.meta.env.MODE,
-  });
+  // No SDK at all in dev: nothing is sent, and no integrations are installed,
+  // so console output stays in the browser console only.
+  console.log(
+    "Sentry: not initialized, dev deployment: errors are logged to the browser console only",
+    { deployment: deployment ?? null },
+  );
 }
 
 // SvelteKit's `handleError` runs for everything that never reaches a

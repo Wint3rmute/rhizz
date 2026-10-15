@@ -11,10 +11,10 @@
 # ca-certificates, which is added explicitly below.
 #
 # Differences from the Dockerfile image, both deliberate:
-#   - No VITE_SENTRY_DSN. The Dockerfile baked one in via a build arg; the Nix
-#     frontend derivation (nix/frontend.nix) builds with Sentry unset, so this
-#     image reports nothing to Sentry. Closing that gap needs a Sentry story
-#     for the Nix build (see the task's step 5).
+#   - Sentry mode is set by the frontend derivation (nix/frontend.nix), which
+#     builds with VITE_RHIZZ_DEPLOYMENT=prod: errors go to Sentry through the
+#     server's tunnel. The Dockerfile no longer sets this, so it builds a dev
+#     frontend that sends nothing.
 #   - Runs as root, as the Dockerfile image did. The server's data dir is a
 #     volume; a non-root user would need the volume chowned to match.
 {

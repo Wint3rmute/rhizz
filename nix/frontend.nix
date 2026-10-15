@@ -36,9 +36,12 @@ buildNpmPackage {
   npmConfigHook = importNpmLock.npmConfigHook;
 
   # Baked in at build time: the embedded frontend talks to its own origin
-  # (`/api/vfs`) rather than a hardcoded host. Sentry is left unset, so the
-  # vite config takes its tokenless "no source maps" path.
+  # (`/api/vfs`) rather than a hardcoded host. "prod" makes the frontend send
+  # errors to Sentry through the server tunnel (see web/src/hooks.client.ts).
+  # Sentry's source-map upload is not configured here, so the vite config takes
+  # its tokenless "no source maps" path.
   VITE_RHIZZ_SERVER_URL = "/";
+  VITE_RHIZZ_DEPLOYMENT = "prod";
 
   # npmConfigHook installs with `--ignore-scripts`, so the `prepare` script
   # (`svelte-kit sync`) never runs. Run it here: it generates
