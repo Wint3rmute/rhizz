@@ -1,11 +1,20 @@
 name: docker
 
-# Build the Docker image and push it to GitHub's container registry (ghcr.io).
-# Runs only on the default branch (main), so the image always reflects an
-# already-reviewed, merged state.
+# Build the container image via its Nix derivation (nix/docker.nix) and push it
+# to GitHub's container registry (ghcr.io).
+#
+# The derivation replaces the Dockerfile's three stages end to end, so this job
+# no longer needs a Docker build context: `nix build .#docker-image` compiles
+# the whole pipeline (wasm → frontend → binary → image) and emits a
+# docker-archive tarball. The Dockerfile is still on disk and still referenced
+# by fly.toml; retiring it is the task's step 5.
+#
+# TEMPORARY: `build/nix-docker-image` is listed below so this job exercises the
+# Nix image before it merges. Drop it once the branch lands — the workflow
+# should then build only on the default branch, as it did before.
 on:
   push:
-    branches: [main]
+    branches: [main, build/nix-docker-image]
   workflow_dispatch:
 
 concurrency:
@@ -20,6 +29,23 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v6
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      # The point of the job: `.#docker-image` consumes the whole pipeline
+      # (rhizz-wasm-pkg → rhizz-web → rhizz → image), so a failure in any
+      # stage surfaces here. This replaces `docker/build-push-action`, which
+      # could only build from a Dockerfile.
+      - name: Build the image
+        run: nix build .#docker-image
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -40,11 +66,16 @@ jobs:
             type=sha,format=short
             type=raw,value={{ date 'YYYYMMDD-HHmmss' }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          # push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      # A Nix image arrives as a docker-archive tarball whose only tag is the
+      # derivation's own name/tag, so the metadata tags above have to be
+      # applied by hand. Pushing stays disabled, exactly as it was in the
+      # Dockerfile version (`# push: true`): this job verifies the image
+      # builds and does not publish it. Uncomment the block below to publish.
+      - name: Load the image
+        run: docker load -i result
+      # - name: Tag and push
+      #   run: |
+      #     for tag in ${{ steps.meta.outputs.tags }}; do
+      #       docker tag rhizz:latest "$tag"
+      #       docker push "$tag"
+      #     done
