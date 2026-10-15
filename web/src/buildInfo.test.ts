@@ -12,7 +12,13 @@ describe("fetchBuildInfo", () => {
   it("reads the git sha from /api/version under the base url", async () => {
     const requested: string[] = [];
     const info = await fetchBuildInfo("https://rhizz.example/", (url) => {
-      requested.push(String(url));
+      requested.push(
+        typeof url === "string"
+          ? url
+          : url instanceof URL
+            ? url.href
+            : url.url,
+      );
       return Promise.resolve(jsonResponse({ git_sha: "07265fb" }));
     });
     expect(requested).toEqual(["https://rhizz.example/api/version"]);
