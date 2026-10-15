@@ -16,25 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Weird focus rules on modeling/
-
-I found the following inconsistency in modeling:
-
-1. Open up any system model
-2. Navigate to modeling/
-3. Click on some component in the canvas
-4. The component gets focused in the canvas, the inspector and the components list on the right
-5. Click on some other component on the components list on the right
-6. The component gets focused in the canvas... but not in the inspector
-
-I'm guessing this is some kind of inconsistency related to focus, perhaps the
-focus mechanic is nested deeply inside frontend, possibly reimplemented in
-multiple places. Understand the issue and resolve it, focusing it on unifying
-where the focus is stored, so that the overall code is simpler and ideally
-shorter.
-
----
-
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
