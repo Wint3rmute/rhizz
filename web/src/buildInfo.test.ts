@@ -13,11 +13,7 @@ describe("fetchBuildInfo", () => {
     const requested: string[] = [];
     const info = await fetchBuildInfo("https://rhizz.example/", (url) => {
       requested.push(
-        typeof url === "string"
-          ? url
-          : url instanceof URL
-            ? url.href
-            : url.url,
+        typeof url === "string" ? url : url instanceof URL ? url.href : url.url,
       );
       return Promise.resolve(jsonResponse({ git_sha: "07265fb" }));
     });
