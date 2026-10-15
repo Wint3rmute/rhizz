@@ -115,11 +115,14 @@ on the old path (step 5).
   Nix-built image to ghcr.io, `latest` from the default branch only (every
   build also gets a short-sha and date tag, so any pushed image is traceable).
   What still blocks deleting the Dockerfile:
-  - **`fly deploy` builds from it.** `fly.toml` pins `[build] dockerfile`, so
-    retiring the Dockerfile means switching fly to the pushed image
-    (`[build] image = 'ghcr.io/wint3rmute/rhizz:latest'`). For fly to pull it
-    the ghcr package has to be public — packages pushed with `GITHUB_TOKEN`
-    default to private.
+  - **`fly deploy` builds from it.** The plan is to skip fly's build entirely
+    and deploy the pushed image: `fly deploy --image
+    ghcr.io/wint3rmute/rhizz:<tag>`. Per the deploy docs, `--image` (like
+    `[build] image`) wins over both the `[build]` section and a Dockerfile in
+    the working directory, so `fly.toml`'s `[build] dockerfile` and
+    `[build.args]` can go with it. For fly to pull the image it has to be
+    readable — packages pushed with `GITHUB_TOKEN` start private, so either
+    make the ghcr package public or give the deploy registry credentials.
   - **The Sentry DSN would be lost.** `VITE_SENTRY_DSN` is a `fly deploy` build
     arg baked into the bundle; the Nix frontend builds with Sentry unset.
     Plumbing it through `nix/frontend.nix` is a choice: the single shared
