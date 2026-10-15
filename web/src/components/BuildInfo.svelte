@@ -3,7 +3,8 @@
 
   // The commit the running `rhizz web` server was built from, shown as a
   // footer. Only a server build exposes `/api/version`; the browser-only build
-  // has no server to ask, so nothing renders there.
+  // has no server to ask, so nothing renders there. The Vite dev server has no
+  // server either, so it shows a `dev server` label instead of staying empty.
   //
   // `buildInfo` is an injection seam for Storybook/tests: absent (or an
   // explicit `undefined`) means "uncontrolled" (fetch from the server), while
@@ -22,6 +23,10 @@
     void fetchBuildInfo(serverUrl).then((info) => {
       fetched = info;
     });
+  } else if (import.meta.env.DEV) {
+    // The dev server has no `/api/version` to ask, so label the build
+    // explicitly rather than leaving the footer empty.
+    fetched = { git_sha: "dev server" };
   }
 
   let info = $derived(buildInfo !== undefined ? buildInfo : fetched);
