@@ -17,6 +17,11 @@ if (dsn !== undefined && dsn !== "") {
   Sentry.init({
     dsn,
 
+    // Every envelope (errors, logs, traces, replays, profiles, metrics) is posted
+    // to the rhizz server, which forwards it to Sentry. Same-origin, so ad
+    // blockers that block Sentry's ingest host do not block it.
+    tunnel: "/api/sentry",
+
     // The documented default for a new project: errors plus tracing on every
     // transaction. Lower this once the volume matters — see
     // https://docs.sentry.io/platforms/javascript/configuration/options/#traces-sample-rate

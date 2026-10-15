@@ -8,10 +8,10 @@
 use std::path::PathBuf;
 
 use axum::body::{Body, Bytes};
-use axum::extract::State;
-use axum::http::{StatusCode, Uri, header};
+use axum::extract::{DefaultBodyLimit, State};
+use axum::http::{Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::{Json, Router, routing::get};
+use axum::{Json, Router, routing::any, routing::get};
 use rust_embed::EmbeddedFile;
 use serde_json::Value;
 
@@ -26,6 +26,10 @@ pub fn app(data_dir: PathBuf) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/vfs", get(get_vfs).put(put_vfs))
+        .route(
+            "/api/sentry",
+            any(sentry_tunnel).layer(DefaultBodyLimit::max(SENTRY_ENVELOPE_LIMIT)),
+        )
         .fallback(get(spa_fallback))
         .with_state(data_dir)
 }
@@ -33,6 +37,27 @@ pub fn app(data_dir: PathBuf) -> Router {
 /// Handles `GET /healthz`, used by orchestrators/tests to probe liveness.
 async fn healthz() -> &'static str {
     "ok"
+}
+
+/// Largest Sentry envelope accepted by `/api/sentry`. Session Replay chunks
+/// and profiles can exceed axum's 2 MB default.
+const SENTRY_ENVELOPE_LIMIT: usize = 10 * 1024 * 1024;
+
+/// Tunnel endpoint the browser SDK posts envelopes to (`tunnel` option). Still
+/// a stub: it accepts every method and body and only logs them, nothing is
+/// forwarded to Sentry yet.
+async fn sentry_tunnel(method: Method, headers: axum::http::HeaderMap, body: Bytes) -> StatusCode {
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    tracing::info!(
+        %method,
+        content_type,
+        bytes = body.len(),
+        "received sentry tunnel request"
+    );
+    StatusCode::OK
 }
 
 /// Fetches the entire VFS state (all projects + nodes), expanded from the
@@ -304,6 +329,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn sentry_tunnel_accepts_post_envelope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sentry")
+                    .header(header::CONTENT_TYPE, "application/x-sentry-envelope")
+                    .body(Body::from("{\"event_id\":\"abc\"}\n{}\n{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn sentry_tunnel_accepts_any_method() {
+        let tmp = tempfile::tempdir().unwrap();
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/sentry")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn sentry_tunnel_accepts_envelope_larger_than_axum_default_limit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let body = vec![b'x'; 3 * 1024 * 1024];
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sentry")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[cfg(rhizz_has_embedded_assets)]
