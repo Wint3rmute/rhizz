@@ -53,10 +53,10 @@ vi.mock("@sentry/sveltekit", () => mocks.sentry);
 // lines it printed (joined the way the browser would show them) alongside the
 // ordered call log the Sentry mock recorded.
 async function loadHooks(env: {
-  VITE_SENTRY_DSN?: string;
+  VITE_RHIZZ_DEPLOYMENT?: string;
 }): Promise<{ lines: string[]; calls: string[]; options: unknown }> {
   vi.resetModules();
-  vi.stubEnv("VITE_SENTRY_DSN", env.VITE_SENTRY_DSN);
+  vi.stubEnv("VITE_RHIZZ_DEPLOYMENT", env.VITE_RHIZZ_DEPLOYMENT);
   mocks.calls.length = 0;
   mocks.initOptions.length = 0;
   mocks.sentry.init.mockClear();
@@ -98,40 +98,41 @@ function initConfig(options: unknown): Record<string, unknown> {
   return options as Record<string, unknown>;
 }
 
+const prod = { VITE_RHIZZ_DEPLOYMENT: "prod" };
+const dev = { VITE_RHIZZ_DEPLOYMENT: "dev" };
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("Sentry startup logging", () => {
-  it("says so, and skips init entirely, when the build has no DSN", async () => {
-    const { lines, calls } = await loadHooks({ VITE_SENTRY_DSN: "" });
+describe("Deployment mode", () => {
+  it("does not initialize Sentry in a dev deployment", async () => {
+    const { lines, calls } = await loadHooks(dev);
     expect(mocks.sentry.init).not.toHaveBeenCalled();
     expect(calls).not.toContain("sentry.init");
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("not initialized");
-    // The reason is the whole point of the line: a missing DSN is the first
-    // thing to check when nothing shows up in Sentry.
-    expect(lines[0]).toContain("VITE_SENTRY_DSN");
   });
 
-  it("says so when the DSN variable is absent rather than empty", async () => {
+  it("does not initialize Sentry when the variable is unset", async () => {
     const { lines } = await loadHooks({});
     expect(mocks.sentry.init).not.toHaveBeenCalled();
     expect(lines[0]).toContain("not initialized");
   });
 
-  it("announces the init after it has actually run", async () => {
-    const { lines, calls } = await loadHooks({
-      VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1",
-    });
+  it("initializes Sentry in a prod deployment", async () => {
+    const { lines } = await loadHooks(prod);
     expect(mocks.sentry.init).toHaveBeenCalledTimes(1);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("initialized");
     expect(lines[0]).not.toContain("not initialized");
+  });
+
+  it("announces the init after it has actually run", async () => {
+    const { calls } = await loadHooks(prod);
     // Ordering is the load-bearing part: consoleLoggingIntegration is only
     // installed by init, so a line printed before it could never reach
-    // Sentry — which would make this the one line that does not show up in
-    // Sentry, exactly when it is most needed.
+    // Sentry.
     //
     // Only the relative order of these two is asserted. consoleLoggingIntegration
     // is built as an argument to init and so legitimately precedes it, and
@@ -141,37 +142,25 @@ describe("Sentry startup logging", () => {
       calls.indexOf("console.log"),
     );
   });
-
-  it("never prints the DSN itself", async () => {
-    const dsn = "https://secretkey@example.ingest.sentry.io/1";
-    const { lines } = await loadHooks({ VITE_SENTRY_DSN: dsn });
-    expect(lines.join("\n")).not.toContain("secretkey");
-    expect(lines.join("\n")).not.toContain("example.ingest.sentry.io");
-  });
 });
 
 describe("Event tunnel", () => {
-  const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
-
-  it("sends every envelope to the same-origin server tunnel", async () => {
+  it("sends every envelope to the same-origin server tunnel in prod", async () => {
     // Relative on purpose: the request stays on the app's own origin, so it is
     // not blocked by ad blockers and needs no CSP entry for Sentry's ingest host.
-    const { options } = await loadHooks(withDsn);
+    const { options } = await loadHooks(prod);
     expect(initConfig(options).tunnel).toBe("/api/sentry");
   });
 
-  it("sets no tunnel when the build has no DSN", async () => {
-    const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
-    expect(mocks.sentry.init).not.toHaveBeenCalled();
-    expect(lines[0]).toContain("not initialized");
+  it("sends nothing, neither directly nor via the tunnel, in dev", async () => {
+    const { options } = await loadHooks(dev);
+    expect(options).toBeUndefined();
   });
 });
 
 describe("Session Replay", () => {
-  const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
-
   it("registers the replay integration with init", async () => {
-    const { options } = await loadHooks(withDsn);
+    const { options } = await loadHooks(prod);
     // A built integration, not just a call: the SDK only replays what is in
     // the `integrations` array init was handed.
     const integrations = initConfig(options).integrations;
@@ -183,33 +172,31 @@ describe("Session Replay", () => {
     // The array is the risk: adding replay means editing a list that was
     // already carrying something, and silently overwriting it would look
     // healthy in every other assertion here.
-    const { options } = await loadHooks(withDsn);
+    const { options } = await loadHooks(prod);
     expect(initConfig(options).integrations).toContainEqual({
       name: "ConsoleLogging",
     });
   });
 
   it("replays every session that has an error, and a tenth of the rest", async () => {
-    const { options } = await loadHooks(withDsn);
+    const { options } = await loadHooks(prod);
     const config = initConfig(options);
     expect(config.replaysOnErrorSampleRate).toBe(1.0);
     expect(config.replaysSessionSampleRate).toBe(0.1);
   });
 
-  it("installs no replay at all when the build has no DSN", async () => {
+  it("installs no replay at all in dev", async () => {
     // Replay is the most expensive thing in the SDK — it ships the rrweb
-    // bundle and records the DOM. A build with no DSN must not pay for either.
-    const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
+    // bundle and records the DOM. A dev deployment must not pay for either.
+    const { lines } = await loadHooks(dev);
     expect(mocks.sentry.replayIntegration).not.toHaveBeenCalled();
     expect(lines[0]).toContain("not initialized");
   });
 });
 
 describe("Browser profiling", () => {
-  const withDsn = { VITE_SENTRY_DSN: "https://key@example.ingest.sentry.io/1" };
-
   it("registers the browser tracing and profiling integrations with init", async () => {
-    const { options } = await loadHooks(withDsn);
+    const { options } = await loadHooks(prod);
     const integrations = initConfig(options).integrations;
     expect(Array.isArray(integrations)).toBe(true);
     expect(integrations).toContainEqual({ name: "BrowserTracing" });
@@ -217,15 +204,15 @@ describe("Browser profiling", () => {
   });
 
   it("profiles every session during active traces", async () => {
-    const { options } = await loadHooks(withDsn);
+    const { options } = await loadHooks(prod);
     const config = initConfig(options);
     expect(config.tracesSampleRate).toBe(1.0);
     expect(config.profileSessionSampleRate).toBe(1.0);
     expect(config.profileLifecycle).toBe("trace");
   });
 
-  it("installs no profiling at all when the build has no DSN", async () => {
-    const { lines } = await loadHooks({ VITE_SENTRY_DSN: "" });
+  it("installs no profiling at all in dev", async () => {
+    const { lines } = await loadHooks(dev);
     expect(mocks.sentry.browserTracingIntegration).not.toHaveBeenCalled();
     expect(mocks.sentry.browserProfilingIntegration).not.toHaveBeenCalled();
     expect(lines[0]).toContain("not initialized");
