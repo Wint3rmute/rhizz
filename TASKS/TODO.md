@@ -16,25 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Weird undo-redo behavior after switching a diagram
-
-Steps to reproduce:
-
-1. Open up any example project
-2. Navigate to some diagram (diagram A)
-3. Switch to another diagram (diagram B)
-4. Press Ctrl-Z
-
-#### Expected result
-
-Nothing happens, "no changes to undo" popup appears.
-
-#### Actual result
-
-Diagram B gets transformed into diagram A which was loaded before. I suspect
-it has something to do with the undo history not being reset when a different
-diagram file is loaded?
-
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
