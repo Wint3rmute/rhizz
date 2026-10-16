@@ -16,6 +16,32 @@ How to work on this file:
 
 ---
 
+## Task <N> - pressing a delete/backspace on connections on modeling should hide them
+
+Currently, when I press delete/backspace on connections on the modeling/ page,
+they get deleted. This is not the right behavior in a system modeler - they
+should only get hidden from the view, same as it currently happens with the
+component instances.
+
+---
+
+## Task <N> - add a "delete" button on the component tree and in connections list
+
+I need a simple way to delete components and connections from the modeling/ page.
+
+The file tree displayed in the diagrams list (left side of modeling/ page) shows
+a trash icon when I hover over a diagram. I want the same behavior on the
+Components/Connections sidebar on the right of modeling/.
+
+When the "trash" icon is clicked on a component instance, this instance is
+removed from the system model, not merely hidden. There should be a confirmation
+dialog before that happens!
+
+Same goes for the connection - if trash icon next to it is clicked, it is
+removed from the system, not just hidden.
+
+---
+
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
@@ -196,25 +222,3 @@ versions. `npm audit fix` cannot replace them: without `--force` it moves
 
 After removing an override, run `npm audit` and confirm the finding stays clear.
 
-## Task <N> - pressing a delete/backspace on connections on modeling should hide them
-
-Currently, when I press delete/backspace on connections on the modeling/ page,
-they get deleted. This is not the right behavior in a system modeler - they
-should only get hidden from the view, same as it currently happens with the
-component instances.
-
-
-## Task <N> - add a "delete" button on the component tree and in connections list
-
-I need a simple way to delete components and connections from the modeling/ page.
-
-The file tree displayed in the diagrams list (left side of modeling/ page) shows
-a trash icon when I hover over a diagram. I want the same behavior on the
-Components/Connections sidebar on the right of modeling/.
-
-When the "trash" icon is clicked on a component instance, this instance is
-removed from the system model, not merely hidden. There should be a confirmation
-dialog before that happens!
-
-Same goes for the connection - if trash icon next to it is clicked, it is
-removed from the system, not just hidden.
