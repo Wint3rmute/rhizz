@@ -57,8 +57,11 @@ test("delete removes the node from the view but keeps it in the model", async ({
   await page.keyboard.press("Delete");
   await expect(canvas.getByText("e2e-vanish").first()).toBeHidden();
   await expect(page.getByTestId("activity-hint")).toHaveText(
-    "component e2e-vanish hidden",
+    "Component e2e-vanish hidden",
   );
+  await expect(
+    page.getByTestId("activity-hint").locator("code.inline-code"),
+  ).toHaveText("e2e-vanish");
 
   // The model keeps the component: its tree row survives, unchecked — only
   // the view placement is gone.

@@ -119,8 +119,11 @@ test("hiding a connection removes it from the canvas and survives reload", async
   await expect(canvas.getByTestId("diagram-edge")).toHaveCount(1);
   await expect(rowAb.getByRole("checkbox")).not.toBeChecked();
   await expect(page.getByTestId("activity-hint")).toHaveText(
-    "connection link-ab hidden",
+    "Connection link-ab hidden",
   );
+  await expect(
+    page.getByTestId("activity-hint").locator("code.inline-code"),
+  ).toHaveText("link-ab");
   await expect
     .poll(async () => viewFile(await storedFiles(page)), { timeout: 10_000 })
     .toMatch(/hidden\s*=\s*true/);
