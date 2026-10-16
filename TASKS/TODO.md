@@ -16,6 +16,35 @@ How to work on this file:
 
 ---
 
+## Task <N> — More information in the modeling/ canvas action type popup
+
+In the modeling/ page, a popup on the bottom-left corner informs the user about
+their current action, e.g. "dragging" or "selecting". I want the popup to also fire when the user:
+
+- Hides a component instance - "component <name> hidden"
+- Hides a connection - "connection <name> hidden"
+- Hides a connection - "connection <name> hidden"
+- Runs undo/redo - "Undo" or "Redo", alternatively "No more actions to undo/redo"
+
+## Task <N> - Weird undo-redo behavior after switching a diagram
+
+Steps to reproduce:
+
+1. Open up any example project
+2. Navigate to some diagram (diagram A)
+3. Switch to another diagram (diagram B)
+4. Press Ctrl-Z
+
+#### Expected result
+
+Nothing happens, "no changes to undo" popup appears.
+
+#### Actual result
+
+Diagram B gets transformed into diagram A which was loaded before. I suspect
+it has something to do with the undo history not being reset when a different
+diagram file is loaded?
+
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
