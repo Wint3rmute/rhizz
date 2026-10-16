@@ -1053,6 +1053,22 @@ fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), Mutatio
     Ok(())
 }
 
+/// True when a connection endpoint names instance `label` inside the scope at
+/// `scope_path`. Endpoints come in two spellings: relative to the scope
+/// (`"comp"`, `"comp/port"`) and absolute (`"/system/comp/port"`), so both are
+/// normalized to a scope-relative path before the first segment is compared.
+fn endpoint_uses(endpoint: Option<&str>, scope_path: &str, label: &str) -> bool {
+    let Some(endpoint) = endpoint else {
+        return false;
+    };
+    let endpoint = endpoint.trim_start_matches('/');
+    let relative = endpoint
+        .strip_prefix(scope_path)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(endpoint);
+    relative.split('/').next() == Some(label)
+}
+
 fn delete(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> {
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     let Some((&first, _)) = segments.split_first() else {
@@ -1076,6 +1092,12 @@ fn delete(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> 
             return Ok(idle());
         };
         instances.remove(position);
+        // A connection cannot outlive one of its endpoints: drop the ones in
+        // this scope that reach the removed instance (`leaf` or `leaf/port`).
+        scope_connections_mut(raw, scope)?.retain(|connection| {
+            !endpoint_uses(connection.inner.from.as_deref(), &parent_path, leaf)
+                && !endpoint_uses(connection.inner.to.as_deref(), &parent_path, leaf)
+        });
     }
     Ok(applied(vec![LoggedAction::DeleteComponent {
         path: path.to_owned(),
@@ -1379,6 +1401,50 @@ mod tests {
             r#"{"kind":"update_system","path":"demo","patch":{"color":"red"}}"#,
         );
         assert!(result.is_err(), "component-only keys must be rejected");
+    }
+
+    #[test]
+    fn delete_instance_also_removes_connections_using_it() {
+        let hcl = mutate(
+            "",
+            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"b","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"a","to":"b"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+
+        let deleted = mutate(&hcl, r#"{"kind":"delete_component","path":"demo/a"}"#)
+            .expect("deleting an instance with connections must apply");
+        assert!(deleted.applied);
+        let hcl = deleted.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"connection "link""#));
+        assert!(!hcl.contains(r#"instance "a""#));
+        assert!(hcl.contains(r#"instance "b""#));
     }
 
     #[test]

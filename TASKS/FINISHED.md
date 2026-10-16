@@ -20,6 +20,12 @@ it removes the item from the system model, not just the view, after a confirm.
   replaces `handleDeleteSelectedConnection`, and the inspector's **Delete
   connection** button calls it too.
 - **Confirms:** both use `confirm()` with the same wording as the inspector button.
+- **Deleting an instance drops its connections:** `delete_component` also removes
+  the connections in the same scope that use the instance (`/sys/inst` or
+  `inst/port` endpoints). Before this, the resolver refused the delete with E011
+  for every dangling connection. Refusals now show an error toast with the
+  resolver's messages (`applyModelMutation` returns `refusal`), so they're no
+  longer console-only.
 - **Tests:** Playwright `sidebar-delete.spec.ts` covers component and connection
   trash, each with a cancel path (nothing removed) and a confirm path (removed
   from `system.hcl`). Storybook `ComponentHierarchyTree` story `DeleteFromModel`

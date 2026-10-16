@@ -1523,7 +1523,14 @@
       do: async (): Promise<boolean> => {
         const cur = await readMainContent();
         const result = await applyModelMutation(fs, cur.path, cur.content, op);
-        if (!result.applied) return false;
+        if (!result.applied) {
+          toastState.show(
+            `Change refused: ${result.refusal ?? "the model would become invalid"}`,
+            "error",
+            8_000,
+          );
+          return false;
+        }
         await projectModel.reload();
         layoutApply?.(result.path);
         noteDiagramEdited();

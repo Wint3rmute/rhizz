@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { subscribeToMutations } from "../mutationObserver";
 import type { ModelAction } from "../actionLog";
 import { compile_system } from "../rhizz_wasm_wrapper";
-import { applyModelMutation } from "./applyMutation";
+import { applyModelMutation, type ModelMutationOp } from "./applyMutation";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -451,6 +451,34 @@ describe("applyModelMutation", () => {
       { kind: "delete_connection_by_label", label: "nope" },
     );
     expect(missing.applied).toBe(false);
+  });
+
+  it("explains a refused op with the resolver's error messages", async () => {
+    const fs = memoryFs();
+    let baseline = "";
+    const setup: ModelMutationOp[] = [
+      {
+        kind: "add_component_definition",
+        label: "cpu",
+        options: { leaf: true },
+      },
+      { kind: "add_system", label: "demo" },
+      { kind: "add_instance", parentPath: "demo", label: "a", source: "cpu" },
+    ];
+    for (const op of setup) {
+      const result = await applyModelMutation(fs, "system.hcl", baseline, op);
+      expect(result.applied).toBe(true);
+      baseline = fs.store.get("system.hcl") ?? "";
+    }
+
+    // The definition is still instanced, so the delete must be refused and
+    // the reason must name the definition.
+    const refused = await applyModelMutation(fs, "system.hcl", baseline, {
+      kind: "delete_component",
+      path: "cpu",
+    });
+    expect(refused.applied).toBe(false);
+    expect(refused.refusal).toContain("cpu");
   });
 
   it("reparents through the dispatcher", async () => {
