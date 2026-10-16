@@ -4,6 +4,30 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Trash buttons on the Components and Connections sidebars
+
+The Modeling sidebars get the same hover trash icon the file tree has. Clicking
+it removes the item from the system model, not just the view, after a confirm.
+
+- **Components:** `ComponentHierarchyTree` gets an `onDeleteComponent` prop and a
+  `rowTail` trash button on component rows (the system root has none).
+  `ModelingPage.deleteComponentFromModel` takes the instance's path from
+  `model.component_keys()` (e.g. `system/instance`) and runs the
+  `delete_component` op through `runModelLayoutTransaction`, so Ctrl+Z restores
+  it. It also clears the component's `checked`/`savedLayout`/selection entries.
+- **Connections:** each Connections row gets a trash button, revealed on hover.
+  `deleteConnectionFromModel(label)` (confirm + `delete_connection_by_label`)
+  replaces `handleDeleteSelectedConnection`, and the inspector's **Delete
+  connection** button calls it too.
+- **Confirms:** both use `confirm()` with the same wording as the inspector button.
+- **Tests:** Playwright `sidebar-delete.spec.ts` covers component and connection
+  trash, each with a cancel path (nothing removed) and a confirm path (removed
+  from `system.hcl`). Storybook `ComponentHierarchyTree` story `DeleteFromModel`
+  checks the callback. The VFS helpers moved from `connection-visibility.spec.ts`
+  to `e2e/helpers.ts` so both specs share them.
+
+---
+
 ## Task <N> — Delete on a connection hides it instead of deleting it
 
 Pressing Delete or Backspace with a connection selected on the Modeling page

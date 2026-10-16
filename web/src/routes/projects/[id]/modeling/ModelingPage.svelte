@@ -3255,9 +3255,9 @@
     }
   }
 
-  async function handleDeleteSelectedConnection(): Promise<void> {
-    if (!selectedConnection) return;
-    const label = selectedConnection;
+  // Removes a connection from the system model (not just this view), after a
+  // confirm. Used by the inspector button and the Connections sidebar trash.
+  async function deleteConnectionFromModel(label: string): Promise<void> {
     if (
       !confirm(
         `Delete connection "${label}"? This will remove it from the system model.`,
@@ -3274,7 +3274,31 @@
       },
       () => {
         delete savedConnections[label];
-        selectedConnection = null;
+        if (selectedConnection === label) selectedConnection = null;
+      },
+    );
+  }
+
+  // Removes a component instance from the system model (not just this view),
+  // after a confirm. `component_keys()` gives the instance's path, which the
+  // `delete_component` op accepts. Used by the Components sidebar trash.
+  async function deleteComponentFromModel(index: number): Promise<void> {
+    const key = model?.component_keys()[index];
+    if (!key) return;
+    if (
+      !confirm(
+        `Delete component "${key}"? This will remove it from the system model.`,
+      )
+    ) {
+      return;
+    }
+    await runModelLayoutTransaction(
+      `delete ${key}`,
+      { kind: "delete_component", path: key },
+      () => {
+        delete checked[key];
+        delete savedLayout[key];
+        selectedKeys.delete(key);
       },
     );
   }
@@ -3883,7 +3907,9 @@
           <button
             class="btn btn-xs btn-outline btn-error w-full"
             onclick={() =>
-              void handleDeleteSelectedConnection().catch(reportDiagramError)}
+              void deleteConnectionFromModel(selectedConnection ?? "").catch(
+                reportDiagramError,
+              )}
           >
             Delete connection
           </button>
@@ -4207,6 +4233,8 @@
             filterSystemLabel={effectiveSystem}
             isChecked={(index) => checkedIndices.has(index)}
             onToggleChecked={(index) => toggleComponentChecked(index)}
+            onDeleteComponent={(index) =>
+              void deleteComponentFromModel(index).catch(reportDiagramError)}
           />
           {#if hiddenForeignCount > 0}
             <p class="text-xs text-warning mt-2">
@@ -4234,7 +4262,7 @@
           <ul class="space-y-1">
             {#each systemConnections as connection (connection.label)}
               <li
-                class="flex items-center gap-2 text-sm truncate"
+                class="group flex items-center gap-2 text-sm truncate"
                 title={connection.label}
                 data-testid={`connection-row-${connection.label}`}
               >
@@ -4250,6 +4278,16 @@
                   aria-label={`Show connection ${connection.label}`}
                 />
                 <span class="truncate">{connection.label}</span>
+                <button
+                  type="button"
+                  class="ml-auto shrink-0 invisible group-hover:visible text-xs text-base-content/60 hover:text-error"
+                  title="Delete connection from the model"
+                  aria-label={`Delete connection ${connection.label}`}
+                  onclick={() =>
+                    void deleteConnectionFromModel(connection.label).catch(
+                      reportDiagramError,
+                    )}>🗑</button
+                >
               </li>
             {/each}
           </ul>

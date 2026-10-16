@@ -90,6 +90,27 @@ export const FilteredBySystem: Story = {
   },
 };
 
+// The trash button on a component row (revealed on hover) reports that
+// component's index; ModelingPage.svelte owns the confirm and the model
+// removal. The system root row gets no trash button.
+export const DeleteFromModel: Story = {
+  args: {
+    onDeleteComponent: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const row = canvas.getByText("imu").closest("li");
+    if (!row) throw new Error("imu row not rendered");
+    // The trash button is display:none until its row is hovered.
+    await userEvent.hover(canvas.getByText("imu"));
+    await userEvent.click(within(row).getByLabelText("Delete component imu"));
+    await expect(args.onDeleteComponent).toHaveBeenLastCalledWith(2);
+    await expect(
+      canvas.queryByRole("button", { name: "Delete component drone" }),
+    ).not.toBeInTheDocument();
+  },
+};
+
 export const FilteredUnknownSystem: Story = {
   args: {
     systems: [{ label: "a" }],
