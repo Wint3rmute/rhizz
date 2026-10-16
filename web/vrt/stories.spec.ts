@@ -169,6 +169,26 @@ async function waitForMonacoChrome(page: Page): Promise<void> {
     .catch(() => {});
 }
 
+// Hover-revealed chrome (CSS `group-hover`) only appears for a real pointer,
+// and a story's play function dispatches synthetic events, so a story opts in
+// with `parameters.vrtHoverText`: the VRT hovers the element whose exact text
+// matches before the screenshot.
+async function storyHoverText(page: Page): Promise<string | undefined> {
+  return page.evaluate(() => {
+    const story = (
+      window as unknown as {
+        __STORYBOOK_PREVIEW__?: {
+          currentRender?: {
+            story?: { parameters?: { vrtHoverText?: unknown } };
+          };
+        };
+      }
+    ).__STORYBOOK_PREVIEW__?.currentRender?.story;
+    const text = story?.parameters?.vrtHoverText;
+    return typeof text === "string" ? text : undefined;
+  });
+}
+
 async function storyViewport(page: Page): Promise<string | undefined> {
   return page.evaluate(() => {
     const story = (
@@ -225,6 +245,11 @@ for (const story of loadStories()) {
       await pinViewportHeight(page);
       await waitForStableLayout(page);
       await waitForMonacoChrome(page);
+
+      const hoverText = await storyHoverText(page);
+      if (hoverText !== undefined) {
+        await page.getByText(hoverText, { exact: true }).first().hover();
+      }
 
       await expect(page).toHaveScreenshot(`${story.id}--${theme}.png`, {
         fullPage: true,
