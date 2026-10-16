@@ -9,16 +9,18 @@ Completed tasks are listed here, most recent first.
 The bottom corner popup on the Modeling page, which showed only the pointer
 interaction ("Dragging", "Selecting"…), now also announces:
 
-- **Hiding a component:** "component <name> hidden", from Delete, the context
+- **Hiding a component:** "Component `<name>` hidden", from Delete, the context
   menu's "Hide from this view", and H.
-- **Hiding a connection:** "connection <name> hidden", from Delete, the context
+- **Hiding a connection:** "Connection `<name>` hidden", from Delete, the context
   menu, and the Connections sidebar checkbox.
 - **Undo/redo:** "Undo" / "Redo" on success, or "No more actions to undo" /
   "No more actions to redo" when the history is empty.
 
 Implementation: `flashActivity()` labels, and the undo/redo handlers split into
 `undoOnce`/`redoOnce`, which report whether a step ran. The popup has
-`data-testid="activity-hint"`.
+`data-testid="activity-hint"` and renders its text as inline Markdown
+(`renderMarkdownInline`), so names show as monospace `inline-code`, the same as
+in the diagnostics bar.
 
 - **Tests:** Playwright assertions in `delete-from-view.spec.ts`,
   `connection-visibility.spec.ts`, and `undo-redo.spec.ts` (new "nothing left"

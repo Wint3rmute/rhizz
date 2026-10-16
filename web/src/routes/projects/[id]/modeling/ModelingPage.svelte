@@ -1159,7 +1159,7 @@
       return;
     }
     savedConnections[label] = { ...prev, hidden: true };
-    flashActivity(`connection ${label} hidden`);
+    flashActivity(`Connection \`${label}\` hidden`);
   }
 
   // Padding kept between a child node's edges and its active parent's edges,
@@ -2326,7 +2326,7 @@
     const label = index !== undefined ? components[index]?.label : undefined;
     if (index !== undefined) deselect(index);
     else clearSelection();
-    if (label) flashActivity(`component ${label} hidden`);
+    if (label) flashActivity(`Component \`${label}\` hidden`);
   }
 
   async function handleOpenDocumentation(): Promise<void> {
@@ -4192,7 +4192,8 @@
           ? ACTIVITY_HINT_FADE_IN_MS
           : ACTIVITY_HINT_FADE_OUT_MS}ms;"
       >
-        {activityHintLabel ?? ""}
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- html is escaped by renderMarkdownInline (see markdownRenderer.ts) -->
+        {@html renderMarkdownInline(activityHintLabel ?? "")}
       </div>
     </div>
   </div>
