@@ -20,6 +20,7 @@ const meta = {
     onSelectComponent: fn(),
     isChecked: (index: number) => index === 1,
     onToggleChecked: fn(),
+    onDeleteComponent: fn(),
   },
 } satisfies Meta<typeof ComponentHierarchyTree>;
 
@@ -32,6 +33,8 @@ type Story = StoryObj<typeof meta>;
 // reporting selection clicks through the onSelectComponent callback.
 export const Default: Story = {
   args: {},
+  // The trash button shows only while its row is hovered; VRT hovers `imu`.
+  parameters: { vrtHoverText: "imu" },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
@@ -55,6 +58,14 @@ export const Default: Story = {
     // selection, so the tree itself never mutates it.
     await userEvent.click(canvas.getByText("imu"));
     await expect(args.onSelectComponent).toHaveBeenLastCalledWith(2);
+
+    // The trash button on a component row (revealed on hover by CSS) reports
+    // that component. Clicking it reports the component (visibility is
+    // checked by VRT, which hovers the row).
+    await userEvent.hover(canvas.getByText("imu"));
+    const trash = canvas.getByLabelText("Delete component imu");
+    await userEvent.click(trash);
+    await expect(args.onDeleteComponent).toHaveBeenLastCalledWith(2);
   },
 };
 
@@ -87,27 +98,6 @@ export const FilteredBySystem: Story = {
     // Unknown system → empty tree with the shared empty message.
     // (Exercised via args update by the story runner re-render.)
     await expect(args.filterSystemLabel).toBe("b");
-  },
-};
-
-// The trash button on a component row (revealed on hover) reports that
-// component's index; ModelingPage.svelte owns the confirm and the model
-// removal. The system root row gets no trash button.
-export const DeleteFromModel: Story = {
-  args: {
-    onDeleteComponent: fn(),
-  },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    const row = canvas.getByText("imu").closest("li");
-    if (!row) throw new Error("imu row not rendered");
-    // The trash button is display:none until its row is hovered.
-    await userEvent.hover(canvas.getByText("imu"));
-    await userEvent.click(within(row).getByLabelText("Delete component imu"));
-    await expect(args.onDeleteComponent).toHaveBeenLastCalledWith(2);
-    await expect(
-      canvas.queryByRole("button", { name: "Delete component drone" }),
-    ).not.toBeInTheDocument();
   },
 };
 

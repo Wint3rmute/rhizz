@@ -28,8 +28,11 @@ it removes the item from the system model, not just the view, after a confirm.
   longer console-only.
 - **Tests:** Playwright `sidebar-delete.spec.ts` covers component and connection
   trash, each with a cancel path (nothing removed) and a confirm path (removed
-  from `system.hcl`). Storybook `ComponentHierarchyTree` story `DeleteFromModel`
-  checks the callback. The VFS helpers moved from `connection-visibility.spec.ts`
+  from `system.hcl`). Storybook `ComponentHierarchyTree` `Default` story clicks the
+  row's trash button and checks the callback. Its VRT baseline now shows the
+  trash icon: the story sets `parameters.vrtHoverText: "imu"`, and the VRT
+  harness hovers that text before the screenshot (play-function hover is
+  synthetic and does not trigger CSS `group-hover`). The VFS helpers moved from `connection-visibility.spec.ts`
   to `e2e/helpers.ts` so both specs share them.
 
 ---
