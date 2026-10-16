@@ -67,3 +67,47 @@ export async function expectInViewport(target: Locator): Promise<void> {
     })
     .toEqual({ left: true, top: true, right: true, bottom: true });
 }
+
+const VFS_KEY = "rhizz:vfs:v1";
+
+/** Every file in the VFS, keyed by its project-relative path. */
+export async function storedFiles(page: import("@playwright/test").Page) {
+  return page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) throw new Error("no VFS in localStorage");
+    const blob = JSON.parse(raw) as {
+      nodes: {
+        id: string;
+        parentId: string | null;
+        name: string;
+        kind: string;
+        content?: string;
+      }[];
+    };
+    const pathOf = (node: (typeof blob.nodes)[number]): string => {
+      const parts = [node.name];
+      let parent = node.parentId;
+      while (parent !== null) {
+        const found = blob.nodes.find((n) => n.id === parent);
+        if (found === undefined) break;
+        parts.unshift(found.name);
+        parent = found.parentId;
+      }
+      return parts.join("/");
+    };
+    const files: Record<string, string> = {};
+    for (const node of blob.nodes) {
+      if (node.kind !== "file") continue;
+      files[pathOf(node)] = node.content ?? "";
+    }
+    return files;
+  }, VFS_KEY);
+}
+
+export function viewFile(files: Record<string, string>): string {
+  const entry = Object.entries(files).find(([path]) =>
+    path.startsWith("views/"),
+  );
+  if (!entry) throw new Error(`no views file, have: ${Object.keys(files)}`);
+  return entry[1]!;
+}

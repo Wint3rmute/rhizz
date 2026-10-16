@@ -27,6 +27,7 @@
     onSelectComponent,
     onToggleChecked,
     isChecked,
+    onDeleteComponent,
     filterSystemLabel = null,
   }: {
     systems: ComponentTreeSystem[];
@@ -41,6 +42,8 @@
     isChecked: (index: number) => boolean;
     /** Fired when a row's checkbox is toggled; ModelingPage.svelte places/unplaces it. */
     onToggleChecked: (index: number) => void;
+    /** Fired when a row's trash button is clicked; ModelingPage.svelte removes it from the model (after a confirm). */
+    onDeleteComponent?: (index: number) => void;
   } = $props();
 
   let nodes = $derived(
@@ -68,6 +71,19 @@
     return Number.isNaN(n) ? null : n;
   }
 </script>
+
+{#snippet compTail(entry: TreeNode)}
+  {@const index = nodeIndex(entry)}
+  {#if index !== null && onDeleteComponent}
+    <button
+      type="button"
+      class="text-xs text-base-content/60 hover:text-error"
+      title="Delete from the model"
+      aria-label={`Delete component ${components[index]?.label ?? ""}`}
+      onclick={() => onDeleteComponent?.(index)}>🗑</button
+    >
+  {/if}
+{/snippet}
 
 {#snippet compLeading(entry: TreeNode)}
   {@const index = nodeIndex(entry)}
@@ -100,5 +116,6 @@
   emptyMessage="No components found."
   showExpandCollapseAll
   leading={compLeading}
+  rowTail={compTail}
   onselect={onSelectRow}
 />
