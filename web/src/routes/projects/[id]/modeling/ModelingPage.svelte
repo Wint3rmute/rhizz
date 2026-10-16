@@ -3786,7 +3786,7 @@
   // constants (rather than baked into Tailwind duration classes) so they
   // can be adjusted without touching markup.
   const ACTIVITY_HINT_FADE_IN_MS = 100;
-  const ACTIVITY_HINT_SUSTAIN_MS = 500;
+  const ACTIVITY_HINT_SUSTAIN_MS = 1000;
   const ACTIVITY_HINT_FADE_OUT_MS = 400;
 
   let activityHintLabel: string | null = $state(null);
