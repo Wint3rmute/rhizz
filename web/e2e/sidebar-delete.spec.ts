@@ -61,10 +61,13 @@ test("trash on a component row removes the instance from the model after confirm
     .toBe(false);
 });
 
-test("trash on a connection row removes the connection from the model after confirm", async ({
-  page,
-}) => {
-  await openModeling(page, "E2E sidebar delete connection");
+// Creates two components, spreads them apart, and drag-connects them with a
+// connection named `label`. Returns the connection's sidebar row.
+async function linkTwoComponents(
+  page: Page,
+  [from, to]: [string, string],
+  label: string,
+) {
   const canvas = page.getByTestId("diagram-canvas");
   const canvasBox = await canvas.boundingBox();
   if (!canvasBox) throw new Error("no canvas box");
@@ -72,7 +75,7 @@ test("trash on a connection row removes the connection from the model after conf
     x: canvasBox.x + canvasBox.width - 60,
     y: canvasBox.y + canvasBox.height - 60,
   };
-  for (const name of ["trash-b", "trash-c"]) {
+  for (const name of [from, to]) {
     await page.mouse.click(emptySpot.x, emptySpot.y);
     await createComponent(page, name);
   }
@@ -90,18 +93,18 @@ test("trash on a connection row removes the connection from the model after conf
   }
 
   // Spread the two nodes apart so the drag-connect drop lands cleanly.
-  await treeRow("trash-b").click();
+  await treeRow(from).click();
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
-  await treeRow("trash-c").click();
+  await treeRow(to).click();
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
 
-  page.once("dialog", (dialog) => void dialog.accept("link-trash"));
-  await treeRow("trash-b").click();
+  page.once("dialog", (dialog) => void dialog.accept(label));
+  await treeRow(from).click();
   const handle = canvas.getByTestId("diagram-side-handle").first();
   await expect(handle).toBeVisible();
   const handleBox = await handle.boundingBox();
   if (!handleBox) throw new Error("no handle box");
-  const end = await nodeCenter("trash-c");
+  const end = await nodeCenter(to);
   await page.mouse.move(
     handleBox.x + handleBox.width / 2,
     handleBox.y + handleBox.height / 2,
@@ -110,16 +113,28 @@ test("trash on a connection row removes the connection from the model after conf
   await page.mouse.move(end.x, end.y, { steps: 8 });
   await page.mouse.up();
 
-  const row = page.getByTestId("connection-row-link-trash");
+  const row = page.getByTestId(`connection-row-${label}`);
   await expect(row).toBeVisible();
   await expect
     .poll(
-      async () => (await modelText(page)).includes('connection "link-trash"'),
+      async () => (await modelText(page)).includes(`connection "${label}"`),
       {
         timeout: 10_000,
       },
     )
     .toBe(true);
+  return row;
+}
+
+test("trash on a connection row removes the connection from the model after confirm", async ({
+  page,
+}) => {
+  await openModeling(page, "E2E sidebar delete connection");
+  const row = await linkTwoComponents(
+    page,
+    ["trash-b", "trash-c"],
+    "link-trash",
+  );
 
   // Cancel: the connection stays.
   page.once("dialog", (dialog) => void dialog.dismiss());
@@ -145,4 +160,35 @@ test("trash on a connection row removes the connection from the model after conf
       },
     )
     .toBe(false);
+});
+
+test("deleting a component that has a connection removes both, without a refusal", async ({
+  page,
+}) => {
+  await openModeling(page, "E2E sidebar delete linked component");
+  await linkTwoComponents(page, ["trash-d", "trash-e"], "link-de");
+
+  const tree = page.getByTestId("modeling-pane-right");
+  const row = tree.locator("li", { hasText: "trash-d" }).first();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await row.hover();
+  await row.getByRole("button", { name: "Delete component trash-d" }).click();
+
+  // The instance and its connection both leave the model, and the model
+  // accepts the change: no refusal toast appears.
+  await expect(row).toBeHidden();
+  await expect
+    .poll(async () => (await modelText(page)).includes('instance "trash-d"'), {
+      timeout: 10_000,
+    })
+    .toBe(false);
+  await expect
+    .poll(
+      async () => (await modelText(page)).includes('connection "link-de"'),
+      {
+        timeout: 10_000,
+      },
+    )
+    .toBe(false);
+  await expect(page.getByText("Change refused")).toBeHidden();
 });

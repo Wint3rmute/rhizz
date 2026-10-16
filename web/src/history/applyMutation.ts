@@ -79,6 +79,8 @@ export interface ApplyMutationResult {
   applied: boolean;
   /** Path of the created component (`create_component` only). */
   path?: string;
+  /** Why the op was refused (`applied: false` only): the resolver's error messages, for the user. */
+  refusal?: string;
 }
 
 export async function applyModelMutation(
@@ -103,7 +105,14 @@ export async function applyModelMutation(
         codes.join(", ") || "guard refusal"
       }`,
     );
-    return { applied: false };
+    // Errors only: warnings ride along on a refusal but do not cause it.
+    const errors = result.diagnostics
+      .filter((diagnostic) => diagnostic.code.startsWith("E"))
+      .map((diagnostic) => diagnostic.message);
+    return {
+      applied: false,
+      refusal: errors.join("; ") || "the change would leave the model invalid",
+    };
   }
   if (result.hcl === undefined) {
     console.warn(`Model mutation (${op.kind}) returned no HCL`);
