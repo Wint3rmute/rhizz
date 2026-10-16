@@ -24,7 +24,7 @@
     "If a component has no diagram, **Inventory** offers “**Create a view**” to generate `views/<label>.hcl` and jump into **Modeling** with it selected.",
     "Set **Strictness** (**Business** / **Architectural** / **Component**) in the navbar to hide leaf-level warnings; your choice persists across reloads, and `rhizz check --warning-level` does the same in CI.",
     "Components are linked to `docs/<component_name>.md` files — open them from the **Node Inspector**, and a `W018` warning flags top-level components missing docs.",
-    "`Delete` (or `Backspace`) only hides a node from the current view — your `system.hcl` model is untouched, and `Ctrl-Z` brings it back to view.",
+    "`Delete` (or `Backspace`) only hides a node or connection from the current view — your `system.hcl` model is untouched, and `Ctrl-Z` brings it back to view.",
     "`Ctrl-Z` / `Ctrl-Y` (or `Ctrl-Shift-Z`) undo and redo model edits, canvas moves, and annotation changes together in one history.",
     "Name components with `full_name` for the official expanded name.",
     "Pick **Auto** / **Light** / **Dark** theme from the navbar; **Auto** follows your browser, an explicit pick pins your choice.",

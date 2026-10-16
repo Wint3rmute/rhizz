@@ -16,15 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - pressing a delete/backspace on connections on modeling should hide them
-
-Currently, when I press delete/backspace on connections on the modeling/ page,
-they get deleted. This is not the right behavior in a system modeler - they
-should only get hidden from the view, same as it currently happens with the
-component instances.
-
----
-
 ## Task <N> - add a "delete" button on the component tree and in connections list
 
 I need a simple way to delete components and connections from the modeling/ page.
