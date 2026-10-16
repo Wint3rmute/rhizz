@@ -111,3 +111,31 @@ export function viewFile(files: Record<string, string>): string {
   if (!entry) throw new Error(`no views file, have: ${Object.keys(files)}`);
   return entry[1]!;
 }
+
+/** Replaces the content of the project's top-level model file before the page loads. */
+export async function replaceModel(page: Page, content: string): Promise<void> {
+  await page.evaluate(
+    ({ key, content }) => {
+      const raw = window.localStorage.getItem(key);
+      if (raw === null) throw new Error("no VFS in localStorage");
+      const blob = JSON.parse(raw) as {
+        nodes: {
+          parentId: string | null;
+          name: string;
+          kind: string;
+          content?: string;
+        }[];
+      };
+      const file = blob.nodes.find(
+        (n) =>
+          n.kind === "file" &&
+          n.parentId === null &&
+          (n.name === "main.hcl" || n.name === "system.hcl"),
+      );
+      if (!file) throw new Error("no top-level model file");
+      file.content = content;
+      window.localStorage.setItem(key, JSON.stringify(blob));
+    },
+    { key: VFS_KEY, content },
+  );
+}

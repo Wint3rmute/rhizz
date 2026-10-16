@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { createNewProject, storedFiles } from "./helpers";
+import { createNewProject, replaceModel, storedFiles } from "./helpers";
 
 // The Components and Connections sidebars of Modeling each carry a trash
 // button on hover. Clicking it removes the item from the system model (not
@@ -191,4 +191,50 @@ test("deleting a component that has a connection removes both, without a refusal
     )
     .toBe(false);
   await expect(page.getByText("Change refused")).toBeHidden();
+});
+
+// A connection in `demo` reaches into `f`'s nested instance `mcu`. Deleting
+// `mcu` is refused (the connection would dangle), so the refusal must come
+// before any confirm prompt.
+const REFUSED_MODEL = `component "cpu" {
+  leaf = true
+}
+
+component "fc" {
+  instance "mcu" { source = "cpu" }
+}
+
+system "demo" {
+  instance "f" { source = "fc" }
+
+  connection "link" {
+    from = "/demo/f/mcu"
+    to   = "/demo/f"
+  }
+}
+`;
+
+test("a component that cannot be deleted is refused without a confirm prompt", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E refused delete");
+  await replaceModel(page, REFUSED_MODEL);
+  await page.goto(`/projects/${id}/modeling`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+
+  const prompts: string[] = [];
+  page.on("dialog", (dialog) => {
+    prompts.push(dialog.message());
+    void dialog.dismiss();
+  });
+
+  const tree = page.getByTestId("modeling-pane-right");
+  const row = tree.locator("li", { hasText: "mcu" }).first();
+  await expect(row).toBeVisible();
+  await row.hover();
+  await row.getByRole("button", { name: "Delete component mcu" }).click();
+
+  await expect(page.getByText("Change refused")).toBeVisible();
+  expect(prompts).toEqual([]);
+  expect(await modelText(page)).toContain('instance "mcu"');
 });

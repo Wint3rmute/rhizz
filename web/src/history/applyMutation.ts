@@ -12,7 +12,7 @@
 // the compiled model — there is no second TypeScript model to keep in sync.
 
 import { type ComponentData, type PortData } from "../modelView";
-import type { SystemPatch } from "../actionLog";
+import type { ModelAction, SystemPatch } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
 import { apply_model_op } from "../rhizz_wasm_wrapper";
 
@@ -83,12 +83,23 @@ export interface ApplyMutationResult {
   refusal?: string;
 }
 
-export async function applyModelMutation(
-  fs: ModelFileSystem,
+type MutationPlan =
+  | {
+      ok: true;
+      hcl: string;
+      path: string | undefined;
+      actions: ModelAction[];
+    }
+  | { ok: false; refusal: string };
+
+// Runs the op in Rust against the baseline without touching the file. Shared
+// by the write path and the dry-run check, so both give the same verdict.
+function planModelMutation(
   primaryPath: string,
   baselineContent: string,
   op: ModelMutationOp,
-): Promise<ApplyMutationResult> {
+): MutationPlan {
+  const fallback = "the change would leave the model invalid";
   let result;
   try {
     // The op JSON matches the Rust `ModelOp` schema field-for-field, so it
@@ -96,7 +107,7 @@ export async function applyModelMutation(
     result = apply_model_op(primaryPath, baselineContent, op);
   } catch (error) {
     console.warn(`Model mutation (${op.kind}) failed to serialize`, error);
-    return { applied: false };
+    return { ok: false, refusal: fallback };
   }
   if (!result.applied) {
     const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
@@ -109,17 +120,44 @@ export async function applyModelMutation(
     const errors = result.diagnostics
       .filter((diagnostic) => diagnostic.code.startsWith("E"))
       .map((diagnostic) => diagnostic.message);
-    return {
-      applied: false,
-      refusal: errors.join("; ") || "the change would leave the model invalid",
-    };
+    return { ok: false, refusal: errors.join("; ") || fallback };
   }
   if (result.hcl === undefined) {
     console.warn(`Model mutation (${op.kind}) returned no HCL`);
-    return { applied: false };
+    return { ok: false, refusal: fallback };
   }
-  await fs.writeFile(primaryPath, result.hcl);
-  for (const action of result.actions) recordModelAction(action);
-  if (result.path === undefined) return { applied: true };
-  return { applied: true, path: result.path };
+  return {
+    ok: true,
+    hcl: result.hcl,
+    path: result.path,
+    actions: result.actions,
+  };
+}
+
+/**
+ * Dry run: returns why `op` would be refused, or `undefined` when it would
+ * apply. Never writes, so a caller can reject an op before asking the user
+ * to confirm it.
+ */
+export function checkModelMutation(
+  primaryPath: string,
+  baselineContent: string,
+  op: ModelMutationOp,
+): string | undefined {
+  const plan = planModelMutation(primaryPath, baselineContent, op);
+  return plan.ok ? undefined : plan.refusal;
+}
+
+export async function applyModelMutation(
+  fs: ModelFileSystem,
+  primaryPath: string,
+  baselineContent: string,
+  op: ModelMutationOp,
+): Promise<ApplyMutationResult> {
+  const plan = planModelMutation(primaryPath, baselineContent, op);
+  if (!plan.ok) return { applied: false, refusal: plan.refusal };
+  await fs.writeFile(primaryPath, plan.hcl);
+  for (const action of plan.actions) recordModelAction(action);
+  if (plan.path === undefined) return { applied: true };
+  return { applied: true, path: plan.path };
 }
