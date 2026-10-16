@@ -790,6 +790,9 @@
     // later — after the switch — would write the old view's layout over the new
     // one, or resurrect a view that is about to be renamed/deleted.)
     scheduleLayoutWrite.flush();
+    // Undo points are snapshots of the diagram they were recorded on. Keeping
+    // them across a switch would let Ctrl+Z paint view A's layout onto view B.
+    resetUndoHistory();
     loadedDiagramPath = path;
     diagramLayoutLoaded = false;
     loadStartStamp = diagramEditStamp;
@@ -1352,6 +1355,19 @@
 
   function top(values: number[]): number | undefined {
     return values[values.length - 1];
+  }
+
+  // Forgets every undo and redo entry. Called when the selected diagram
+  // changes, since those entries only make sense for the diagram they were
+  // recorded on.
+  function resetUndoHistory(): void {
+    diagramHistory.undoStack.length = 0;
+    diagramHistory.redoStack.length = 0;
+    diagramUndoSeqs.length = 0;
+    diagramRedoSeqs.length = 0;
+    unifiedHistory.clear();
+    unifiedUndoSeqs.length = 0;
+    unifiedRedoSeqs.length = 0;
   }
 
   function snapshotDiagram(): DiagramSnapshot {

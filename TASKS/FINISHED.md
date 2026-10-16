@@ -28,6 +28,22 @@ in the diagnostics bar.
 
 ---
 
+## Task <N> — Undo after switching diagrams restored the previous diagram
+
+Ctrl+Z after switching to another diagram used to apply the undo snapshot of
+the diagram that was left, so diagram B was overwritten with diagram A's
+layout. Switching the selected diagram now clears both undo stacks (the layout
+history and the unified model+layout history), so Ctrl+Z reports "No more
+actions to undo" on the new diagram.
+
+- **Fix:** `ModelingPage.svelte` calls `resetUndoHistory()` in the diagram-load
+  effect, right after the pending layout write is flushed.
+- **Tests:** Playwright `undo-view-switch.spec.ts` places a component in one
+  view, switches to another, and checks that Ctrl+Z leaves the second view's
+  checkboxes unchanged and shows the "No more actions to undo" hint.
+
+---
+
 ## Task <N> — Trash buttons on the Components and Connections sidebars
 
 The Modeling sidebars get the same hover trash icon the file tree has. Clicking
