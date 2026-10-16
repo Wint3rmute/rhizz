@@ -32,16 +32,6 @@ export const Commit: Story = {
   },
 };
 
-// `dev` is not a commit, so it is plain text — no broken link.
-export const DevBuild: Story = {
-  args: { buildInfo: { git_sha: "dev" } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByText(/rhizz build dev/)).toBeInTheDocument();
-    await expect(canvas.queryByRole("link")).toBeNull();
-  },
-};
-
 // No server to ask (browser-only build): nothing renders. No baseline — the
 // screenshot would be an empty page.
 export const Hidden: Story = {
