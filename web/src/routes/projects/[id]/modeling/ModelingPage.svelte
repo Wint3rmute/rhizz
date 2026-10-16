@@ -1127,6 +1127,13 @@
     reclampChildren(index);
   }
 
+  // Hides a connection from this view and clears the selection, so a hidden
+  // edge is never left selected. The model keeps the connection.
+  function hideConnection(label: string): void {
+    toggleConnectionShown(label, false);
+    selectedConnection = null;
+  }
+
   // Shows or hides a connection in this view. Keyed by name, so all copies
   // of one declaration hide together. Removing an endpoint component from
   // the view does not clear the flag — re-checking the component restores
@@ -1270,14 +1277,12 @@
   // kinds it holds. A note and a component can be selected together
   // (shift-click), and both removals are layout-only changes on the same
   // history stack — so they go as one undo point. A connection is only ever
-  // selected on its own, and keeps its own path.
+  // selected on its own; Delete hides it from this view (the model keeps it).
   function deleteSelection(): void {
     const deletingNotes = selectedAnnotations.size > 0;
     const deletingNode = selectedKey !== null;
     if (!deletingNotes && !deletingNode) {
-      if (selectedConnection !== null) {
-        void handleDeleteSelectedConnection(true).catch(reportDiagramError);
-      }
+      if (selectedConnection !== null) hideConnection(selectedConnection);
       return;
     }
     recordUndoPoint();
@@ -2533,11 +2538,9 @@
       y: event.clientY,
       items: [
         {
-          label: "Delete",
+          label: "Hide",
           shortcut: "Del",
-          dangerous: true,
-          action: () =>
-            void handleDeleteSelectedConnection().catch(reportDiagramError),
+          action: () => hideConnection(label),
         },
       ],
     };
@@ -3252,13 +3255,10 @@
     }
   }
 
-  async function handleDeleteSelectedConnection(
-    skipConfirm = false,
-  ): Promise<void> {
+  async function handleDeleteSelectedConnection(): Promise<void> {
     if (!selectedConnection) return;
     const label = selectedConnection;
     if (
-      !skipConfirm &&
       !confirm(
         `Delete connection "${label}"? This will remove it from the system model.`,
       )

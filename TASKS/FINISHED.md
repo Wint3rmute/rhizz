@@ -4,6 +4,28 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Delete on a connection hides it instead of deleting it
+
+Pressing Delete or Backspace with a connection selected on the Modeling page
+used to remove the connection from `system.hcl`. It now hides the connection
+from the current view, the same as Delete does for a component. The model keeps
+the connection, and Ctrl+Z restores the edge.
+
+- **Behavior:** `deleteSelection` calls `hideConnection`, which reuses
+  `toggleConnectionShown(label, false)` (undo point, save effect) and clears the
+  selection. No confirm dialog, since nothing is removed.
+- **Context menu:** the connection item is now **Hide** (shortcut `Del`), not
+  Delete, so it matches the key.
+- **Unchanged:** the inspector's **Delete connection** button still removes the
+  connection from the model, with its confirm dialog.
+- **Cleanup:** `handleDeleteSelectedConnection` lost its unused `skipConfirm`
+  parameter. The `TipsPanel` tip now mentions connections.
+- **Tests:** Playwright `connection-visibility.spec.ts` "Delete on a selected
+  connection hides it instead of removing it" (red first: the connection row
+  disappeared, so the key deleted it from the model).
+
+---
+
 ## Task <N> — Build the whole app (and its Docker image) via Nix
 
 The server binary, the web frontend and the Docker image are all built by Nix,

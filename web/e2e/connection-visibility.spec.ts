@@ -221,3 +221,105 @@ test("hiding a connection removes it from the canvas and survives reload", async
     .poll(async () => viewFile(await storedFiles(page)), { timeout: 10_000 })
     .not.toMatch(/hidden\s*=\s*true/);
 });
+
+// Delete/Backspace on a selected connection hides it from the view, the same
+// way Delete hides a component: the edge leaves the canvas, the row stays
+// listed but unchecked, and the connection stays in the model (Code still has
+// it). Ctrl+Z brings the edge back.
+test("Delete on a selected connection hides it instead of removing it", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E connection delete hides");
+
+  await page.goto(`/projects/${id}/modeling`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+  const canvasBox = await page.getByTestId("diagram-canvas").boundingBox();
+  if (!canvasBox) throw new Error("no canvas box");
+  const emptySpot = {
+    x: canvasBox.x + canvasBox.width - 60,
+    y: canvasBox.y + canvasBox.height - 60,
+  };
+  for (const name of ["hide-a", "hide-b"]) {
+    await page.mouse.click(emptySpot.x, emptySpot.y);
+    await page.getByRole("button", { name: "+ Component" }).click();
+    const modal = page.getByTestId("create-component-modal");
+    await expect(modal).toBeVisible();
+    await modal.locator("#new-comp-name").fill(name);
+    await modal.getByRole("button", { name: "Create Definition" }).click();
+    await expect(modal).toBeHidden();
+  }
+
+  const canvas = page.getByTestId("diagram-canvas");
+  const treeRow = (name: string) =>
+    page.getByTestId("modeling-pane-right").getByRole("button", { name });
+
+  async function nodeCenter(name: string): Promise<{ x: number; y: number }> {
+    const box = await canvas
+      .getByText(name, { exact: true })
+      .first()
+      .boundingBox();
+    if (!box) throw new Error(`no box for ${name}`);
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
+
+  // Spread the two components apart so the drag-connect drop lands cleanly.
+  await treeRow("hide-a").click();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+  await treeRow("hide-b").click();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
+
+  page.once("dialog", (dialog) => void dialog.accept("link-hide"));
+  await treeRow("hide-a").click();
+  const handle = canvas.getByTestId("diagram-side-handle").first();
+  await expect(handle).toBeVisible();
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error("no handle box");
+  const end = await nodeCenter("hide-b");
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2,
+    handleBox.y + handleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 8 });
+  await page.mouse.up();
+
+  const row = page.getByTestId("connection-row-link-hide");
+  await expect(row).toBeVisible();
+  await expect(canvas.getByTestId("diagram-edge")).toHaveCount(1);
+
+  // Select the connection by clicking its edge, then press Delete.
+  await canvas
+    .getByTestId("diagram-edge")
+    .first()
+    .evaluate((el) =>
+      el.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      ),
+    );
+  await expect(page.getByText("Delete connection")).toBeVisible();
+  await page.keyboard.press("Delete");
+
+  // Hidden, not deleted: the edge is gone, the row stays listed unchecked,
+  // and the model still declares the connection.
+  await expect(canvas.getByTestId("diagram-edge")).toHaveCount(0);
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("checkbox")).not.toBeChecked();
+  await expect
+    .poll(async () => viewFile(await storedFiles(page)), { timeout: 10_000 })
+    .toMatch(/hidden\s*=\s*true/);
+  await expect
+    .poll(
+      async () => {
+        const files = await storedFiles(page);
+        const model = files["main.hcl"] ?? files["system.hcl"] ?? "";
+        return model.includes('connection "link-hide"');
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+
+  // Undo brings the edge back.
+  await page.keyboard.press("Control+z");
+  await expect(canvas.getByTestId("diagram-edge")).toHaveCount(1);
+  await expect(row.getByRole("checkbox")).toBeChecked();
+});
