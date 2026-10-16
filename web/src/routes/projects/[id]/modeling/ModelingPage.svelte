@@ -73,7 +73,10 @@
     redoHistory,
     undoHistory,
   } from "./history";
-  import { applyModelMutation } from "../../../../history/applyMutation";
+  import {
+    applyModelMutation,
+    checkModelMutation,
+  } from "../../../../history/applyMutation";
   import type { ModelMutationOp } from "../../../../history/applyMutation";
   import { TransactionManager } from "../../../../history/TransactionManager";
   import {
@@ -1524,11 +1527,7 @@
         const cur = await readMainContent();
         const result = await applyModelMutation(fs, cur.path, cur.content, op);
         if (!result.applied) {
-          toastState.show(
-            `Change refused: ${result.refusal ?? "the model would become invalid"}`,
-            "error",
-            8_000,
-          );
+          showRefusal(result.refusal);
           return false;
         }
         await projectModel.reload();
@@ -3262,9 +3261,31 @@
     }
   }
 
+  // Tells the user a model change was refused, and why. Shown instead of a
+  // confirm prompt when a delete cannot apply.
+  function showRefusal(reason: string | undefined): void {
+    toastState.show(
+      `Change refused: ${reason ?? "the model would become invalid"}`,
+      "error",
+      8_000,
+    );
+  }
+
+  // Dry-runs a model op. Returns false (after showing why) when the model
+  // would refuse it, so the caller can skip the confirm prompt entirely.
+  async function canApplyModelOp(op: ModelMutationOp): Promise<boolean> {
+    const { path, content } = await readMainContent();
+    const refusal = checkModelMutation(path, content, op);
+    if (refusal === undefined) return true;
+    showRefusal(refusal);
+    return false;
+  }
+
   // Removes a connection from the system model (not just this view), after a
   // confirm. Used by the inspector button and the Connections sidebar trash.
   async function deleteConnectionFromModel(label: string): Promise<void> {
+    const op: ModelMutationOp = { kind: "delete_connection_by_label", label };
+    if (!(await canApplyModelOp(op))) return;
     if (
       !confirm(
         `Delete connection "${label}"? This will remove it from the system model.`,
@@ -3292,6 +3313,9 @@
   async function deleteComponentFromModel(index: number): Promise<void> {
     const key = model?.component_keys()[index];
     if (!key) return;
+    if (!(await canApplyModelOp({ kind: "delete_component", path: key }))) {
+      return;
+    }
     if (
       !confirm(
         `Delete component "${key}"? This will remove it from the system model.`,

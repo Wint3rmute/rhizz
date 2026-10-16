@@ -20,6 +20,9 @@ it removes the item from the system model, not just the view, after a confirm.
   replaces `handleDeleteSelectedConnection`, and the inspector's **Delete
   connection** button calls it too.
 - **Confirms:** both use `confirm()` with the same wording as the inspector button.
+  The model op is dry-run first (`checkModelMutation`, same planning step as the
+  write path), so a delete the model would refuse shows the "Change refused"
+  toast straight away and never prompts.
 - **Deleting an instance drops its connections:** `delete_component` also removes
   the connections in the same scope that use the instance (`/sys/inst` or
   `inst/port` endpoints). Before this, the resolver refused the delete with E011

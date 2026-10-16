@@ -5,7 +5,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { subscribeToMutations } from "../mutationObserver";
 import type { ModelAction } from "../actionLog";
 import { compile_system } from "../rhizz_wasm_wrapper";
-import { applyModelMutation, type ModelMutationOp } from "./applyMutation";
+import {
+  applyModelMutation,
+  checkModelMutation,
+  type ModelMutationOp,
+} from "./applyMutation";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -479,6 +483,44 @@ describe("applyModelMutation", () => {
     });
     expect(refused.applied).toBe(false);
     expect(refused.refusal).toContain("cpu");
+  });
+
+  it("reports a refusal without writing, before any confirm", async () => {
+    const fs = memoryFs();
+    let baseline = "";
+    const setup: ModelMutationOp[] = [
+      {
+        kind: "add_component_definition",
+        label: "cpu",
+        options: { leaf: true },
+      },
+      { kind: "add_component_definition", label: "fc" },
+      { kind: "add_instance", parentPath: "fc", label: "mcu", source: "cpu" },
+      { kind: "add_system", label: "demo" },
+      { kind: "add_instance", parentPath: "demo", label: "f", source: "fc" },
+      {
+        kind: "add_connection",
+        scopePath: "demo",
+        label: "link",
+        from: "/demo/f/mcu",
+        to: "/demo/f",
+      },
+    ];
+    for (const op of setup) {
+      const result = await applyModelMutation(fs, "system.hcl", baseline, op);
+      expect(result.applied).toBe(true);
+      baseline = fs.store.get("system.hcl") ?? "";
+    }
+
+    // The connection in `demo` still uses `f/mcu`, so the delete is refused.
+    const op: ModelMutationOp = {
+      kind: "delete_component",
+      path: "demo/f/mcu",
+    };
+    const refusal = checkModelMutation("system.hcl", baseline, op);
+    expect(refusal).toContain("mcu");
+    // The check leaves the model untouched.
+    expect(fs.store.get("system.hcl")).toBe(baseline);
   });
 
   it("reparents through the dispatcher", async () => {
