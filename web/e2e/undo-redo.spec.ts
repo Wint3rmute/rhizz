@@ -48,6 +48,18 @@ test("create undoes canvas + model, redo restores both", async ({ page }) => {
   await expect(canvas.getByText("e2e-sensor").first()).toBeVisible();
 });
 
+test("undo and redo with nothing left say so in the activity hint", async ({
+  page,
+}) => {
+  await openDiagram(page);
+  const hint = page.getByTestId("activity-hint");
+
+  await page.keyboard.press("Control+z");
+  await expect(hint).toHaveText("No more actions to undo");
+  await page.keyboard.press("Control+y");
+  await expect(hint).toHaveText("No more actions to redo");
+});
+
 test("drag undo keeps working after a model op", async ({ page }) => {
   await openDiagram(page);
   await createComponent(page, "e2e-drag");

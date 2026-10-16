@@ -16,16 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — More information in the modeling/ canvas action type popup
-
-In the modeling/ page, a popup on the bottom-left corner informs the user about
-their current action, e.g. "dragging" or "selecting". I want the popup to also fire when the user:
-
-- Hides a component instance - "component <name> hidden"
-- Hides a connection - "connection <name> hidden"
-- Hides a connection - "connection <name> hidden"
-- Runs undo/redo - "Undo" or "Redo", alternatively "No more actions to undo/redo"
-
 ## Task <N> - Weird undo-redo behavior after switching a diagram
 
 Steps to reproduce:

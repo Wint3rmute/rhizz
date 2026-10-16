@@ -1159,6 +1159,7 @@
       return;
     }
     savedConnections[label] = { ...prev, hidden: true };
+    flashActivity(`connection ${label} hidden`);
   }
 
   // Padding kept between a child node's edges and its active parent's edges,
@@ -1474,39 +1475,41 @@
   // so a drag after a create reverts the drag first.
   async function undoDiagramEdit() {
     if (autoLayoutRunning) return;
+    if (!(await undoOnce())) flashActivity("No more actions to undo");
+  }
+
+  async function undoOnce(): Promise<boolean> {
     const unifiedTop = top(unifiedUndoSeqs);
     const diagramTop = top(diagramUndoSeqs);
     if (
       unifiedTop !== undefined &&
       (diagramTop === undefined || unifiedTop > diagramTop)
     ) {
-      if (await undoUnifiedEntry()) return;
-      undoDiagramEntry();
-      return;
+      if (await undoUnifiedEntry()) return true;
+      return undoDiagramEntry();
     }
-    if (diagramTop !== undefined) {
-      if (undoDiagramEntry()) return;
-    }
-    await undoUnifiedEntry();
+    if (diagramTop !== undefined && undoDiagramEntry()) return true;
+    return undoUnifiedEntry();
   }
 
   // Ctrl/Cmd+Y (or Ctrl/Cmd+Shift+Z, the Mac-idiomatic alternative).
   async function redoDiagramEdit() {
     if (autoLayoutRunning) return;
+    if (!(await redoOnce())) flashActivity("No more actions to redo");
+  }
+
+  async function redoOnce(): Promise<boolean> {
     const unifiedTop = top(unifiedRedoSeqs);
     const diagramTop = top(diagramRedoSeqs);
     if (
       unifiedTop !== undefined &&
       (diagramTop === undefined || unifiedTop > diagramTop)
     ) {
-      if (await redoUnifiedEntry()) return;
-      redoDiagramEntry();
-      return;
+      if (await redoUnifiedEntry()) return true;
+      return redoDiagramEntry();
     }
-    if (diagramTop !== undefined) {
-      if (redoDiagramEntry()) return;
-    }
-    await redoUnifiedEntry();
+    if (diagramTop !== undefined && redoDiagramEntry()) return true;
+    return redoUnifiedEntry();
   }
 
   // Runs one model mutation plus its canvas placement as a single undoable
@@ -2320,8 +2323,10 @@
     const keyToRemove = selectedKey;
     delete checked[keyToRemove];
     const index = keyToIndex.get(keyToRemove);
+    const label = index !== undefined ? components[index]?.label : undefined;
     if (index !== undefined) deselect(index);
     else clearSelection();
+    if (label) flashActivity(`component ${label} hidden`);
   }
 
   async function handleOpenDocumentation(): Promise<void> {
@@ -4179,6 +4184,7 @@
       />
 
       <div
+        data-testid="activity-hint"
         class="absolute bottom-2 right-2 z-10 pointer-events-none bg-base-100 border border-base-300 rounded-box shadow px-3 py-1 text-sm text-base-content/80"
         style="opacity: {activityHintVisible
           ? 1

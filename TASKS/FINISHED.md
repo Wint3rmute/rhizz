@@ -4,6 +4,28 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — More information in the modeling/ canvas action popup
+
+The bottom corner popup on the Modeling page, which showed only the pointer
+interaction ("Dragging", "Selecting"…), now also announces:
+
+- **Hiding a component:** "component <name> hidden", from Delete, the context
+  menu's "Hide from this view", and H.
+- **Hiding a connection:** "connection <name> hidden", from Delete, the context
+  menu, and the Connections sidebar checkbox.
+- **Undo/redo:** "Undo" / "Redo" on success, or "No more actions to undo" /
+  "No more actions to redo" when the history is empty.
+
+Implementation: `flashActivity()` labels, and the undo/redo handlers split into
+`undoOnce`/`redoOnce`, which report whether a step ran. The popup has
+`data-testid="activity-hint"`.
+
+- **Tests:** Playwright assertions in `delete-from-view.spec.ts`,
+  `connection-visibility.spec.ts`, and `undo-redo.spec.ts` (new "nothing left"
+  test).
+
+---
+
 ## Task <N> — Trash buttons on the Components and Connections sidebars
 
 The Modeling sidebars get the same hover trash icon the file tree has. Clicking
