@@ -56,6 +56,9 @@ test("delete removes the node from the view but keeps it in the model", async ({
 
   await page.keyboard.press("Delete");
   await expect(canvas.getByText("e2e-vanish").first()).toBeHidden();
+  await expect(page.getByTestId("activity-hint")).toHaveText(
+    "component e2e-vanish hidden",
+  );
 
   // The model keeps the component: its tree row survives, unchecked — only
   // the view placement is gone.
@@ -67,8 +70,10 @@ test("delete removes the node from the view but keeps it in the model", async ({
   // Undo restores the node on canvas, redo removes it from the view again.
   await page.keyboard.press("Control+z");
   await expect(canvas.getByText("e2e-vanish").first()).toBeVisible();
+  await expect(page.getByTestId("activity-hint")).toHaveText("Undo");
   await page.keyboard.press("Control+y");
   await expect(canvas.getByText("e2e-vanish").first()).toBeHidden();
+  await expect(page.getByTestId("activity-hint")).toHaveText("Redo");
 
   // The model keeps the component: Code still shows its instance
   // block. (A whole-model delete removes the instance and leaves only the
