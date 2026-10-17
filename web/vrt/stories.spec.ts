@@ -132,27 +132,6 @@ async function waitForStableLayout(page: Page): Promise<void> {
 // ruler painted. `canvas.decorationsOverviewRuler` is transparent until Monaco
 // paints it, so "has an opaque pixel" means "painted". Bounded, and a story
 // without an editor (no such nodes) returns immediately.
-// Monaco's text cursor is a DOM node whose visibility is toggled by a
-// JavaScript interval (viewCursors.js: `_cursorFlatBlinkInterval`), not by a
-// CSS animation: it is only invisible while the editor does NOT have focus
-// (`_getCursorBlinking()` -> Hidden). Neither of Playwright's guards covers it
-// — `caret: "hide"` sets `caret-color`, which Monaco's custom cursor node
-// ignores, and `animations: "disabled"` finishes CSS animations/transitions,
-// which the JS interval is not. So a capture races the blink: it can land on
-// a frame with the cursor showing (~37 px of `--color-primary` over one text
-// line), which both destabilises Playwright's two-stable-frames check and
-// diffs against a baseline captured unfocused.
-//
-// Blurring the editor is the app's own resting state for an unfocused editor
-// (cursor hidden, blink interval cancelled), so it is deterministic rather
-// than a timing bet. Run it after every wait, just before the capture.
-async function stopBlinkingCursors(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) active.blur();
-  });
-}
-
 async function waitForMonacoChrome(page: Page): Promise<void> {
   await page
     .waitForFunction(
@@ -266,7 +245,6 @@ for (const story of loadStories()) {
       await pinViewportHeight(page);
       await waitForStableLayout(page);
       await waitForMonacoChrome(page);
-      await stopBlinkingCursors(page);
 
       const hoverText = await storyHoverText(page);
       if (hoverText !== undefined) {
