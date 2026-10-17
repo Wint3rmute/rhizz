@@ -1,0 +1,172 @@
+# EXPERIMENT ONLY — not part of CI. A copy of the `visual-regressions` job
+# from frontend.yml with workflow_dispatch, a 20-way repeat matrix and an
+# environment-diagnostics step, used to measure VRT flakiness on a fixed SHA.
+# https://github.com/Wint3rmute/rhizz branch fix/vrt-robustness
+#
+# Trigger with:
+#   gh workflow run vrt-experiment.yml --ref fix/vrt-robustness \
+#     -f experiment=baseline
+name: vrt-experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: "Experiment label (recorded in the CI ledger)"
+        required: true
+        default: baseline
+
+# Never cancel a repeat matrix halfway through: the whole point is the count.
+concurrency:
+  group: vrt-experiment-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix build .#rhizz-wasm-pkg
+      - run: |
+          rm -rf crates/rhizz-wasm/pkg
+          mkdir -p crates/rhizz-wasm/pkg
+          cp -rL result/. crates/rhizz-wasm/pkg/
+          chmod -R u+w crates/rhizz-wasm/pkg
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
+
+  vrt:
+    needs: wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        # 20 repeats of the whole suite, one per job: whole-suite effects
+        # (server start, warm/cold caches) are preserved and the repeat
+        # index is part of the artifact name.
+        index: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: actions/download-artifact@v8
+        with:
+          name: rhizz-wasm
+          path: crates/rhizz-wasm/pkg/
+
+      - name: Print environment diagnostics
+        run: |
+          {
+            echo "== runner =="
+            echo "runner: $GITHUB_RUNNER_NAME / $GITHUB_RUNNER_ARCH / image $RUNNER_IMAGE_NAME"
+            echo "run_id: $GITHUB_RUN_ID attempt: $GITHUB_RUN_ATTEMPT experiment: ${{ inputs.experiment }} matrix: ${{ matrix.index }}"
+            echo "== cpu/mem/shm =="
+            nproc
+            grep -E "MemTotal|MemAvailable" /proc/meminfo
+            df -h /dev/shm
+            echo "== time/locale =="
+            echo "TZ=${TZ:-unset} LANG=${LANG:-unset} LC_ALL=${LC_ALL:-unset}"
+            date
+            echo "== nix =="
+            nix --version
+            node -e 'const fs=require("fs");const n=JSON.parse(fs.readFileSync("./flake.lock","utf8")).nodes.nixpkgs.locked;console.log("nixpkgs",n.rev,n.narHash)'
+            echo "== fonts =="
+            # fontconfig tools are not in the devshell; fetch them ad hoc.
+            nix shell nixpkgs#fontconfig -c bash -c '
+              fc-list | sort | md5sum
+              fc-list | wc -l
+              echo "sans-serif: $(fc-match sans-serif)"
+              echo "serif: $(fc-match serif)"
+              echo "monospace: $(fc-match monospace)"
+              fc-list | sort
+            ' || echo "(fontconfig diagnostics failed)"
+            echo "== browser =="
+            echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH"
+            "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*/chrome-linux/chrome --version || true
+            echo "FONTCONFIG_FILE=$FONTCONFIG_FILE"
+          } 2>&1 | tee diag.txt
+
+      - run: nix develop --command npm ci
+        working-directory: ./web
+
+      - run: nix develop --command npm run build-storybook
+        working-directory: ./web
+
+      - name: VRT (repeat ${{ matrix.index }})
+        run: |
+          cd web
+          PLAYWRIGHT_JSON_OUTPUT_NAME="$PWD/report.json" \
+            nix develop --command npm run test:vrt -- --reporter=json --workers=2
+        continue-on-error: true
+
+      - name: Summarize repeat ${{ matrix.index }}
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            let r;
+            try {
+              r = JSON.parse(fs.readFileSync("web/report.json", "utf8"));
+            } catch {
+              console.log("no report.json (run crashed?)");
+              process.exit(0);
+            }
+            const fails = [];
+            const walk = (suite) => {
+              for (const s of suite.suites || []) walk(s);
+              for (const spec of suite.specs || []) {
+                for (const t of spec.tests) {
+                  const st = t.results.at(-1).status;
+                  if (st !== "expected" && st !== "skipped") {
+                    const err = t.results.at(-1).error?.message ?? "";
+                    const px = /(\d+) pixels \(ratio ([\d.]+)/.exec(err);
+                    fails.push(`${spec.location.file}:${spec.location.line} > ${spec.title} :: ${st} :: ${px ? px[1] + "px ratio " + px[2] : err.split("\n")[0].slice(0, 120)}`);
+                  }
+                }
+              }
+            };
+            for (const s of r.suites) walk(s);
+            console.log(`REPEAT ${process.argv[1]}/${process.argv[2]} duration=${r.stats.duration}ms failures=${fails.length}`);
+            for (const f of fails) console.log("FAIL " + f);
+          ' "${{ matrix.index }}" "${{ inputs.experiment }}" | tee summary.txt
+
+      - name: Probe flaky stories (timeline)
+        if: always()
+        run: |
+          cd web
+          # One timeline per flaky story: ruler canvas paint + focus/cursor state.
+          nix develop --command node ../scripts/vrt-research/probe-series.mjs \
+            pages-code--default light 10 "" ../probe-code.txt || true
+          nix develop --command node ../scripts/vrt-research/probe-series.mjs \
+            pages-inventory--documentation-editor-open dark 10 "" ../probe-inventory.txt || true
+          echo "probe done"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ inputs.experiment }}-diag-${{ matrix.index }}
+          path: |
+            diag.txt
+            web/report.json
+            web/summary.txt
+            probe-code.txt
+            probe-inventory.txt
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ inputs.experiment }}-artifacts-${{ matrix.index }}
+          path: web/test-results/
+          if-no-files-found: ignore
