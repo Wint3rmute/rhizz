@@ -159,8 +159,8 @@ jobs:
           if-no-files-found: ignore
 
 jobs-summary:
-    needs: vrt
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "experiment ${{ inputs.experiment }} finished"
+  needs: vrt
+  if: always()
+  runs-on: ubuntu-latest
+  steps:
+    - run: echo "experiment ${{ inputs.experiment }} finished"
