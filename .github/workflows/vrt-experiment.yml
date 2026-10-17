@@ -80,7 +80,7 @@ jobs:
             date
             echo "== nix =="
             nix --version
-            node -e 'const l=require("./flake.lock");const n=l.nodes.nixpkgs.locked;console.log("nixpkgs",n.rev,n.narHash)'
+            node -e 'const fs=require("fs");const n=JSON.parse(fs.readFileSync("./flake.lock","utf8")).nodes.nixpkgs.locked;console.log("nixpkgs",n.rev,n.narHash)'
             echo "== fonts =="
             # fontconfig tools are not in the devshell; fetch them ad hoc.
             nix shell nixpkgs#fontconfig -c bash -c '
@@ -141,6 +141,17 @@ jobs:
             for (const f of fails) console.log("FAIL " + f);
           ' "${{ matrix.index }}" "${{ inputs.experiment }}" | tee summary.txt
 
+      - name: Probe flaky stories (timeline)
+        if: always()
+        run: |
+          cd web
+          # One timeline per flaky story: ruler canvas paint + focus/cursor state.
+          node ../scripts/vrt-research/probe-series.mjs \
+            pages-code--default light 10 "" ../probe-code.txt || true
+          node ../scripts/vrt-research/probe-series.mjs \
+            pages-inventory--documentation-editor-open dark 10 "" ../probe-inventory.txt || true
+          echo "probe done"
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -149,6 +160,8 @@ jobs:
             diag.txt
             web/report.json
             web/summary.txt
+            probe-code.txt
+            probe-inventory.txt
           if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v7
