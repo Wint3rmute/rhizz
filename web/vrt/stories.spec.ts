@@ -169,6 +169,29 @@ async function waitForMonacoChrome(page: Page): Promise<void> {
     .catch(() => {});
 }
 
+// Monaco's text cursor is a DOM node whose visibility a JavaScript interval
+// toggles (~500 ms, viewCursors.js `_cursorFlatBlinkInterval`) while the
+// editor has focus. Neither Playwright guard covers it: `caret: "hide"` only
+// sets `caret-color` (Monaco's cursor is a styled div, not the native caret),
+// and `animations: "disabled"` only finishes CSS animations/transitions,
+// which the JS interval is not. So a capture races the blink: it can land on
+// a frame with the cursor showing (~37 px of `--color-primary` over one text
+// line), which both destabilises Playwright's two-stable-frames check ("Failed
+// to take two consecutive stable screenshots") and diffs against baselines
+// captured with it hidden.
+//
+// Hide the cursor node itself: scoped to Monaco's cursor, so nothing else —
+// in particular the input focus rings baselines deliberately capture — is
+// touched, and every blink phase renders identically. (A plain
+// `activeElement.blur()` also stops the blink, but it strips focus rings from
+// every focused input: ~60 stories then failed 100% deterministically, so it
+// is the wrong tool.) Run it after every wait, just before the capture.
+async function hideBlinkingCursors(page: Page): Promise<void> {
+  await page.addStyleTag({
+    content: ".monaco-editor .cursor { visibility: hidden !important; }",
+  });
+}
+
 // Hover-revealed chrome (CSS `group-hover`) only appears for a real pointer,
 // and a story's play function dispatches synthetic events, so a story opts in
 // with `parameters.vrtHoverText`: the VRT hovers the element whose exact text
@@ -245,6 +268,7 @@ for (const story of loadStories()) {
       await pinViewportHeight(page);
       await waitForStableLayout(page);
       await waitForMonacoChrome(page);
+      await hideBlinkingCursors(page);
 
       const hoverText = await storyHoverText(page);
       if (hoverText !== undefined) {
