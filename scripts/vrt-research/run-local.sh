@@ -23,6 +23,16 @@ BASE=".vrt-research/runs/local/$LABEL"
 SHA=$(git rev-parse --short HEAD)
 mkdir -p "$BASE"
 
+# Single-instance guard: two loops writing the same label dir steal each
+# other's test-results and contaminate the measurement (they did exactly that
+# once during this research).
+LOCK="$BASE/.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "another $LABEL run is active (lock $LOCK)" >&2
+  exit 1
+fi
+trap 'rmdir "$LOCK"' EXIT
+
 WORKERS_ARG=""
 [ -n "$WORKERS" ] && WORKERS_ARG="--workers=$WORKERS"
 
