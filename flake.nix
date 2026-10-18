@@ -118,6 +118,9 @@
               wasm-pack
               nodejs
               just
+              # Conventional-commit tooling (`cz commit`, `cz check`, `cz bump`);
+              # config lives in cz.toml. Driven through the `just` recipes.
+              commitizen
               lld
               # LLVM tools matching rustc's LLVM (21.1.8), required by
               # cargo-llvm-cov (NixOS equivalent of rustup's
