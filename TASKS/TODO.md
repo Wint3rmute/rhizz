@@ -16,6 +16,27 @@ How to work on this file:
 
 ---
 
+## Task <N> — Review `encapsulates` usage against its meaning
+
+The existing `connection.encapsulates` attribute means "this connection runs on
+top of the listed connection". In normal usage, "encapsulate" means the outer
+layer contains the inner one, so the name points the opposite way. Proposal 0002
+uses `carries` for the protocol-level attribute to avoid a second reversed
+meaning.
+
+- Review every use of `encapsulates` in `SPEC.md` (§2.7), `SPEC/` (models.md,
+  diagnostics E003/E004), `crates/rhizz-core` (parse.rs, model.rs, resolve.rs,
+  validate.rs and tests), `examples/`, `book/`, and `web/`.
+- Decide whether to rename the connection attribute (for example to `runs_on`)
+  or keep it and document the convention. Update `book/src/proposals/0002-protocol-modeling.md`
+  if the decision affects `carries`.
+- If renaming: update the HCL schema, diagnostics, Rust fields, tests, examples,
+  and book, and add migration notes for existing `.hcl` files.
+- Definition of done: one meaning for the word in code, spec, and docs, and
+  `just test`, `just lint`, `just build` pass.
+
+---
+
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit

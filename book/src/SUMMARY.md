@@ -17,3 +17,4 @@
 - [Index](proposals/README.md)
 - [Template](proposals/0000-template.md)
 - [0001 Rhizz v0.6 Baseline](proposals/0001-baseline.md)
+- [0002 Protocol Modeling](proposals/0002-protocol-modeling.md)
