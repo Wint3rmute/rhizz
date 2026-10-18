@@ -1,0 +1,32 @@
+name: commitizen
+
+# Enforces conventional commits (cz.toml) on every commit a PR introduces.
+# Local hooks are intentionally not used; this check is the only gate.
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cz-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so the base branch is available for the range.
+          fetch-depth: 0
+          # Check out the PR head, not the default merge commit: the merge
+          # commit's message is auto-generated and would fail the check.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix develop --command just commit-check "origin/${{ github.base_ref }}"
+
+permissions:
+  contents: read
