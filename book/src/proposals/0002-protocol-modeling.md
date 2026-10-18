@@ -65,14 +65,14 @@ Add two attributes to the top-level `protocol` block:
 | Attribute | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `leaf` | bool | no | `false` | Whether the protocol is considered sufficiently concrete to require no further decomposition. |
-| `carries` | list(string) | no | `[]` | Protocols that this protocol can carry as payload. Each value references a top-level `protocol` label. |
+| `encapsulates` | list(string) | no | `[]` | Protocols that this protocol can carry as payload. Each value references a top-level `protocol` label. |
 
 `leaf` follows the same default convention as `component.leaf`. A protocol with
 `leaf = true` needs no further realization. A non-leaf protocol must be realized
 by one or more connections whose realization chains eventually terminate at
 leaf protocols.
 
-`carries` expresses a compatibility rule between protocol types,
+`encapsulates` expresses a compatibility rule between protocol types,
 independently of any particular connection.
 
 For example:
@@ -88,22 +88,22 @@ protocol "fund-transfer" {
 
 protocol "http" {
   leaf        = false
-  carries     = ["fund-transfer"]
+  encapsulates     = ["fund-transfer"]
 }
 
 protocol "tls" {
   leaf        = false
-  carries     = ["http"]
+  encapsulates     = ["http"]
 }
 
 protocol "tcp" {
   leaf        = false
-  carries     = ["tls"]
+  encapsulates     = ["tls"]
 }
 
 protocol "ip" {
   leaf        = true
-  carries     = ["tcp"]
+  encapsulates     = ["tcp"]
 }
 ```
 
@@ -111,9 +111,7 @@ Here, HTTP can carry a fund-transfer interaction, TLS can carry HTTP, TCP can
 carry TLS, and IP is the terminal protocol for this model.
 
 The list describes what a protocol can carry. The direction is payload nesting:
-`http.carries = ["fund-transfer"]` means HTTP can carry fund-transfer messages.
-The connection-level `connection.encapsulates` attribute uses the same direction:
-a connection lists the higher-level connections it can carry.
+`http.encapsulates = ["fund-transfer"]` means HTTP can carry fund-transfer messages.
 
 Only adjacent layers
 in a realization chain need to satisfy the compatibility rule.
@@ -212,7 +210,7 @@ promote the warning to a failing result.
 When connection `A` is realized by connection `B`, the protocol used by `B` must
 declare that it can carry the protocol used by `A`.
 
-Formally, if `protocol(A) = P` and `protocol(B) = Q`, then `Q.carries` must contain `P`.
+Formally, if `protocol(A) = P` and `protocol(B) = Q`, then `Q.encapsulates` must contain `P`.
 
 This rule applies between each directly related pair, rather than requiring a
 lower-level protocol to list every protocol appearing earlier in the chain.
@@ -255,7 +253,7 @@ Each code requires a matching file under `SPEC/diagnostics/`.
 |---|---|---|
 | `E017` | Error | A `realized_by` entry references a connection that cannot be resolved. |
 | `E018` | Error | Connections form a cycle through `realized_by` references. |
-| `E019` | Warning | A realization violates protocol `carries` compatibility. |
+| `E019` | Warning | A realization violates protocol `encapsulates` compatibility. |
 | `E020` | Error | A connection with a leaf protocol declares `realized_by`. |
 | `W019` | Architectural | A connection is incomplete because its non-leaf protocol has no realization, or its realization chain has not reached leaf protocols. |
 | `W020` | Architectural | A realization refers to endpoints outside the corresponding component hierarchies of the higher-level connection. |
