@@ -1,7 +1,6 @@
 name: commitizen
 
 # Enforces conventional commits (cz.toml) on every commit a PR introduces.
-# Local hooks are intentionally not used; this check is the only gate.
 on:
   pull_request:
     branches: [main, master]
@@ -12,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cz-check:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -28,7 +27,7 @@ jobs:
         with:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
-      - run: nix develop --command just commit-check "origin/${{ github.base_ref }}"
+      - run: nix develop --command just lint-commit "origin/${{ github.base_ref }}"
 
       # CHANGELOG.md must match what `cz changelog` generates from the PR's
       # commits. Regenerate in place, then fail if the file changed.
