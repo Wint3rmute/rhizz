@@ -6,6 +6,7 @@ has_nix := if shell('command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -
     "false"
 }
 
+alias c := lint-commit
 alias b := build
 alias w := wasm
 alias t := test
@@ -15,16 +16,6 @@ alias fmt := format
 alias bs := book-serve
 
 run := if has_nix == "true" { "nix develop --command" } else { "" }
-
-# Conventional commits via commitizen (config: cz.toml).
-# Interactive commit prompt.
-commit:
-    {{run}} cz commit
-
-# Validates every commit since BASE. CI runs the same check on PRs.
-# Checks commits since origin/main by default.
-commit-check base="origin/main":
-    {{run}} cz check --rev-range {{base}}..HEAD
 
 # Versions come from git tags (version_provider = "scm").
 # Bumps from commits since the last tag, updates CHANGELOG.md, creates the tag.
@@ -40,8 +31,18 @@ format:
     {{run}} cargo fmt --all
     {{run}} sh -c 'cd web && npm run format'
 
-lint:
-    {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all && cd web && npm run sync && npm run eslint && npm run check-only'
+lint: lint-rust lint-frontend lint-commit
+
+lint-rust:
+    {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all'
+
+lint-frontend:
+    {{run}} sh -c 'cd web && npm run sync && npm run eslint && npm run check-only'
+
+# Validates every commit since BASE. CI runs the same check on PRs.
+# Checks commits since origin/main by default.
+lint-commit base="origin/main":
+    {{run}} sh -c 'if [ -z "$(git rev-list {{base}}..HEAD)" ]; then echo "No commits since {{base}}, nothing to check."; else cz check --rev-range {{base}}..HEAD; fi'
 
 test: wasm
     {{run}} cargo test --quiet --all
