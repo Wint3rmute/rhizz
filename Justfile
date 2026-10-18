@@ -16,6 +16,26 @@ alias bs := book-serve
 
 run := if has_nix == "true" { "nix develop --command" } else { "" }
 
+# Conventional commits via commitizen (config: cz.toml).
+# Interactive commit prompt.
+commit:
+    {{run}} cz commit
+
+# Validates every commit since BASE. CI runs the same check on PRs.
+# Checks commits since origin/main by default.
+commit-check base="origin/main":
+    {{run}} cz check --rev-range {{base}}..HEAD
+
+# Versions come from git tags (version_provider = "scm").
+# Bumps from commits since the last tag, updates CHANGELOG.md, creates the tag.
+# Preview first with `just bump --dry-run`.
+bump *args:
+    {{run}} cz bump {{args}}
+
+# Regenerates CHANGELOG.md.
+changelog *args:
+    {{run}} cz changelog {{args}}
+
 format:
     {{run}} cargo fmt --all
     {{run}} sh -c 'cd web && npm run format'

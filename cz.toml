@@ -1,0 +1,14 @@
+[tool.commitizen]
+name = "cz_conventional_commits"
+# Versions live in git tags, not in Cargo.toml / web/package.json.
+version_provider = "scm"
+version_scheme = "semver"
+# Existing tags are bare semver (0.1.0-rc.2), no "v" prefix.
+tag_format = "$version"
+annotated_tag = true
+bump_message = "bump: version $current_version → $new_version"
+update_changelog_on_bump = true
+changelog_file = "CHANGELOG.md"
+changelog_incremental = true
+# Pre-release: breaking changes bump MINOR while the major version is 0 (no compatibility guarantees yet).
+major_version_zero = true
