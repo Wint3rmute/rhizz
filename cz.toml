@@ -10,5 +10,8 @@ bump_message = "bump: version $current_version → $new_version"
 update_changelog_on_bump = true
 changelog_file = "CHANGELOG.md"
 changelog_incremental = true
+# Changelog covers commits after this revision; commitizen treats the start rev as exclusive,
+# so the parent of the marked commit (c777641) is used to include c777641 itself.
+changelog_start_rev = "d0df3ee"
 # Pre-release: breaking changes bump MINOR while the major version is 0 (no compatibility guarantees yet).
 major_version_zero = true
