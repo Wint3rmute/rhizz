@@ -1,6 +1,6 @@
 # 0001: Rhizz v0.6 Baseline
 
-- **Status:** draft
+- **Status:** accepted
 - **Author:** @wint3rmute
 - **Created:** 2026.10.18
 
