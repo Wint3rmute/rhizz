@@ -16,3 +16,4 @@
 
 - [Index](proposals/README.md)
 - [Template](proposals/0000-template.md)
+- [0001 Rhizz v0.6 Baseline](proposals/0001-baseline.md)

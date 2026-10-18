@@ -1,5 +1,11 @@
 # Proposals
 
+> [!IMPORTANT]
+> Proposals do not describe the current state of the project. Proposals keep the
+> history of changes proposed to the Rhizz project, documenting how the project
+> has evolved. Up-to-date spec of how Rhizz works can always be found in
+> [SPEC.md](https://github.com/Wint3rmute/rhizz/blob/main/SPEC.md).
+
 Proposals are design documents for changes to the Rhizz language, its
 diagnostics, scoring, views, or CLI. Each proposal is numbered and carries a
 status.

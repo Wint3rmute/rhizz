@@ -2,9 +2,7 @@
 
 - **Status:** draft
 - **Author:** @handle
-- **Created:** YYYY-MM-DD
-- **Spec impact:** SPEC.md §X.Y, SPEC/models.md, …
-- **Diagnostics:** new codes (e.g. E0xx, W0xx), or "none"
+- **Created:** YYYY.MM.DD
 
 ## Motivation
 
