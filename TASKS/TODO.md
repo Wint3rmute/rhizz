@@ -196,3 +196,31 @@ versions. `npm audit fix` cannot replace them: without `--force` it moves
 
 After removing an override, run `npm audit` and confirm the finding stays clear.
 
+---
+
+## Task <N> — Replace the Justfile with Nix-managed scripts
+
+Replace `Justfile` recipes with scripts defined in `flake.nix` and put them on
+the devshell `PATH`, so they run as `lint-rust`, `lint-commit`, etc.
+
+- Decide the script language: bash (`pkgs.writeShellApplication`) or nushell
+  (`pkgs.writers.writeNuBin`). Confirm the chosen writer exists in the pinned
+  nixpkgs before committing to it.
+- Start with `lint-rust`, `lint-frontend`, and `lint-commit`. Add them to
+  `devShells.default` `packages`, and keep the devshell env vars (`LLVM_COV`,
+  `PLAYWRIGHT_BROWSERS_PATH`, `RHIZZ_VRT_FONTCONFIG_FILE`) working inside them.
+- Port the remaining recipes (`format`, `test`, `build`, `coverage`, `wasm`,
+  `web-build`, `book`, `vrt`, `serve`, `changelog`, `bump`), with a script
+  `cd`ing to the repo root via `git rev-parse --show-toplevel`.
+- Point CI at the scripts: `nix develop --command <script>` in
+  `.github/workflows/*.yml`, including `commitizen.yml`'s `commit-check` and
+  `changelog` calls.
+- Remove `Justfile` and update `AGENTS.md` and docs that mention `just`.
+- Remove the stub `builder.sh` package from the devshell in `flake.nix`.
+
+Definition of done:
+
+- `lint` runs `lint-rust`, `lint-frontend`, and `lint-commit` and passes.
+- Every former `just` recipe has a devshell equivalent.
+- CI passes with no `just` invocations left in `.github/`.
+
