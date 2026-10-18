@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Review `encapsulates` usage against its meaning
+
+`connection.encapsulates` keeps its name and its behavior. Its meaning is now
+the one the word carries: a connection lists the higher-level connections (the
+protocols) it can carry. The docs and comments had it reversed ("runs on top
+of"). No rename, and no change to parsing, resolution, or cycle detection (the
+code never depended on the direction).
+
+- **Corrected:** `SPEC.md` §2.7 table, §9 example (Ethernet → TCP → HTTP),
+  `model.rs` and `parse.rs` doc comments, and proposal 0002 (the `carries`
+  rationale and the "Use only `connection.encapsulates`" alternative).
+- **Checked, unchanged:** diagnostics E003/E004 (their examples already read
+  correctly under the corrected meaning), `SPEC/models.md`, `examples/`, and the
+  web app (no connection-level uses).
+- **Not done:** existing `.hcl` files that used `encapsulates` with the old
+  reading still parse, but their lists now read the other way round. None in
+  the repo, so no migration was needed.
+- **Validation:** `just test`, `just lint`, `just build` pass.
+
+---
+
 ## Task <N> — More information in the modeling/ canvas action popup
 
 The bottom corner popup on the Modeling page, which showed only the pointer

@@ -325,7 +325,7 @@ system "drone" {
 | `full_name`  | string       | no       | `""`             | Full official name, expanding abbreviations                                     |
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
-| `encapsulates` | list(string) | no       | `[]`             | Labels of sibling connections this one runs on top of          |
+| `encapsulates` | list(string) | no       | `[]`             | Labels of sibling connections (higher-level protocols) this connection can carry |
 
 **No `direction` attribute** — direction is inferred from the `role` values of
 the connected ports (see §6).
@@ -737,7 +737,7 @@ system "home-monitor" {
 | `type` on fields is a free-form string                          | Supports gradual specification — no type system to fight during early design                                                                                                                                            |
 | `level` auto-increments from parent                             | Reduces boilerplate; explicit override still available                                                                                                                                                                  |
 | Views are top-level blocks                                      | A view can reference any system; decoupled from the model itself                                                                                                                                                        |
-| `encapsulates` is a name-based reference                        | Captures protocol layering (HTTP → TCP → Ethernet) without deep nesting                                                                                                                                                 |
+| `encapsulates` is a name-based reference                        | Captures protocol layering (Ethernet encapsulates TCP, TCP encapsulates HTTP) without deep nesting                                                                                                                     |
 | Multiple frontends share one compiler core                      | Keeps all model semantics in one tested place; frontends own only I/O and presentation                                                                                                                                  |
 
 **Out of scope for v1, currently non-goals. Candidates for v2:**
