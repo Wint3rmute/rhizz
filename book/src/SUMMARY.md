@@ -11,3 +11,8 @@
 - [Protocols, Ports & Messages](07_protocols.md)
 - [Completion Scoring](08_scoring.md)
 - [CLI Reference](09_cli.md)
+
+# Proposals
+
+- [Index](proposals/README.md)
+- [Template](proposals/0000-template.md)
