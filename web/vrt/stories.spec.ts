@@ -169,6 +169,58 @@ async function waitForMonacoChrome(page: Page): Promise<void> {
     .catch(() => {});
 }
 
+// Monaco's text cursor is a DOM node whose visibility a JavaScript interval
+// toggles (~500 ms, viewCursors.js `_cursorFlatBlinkInterval`) while the
+// editor has focus. Neither Playwright guard covers it: `caret: "hide"` only
+// sets `caret-color` (Monaco's cursor is a styled div, not the native caret),
+// and `animations: "disabled"` only finishes CSS animations/transitions,
+// which the JS interval is not. So a capture races the blink: it can land on
+// a frame with the cursor showing (~37 px of `--color-primary` over one text
+// line), which both destabilises Playwright's two-stable-frames check ("Failed
+// to take two consecutive stable screenshots") and diffs against baselines
+// captured with it hidden.
+//
+// Hide the cursor node itself: scoped to Monaco's cursor, so nothing else —
+// in particular the input focus rings baselines deliberately capture — is
+// touched, and every blink phase renders identically. (A plain
+// `activeElement.blur()` also stops the blink, but it strips focus rings from
+// every focused input: ~60 stories then failed 100% deterministically, so it
+// is the wrong tool.) Run it after every wait, just before the capture.
+async function hideBlinkingCursors(page: Page): Promise<void> {
+  await page.addStyleTag({
+    content: ".monaco-editor .cursor { visibility: hidden !important; }",
+  });
+}
+
+// Storybook applies `globals=theme:...` only *after* the story has rendered:
+// `data-theme` lands ~0.5 s into the page's life (probe timelines). The app
+// watches that attribute and re-defines its Monaco themes, and Monaco then
+// rebuilds the overview ruler: the re-render clears the ruler canvas, and
+// whether a follow-up render repaints it is a scheduling race — in CI the
+// canvas stayed blank in 54/200 probe loads (27%), which is exactly the suite's
+// flake rate for `pages-code--default light` (5/20 baseline runs; the failing
+// captures are byte-identical and miss the ruler's 1px border + cursor zone).
+// `waitForMonacoChrome`'s 5s bound then expires and the capture is blank.
+//
+// Applying the theme *before* the editor mounts makes Storybook's later flip
+// idempotent (same attribute value, same colours): no mid-life re-theme, no
+// ruler rebuild, the mount-time paint survives. Run before `page.goto`; it
+// re-arms itself for the viewport reload too.
+async function settleThemeEarly(page: Page, theme: string): Promise<void> {
+  await page.addInitScript((value: string) => {
+    const apply = () => {
+      const root = document.documentElement;
+      if (root && !root.getAttribute("data-theme")) {
+        root.setAttribute("data-theme", value);
+      }
+    };
+    apply();
+    // The attribute must be set as soon as <html> exists; document_start
+    // init scripts can run before the element does.
+    new MutationObserver(apply).observe(document, { childList: true });
+  }, theme);
+}
+
 // Hover-revealed chrome (CSS `group-hover`) only appears for a real pointer,
 // and a story's play function dispatches synthetic events, so a story opts in
 // with `parameters.vrtHoverText`: the VRT hovers the element whose exact text
@@ -221,6 +273,7 @@ for (const story of loadStories()) {
       );
 
       await page.emulateMedia({ colorScheme: theme });
+      await settleThemeEarly(page, theme);
       await page.goto(
         `/iframe.html?id=${story.id}&viewMode=story&globals=theme:${theme}`,
         { waitUntil: "networkidle" },
@@ -245,6 +298,7 @@ for (const story of loadStories()) {
       await pinViewportHeight(page);
       await waitForStableLayout(page);
       await waitForMonacoChrome(page);
+      await hideBlinkingCursors(page);
 
       const hoverText = await storyHoverText(page);
       if (hoverText !== undefined) {
