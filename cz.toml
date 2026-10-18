@@ -10,3 +10,5 @@ bump_message = "bump: version $current_version → $new_version"
 update_changelog_on_bump = true
 changelog_file = "CHANGELOG.md"
 changelog_incremental = true
+# Pre-release: breaking changes bump MINOR while the major version is 0 (no compatibility guarantees yet).
+major_version_zero = true
