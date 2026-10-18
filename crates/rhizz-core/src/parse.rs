@@ -208,7 +208,7 @@ pub struct RawConnection {
     pub from: Option<String>,
     /// Target reference (`"comp"` or `"comp/port"`).
     pub to: Option<String>,
-    /// Labels of sibling connections this one encapsulates.
+    /// Labels of sibling connections (higher-level protocols) this connection can carry.
     pub encapsulates: Vec<String>,
 }
 

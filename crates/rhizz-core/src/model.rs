@@ -392,7 +392,7 @@ pub struct Connection {
     pub from: ConnectionEndpoint,
     /// Target endpoint.
     pub to: ConnectionEndpoint,
-    /// Sibling connections this one runs on top of.
+    /// Sibling connections (higher-level protocols) this connection can carry.
     pub encapsulates: Vec<ConnectionId>,
 }
 

@@ -112,9 +112,8 @@ carry TLS, and IP is the terminal protocol for this model.
 
 The list describes what a protocol can carry. The direction is payload nesting:
 `http.carries = ["fund-transfer"]` means HTTP can carry fund-transfer messages.
-The name `carries` is used instead of `encapsulates` because the existing
-`connection.encapsulates` attribute means "runs on top of", which is the opposite
-direction (see Alternatives).
+The connection-level `connection.encapsulates` attribute uses the same direction:
+a connection lists the higher-level connections it can carry.
 
 Only adjacent layers
 in a realization chain need to satisfy the compatibility rule.
@@ -319,8 +318,8 @@ realization chains.
 ### Use only `connection.encapsulates`
 
 The existing connection-level `encapsulates` attribute already represents
-connections that run on top of other connections. Extending it could avoid
-introducing another relationship.
+connections that a connection can carry (higher-level protocols). Extending it
+could avoid introducing another relationship.
 
 However, its current semantics resolve sibling connection labels within the
 same scope. It does not directly express top-down realization across scopes with
