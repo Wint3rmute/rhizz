@@ -19,6 +19,8 @@ jobs:
         with:
           # Full history so the base branch is available for the range.
           fetch-depth: 0
+          # Tags define the version `cz changelog` builds on.
+          fetch-tags: true
           # Check out the PR head, not the default merge commit: the merge
           # commit's message is auto-generated and would fail the check.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -27,6 +29,18 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix develop --command just commit-check "origin/${{ github.base_ref }}"
+
+      # CHANGELOG.md must match what `cz changelog` generates from the PR's
+      # commits. Regenerate in place, then fail if the file changed.
+      - run: nix develop --command just changelog
+      - name: CHANGELOG.md is up to date
+        run: |
+          # `git status --porcelain` also catches a missing (untracked) file.
+          if [ -n "$(git status --porcelain -- CHANGELOG.md)" ]; then
+            git --no-pager diff -- CHANGELOG.md
+            echo "::error::CHANGELOG.md is out of date. Run 'just changelog' and commit the result."
+            exit 1
+          fi
 
 permissions:
   contents: read
