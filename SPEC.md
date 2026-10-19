@@ -579,8 +579,9 @@ ambiguity as in endpoint paths.
   Entries are sorted.
 
 > **Status:** the attributes parse, are stored on the model and serialize.
-> Resolution and validation (`E017`–`E020`, `W019`–`W022`) land in follow-up
-> tasks; until then entries are kept as written.
+> Resolution of `realized_by` is implemented (`E017`–`E019`). `W019`–`W021`
+> and the canonical rewriting of entries in serialized output are not yet
+> implemented; until then entries are written as declared.
 
 ---
 

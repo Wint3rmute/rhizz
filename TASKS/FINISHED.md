@@ -4,6 +4,54 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0002.3: Resolve `realized_by` (`E017`, `E018`, `E019`)
+
+Resolves connection `realized_by` entries to `ConnectionId`s (proposal 0002,
+"Reference syntax").
+
+- **Resolution:** `Connection.realized_by_ids` (deduplicated, in declaration
+  order) is filled after every connection in every scope is registered. The
+  last segment is a connection label; the segments before it go through the
+  same walker as endpoint paths (`walk_scope`, shared with `resolve_endpoint`).
+  Targets must share the declaring system or definition tree. Unresolvable
+  entries emit `E017` naming the entry and the scope searched, and are dropped.
+- **Cycles (`E018`):** one global DFS over the resolved graph. Each back edge
+  reports one cycle and is removed, so later passes terminate. Self-references
+  are one-entry cycles.
+- **`E019`:** a connection whose derived protocol is `leaf` and which declares
+  `realized_by`.
+- **Helper:** `Model::connection_protocol(ConnectionId)` returns the protocol
+  when both endpoint ports name the same non-empty protocol that resolves to a
+  top-level protocol. W007/W008 are unchanged.
+- **Endpoint refactor:** `resolve_endpoint` now uses `walk_scope` and
+  `endpoint_segments`. Its behavior is unchanged, including the silent `None`
+  for a `..` above a top-level definition.
+- **Mutations:** `delete_connection_by_label` and `delete` (instance) drop the
+  `realized_by` entries that the resolver reports as unresolved after the
+  deletion (`resolve::unresolved_realized_by`), removing only those exact
+  entries from their raw declaring block. Mutations that do not remove
+  connections are untouched. The `encapsulates` equivalent (`E003` on delete)
+  is not fixed here.
+- **Fixture change:** the serializer test `test_realized_by_keeps_non_sibling_entries_verbatim`
+  used `"../other"` from system scope, which can never resolve. Its entries now
+  point at declared connections. The verbatim and sorted check is unchanged.
+- **Tests:** each reference form except `..`, duplicate collapse, `E017` (missing
+  label, missing instance, `..` above the system, another system), `E018`
+  (self, 2-cycle, cycle inside a definition), `E019`, per-copy resolution,
+  `connection_protocol`, mutation cleanup (connection delete, instance delete,
+  and a live entry kept), plus `E003`/`E004`, which had no tests.
+- **Docs:** "(Not yet implemented)" removed from `E017`–`E019`. `SPEC/models.md`
+  (resolution step 8, scopes) and `SPEC.md` §3 status note updated.
+- **Not done:** canonical rewriting of entries in serialized output (bare label
+  for same-scope targets, absolute path otherwise). Entries are still written as
+  declared, as the 0002.1 note anticipated. The proposal's `..` form cannot
+  resolve for a connection declared in a definition or system, because the
+  definition is also resolved at top level, where `..` is an error.
+- **Validation:** `just test`, `just lint`, `just build` pass. Example projects
+  are unchanged.
+
+---
+
 ## Task <N> — 0002.2: Protocol checks (`W022`, `E020`)
 
 Resolves protocol `encapsulates` labels (proposal 0002, §1 and §6).

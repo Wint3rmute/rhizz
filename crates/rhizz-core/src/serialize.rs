@@ -1391,13 +1391,25 @@ system "s" {
   connection "top" {
     from        = "n/p"
     to          = "m/p"
-    realized_by = ["/s/low", "./low2", "../other"]
+    realized_by = ["/s/low", "./low2", "low3"]
+  }
+  connection "low" {
+    from = "n"
+    to   = "m"
+  }
+  connection "low2" {
+    from = "n"
+    to   = "m"
+  }
+  connection "low3" {
+    from = "n"
+    to   = "m"
   }
 }
 "#;
         let out = canonical(src);
         assert!(
-            out.contains("realized_by  = [\"../other\", \"./low2\", \"/s/low\"]"),
+            out.contains("realized_by  = [\"./low2\", \"/s/low\", \"low3\"]"),
             "raw entries must be kept and sorted:\n{out}"
         );
         assert_eq!(out, canonical(&out));

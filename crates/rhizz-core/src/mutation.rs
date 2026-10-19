@@ -374,6 +374,9 @@ pub fn mutate_to_hcl(
             warnings: Vec::new(),
         });
     }
+    if removes_connections(op) {
+        drop_unresolved_realized_by(&mut raw);
+    }
 
     // Same default project-name behavior as `compile` for single sources.
     let source = Source {
@@ -396,6 +399,43 @@ pub fn mutate_to_hcl(
             warnings,
         }),
         Err(diagnostics) => Err(diagnostics),
+    }
+}
+
+/// Whether `op` can remove a connection that other connections may realize.
+const fn removes_connections(op: &ModelOp) -> bool {
+    matches!(
+        op,
+        ModelOp::Delete { .. } | ModelOp::DeleteConnectionByLabel { .. }
+    )
+}
+
+/// Remove the `realized_by` entries that a deletion left dangling, so the
+/// delete is not refused by its own `E017`. The resolver reports the entries
+/// that no longer resolve, each with the raw block that declares it. Only
+/// those exact entries are removed.
+fn drop_unresolved_realized_by(raw: &mut RawFile) {
+    for dangling in resolve::unresolved_realized_by(raw.clone()) {
+        let connections = match &dangling.owner {
+            resolve::RawOwner::System(label) => raw
+                .systems
+                .iter_mut()
+                .find(|s| &s.label == label)
+                .map(|s| &mut s.inner.connections),
+            resolve::RawOwner::Definition(label) => raw
+                .components
+                .iter_mut()
+                .find(|c| &c.label == label)
+                .map(|c| &mut c.inner.connections),
+        };
+        if let Some(connection) =
+            connections.and_then(|cs| cs.iter_mut().find(|c| c.label == dangling.label))
+        {
+            connection
+                .inner
+                .realized_by
+                .retain(|e| *e != dangling.entry);
+        }
     }
 }
 
@@ -1903,5 +1943,110 @@ mod leaf_and_visual_tests {
         assert!(!hcl.contains("color       ="));
         assert!(!hcl.contains("border      ="));
         assert!(!hcl.contains("font        ="));
+    }
+
+    fn mutate_op(
+        content: &str,
+        json: &str,
+    ) -> Result<super::MutationResult, Vec<super::Diagnostic>> {
+        mutate_to_hcl(
+            "system.hcl",
+            content,
+            &serde_json::from_str::<ModelOp>(json).expect("op JSON must parse"),
+        )
+    }
+
+    /// Definition `bank` declares `low` and `high` (which realizes `low`), and
+    /// system `banking` holds one copy of it.
+    const REALIZED_BANK: &str = r#"
+component "stack" { leaf = true }
+component "bank" {
+  instance "stack" { source = "stack" }
+  connection "low" {
+    from = "stack"
+    to = "stack"
+  }
+  connection "high" {
+    from = "stack"
+    to = "stack"
+    realized_by = ["low"]
+  }
+}
+system "banking" {
+  instance "bank-a" { source = "bank" }
+}
+"#;
+
+    #[test]
+    fn delete_connection_drops_realized_by_entries_that_target_it() {
+        let result = mutate_op(
+            REALIZED_BANK,
+            r#"{"kind":"delete_connection_by_label","label":"low"}"#,
+        )
+        .expect("deleting a realized connection must succeed");
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains("realized_by"), "dangling entry kept:\n{hcl}");
+        assert!(hcl.contains("connection \"high\""), "{hcl}");
+    }
+
+    #[test]
+    fn delete_instance_drops_realized_by_entries_into_it() {
+        let src = r#"
+component "stack" { leaf = true }
+component "bank" {
+  instance "stack" { source = "stack" }
+  connection "http-request" {
+    from = "stack"
+    to = "stack"
+  }
+}
+system "banking" {
+  instance "bank-a" { source = "bank" }
+  instance "ext" { source = "stack" }
+  connection "tls" {
+    from = "ext"
+    to = "ext"
+    realized_by = ["bank-a/http-request"]
+  }
+}
+"#;
+        let result = mutate_op(
+            src,
+            r#"{"kind":"delete_component","path":"banking/bank-a"}"#,
+        )
+        .expect("deleting an instance must succeed");
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains("realized_by"), "dangling entry kept:\n{hcl}");
+        assert!(hcl.contains("connection \"tls\""), "{hcl}");
+    }
+
+    #[test]
+    fn delete_keeps_realized_by_entries_that_still_resolve() {
+        let src = r#"
+component "stack" { leaf = true }
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "uplink" {
+    from = "ext"
+    to = "ext"
+  }
+  connection "tls" {
+    from = "ext"
+    to = "ext"
+    realized_by = ["uplink"]
+  }
+  connection "spare" {
+    from = "ext"
+    to = "ext"
+  }
+}
+"#;
+        let result = mutate_op(
+            src,
+            r#"{"kind":"delete_connection_by_label","label":"spare"}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        assert!(hcl.contains("realized_by"), "live entry removed:\n{hcl}");
     }
 }

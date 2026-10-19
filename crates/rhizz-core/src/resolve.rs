@@ -7,6 +7,13 @@ use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
+/// A system whose connections are processed after every instance is registered.
+struct SystemWork {
+    sid: SystemId,
+    label: String,
+    connections: Vec<Labeled<RawConnection>>,
+}
+
 // ── Resolver state ────────────────────────────────────────────────────────────
 
 /// Internal state used throughout the resolution pass.
@@ -26,6 +33,8 @@ struct Resolver {
     used_protocol_labels: HashSet<String>,
     /// Top-level component labels that were referenced by at least one `source` attribute.
     used_top_level_labels: HashSet<String>,
+    /// `realized_by` entries that did not resolve, by declaring connection.
+    unresolved_realized_by: Vec<(ConnectionId, String)>,
 }
 
 impl Resolver {
@@ -51,11 +60,32 @@ impl Resolver {
 ///
 /// Returns the full list of collected diagnostics when any blocking error
 /// (E-code) was emitted during resolution.
+#[instrument(skip(raw))]
+pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>> {
+    let r = resolve_pass(raw);
+
+    // ── Return ────────────────────────────────────────────────────────────────
+    let has_errors = r
+        .diagnostics
+        .iter()
+        .any(super::diagnostics::Diagnostic::is_error);
+    if has_errors {
+        Err(r.diagnostics)
+    } else {
+        let warnings = r
+            .diagnostics
+            .into_iter()
+            .filter(super::diagnostics::Diagnostic::is_warning)
+            .collect();
+        Ok((r.model, warnings))
+    }
+}
+
+/// Run every resolution pass and keep the whole resolver state, errors included.
 // Long but linear: phases A/B of resolution read top-to-bottom; splitting
 // would thread `Resolver` through helpers without reducing complexity.
 #[allow(clippy::too_many_lines)]
-#[instrument(skip(raw))]
-pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>> {
+fn resolve_pass(raw: RawFile) -> Resolver {
     let mut r = Resolver::default();
 
     // ── Project ───────────────────────────────────────────────────────────────
@@ -152,11 +182,6 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
 
     let mut system_labels_seen: HashSet<String> = HashSet::new();
 
-    struct SystemWork {
-        sid: SystemId,
-        label: String,
-        connections: Vec<Labeled<RawConnection>>,
-    }
     let mut pending_systems: Vec<SystemWork> = Vec::new();
 
     for ls in raw.systems {
@@ -238,6 +263,9 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             system.connections = conn_ids;
         }
     }
+
+    // ── realized_by: after every connection in every scope is registered ─────
+    resolve_realized_by(&mut r);
 
     // ── E001: one connection name per system ─────────────────────────────────
     // View `connection` blocks are keyed by name, so one name must refer to
@@ -324,21 +352,7 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
     // ── Warnings ──────────────────────────────────────────────────────────────
     r.diagnostics.extend(crate::validate::validate(&r.model));
 
-    // ── Return ────────────────────────────────────────────────────────────────
-    let has_errors = r
-        .diagnostics
-        .iter()
-        .any(super::diagnostics::Diagnostic::is_error);
-    if has_errors {
-        Err(r.diagnostics)
-    } else {
-        let warnings = r
-            .diagnostics
-            .into_iter()
-            .filter(super::diagnostics::Diagnostic::is_warning)
-            .collect();
-        Ok((r.model, warnings))
-    }
+    r
 }
 
 // ── Component registration ────────────────────────────────────────────────────
@@ -739,6 +753,7 @@ fn process_connections_in_scope(
             to: to_ep,
             encapsulates: vec![], // filled by resolve_encapsulates
             realized_by: lc.inner.realized_by.clone(),
+            realized_by_ids: vec![], // filled by resolve_realized_by
         });
 
         conn_ids.push(conn_id);
@@ -768,27 +783,91 @@ fn is_ancestor_or_self(model: &Model, ancestor_scope: Scope, cid: ComponentId) -
     }
 }
 
-/// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
-///
-/// Supports UNIX-style path notation:
-/// - Relative sibling bare component: `"comp"` or `"./comp"`
-/// - Relative sibling port: `"comp/port"`
-/// - Nested subcomponents: `"comp/subcomp/port"` or `"comp/subcomp"`
-/// - Parent traversal: `"../sibling/port"`
-/// - Absolute root path: `"/system-name/comp/subcomp/port"`
-/// - Legacy colon notation: `"comp:port"`
-///
-/// Returns `None` and emits the appropriate error if resolution fails.
-// Long but linear: each path notation is handled by one branch of the
-// segment-traversal loop.
-#[allow(clippy::too_many_lines)]
-fn resolve_endpoint(
+/// Why a path walk stopped before the end of its segments.
+#[derive(Debug, PartialEq, Eq)]
+enum WalkError {
+    /// A segment names no component in the scope it was looked up in.
+    NotFound(String),
+    /// `..` used at a system, which has no parent scope.
+    AboveSystem,
+    /// `..` used at a top-level definition, which has no parent scope.
+    AboveDefinition,
+}
+
+/// Walk `segments` from `start` through `.`, `..` and child components and
+/// return the scope they lead to. Shared by endpoint resolution and
+/// `realized_by` resolution, so both read paths the same way.
+fn walk_scope(r: &Resolver, start: Scope, segments: &[&str]) -> Result<Scope, WalkError> {
+    let mut current = start;
+    for &seg in segments {
+        current = match seg {
+            "." => current,
+            ".." => match current {
+                Scope::System(_) => return Err(WalkError::AboveSystem),
+                Scope::Component(cid) => match r.model.component(cid).and_then(|c| c.parent) {
+                    Some(ComponentParent::Component(parent)) => Scope::Component(parent),
+                    Some(ComponentParent::System(sid)) => Scope::System(sid),
+                    None => return Err(WalkError::AboveDefinition),
+                },
+            },
+            name => match r.scope_index.components.get(&(current, name.to_owned())) {
+                Some(cid) => Scope::Component(*cid),
+                None => return Err(WalkError::NotFound(name.to_owned())),
+            },
+        };
+    }
+    Ok(current)
+}
+
+/// Scope of the system with the given label.
+fn system_scope(r: &Resolver, label: &str) -> Option<Scope> {
+    r.system_label_index
+        .get(label)
+        .map(|sid| Scope::System(*sid))
+}
+
+/// Report a failed endpoint walk. A `..` above a top-level definition is
+/// silent, as it always was for endpoints.
+fn report_endpoint_walk_error(
     r: &mut Resolver,
-    ref_str: Option<&str>,
-    scope: Scope,
+    err: WalkError,
+    conn_label: &str,
+    raw: &str,
+    field: &str,
+    segment_count: usize,
+) {
+    match err {
+        WalkError::AboveDefinition => {}
+        WalkError::AboveSystem => r.push_error(
+            DiagnosticCode::E002,
+            format!(
+                "connection `{conn_label}` cannot navigate above root system with '..' in path `{raw}`"
+            ),
+        ),
+        WalkError::NotFound(seg) => {
+            let err_code = if segment_count > 1 {
+                DiagnosticCode::E011
+            } else {
+                DiagnosticCode::E002
+            };
+            r.push_error(
+                err_code,
+                format!(
+                    "connection `{conn_label}` references undefined component `{seg}` in '{field}'"
+                ),
+            );
+        }
+    }
+}
+
+/// Validate an endpoint string and split it into `/`-separated segments.
+/// Reports E002 for a missing, empty, colon-notation or segment-less path.
+fn endpoint_segments<'a>(
+    r: &mut Resolver,
+    ref_str: Option<&'a str>,
     conn_label: &str,
     field: &str,
-) -> Option<ConnectionEndpoint> {
+) -> Option<(&'a str, Vec<&'a str>)> {
     let raw = match ref_str {
         None => {
             r.push_error(
@@ -818,9 +897,7 @@ fn resolve_endpoint(
         return None;
     }
 
-    let is_absolute = raw.starts_with('/');
     let raw_segments: Vec<&str> = raw.split('/').filter(|s| !s.is_empty()).collect();
-
     if raw_segments.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
@@ -828,17 +905,34 @@ fn resolve_endpoint(
         );
         return None;
     }
+    Some((raw, raw_segments))
+}
 
-    let mut current_scope = scope;
+/// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
+///
+/// Supports UNIX-style path notation:
+/// - Relative sibling bare component: `"comp"` or `"./comp"`
+/// - Relative sibling port: `"comp/port"`
+/// - Nested subcomponents: `"comp/subcomp/port"` or `"comp/subcomp"`
+/// - Parent traversal: `"../sibling/port"`
+/// - Absolute root path: `"/system-name/comp/subcomp/port"`
+///
+/// Returns `None` and emits the appropriate error if resolution fails.
+fn resolve_endpoint(
+    r: &mut Resolver,
+    ref_str: Option<&str>,
+    scope: Scope,
+    conn_label: &str,
+    field: &str,
+) -> Option<ConnectionEndpoint> {
+    let (raw, raw_segments) = endpoint_segments(r, ref_str, conn_label, field)?;
+    let is_absolute = raw.starts_with('/');
+
     // Absolute paths start after the leading system segment; relative paths
-    // start at the first segment. Assigned in the branch below, so the
-    // initializer is always overwritten — hence the nursery allow.
-    #[allow(clippy::useless_let_if_seq)]
-    let mut segment_idx = 0;
-
-    if is_absolute {
-        let system_label = *raw_segments.first()?;
-        let Some(sid) = r.system_label_index.get(system_label) else {
+    // start at the declaring scope and use every segment.
+    let (start, path): (Scope, &[&str]) = if is_absolute {
+        let system_label = raw_segments.first().copied().unwrap_or_default();
+        let Some(scope) = system_scope(r, system_label) else {
             r.push_error(
                 DiagnosticCode::E002,
                 format!(
@@ -847,11 +941,12 @@ fn resolve_endpoint(
             );
             return None;
         };
-        current_scope = Scope::System(*sid);
-        segment_idx = 1;
-    }
+        (scope, raw_segments.get(1..).unwrap_or_default())
+    } else {
+        (scope, raw_segments.as_slice())
+    };
 
-    if segment_idx >= raw_segments.len() {
+    let Some((&last, prefix)) = path.split_last() else {
         // Absolute path pointed to just the system itself
         r.push_error(
             DiagnosticCode::E002,
@@ -860,105 +955,65 @@ fn resolve_endpoint(
             ),
         );
         return None;
+    };
+
+    if last == "." || last == ".." {
+        // A trailing `.` or `..` names neither a component nor a port: walk
+        // the path for its errors, then give no endpoint (as before).
+        if let Err(err) = walk_scope(r, start, path) {
+            report_endpoint_walk_error(r, err, conn_label, raw, field, raw_segments.len());
+        }
+        return None;
     }
 
-    // Traverse component segments
-    while segment_idx < raw_segments.len() {
-        let Some(seg) = raw_segments.get(segment_idx) else {
-            break;
-        };
-        let seg = *seg;
-
-        if seg == "." {
-            segment_idx = segment_idx.saturating_add(1);
-            continue;
-        }
-
-        if seg == ".." {
-            match current_scope {
-                Scope::Component(cid) => {
-                    let parent = r.model.component(cid).map(|c| c.parent)?;
-                    current_scope = match parent {
-                        Some(ComponentParent::Component(parent_cid)) => {
-                            Scope::Component(parent_cid)
-                        }
-                        Some(ComponentParent::System(parent_sid)) => Scope::System(parent_sid),
-                        // Cannot navigate above a top-level definition (no parent).
-                        None => return None,
-                    };
-                    segment_idx = segment_idx.saturating_add(1);
-                    continue;
-                }
-                Scope::System(_) => {
-                    r.push_error(
-                        DiagnosticCode::E002,
-                        format!(
-                            "connection `{conn_label}` cannot navigate above root system with '..' in path `{raw}`"
-                        ),
-                    );
-                    return None;
-                }
-            }
-        }
-
-        let is_last_segment = segment_idx.saturating_add(1) == raw_segments.len();
-
-        // Try looking up component in current_scope
-        if let Some(comp_cid) = r
-            .scope_index
-            .components
-            .get(&(current_scope, seg.to_string()))
-        {
-            let cid = *comp_cid;
-            if is_last_segment {
-                // Resolved as a bare component
-                return Some(ConnectionEndpoint {
-                    component: cid,
-                    port: None,
-                });
-            }
-            current_scope = Scope::Component(cid);
-            segment_idx = segment_idx.saturating_add(1);
-            continue;
-        }
-
-        // If not found as a component, and this is the last segment, check if current_scope is a component with this port
-        if let (true, Scope::Component(cid)) = (is_last_segment, current_scope) {
-            if let Some(pid) = r.scope_index.ports.get(&(cid, seg.to_string())) {
-                return Some(ConnectionEndpoint {
-                    component: cid,
-                    port: Some(*pid),
-                });
-            }
-            let comp_label = r
-                .model
-                .component(cid)
-                .map(|c| c.label.clone())
-                .unwrap_or_default();
-            r.push_error(
-                DiagnosticCode::E010,
-                format!(
-                    "connection `{conn_label}`: component `{comp_label}` has no port `{seg}` (in '{field}')"
-                ),
-            );
+    let owner_scope = match walk_scope(r, start, prefix) {
+        Ok(owner_scope) => owner_scope,
+        Err(err) => {
+            report_endpoint_walk_error(r, err, conn_label, raw, field, raw_segments.len());
             return None;
         }
+    };
 
-        // Component not found in current scope
-        let err_code = if raw_segments.len() > 1 {
-            DiagnosticCode::E011
-        } else {
-            DiagnosticCode::E002
-        };
+    // The last segment is a component, or a port of the component it names.
+    if let Some(cid) = r
+        .scope_index
+        .components
+        .get(&(owner_scope, last.to_owned()))
+    {
+        return Some(ConnectionEndpoint {
+            component: *cid,
+            port: None,
+        });
+    }
+    if let Scope::Component(cid) = owner_scope {
+        if let Some(pid) = r.scope_index.ports.get(&(cid, last.to_owned())) {
+            return Some(ConnectionEndpoint {
+                component: cid,
+                port: Some(*pid),
+            });
+        }
+        let comp_label = r
+            .model
+            .component(cid)
+            .map(|c| c.label.clone())
+            .unwrap_or_default();
         r.push_error(
-            err_code,
+            DiagnosticCode::E010,
             format!(
-                "connection `{conn_label}` references undefined component `{seg}` in '{field}'"
+                "connection `{conn_label}`: component `{comp_label}` has no port `{last}` (in '{field}')"
             ),
         );
         return None;
     }
 
+    report_endpoint_walk_error(
+        r,
+        WalkError::NotFound(last.to_owned()),
+        conn_label,
+        raw,
+        field,
+        raw_segments.len(),
+    );
     None
 }
 
@@ -1255,6 +1310,305 @@ fn process_fields(
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+// ── realized_by (E017, E018, E019) ───────────────────────────────────────────
+
+/// A `realized_by` entry that did not resolve, with the connection declaring it
+/// identified by its raw owner, so mutations can edit the raw source.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnresolvedRealizedBy {
+    /// Raw block the declaring connection was written in.
+    pub(crate) owner: RawOwner,
+    /// Label of the declaring connection within that block.
+    pub(crate) label: String,
+    /// The `realized_by` entry exactly as written.
+    pub(crate) entry: String,
+}
+
+/// A raw block that declares connections.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RawOwner {
+    /// A `system` block, by label.
+    System(String),
+    /// A top-level `component` definition, by label.
+    Definition(String),
+}
+
+/// Raw `realized_by` entries that do not resolve, for mutations that delete
+/// connections. Runs the resolver and ignores every other diagnostic.
+pub(crate) fn unresolved_realized_by(raw: RawFile) -> Vec<UnresolvedRealizedBy> {
+    let r = resolve_pass(raw);
+    r.unresolved_realized_by
+        .iter()
+        .filter_map(|(cid, entry)| {
+            let conn = r.model.connection(*cid)?;
+            let owner = if let Some(label) = conn.decl.strip_prefix("system:") {
+                RawOwner::System(label.to_owned())
+            } else {
+                RawOwner::Definition(conn.decl.strip_prefix("component:")?.to_owned())
+            };
+            Some(UnresolvedRealizedBy {
+                owner,
+                label: conn.label.clone(),
+                entry: entry.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Human-readable path of a scope, e.g. `banking/bank-a`.
+fn scope_path(model: &Model, scope: Scope) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let mut current = scope;
+    loop {
+        match current {
+            Scope::System(sid) => {
+                parts.push(
+                    model
+                        .system(sid)
+                        .map(|s| s.label.clone())
+                        .unwrap_or_default(),
+                );
+                break;
+            }
+            Scope::Component(cid) => {
+                let Some(comp) = model.component(cid) else {
+                    break;
+                };
+                parts.push(comp.label.clone());
+                match comp.parent {
+                    Some(ComponentParent::Component(parent)) => {
+                        current = Scope::Component(parent);
+                    }
+                    Some(ComponentParent::System(sid)) => current = Scope::System(sid),
+                    None => break,
+                }
+            }
+        }
+    }
+    parts.reverse();
+    parts.join("/")
+}
+
+/// The system or top-level definition a scope belongs to.
+fn scope_root(model: &Model, scope: Scope) -> Scope {
+    let mut current = scope;
+    while let Scope::Component(cid) = current {
+        match model.component(cid).and_then(|c| c.parent) {
+            Some(ComponentParent::Component(parent)) => current = Scope::Component(parent),
+            Some(ComponentParent::System(sid)) => return Scope::System(sid),
+            None => return current,
+        }
+    }
+    current
+}
+
+/// Resolve one `realized_by` entry written in `declaring`. The last segment is
+/// a connection label; the segments before it are walked like an endpoint's
+/// component path. The target must share the declaring system or definition
+/// tree. Failures return the reason, which the caller puts in `E017`.
+fn resolve_realized_by_entry(
+    r: &Resolver,
+    entry: &str,
+    declaring: Scope,
+) -> Result<ConnectionId, String> {
+    let not_a_connection = || "the path must end in a connection label".to_owned();
+    let segments: Vec<&str> = entry.split('/').filter(|s| !s.is_empty()).collect();
+    let (start, path): (Scope, &[&str]) = if entry.starts_with('/') {
+        let Some((&system_label, rest)) = segments.split_first() else {
+            return Err(not_a_connection());
+        };
+        let Some(scope) = system_scope(r, system_label) else {
+            return Err(format!("no system `{system_label}`"));
+        };
+        (scope, rest)
+    } else {
+        (declaring, segments.as_slice())
+    };
+
+    let Some((&last, prefix)) = path.split_last() else {
+        return Err(not_a_connection());
+    };
+    if last == "." || last == ".." {
+        return Err(not_a_connection());
+    }
+
+    let container = walk_scope(r, start, prefix).map_err(|err| {
+        let searched = scope_path(&r.model, start);
+        match err {
+            WalkError::NotFound(seg) => {
+                format!("no component `{seg}` on the path from `{searched}`")
+            }
+            WalkError::AboveSystem => format!("`..` from `{searched}` goes above the system"),
+            WalkError::AboveDefinition => {
+                format!("`..` from `{searched}` goes above a top-level definition")
+            }
+        }
+    })?;
+
+    let Some(target) = r
+        .scope_index
+        .connections
+        .get(&(container, last.to_owned()))
+        .copied()
+    else {
+        return Err(format!(
+            "no connection `{last}` in `{}`",
+            scope_path(&r.model, container)
+        ));
+    };
+
+    if scope_root(&r.model, container) != scope_root(&r.model, declaring) {
+        return Err(format!(
+            "`{}` is outside the system or definition tree of the declaring connection",
+            scope_path(&r.model, container)
+        ));
+    }
+    Ok(target)
+}
+
+/// Resolve every `realized_by` entry (`E017`), reject cycles in the resolved
+/// graph (`E018`) and flag connections over a leaf protocol that declare
+/// `realized_by` (`E019`). Runs after all connections are registered.
+fn resolve_realized_by(r: &mut Resolver) {
+    let mut declared: Vec<(ConnectionId, Scope)> = r
+        .scope_index
+        .connections
+        .iter()
+        .map(|((scope, _), cid)| (*cid, *scope))
+        .collect();
+    declared.sort_by_key(|(cid, _)| cid.0);
+
+    let connection_count = r.model.connections.len();
+    let mut names: Vec<String> = (0..connection_count).map(|i| format!("#{i}")).collect();
+    let mut graph: Vec<Vec<usize>> = vec![Vec::new(); connection_count];
+    let mut messages: Vec<String> = Vec::new();
+
+    for (cid, scope) in &declared {
+        let Some(conn) = r.model.connection(*cid) else {
+            continue;
+        };
+        let label = conn.label.clone();
+        let mut entries = conn.realized_by.clone();
+        let mut seen: HashSet<String> = HashSet::new();
+        entries.retain(|e| seen.insert(e.clone()));
+
+        let here = scope_path(&r.model, *scope);
+        if let Some(name) = names.get_mut(cid.0) {
+            *name = format!("{here}/{label}");
+        }
+
+        let mut targets: Vec<ConnectionId> = Vec::new();
+        for entry in &entries {
+            match resolve_realized_by_entry(r, entry, *scope) {
+                Ok(target) => {
+                    if !targets.contains(&target) {
+                        targets.push(target);
+                    }
+                }
+                Err(reason) => {
+                    messages.push(format!(
+                        "connection `{label}` in `{here}` has unresolved realized_by entry `{entry}`: {reason}"
+                    ));
+                    r.unresolved_realized_by.push((*cid, entry.clone()));
+                }
+            }
+        }
+        if let Some(slot) = graph.get_mut(cid.0) {
+            *slot = targets.iter().map(|t| t.0).collect();
+        }
+    }
+    for msg in messages {
+        r.push_error(DiagnosticCode::E017, msg);
+    }
+
+    let mut state = vec![VisitState::Unvisited; connection_count];
+    let mut path: Vec<usize> = Vec::new();
+    let mut cycles: Vec<String> = Vec::new();
+    for node in 0..connection_count {
+        if state.get(node) == Some(&VisitState::Unvisited) {
+            visit_realization(node, &mut graph, &names, &mut state, &mut path, &mut cycles);
+        }
+    }
+    for cycle in cycles {
+        r.push_error(DiagnosticCode::E018, cycle);
+    }
+
+    for (idx, targets) in graph.into_iter().enumerate() {
+        if let Some(conn) = r.model.connections.get_mut(idx) {
+            conn.realized_by_ids = targets.into_iter().map(ConnectionId).collect();
+        }
+    }
+
+    let mut leaf_messages: Vec<String> = Vec::new();
+    for (idx, conn) in r.model.connections.iter().enumerate() {
+        if conn.realized_by.is_empty() {
+            continue;
+        }
+        let Some(pid) = r.model.connection_protocol(ConnectionId(idx)) else {
+            continue;
+        };
+        if let Some(proto) = r.model.protocol(pid).filter(|p| p.leaf) {
+            leaf_messages.push(format!(
+                "connection `{}` declares realized_by but its protocol `{}` is a leaf",
+                names.get(idx).map_or("", String::as_str),
+                proto.label
+            ));
+        }
+    }
+    for msg in leaf_messages {
+        r.push_error(DiagnosticCode::E019, msg);
+    }
+}
+
+/// DFS step of the `realized_by` cycle check. Each back edge closes one cycle,
+/// which is reported and removed from `graph`, so the remaining graph is
+/// acyclic. A connection realized by itself is a one-entry cycle.
+fn visit_realization(
+    node: usize,
+    graph: &mut [Vec<usize>],
+    names: &[String],
+    state: &mut [VisitState],
+    path: &mut Vec<usize>,
+    cycles: &mut Vec<String>,
+) {
+    if let Some(slot) = state.get_mut(node) {
+        *slot = VisitState::OnPath;
+    }
+    path.push(node);
+
+    let successors = graph.get(node).cloned().unwrap_or_default();
+    let mut kept: Vec<usize> = Vec::with_capacity(successors.len());
+    for next in successors {
+        match state.get(next).copied().unwrap_or(VisitState::Done) {
+            VisitState::OnPath => {
+                let start = path.iter().position(|&p| p == next).unwrap_or(0);
+                let mut chain: Vec<String> = path
+                    .get(start..)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|&p| names.get(p).map(|n| format!("`{n}`")))
+                    .collect();
+                if let Some(name) = names.get(next) {
+                    chain.push(format!("`{name}`"));
+                }
+                cycles.push(format!("circular realization: {}", chain.join(" -> ")));
+            }
+            VisitState::Unvisited => {
+                visit_realization(next, graph, names, state, path, cycles);
+                kept.push(next);
+            }
+            VisitState::Done => kept.push(next),
+        }
+    }
+    if let Some(slot) = graph.get_mut(node) {
+        *slot = kept;
+    }
+    path.pop();
+    if let Some(slot) = state.get_mut(node) {
+        *slot = VisitState::Done;
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -2573,5 +2927,381 @@ system "drone" {
         assert_eq!(model.ports[conn.from.port.unwrap().0].label, "data");
         assert_eq!(model.components[conn.to.component.0].label, "fc");
         assert_eq!(model.ports[conn.to.port.unwrap().0].label, "data-in");
+    }
+
+    // ── realized_by (0002.3) ─────────────────────────────────────────────────
+
+    /// Banking fixture. `bank-a` is a copy of `bank`, which declares
+    /// `http-request`. `tls-session` (system scope) realizes through `entry`.
+    fn realized_fixture(entry: &str) -> String {
+        format!(
+            r#"
+component "stack" {{ leaf = true }}
+component "bank" {{
+  instance "stack" {{ source = "stack" }}
+  connection "http-request" {{
+    from = "stack"
+    to = "stack"
+  }}
+}}
+system "banking" {{
+  instance "bank-a" {{ source = "bank" }}
+  instance "ext" {{ source = "stack" }}
+  connection "uplink" {{
+    from = "ext"
+    to = "ext"
+  }}
+  connection "tls-session" {{
+    from = "ext"
+    to = "ext"
+    realized_by = [{entry}]
+  }}
+}}
+"#
+        )
+    }
+
+    /// Label of the component or system that declares `conn`.
+    fn declaring_scope_label(model: &Model, conn: &Connection) -> String {
+        let Some(comp) = model.component(conn.from.component) else {
+            return String::new();
+        };
+        match comp.parent {
+            Some(ComponentParent::Component(p)) => model
+                .component(p)
+                .map(|c| c.label.clone())
+                .unwrap_or_default(),
+            Some(ComponentParent::System(s)) => {
+                model.system(s).map(|s| s.label.clone()).unwrap_or_default()
+            }
+            None => String::new(),
+        }
+    }
+
+    /// `(label, declaring scope)` of every connection `tls-session` realizes.
+    fn realized_targets(model: &Model) -> Vec<(String, String)> {
+        let conn = model
+            .connections
+            .iter()
+            .find(|c| c.label == "tls-session")
+            .expect("tls-session");
+        conn.realized_by_ids
+            .iter()
+            .map(|cid| {
+                let target = model.connection(*cid).expect("target");
+                (target.label.clone(), declaring_scope_label(model, target))
+            })
+            .collect()
+    }
+
+    /// Asserts the blocking error codes of `src` (warnings are not compared).
+    fn expect_codes(src: &str, expected: &[&str]) -> Vec<Diagnostic> {
+        let diags = resolve_src(src).expect_err("expected a blocking error");
+        let errors: Vec<Diagnostic> = diags.iter().filter(|d| d.is_error()).cloned().collect();
+        let error_codes: Vec<&str> = errors.iter().map(|d| d.code.code).collect();
+        assert_eq!(error_codes, expected, "{diags:?}");
+        errors
+    }
+
+    #[test]
+    fn realized_by_bare_label_resolves_to_sibling() {
+        let (model, _) = resolve_src(&realized_fixture("\"uplink\"")).expect("resolves");
+        assert_eq!(
+            realized_targets(&model),
+            vec![("uplink".to_owned(), "banking".to_owned())]
+        );
+    }
+
+    #[test]
+    fn realized_by_dot_slash_resolves_like_bare_label() {
+        let (model, _) = resolve_src(&realized_fixture("\"./uplink\"")).expect("resolves");
+        assert_eq!(
+            realized_targets(&model),
+            vec![("uplink".to_owned(), "banking".to_owned())]
+        );
+    }
+
+    #[test]
+    fn realized_by_child_instance_path_resolves_into_that_copy() {
+        let (model, _) =
+            resolve_src(&realized_fixture("\"bank-a/http-request\"")).expect("resolves");
+        assert_eq!(
+            realized_targets(&model),
+            vec![("http-request".to_owned(), "bank-a".to_owned())]
+        );
+    }
+
+    #[test]
+    fn realized_by_absolute_system_path_resolves() {
+        let (model, _) = resolve_src(&realized_fixture("\"/banking/uplink\"")).expect("resolves");
+        assert_eq!(
+            realized_targets(&model),
+            vec![("uplink".to_owned(), "banking".to_owned())]
+        );
+    }
+
+    #[test]
+    fn realized_by_absolute_path_through_instance_resolves() {
+        let (model, _) =
+            resolve_src(&realized_fixture("\"/banking/bank-a/http-request\"")).expect("resolves");
+        assert_eq!(
+            realized_targets(&model),
+            vec![("http-request".to_owned(), "bank-a".to_owned())]
+        );
+    }
+
+    #[test]
+    fn realized_by_duplicate_entries_collapse_to_one() {
+        let (model, _) =
+            resolve_src(&realized_fixture("\"uplink\", \"./uplink\"")).expect("resolves");
+        assert_eq!(realized_targets(&model).len(), 1);
+    }
+
+    #[test]
+    fn e017_missing_label_names_the_entry() {
+        let diags = expect_codes(&realized_fixture("\"nope\""), &["E017"]);
+        assert!(diags[0].message.contains("nope"), "{}", diags[0].message);
+    }
+
+    #[test]
+    fn e017_path_through_missing_instance() {
+        expect_codes(&realized_fixture("\"ghost/http-request\""), &["E017"]);
+    }
+
+    #[test]
+    fn e017_dotdot_above_system_is_unresolved() {
+        expect_codes(&realized_fixture("\"../uplink\""), &["E017"]);
+    }
+
+    #[test]
+    fn e017_reference_into_another_system() {
+        let src = r#"
+component "stack" { leaf = true }
+system "other" {
+  instance "o" { source = "stack" }
+  connection "far" {
+    from = "o"
+    to = "o"
+  }
+}
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "tls-session" {
+    from = "ext"
+    to = "ext"
+    realized_by = ["/other/far"]
+  }
+}
+"#;
+        expect_codes(src, &["E017"]);
+    }
+
+    #[test]
+    fn e018_self_reference_is_a_cycle() {
+        let diags = expect_codes(&realized_fixture("\"tls-session\""), &["E018"]);
+        assert!(
+            diags[0].message.contains("tls-session"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn e018_two_connection_cycle_reported_once() {
+        let src = r#"
+component "stack" { leaf = true }
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "a" {
+    from = "ext"
+    to = "ext"
+    realized_by = ["b"]
+  }
+  connection "b" {
+    from = "ext"
+    to = "ext"
+    realized_by = ["a"]
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E018"]);
+        let msg = &diags[0].message;
+        assert!(msg.contains('a') && msg.contains('b'), "{msg}");
+    }
+
+    #[test]
+    fn e018_cycle_inside_definition_body() {
+        let src = r#"
+component "stack" { leaf = true }
+component "bank" {
+  instance "stack" { source = "stack" }
+  connection "x" {
+    from = "stack"
+    to = "stack"
+    realized_by = ["y"]
+  }
+  connection "y" {
+    from = "stack"
+    to = "stack"
+    realized_by = ["x"]
+  }
+}
+"#;
+        expect_codes(src, &["E018"]);
+    }
+
+    #[test]
+    fn e019_leaf_protocol_connection_declares_realized_by() {
+        let src = r#"
+protocol "p" { leaf = true }
+component "a" {
+  leaf = true
+  port "x" { protocol = "p" }
+}
+component "b" {
+  leaf = true
+  port "y" { protocol = "p" }
+}
+system "s" {
+  instance "ia" { source = "a" }
+  instance "ib" { source = "b" }
+  connection "c1" {
+    from = "ia/x"
+    to = "ib/y"
+    realized_by = ["c2"]
+  }
+  connection "c2" {
+    from = "ia/x"
+    to = "ib/y"
+  }
+}
+"#;
+        expect_codes(src, &["E019"]);
+    }
+
+    #[test]
+    fn connection_protocol_needs_both_ports_to_agree_on_a_defined_protocol() {
+        let src = r#"
+protocol "p" { leaf = true }
+component "a" {
+  leaf = true
+  port "x" { protocol = "p" }
+  port "z" { protocol = "q" }
+}
+component "b" {
+  leaf = true
+  port "y" { protocol = "p" }
+}
+system "s" {
+  instance "ia" { source = "a" }
+  instance "ib" { source = "b" }
+  connection "same" {
+    from = "ia/x"
+    to = "ib/y"
+  }
+  connection "mixed" {
+    from = "ia/z"
+    to = "ib/y"
+  }
+  connection "bare" {
+    from = "ia"
+    to = "ib/y"
+  }
+}
+"#;
+        let (model, _) = resolve_src(src).expect("warnings only");
+        let protocol_of = |label: &str| {
+            let idx = model
+                .connections
+                .iter()
+                .position(|c| c.label == label)
+                .expect(label);
+            model.connection_protocol(ConnectionId(idx))
+        };
+        assert_eq!(protocol_of("same"), Some(ProtocolId(0)));
+        assert_eq!(protocol_of("mixed"), None, "undefined vs defined protocol");
+        assert_eq!(protocol_of("bare"), None, "bare endpoint has no protocol");
+    }
+
+    #[test]
+    fn realized_by_copies_of_a_definition_resolve_independently() {
+        let src = r#"
+component "stack" { leaf = true }
+component "bank" {
+  instance "stack" { source = "stack" }
+  connection "low" {
+    from = "stack"
+    to = "stack"
+  }
+  connection "high" {
+    from = "stack"
+    to = "stack"
+    realized_by = ["low"]
+  }
+}
+system "banking" {
+  instance "bank-a" { source = "bank" }
+  instance "bank-b" { source = "bank" }
+}
+"#;
+        let (model, _) = resolve_src(src).expect("resolves");
+        let highs: Vec<&Connection> = model
+            .connections
+            .iter()
+            .filter(|c| c.label == "high")
+            .collect();
+        assert_eq!(highs.len(), 3, "definition plus two copies");
+        let mut targets = Vec::new();
+        for high in highs {
+            assert_eq!(high.realized_by_ids.len(), 1);
+            let target = model.connection(high.realized_by_ids[0]).expect("target");
+            assert_eq!(target.label, "low");
+            assert_eq!(
+                declaring_scope_label(&model, target),
+                declaring_scope_label(&model, high),
+                "a copy must realize its own low, not another copy's"
+            );
+            targets.push(high.realized_by_ids[0]);
+        }
+        targets.sort_by_key(|c| c.0);
+        targets.dedup();
+        assert_eq!(targets.len(), 3, "each copy has a distinct target");
+    }
+
+    #[test]
+    fn e003_undefined_encapsulates_label_is_an_error() {
+        let src = r#"
+component "stack" { leaf = true }
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "c1" {
+    from = "ext"
+    to = "ext"
+    encapsulates = ["missing"]
+  }
+}
+"#;
+        expect_codes(src, &["E003"]);
+    }
+
+    #[test]
+    fn e004_connection_encapsulates_cycle_is_an_error() {
+        let src = r#"
+component "stack" { leaf = true }
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "c1" {
+    from = "ext"
+    to = "ext"
+    encapsulates = ["c2"]
+  }
+  connection "c2" {
+    from = "ext"
+    to = "ext"
+    encapsulates = ["c1"]
+  }
+}
+"#;
+        expect_codes(src, &["E004"]);
     }
 }
