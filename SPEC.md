@@ -579,9 +579,10 @@ ambiguity as in endpoint paths.
   Entries are sorted.
 
 > **Status:** the attributes parse, are stored on the model and serialize.
-> Resolution of `realized_by` is implemented (`E017`–`E019`). `W019`–`W021`
-> and the canonical rewriting of entries in serialized output are not yet
-> implemented; until then entries are written as declared.
+> Resolution of `realized_by` is implemented (`E017`–`E019`), and so are the
+> realization warnings `W020` and `W021` (see §4). `W019` and the canonical
+> rewriting of entries in serialized output are not yet implemented; until then
+> entries are written as declared.
 
 ---
 
@@ -622,6 +623,23 @@ unit-level checks) vs. verifying a fully instantiated system:
 ### Connection Placement Validation
 - A connection must be declared within the Lowest Common Ancestor (LCA) enclosing both `from` and `to` endpoints, or an ancestor above it.
 - Declaring a connection inside a child component that references sibling or external components is an error (E011/E015).
+
+### Realization Validation
+
+Checked for every connection `A` and each connection `B` in its resolved
+`realized_by` list (`B` realizes `A`). These checks do not apply to connections
+without `realized_by`.
+
+- **Hierarchy (`W020`, architectural):** the `from` endpoint of `B` must be the
+  `from` component of `A` or one of its component descendants, and likewise for
+  `to`. Containment is checked through component parent links, not `level`, and
+  the direction is not swapped. One `W020` is reported per pair, naming each
+  endpoint that falls outside.
+- **Protocol compatibility (`W021`, architectural):** if `A` has protocol `P` and
+  `B` has protocol `Q` (see `Model::connection_protocol`), then `Q.encapsulates`
+  must contain `P`. The check is skipped when either protocol is undefined.
+
+Both warnings are reported at the architectural warning level and above.
 
 ---
 

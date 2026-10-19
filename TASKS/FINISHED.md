@@ -36,6 +36,32 @@ every call.
 
 ---
 
+## Task <N> — 0002.4: Compatibility and hierarchy warnings (`W021`, `W020`)
+
+Adds the two realization warnings of proposal 0002 (sections 4 and 5). Both
+only run on connections that declare `realized_by`, so no example changes.
+
+- **`W020`** (`validate.rs`, `realization_warnings`): for each realizing pair,
+  the realizing `from` must be the parent's `from` component or a component
+  descendant of it, and likewise for `to`. Containment is checked through parent
+  links, not `level`. One warning per pair names each endpoint that falls
+  outside. The direction is not swapped, so a reversed realization is reported.
+- **`W021`**: when both connections have a defined protocol (`P` for the parent,
+  `Q` for the realizer), `Q.encapsulates` must contain `P`. Skipped when either
+  protocol is undefined (that case is `W019` in 0002.5).
+- **Docs:** "(Not yet implemented)" removed from `W020` and `W021` and from the
+  `warning-levels.md` rows. New "Realization Validation" subsection in `SPEC.md`
+  §4. The §3 status note now lists `W020`/`W021` as implemented.
+- **Tests:** exact-code assertions for the clean banking chain (no warnings),
+  `W021` on a non-encapsulating protocol, `W021` skipped for an undefined parent
+  protocol, `W020` passing for a descendant endpoint and failing for a sibling
+  endpoint, and one `W020` for a reversed realization. `lib.rs` checks both are
+  gated at the architectural level and not at business.
+- **Validation:** `just test`, `just lint`, `just build` pass. Example projects
+  are unchanged.
+
+---
+
 ## Task <N> — 0002.3: Resolve `realized_by` (`E017`, `E018`, `E019`)
 
 Resolves connection `realized_by` entries to `ConnectionId`s (proposal 0002,

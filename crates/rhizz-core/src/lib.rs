@@ -966,6 +966,65 @@ system \"s\" {\n\
         }
     }
 
+    /// A realization that runs against the hierarchy (W020) and uses a protocol
+    /// that does not encapsulate the realized one (W021).
+    const REALIZATION_WARNINGS: &str = "protocol \"fund\" {}\n\
+protocol \"http\" {}\n\
+component \"node\" {\n\
+  leaf = true\n\
+  port \"fund\" {\n\
+    protocol = \"fund\"\n\
+    role = \"provider\"\n\
+  }\n\
+  port \"http\" {\n\
+    protocol = \"http\"\n\
+    role = \"provider\"\n\
+  }\n\
+}\n\
+system \"s\" {\n\
+  instance \"a\" { source = \"node\" }\n\
+  instance \"b\" { source = \"node\" }\n\
+  connection \"transfer\" {\n\
+    from = \"a/fund\"\n\
+    to   = \"b/fund\"\n\
+    realized_by = [\"request\"]\n\
+  }\n\
+  connection \"request\" {\n\
+    from = \"b/http\"\n\
+    to   = \"a/http\"\n\
+  }\n\
+}";
+
+    #[test]
+    fn realization_warnings_are_gated_by_architectural_level() {
+        let sources = [model_source(REALIZATION_WARNINGS)];
+        let business = codes(&compile_with_warning_level(
+            &sources,
+            WarningLevel::Business,
+        ));
+        assert!(
+            !business.contains(&"W020"),
+            "unexpected W020 in {business:?}"
+        );
+        assert!(
+            !business.contains(&"W021"),
+            "unexpected W021 in {business:?}"
+        );
+
+        let architectural = codes(&compile_with_warning_level(
+            &sources,
+            WarningLevel::Architectural,
+        ));
+        assert!(
+            architectural.contains(&"W020"),
+            "expected W020 in {architectural:?}"
+        );
+        assert!(
+            architectural.contains(&"W021"),
+            "expected W021 in {architectural:?}"
+        );
+    }
+
     #[test]
     fn default_compile_reports_every_warning() {
         let sources = [model_source(MIXED_WARNINGS)];
