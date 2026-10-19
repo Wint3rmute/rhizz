@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Add a proof-of-concept MCP server to the Rhizz backend
+
+Exposes the Rhizz server to AI clients over the Model Context Protocol. One
+tool, `fetch_projects`, lists the projects (`id`, `name`, `createdAt`,
+`updatedAt`) and never returns nodes. POC only: no auth (marked with a TODO
+next to the mount).
+
+- **Endpoint:** `/mcp`, mounted with `nest_service` before the SPA fallback in
+  `server::app`. Other routes are unchanged.
+- **Module:** `crates/rhizz-server/src/mcp.rs` (`RhizzMcp`, `#[tool_router]`
+  with the `fetch_projects` tool, `ServerHandler` named `rhizz`, tools
+  capability only). The tool loads via `storage::load_vfs` in
+  `spawn_blocking`. A failure is returned as a tool error (`isError`), not a
+  panic or protocol error.
+- **Dependency:** `rmcp` 3.5.1 with `macros`, `server`,
+  `transport-streamable-http-server` (default features off).
+- **Deviation:** `ServerHandler` is written by hand instead of `#[tool_handler]`.
+  The macro generates `async` methods without `.await`, which fails
+  `clippy::unused_async` (denied by workspace lints) and cannot be suppressed
+  at the impl level. Behavior is the same.
+- **Sessions:** default `StreamableHttpServerConfig` with `LocalSessionManager`,
+  so clients must `initialize`, send `notifications/initialized`, and then
+  reuse the `Mcp-Session-Id` header.
+- **Tests:** `mcp.rs` covers `tools/list` (exactly `fetch_projects`),
+  `tools/call` (project `drone` returned), and an empty data dir (`[]`).
+- **Validation:** `just test` (all Rust suites pass; the web Playwright step
+  needs a Chromium binary absent from the sandbox), `just lint-rust`, `just build`.
+---
+
 ## Task <N> — 0002.1: Schema for `protocol.leaf`, `protocol.encapsulates`, `connection.realized_by`
 
 The new attributes of proposal 0002 go through parse, model and serialization.
