@@ -490,6 +490,74 @@ for "Interfaces" in `web/` finds no placeholder references.
 
 ---
 
+## Task: Add a proof-of-concept MCP server to the Rhizz backend
+
+### Goal
+
+Let AI clients reach the existing Rhizz Axum server over the Model Context Protocol (MCP).
+Expose exactly ONE tool, `fetch_projects`, which lists all projects. Keep it minimal.
+This is a POC, not production.
+
+### Context (read these files first)
+
+- `crates/rhizz-server/src/server.rs`: `pub fn app(data_dir: PathBuf) -> Router` is the
+  ONLY place where routes are registered. The router state is just `PathBuf` (the data dir).
+  It ends with `.fallback(get(spa_fallback))`.
+- `crates/rhizz-server/src/storage.rs`: `pub fn load_vfs(data_dir: &Path) -> anyhow::Result<serde_json::Value>`
+  is SYNCHRONOUS. It returns `{ "version": 1, "projects": [...], "nodes": [...] }`.
+  Each project is `{ id, name, createdAt, updatedAt }`, where `id == name ==` the directory slug.
+- Existing tests in `server.rs` build the router with `app(tempdir)` and call it with
+  `tower::ServiceExt::oneshot`. Follow the same pattern.
+
+### Requirements
+
+1. Add the official Rust MCP SDK `rmcp` to `crates/rhizz-server/Cargo.toml`, with the
+   features `server` and `transport-streamable-http-server`. Add `schemars` if the macros
+   need it. Use the latest version, and check the API against the docs for THAT version
+   (docs.rs/rmcp and the examples in github.com/modelcontextprotocol/rust-sdk). The macro
+   API has changed between major versions, so don't write it from memory.
+2. Create a new module `crates/rhizz-server/src/mcp.rs` containing:
+   - A `#[derive(Clone)] struct RhizzMcp { data_dir: PathBuf }`.
+   - A tool router (`#[tool_router]` / `#[tool]` macros) with one tool:
+     - name: `fetch_projects`
+     - description: "List all Rhizz projects available on this server (id, name, createdAt, updatedAt)."
+     - no input parameters
+     - implementation: call `storage::load_vfs` inside `tokio::task::spawn_blocking`
+       (it does blocking file I/O). Return ONLY the `projects` array as JSON; do NOT
+       return `nodes`. On error, log it with `tracing::error!` and return an MCP tool error.
+       Never panic.
+   - A `ServerHandler` implementation. The server info name is "rhizz" and only the
+     tools capability is enabled.
+3. In `app()`, mount the service with
+   `.nest_service("/mcp", StreamableHttpService::new(...))` BEFORE `.fallback(...)`.
+   Use `LocalSessionManager` and the default/stateless config. Don't change any existing routes.
+4. Don't change `storage.rs`. Reusing `load_vfs` is fine for the POC.
+5. No auth in this POC. Add a `// TODO: auth (bearer token / OAuth 2.1) before exposing beyond localhost`
+   comment next to the mount.
+
+### Tests (in `server.rs` or `mcp.rs`, using `tempfile` + `oneshot`)
+
+- Set up a temp data dir with a project `drone/system.hcl`, as in the existing
+  `get_vfs_serves_a_data_dir_of_project_directories` test.
+- POST JSON-RPC to `/mcp` with the headers `Content-Type: application/json` and
+  `Accept: application/json, text/event-stream`. Do the `initialize` handshake first
+  if the SDK version needs it. Then:
+  - `tools/list` returns exactly one tool, named `fetch_projects`.
+  - `tools/call` for `fetch_projects` returns a result containing project id `"drone"`.
+- An empty data dir returns an empty list, not an error.
+- Existing tests still pass.
+
+### Definition of done
+
+- `cargo build`, `cargo test -p rhizz-server`, and `cargo clippy -p rhizz-server -- -D warnings` all pass.
+- Keep the change small: one new module, the Cargo.toml change, one router line, and tests.
+  Briefly describe the rmcp version and any API differences you found from these instructions.
+
+### Out of scope
+Auth, more tools, resources/prompts, write operations, and changes to the frontend.
+
+---
+
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit
