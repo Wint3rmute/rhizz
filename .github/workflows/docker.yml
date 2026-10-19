@@ -4,7 +4,7 @@ name: docker
 # to GitHub's container registry (ghcr.io).
 #
 # The derivation replaces the Dockerfile's three stages end to end, so this job
-# no longer needs a Docker build context: `nix build .#docker-image` compiles
+# no longer needs a Docker build context: `nix build .#rhizz-docker` compiles
 # the whole pipeline (wasm → frontend → binary → image) and emits a
 # docker-archive tarball.
 #
@@ -39,12 +39,12 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      # The point of the job: `.#docker-image` consumes the whole pipeline
-      # (rhizz-wasm-pkg → rhizz-web → rhizz → image), so a failure in any
+      # The point of the job: `.#rhizz-docker` consumes the whole pipeline
+      # (rhizz-wasm-pkg → rhizz-frontend → rhizz-server → image), so a failure in any
       # stage surfaces here. This replaced `docker/build-push-action`, which
       # could only build from a Dockerfile.
       - name: Build the image
-        run: nix build .#docker-image
+        run: nix build .#rhizz-docker
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3

@@ -1,7 +1,7 @@
 # Builds the `rhizz` binary (`rhizz-cli`) with the web frontend embedded.
 #
 # Stage 3 of the Nix pipeline: consumes the frontend build (stage 2,
-# `rhizz-web`) and embeds it into the binary via rhizz-server's build.rs
+# `rhizz-frontend`) and embeds it into the binary via rhizz-server's build.rs
 # (rust-embed).
 #
 # The source is `rustSrc` from flake.nix: the workspace manifests, the crates,
@@ -10,13 +10,13 @@
 # there is no fixed-output hash to maintain by hand.
 #
 # rhizz-server's build.rs looks for the frontend at `<workspace>/web/build`
-# relative to its own CARGO_MANIFEST_DIR — a hardcoded path. `rhizz-web` is
+# relative to its own CARGO_MANIFEST_DIR — a hardcoded path. `rhizz-frontend` is
 # copied there in `preBuild`, so the Rust side needs no change; the copy lands
 # in the writable build directory, not the read-only store source.
 {
   lib,
   rustPlatform,
-  rhizz-web,
+  rhizz-frontend,
   src,
   # Short commit the source was built from, shown in the UI via
   # `/api/version`. Passed in from the flake so this derivation has no git dependency.
@@ -40,7 +40,7 @@ rustPlatform.buildRustPackage {
   # binary embeds the production UI rather than the placeholder shell.
   preBuild = ''
     mkdir -p web/build
-    cp -r ${rhizz-web}/. web/build/
+    cp -r ${rhizz-frontend}/. web/build/
   '';
 
   # Only the CLI and its dependencies are needed. A bare `cargo build` in this

@@ -57,13 +57,13 @@ jobs:
           path: target/coverage/lcov.info
 
       # The production server goes through its Nix derivation (nix/backend.nix),
-      # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-web → rhizz.
+      # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-frontend → rhizz-server.
       # This replaces the devshell's `cargo build --release`, which had no
       # frontend to embed (web/build is gitignored and this job has no Node
       # toolchain), so it only ever produced the placeholder shell page — the
       # release build was never actually verified. No devshell here: the
       # derivation brings its own toolchain.
-      - run: nix build .#rhizz
+      - run: nix build .#rhizz-server
 
 # The `audit` job moved to its own workflow (audit.yml) so it can be gated on
 # Cargo.lock changes — a path filter applies to a whole workflow, not to a

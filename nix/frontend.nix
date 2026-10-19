@@ -19,7 +19,7 @@
 }:
 
 buildNpmPackage {
-  pname = "rhizz-web";
+  pname = "rhizz-frontend";
   version = "0.0.1";
 
   inherit src;

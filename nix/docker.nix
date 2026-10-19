@@ -1,6 +1,6 @@
 # The OCI image deployed to ghcr.io and Fly.io.
 #
-# Stage 4 of the Nix pipeline: consumes the `rhizz` binary (stage 3) and wraps
+# Stage 4 of the Nix pipeline: consumes the `rhizz-server` binary (stage 3) and wraps
 # it in a container image. This replaces the three-stage Dockerfile, whose
 # frontend/backend stages re-implemented stages 2–3 by hand.
 #
@@ -20,7 +20,7 @@
 {
   lib,
   dockerTools,
-  rhizz,
+  rhizz-server,
   examples,
 }:
 
@@ -31,7 +31,7 @@ dockerTools.buildLayeredImage {
   # The binary and its whole /nix/store closure, plus CA certificates for
   # outbound TLS (mirrors the Dockerfile's `ca-certificates` package).
   contents = [
-    rhizz
+    rhizz-server
     dockerTools.caCertificates
   ];
 
