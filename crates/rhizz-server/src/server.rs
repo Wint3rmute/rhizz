@@ -6,16 +6,21 @@
 //! `tower::ServiceExt::oneshot` without binding a socket.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router, routing::get, routing::post};
+use rmcp::transport::streamable_http_server::{
+    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+};
 use rust_embed::EmbeddedFile;
 use serde_json::Value;
 
 use crate::assets::StaticAssets;
+use crate::mcp::RhizzMcp;
 use crate::{sentry, storage};
 
 /// Builds the complete axum router for the server.
@@ -23,6 +28,12 @@ use crate::{sentry, storage};
 /// Keep this as the single place that registers routes; the binary only
 /// binds a listener and hands it to [`axum::serve()`].
 pub fn app(data_dir: PathBuf) -> Router {
+    let mcp_data_dir = data_dir.clone();
+    let mcp = StreamableHttpService::new(
+        move || Ok(RhizzMcp::new(mcp_data_dir.clone())),
+        Arc::new(LocalSessionManager::default()),
+        StreamableHttpServerConfig::default(),
+    );
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/version", get(version))
@@ -31,6 +42,8 @@ pub fn app(data_dir: PathBuf) -> Router {
             "/api/sentry",
             post(sentry_tunnel).layer(DefaultBodyLimit::max(SENTRY_ENVELOPE_LIMIT)),
         )
+        // TODO: auth (bearer token / OAuth 2.1) before exposing beyond localhost
+        .nest_service("/mcp", mcp)
         .fallback(get(spa_fallback))
         .with_state(data_dir)
 }

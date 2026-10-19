@@ -20,6 +20,9 @@ pub mod signal;
 /// Compile-time embedding of the web frontend.
 pub mod assets;
 
+/// Proof-of-concept MCP endpoint exposing `fetch_projects`.
+pub mod mcp;
+
 /// Filesystem persistence for the VFS API: one directory per project.
 pub mod storage;
 
