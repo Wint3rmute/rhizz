@@ -31,6 +31,7 @@ next to the mount).
   `tools/call` (project `drone` returned), and an empty data dir (`[]`).
 - **Validation:** `just test` (all Rust suites pass; the web Playwright step
   needs a Chromium binary absent from the sandbox), `just lint-rust`, `just build`.
+
 ---
 
 ## Task <N> — 0002.1: Schema for `protocol.leaf`, `protocol.encapsulates`, `connection.realized_by`
