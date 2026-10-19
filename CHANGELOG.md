@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **core**: resolve realized_by and detect cycles (0002.3)
 - **core**: resolve protocol encapsulates and detect cycles (0002.2)
 - **server**: add proof-of-concept MCP endpoint
 - **core**: add protocol leaf/encapsulates and connection realized_by schema
