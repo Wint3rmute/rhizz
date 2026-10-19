@@ -3,7 +3,7 @@
   // Loads the project, compiles it, reads one layout, and draws the doc card.
   // Callers own chrome and, when a node click should navigate, onOpenDiagram.
   import type { ComponentJS, ConnectionJS } from "rhizz";
-  import { type Snippet, untrack } from "svelte";
+  import { type Snippet } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { projectStore } from "../../../../ProjectState.svelte";
@@ -29,10 +29,8 @@
     VIEW_LAYOUT_DIR,
   } from "./persistence";
   import type { DiagramStaticBox } from "./types";
-  import { fitCamera, sceneBounds } from "./blend";
   import { buildReadOnlyScene, type DiagramNode } from "./scene";
-  import { createDiagramTransition } from "./transition.svelte";
-  import DiagramCanvas from "./DiagramCanvas.svelte";
+  import DiagramSceneView from "./DiagramSceneView.svelte";
 
   export interface DiagramView {
     components: ComponentJS[];
@@ -86,10 +84,6 @@
   const projectModel = getProjectModel();
 
   let docs = $state<ProjectDoc[]>([]);
-  let viewportWidth = $state(0);
-  let viewportHeight = $state(0);
-  const stage = createDiagramTransition();
-  let presentedPath: string | null = null;
   let layout = $state<DiagramLayout>(emptyDiagramLayout());
   let layoutLoaded = $state(false);
   let layoutMissing = $state(false);
@@ -276,49 +270,10 @@
     }),
   );
 
-  let ready = $derived(
-    layoutLoaded &&
-      projectModel.ready &&
-      !layoutMissing &&
-      diagramPath !== null &&
-      viewportWidth > 0 &&
-      viewportHeight > 0,
-  );
-
-  $effect(() => {
-    if (!ready || !diagramPath) return;
-    const scene = desiredScene;
-    const path = diagramPath;
-    // The layout can arrive before its keys resolve onto the model. Fitting
-    // then aims the camera at nothing; wait until the nodes are actually there.
-    if (Object.keys(layout.checked).length > 0 && scene.nodes.length === 0) {
-      return;
-    }
-    const bounds = sceneBounds(scene);
-    const fit = bounds
-      ? fitCamera(bounds, { width: viewportWidth, height: viewportHeight })
-      : null;
-    // show() writes the stage. Don't let that write resubscribe this effect.
-    // A scene update for the path already on screen must not cancel a tween
-    // that started because the path changed.
-    untrack(() => {
-      if (stage.settling && presentedPath === path) return;
-      const switching = presentedPath !== null && presentedPath !== path;
-      stage.show(scene, fit, {
-        transition: switching,
-        moveCamera: presentedPath === null || switching,
-      });
-      presentedPath = path;
-    });
-  });
-
-  $effect(() => () => stage.destroy());
 </script>
 
 <div
   bind:this={container}
-  bind:clientWidth={viewportWidth}
-  bind:clientHeight={viewportHeight}
   class="relative flex h-full min-h-0 w-full flex-1 flex-col"
 >
   {#if !layoutLoaded && pending}
@@ -338,21 +293,14 @@
       onnodehover,
     })}
   {:else}
-    <svg
-      width="100%"
-      height="100%"
-      viewBox="{stage.camera.x} {stage.camera.y} {Math.max(viewportWidth, 1) /
-        stage.camera.zoom} {Math.max(viewportHeight, 1) / stage.camera.zoom}"
-    >
-      <DiagramCanvas
-        scene={stage.shown ? stage.scene : desiredScene}
-        linkNodes={clickable}
-        {linkLabel}
-        frozen={stage.settling}
-        onNodeClick={clickable ? onnodeclick : undefined}
-        onNodeHover={onnodehover}
-      />
-    </svg>
+    <DiagramSceneView
+      scene={desiredScene}
+      viewKey={diagramPath}
+      linkNodes={clickable}
+      {linkLabel}
+      onNodeClick={clickable ? onnodeclick : undefined}
+      onNodeHover={onnodehover}
+    />
   {/if}
   {#if hoveredDoc && hoverPos}
     <div
