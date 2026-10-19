@@ -6,16 +6,19 @@ project {
 
 protocol "grpc" {
   full_name = "Internal gRPC microservice communication"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "hls" {
   full_name = "HLS video streaming"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "https" {
   full_name = "HTTP REST API"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "get-feed" {
@@ -52,16 +55,19 @@ protocol "https" {
 
 protocol "push" {
   full_name = "Push notifications"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "s3" {
   full_name = "Object storage protocol"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "sql" {
   full_name = "SQL relational database protocol"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 

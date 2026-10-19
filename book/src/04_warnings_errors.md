@@ -6,9 +6,10 @@ The Rhizz compiler produces 2 types of diagnostic messages:
 - Errors, which prevent the compiler from building the system model
 
 Warnings do not stop the build. Example below reuses a top-level component via
-`source = "sensor-hat"`, but its protocol defines no messages yet and two
-entities are missing full names. The model still compiles and scores — the
-warnings point at exactly what to finish.
+`source = "sensor-hat"`, but its protocol defines no messages yet, two
+entities are missing full names, and the `link` connection is not complete: its
+`serial` protocol is not marked `leaf` and has no `realized_by`. The model still
+compiles and scores — the warnings point at exactly what to finish.
 
 ```rhizz
 protocol "serial" {

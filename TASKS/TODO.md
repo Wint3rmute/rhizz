@@ -60,56 +60,6 @@ first, including the "Reference syntax" and "Diagnostics" sections). Tasks
 
 ---
 
-## Task <N> — 0002.5: Completeness warning `W019` and migration
-
-Depends on 0002.4. This task changes behavior of existing projects, so it goes
-last.
-
-- **`W019`** (`validate.rs`): implement the `complete(c)` definition from the
-  proposal, section 3, with memoization over the resolved `realized_by` graph
-  (it is acyclic after 0002.3). Put the computation in a public function in
-  `rhizz-core` that returns, per connection, `Complete` or `Incomplete` with
-  the first blocking connection (`Option<ConnectionId>`), and emit `W019` from
-  that result. The web connection inspector (see "Rhizz Web Application
-  protocols" below) reads the same result, so it must not be reimplemented in
-  TypeScript. Emit it on every incomplete connection. The
-  message names the first incomplete connection in the chain when there is one.
-  A connection with an undefined protocol (bare endpoint, untyped port,
-  mismatch, undefined protocol) is always incomplete. Level is `architectural`.
-- **Expected fallout, do not weaken `W019` to avoid it.** Every connection in
-  the examples and book fixtures will now get `W019` unless its protocol has
-  `leaf = true` or it is realized. Fix the fallout:
-  - Set `leaf = true` on the terminal protocols in `examples/` (about 40
-    protocols across six examples). Judge each: transport protocols are leaves,
-    business-level protocols are not and must get a realization or stay
-    flagged. Do not mark a protocol `leaf` just to silence the warning.
-    `examples/web-app` is a good place to show `encapsulates`
-    (`https`/`jwt`/`websocket`) and one `realized_by` chain.
-  - `crates/rhizz-cli/src/cli.rs` `COMPONENT_ONLY` strict-mode tests
-    (around `:948-1004`): the bare `i -> j` connection now yields `W019` at
-    `architectural`. Update the fixture, not the rule, and list the change in
-    your report.
-  - `web/src/routes/book-example/BookExampleView.stories.ts` ("1 warning"
-    assertion near `:181`) and its VRT baseline screenshots.
-  - `book/book.lock`: review each changed entry, then regenerate with
-    `just book-accept`.
-  - Drone/social-media/software-house `--strict` expectations in
-    `rhizz-cli/tests/integration_test.rs` and the watch-mode warning count.
-- **Docs:** remove the last "(not yet implemented)" marker (`W019`). Describe the
-  completeness rule in `SPEC.md` §4. Do not change scoring (§5). Add the `leaf`,
-  `encapsulates` and `realized_by` semantics to the book (`07_protocols.md` is a
-  stub, `03_connections_ports.md` covers connections). Set the proposal's status
-  to `implemented` and update `book/src/proposals/README.md`, as the proposal
-  process requires, and bump the spec version in `SPEC.md`.
-- **Tests (red first):** each rule in the proposal's list (leaf, non-leaf
-  without `realized_by`, untyped, freeform, complete chain, one incomplete branch
-  among several, `W019` on parent and on the incomplete child), plus a warning-level gating test.
-
-Definition of done: `just test`, `just lint`, `just build` pass; the report
-lists every fixture, example and baseline that changed and why.
-
----
-
 # Rhizz Web Application protocols
 
 Web-side work for proposal 0002. Four tasks (W.1 – W.4). These depend on the

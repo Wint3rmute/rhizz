@@ -6,6 +6,7 @@ project {
 
 protocol "cryo-reactant-supply" {
   full_name = "Supercritical cryogenic oxygen and hydrogen supply lines"
+  leaf = true
   tags        = ["power", "cryo", "fluid"]
   roles       = ["tank", "consumer"]
 
@@ -28,6 +29,7 @@ protocol "cryo-reactant-supply" {
 
 protocol "docking-tunnel" {
   full_name = "CSM-to-LM mechanical docking probe, drogue, and pressurized transfer tunnel"
+  leaf = true
   tags        = ["mechanical", "docking", "pressurized"]
   roles       = ["active-probe", "passive-drogue"]
 
@@ -54,6 +56,7 @@ protocol "docking-tunnel" {
 
 protocol "eps-28v-dc" {
   full_name = "Main 28V DC electrical power distribution buses"
+  leaf = true
   tags        = ["power", "electrical"]
   roles       = ["power-source", "power-load"]
 
@@ -76,6 +79,7 @@ protocol "eps-28v-dc" {
 
 protocol "imu-gimbal-interface" {
   full_name = "Inertial Measurement Unit resolver coupling and torque pulse interface"
+  leaf = true
   tags        = ["avionics", "guidance", "imu"]
   roles       = ["imu-platform", "guidance-computer"]
 
@@ -110,6 +114,7 @@ protocol "imu-gimbal-interface" {
 
 protocol "optical-sighting-bus" {
   full_name = "CSM Scanning Telescope and Sextant optical shaft and trunnion resolver link"
+  leaf = true
   tags        = ["avionics", "navigation", "optics"]
   roles       = ["optics-unit", "guidance-computer"]
 
@@ -137,6 +142,7 @@ protocol "optical-sighting-bus" {
 
 protocol "pgncs-digital-bus" {
   full_name = "Primary Guidance, Navigation, and Control System (PGNCS) internal digital bus"
+  leaf = true
   tags        = ["avionics", "guidance", "digital"]
   roles       = ["computer", "peripheral"]
 
@@ -181,6 +187,7 @@ protocol "pgncs-digital-bus" {
 
 protocol "propellant-feed" {
   full_name = "Hypergolic or cryogenic liquid propellant delivery manifold"
+  leaf = true
   tags        = ["propulsion", "fluid", "propellant"]
   roles       = ["tank", "engine"]
 
@@ -208,6 +215,7 @@ protocol "propellant-feed" {
 
 protocol "radar-altimetry" {
   full_name = "Landing / rendezvous radar range, range-rate, and altitude beams"
+  leaf = true
   tags        = ["avionics", "radar", "guidance"]
   roles       = ["radar-sensor", "guidance-computer"]
 
@@ -241,6 +249,7 @@ protocol "radar-altimetry" {
 
 protocol "rcs-thruster-command" {
   full_name = "Jet Driver Electronics firing pulse signals to RCS solenoids"
+  leaf = true
   tags        = ["control", "rcs", "actuator"]
   roles       = ["controller", "thruster-quad"]
 
@@ -262,6 +271,7 @@ protocol "rcs-thruster-command" {
 
 protocol "saturn-iu-umbilical" {
   full_name = "Saturn V Launch Vehicle Digital Computer (LVDC) to CSM guidance handover and abort sensing"
+  leaf = true
   tags        = ["guidance", "launch", "abort"]
   roles       = ["instrument-unit", "csm-eds"]
 
@@ -294,6 +304,7 @@ protocol "saturn-iu-umbilical" {
 
 protocol "unified-s-band" {
   full_name = "2.2 GHz Unified S-band Earth-space telemetry, voice, and ranging"
+  leaf = true
   tags        = ["rf", "telemetry", "deep-space"]
   roles       = ["ground-station", "spacecraft-transceiver"]
 
@@ -347,6 +358,7 @@ protocol "unified-s-band" {
 
 protocol "vhf-inter-spacecraft" {
   full_name = "VHF lunar orbit inter-spacecraft voice and ranging link"
+  leaf = true
   tags        = ["rf", "ranging", "lunar-orbit"]
   roles       = ["csm-transceiver", "lm-transceiver"]
 

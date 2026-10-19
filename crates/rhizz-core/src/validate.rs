@@ -252,7 +252,119 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     }
 
     warnings.extend(realization_warnings(model));
+    warnings.extend(completeness_warnings(model));
 
+    warnings
+}
+
+/// Completeness of one connection (proposal 0002, section 3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Completeness {
+    /// The connection needs no further realization.
+    Complete,
+    /// The connection is incomplete. `blocking` is the root cause of its
+    /// realization chain: the first connection, in `realized_by` declaration
+    /// order, that is itself incomplete for its own protocol. It is `None`
+    /// when the connection is a root cause (undefined protocol, or non-leaf
+    /// protocol without `realized_by`).
+    Incomplete { blocking: Option<ConnectionId> },
+}
+
+/// Completeness of every connection, index-aligned with
+/// [`Model::connections`].
+///
+/// A connection with an undefined protocol is always incomplete. A connection
+/// on a leaf protocol is complete. Any other connection is complete when it has
+/// `realized_by` entries and every one of them is complete. Results are
+/// memoized, so each connection is evaluated once.
+#[must_use]
+pub fn connection_completeness(model: &Model) -> Vec<Completeness> {
+    let mut memo: Vec<Option<Completeness>> = vec![None; model.connections.len()];
+    (0..model.connections.len())
+        .map(|idx| completeness_of(model, ConnectionId(idx), &mut memo))
+        .collect()
+}
+
+fn completeness_of(
+    model: &Model,
+    id: ConnectionId,
+    memo: &mut [Option<Completeness>],
+) -> Completeness {
+    if let Some(Some(known)) = memo.get(id.0) {
+        return *known;
+    }
+    // Pessimistic placeholder while `id` is on the stack. `realized_by` is
+    // acyclic after resolution (E018), so this only guards against a broken
+    // model and keeps the recursion finite.
+    if let Some(slot) = memo.get_mut(id.0) {
+        *slot = Some(Completeness::Incomplete { blocking: None });
+    }
+
+    let result = match model.connection_protocol(id) {
+        None => Completeness::Incomplete { blocking: None },
+        Some(pid) if model.protocol(pid).is_some_and(|proto| proto.leaf) => Completeness::Complete,
+        Some(_) => {
+            let realizers = model
+                .connection(id)
+                .map_or(&[][..], |conn| conn.realized_by_ids.as_slice());
+            if realizers.is_empty() {
+                Completeness::Incomplete { blocking: None }
+            } else {
+                let mut result = Completeness::Complete;
+                for &realizer in realizers {
+                    if let Completeness::Incomplete { blocking } =
+                        completeness_of(model, realizer, memo)
+                    {
+                        result = Completeness::Incomplete {
+                            blocking: Some(blocking.unwrap_or(realizer)),
+                        };
+                        break;
+                    }
+                }
+                result
+            }
+        }
+    };
+    if let Some(slot) = memo.get_mut(id.0) {
+        *slot = Some(result);
+    }
+    result
+}
+
+/// `W019`: one warning per incomplete connection. The message names the
+/// blocking connection when the chain has one, otherwise the reason the
+/// connection itself is a root cause.
+fn completeness_warnings(model: &Model) -> Vec<Diagnostic> {
+    let mut warnings = Vec::new();
+    for (idx, (conn, state)) in model
+        .connections
+        .iter()
+        .zip(connection_completeness(model))
+        .enumerate()
+    {
+        let Completeness::Incomplete { blocking } = state else {
+            continue;
+        };
+        let reason = match (blocking, model.connection_protocol(ConnectionId(idx))) {
+            (Some(blocker), _) => format!(
+                "`{}` is the first incomplete connection in its realization chain",
+                model
+                    .connection(blocker)
+                    .map_or("?", |conn| conn.label.as_str())
+            ),
+            (None, None) => "its protocol is not defined".to_string(),
+            (None, Some(pid)) => format!(
+                "protocol `{}` is not a leaf and it has no realized_by",
+                model
+                    .protocol(pid)
+                    .map_or("?", |proto| proto.label.as_str())
+            ),
+        };
+        warnings.push(Diagnostic::warning(
+            DiagnosticCode::W019,
+            format!("connection `{}` is incomplete: {reason}", conn.label),
+        ));
+    }
     warnings
 }
 
@@ -1559,5 +1671,223 @@ system "s" {{
             "\"fund\"",
         );
         assert_eq!(realization_warnings(&src), vec!["W020"]);
+    }
+
+    // ── W019: completeness ──────────────────────────────────────────────────
+
+    /// Messages of the `W019` warnings raised for `src`, in emission order.
+    fn w019_messages(src: &str) -> Vec<String> {
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).expect("fixture resolves");
+        validate(&model)
+            .into_iter()
+            .filter(|d| d.code.code == "W019")
+            .map(|d| d.message)
+            .collect()
+    }
+
+    /// Two instances of `node`, each with a `fund` port (protocol `fund`, the
+    /// given `leaf` value) and an `http` port (leaf). `transfer` is the parent
+    /// connection on `fund`; `realizers` is the body of its `realized_by` list
+    /// and `extra` holds the other connection declarations.
+    fn completeness_fixture(fund_leaf: bool, realizers: &str, extra: &str) -> String {
+        format!(
+            r#"
+protocol "fund" {{ leaf = {fund_leaf} }}
+protocol "http" {{ leaf = true }}
+component "node" {{
+  leaf = true
+  port "fund" {{
+    protocol = "fund"
+    role = "provider"
+  }}
+  port "http" {{
+    protocol = "http"
+    role = "provider"
+  }}
+}}
+system "s" {{
+  instance "a" {{ source = "node" }}
+  instance "b" {{ source = "node" }}
+  connection "transfer" {{
+    from = "a/fund"
+    to = "b/fund"
+    realized_by = [{realizers}]
+  }}
+{extra}
+}}
+"#
+        )
+    }
+
+    const HTTP_LEAF: &str = r#"
+  connection "request" {
+    from = "a/http"
+    to = "b/http"
+  }
+"#;
+
+    #[test]
+    fn w019_leaf_protocol_is_complete() {
+        let src = completeness_fixture(true, "", "");
+        assert_eq!(w019_messages(&src), Vec::<String>::new());
+    }
+
+    #[test]
+    fn w019_non_leaf_protocol_without_realization_is_incomplete() {
+        let src = completeness_fixture(false, "", "");
+        assert_eq!(
+            w019_messages(&src),
+            vec![
+                "connection `transfer` is incomplete: protocol `fund` is not a leaf and it has no realized_by"
+            ]
+        );
+    }
+
+    #[test]
+    fn w019_complete_realization_chain_is_complete() {
+        let src = completeness_fixture(false, r#""request""#, HTTP_LEAF);
+        assert_eq!(w019_messages(&src), Vec::<String>::new());
+    }
+
+    #[test]
+    fn w019_untyped_endpoints_are_always_incomplete() {
+        let src = r#"
+component "node" { leaf = true }
+system "s" {
+  instance "a" { source = "node" }
+  instance "b" { source = "node" }
+  connection "bare" {
+    from = "a"
+    to = "b"
+  }
+}
+"#;
+        assert_eq!(
+            w019_messages(src),
+            vec!["connection `bare` is incomplete: its protocol is not defined"]
+        );
+    }
+
+    #[test]
+    fn w019_freeform_port_protocol_is_always_incomplete() {
+        // `fund` is not declared as a top-level protocol, so the endpoints
+        // have no resolved protocol even though both ports name it.
+        let src = r#"
+component "node" {
+  leaf = true
+  port "fund" {
+    protocol = "fund"
+    role = "provider"
+  }
+}
+system "s" {
+  instance "a" { source = "node" }
+  instance "b" { source = "node" }
+  connection "transfer" {
+    from = "a/fund"
+    to = "b/fund"
+  }
+}
+"#;
+        assert_eq!(
+            w019_messages(src),
+            vec!["connection `transfer` is incomplete: its protocol is not defined"]
+        );
+    }
+
+    #[test]
+    fn w019_realization_branch_failure_names_the_incomplete_branch() {
+        // `transfer` has two branches: `request` (complete) and `audit`
+        // (non-leaf, no realization). Only `audit` blocks the parent.
+        let src = completeness_fixture(
+            false,
+            r#""request", "audit""#,
+            &format!(
+                "{HTTP_LEAF}\n  connection \"audit\" {{\n    from = \"a/fund\"\n    to = \"b/fund\"\n  }}\n"
+            ),
+        );
+        assert_eq!(
+            w019_messages(&src),
+            vec![
+                "connection `transfer` is incomplete: `audit` is the first incomplete connection in its realization chain",
+                "connection `audit` is incomplete: protocol `fund` is not a leaf and it has no realized_by",
+            ]
+        );
+    }
+
+    #[test]
+    fn w019_on_parent_and_incomplete_child_names_child_on_parent_only() {
+        // `request` is on the undefined protocol `fund`, so it is incomplete
+        // and warns itself. `transfer` names it as the blocking connection.
+        let src = completeness_fixture(
+            false,
+            r#""request""#,
+            "\n  connection \"request\" {\n    from = \"a/fund\"\n    to = \"b/fund\"\n  }\n",
+        );
+        assert_eq!(
+            w019_messages(&src),
+            vec![
+                "connection `transfer` is incomplete: `request` is the first incomplete connection in its realization chain",
+                "connection `request` is incomplete: protocol `fund` is not a leaf and it has no realized_by",
+            ]
+        );
+    }
+
+    #[test]
+    fn w019_chain_names_the_root_cause_at_every_level() {
+        // transfer -> request -> audit, and `audit` is the root cause.
+        let src = completeness_fixture(
+            false,
+            r#""request""#,
+            "\n  connection \"request\" {\n    from = \"a/fund\"\n    to = \"b/fund\"\n    realized_by = [\"audit\"]\n  }\n  connection \"audit\" {\n    from = \"a/fund\"\n    to = \"b/fund\"\n  }\n",
+        );
+        let messages = w019_messages(&src);
+        assert_eq!(
+            messages,
+            vec![
+                "connection `transfer` is incomplete: `audit` is the first incomplete connection in its realization chain",
+                "connection `request` is incomplete: `audit` is the first incomplete connection in its realization chain",
+                "connection `audit` is incomplete: protocol `fund` is not a leaf and it has no realized_by",
+            ]
+        );
+    }
+
+    #[test]
+    fn w019_completeness_result_is_per_connection() {
+        use super::{Completeness, connection_completeness};
+        let src = completeness_fixture(false, r#""request""#, HTTP_LEAF);
+        let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).expect("fixture resolves");
+        let results = connection_completeness(&model);
+        let by_label = |label: &str| {
+            let idx = model
+                .connections
+                .iter()
+                .position(|c| c.label == label)
+                .expect("connection exists");
+            results[idx]
+        };
+        assert_eq!(by_label("transfer"), Completeness::Complete);
+        assert_eq!(by_label("request"), Completeness::Complete);
+    }
+
+    #[test]
+    fn w019_is_gated_by_architectural_level() {
+        use crate::diagnostics::WarningLevel;
+        let src = completeness_fixture(false, "", "");
+        let sources = [crate::Source {
+            filename: "model.hcl".into(),
+            content: src,
+        }];
+        let codes_at = |level| {
+            crate::compile_with_warning_level(&sources, level)
+                .diagnostics
+                .iter()
+                .map(|d| d.code.code)
+                .collect::<Vec<_>>()
+        };
+        assert!(!codes_at(WarningLevel::Business).contains(&"W019"));
+        assert!(codes_at(WarningLevel::Architectural).contains(&"W019"));
     }
 }

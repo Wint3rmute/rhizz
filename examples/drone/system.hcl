@@ -6,11 +6,13 @@ project {
 
 protocol "analog-video" {
   full_name = "Analog composite video"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "crsf" {
   full_name = "CRSF serial protocol for RC input"
+  leaf = true
   roles       = ["provider", "consumer", "peer"]
 
   message "rc-channels" {
@@ -26,6 +28,7 @@ protocol "crsf" {
 
 protocol "dshot600" {
   full_name = "DShot600 digital motor control"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "throttle" {
@@ -46,21 +49,25 @@ protocol "dshot600" {
 
 protocol "i2c" {
   full_name = "I2C serial sensor bus"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "power-dc" {
   full_name = "DC power delivery rail"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "spi" {
   full_name = "Serial peripheral interface"
+  leaf = true
   roles       = ["provider", "consumer"]
 }
 
 protocol "uart" {
   full_name = "UART serial bus"
+  leaf = true
   roles       = ["peer"]
 
   message "nav-pvt" {

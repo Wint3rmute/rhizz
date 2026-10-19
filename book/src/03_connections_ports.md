@@ -47,6 +47,11 @@ points us towards things to specify further:
 - There are 0 `ports` defined
 - There are 0 `messages` defined
 
+The connection is also reported as incomplete (`W019`): with no ports there is
+no protocol to type it, and an untyped connection can never be complete. See
+[Protocols](07_protocols.md) for how a connection gets its protocol and how it
+is completed.
+
 > TODO: what the hell is "Connections 0/1"? Some bug prolly...
 
 ## Defining & connecting ports

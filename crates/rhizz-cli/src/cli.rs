@@ -943,9 +943,14 @@ system "s" {
 }
 "#;
 
-    /// Raises only component-level warnings: unused ports (W010) and a protocol
-    /// without messages (W011). Both instances are wired, so no W003.
-    const COMPONENT_ONLY: &str = r#"protocol "bus" { full_name = "d" }
+    /// Raises only component-level warnings: a protocol without messages
+    /// (W011). Both instances are wired, so no W003. The connection is typed on
+    /// a leaf protocol so it is complete and raises no architectural W019; a
+    /// bare endpoint would be incomplete by definition.
+    const COMPONENT_ONLY: &str = r#"protocol "bus" {
+  full_name = "d"
+  leaf      = true
+}
 
 component "c" {
   full_name = "d"
@@ -965,8 +970,8 @@ system "s" {
 
   connection "l" {
     full_name = "d"
-    from        = "i"
-    to          = "j"
+    from        = "i/p"
+    to          = "j/p"
   }
 }
 "#;
@@ -983,7 +988,7 @@ system "s" {
         assert_eq!(
             check_strict_at(component.path(), WarningLevel::Business),
             0,
-            "business level must hide W010/W011"
+            "business level must hide W011"
         );
     }
 
@@ -999,7 +1004,7 @@ system "s" {
         assert_eq!(
             check_strict_at(component.path(), WarningLevel::Architectural),
             0,
-            "architectural level must hide W010/W011"
+            "architectural level must hide W011"
         );
     }
 
@@ -1015,7 +1020,7 @@ system "s" {
         assert_eq!(
             check_strict_at(component.path(), WarningLevel::Component),
             1,
-            "component level must report W010/W011"
+            "component level must report W011"
         );
     }
 

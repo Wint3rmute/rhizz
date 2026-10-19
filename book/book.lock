@@ -43,6 +43,18 @@
           {
             "code": "W003",
             "message": "component `tire` (source `tire`) is not referenced by any connection"
+          },
+          {
+            "code": "W019",
+            "message": "connection `fork-mount` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `front-wheel-mount` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `rear-wheel-mount` is incomplete: its protocol is not defined"
           }
         ]
       }
@@ -283,7 +295,12 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W019",
+            "message": "connection `mouse-to-computer` is incomplete: its protocol is not defined"
+          }
+        ]
       }
     },
     {
@@ -317,7 +334,12 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W019",
+            "message": "connection `api-access` is incomplete: its protocol is not defined"
+          }
+        ]
       }
     },
     {
@@ -371,6 +393,10 @@
           {
             "code": "W018",
             "message": "component `sensor-hat` is missing documentation (`docs/sensor-hat.md`)"
+          },
+          {
+            "code": "W019",
+            "message": "connection `link` is incomplete: protocol `serial` is not a leaf and it has no realized_by"
           }
         ]
       }
@@ -429,6 +455,18 @@
           {
             "code": "W003",
             "message": "component `tire` (source `tire`) is not referenced by any connection"
+          },
+          {
+            "code": "W019",
+            "message": "connection `fork-mount` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `front-wheel-mount` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `rear-wheel-mount` is incomplete: its protocol is not defined"
           }
         ]
       },
@@ -478,7 +516,20 @@
           },
           "system": ""
         },
-        "warnings": []
+        "warnings": [
+          {
+            "code": "W019",
+            "message": "connection `hdmi` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `pci` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `pci` is incomplete: its protocol is not defined"
+          }
+        ]
       },
       "src": "views-intro/1_example_simple",
       "level": "architectural"
@@ -526,6 +577,18 @@
           {
             "code": "W016",
             "message": "views/overview.hcl: view `overview` node `computer-setup/not-a-computer` does not reference a known component"
+          },
+          {
+            "code": "W019",
+            "message": "connection `hdmi` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `pci` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `pci` is incomplete: its protocol is not defined"
           }
         ]
       },
