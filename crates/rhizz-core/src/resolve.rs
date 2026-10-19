@@ -92,8 +92,11 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             messages: msg_ids,
             leaf: lp.inner.leaf,
             encapsulates: lp.inner.encapsulates,
+            encapsulates_ids: vec![],
         });
     }
+
+    resolve_protocol_encapsulates(&mut r);
 
     // ── Systems ───────────────────────────────────────────────────────────────
     //
@@ -957,6 +960,126 @@ fn resolve_endpoint(
     }
 
     None
+}
+
+/// Resolve protocol `encapsulates` labels to [`ProtocolId`]s (`W022` for labels
+/// naming no top-level protocol), then reject cycles (`E020`).
+fn resolve_protocol_encapsulates(r: &mut Resolver) {
+    let labels: Vec<String> = r.model.protocols.iter().map(|p| p.label.clone()).collect();
+
+    let mut graph: Vec<Vec<ProtocolId>> = Vec::with_capacity(labels.len());
+    let mut warnings: Vec<String> = Vec::new();
+    for proto in &r.model.protocols {
+        let mut ids: Vec<ProtocolId> = Vec::new();
+        for target in &proto.encapsulates {
+            match r.protocol_label_index.get(target).copied() {
+                Some(pid) if !ids.contains(&pid) => ids.push(pid),
+                Some(_) => {}
+                None => warnings.push(format!(
+                    "protocol `{}` encapsulates undefined protocol `{target}`",
+                    proto.label
+                )),
+            }
+        }
+        graph.push(ids);
+    }
+    for msg in warnings {
+        r.push_warning(DiagnosticCode::W022, msg);
+    }
+
+    // Visit roots in label order so that the reported cycles are deterministic.
+    let mut roots: Vec<usize> = (0..labels.len()).collect();
+    roots.sort_by_key(|i| labels.get(*i).cloned());
+
+    let mut state = vec![VisitState::Unvisited; labels.len()];
+    let mut path: Vec<usize> = Vec::new();
+    let mut chains: Vec<String> = Vec::new();
+    for root in roots {
+        if state.get(root) == Some(&VisitState::Unvisited) {
+            visit_protocol_encapsulates(
+                root,
+                &mut graph,
+                &labels,
+                &mut state,
+                &mut path,
+                &mut chains,
+            );
+        }
+    }
+    for chain in chains {
+        r.push_error(
+            DiagnosticCode::E020,
+            format!("circular protocol encapsulation: {chain}"),
+        );
+    }
+
+    for (proto, ids) in r.model.protocols.iter_mut().zip(graph) {
+        proto.encapsulates_ids = ids;
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum VisitState {
+    Unvisited,
+    OnPath,
+    Done,
+}
+
+/// DFS step of the `encapsulates` cycle check. Each back edge closes one cycle,
+/// which is recorded in `chains` and removed from `graph`, so the remaining
+/// graph is acyclic.
+fn visit_protocol_encapsulates(
+    node: usize,
+    graph: &mut [Vec<ProtocolId>],
+    labels: &[String],
+    state: &mut [VisitState],
+    path: &mut Vec<usize>,
+    chains: &mut Vec<String>,
+) {
+    if let Some(slot) = state.get_mut(node) {
+        *slot = VisitState::OnPath;
+    }
+    path.push(node);
+
+    let successors = graph.get(node).cloned().unwrap_or_default();
+    let mut kept: Vec<ProtocolId> = Vec::with_capacity(successors.len());
+    for succ in successors {
+        let next = succ.0;
+        match state.get(next).copied().unwrap_or(VisitState::Done) {
+            VisitState::OnPath => {
+                let start = path.iter().position(|&p| p == next).unwrap_or(0);
+                let mut chain: Vec<String> = path
+                    .get(start..)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|&p| labels.get(p).cloned())
+                    .collect();
+                if let Some(first) = chain.first().cloned() {
+                    chain.push(first);
+                }
+                let shown = chain
+                    .iter()
+                    .map(|l| format!("`{l}`"))
+                    .collect::<Vec<_>>()
+                    .join(" -> ");
+                chains.push(shown);
+                // The back edge is dropped, so this cycle cannot recur.
+            }
+            VisitState::Unvisited => {
+                kept.push(succ);
+                visit_protocol_encapsulates(next, graph, labels, state, path, chains);
+            }
+            VisitState::Done => kept.push(succ),
+        }
+    }
+    if let Some(slot) = graph.get_mut(node) {
+        *slot = kept;
+    }
+
+    path.pop();
+    if let Some(slot) = state.get_mut(node) {
+        *slot = VisitState::Done;
+    }
 }
 
 /// Resolve `encapsulates` labels for an already-allocated connection.
@@ -2305,6 +2428,118 @@ system "drone" {
         assert!(
             diags.iter().any(|d| d.code == DiagnosticCode::E009),
             "expected E009 error, got: {diags:?}"
+        );
+    }
+
+    fn resolve_src(src: &str) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>> {
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        resolve(raw)
+    }
+
+    /// Codes of `diags`, without the orphan/no-message noise (W011/W012) that
+    /// bare protocol fixtures always produce.
+    fn codes(diags: &[Diagnostic]) -> Vec<&'static str> {
+        diags
+            .iter()
+            .map(|d| d.code.code)
+            .filter(|c| *c != "W011" && *c != "W012")
+            .collect()
+    }
+
+    #[test]
+    fn w022_undefined_encapsulates_label_is_dropped() {
+        let src = r#"
+protocol "http" {
+  encapsulates = ["fund-transfer"]
+}
+"#;
+        let (model, warnings) = resolve_src(src).expect("W022 must not block compilation");
+        assert_eq!(codes(&warnings), vec!["W022"]);
+        assert!(model.protocols[0].encapsulates_ids.is_empty());
+        assert_eq!(model.protocols[0].encapsulates, vec!["fund-transfer"]);
+    }
+
+    #[test]
+    fn e020_protocol_listing_itself_is_a_cycle() {
+        let src = r#"
+protocol "http" {
+  encapsulates = ["http"]
+}
+"#;
+        let diags = resolve_src(src).expect_err("self-reference must be an error");
+        assert_eq!(codes(&diags), vec!["E020"]);
+        assert!(diags[0].message.contains("http"), "{}", diags[0].message);
+    }
+
+    #[test]
+    fn e020_two_protocol_cycle_reported_once() {
+        let src = r#"
+protocol "http" {
+  encapsulates = ["tls"]
+}
+protocol "tls" {
+  encapsulates = ["http"]
+}
+"#;
+        let diags = resolve_src(src).expect_err("2-cycle must be an error");
+        assert_eq!(codes(&diags), vec!["E020"]);
+        let msg = &diags[0].message;
+        assert!(msg.contains("http") && msg.contains("tls"), "{msg}");
+    }
+
+    #[test]
+    fn e020_longer_cycle_reported_once() {
+        let src = r#"
+protocol "a" {
+  encapsulates = ["b"]
+}
+protocol "b" {
+  encapsulates = ["c"]
+}
+protocol "c" {
+  encapsulates = ["a"]
+}
+"#;
+        let diags = resolve_src(src).expect_err("3-cycle must be an error");
+        assert_eq!(codes(&diags), vec!["E020"]);
+        let msg = &diags[0].message;
+        assert!(
+            msg.contains('a') && msg.contains('b') && msg.contains('c'),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn encapsulates_diamond_is_clean_and_resolved() {
+        let src = r#"
+protocol "top" {
+  encapsulates = ["left", "right"]
+}
+protocol "left" {
+  encapsulates = ["base"]
+}
+protocol "right" {
+  encapsulates = ["base"]
+}
+protocol "base" {
+  leaf = true
+}
+"#;
+        let (model, warnings) = resolve_src(src).expect("diamond has no cycle");
+        assert!(codes(&warnings).is_empty(), "{warnings:?}");
+        let id_of = |label: &str| {
+            model
+                .protocols
+                .iter()
+                .position(|p| p.label == label)
+                .map(ProtocolId)
+                .unwrap()
+        };
+        let top = &model.protocols[id_of("top").0];
+        assert_eq!(top.encapsulates_ids, vec![id_of("left"), id_of("right")]);
+        assert_eq!(
+            model.protocols[id_of("left").0].encapsulates_ids,
+            vec![id_of("base")]
         );
     }
 

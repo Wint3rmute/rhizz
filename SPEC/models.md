@@ -71,9 +71,10 @@ messages / fields. Key semantics:
   serializer to re-emit `instance` blocks).
 - `Port { protocol: String, protocol_id: Option<ProtocolId>, external, required,
   owner }` — `protocol_id` links to a top-level protocol when the name matches.
-- `Protocol { leaf, encapsulates: Vec<String>, .. }` — `leaf` defaults to
-  `false`; `encapsulates` holds the declared protocol labels (not yet resolved
-  to `ProtocolId`s).
+- `Protocol { leaf, encapsulates: Vec<String>, encapsulates_ids: Vec<ProtocolId>,
+  .. }` — `leaf` defaults to `false`; `encapsulates` holds the declared protocol
+  labels, `encapsulates_ids` the resolved targets (undefined labels and cycle
+  edges are dropped).
 - `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId> },
   encapsulates, realized_by: Vec<String> }` — `port: None` is a bare (untyped)
   reference; W007–W009 fire on the typed/untyped and role combinations.
@@ -86,6 +87,9 @@ messages / fields. Key semantics:
 `resolve(raw) -> Result<Model, Vec<Diagnostic>>`:
 
 1. Index top-level `protocol`s (E001); allocate messages/fields.
+   Resolve protocol `encapsulates` to `ProtocolId`s (W022 for undefined labels);
+   a DFS in label order reports each `encapsulates` cycle once (E020) and drops
+   its back edge.
 2. Index top-level `component`s (E001).
 3. Register systems (E001).
 4. Expand each system's `instance`s depth-first (E012/E014/E013, clone body).

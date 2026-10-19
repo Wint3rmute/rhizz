@@ -340,9 +340,13 @@ pub struct Protocol {
     #[serde(default)]
     pub leaf: bool,
     /// Labels of protocols this protocol can carry as payload, as declared.
-    /// Not yet resolved to [`ProtocolId`]s.
     #[serde(default)]
     pub encapsulates: Vec<String>,
+    /// Resolved [`ProtocolId`]s of [`Protocol::encapsulates`]. Labels that name
+    /// no top-level protocol (`W022`) and edges on an `encapsulates` cycle
+    /// (`E020`) are dropped.
+    #[serde(default)]
+    pub encapsulates_ids: Vec<ProtocolId>,
 }
 
 /// A resolved port on a component.
