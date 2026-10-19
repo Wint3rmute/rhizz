@@ -32,7 +32,12 @@ pub fn app(data_dir: PathBuf) -> Router {
     let mcp = StreamableHttpService::new(
         move || Ok(RhizzMcp::new(mcp_data_dir.clone())),
         Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default(),
+        StreamableHttpServerConfig::default().with_allowed_hosts([
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "rhizz.fly.dev",
+        ]),
     );
     Router::new()
         .route("/healthz", get(healthz))

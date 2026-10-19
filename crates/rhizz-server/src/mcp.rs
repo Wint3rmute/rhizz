@@ -273,4 +273,21 @@ mod tests {
         let projects: Value = serde_json::from_str(text).unwrap();
         assert_eq!(projects, json!([]));
     }
+
+    #[tokio::test]
+    async fn initialize_accepts_the_public_hostname() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header(header::HOST, "rhizz.fly.dev")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ACCEPT, "application/json, text/event-stream")
+            .body(Body::from(initialize_request().to_string()))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }
