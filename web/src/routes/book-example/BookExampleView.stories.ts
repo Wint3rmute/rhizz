@@ -93,6 +93,35 @@ system "demo" {
 `,
   },
   {
+    path: "views/alternate.hcl",
+    content: `view "alternate" {
+  system = "demo"
+
+  node "demo/sensor" {
+    x          = 480
+    y          = 40
+    width      = 140
+    height     = 90
+    text_align = "center"
+  }
+
+  node "demo/hub" {
+    x          = 80
+    y          = 240
+    width      = 140
+    height     = 90
+    text_align = "center"
+  }
+
+  annotation {
+    x    = 80
+    y    = 40
+    text = "Alternate layout"
+  }
+}
+`,
+  },
+  {
     path: "docs/sensor.md",
     content: "# sensor\n\nTemperature sensor.\n",
   },
@@ -156,6 +185,31 @@ export const CodeTab: Story = {
     await findCodeWith(canvasElement, 'protocol "temp-bus"');
     await expect(canvasElement.querySelector(".hcl-keyword")).not.toBeNull();
     await expect(canvasElement.querySelector(".hcl-string")).not.toBeNull();
+  },
+};
+
+// Switching between two diagram views tweens from one layout to the next:
+// the incoming view's annotation appears and the previous view's content
+// fades out once the transition settles.
+export const SwitchBetweenViews: Story = {
+  args: {
+    files: SAMPLE_FILES,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("two components");
+    await userEvent.click(
+      await canvas.findByRole("tab", { name: "views/alternate.hcl" }),
+    );
+    await canvas.findByText("Alternate layout");
+    await waitFor(
+      () => {
+        if (canvas.queryByText("two components")) {
+          throw new Error("previous view still visible after switch");
+        }
+      },
+      { timeout: 2000 },
+    );
   },
 };
 

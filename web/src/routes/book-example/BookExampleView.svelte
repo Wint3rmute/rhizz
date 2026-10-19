@@ -9,12 +9,16 @@
     type ViewDefinition,
     type WarningLevel,
   } from "../../rhizz_wasm_wrapper";
+  import { untrack } from "svelte";
   import { isDocsSource } from "../../vfs/compile";
-  import DiagramStaticView from "../projects/[id]/modeling/DiagramStaticView.svelte";
+  import { fitCamera, sceneBounds } from "../projects/[id]/modeling/blend";
+  import DiagramCanvas from "../projects/[id]/modeling/DiagramCanvas.svelte";
   import {
     mapLayoutToBoxes,
     viewsToLayout,
   } from "../projects/[id]/modeling/persistence";
+  import { buildReadOnlyScene } from "../projects/[id]/modeling/scene";
+  import { createDiagramTransition } from "../projects/[id]/modeling/transition.svelte";
   import type { DiagramStaticAnnotation } from "../projects/[id]/modeling/types";
   import { postExampleHeight } from "./autosize";
   import { copyToClipboard } from "../../clipboard";
@@ -229,6 +233,10 @@
   });
 
   let keyToIndex = $derived(componentKeyIndex(model));
+  // Stable keys, index-aligned with `components` — view transitions match on
+  // these rather than arena indexes, so nodes keep their identity across a
+  // tween even if the compile renumbers them.
+  let componentKeys = $derived(model?.component_keys() ?? []);
   let boxes = $derived(
     mapLayoutToBoxes(viewsToLayout(selectedViews).checked, keyToIndex),
   );
@@ -247,6 +255,55 @@
     }
     return out;
   });
+
+  // The scene the current view asks for. The transition stage tweens from
+  // whatever scene is currently on screen to this one when the file/views
+  // change (see the `show` effect below).
+  let desiredScene = $derived(
+    buildReadOnlyScene({
+      components,
+      connections,
+      boxes,
+      annotations,
+      ids: componentKeys,
+    }),
+  );
+
+  // Shared scene/camera tween, the same machinery `DiagramViewer` uses so
+  // switching views glides nodes/edges into place instead of swapping.
+  const stage = createDiagramTransition();
+  let diagramContainer: HTMLDivElement | undefined = $state();
+  let viewportWidth = $state(0);
+  let viewportHeight = $state(0);
+  let presentedFile: string | null = null;
+
+  $effect(() => {
+    if (!showDiagram) return;
+    if (viewportWidth === 0 || viewportHeight === 0) return;
+    const scene = desiredScene;
+    const file = selectedFile;
+    // The layout can arrive before its keys resolve onto the model. Fitting
+    // then aims the camera at nothing; wait until the nodes are actually there.
+    if (Object.keys(boxes).length > 0 && scene.nodes.length === 0) return;
+    const bounds = sceneBounds(scene);
+    const fit = bounds
+      ? fitCamera(bounds, { width: viewportWidth, height: viewportHeight })
+      : null;
+    // show() writes the stage. Don't let that write resubscribe this effect.
+    // A scene update for the file already on screen must not cancel a tween
+    // that started because the file changed.
+    untrack(() => {
+      if (stage.settling && presentedFile === file) return;
+      const switching = presentedFile !== null && presentedFile !== file;
+      stage.show(scene, fit, {
+        transition: switching,
+        moveCamera: presentedFile === null || switching,
+      });
+      presentedFile = file;
+    });
+  });
+
+  $effect(() => () => stage.destroy());
 
   let codeContent = $derived(
     files.find((file) => file.path === selectedFile)?.content ?? "",
@@ -394,8 +451,26 @@
           No placed components in this diagram.
         </div>
       {:else}
-        <div class="h-[420px]">
-          <DiagramStaticView {components} {connections} {boxes} {annotations} />
+        <div
+          class="relative h-[420px] w-full overflow-hidden"
+          bind:this={diagramContainer}
+          bind:clientWidth={viewportWidth}
+          bind:clientHeight={viewportHeight}
+        >
+          <svg
+            width="100%"
+            height="100%"
+            viewBox="{stage.camera.x} {stage.camera.y} {Math.max(
+              viewportWidth,
+              1,
+            ) / stage.camera.zoom} {Math.max(viewportHeight, 1) /
+              stage.camera.zoom}"
+          >
+            <DiagramCanvas
+              scene={stage.shown ? stage.scene : desiredScene}
+              frozen={stage.settling}
+            />
+          </svg>
         </div>
       {/if}
     {:else}
