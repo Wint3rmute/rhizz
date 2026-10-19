@@ -87,23 +87,23 @@ protocol "fund-transfer" {
 }
 
 protocol "http" {
-  leaf        = false
-  encapsulates     = ["fund-transfer"]
+  leaf         = false
+  encapsulates = ["fund-transfer"]
 }
 
 protocol "tls" {
-  leaf        = false
-  encapsulates     = ["http"]
+  leaf         = false
+  encapsulates = ["http"]
 }
 
 protocol "tcp" {
-  leaf        = false
-  encapsulates     = ["tls"]
+  leaf         = false
+  encapsulates = ["tls"]
 }
 
 protocol "ip" {
-  leaf        = true
-  encapsulates     = ["tcp"]
+  leaf         = true
+  encapsulates = ["tcp"]
 }
 ```
 
@@ -116,6 +116,14 @@ The list describes what a protocol can carry. The direction is payload nesting:
 Only adjacent layers
 in a realization chain need to satisfy the compatibility rule.
 
+Each `encapsulates` entry must name a top-level `protocol`. An entry that does
+not is reported as `W022`, mirroring how a port referencing an undefined
+protocol is reported as `W014`: the protocol may simply not have been written
+yet, so the model still compiles. The entry is ignored by the compatibility
+check. The `encapsulates` relation between protocols must be acyclic, and a
+protocol listing itself counts as a cycle. A cycle is an error (`E020`),
+because it describes a protocol that has to carry itself.
+
 ### 2. Connection realization
 
 Add a `realized_by` attribute to the `connection` block:
@@ -125,9 +133,50 @@ Add a `realized_by` attribute to the `connection` block:
 | `realized_by` | list(string) | no | `[]` | Connections that realize this connection at the same or a lower level of abstraction. |
 
 Each entry references another `connection`. References may point to connections
-in any scope within the same system model, using relative or absolute path
-notation consistent with existing connection references. A bare label refers to
-a sibling connection in the same scope.
+in any scope of the same system, using the same relative or absolute path
+notation as `from` and `to` (see below). A bare label refers to a sibling
+connection in the same scope.
+
+#### Reference syntax
+
+A `realized_by` entry is a UNIX-style path whose **last segment is always a
+connection label**. The segments before it, if any, name a component (or the
+system) and are resolved exactly like the component part of a `from`/`to`
+endpoint, starting from the scope that declares the connection. Because the last
+segment is always the connection, there is no port-versus-component ambiguity
+as there is in endpoint paths.
+
+| Entry | Resolves to |
+|---|---|
+| `"tls-session"` | Connection `tls-session` declared in the same scope (sibling). |
+| `"bank-a/http-request"` | Connection `http-request` declared inside the child instance `bank-a` of this scope. Deeper nesting works: `"bank-a/stack/tcp-stream"`. |
+| `"../uplink"` | Connection `uplink` declared in the parent scope. |
+| `"./tls-session"` | Same as the bare label. |
+| `"/banking/tls-session"` | Connection declared directly in system `banking`. |
+| `"/banking/bank-a/http-request"` | Connection declared inside instance `bank-a` of system `banking`. |
+
+Rules:
+
+- Relative paths follow the existing `from`/`to` rules: `.` is the current
+  scope, `..` goes one scope up, and `..` above a system or a top-level
+  definition is an error.
+- An absolute path starts with a system label. A path consisting only of a
+  system label is not a connection reference.
+- The target must belong to the same system, or to the same top-level
+  definition tree, as the declaring connection. A reference into another system
+  is unresolved.
+- Every instance of a component gets its own copy of the connections declared in
+  its definition. A relative reference declared inside the definition therefore
+  resolves within each copy independently, which is the intended behavior.
+  Paths through instances address one specific copy.
+- A reference that cannot be resolved is `E017`. The message names the entry
+  and the scope that was searched.
+- Duplicate entries are harmless and collapse to one.
+- Canonical output keeps a bare label when the target is declared in the same
+  scope. Any other target is written as an absolute path, or as a
+  definition-relative path for connections inside a top-level definition, the
+  same way endpoints are written today. Entries are sorted, like the connection
+  `encapsulates` list.
 
 The relationship is **top-down**: the higher-level connection declares how
 it is realized. A lower-level connection does not need to refer back to the
@@ -192,6 +241,13 @@ complete(c) =
 
 This recursive definition requires every branch to terminate at a leaf protocol.
 
+`protocol(c)` is derived from the endpoints, as in the existing model. It is
+defined only when both endpoints name a port, both ports declare the same
+non-empty protocol, and that protocol resolves to a top-level `protocol` block.
+In every other case (a bare endpoint, a port without a protocol, differing
+protocols already reported as `W008`, or an undefined protocol already reported
+as `W014`), `protocol(c)` is undefined and `c` is incomplete.
+
 The following rules apply:
 
 - A leaf protocol does not require `realized_by`.
@@ -199,7 +255,8 @@ The following rules apply:
 - A freeform or untyped protocol is always incomplete.
 - A non-leaf connection with a complete realization chain is complete.
 - Every referenced connection must be valid and complete for the parent connection to be complete.
-- A connection whose protocol is declared `leaf = true` must not also declare `realized_by`; the two declarations express conflicting modeling intentions.
+- `W019` is reported on every incomplete connection, not only on the root cause. Its message names the first incomplete connection in the chain, when there is one.
+- A connection whose protocol is declared `leaf = true` must not also declare `realized_by`; the two declarations express conflicting modeling intentions (`E019`).
 
 An incomplete chain is not automatically a compilation error. It produces a
 warning, allowing authors to model architecture incrementally. `--strict` can
@@ -210,7 +267,7 @@ promote the warning to a failing result.
 When connection `A` is realized by connection `B`, the protocol used by `B` must
 declare that it can carry the protocol used by `A`.
 
-Formally, if `protocol(A) = P` and `protocol(B) = Q`, then `Q.encapsulates` must contain `P`.
+Formally, if `protocol(A) = P` and `protocol(B) = Q`, then `Q.encapsulates` must contain `P`. A violation is reported as `W021`.
 
 This rule applies between each directly related pair, rather than requiring a
 lower-level protocol to list every protocol appearing earlier in the chain.
@@ -233,9 +290,11 @@ Apply these checks recursively at every realization step.
 
 This uses actual component containment rather than comparing the numeric `level`
 attributes. The `level` attribute remains descriptive metadata and does not
-determine whether a realization is valid. Hierarchy inconsistencies should
-initially produce warnings, allowing the model author to review cases that may
-need more expressive modeling rules in the future.
+determine whether a realization is valid. Hierarchy inconsistencies
+initially produce a warning (`W020`), allowing the model author to review cases that may
+need more expressive modeling rules in the future. For example, a realizing
+connection that runs in the opposite direction to its parent is reported, because
+the `from` and `to` checks are not swapped.
 
 ### 6. Cycles
 
@@ -243,7 +302,11 @@ The `realized_by` graph must be acyclic. Cycles make recursive completeness
 undefined and are always errors.
 
 References may cross scopes, so cycle detection must operate on the resolved
-graph of connections rather than only on sibling declarations.
+graph of connections rather than only on sibling declarations. A connection
+that realizes itself, directly or through other connections, is a cycle
+(`E018`).
+
+The same rule applies to `protocol.encapsulates` (`E020`, see section 1).
 
 ## Diagnostics
 
@@ -253,16 +316,21 @@ Each code requires a matching file under `SPEC/diagnostics/`.
 |---|---|---|
 | `E017` | Error | A `realized_by` entry references a connection that cannot be resolved. |
 | `E018` | Error | Connections form a cycle through `realized_by` references. |
-| `E019` | Warning | A realization violates protocol `encapsulates` compatibility. |
-| `E020` | Error | A connection with a leaf protocol declares `realized_by`. |
-| `W019` | Architectural | A connection is incomplete because its non-leaf protocol has no realization, or its realization chain has not reached leaf protocols. |
+| `E019` | Error | A connection with a leaf protocol declares `realized_by`. |
+| `E020` | Error | Protocols form a cycle through `encapsulates`, including a protocol listing itself. |
+| `W019` | Architectural | A connection is incomplete because its protocol is undefined or non-leaf and it has no complete realization. |
 | `W020` | Architectural | A realization refers to endpoints outside the corresponding component hierarchies of the higher-level connection. |
+| `W021` | Architectural | A realization violates protocol `encapsulates` compatibility. |
+| `W022` | Business | A protocol `encapsulates` entry references an undefined protocol. |
 
-Warnings follow the existing warning-level rules. Both incomplete decomposition
-and hierarchy inconsistency are architectural concerns.
+`W022` has the same level as `W014`, the equivalent check for ports. Incomplete
+decomposition (`W019`), hierarchy inconsistency (`W020`) and incompatible layering
+(`W021`) are architectural concerns.
+
+Warnings follow the existing warning-level rules.
 
 Existing diagnostics for connection endpoint resolution, protocol references,
-protocol mismatch, and connection `encapsulates` cycles remain in effect.
+protocol mismatch, and connection `encapsulates` cycles (`E003`, `E004`) remain in effect.
 
 ## Scoring and views
 
@@ -297,9 +365,10 @@ without the new syntax preserve their existing serialization.
 
 However, validation and scoring behavior may change:
 
-- Connections using protocols without an explicit `leaf = true` or a realization chain may receive `W019`.
+- Connections using protocols without an explicit `leaf = true` or a realization chain receive `W019`. This includes connections with untyped endpoints, because an untyped connection is always incomplete (section 3). Specs that stay at the component level will see `W019` at the `architectural` warning level and above, even though untyped endpoints are otherwise treated as component-level detail.
 - Projects using `--strict` may begin to fail until these warnings are addressed.
 - Existing `connection.encapsulates` declarations retain their current semantics and behavior in this proposal.
+- Connection `encapsulates` and protocol `encapsulates` are different attributes on different blocks. They share a name, not a code path.
 - New protocol compatibility checks apply to declared realizations, not retroactively to connections without `realized_by`.
 
 Migration consists of explicitly marking terminal protocols with `leaf = true`,
@@ -311,7 +380,7 @@ realization chains.
 >[!NOTE]
 >
 > Alternatives outlined below have been considered **and rejected**.
-> Those do not document the result of the porposal!
+> Those do not document the result of the proposal!
 
 ### Use only `connection.encapsulates`
 
