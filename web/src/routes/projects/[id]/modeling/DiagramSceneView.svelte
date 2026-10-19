@@ -85,11 +85,11 @@
   >
     <DiagramCanvas
       scene={stage.shown ? stage.scene : scene}
-      linkNodes={linkNodes}
+      {linkNodes}
       {linkLabel}
       frozen={stage.settling}
-      onNodeClick={onNodeClick}
-      onNodeHover={onNodeHover}
+      {onNodeClick}
+      {onNodeHover}
     />
   </svg>
 </div>
