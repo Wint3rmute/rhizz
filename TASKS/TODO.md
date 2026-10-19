@@ -16,6 +16,235 @@ How to work on this file:
 
 ---
 
+# Proposal 0002 (Protocol Modeling) — implementation tasks
+
+Source of truth: `book/src/proposals/0002-protocol-modeling.md` (read it fully
+first, including the "Reference syntax" and "Diagnostics" sections). Tasks
+0002.1 – 0002.5 below are meant to be delegated to separate coding agents.
+
+**Shared context for every 0002 task:**
+
+- **Order and branches.** 0002.1 goes first. 0002.2 and 0002.3 both start from
+  0002.1 and can run in parallel (they touch different functions in
+  `resolve.rs`; expect a trivial merge conflict). 0002.4 starts after 0002.3.
+  0002.5 goes last. Branch each task from the previous task's branch (stacked
+  PRs), or from `main` once the previous one is merged.
+- **Diagnostic codes** (final, from the proposal): `E017` unresolved
+  `realized_by`, `E018` `realized_by` cycle, `E019` leaf protocol with
+  `realized_by`, `E020` `protocol.encapsulates` cycle, `W019` incomplete
+  connection (architectural), `W020` hierarchy violation (architectural), `W021`
+  `encapsulates` compatibility violation (architectural), `W022` undefined
+  `protocol.encapsulates` label (business).
+- **How codes work.** `crates/rhizz-core/build.rs` generates the code constants
+  from `SPEC/diagnostics/*.md` (format: `SPEC/diagnostics.md`). A W file needs a
+  `**Warning level:**` line right after the title, an E file must not have one.
+  A new W code also needs a row in `SPEC/warning-levels.md`.
+- **Naming trap.** `Connection.encapsulates` (a list of sibling connections)
+  already exists and keeps its behavior. The new `protocol.encapsulates`
+  (protocol labels) and `connection.realized_by` are separate fields. Do not
+  merge or reuse the old code paths.
+- **Already known facts** (verified by reading the code, not by running it):
+  - A connection has no protocol field. It is derived from the endpoint ports
+    in `validate.rs` (W008) and `score.rs`, from the free-form `Port.protocol`
+    string.
+  - The serializer omits default values and sorts lists (`serialize.rs`).
+  - `E003`/`E004` have no tests at all.
+- **Spec updates ship with the code.** Each task updates the matching parts of
+  `SPEC.md` (§2.5, §2.7, §3, §4), `SPEC/models.md` and
+  `SPEC/diagnostics/`, so the spec never lags behind the code.
+- **Scoring is out of scope.** Do not touch `score.rs`, connection scoring, or
+  `SPEC.md` §5.
+- **Out of scope for all tasks:** web UI, WASM getters, mutation ops that edit
+  protocols, view files. The WASM `Model` serializes through serde, so new
+  `Model` fields will pass through without extra work. Do not add unused getters.
+
+---
+
+## Task <N> — 0002.1: Schema for `protocol.leaf`, `protocol.encapsulates`, `connection.realized_by`
+
+Add the new attributes through parse, model and serialization, plus the
+documentation for every new diagnostic code. No validation yet.
+
+- **Parse** (`parse.rs`): `ProtocolAttrs` gets `leaf` (bool, default `false`) and
+  `encapsulates` (list of strings). `ConnectionAttrs` / `RawConnection` get
+  `realized_by` (list of strings, default empty). Unknown attributes must still
+  fail with E000.
+- **Model** (`model.rs`): `Protocol` stores `leaf` and its `encapsulates`
+  labels (resolved ids come in 0002.2). `Connection` gets a `realized_by` field
+  for the raw entries (resolved ids come in 0002.3). Keep it distinct from the
+  existing `Connection.encapsulates`.
+- **Serialize** (`serialize.rs`): emit `leaf = true` only when true, and
+  non-empty `encapsulates` / `realized_by` only. Sort the entries. Canonical
+  output of files without the new syntax must not change.
+- **Diagnostic docs:** create `SPEC/diagnostics/E017.md` – `E020.md` and
+  `W019.md` – `W022.md` with the levels from the proposal, an example and a fix
+  each. Put "(not yet implemented)" in their titles, as `W009.md` does; the task
+  that implements a code removes the marker. Add W019–W022 to
+  `SPEC/warning-levels.md` with the same marker. Fix the stale `E001`–`E016`
+  and `W001`–`W016` ranges in `SPEC/architecture.md`.
+- **Spec:** add the attributes to the `protocol` table (`SPEC.md` §2.5) and the
+  `connection` table (§2.7), and say there that `realized_by` is a different
+  attribute from `connection.encapsulates`. Add the reference syntax from the
+  proposal to §3. Update the `Protocol` / `Connection` bullets in
+  `SPEC/models.md`.
+- **Tests (red first):**
+  - parsing of each attribute and rejection of unknown ones;
+  - serializer round trips with and without the attributes;
+  - extend the generator in `crates/rhizz-core/tests/proptest_serialization.rs`
+    to cover them;
+  - `test_examples_idempotent_roundtrip` still passes untouched.
+
+Definition of done: the attributes round-trip through parse and serialize,
+`just test`, `just lint`, `just build` pass, and no existing diagnostics or
+canonical outputs change.
+
+---
+
+## Task <N> — 0002.2: Protocol checks (`W022`, `E020`)
+
+Depends on 0002.1.
+
+- **Resolve** (`resolve.rs`, next to the protocol loop): resolve each
+  `protocol.encapsulates` label to a `ProtocolId`, stored on `Protocol`.
+  An undefined label emits `W022` and is dropped. A protocol listing itself, or any
+  cycle in the `encapsulates` graph, emits `E020`. Report each cycle once, with
+  the labels on it in the message.
+- **Docs:** remove the "(not yet implemented)" markers from `W022.md`,
+  `E020.md` and their `warning-levels.md` row. Update the resolution-pass list
+  in `SPEC/models.md`.
+- **Tests (red first):** `W022` for an undefined label, `E020` for a direct
+  self-reference, a 2-protocol cycle and a longer cycle, and a diamond-shaped
+  graph (no cycle) that must stay clean. Assert exact codes.
+
+Definition of done: as above, with `just test`, `just lint`, `just build`.
+
+---
+
+## Task <N> — 0002.3: Resolve `realized_by` (`E017`, `E018`, `E019`)
+
+Depends on 0002.1. Can run in parallel with 0002.2.
+
+- **Resolution:** after all connections in all scopes are registered, resolve
+  each `realized_by` entry to a `ConnectionId` using the "Reference syntax"
+  section of the proposal. The last segment is the connection label. The
+  preceding segments are resolved like the component part of an endpoint path
+  (`resolve_endpoint`): reuse its scope traversal (`.`, `..`, leading system
+  label) rather than writing a second walker. Restrictions:
+  - the target must be in the same system or definition tree, otherwise `E017`;
+  - an unresolvable entry emits `E017` naming the entry and the scope searched,
+    and is dropped;
+  - duplicates collapse to one.
+- **Cycles:** after resolving every scope, run one global cycle check over the
+  resolved `realized_by` graph. Do not copy `has_encapsulation_cycle`: it only
+  starts from the connection being resolved, which is not enough for
+  cross-scope references. Report each cycle once with `E018`, and clear the
+  edges on the cycle so later passes terminate. Self-references are cycles.
+- **`E019`:** a connection whose derived protocol (see below) has `leaf = true`
+  and which declares `realized_by` emits `E019`.
+- **Connection protocol helper:** add one function in `rhizz-core` that returns
+  the connection's protocol (`Option<ProtocolId>`) per the proposal: both
+  endpoints name a port, both ports declare the same non-empty protocol, and it
+  resolves to a top-level protocol. It will be reused by 0002.4 and 0002.5.
+  Do not change the existing W007/W008 behavior to use it.
+- **Mutations** (`mutation.rs`): deleting a connection
+  (`delete_connection_by_label`) or an instance (which drops the connections
+  that use it) must also remove `realized_by` entries that point at the removed
+  connections. Otherwise the re-resolve emits `E017` and the user's delete is
+  refused. Find which entries to remove from the resolved model, not by string
+  matching, since entries can be relative paths. This is the same latent trap as
+  for connection `encapsulates`; fix it for both if it is cheap, and say what
+  you did.
+- **Tests (red first):**
+  - one for each reference form in the proposal's table (bare, child instance,
+    `..`, `./`, absolute, absolute through an instance);
+  - `E017` for a missing label, a path through a missing instance and a
+    reference into another system;
+  - `E018` for a self reference, 2-cycle, and a cross-scope cycle;
+  - `E019`;
+  - copies of a definition's connections resolve independently per instance;
+  - deleting the target of a `realized_by` through the mutation API succeeds and
+    leaves no dangling entry;
+  - while here, add the missing tests for `E003` and `E004`.
+- **Docs:** remove the "(not yet implemented)" markers for `E017`, `E018`, `E019`.
+  Update `SPEC/models.md` (resolution steps, reference scopes).
+
+Definition of done: `just test`, `just lint`, `just build` pass and no example
+changes behavior.
+
+---
+
+## Task <N> — 0002.4: Compatibility and hierarchy warnings (`W021`, `W020`)
+
+Depends on 0002.3 (needs resolved `realized_by` and the connection protocol
+helper). These checks only run on connections that declare `realized_by`, so no
+existing example changes.
+
+- **`W021`** (`validate.rs`): for every pair (parent `A`, realizing `B`) where
+  both connections have a defined protocol (`P`, `Q`), `Q.encapsulates` must
+  contain `P`. If either protocol is undefined, skip the check; `W019` in 0002.5
+  reports that case.
+- **`W020`:** for each realizing connection, its `from` component must be the
+  parent's `from` component or a descendant of it, and the same for `to`. Use
+  component containment (parent links), not `level`. Check every pair along the
+  chain. Keep the direction as the proposal states it: a reversed realizing
+  connection is reported.
+- **Docs:** remove the "(not yet implemented)" markers for `W020`, `W021`.
+  Add the validation rules to `SPEC.md` §4.
+- **Tests (red first):** each warning with exact codes, and the clean case (the
+  proposal's banking chain with all `encapsulates` declared must produce neither
+  warning). Include a component-descendant endpoint that must pass `W020`, and a
+  sibling endpoint that must fail. Add tests for each warning-level gate in
+  `lib.rs` (the existing mixed-warnings test shows the pattern).
+
+Definition of done: `just test`, `just lint`, `just build` pass.
+
+---
+
+## Task <N> — 0002.5: Completeness warning `W019` and migration
+
+Depends on 0002.4. This task changes behavior of existing projects, so it goes
+last.
+
+- **`W019`** (`validate.rs`): implement the `complete(c)` definition from the
+  proposal, section 3, with memoization over the resolved `realized_by` graph
+  (it is acyclic after 0002.3). Emit it on every incomplete connection. The
+  message names the first incomplete connection in the chain when there is one.
+  A connection with an undefined protocol (bare endpoint, untyped port,
+  mismatch, undefined protocol) is always incomplete. Level is `architectural`.
+- **Expected fallout, do not weaken `W019` to avoid it.** Every connection in
+  the examples and book fixtures will now get `W019` unless its protocol has
+  `leaf = true` or it is realized. Fix the fallout:
+  - Set `leaf = true` on the terminal protocols in `examples/` (about 40
+    protocols across six examples). Judge each: transport protocols are leaves,
+    business-level protocols are not and must get a realization or stay
+    flagged. Do not mark a protocol `leaf` just to silence the warning.
+    `examples/web-app` is a good place to show `encapsulates`
+    (`https`/`jwt`/`websocket`) and one `realized_by` chain.
+  - `crates/rhizz-cli/src/cli.rs` `COMPONENT_ONLY` strict-mode tests
+    (around `:948-1004`): the bare `i -> j` connection now yields `W019` at
+    `architectural`. Update the fixture, not the rule, and list the change in
+    your report.
+  - `web/src/routes/book-example/BookExampleView.stories.ts` ("1 warning"
+    assertion near `:181`) and its VRT baseline screenshots.
+  - `book/book.lock`: review each changed entry, then regenerate with
+    `just book-accept`.
+  - Drone/social-media/software-house `--strict` expectations in
+    `rhizz-cli/tests/integration_test.rs` and the watch-mode warning count.
+- **Docs:** remove the last "(not yet implemented)" marker (`W019`). Describe the
+  completeness rule in `SPEC.md` §4. Do not change scoring (§5). Add the `leaf`,
+  `encapsulates` and `realized_by` semantics to the book (`07_protocols.md` is a
+  stub, `03_connections_ports.md` covers connections). Set the proposal's status
+  to `implemented` and update `book/src/proposals/README.md`, as the proposal
+  process requires, and bump the spec version in `SPEC.md`.
+- **Tests (red first):** each rule in the proposal's list (leaf, non-leaf
+  without `realized_by`, untyped, freeform, complete chain, one incomplete branch
+  among several, `W019` on parent and on the incomplete child), plus a warning-level gating test.
+
+Definition of done: `just test`, `just lint`, `just build` pass; the report
+lists every fixture, example and baseline that changed and why.
+
+---
+
 ## Task <N> — Palette e2e flake
 
 Command-palette e2e tests fail intermittently (2 of 5 runs with the audit

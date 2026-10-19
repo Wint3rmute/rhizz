@@ -31,8 +31,10 @@ draft -> review -> accepted -> implemented
 
 | No. | Title | Status |
 | --- | ----- | ------ |
+| 0001 | [Rhizz v0.6 Baseline](0001-baseline.md) | accepted |
+| 0002 | [Protocol Modeling](0002-protocol-modeling.md) | draft |
 
-_No proposals yet. See [the template](0000-template.md) to start a new one._
+To start a new proposal, see [the template](0000-template.md).
 
 ## Process
 
