@@ -86,8 +86,8 @@ a generated-by-hand summary. Change the level in the diagnostic file.
 | W017 | View node outside the view's system | `architectural` |
 | W018 | Component missing documentation | `component` |
 | W019 | Incomplete connection (not yet implemented) | `architectural` |
-| W020 | Realization outside the component hierarchy (not yet implemented) | `architectural` |
-| W021 | Protocol cannot carry the realized protocol (not yet implemented) | `architectural` |
+| W020 | Realization outside the component hierarchy | `architectural` |
+| W021 | Protocol cannot carry the realized protocol | `architectural` |
 | W022 | Undefined protocol in `encapsulates` | `business` |
 
 `W000` is emitted by frontends rather than the compiler; its declared level is

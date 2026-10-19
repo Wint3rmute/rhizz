@@ -1,7 +1,8 @@
 //! Validation pass -- warning pass over the resolved Model.
 
 use crate::model::{
-    ComponentKind, ComponentParent, Diagnostic, DiagnosticCode, Model, ViewDefinition,
+    ComponentId, ComponentKind, ComponentParent, ConnectionId, Diagnostic, DiagnosticCode, Model,
+    ProtocolId, ViewDefinition,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -250,7 +251,93 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
+    warnings.extend(realization_warnings(model));
+
     warnings
+}
+
+/// `W020` and `W021`: checks on every realizing pair (parent `A`, realizer `B`
+/// with `B` in `A.realized_by_ids`). One `W020` per pair names each endpoint
+/// outside the parent's hierarchy; `W021` needs both protocols defined.
+fn realization_warnings(model: &Model) -> Vec<Diagnostic> {
+    let keys = model.component_keys();
+    let key = |id: ComponentId| keys.get(id.0).map_or("?", String::as_str);
+    let mut warnings = Vec::new();
+
+    for (idx, parent) in model.connections.iter().enumerate() {
+        let parent_id = ConnectionId(idx);
+        for &child_id in &parent.realized_by_ids {
+            let Some(child) = model.connection(child_id) else {
+                continue;
+            };
+
+            // W020 -- each realizing endpoint must sit at or below the parent's
+            // endpoint on the same side. Containment, not `level`.
+            let mut outside = Vec::new();
+            if !is_within(model, child.from.component, parent.from.component) {
+                outside.push(format!("from `{}`", key(child.from.component)));
+            }
+            if !is_within(model, child.to.component, parent.to.component) {
+                outside.push(format!("to `{}`", key(child.to.component)));
+            }
+            if !outside.is_empty() {
+                warnings.push(Diagnostic::warning(
+                    DiagnosticCode::W020,
+                    format!(
+                        "connection `{}` realizes `{}` but its {} is outside the component hierarchy of `{}`",
+                        child.label,
+                        parent.label,
+                        outside.join(" and "),
+                        parent.label
+                    ),
+                ));
+            }
+
+            // W021 -- the realizing protocol must list the realized one in
+            // `encapsulates`. Skipped when either protocol is undefined.
+            if let (Some(p), Some(q)) = (
+                model.connection_protocol(parent_id),
+                model.connection_protocol(child_id),
+            ) {
+                let carries = model
+                    .protocol(q)
+                    .is_some_and(|proto| proto.encapsulates_ids.contains(&p));
+                if !carries {
+                    let name = |pid: ProtocolId| {
+                        model
+                            .protocol(pid)
+                            .map_or("?", |proto| proto.label.as_str())
+                    };
+                    warnings.push(Diagnostic::warning(
+                        DiagnosticCode::W021,
+                        format!(
+                            "connection `{}` (protocol `{}`) is realized by `{}` (protocol `{}`), which does not encapsulate `{}`",
+                            parent.label,
+                            name(p),
+                            child.label,
+                            name(q),
+                            name(p)
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    warnings
+}
+
+/// True when `candidate` is `ancestor` or one of its component descendants.
+fn is_within(model: &Model, mut candidate: ComponentId, ancestor: ComponentId) -> bool {
+    loop {
+        if candidate == ancestor {
+            return true;
+        }
+        match model.component(candidate).and_then(|comp| comp.parent) {
+            Some(ComponentParent::Component(parent)) => candidate = parent,
+            _ => return false,
+        }
+    }
 }
 
 /// Run [`validate`] plus the missing-documentation check (W018).
@@ -1356,5 +1443,121 @@ system "other" {
             w016_paths(&diags).is_empty(),
             "node checks must be skipped when the system is unknown, got {diags:?}"
         );
+    }
+
+    // ── W020 / W021: realization checks ─────────────────────────────────────
+
+    /// Codes of the realization warnings (`W020`, `W021`) raised for `src`.
+    fn realization_warnings(src: &str) -> Vec<&'static str> {
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).expect("fixture resolves");
+        validate(&model)
+            .iter()
+            .map(|d| d.code.code)
+            .filter(|c| matches!(*c, "W020" | "W021"))
+            .collect()
+    }
+
+    /// Two banks, each with a `core` node exposing a `fund` and an `http` port.
+    /// `transfer` (protocol `fund`) is realized by `request` (protocol `http`).
+    fn realization_fixture(
+        parent_from: &str,
+        realizer_from: &str,
+        realizer_to: &str,
+        encapsulates: &str,
+    ) -> String {
+        format!(
+            r#"
+protocol "fund" {{}}
+protocol "http" {{ encapsulates = [{encapsulates}] }}
+component "node" {{
+  leaf = true
+  port "fund" {{
+    protocol = "fund"
+    role = "provider"
+  }}
+  port "http" {{
+    protocol = "http"
+    role = "provider"
+  }}
+}}
+component "bank" {{
+  instance "core" {{ source = "node" }}
+}}
+system "s" {{
+  instance "bank-a" {{ source = "bank" }}
+  instance "bank-b" {{ source = "bank" }}
+  connection "transfer" {{
+    from = "{parent_from}"
+    to = "bank-b/core/fund"
+    realized_by = ["request"]
+  }}
+  connection "request" {{
+    from = "{realizer_from}"
+    to = "{realizer_to}"
+  }}
+}}
+"#
+        )
+    }
+
+    #[test]
+    fn clean_realization_chain_raises_no_w020_or_w021() {
+        let src = realization_fixture(
+            "bank-a/core/fund",
+            "bank-a/core/http",
+            "bank-b/core/http",
+            "\"fund\"",
+        );
+        assert_eq!(realization_warnings(&src), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn w021_protocol_not_encapsulating_realized_protocol() {
+        let src = realization_fixture(
+            "bank-a/core/fund",
+            "bank-a/core/http",
+            "bank-b/core/http",
+            "",
+        );
+        assert_eq!(realization_warnings(&src), vec!["W021"]);
+    }
+
+    #[test]
+    fn w021_skipped_when_parent_protocol_is_undefined() {
+        // A bare parent endpoint has no protocol, so W021 has nothing to check.
+        let src = realization_fixture("bank-a", "bank-a/core/http", "bank-b/core/http", "");
+        assert_eq!(realization_warnings(&src), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn w020_descendant_endpoint_of_parent_component_passes() {
+        // `bank-a/core` is a descendant of the parent's bare `bank-a` endpoint.
+        let src = realization_fixture("bank-a", "bank-a/core/http", "bank-b/core/http", "\"fund\"");
+        assert_eq!(realization_warnings(&src), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn w020_sibling_endpoint_outside_parent_hierarchy_fails() {
+        // The realizing `from` is in `bank-b`, not in the parent's `bank-a/core`.
+        let src = realization_fixture(
+            "bank-a/core/fund",
+            "bank-b/core/http",
+            "bank-b/core/http",
+            "\"fund\"",
+        );
+        assert_eq!(realization_warnings(&src), vec!["W020"]);
+    }
+
+    #[test]
+    fn w020_reversed_realization_is_reported_once_per_pair() {
+        // Both endpoints run the opposite way; still one warning for the pair.
+        let src = realization_fixture(
+            "bank-a/core/fund",
+            "bank-b/core/http",
+            "bank-a/core/http",
+            "\"fund\"",
+        );
+        assert_eq!(realization_warnings(&src), vec!["W020"]);
     }
 }

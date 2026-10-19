@@ -60,33 +60,6 @@ first, including the "Reference syntax" and "Diagnostics" sections). Tasks
 
 ---
 
-## Task <N> — 0002.4: Compatibility and hierarchy warnings (`W021`, `W020`)
-
-Depends on 0002.3 (needs resolved `realized_by` and the connection protocol
-helper). These checks only run on connections that declare `realized_by`, so no
-existing example changes.
-
-- **`W021`** (`validate.rs`): for every pair (parent `A`, realizing `B`) where
-  both connections have a defined protocol (`P`, `Q`), `Q.encapsulates` must
-  contain `P`. If either protocol is undefined, skip the check; `W019` in 0002.5
-  reports that case.
-- **`W020`:** for each realizing connection, its `from` component must be the
-  parent's `from` component or a descendant of it, and the same for `to`. Use
-  component containment (parent links), not `level`. Check every pair along the
-  chain. Keep the direction as the proposal states it: a reversed realizing
-  connection is reported.
-- **Docs:** remove the "(not yet implemented)" markers for `W020`, `W021`.
-  Add the validation rules to `SPEC.md` §4.
-- **Tests (red first):** each warning with exact codes, and the clean case (the
-  proposal's banking chain with all `encapsulates` declared must produce neither
-  warning). Include a component-descendant endpoint that must pass `W020`, and a
-  sibling endpoint that must fail. Add tests for each warning-level gate in
-  `lib.rs` (the existing mixed-warnings test shows the pattern).
-
-Definition of done: `just test`, `just lint`, `just build` pass.
-
----
-
 ## Task <N> — 0002.5: Completeness warning `W019` and migration
 
 Depends on 0002.4. This task changes behavior of existing projects, so it goes
