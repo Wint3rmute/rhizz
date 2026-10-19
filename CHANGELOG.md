@@ -2,6 +2,8 @@
 
 ### Feat
 
+- **core**: warn on realization hierarchy and protocol compatibility (W020, W021)
+- **rhizz-server**: paginate MCP fetch_projects output
 - **core**: resolve realized_by and detect cycles (0002.3)
 - **core**: resolve protocol encapsulates and detect cycles (0002.2)
 - **server**: add proof-of-concept MCP endpoint
