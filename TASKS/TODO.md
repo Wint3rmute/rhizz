@@ -207,7 +207,12 @@ last.
 
 - **`W019`** (`validate.rs`): implement the `complete(c)` definition from the
   proposal, section 3, with memoization over the resolved `realized_by` graph
-  (it is acyclic after 0002.3). Emit it on every incomplete connection. The
+  (it is acyclic after 0002.3). Put the computation in a public function in
+  `rhizz-core` that returns, per connection, `Complete` or `Incomplete` with
+  the first blocking connection (`Option<ConnectionId>`), and emit `W019` from
+  that result. The web connection inspector (see "Rhizz Web Application
+  protocols" below) reads the same result, so it must not be reimplemented in
+  TypeScript. Emit it on every incomplete connection. The
   message names the first incomplete connection in the chain when there is one.
   A connection with an undefined protocol (bare endpoint, untyped port,
   mismatch, undefined protocol) is always incomplete. Level is `architectural`.
@@ -242,6 +247,265 @@ last.
 
 Definition of done: `just test`, `just lint`, `just build` pass; the report
 lists every fixture, example and baseline that changed and why.
+
+---
+
+# Rhizz Web Application protocols
+
+Web-side work for proposal 0002. Four tasks (W.1 – W.4). These depend on the
+0002 tasks above and must not start before them.
+
+**Shared context:**
+
+- **Order.** W.1 and W.3 are Rust/WASM/TypeScript plumbing and can run in
+  parallel (different ops, trivial merge conflicts in `mutation.rs`,
+  `applyMutation.ts` and `actionLog.ts`). W.2 needs W.1. W.4 needs W.2 and W.3.
+  W.1 needs 0002.5 (completeness and `realized_by`). W.3 needs 0002.2 (`E020`
+  and `W022` make an invalid protocol edit refusable).
+- **Current state** (verified by reading the code, not by running it):
+  - The Modeling page selects connections by label only. Its connection
+    inspector is an inline block in `ModelingPage.svelte` (`connection-inspector`
+    test id, about `:3918-3969`). It shows From/To, the per-view
+    start/end side pickers and a "Delete connection" button. No story or e2e
+    test targets it.
+  - `ConnectionJS` (wasm) exposes only `label`, `from`, `to`. `ProtocolJS`
+    exposes `label`, `full_name`, `tags`, `roles`. `ModelJS.protocols()` is
+    unused in `web/src`. Everything else is reachable today through
+    `projectModel.raw` (`model.to_js()`), typed in `modelView.ts`
+    (`RawModelPayload`).
+  - No `ModelOp` edits a connection or touches a protocol.
+    `update_component` redirects instance paths to the definition.
+  - `delete_connection_by_label` is keyed by label only. Labels are unique per
+    scope, not globally, so new connection ops address `scopePath` + `label`
+    like `add_connection` does.
+  - Every `ModelOp` has a mirror in `LoggedAction` (Rust), `ModelAction` and
+    `toMutationOp` (the exhaustive switch in `web/src/actionLog.ts`). Without a
+    mirror, "Copy Debug Info" cannot replay it. Add all three together, with the
+    test that checks the TS and Rust action JSON stay in sync
+    (`logged_actions_match_typescript_model_action_json` in `mutation.rs`).
+- **Inspector scopes pattern.** `NodeInspector.svelte` already separates
+  attributes by where they are written: a "Component" panel
+  (`data-testid="component-attributes"`) with a heading tooltip
+  ("Written to system.hcl — these travel with the component wherever it is
+  used"), a `divider`, then a "This view" panel (`data-testid="view-attributes"`)
+  for `views/<view>.hcl`. Its story `AttributeScopes` and e2e spec
+  `inspector-attribute-scopes.spec.ts` assert the split and check that an edit
+  never lands in the wrong file. The new inspector reuses that pattern and
+  must not invent a new look.
+- **Process rules from `AGENTS.md`.** Prefer DaisyUI components over Tailwind
+  utilities. Interaction logic needs Playwright e2e tests, new visuals need a
+  Storybook story (VRT) only if no existing story covers them. Accept new
+  baselines with `just vrt-accept` and list them in the report. Use `just`, never
+  `npm`/`cargo`/`npx` directly.
+- **Out of scope for all four tasks:** the realization tree in the Connections
+  sidebar, the rules-filtered realization picker (only offering compatible
+  connections), the "Realize this connection..." creation flow, clickable
+  diagnostics and quick fixes, the layered chain view, editing a connection's
+  endpoints, renaming protocols, and message/field editing. Do not start them.
+
+---
+
+## Task <N> — W.1: Connection read model and `update_connection` op
+
+Depends on 0002.5. Rust, WASM and TypeScript plumbing for the connection
+inspector. No UI.
+
+- **WASM getters** (`crates/rhizz-wasm/src/lib.rs`): extend `ConnectionJS` with
+  what the inspector reads: `full_name`, `tags`, `level`, the endpoint ports
+  (`from_port`, `to_port` as optional port labels or indices), the derived
+  protocol (`Option` of the protocol label, using the helper from 0002.3),
+  the `realized_by` targets (as references the UI can display and re-send, see
+  `ConnectionRef` below), and the completeness result from 0002.5 (state plus
+  the first blocking connection). Extend `ProtocolJS` with `leaf` and
+  `encapsulates`. The commented-out fields in `ConnectionJS` are a convention for
+  "not used yet": only add getters that W.2 uses.
+- **Scope and identity.** Add a stable way to address one connection from TS:
+  `ConnectionRef = { scopePath: string; label: string }`. `scopePath` follows the
+  existing `add_connection` / `delete_connection` convention. Document how it is
+  built for a connection declared in a system, in an instance, and in a
+  top-level definition.
+- **Op** (`mutation.rs`): `update_connection { scopePath, label, patch }`.
+  `patch` fields: `full_name`, `tags`, `level`, and `realized_by` as a **full
+  replacement** list of `ConnectionRef`, like `ports` in `update_component`.
+  Rust turns each `ConnectionRef` into the canonical `realized_by` entry (bare
+  label for same-scope, otherwise the path form the serializer writes), so the
+  UI never builds path strings. Unknown patch fields are rejected
+  (`deny_unknown_fields`), as for `update_system`. If the connection lives in a
+  reusable definition, the edit applies to the definition and so to all its
+  copies; say so in the op's doc comment.
+- **Refusals.** A patch that makes the model produce an error (`E017`, `E018`,
+  `E019`) is refused through the existing re-resolve in `mutate_to_hcl`. Warnings
+  are not refusals.
+- **Mirrors:** `LoggedAction::UpdateConnection`, `ModelAction`,
+  `toMutationOp`, `ModelMutationOp` in `applyMutation.ts`, a `ConnectionPatch`
+  type, and the sync test. Extend `RawModelPayload` / `modelView.ts` with typed
+  connection and protocol data, and add small pure helpers (for example
+  "connection data by ref", "protocol usage count") with Vitest tests.
+- **Tests (red first):** Rust unit tests for the op (each patch field, a refusal
+  for a `realized_by` cycle, definition-copy semantics, no change to canonical
+  output for an empty patch), wasm test for the new getters on the banking chain
+  from the proposal, and the `actionLog` replay test.
+
+Definition of done: `just test`, `just lint`, `just build` pass. `just build`
+must succeed, because it also builds the WASM package.
+
+---
+
+## Task <N> — W.2: Connection inspector with protocol-bound and connection-bound panels
+
+Depends on W.1.
+
+Extract the inline connection inspector from `ModelingPage.svelte` into
+`modeling/ConnectionInspector.svelte` (typed props and callbacks, like
+`NodeInspector`), and add the realization information. Keep the per-view side
+pickers and the delete flow working exactly as today.
+
+**Panel layout.** Three panels in this order, separated by `divider`s, each with
+a heading that has a tooltip naming where its fields are written, the same
+markup as `NodeInspector`'s panel headings:
+
+1. **Protocol** (`data-testid="protocol-attributes"`). Everything that belongs
+   to the protocol and so is shared by every port and connection using it.
+   Tooltip: "Defined by protocol `<label>` in system.hcl — shared by every
+   connection and port that uses it". Content: protocol label (with a `leaf`
+   badge), full name, `roles`, `encapsulates` list, and a count of other
+   connections and ports using it. Read-only in this task. A secondary-text
+   "Edit protocol" link is added by W.4, once the Inventory can show a protocol.
+   When the derived protocol is undefined, show why in the panel (bare endpoint,
+   untyped port, mismatch, undefined protocol) instead of empty fields.
+2. **Connection** (`data-testid="connection-attributes"`). Everything that
+   belongs to this connection declaration. Tooltip: "Written to system.hcl —
+   applies to this connection only" (when the connection lives in a reusable
+   component: "...and to its copies in every instance"). Content:
+   - label, From and To (read-only; show component and port);
+   - full name, tags, level (editable, via `update_connection`);
+   - **Realization:** the completeness badge (complete, or incomplete with the
+     blocking connection named, taken from the W.1 completeness result), the
+     "Realized by" list, and an "Add realization" select. Each list row shows
+     the target's label, scope, protocol and completeness badge, a button that
+     selects that connection in the canvas when it is placed in the open view
+     (disabled with a tooltip when it is not), and a remove button. The select
+     lists every other connection, with no compatibility filtering (that is a
+     later feature); invalid choices simply surface the compiler's warnings.
+3. **This view** (`data-testid="view-attributes"`). Only the Start/End side
+   pickers, as today. Tooltip names `views/<view>.hcl`, like `NodeInspector`.
+
+Edits run through `runModelLayoutTransaction`, so Ctrl+Z restores them. A refused
+edit shows the existing "Change refused" toast. The "Delete connection" button
+stays below the panels.
+
+- **Tests (red first):**
+  - Storybook `ConnectionInspector.stories.ts`: `Default`, `Realized` (a chain,
+    complete), `Incomplete` (names the blocker), `UndefinedProtocol` and
+    `AttributeScopes`, mirroring `NodeInspector`'s `AttributeScopes` (asserts the
+    panel split and the tooltips). Accept the VRT baselines.
+  - Playwright `connection-inspector-scopes.spec.ts`, modeled on
+    `inspector-attribute-scopes.spec.ts`: a full-name edit lands in `system.hcl`
+    only, a side change lands in `views/<view>.hcl` only, the Protocol panel
+    has no editable control, and no edit leaks into the other file.
+  - Playwright `connection-realization.spec.ts`: add a realization, see the
+    badge flip to complete, remove it, undo with Ctrl+Z, and a refused cycle
+    shows the toast and writes nothing.
+
+Definition of done: `just test`, `just lint`, `just build` pass, and the old
+inline block is gone from `ModelingPage.svelte`.
+
+---
+
+## Task <N> — W.3: Protocol ops (`add_protocol`, `update_protocol`, `delete_protocol`)
+
+Depends on 0002.2. Rust, WASM and TypeScript plumbing for the Inventory
+protocol editor. No UI.
+
+- **Ops** (`mutation.rs`):
+  - `add_protocol { label, options? }` with `full_name`, `tags`, `roles`,
+    `leaf`, `encapsulates`. A blank label, a label containing `/`, or an
+    existing protocol label is refused like `add_component_definition`.
+  - `update_protocol { path, patch }` where `path` is the protocol label. Patch
+    fields: `full_name`, `tags`, `roles`, `leaf`, `encapsulates` (full
+    replacement). Unknown fields are rejected. The label cannot be changed here.
+  - `delete_protocol { path }`. It does not rewrite references: ports that name
+    the protocol keep the string and get `W014`, and protocols that list it in
+    `encapsulates` get `W022`. Messages go with the protocol.
+- **Refusals.** An edit that introduces an error is refused through the existing
+  re-resolve. The important one is `E020` (an `encapsulates` cycle), and
+  `E009` when changing `roles` leaves a port with a role the protocol no longer
+  allows.
+- **Mirrors:** `LoggedAction` variants, `ModelAction`, `toMutationOp`,
+  `ModelMutationOp`, a `ProtocolPatch` type, and the sync test.
+- **Read side:** type `protocols` (label, full name, tags, roles, `leaf`,
+  `encapsulates`, message labels) in `RawModelPayload`, and add a helper that
+  returns, for a protocol, the ports using it (component key and port label),
+  the protocols that list it in `encapsulates`, and the connections whose
+  derived protocol it is. Pure functions with Vitest tests.
+- **Tests (red first):** Rust unit tests for each op including each refusal and
+  the unchanged canonical output when nothing changes, the sync test, and the
+  helper tests. Assert exact diagnostic codes.
+
+Definition of done: `just test`, `just lint`, `just build` pass.
+
+---
+
+## Task <N> — W.4: Protocols tab in the Inventory
+
+Depends on W.2 and W.3. The "Interfaces" tab in the Inventory selector is a
+placeholder with no entities behind it. Replace it with "Protocols", where the
+project's protocols can be added, edited and removed.
+
+- **Tab.** Rename `InventoryTab.Interfaces` to `Protocols` (`inventory.ts`) and
+  update the label, the hidden "Only with defined views" checkbox, and the
+  placeholder text in `Inventory.svelte`. Remove every mention of interfaces as
+  a placeholder (including the doc comments in `inventory.ts`).
+  `filterDefinitions` keeps returning only components, and protocols get their
+  own filter function, as systems do. Protocols are listed from
+  `projectModel.raw`, searched by label and full name, sorted by label.
+- **List.** Protocol cards in the `DefinitionCard` style: label, full name, a
+  `leaf` badge, and the number of ports using it (a `badge badge-ghost`).
+- **Add.** The "+ New" button (`inventory-add-entity`) opens a
+  `CreateProtocolModal`, built like `CreateSystemModal`: label (required, no
+  `/`, unique across protocols), optional full name, and a `leaf` checkbox. It
+  applies `add_protocol` and selects the new protocol.
+- **Detail pane.** A `ProtocolDetailPane.svelte` next to `DetailPane.svelte`,
+  with the same tab styling. Tabs:
+  - **Overview** (editable): full name, tags, roles, `leaf`, and
+    `encapsulates` (a multi-select of the other protocols, with the
+    "what this protocol can carry" wording from the proposal in the label).
+    Edits apply `update_protocol`; a refusal (`E020`, `E009`) shows the
+    "Change refused" toast. Unlike the rest of the page, which fails silently, a
+    refusal must always be visible.
+  - **Messages** (read-only): messages and their fields. Editing messages is a
+    follow-up.
+  - **Usage** (read-only): ports using the protocol (each linking to the
+    component's page in the Inventory), protocols that list it in
+    `encapsulates`, and connections it types.
+  - **Delete:** the same type-the-label confirmation as components. It is not
+    blocked by usage, because dangling references are warnings in the language,
+    but the pane lists them first and says they will become `W014` / `W022`.
+- **Deep link.** `/projects/<id>/inventory/<label>` already means a component
+  or a system, and labels of different kinds can collide, so a protocol must not
+  reuse that form. Use a form that cannot collide (for example a `?tab=protocols`
+  query or a reserved route segment), mirror the open protocol in the URL like
+  the other tabs do, and document the choice in the report.
+- **Connection inspector link.** Add the "Edit protocol" link to the Protocol
+  panel of the W.2 inspector, pointing at the deep link above. The panel stays
+  read-only.
+- **Tests (red first):**
+  - Update the e2e specs that encode the old placeholder:
+    `inventory-systems.spec.ts` ("Interfaces has nothing to add: no button
+    there") and `inventory-view-filter.spec.ts` (the Interfaces assertions at
+    `:95-153`) and `inventory.test.ts` (`:154`). The checkbox still hides on the
+    Protocols tab, and "+ New" is now present there.
+  - Playwright `inventory-protocols.spec.ts`: add a protocol and see it in
+    `system.hcl`; edit full name, `leaf` and `encapsulates` and see each in the
+    file; an `encapsulates` cycle shows the refusal toast and writes nothing;
+    delete with the type-the-label confirmation; the deep link survives reload.
+  - Storybook `InventoryPage` stories: `ProtocolsTab` (list), `ProtocolDetail`
+    (overview, with the usage tab), and the create modal. Accept the VRT
+    baselines. The fixture already has `protocol "power"`; extend it only as
+    needed.
+
+Definition of done: `just test`, `just lint`, `just build` pass, and a search
+for "Interfaces" in `web/` finds no placeholder references.
 
 ---
 
