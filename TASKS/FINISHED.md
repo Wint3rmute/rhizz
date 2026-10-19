@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0002.5: Completeness warning `W019` and migration
+
+Completes proposal 0002. A connection is complete when its protocol is a leaf,
+or when it has `realized_by` entries and all of them are complete.
+
+- **Rule:** `rhizz_core::validate::connection_completeness` returns a
+  `Completeness` per connection (memoized). An undefined protocol is always
+  incomplete. `W019` (architectural) is emitted on every incomplete connection.
+  Its message names the root-cause connection of the chain when there is one.
+- **Examples:** `leaf = true` on the physical and wire-level protocols in
+  apollo-11 (12), drone (7), single-file (`i2c`, `mqtt`) and social-media (6),
+  plus web-app `https`, `postgresql`, `websocket`, `ui-nav`. web-app `https`
+  `encapsulates = ["jwt"]`, and web-app `auth` is `realized_by = ["rest-api"]`,
+  a complete chain. The software-house business protocols stay flagged, and the
+  untyped connections (drone, social-media, software-house) stay flagged.
+- **Fixtures and baselines:** `COMPONENT_ONLY` in `rhizz-cli/src/cli.rs` types its
+  connection on a leaf protocol, so it still isolates the component-level
+  warning (W011). The rule is unchanged. The `BookExampleView` story sample gets
+  `leaf = true`, and its four VRT baselines are re-accepted (code tab and
+  single-file, light and dark; the protocol line shifts). `book/book.lock` is
+  regenerated: 15 new W019 entries, and three entries that had empty warnings now
+  list them.
+- **Docs:** `W019` is no longer marked not-yet-implemented (SPEC, diagnostics,
+  warning levels). SPEC §3 and §4 document completeness. Spec is v0.7. The book
+  `07_protocols.md` documents leaf, `encapsulates` and `realized_by`. Chapters
+  03 and 04 mention the new W019. The proposal is `implemented`, and the index
+  is updated.
+- **Validation:** `just test`, `just lint`, `just build`, `just vrt` (4
+  re-accepted baselines), and `just format` all pass.
+
+---
+
 ## Task <N> — Bound the size of `fetch_projects` output
 
 The MCP `fetch_projects` tool (`crates/rhizz-server/src/mcp.rs`) now returns

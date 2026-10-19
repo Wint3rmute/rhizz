@@ -1,4 +1,4 @@
-# `rhizz` Specification v0.6
+# `rhizz` Specification v0.7
 
 Rhizz is a code-first system architecture modeling tool. It combines:
 
@@ -580,8 +580,8 @@ ambiguity as in endpoint paths.
 
 > **Status:** the attributes parse, are stored on the model and serialize.
 > Resolution of `realized_by` is implemented (`E017`–`E019`), and so are the
-> realization warnings `W020` and `W021` (see §4). `W019` and the canonical
-> rewriting of entries in serialized output are not yet implemented; until then
+> realization warnings `W019`, `W020` and `W021` (see §4). The canonical
+> rewriting of entries in serialized output is not yet implemented; until then
 > entries are written as declared.
 
 ---
@@ -640,6 +640,30 @@ without `realized_by`.
   must contain `P`. The check is skipped when either protocol is undefined.
 
 Both warnings are reported at the architectural warning level and above.
+
+### Completeness Validation
+
+Checked for every connection `c` (`W019`, architectural). A connection is
+**complete** when its protocol is a leaf protocol, or when it has `realized_by`
+entries and every one of them is complete:
+
+- A connection whose protocol is undefined is always incomplete. This covers a
+  bare endpoint, an untyped port, endpoints with differing protocols, and an
+  undefined protocol.
+- A non-leaf protocol without `realized_by` is incomplete.
+- `W019` is reported on every incomplete connection, including the connections
+  in a realization chain. Its message names the first incomplete connection in
+  the chain (the root cause) when there is one.
+
+The computation is `rhizz_core::validate::connection_completeness`, which
+returns a `Completeness` value per connection. Consumers such as the web
+inspector read that result rather than reimplementing the rule.
+
+A connection on a leaf protocol that also declares `realized_by` is `E019`, not
+`W019`.
+
+The completeness check is a warning like the realization checks: an incomplete
+chain does not stop compilation.
 
 ---
 

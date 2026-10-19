@@ -15,6 +15,7 @@ const SAMPLE_FILES: BookPayloadFile[] = [
 
 protocol "temp-bus" {
   full_name = "Temperature sensor bus"
+  leaf        = true
   roles       = ["provider", "consumer"]
 
   message "reading" {

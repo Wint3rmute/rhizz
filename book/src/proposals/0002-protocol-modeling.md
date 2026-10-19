@@ -1,6 +1,6 @@
 # 0002: Protocol Modeling
 
-- **Status:** accepted
+- **Status:** implemented
 - **Author:** @wint3rmute
 - **Created:** 2026.10.18
 

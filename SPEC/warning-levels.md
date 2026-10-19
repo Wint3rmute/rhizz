@@ -85,7 +85,7 @@ a generated-by-hand summary. Change the level in the diagnostic file.
 | W016 | View node references unknown component | `architectural` |
 | W017 | View node outside the view's system | `architectural` |
 | W018 | Component missing documentation | `component` |
-| W019 | Incomplete connection (not yet implemented) | `architectural` |
+| W019 | Incomplete connection | `architectural` |
 | W020 | Realization outside the component hierarchy | `architectural` |
 | W021 | Protocol cannot carry the realized protocol | `architectural` |
 | W022 | Undefined protocol in `encapsulates` | `business` |

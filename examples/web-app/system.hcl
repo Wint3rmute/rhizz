@@ -6,6 +6,8 @@ project {
 
 protocol "https" {
   full_name = "HTTPS REST API"
+  leaf = true
+  encapsulates = ["jwt"]
   roles       = ["provider", "consumer"]
 
   message "api-request" {
@@ -77,6 +79,7 @@ protocol "jwt" {
 
 protocol "postgresql" {
   full_name = "PostgreSQL wire protocol"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "db-query" {
@@ -96,6 +99,7 @@ protocol "postgresql" {
 
 protocol "ui-nav" {
   full_name = "Frontend page routing and navigation events"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "nav-event" {
@@ -110,6 +114,7 @@ protocol "ui-nav" {
 
 protocol "websocket" {
   full_name = "Real-time bidirectional WebSocket event channel"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "match-event" {
@@ -285,6 +290,7 @@ system "Web Application" {
     full_name  = "JWT authentication API"
     from         = "/Web Application/frontend/auth-out"
     to           = "/Web Application/backend/auth-in"
+    realized_by  = ["rest-api"]
   }
 
   connection "database-connection" {

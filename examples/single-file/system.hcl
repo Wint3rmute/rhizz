@@ -6,6 +6,7 @@ project {
 
 protocol "i2c" {
   full_name = "I2C sensor communication bus"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "reading" {
@@ -23,6 +24,7 @@ protocol "i2c" {
 
 protocol "mqtt" {
   full_name = "MQTT telemetry protocol"
+  leaf = true
   roles       = ["provider", "consumer"]
 
   message "telemetry" {
