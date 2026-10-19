@@ -571,14 +571,6 @@ view. Please make it possible to navigate back and forth through linked views.
 
 ---
 
-## Task <NUMBER> — Task template
-
-- Task description here
-- Requirements, spec, acceptance criteria as bullet points
-- Keep on increasing the task ID when creating new tasks
-- Don't remove this template, move it to the bottom instead
-
----
 
 ## Note — Remove the audit `overrides` when upstream is fixed
 
@@ -625,3 +617,46 @@ Definition of done:
 - Every former `just` recipe has a devshell equivalent.
 - CI passes with no `just` invocations left in `.github/`.
 
+---
+
+## Task <N> — Bound the size of `fetch_projects` output
+
+The MCP `fetch_projects` tool (`crates/rhizz-server/src/mcp.rs`) returns every
+project on every call, with no limit or pagination. Today that is about 110
+bytes per project, which is fine for a handful of projects, but it grows
+linearly and would fill an agent's context window at a few hundred projects.
+
+- Add an optional `page` argument (1-based integer). Each page holds 10
+  projects, and `page` is the only navigation parameter (no `limit` or
+  `offset`). Omitting `page` returns page 1.
+- The result reports the page number, the total number of projects, and the
+  total number of pages, so the caller knows whether to ask for the next page.
+- A page past the last one returns an empty list with the same totals, not an
+  error. `page` 0 is rejected with a tool error.
+- This changes behaviour for existing callers that expected the full list, so
+  note it in the PR.
+- Decide the order of results when truncating, so that the same call returns
+  the same projects. Most-recently-updated first is the likely choice, since
+  that is what a user usually wants.
+- Update the tool description so the model knows about `page`, the page size,
+  and the totals in the result.
+- Keep the response a single JSON text block, as today. Any change to the
+  shape (for example wrapping the array in an object with `total`) must be
+  reflected in the tests in `mcp.rs`.
+
+Acceptance criteria:
+
+- Tests cover: omitted `page` returns page 1; a middle page returns the right
+  10 projects; a final partial page returns the remainder; a page past the end
+  returns an empty list with the totals; `page` 0 is a tool error.
+- The tool description and the `tools/list` output describe the new argument.
+- `just test` and `just lint` pass.
+
+---
+
+## Task <NUMBER> — Task template
+
+- Task description here
+- Requirements, spec, acceptance criteria as bullet points
+- Keep on increasing the task ID when creating new tasks
+- Don't remove this template, move it to the bottom instead
