@@ -130,11 +130,11 @@
               # (`npm run test`, the storybook Vitest project, also covered by
               # `just test`). Nixpkgs' playwright-driver version must match the
               # `playwright` version pinned in web/package.json (currently
-              # 1.63.0), because Playwright looks up browsers by revision
-              # directory name (chromium-1243).
+              # 1.64.1), because Playwright looks up browsers by revision
+              # directory name (chromium-1248).
               # After bumping either side, rerun `npm ci` so node_modules
               # resolves the new driver; a stale tree keeps resolving the old
-              # driver (e.g. 1228 lookups against 1243 browsers) with no
+              # driver (e.g. 1243 lookups against 1248 browsers) with no
               # warning.
               playwright-driver.browsers
               flyctl
