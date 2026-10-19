@@ -60,26 +60,6 @@ first, including the "Reference syntax" and "Diagnostics" sections). Tasks
 
 ---
 
-## Task <N> — 0002.2: Protocol checks (`W022`, `E020`)
-
-Depends on 0002.1.
-
-- **Resolve** (`resolve.rs`, next to the protocol loop): resolve each
-  `protocol.encapsulates` label to a `ProtocolId`, stored on `Protocol`.
-  An undefined label emits `W022` and is dropped. A protocol listing itself, or any
-  cycle in the `encapsulates` graph, emits `E020`. Report each cycle once, with
-  the labels on it in the message.
-- **Docs:** remove the "(not yet implemented)" markers from `W022.md`,
-  `E020.md` and their `warning-levels.md` row. Update the resolution-pass list
-  in `SPEC/models.md`.
-- **Tests (red first):** `W022` for an undefined label, `E020` for a direct
-  self-reference, a 2-protocol cycle and a longer cycle, and a diamond-shaped
-  graph (no cycle) that must stay clean. Assert exact codes.
-
-Definition of done: as above, with `just test`, `just lint`, `just build`.
-
----
-
 ## Task <N> — 0002.3: Resolve `realized_by` (`E017`, `E018`, `E019`)
 
 Depends on 0002.1. Can run in parallel with 0002.2.

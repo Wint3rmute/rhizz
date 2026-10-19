@@ -4,6 +4,31 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0002.2: Protocol checks (`W022`, `E020`)
+
+Resolves protocol `encapsulates` labels (proposal 0002, §1 and §6).
+
+- **Resolution:** `Protocol.encapsulates` (labels, kept as written) now has a
+  resolved counterpart `Protocol.encapsulates_ids: Vec<ProtocolId>`. Duplicates
+  collapse; undefined labels emit `W022` and are dropped.
+- **Cycles (`E020`):** DFS over the resolved graph in label order. Each back
+  edge closes one cycle, reported once with its labels
+  (`` `http` -> `tls` -> `http` ``), and is dropped so the graph left behind is
+  acyclic. A protocol listing itself is a one-label cycle.
+- **Scope:** only `Protocol.encapsulates`. Connection `encapsulates` (E003/E004)
+  and `realized_by` are untouched.
+- **Docs:** "(not yet implemented)" removed from `W022.md`, `E020.md`, and the
+  `warning-levels.md` row. `SPEC/models.md` updated (resolved model and
+  resolution pass).
+- **Tests:** `W022` for an undefined label; `E020` for a self-reference, a
+  2-protocol cycle, and a 3-protocol cycle (each reported once); a diamond with
+  no cycle that stays clean and resolves to the expected ids. Assertions filter
+  out the unrelated W011/W012 that bare protocol fixtures produce.
+- **Validation:** `just test`, `just lint`, `just build` pass. Example projects
+  are unchanged.
+
+---
+
 ## Task <N> — Add a proof-of-concept MCP server to the Rhizz backend
 
 Exposes the Rhizz server to AI clients over the Model Context Protocol. One
