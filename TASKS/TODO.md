@@ -60,46 +60,6 @@ first, including the "Reference syntax" and "Diagnostics" sections). Tasks
 
 ---
 
-## Task <N> — 0002.1: Schema for `protocol.leaf`, `protocol.encapsulates`, `connection.realized_by`
-
-Add the new attributes through parse, model and serialization, plus the
-documentation for every new diagnostic code. No validation yet.
-
-- **Parse** (`parse.rs`): `ProtocolAttrs` gets `leaf` (bool, default `false`) and
-  `encapsulates` (list of strings). `ConnectionAttrs` / `RawConnection` get
-  `realized_by` (list of strings, default empty). Unknown attributes must still
-  fail with E000.
-- **Model** (`model.rs`): `Protocol` stores `leaf` and its `encapsulates`
-  labels (resolved ids come in 0002.2). `Connection` gets a `realized_by` field
-  for the raw entries (resolved ids come in 0002.3). Keep it distinct from the
-  existing `Connection.encapsulates`.
-- **Serialize** (`serialize.rs`): emit `leaf = true` only when true, and
-  non-empty `encapsulates` / `realized_by` only. Sort the entries. Canonical
-  output of files without the new syntax must not change.
-- **Diagnostic docs:** create `SPEC/diagnostics/E017.md` – `E020.md` and
-  `W019.md` – `W022.md` with the levels from the proposal, an example and a fix
-  each. Put "(not yet implemented)" in their titles, as `W009.md` does; the task
-  that implements a code removes the marker. Add W019–W022 to
-  `SPEC/warning-levels.md` with the same marker. Fix the stale `E001`–`E016`
-  and `W001`–`W016` ranges in `SPEC/architecture.md`.
-- **Spec:** add the attributes to the `protocol` table (`SPEC.md` §2.5) and the
-  `connection` table (§2.7), and say there that `realized_by` is a different
-  attribute from `connection.encapsulates`. Add the reference syntax from the
-  proposal to §3. Update the `Protocol` / `Connection` bullets in
-  `SPEC/models.md`.
-- **Tests (red first):**
-  - parsing of each attribute and rejection of unknown ones;
-  - serializer round trips with and without the attributes;
-  - extend the generator in `crates/rhizz-core/tests/proptest_serialization.rs`
-    to cover them;
-  - `test_examples_idempotent_roundtrip` still passes untouched.
-
-Definition of done: the attributes round-trip through parse and serialize,
-`just test`, `just lint`, `just build` pass, and no existing diagnostics or
-canonical outputs change.
-
----
-
 ## Task <N> — 0002.2: Protocol checks (`W022`, `E020`)
 
 Depends on 0002.1.

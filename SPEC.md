@@ -220,6 +220,21 @@ protocol "spi" {
 | `full_name` | string       | no       | `""`                                | Full official name, expanding abbreviations                       |
 | `tags`        | list(string) | no       | `[]`                                | Filtering tags                                   |
 | `roles`       | list(string) | no       | `[]`                                | Valid port roles permitted by this protocol (empty = any) |
+| `leaf`        | bool         | no       | `false`                             | Whether the protocol is concrete enough to need no further realization (like `component.leaf`) |
+| `encapsulates` | list(string) | no      | `[]`                                | Labels of top-level protocols this protocol can carry as payload (e.g. `http` carries `fund-transfer`) |
+
+`encapsulates` states a compatibility rule between protocol types,
+independently of any connection. Entries must name top-level `protocol`
+blocks, and the relation must be acyclic. Both rules, and the use of `leaf`
+for completeness, are described in
+[proposal 0002](book/src/proposals/0002-protocol-modeling.md).
+
+```hcl
+protocol "http" {
+  leaf         = false
+  encapsulates = ["fund-transfer"]
+}
+```
 
 **Children:** `message`
 
@@ -326,6 +341,27 @@ system "drone" {
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
 | `encapsulates` | list(string) | no       | `[]`             | Labels of sibling connections (higher-level protocols) this connection can carry |
+| `realized_by`  | list(string) | no       | `[]`             | Paths to connections that realize this connection at the same or a lower level of abstraction (see §3) |
+
+`realized_by` is a **different attribute** from `encapsulates`. `encapsulates`
+lists sibling connections by label; `realized_by` is top-down (the
+higher-level connection declares how it is realized) and may point into other
+scopes of the same system.
+
+```hcl
+system "banking" {
+  connection "fund-transfer" {
+    from        = "bank-a/payment"
+    to          = "bank-b/payment"
+    realized_by = ["http-request"]
+  }
+
+  connection "http-request" {
+    from = "bank-a/http"
+    to   = "bank-b/http"
+  }
+}
+```
 
 **No `direction` attribute** — direction is inferred from the `role` values of
 the connected ports (see §6).
@@ -503,9 +539,48 @@ All references use **name-based or UNIX-style path notation**:
 | `connection.from` / `connection.to` (bare label)  | Component path evaluated relative to declaring scope                   |
 | `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component                      |
 | `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path from scope   |
-| `encapsulates`                                    | Sibling `connection` labels in the same parent scope                   |
+| `encapsulates` (connection)                       | Sibling `connection` labels in the same parent scope                   |
+| `encapsulates` (protocol)                         | Top-level `protocol` labels                                            |
+| `connection.realized_by`                          | `connection` path; the last segment is always a connection label       |
 | `instance.source`                                | Top-level `component` label                                            |
 | `view.system`                                     | Top-level `system` label                                               |
+
+### `realized_by` reference syntax
+
+A `realized_by` entry is a UNIX-style path whose **last segment is always a
+connection label**. The segments before it, if any, name a component (or the
+system) and are resolved exactly like the component part of a `from`/`to`
+endpoint, starting from the scope that declares the connection. Because the
+last segment is always the connection, there is no port-versus-component
+ambiguity as in endpoint paths.
+
+| Entry                            | Resolves to                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `"tls-session"`                  | Connection declared in the same scope (sibling).                            |
+| `"bank-a/http-request"`          | Connection declared inside the child instance `bank-a`. Deeper nesting works: `"bank-a/stack/tcp-stream"`. |
+| `"../uplink"`                    | Connection declared in the parent scope.                                    |
+| `"./tls-session"`                | Same as the bare label.                                                     |
+| `"/banking/tls-session"`         | Connection declared directly in system `banking`.                           |
+| `"/banking/bank-a/http-request"` | Connection declared inside instance `bank-a` of system `banking`.           |
+
+- `.` is the current scope and `..` goes one scope up; `..` above a system or a
+  top-level definition is an error.
+- An absolute path starts with a system label. A path of only a system label is
+  not a connection reference.
+- The target must belong to the same system, or to the same top-level
+  definition tree, as the declaring connection.
+- Every instance gets its own copy of the connections declared in its
+  definition, so a relative reference inside a definition resolves within each
+  copy independently.
+- An unresolvable entry is `E017`. Duplicates collapse to one. The
+  `realized_by` graph must be acyclic (`E018`).
+- Canonical output keeps a bare label when the target is declared in the same
+  scope; other targets are written as absolute (or definition-relative) paths.
+  Entries are sorted.
+
+> **Status:** the attributes parse, are stored on the model and serialize.
+> Resolution and validation (`E017`–`E020`, `W019`–`W022`) land in follow-up
+> tasks; until then entries are kept as written.
 
 ---
 
