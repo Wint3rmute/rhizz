@@ -2,6 +2,8 @@
 //!
 //! Exposes a single tool, `fetch_projects`, over the MCP Streamable HTTP
 //! transport. The endpoint is mounted at `/mcp` by [`crate::server::app`].
+//! Projects are returned ten per page, most recently updated first, and the
+//! tool reports the totals so a caller knows when to ask for the next page.
 //!
 //! This is a POC: there is no authentication, so it must not be exposed beyond
 //! localhost.
@@ -11,12 +13,14 @@ use std::path::PathBuf;
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
+use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
     ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler, tool, tool_router};
+use serde_json::{Value, json};
 
 use crate::storage;
 
@@ -40,14 +44,38 @@ impl RhizzMcp {
     }
 }
 
+/// Number of projects each `fetch_projects` page returns.
+const PAGE_SIZE: usize = 10;
+
+/// Arguments accepted by the `fetch_projects` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct FetchProjectsParams {
+    /// The 1-based page to fetch; when omitted, page 1.
+    page: Option<i64>,
+}
+
 #[tool_router]
 impl RhizzMcp {
-    /// Lists the projects only (no nodes), as a JSON array in the text content.
+    /// Lists the projects only (no nodes), as a JSON object in the text
+    /// content: `projects` (this page), plus `page`, `pageSize`,
+    /// `totalProjects` and `totalPages` so a caller knows whether to ask for
+    /// the next page.
     #[tool(
         name = "fetch_projects",
-        description = "List all Rhizz projects available on this server (id, name, createdAt, updatedAt)."
+        description = "List Rhizz projects on this server (id, name, createdAt, updatedAt), most recently updated first, 10 per page. Pass the 1-based `page` to request a specific page (omitted means page 1). The result reports `page`, `pageSize`, `totalProjects`, and `totalPages`."
     )]
-    async fn fetch_projects(&self) -> Result<CallToolResult, ErrorData> {
+    async fn fetch_projects(
+        &self,
+        params: Parameters<FetchProjectsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let requested_page = match params.0.page {
+            Some(page) if page < 1 => {
+                return Ok(tool_error("page must be a positive 1-based integer"));
+            }
+            Some(page) => usize::try_from(page).unwrap_or(usize::MAX),
+            None => 1,
+        };
+
         let data_dir = self.data_dir.clone();
         let loaded = tokio::task::spawn_blocking(move || storage::load_vfs(&data_dir)).await;
         let vfs = match loaded {
@@ -61,11 +89,41 @@ impl RhizzMcp {
                 return Ok(tool_error("failed to load projects"));
             }
         };
-        let projects = vfs
+
+        let mut projects = vfs
             .get("projects")
+            .and_then(Value::as_array)
             .cloned()
-            .unwrap_or_else(|| serde_json::json!([]));
-        match serde_json::to_string(&projects) {
+            .unwrap_or_default();
+
+        // Most recently updated first; ties broken by id so repeated calls land
+        // on the same projects at page boundaries.
+        projects.sort_by(|a, b| {
+            project_updated_at(b)
+                .cmp(project_updated_at(a))
+                .then_with(|| project_id(a).cmp(project_id(b)))
+        });
+
+        let total_projects = projects.len();
+        let total_pages = total_projects.div_ceil(PAGE_SIZE);
+        let start = requested_page
+            .saturating_sub(1)
+            .saturating_mul(PAGE_SIZE)
+            .min(total_projects);
+        let end = start.saturating_add(PAGE_SIZE).min(total_projects);
+        let page_projects = projects
+            .get(start..end)
+            .map(<[Value]>::to_vec)
+            .unwrap_or_default();
+
+        let result = json!({
+            "projects": page_projects,
+            "page": requested_page,
+            "pageSize": PAGE_SIZE,
+            "totalProjects": total_projects,
+            "totalPages": total_pages,
+        });
+        match serde_json::to_string(&result) {
             Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
             Err(err) => {
                 tracing::error!(?err, "fetch_projects: failed to encode projects");
@@ -79,6 +137,19 @@ impl RhizzMcp {
 /// protocol error, so the model can see it and the session stays usable.
 fn tool_error(message: &'static str) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message)])
+}
+
+/// The `updatedAt` stamp of a project, or an empty string when absent.
+fn project_updated_at(project: &Value) -> &str {
+    project
+        .get("updatedAt")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+}
+
+/// The `id` of a project, or an empty string when absent.
+fn project_id(project: &Value) -> &str {
+    project.get("id").and_then(Value::as_str).unwrap_or("")
 }
 
 /// Hand-written rather than `#[tool_handler]`: the macro generates `async`
@@ -209,6 +280,46 @@ mod tests {
         std::fs::write(drone.join("system.hcl"), "system \"drone\" {}\n").unwrap();
     }
 
+    /// Writes `count` projects named `p00`..`p{count-1}`, each with a distinct
+    /// mtime increasing with the id, so most-recently-updated-first ordering is
+    /// `p{count-1}` .. `p00`.
+    fn write_many_projects(data_dir: &std::path::Path, count: usize) {
+        for i in 0..count {
+            let id = format!("p{i:02}");
+            let project_dir = data_dir.join(&id);
+            std::fs::create_dir_all(&project_dir).unwrap();
+            let source = project_dir.join("system.hcl");
+            std::fs::write(&source, format!("system \"{id}\" {{}}\n")).unwrap();
+
+            let file = std::fs::File::open(&source).unwrap();
+            let seconds = u64::try_from(i).unwrap();
+            let total_seconds = 1_700_000_000u64.checked_add(seconds).unwrap();
+            let modified = std::time::UNIX_EPOCH
+                .checked_add(std::time::Duration::from_secs(total_seconds))
+                .unwrap();
+            let times = std::fs::FileTimes::new().set_modified(modified);
+            file.set_times(times).unwrap();
+        }
+    }
+
+    /// Calls `fetch_projects` (with an optional `page`) and returns the parsed
+    /// text content of the successful result.
+    async fn call_fetch_projects(app: &Router, session: &str, id: i64, page: Option<i64>) -> Value {
+        let arguments = page.map_or_else(|| json!({}), |page| json!({ "page": page }));
+        let call = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": { "name": "fetch_projects", "arguments": arguments }
+        });
+        let (status, _, payload) = post_rpc(app, &call, Some(session)).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("tools/call must reply");
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let text = payload["result"]["content"][0]["text"].as_str().unwrap();
+        serde_json::from_str(text).unwrap()
+    }
+
     #[tokio::test]
     async fn tools_list_exposes_exactly_one_tool_named_fetch_projects() {
         let tmp = tempfile::tempdir().unwrap();
@@ -223,6 +334,20 @@ mod tests {
         let tools = payload["result"]["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1, "expected exactly one tool: {tools:?}");
         assert_eq!(tools[0]["name"], json!("fetch_projects"));
+
+        let description = tools[0]["description"].as_str().unwrap();
+        assert!(
+            description.to_lowercase().contains("page"),
+            "tool description must describe the page argument: {description}"
+        );
+        let schema = tools[0]["inputSchema"].as_object().unwrap();
+        assert!(
+            schema
+                .get("properties")
+                .and_then(|props| props.get("page"))
+                .is_some(),
+            "tool input schema must describe the page argument: {schema:?}"
+        );
     }
 
     #[tokio::test]
@@ -244,12 +369,16 @@ mod tests {
         let payload = payload.expect("tools/call must reply");
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let text = payload["result"]["content"][0]["text"].as_str().unwrap();
-        let projects: Value = serde_json::from_str(text).unwrap();
-        let projects = projects.as_array().unwrap();
+        let result: Value = serde_json::from_str(text).unwrap();
+        let projects = result["projects"].as_array().unwrap();
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0]["id"], json!("drone"));
         assert_eq!(projects[0]["name"], json!("drone"));
         assert!(projects[0].get("nodes").is_none());
+        assert_eq!(result["page"], json!(1));
+        assert_eq!(result["pageSize"], json!(10));
+        assert_eq!(result["totalProjects"], json!(1));
+        assert_eq!(result["totalPages"], json!(1));
     }
 
     #[tokio::test]
@@ -270,8 +399,74 @@ mod tests {
         let payload = payload.expect("tools/call must reply");
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let text = payload["result"]["content"][0]["text"].as_str().unwrap();
-        let projects: Value = serde_json::from_str(text).unwrap();
-        assert_eq!(projects, json!([]));
+        let result: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(result["projects"], json!([]));
+        assert_eq!(result["page"], json!(1));
+        assert_eq!(result["totalProjects"], json!(0));
+        assert_eq!(result["totalPages"], json!(0));
+    }
+
+    #[tokio::test]
+    async fn fetch_projects_paginates_ten_per_page_most_recent_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_many_projects(tmp.path(), 23);
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let first = call_fetch_projects(&app, &session, 10, None).await;
+        assert_eq!(first["page"], json!(1), "omitted page defaults to 1");
+        assert_eq!(first["pageSize"], json!(10));
+        assert_eq!(first["totalProjects"], json!(23));
+        assert_eq!(first["totalPages"], json!(3));
+        let items = first["projects"].as_array().unwrap();
+        assert_eq!(items.len(), 10);
+        assert_eq!(items[0]["id"], json!("p22"), "most recently updated first");
+        assert_eq!(items[9]["id"], json!("p13"));
+
+        let second = call_fetch_projects(&app, &session, 11, Some(2)).await;
+        assert_eq!(second["page"], json!(2));
+        assert_eq!(second["totalProjects"], json!(23));
+        assert_eq!(second["totalPages"], json!(3));
+        let items = second["projects"].as_array().unwrap();
+        assert_eq!(items.len(), 10);
+        assert_eq!(items[0]["id"], json!("p12"));
+        assert_eq!(items[9]["id"], json!("p03"));
+
+        let third = call_fetch_projects(&app, &session, 12, Some(3)).await;
+        assert_eq!(third["page"], json!(3));
+        let items = third["projects"].as_array().unwrap();
+        assert_eq!(items.len(), 3, "final partial page holds the remainder");
+        assert_eq!(items[0]["id"], json!("p02"));
+        assert_eq!(items[2]["id"], json!("p00"));
+
+        let past = call_fetch_projects(&app, &session, 13, Some(4)).await;
+        assert_eq!(past["page"], json!(4));
+        assert_eq!(
+            past["projects"],
+            json!([]),
+            "past-the-end page is empty, not an error"
+        );
+        assert_eq!(past["totalProjects"], json!(23));
+        assert_eq!(past["totalPages"], json!(3));
+    }
+
+    #[tokio::test]
+    async fn fetch_projects_rejects_page_zero_with_a_tool_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_drone_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let call = json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": { "name": "fetch_projects", "arguments": { "page": 0 } }
+        });
+        let (status, _, payload) = post_rpc(&app, &call, Some(&session)).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("tools/call must reply");
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 
     #[tokio::test]

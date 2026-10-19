@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Bound the size of `fetch_projects` output
+
+The MCP `fetch_projects` tool (`crates/rhizz-server/src/mcp.rs`) now returns
+projects ten per page, most recently updated first, instead of every project on
+every call.
+
+- **Arguments:** optional `page` (1-based integer); omitted means page 1.
+  `page` is the only navigation parameter (no `limit`/`offset`). `page` 0 (or
+  negative) is rejected with a tool error; a page past the last one returns an
+  empty `projects` list with the same totals.
+- **Response:** still one JSON text block, now an object: `projects` (this
+  page), `page`, `pageSize` (10), `totalProjects`, and `totalPages`.
+- **Ordering:** most-recently-updated first (`updatedAt` descending), ties
+  broken by `id` ascending so repeated calls land on the same projects at page
+  boundaries.
+- **Tool metadata:** description updated to describe `page`, the page size,
+  and the totals; the input schema generated from `FetchProjectsParams`
+  (`Parameters<FetchProjectsParams>` via the `#[tool]` macro) advertises
+  `page` in `tools/list`.
+- **Dependencies:** `serde` (derive) and `schemars` (derive) added to
+  `crates/rhizz-server/Cargo.toml` for the argument struct.
+- **Breaking change:** existing callers that expected the full project array
+  get the new object shape; noted in the PR.
+- **Tests:** `mcp.rs` covers omitted `page` → page 1, a middle page (10
+  projects), a final partial page, a page past the end (empty list with
+  totals), `page` 0 → tool error, and `tools/list` describing the `page`
+  argument. Existing call tests updated to the new object shape.
+- **Validation:** `just test` (all Rust suites pass; one unrelated pre-existing
+  command-palette e2e flake), `just lint-rust`, `just build`, `just format`.
+
+---
+
 ## Task <N> — 0002.3: Resolve `realized_by` (`E017`, `E018`, `E019`)
 
 Resolves connection `realized_by` entries to `ConnectionId`s (proposal 0002,
