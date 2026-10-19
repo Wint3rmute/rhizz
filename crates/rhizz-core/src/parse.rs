@@ -85,7 +85,7 @@ pub struct Labeled<T> {
 }
 
 /// Merged contents of all `.hcl` files in a project directory.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RawFile {
     /// Source file path hint — used for diagnostics.
     /// After merging this holds the last file that contributed a project block.

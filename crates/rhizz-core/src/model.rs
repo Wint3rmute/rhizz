@@ -199,6 +199,24 @@ impl Model {
         self.connections.get_mut(id.0)
     }
 
+    /// Protocol a connection travels over, or `None` when it has none.
+    ///
+    /// Both endpoints must name a port, both ports must declare the same
+    /// non-empty protocol, and that protocol must resolve to a top-level
+    /// protocol. Used by the `realized_by` checks; W007/W008 read the port
+    /// strings directly and are not affected.
+    #[must_use]
+    pub fn connection_protocol(&self, id: ConnectionId) -> Option<ProtocolId> {
+        let conn = self.connection(id)?;
+        let from = self.port(conn.from.port?)?;
+        let to = self.port(conn.to.port?)?;
+        if from.protocol.is_empty() || from.protocol != to.protocol {
+            return None;
+        }
+        let pid = from.protocol_id?;
+        (to.protocol_id == Some(pid)).then_some(pid)
+    }
+
     /// Returns a reference to the message at `id`, or `None` if out of bounds.
     #[must_use]
     pub fn message(&self, id: MessageId) -> Option<&Message> {
@@ -410,6 +428,11 @@ pub struct Connection {
     /// different attribute from [`Connection::encapsulates`].
     #[serde(default)]
     pub realized_by: Vec<String>,
+    /// Resolved [`ConnectionId`]s of [`Connection::realized_by`], deduplicated
+    /// in declaration order. Entries that name no connection (`E017`) are
+    /// absent, and edges on a `realized_by` cycle (`E018`) are removed.
+    #[serde(default)]
+    pub realized_by_ids: Vec<ConnectionId>,
 }
 
 /// A resolved message carried by a port.

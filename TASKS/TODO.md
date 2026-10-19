@@ -60,59 +60,6 @@ first, including the "Reference syntax" and "Diagnostics" sections). Tasks
 
 ---
 
-## Task <N> — 0002.3: Resolve `realized_by` (`E017`, `E018`, `E019`)
-
-Depends on 0002.1. Can run in parallel with 0002.2.
-
-- **Resolution:** after all connections in all scopes are registered, resolve
-  each `realized_by` entry to a `ConnectionId` using the "Reference syntax"
-  section of the proposal. The last segment is the connection label. The
-  preceding segments are resolved like the component part of an endpoint path
-  (`resolve_endpoint`): reuse its scope traversal (`.`, `..`, leading system
-  label) rather than writing a second walker. Restrictions:
-  - the target must be in the same system or definition tree, otherwise `E017`;
-  - an unresolvable entry emits `E017` naming the entry and the scope searched,
-    and is dropped;
-  - duplicates collapse to one.
-- **Cycles:** after resolving every scope, run one global cycle check over the
-  resolved `realized_by` graph. Do not copy `has_encapsulation_cycle`: it only
-  starts from the connection being resolved, which is not enough for
-  cross-scope references. Report each cycle once with `E018`, and clear the
-  edges on the cycle so later passes terminate. Self-references are cycles.
-- **`E019`:** a connection whose derived protocol (see below) has `leaf = true`
-  and which declares `realized_by` emits `E019`.
-- **Connection protocol helper:** add one function in `rhizz-core` that returns
-  the connection's protocol (`Option<ProtocolId>`) per the proposal: both
-  endpoints name a port, both ports declare the same non-empty protocol, and it
-  resolves to a top-level protocol. It will be reused by 0002.4 and 0002.5.
-  Do not change the existing W007/W008 behavior to use it.
-- **Mutations** (`mutation.rs`): deleting a connection
-  (`delete_connection_by_label`) or an instance (which drops the connections
-  that use it) must also remove `realized_by` entries that point at the removed
-  connections. Otherwise the re-resolve emits `E017` and the user's delete is
-  refused. Find which entries to remove from the resolved model, not by string
-  matching, since entries can be relative paths. This is the same latent trap as
-  for connection `encapsulates`; fix it for both if it is cheap, and say what
-  you did.
-- **Tests (red first):**
-  - one for each reference form in the proposal's table (bare, child instance,
-    `..`, `./`, absolute, absolute through an instance);
-  - `E017` for a missing label, a path through a missing instance and a
-    reference into another system;
-  - `E018` for a self reference, 2-cycle, and a cross-scope cycle;
-  - `E019`;
-  - copies of a definition's connections resolve independently per instance;
-  - deleting the target of a `realized_by` through the mutation API succeeds and
-    leaves no dangling entry;
-  - while here, add the missing tests for `E003` and `E004`.
-- **Docs:** remove the "(not yet implemented)" markers for `E017`, `E018`, `E019`.
-  Update `SPEC/models.md` (resolution steps, reference scopes).
-
-Definition of done: `just test`, `just lint`, `just build` pass and no example
-changes behavior.
-
----
-
 ## Task <N> — 0002.4: Compatibility and hierarchy warnings (`W021`, `W020`)
 
 Depends on 0002.3 (needs resolved `realized_by` and the connection protocol
