@@ -383,6 +383,16 @@ fn serialize_protocol(out: &mut String, proto: &Protocol, model: &Model) {
     if !proto.roles.is_empty() {
         let _ = writeln!(out, "  roles       = {}", format_string_list(&proto.roles));
     }
+    if proto.leaf {
+        let _ = writeln!(out, "  leaf        = true");
+    }
+    if !proto.encapsulates.is_empty() {
+        let _ = writeln!(
+            out,
+            "  encapsulates = {}",
+            format_string_list(&sorted_strings(&proto.encapsulates))
+        );
+    }
 
     let mut messages: Vec<&Message> = proto
         .messages
@@ -533,6 +543,13 @@ fn serialize_connection(
             out,
             "{inner_indent}encapsulates = {}",
             format_string_list(&enc_labels)
+        );
+    }
+    if !conn.realized_by.is_empty() {
+        let _ = writeln!(
+            out,
+            "{inner_indent}realized_by  = {}",
+            format_string_list(&sorted_strings(&conn.realized_by))
         );
     }
 
@@ -955,6 +972,13 @@ fn escape_string(s: &str) -> String {
     out
 }
 
+/// Returns the entries sorted, for canonical list output.
+fn sorted_strings(items: &[String]) -> Vec<String> {
+    let mut sorted = items.to_vec();
+    sorted.sort();
+    sorted
+}
+
 fn format_string_list(items: &[String]) -> String {
     let escaped: Vec<String> = items.iter().map(|s| escape_string(s)).collect();
     format!("[{}]", escaped.join(", "))
@@ -1242,6 +1266,217 @@ system "monitored-device" {
             serialized1, serialized2,
             "protocol and port attributes serialization must be idempotent"
         );
+    }
+
+    /// Compile `hcl` and serialize it, failing the test on any error.
+    fn canonical(hcl: &str) -> String {
+        let res = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res.diagnostics.iter().all(|d| !d.is_error()),
+            "errors: {:?}",
+            res.diagnostics
+        );
+        serialize_model(&res.model.expect("model should resolve"))
+    }
+
+    const REALIZATION_SRC: &str = r#"protocol "fund-transfer" {}
+
+protocol "http" {
+  leaf         = false
+  encapsulates = ["tls", "fund-transfer"]
+}
+
+protocol "ip" {
+  leaf = true
+}
+
+component "bank" {
+  leaf = true
+
+  port "payment" {
+    protocol = "fund-transfer"
+  }
+  port "http" {
+    protocol = "http"
+  }
+  port "ip" {
+    protocol = "ip"
+  }
+}
+
+system "banking" {
+  instance "bank-a" {
+    source = "bank"
+  }
+  instance "bank-b" {
+    source = "bank"
+  }
+
+  connection "fund-transfer" {
+    from        = "bank-a/payment"
+    to          = "bank-b/payment"
+    realized_by = ["ip-packet", "http-request"]
+  }
+  connection "http-request" {
+    from = "bank-a/http"
+    to   = "bank-b/http"
+  }
+  connection "ip-packet" {
+    from = "bank-a/ip"
+    to   = "bank-b/ip"
+  }
+}
+"#;
+
+    #[test]
+    fn test_protocol_leaf_and_encapsulates_serialized_sorted() {
+        let out = canonical(REALIZATION_SRC);
+
+        // `leaf = false` is the default and is omitted, `leaf = true` is kept.
+        assert!(
+            !out.contains("leaf        = false"),
+            "default leaf must be omitted:\n{out}"
+        );
+        assert!(
+            out.contains("protocol \"ip\" {\n  leaf        = true\n}"),
+            "leaf = true must be emitted:\n{out}"
+        );
+        // Entries are sorted.
+        assert!(
+            out.contains("  encapsulates = [\"fund-transfer\", \"tls\"]"),
+            "encapsulates must be emitted sorted:\n{out}"
+        );
+    }
+
+    #[test]
+    fn test_connection_realized_by_serialized_sorted() {
+        let out = canonical(REALIZATION_SRC);
+        assert!(
+            out.contains("realized_by  = [\"http-request\", \"ip-packet\"]"),
+            "realized_by must be emitted sorted:\n{out}"
+        );
+        assert_eq!(
+            out.matches("realized_by").count(),
+            1,
+            "only the connection that declares it emits it:\n{out}"
+        );
+    }
+
+    #[test]
+    fn test_realization_attributes_roundtrip_idempotent() {
+        let once = canonical(REALIZATION_SRC);
+        let twice = canonical(&once);
+        assert_eq!(once, twice, "serialization must be idempotent");
+    }
+
+    #[test]
+    fn test_realized_by_keeps_non_sibling_entries_verbatim() {
+        let src = r#"component "stack" {
+  leaf = true
+
+  port "p" {}
+}
+
+system "s" {
+  instance "n" {
+    source = "stack"
+  }
+  instance "m" {
+    source = "stack"
+  }
+
+  connection "top" {
+    from        = "n/p"
+    to          = "m/p"
+    realized_by = ["/s/low", "./low2", "../other"]
+  }
+}
+"#;
+        let out = canonical(src);
+        assert!(
+            out.contains("realized_by  = [\"../other\", \"./low2\", \"/s/low\"]"),
+            "raw entries must be kept and sorted:\n{out}"
+        );
+        assert_eq!(out, canonical(&out));
+    }
+
+    #[test]
+    fn test_realized_by_inside_component_roundtrip() {
+        let src = r#"component "part" {
+  leaf = true
+
+  port "p" {}
+}
+
+component "stack" {
+  port "p" {}
+
+  instance "a" {
+    source = "part"
+  }
+  instance "b" {
+    source = "part"
+  }
+
+  connection "top" {
+    from        = "a/p"
+    to          = "b/p"
+    realized_by = ["low"]
+  }
+  connection "low" {
+    from = "a/p"
+    to   = "b/p"
+  }
+}
+
+system "s" {
+  instance "n" {
+    source = "stack"
+  }
+}
+"#;
+        let once = canonical(src);
+        assert!(
+            once.contains("realized_by  = [\"low\"]"),
+            "realized_by lost:\n{once}"
+        );
+        assert_eq!(once, canonical(&once));
+    }
+
+    #[test]
+    fn test_canonical_output_without_new_attributes_has_none() {
+        let src = r#"protocol "p" {}
+
+component "c" {
+  leaf = true
+
+  port "x" {
+    protocol = "p"
+  }
+}
+
+system "s" {
+  instance "a" {
+    source = "c"
+  }
+  instance "b" {
+    source = "c"
+  }
+
+  connection "link" {
+    from = "a/x"
+    to   = "b/x"
+  }
+}
+"#;
+        let out = canonical(src);
+        assert!(!out.contains("encapsulates"), "{out}");
+        assert!(!out.contains("realized_by"), "{out}");
+        // Component `leaf = true` is allowed, but the protocol must stay bare.
+        assert!(out.starts_with("protocol \"p\" {\n}\n"), "{out}");
     }
 
     #[test]

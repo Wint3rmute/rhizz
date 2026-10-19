@@ -23,6 +23,20 @@ struct FieldInput {
     required: bool,
 }
 
+/// Input for the protocol / connection realization attributes.
+#[derive(Debug)]
+struct RealizationInput {
+    /// Value of the main protocol's `leaf` attribute.
+    leaf: bool,
+    /// Suffix of the extra protocol the main protocol `encapsulates`.
+    carried_suffix: String,
+    /// Whether the extra protocol is emitted at all.
+    encapsulate_carried: bool,
+    /// For each generated connection, which later connections realize it.
+    /// Only indexes greater than its own are used, so the graph stays acyclic.
+    realized_by: Vec<Vec<bool>>,
+}
+
 #[derive(Debug)]
 struct ModelInput {
     project_name: String,
@@ -32,6 +46,7 @@ struct ModelInput {
     tags: Vec<String>,
     components: Vec<ComponentInput>,
     fields: Vec<FieldInput>,
+    realization: RealizationInput,
 }
 
 fn identifier_suffix() -> impl Strategy<Value = String> {
@@ -91,6 +106,23 @@ fn field_input() -> impl Strategy<Value = FieldInput> {
     })
 }
 
+fn realization_input() -> impl Strategy<Value = RealizationInput> {
+    (
+        any::<bool>(),
+        identifier_suffix(),
+        any::<bool>(),
+        prop::collection::vec(prop::collection::vec(any::<bool>(), 0..6), 0..6),
+    )
+        .prop_map(|(leaf, carried_suffix, encapsulate_carried, realized_by)| {
+            RealizationInput {
+                leaf,
+                carried_suffix,
+                encapsulate_carried,
+                realized_by,
+            }
+        })
+}
+
 fn model_input() -> impl Strategy<Value = ModelInput> {
     (
         text(),
@@ -100,6 +132,7 @@ fn model_input() -> impl Strategy<Value = ModelInput> {
         tags(),
         prop::collection::vec(component_input(), 1..6),
         prop::collection::vec(field_input(), 0..5),
+        realization_input(),
     )
         .prop_map(
             |(
@@ -110,6 +143,7 @@ fn model_input() -> impl Strategy<Value = ModelInput> {
                 tags,
                 components,
                 fields,
+                realization,
             )| ModelInput {
                 project_name,
                 system_suffix,
@@ -118,6 +152,7 @@ fn model_input() -> impl Strategy<Value = ModelInput> {
                 tags,
                 components,
                 fields,
+                realization,
             },
         )
 }
@@ -144,6 +179,32 @@ fn string_list(values: &[String]) -> String {
     format!("[{}]", values.join(", "))
 }
 
+/// Labels of the connections that `connection-{current_index}` is realized by.
+///
+/// Entries are listed in reverse so that canonical sorting is exercised. Only
+/// later connections are referenced, which keeps the graph acyclic.
+fn realized_by_targets(
+    realization: &RealizationInput,
+    previous_index: usize,
+    current_index: usize,
+    component_count: usize,
+) -> Vec<String> {
+    let flags = realization
+        .realized_by
+        .get(previous_index)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    flags
+        .iter()
+        .enumerate()
+        .filter(|(_, enabled)| **enabled)
+        .map(|(offset, _)| current_index.saturating_add(offset).saturating_add(1))
+        .filter(|target| *target < component_count)
+        .map(|target| format!("connection-{target}"))
+        .rev()
+        .collect()
+}
+
 fn render_valid_model(input: &ModelInput) -> String {
     let system_label = format!("system-{}", input.system_suffix);
     let protocol_label = format!("protocol-{}", input.protocol_suffix);
@@ -159,6 +220,14 @@ fn render_valid_model(input: &ModelInput) -> String {
     let _ = writeln!(hcl, "  full_name = {}", quoted(&input.full_name));
     let _ = writeln!(hcl, "  tags = {}", string_list(&input.tags));
     let _ = writeln!(hcl, "  roles = [\"provider\", \"consumer\"]");
+    let realization = &input.realization;
+    let carried_label = format!("protocol-carried-{}", realization.carried_suffix);
+    // A leaf protocol must not be realized (reserved `E019`), so connections
+    // only declare `realized_by` when the protocol is not a leaf.
+    let _ = writeln!(hcl, "  leaf = {}", realization.leaf);
+    if realization.encapsulate_carried {
+        let _ = writeln!(hcl, "  encapsulates = [{}]", quoted(&carried_label));
+    }
     let _ = writeln!(hcl, "  message \"message-generated\" {{");
     let _ = writeln!(hcl, "    full_name = {}", quoted(&input.full_name));
     for (index, field) in input.fields.iter().enumerate() {
@@ -175,6 +244,8 @@ fn render_valid_model(input: &ModelInput) -> String {
     }
     let _ = writeln!(hcl, "  }}");
     let _ = writeln!(hcl, "}}\n");
+
+    let _ = writeln!(hcl, "protocol {} {{}}\n", quoted(&carried_label));
 
     // Emit each component as a reusable top-level definition.
     for (index, component) in input.components.iter().enumerate() {
@@ -229,6 +300,15 @@ fn render_valid_model(input: &ModelInput) -> String {
         let _ = writeln!(hcl, "  connection \"connection-{current_index}\" {{");
         let _ = writeln!(hcl, "    from = {}", quoted(&from));
         let _ = writeln!(hcl, "    to = {}", quoted(&to));
+        let targets = realized_by_targets(
+            realization,
+            previous_index,
+            current_index,
+            input.components.len(),
+        );
+        if !realization.leaf && !targets.is_empty() {
+            let _ = writeln!(hcl, "    realized_by = {}", string_list(&targets));
+        }
         let _ = writeln!(hcl, "  }}");
     }
     let _ = writeln!(hcl, "}}");

@@ -71,9 +71,15 @@ messages / fields. Key semantics:
   serializer to re-emit `instance` blocks).
 - `Port { protocol: String, protocol_id: Option<ProtocolId>, external, required,
   owner }` — `protocol_id` links to a top-level protocol when the name matches.
+- `Protocol { leaf, encapsulates: Vec<String>, .. }` — `leaf` defaults to
+  `false`; `encapsulates` holds the declared protocol labels (not yet resolved
+  to `ProtocolId`s).
 - `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId> },
-  encapsulates }` — `port: None` is a bare (untyped) reference; W007–W009 fire
-  on the typed/untyped and role combinations.
+  encapsulates, realized_by: Vec<String> }` — `port: None` is a bare (untyped)
+  reference; W007–W009 fire on the typed/untyped and role combinations.
+  `encapsulates` (resolved sibling connections) and `realized_by` (the raw
+  `realized_by` path entries, not yet resolved) are different attributes with
+  separate code paths.
 
 ## Resolution pass
 

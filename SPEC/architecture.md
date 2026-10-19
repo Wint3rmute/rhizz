@@ -60,8 +60,8 @@ pub fn score(model: &Model) -> ScoreReport;
   serialise results (JSON output, IPC, storage) without extra conversion.
 - **`Clone`, `Debug` on all public types** — frontends may need to hold multiple
   snapshots of the model simultaneously (e.g. the Frontend keeping the last valid)
-- **Stable error codes** — `Diagnostic.code` strings (`E001`–`E016`,
-  `W001`–`W016`) are part of the public API. Changing or renumbering them is a
+- **Stable error codes** — `Diagnostic.code` strings (`E001`–`E020`,
+  `W001`–`W022`) are part of the public API. Changing or renumbering them is a
   breaking change.
 
 ---

@@ -174,6 +174,10 @@ pub struct RawProtocol {
     pub tags: Vec<String>,
     /// Permitted port roles (e.g. `["provider", "consumer"]`).
     pub roles: Option<Vec<String>>,
+    /// Whether the protocol is concrete enough to need no further realization.
+    pub leaf: bool,
+    /// Labels of protocols this protocol can carry as payload.
+    pub encapsulates: Vec<String>,
     /// Child message blocks.
     pub messages: Vec<Labeled<RawMessage>>,
 }
@@ -210,6 +214,9 @@ pub struct RawConnection {
     pub to: Option<String>,
     /// Labels of sibling connections (higher-level protocols) this connection can carry.
     pub encapsulates: Vec<String>,
+    /// Raw `realized_by` entries: paths to connections that realize this one.
+    /// A different attribute from [`RawConnection::encapsulates`].
+    pub realized_by: Vec<String>,
 }
 
 /// Raw message block before resolution.
@@ -308,6 +315,10 @@ struct ProtocolAttrs {
     pub tags: Option<Vec<String>>,
     /// Optional roles list.
     pub roles: Option<Vec<String>>,
+    /// Optional leaf flag.
+    pub leaf: Option<bool>,
+    /// Optional list of protocol labels this protocol can carry.
+    pub encapsulates: Option<Vec<String>>,
 }
 
 /// Serde helper for deserializing port attributes.
@@ -344,6 +355,8 @@ struct ConnectionAttrs {
     to: Option<String>,
     /// Encapsulated connection labels.
     encapsulates: Option<Vec<String>>,
+    /// Paths of connections that realize this connection.
+    realized_by: Option<Vec<String>>,
 }
 
 /// Serde helper for deserializing message attributes.
@@ -486,6 +499,8 @@ fn parse_protocol(body: &hcl::Body) -> ParseResult<RawProtocol> {
         full_name: a.full_name,
         tags: a.tags.unwrap_or_default(),
         roles: a.roles,
+        leaf: a.leaf.unwrap_or_default(),
+        encapsulates: a.encapsulates.unwrap_or_default(),
         messages,
     })
 }
@@ -500,6 +515,7 @@ fn parse_connection(body: &hcl::Body) -> ParseResult<RawConnection> {
         from: a.from,
         to: a.to,
         encapsulates: a.encapsulates.unwrap_or_default(),
+        realized_by: a.realized_by.unwrap_or_default(),
     })
 }
 
@@ -1311,6 +1327,68 @@ mod tests {
     }
 
     #[test]
+    fn parse_protocol_leaf_and_encapsulates() {
+        let src = r#"
+            protocol "http" {
+                leaf         = true
+                encapsulates = ["fund-transfer", "json"]
+            }
+            protocol "plain" {}
+        "#;
+        let raw = parse_file(src, &PathBuf::from("protocols.hcl")).unwrap();
+
+        let http = &raw.protocols[0].inner;
+        assert!(http.leaf);
+        assert_eq!(http.encapsulates, vec!["fund-transfer", "json"]);
+
+        let plain = &raw.protocols[1].inner;
+        assert!(!plain.leaf, "leaf defaults to false");
+        assert!(plain.encapsulates.is_empty());
+    }
+
+    #[test]
+    fn parse_connection_realized_by() {
+        let src = r#"
+            system "banking" {
+                connection "a" {
+                    from        = "x"
+                    to          = "y"
+                    realized_by = ["b", "../c", "/banking/n/d"]
+                }
+                connection "b" {
+                    from = "x"
+                    to   = "y"
+                }
+            }
+        "#;
+        let raw = parse_file(src, &PathBuf::from("system.hcl")).unwrap();
+        let conns = &raw.systems[0].inner.connections;
+
+        assert_eq!(
+            conns[0].inner.realized_by,
+            vec!["b", "../c", "/banking/n/d"]
+        );
+        assert!(conns[0].inner.encapsulates.is_empty());
+        assert!(conns[1].inner.realized_by.is_empty());
+    }
+
+    #[test]
+    fn parse_connection_realized_by_inside_component() {
+        let src = r#"
+            component "stack" {
+                connection "a" {
+                    from        = "x"
+                    to          = "y"
+                    realized_by = ["b"]
+                }
+            }
+        "#;
+        let raw = parse_file(src, &PathBuf::from("comp.hcl")).unwrap();
+        let conn = &raw.components[0].inner.connections[0];
+        assert_eq!(conn.inner.realized_by, vec!["b"]);
+    }
+
+    #[test]
     fn parse_port_external_required_attributes() {
         let src = r#"
             component "controller" {
@@ -1400,6 +1478,42 @@ mod tests {
     #[test]
     fn unknown_attr_on_protocol_is_error() {
         assert_e000_with_key(r#"protocol "p" { descripton = "x" }"#, "descripton");
+    }
+
+    #[test]
+    fn protocol_leaf_must_be_bool() {
+        let err = assert_parse_fails(r#"protocol "p" { leaf = "yes" }"#);
+        assert_eq!(err.code, DiagnosticCode::E000);
+    }
+
+    #[test]
+    fn protocol_encapsulates_must_be_list() {
+        let err = assert_parse_fails(r#"protocol "p" { encapsulates = "http" }"#);
+        assert_eq!(err.code, DiagnosticCode::E000);
+    }
+
+    #[test]
+    fn connection_realized_by_must_be_list() {
+        let err = assert_parse_fails(
+            r#"system "s" { connection "c" { from = "a" to = "b" realized_by = "d" } }"#,
+        );
+        assert_eq!(err.code, DiagnosticCode::E000);
+    }
+
+    #[test]
+    fn unknown_attr_next_to_new_protocol_attrs_is_error() {
+        assert_e000_with_key(
+            r#"protocol "p" { leaf = true  encapsulate = ["x"] }"#,
+            "encapsulate",
+        );
+    }
+
+    #[test]
+    fn unknown_attr_next_to_realized_by_is_error() {
+        assert_e000_with_key(
+            r#"system "s" { connection "c" { from = "a" to = "b" realised_by = ["d"] } }"#,
+            "realised_by",
+        );
     }
 
     #[test]

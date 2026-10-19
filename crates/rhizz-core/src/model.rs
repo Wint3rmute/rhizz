@@ -336,6 +336,13 @@ pub struct Protocol {
     pub roles: Vec<String>,
     /// Messages defined in this protocol.
     pub messages: Vec<MessageId>,
+    /// Whether the protocol is concrete enough to need no further realization.
+    #[serde(default)]
+    pub leaf: bool,
+    /// Labels of protocols this protocol can carry as payload, as declared.
+    /// Not yet resolved to [`ProtocolId`]s.
+    #[serde(default)]
+    pub encapsulates: Vec<String>,
 }
 
 /// A resolved port on a component.
@@ -394,6 +401,11 @@ pub struct Connection {
     pub to: ConnectionEndpoint,
     /// Sibling connections (higher-level protocols) this connection can carry.
     pub encapsulates: Vec<ConnectionId>,
+    /// Raw `realized_by` entries as declared: paths to the connections that
+    /// realize this one. Not yet resolved to [`ConnectionId`]s, and a
+    /// different attribute from [`Connection::encapsulates`].
+    #[serde(default)]
+    pub realized_by: Vec<String>,
 }
 
 /// A resolved message carried by a port.

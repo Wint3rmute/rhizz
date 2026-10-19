@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0002.1: Schema for `protocol.leaf`, `protocol.encapsulates`, `connection.realized_by`
+
+The new attributes of proposal 0002 go through parse, model and serialization.
+There is no validation yet: entries are stored as written.
+
+- **Parse:** `protocol` accepts `leaf` (bool, default `false`) and `encapsulates`
+  (list of protocol labels). `connection` accepts `realized_by` (list of path
+  strings). Unknown attributes and wrongly typed values still fail with E000.
+- **Model:** `Protocol.leaf` and `Protocol.encapsulates` (raw labels, `ProtocolId`s
+  come in 0002.2), and `Connection.realized_by` (raw entries, `ConnectionId`s
+  come in 0002.3). `Connection.encapsulates` is untouched and separate.
+- **Serialize:** `leaf = true` is emitted only when true. Non-empty
+  `encapsulates` and `realized_by` are emitted sorted. Canonical output of
+  files without the new syntax is unchanged (`test_examples_idempotent_roundtrip`
+  passes untouched). Entries are not deduplicated or rewritten to canonical
+  paths yet, that belongs to 0002.3.
+- **Diagnostic docs:** `E017`–`E020` and `W019`–`W022` under `SPEC/diagnostics/`,
+  all titled "(Not yet implemented)", plus rows in `SPEC/warning-levels.md`.
+  `W019`–`W021` are `Architectural`, `W022` is `Business`. The stale code
+  ranges in `SPEC/architecture.md` now read `E001`–`E020` / `W001`–`W022`.
+- **Spec:** `SPEC.md` §2.5 and §2.7 tables (with a note that `realized_by` is
+  not `connection.encapsulates`), the `realized_by` reference syntax in §3, and
+  the `Protocol` / `Connection` bullets in `SPEC/models.md`.
+- **Tests:** parse tests for each attribute, wrong types and typo'd neighbours;
+  serializer tests for sorting, default omission, idempotence, entries kept
+  verbatim, and `realized_by` inside a definition; the proptest generator now
+  emits `leaf`, `encapsulates` and an acyclic `realized_by` graph (only on
+  non-leaf protocols, so it stays valid once `E019` exists).
+- **Validation:** `just test`, `just lint`, `just build` pass.
+
+---
+
 ## Task <N> — Review `encapsulates` usage against its meaning
 
 `connection.encapsulates` keeps its name and its behavior. Its meaning is now

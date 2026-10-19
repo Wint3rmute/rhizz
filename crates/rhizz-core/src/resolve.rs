@@ -90,6 +90,8 @@ pub fn resolve(raw: RawFile) -> Result<(Model, Vec<Diagnostic>), Vec<Diagnostic>
             tags: lp.inner.tags,
             roles,
             messages: msg_ids,
+            leaf: lp.inner.leaf,
+            encapsulates: lp.inner.encapsulates,
         });
     }
 
@@ -733,6 +735,7 @@ fn process_connections_in_scope(
             from: from_ep,
             to: to_ep,
             encapsulates: vec![], // filled by resolve_encapsulates
+            realized_by: lc.inner.realized_by.clone(),
         });
 
         conn_ids.push(conn_id);
