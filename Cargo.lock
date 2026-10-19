@@ -1629,6 +1629,8 @@ dependencies = [
  "reqwest",
  "rmcp",
  "rust-embed",
+ "schemars",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror",
