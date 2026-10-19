@@ -269,7 +269,6 @@
       dimUnlinked: onOpenDiagram !== undefined,
     }),
   );
-
 </script>
 
 <div
