@@ -85,7 +85,7 @@ wasm:
 # Same caveat as `wasm`: `nix build .#` snapshots the git tree, so a brand-new
 # source file must be `git add`ed before it appears in the build.
 web-build:
-    nix build .#rhizz-web
+    nix build .#rhizz-frontend
     rm -rf web/build
     mkdir -p web/build
     cp -rL result/. web/build/

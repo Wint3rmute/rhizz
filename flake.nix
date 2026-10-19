@@ -39,14 +39,14 @@
 
           rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
 
-          rhizz-web = pkgs.callPackage ./nix/frontend.nix {
+          rhizz-frontend = pkgs.callPackage ./nix/frontend.nix {
             src = ./web;
             inherit rhizz-wasm-pkg;
           };
 
-          rhizz = pkgs.callPackage ./nix/backend.nix {
+          rhizz-server = pkgs.callPackage ./nix/backend.nix {
             src = rustSrc;
-            inherit rhizz-web;
+            inherit rhizz-frontend;
             # `shortRev` exists only for a clean git tree; `dirtyShortRev`
             # marks a dirty one. Neither exists for a non-git source.
             gitSha = self.shortRev or self.dirtyShortRev or "unknown";
@@ -55,16 +55,16 @@
           # A container image is inherently Linux: on Darwin the same
           # derivation would pack a Mach-O binary into an image that cannot
           # run it, so the attribute is only defined where it means something.
-          docker-image = pkgs.callPackage ./nix/docker.nix {
-            inherit rhizz;
+          rhizz-docker = pkgs.callPackage ./nix/docker.nix {
+            inherit rhizz-server;
             examples = examplesSrc;
           };
         in
         {
-          inherit rhizz-wasm-pkg rhizz-web rhizz;
+          inherit rhizz-wasm-pkg rhizz-frontend rhizz-server;
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          inherit docker-image;
+          inherit rhizz-docker;
         });
 
       devShells = forAllSystems (system:
@@ -139,7 +139,7 @@
               playwright-driver.browsers
               flyctl
               gh
-              # Rootless container runtime for verifying `.#docker-image`
+              # Rootless container runtime for verifying `.#rhizz-docker`
               # without a Docker daemon: `podman load -i result` then
               # `podman run`. Daemonless and runs in a user namespace, so it
               # needs no privileged service. Note the published port is

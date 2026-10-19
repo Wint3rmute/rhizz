@@ -93,7 +93,7 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - run: nix build .#rhizz-web
+      - run: nix build .#rhizz-frontend
 
   lint:
     needs: wasm
