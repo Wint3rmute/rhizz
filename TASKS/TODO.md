@@ -424,9 +424,15 @@ protocol editor. No UI.
   - `update_protocol { path, patch }` where `path` is the protocol label. Patch
     fields: `full_name`, `tags`, `roles`, `leaf`, `encapsulates` (full
     replacement). Unknown fields are rejected. The label cannot be changed here.
-  - `delete_protocol { path }`. It does not rewrite references: ports that name
-    the protocol keep the string and get `W014`, and protocols that list it in
-    `encapsulates` get `W022`. Messages go with the protocol.
+  - `delete_protocol { path }`. Deleting a protocol that is still used is not
+    allowed, the same rule as for component definitions: it is used when any
+    port names it or any other protocol lists it in `encapsulates`. (Connections
+    are typed through their ports, so they need no separate check.) The op
+    refuses such a delete and does not touch the model. Dangling references are
+    only warnings (`W014`, `W022`), so the resolver would not refuse by itself:
+    the op has to check usage explicitly. If the op layer cannot express a refusal
+    that is not tied to an error diagnostic, add that ability in a minimal way
+    and say what you did. Messages go with the protocol.
 - **Refusals.** An edit that introduces an error is refused through the existing
   re-resolve. The important one is `E020` (an `encapsulates` cycle), and
   `E009` when changing `roles` leaves a port with a role the protocol no longer
@@ -438,9 +444,11 @@ protocol editor. No UI.
   returns, for a protocol, the ports using it (component key and port label),
   the protocols that list it in `encapsulates`, and the connections whose
   derived protocol it is. Pure functions with Vitest tests.
-- **Tests (red first):** Rust unit tests for each op including each refusal and
-  the unchanged canonical output when nothing changes, the sync test, and the
-  helper tests. Assert exact diagnostic codes.
+- **Tests (red first):** Rust unit tests for each op including each refusal
+  (a delete blocked by a port, a delete blocked by another protocol's
+  `encapsulates`, and a delete that succeeds once both are removed) and the
+  unchanged canonical output when nothing changes, the sync test, and the helper
+  tests. Assert exact diagnostic codes.
 
 Definition of done: `just test`, `just lint`, `just build` pass.
 
@@ -477,15 +485,24 @@ project's protocols can be added, edited and removed.
     follow-up.
   - **Usage** (read-only): ports using the protocol (each linking to the
     component's page in the Inventory), protocols that list it in
-    `encapsulates`, and connections it types.
-  - **Delete:** the same type-the-label confirmation as components. It is not
-    blocked by usage, because dangling references are warnings in the language,
-    but the pane lists them first and says they will become `W014` / `W022`.
+    `encapsulates` (each linking to that protocol), and connections it types.
+  - **Delete:** the same logic as component definitions. The delete button is
+    disabled while the protocol is used, and a blockers box
+    (`data-testid="inventory-delete-blockers"`, the same `border-warning/40
+    bg-warning/10` styling as `DetailPane`) lists every usage the user has to
+    remove first: ports using the protocol (linking to the component) and
+    protocols that list it in `encapsulates`. Once nothing uses it, the
+    type-the-label confirmation enables the delete, as for components. Compute
+    the blockers with the W.3 usage helper.
 - **Deep link.** `/projects/<id>/inventory/<label>` already means a component
   or a system, and labels of different kinds can collide, so a protocol must not
-  reuse that form. Use a form that cannot collide (for example a `?tab=protocols`
-  query or a reserved route segment), mirror the open protocol in the URL like
-  the other tabs do, and document the choice in the report.
+  reuse that form. Use query parameters instead:
+  `/projects/<id>/inventory?tab=protocols` opens the Protocols tab, and
+  `/projects/<id>/inventory?tab=protocols&protocol=<label>` also opens that
+  protocol. Mirror the open protocol in the URL like the other tabs do, keep the
+  tab and selection across reload, and ignore an unknown `protocol` label
+  without an error. Add a small helper that builds this URL, so the inspector
+  link and the Usage tab use the same one.
 - **Connection inspector link.** Add the "Edit protocol" link to the Protocol
   panel of the W.2 inspector, pointing at the deep link above. The panel stays
   read-only.
@@ -498,9 +515,13 @@ project's protocols can be added, edited and removed.
   - Playwright `inventory-protocols.spec.ts`: add a protocol and see it in
     `system.hcl`; edit full name, `leaf` and `encapsulates` and see each in the
     file; an `encapsulates` cycle shows the refusal toast and writes nothing;
-    delete with the type-the-label confirmation; the deep link survives reload.
+    deleting a used protocol is blocked (the button is disabled, the blockers
+    box names the port and the protocol that use it); after removing those
+    usages, the type-the-label confirmation deletes it; the deep link
+    (`?tab=protocols&protocol=<label>`) survives reload.
   - Storybook `InventoryPage` stories: `ProtocolsTab` (list), `ProtocolDetail`
-    (overview, with the usage tab), and the create modal. Accept the VRT
+    (overview, with the usage tab), `ProtocolDeleteBlocked`, and the create
+    modal. Accept the VRT
     baselines. The fixture already has `protocol "power"`; extend it only as
     needed.
 
