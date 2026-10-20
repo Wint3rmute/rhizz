@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — W.3: Protocol ops (`add_protocol`, `update_protocol`, `delete_protocol`)
+
+Rust, WASM and TypeScript plumbing for the Inventory protocol editor. No UI.
+
+- **Ops** (`mutation.rs`): `add_protocol { label, options }`,
+  `update_protocol { path, patch }` and `delete_protocol { path }`. The
+  options and patch share `ProtocolPatch` (`full_name`, `tags`, `roles`,
+  `leaf`, `encapsulates`), which rejects unknown keys. `tags`, `roles` and
+  `encapsulates` are full replacements, and `roles: []` clears the restriction.
+  Messages are kept on update and removed with the protocol.
+- **Refusals:** a blank label, a label with `/`, or an existing label is an
+  `E000` refusal. Deleting a protocol that a port names or another protocol
+  lists in `encapsulates` is an `E000` refusal that names each user, so the
+  UI can show why. Edits go through the usual re-resolve, so `E020` and `E009`
+  refuse them. An unknown `path` is a guard refusal (`applied: false`).
+- **Mirrors:** `LoggedAction` variants, `ModelAction`, `ModelMutationOp`,
+  `toMutationOp` and `ProtocolPatch`. The Rust sync test covers the three new
+  shapes.
+- **Read side:** `ProtocolData` now carries `tags` and message labels, and
+  `RawModelPayload` types `messages`. `protocolUsage` is a pure helper that
+  returns the ports using a protocol (definitions only, so instances are not
+  counted twice), the protocols listing it, and the connections it types.
+- **Tests:** Rust unit tests for each op and refusal, including the blocked
+  and then successful delete. Vitest tests for the op mirrors, the applied
+  and refused ops, and the usage helper.
+- **Validation:** `just test`, `just lint`, `just build` and `just format`.
+
+---
+
 ## Task <N> — W.2: Connection inspector with protocol-bound and connection-bound panels
 
 Web-only. The connection inspector moves out of `ModelingPage.svelte` into

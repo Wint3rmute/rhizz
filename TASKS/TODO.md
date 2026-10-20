@@ -115,48 +115,6 @@ Web-side work for proposal 0002. Four tasks (W.1 – W.4). These depend on the
 
 ---
 
-## Task <N> — W.3: Protocol ops (`add_protocol`, `update_protocol`, `delete_protocol`)
-
-Depends on 0002.2. Rust, WASM and TypeScript plumbing for the Inventory
-protocol editor. No UI.
-
-- **Ops** (`mutation.rs`):
-  - `add_protocol { label, options? }` with `full_name`, `tags`, `roles`,
-    `leaf`, `encapsulates`. A blank label, a label containing `/`, or an
-    existing protocol label is refused like `add_component_definition`.
-  - `update_protocol { path, patch }` where `path` is the protocol label. Patch
-    fields: `full_name`, `tags`, `roles`, `leaf`, `encapsulates` (full
-    replacement). Unknown fields are rejected. The label cannot be changed here.
-  - `delete_protocol { path }`. Deleting a protocol that is still used is not
-    allowed, the same rule as for component definitions: it is used when any
-    port names it or any other protocol lists it in `encapsulates`. (Connections
-    are typed through their ports, so they need no separate check.) The op
-    refuses such a delete and does not touch the model. Dangling references are
-    only warnings (`W014`, `W022`), so the resolver would not refuse by itself:
-    the op has to check usage explicitly. If the op layer cannot express a refusal
-    that is not tied to an error diagnostic, add that ability in a minimal way
-    and say what you did. Messages go with the protocol.
-- **Refusals.** An edit that introduces an error is refused through the existing
-  re-resolve. The important one is `E020` (an `encapsulates` cycle), and
-  `E009` when changing `roles` leaves a port with a role the protocol no longer
-  allows.
-- **Mirrors:** `LoggedAction` variants, `ModelAction`, `toMutationOp`,
-  `ModelMutationOp`, a `ProtocolPatch` type, and the sync test.
-- **Read side:** type `protocols` (label, full name, tags, roles, `leaf`,
-  `encapsulates`, message labels) in `RawModelPayload`, and add a helper that
-  returns, for a protocol, the ports using it (component key and port label),
-  the protocols that list it in `encapsulates`, and the connections whose
-  derived protocol it is. Pure functions with Vitest tests.
-- **Tests (red first):** Rust unit tests for each op including each refusal
-  (a delete blocked by a port, a delete blocked by another protocol's
-  `encapsulates`, and a delete that succeeds once both are removed) and the
-  unchanged canonical output when nothing changes, the sync test, and the helper
-  tests. Assert exact diagnostic codes.
-
-Definition of done: `just test`, `just lint`, `just build` pass.
-
----
-
 ## Task <N> — W.4: Protocols tab in the Inventory
 
 Depends on W.2 and W.3. The "Interfaces" tab in the Inventory selector is a
