@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { createNewProject } from "./helpers";
 
 // Inventory's "Only with defined views" checkbox. It appears on the
-// Components and Systems tabs (never Interfaces) and narrows the list to
+// Components and Systems tabs (never Protocols) and narrows the list to
 // entities that actually have a view: a definition whose `views/<label>.hcl`
 // source exists, or a system bound by at least one view file. The checkbox is
 // one shared state, so it survives switching tabs.
@@ -92,7 +92,7 @@ function viewFilter(page: Page) {
   return page.getByRole("checkbox", { name: "Only with defined views" });
 }
 
-test("the view filter shows on Components and Systems but not Interfaces", async ({
+test("the view filter shows on Components and Systems but not Protocols", async ({
   page,
 }) => {
   const id = await createNewProject(page, "E2E view filter visibility");
@@ -101,7 +101,7 @@ test("the view filter shows on Components and Systems but not Interfaces", async
   await expect(viewFilter(page)).toBeVisible();
   await page.getByRole("tab", { name: "Systems" }).click();
   await expect(viewFilter(page)).toBeVisible();
-  await page.getByRole("tab", { name: "Interfaces" }).click();
+  await page.getByRole("tab", { name: "Protocols" }).click();
   await expect(viewFilter(page)).toHaveCount(0);
   await page.getByRole("tab", { name: "Components" }).click();
   await expect(viewFilter(page)).toBeVisible();
@@ -149,8 +149,8 @@ test("the view filter state survives switching tabs", async ({ page }) => {
   await page.getByRole("tab", { name: "Systems" }).click();
   await expect(viewFilter(page)).toBeChecked();
 
-  // Hidden on Interfaces, but the shared state is not reset.
-  await page.getByRole("tab", { name: "Interfaces" }).click();
+  // Hidden on Protocols, but the shared state is not reset.
+  await page.getByRole("tab", { name: "Protocols" }).click();
   await expect(viewFilter(page)).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Components" }).click();

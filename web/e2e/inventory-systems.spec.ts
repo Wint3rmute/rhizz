@@ -48,10 +48,10 @@ test("inventory systems tab previews the same-named diagram, or offers to create
   const id = await createNewProject(page, "E2E inventory systems");
 
   await page.goto(`/projects/${id}/inventory`);
-  // The filter is Components / Systems / Interfaces now — no "All".
+  // The filter is Components / Systems / Protocols now — no "All".
   await expect(page.getByRole("tab", { name: "Components" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Systems" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Interfaces" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Protocols" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "All", exact: true })).toHaveCount(
     0,
   );
@@ -125,10 +125,13 @@ test("inventory add buttons create systems and components", async ({
   });
   await expect(stat).toContainText("2");
 
-  // Interfaces has nothing to add: no button there.
+  // Protocols offers the same "+ New" button, which opens the protocol modal.
   await page.goto(`/projects/${id}/inventory`);
-  await page.getByRole("tab", { name: "Interfaces" }).click();
-  await expect(page.getByTestId("inventory-add-entity")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Protocols" }).click();
+  const addProtocol = page.getByTestId("inventory-add-entity");
+  await expect(addProtocol).toHaveText("+ New");
+  await addProtocol.click();
+  await expect(page.getByTestId("create-protocol-modal")).toBeVisible();
 });
 
 test("inventory detail pane keeps the active tab when switching entities", async ({

@@ -9,9 +9,26 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { applyModelMutation } from "../../../../history/applyMutation";
-  import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
-  import type { PortData } from "../../../../modelView";
+  import { untrack } from "svelte";
+  import {
+    applyModelMutation,
+    type ModelMutationOp,
+  } from "../../../../history/applyMutation";
+  import type {
+    ComponentPatch,
+    ProtocolPatch,
+    SystemPatch,
+  } from "../../../../actionLog";
+  import {
+    componentDataByKey,
+    connectionDataList,
+    type PortData,
+    type ProtocolData,
+    protocolDataList,
+    protocolMessages,
+    protocolUsage,
+  } from "../../../../modelView";
+  import { toastState } from "../../../../ToastState.svelte";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { projectStore } from "../../../../ProjectState.svelte";
   import { primaryHclPath } from "../../../../vfs/compile";
@@ -26,8 +43,12 @@
     VIEW_LAYOUT_DIR,
     writeDiagramLayoutFile,
   } from "../modeling/persistence";
+  import CreateProtocolModal from "./CreateProtocolModal.svelte";
   import DefinitionCard from "./DefinitionCard.svelte";
   import DetailPane from "./DetailPane.svelte";
+  import ProtocolCard from "./ProtocolCard.svelte";
+  import ProtocolDetailPane from "./ProtocolDetailPane.svelte";
+  import { inventoryProtocolHref } from "./protocolLink";
   import Pane from "../../../../components/modular_ui/Pane.svelte";
   import Splitter from "../../../../components/modular_ui/Splitter.svelte";
   import {
@@ -39,6 +60,7 @@
     defaultViewPath,
     definitionLabelForNode,
     filterDefinitions,
+    filterProtocols,
     filterSystems,
     filterWithViews,
     hasDefaultView,
@@ -124,6 +146,9 @@
   let activeTab = $state<InventoryTab>(InventoryTab.Components);
   let query = $state("");
   let selectedLabel = $state<string | null>(null);
+  // The open protocol while the Protocols tab shows. Mirrored in the URL's
+  // query string, see the protocol section below.
+  let selectedProtocol = $state<string | null>(null);
 
   // ── Modular workspace layout ────────────────────────────────────────────────
   // Panel widths + hidden flags in one serializable store, persisted across
@@ -147,6 +172,39 @@
     })),
   );
 
+  // ── Protocols ───────────────────────────────────────────────────────────────
+  let protocols = $derived<ProtocolData[]>(protocolDataList(model));
+  let componentsByKey = $derived(componentDataByKey(model));
+  let allConnections = $derived(connectionDataList(model));
+  // How many ports name each protocol, for the list cards. protocolUsage skips
+  // instances, so each port is counted once.
+  let protocolPortCounts = $derived(
+    new Map<string, number>(
+      protocols.map((p): [string, number] => [
+        p.label,
+        protocolUsage(p.label, componentsByKey, protocols, allConnections).ports
+          .length,
+      ]),
+    ),
+  );
+  let filteredProtocols = $derived(filterProtocols(protocols, query));
+  let openProtocol = $derived(
+    protocols.find((p) => p.label === selectedProtocol) ?? null,
+  );
+  let openProtocolUsage = $derived(
+    openProtocol === null
+      ? null
+      : protocolUsage(
+          openProtocol.label,
+          componentsByKey,
+          protocols,
+          allConnections,
+        ),
+  );
+  let openProtocolMessages = $derived(
+    openProtocol === null ? [] : protocolMessages(model, openProtocol.label),
+  );
+
   let onlyWithViews = $state(false);
 
   let filtered = $derived(
@@ -165,9 +223,11 @@
 
   // The rows the sidebar actually shows for the active tab.
   let visibleLabels = $derived(
-    activeTab === InventoryTab.Systems
-      ? filteredSystems.map((s) => s.label)
-      : filtered.map((d) => d.label),
+    activeTab === InventoryTab.Protocols
+      ? []
+      : activeTab === InventoryTab.Systems
+        ? filteredSystems.map((s) => s.label)
+        : filtered.map((d) => d.label),
   );
 
   // ── The inspected entity lives in the URL path ─────────────────────────────
@@ -191,12 +251,14 @@
   // the open entity) rather than moved to by the user.
   function selectLabel(label: string | null, replace = false): void {
     selectedLabel = label;
-    const target = labelUrl(label);
-    if (target === page.url.pathname) return;
-    void goto(target, {
-      replace,
-      reset: false,
-    });
+    navigateTo(labelUrl(label), replace);
+  }
+
+  // Moves to `url` unless the address bar already shows it. The query counts:
+  // the Protocols tab is `?tab=protocols` on the same path an entity uses.
+  function navigateTo(url: string, replace = false): void {
+    if (url === page.url.pathname + page.url.search) return;
+    void goto(url, { replace, reset: false });
   }
 
   // The last entity this page settled on. Non-reactive: it exists so a
@@ -205,15 +267,44 @@
   // would undo the very click that caused it.
   let lastHandledLabel: string | null = null;
 
+  // The Protocols tab is addressed by query (`?tab=protocols[&protocol=…]`),
+  // so the URL decides whether it is open. This effect is declared before the
+  // entity effect below, so a cold protocol link settles the tab first. Reads
+  // of the tab and the open protocol are untracked: a click writes them before
+  // the URL catches up, and reacting to that lag would undo the click.
+  $effect(() => {
+    if (!modelReady) return;
+    if (page.url.searchParams.get("tab") !== InventoryTab.Protocols) return;
+    if (untrack(() => activeTab) !== InventoryTab.Protocols) {
+      activeTab = InventoryTab.Protocols;
+    }
+    const requested = page.url.searchParams.get("protocol");
+    const open =
+      requested !== null && protocols.some((p) => p.label === requested)
+        ? requested
+        : null;
+    if (open !== untrack(() => selectedProtocol)) selectedProtocol = open;
+  });
+
   $effect(() => {
     // Before the model is read there is nothing to resolve the path against —
     // and a cold deep link would be rewritten to the bare page if we tried.
     if (!modelReady) return;
+    // The Protocols URL names no entity, so there is nothing to resolve here.
+    // Keep the bookkeeping cleared so leaving the tab resolves afresh.
+    if (page.url.searchParams.get("tab") === InventoryTab.Protocols) {
+      lastHandledLabel = null;
+      return;
+    }
     const requested = requestedLabel;
     // Already settled — this is our own navigation echoing back (or a filter
     // change re-running the effect), not a new entity to open.
     if (requested === lastHandledLabel) return;
     lastHandledLabel = requested;
+    // A new path names an entity, so it ends the Protocols tab.
+    if (activeTab === InventoryTab.Protocols) {
+      activeTab = InventoryTab.Components;
+    }
     const isOpenable =
       requested !== "" &&
       (definitions.some((d) => d.label === requested) ||
@@ -358,6 +449,7 @@
   let creatingEntity = $state(false);
   let isCreateModalOpen = $state(false);
   let isCreateSystemModalOpen = $state(false);
+  let isCreateProtocolModalOpen = $state(false);
 
   // Parents the modal's inspector shows alongside the new definition's key.
   // Nothing is ever placed under them from here — the modal needs the list,
@@ -374,9 +466,11 @@
   async function handleAddEntity(): Promise<void> {
     const id = projectId;
     if (!id || creatingEntity) return;
-    const isSystem = activeTab === InventoryTab.Systems;
-    if (!isSystem && activeTab !== InventoryTab.Components) return;
-    if (isSystem) {
+    if (activeTab === InventoryTab.Protocols) {
+      isCreateProtocolModalOpen = true;
+      return;
+    }
+    if (activeTab === InventoryTab.Systems) {
       isCreateSystemModalOpen = true;
       return;
     }
@@ -511,6 +605,98 @@
       { kind: "update_system", patch },
       "Failed to update inventory system style:",
     );
+  }
+
+  // ── Protocols ──────────────────────────────────────────────────────────────
+  // Protocol ops run through the same dispatcher as the rest of the page. A
+  // refusal is always shown as a toast: unlike the other edits here, which fail
+  // quietly, a protocol edit that did not apply has to say why.
+
+  // Opens a protocol (or none) and makes the URL name it.
+  function selectProtocol(label: string | null): void {
+    selectedProtocol = label;
+    navigateTo(inventoryProtocolHref(projectId, label));
+  }
+
+  // Clicking a tab. Leaving the Protocols tab moves the URL off `?tab=`, onto
+  // an entity the new tab can show.
+  function selectTab(tab: InventoryTab): void {
+    activeTab = tab;
+    if (tab === InventoryTab.Protocols) {
+      navigateTo(inventoryProtocolHref(projectId, selectedProtocol));
+      return;
+    }
+    if (page.url.searchParams.get("tab") !== InventoryTab.Protocols) return;
+    const keep =
+      selectedLabel !== null && visibleLabels.includes(selectedLabel);
+    selectLabel(keep ? selectedLabel : (visibleLabels[0] ?? null), true);
+  }
+
+  // Applies one op and reports whether it landed. A refusal is shown with its
+  // reason, and the caller decides what to do with the open protocol.
+  async function applyProtocolOp(op: ModelMutationOp): Promise<boolean> {
+    const id = projectId;
+    if (!id) return false;
+    try {
+      const fs = openProjectFs(projectStore, id);
+      const targetPath = primaryHclPath(
+        await fs.readdir(".", { recursive: true }),
+      );
+      const content = await fs.readFile(targetPath).catch(() => "");
+      const result = await applyModelMutation(fs, targetPath, content, op);
+      if (!result.applied) {
+        toastState.show(
+          `Change refused: ${result.refusal ?? "the model would become invalid"}`,
+          "error",
+          8_000,
+        );
+        return false;
+      }
+      await projectModel.reload();
+      return true;
+    } catch (error) {
+      console.error("Failed to change protocol:", error);
+      return false;
+    }
+  }
+
+  async function handleProtocolCreate(data: {
+    label: string;
+    full_name: string;
+    leaf: boolean;
+  }): Promise<void> {
+    isCreateProtocolModalOpen = false;
+    if (creatingEntity) return;
+    // The protocol is already there — open it rather than writing a no-op.
+    if (protocols.some((p) => p.label === data.label)) {
+      selectProtocol(data.label);
+      return;
+    }
+    creatingEntity = true;
+    try {
+      const applied = await applyProtocolOp({
+        kind: "add_protocol",
+        label: data.label,
+        options: { full_name: data.full_name, leaf: data.leaf },
+      });
+      if (applied) selectProtocol(data.label);
+    } finally {
+      creatingEntity = false;
+    }
+  }
+
+  async function handleProtocolUpdate(patch: ProtocolPatch): Promise<boolean> {
+    const label = openProtocol?.label;
+    if (label === undefined) return false;
+    return applyProtocolOp({ kind: "update_protocol", path: label, patch });
+  }
+
+  async function handleDeleteProtocol(): Promise<void> {
+    const label = openProtocol?.label;
+    if (label === undefined) return;
+    if (await applyProtocolOp({ kind: "delete_protocol", path: label })) {
+      selectProtocol(null);
+    }
   }
 
   // ── Deletion ───────────────────────────────────────────────────────────────
@@ -668,26 +854,24 @@
               class="btn btn-xs {activeTab === tab
                 ? 'btn-primary'
                 : 'btn-ghost'}"
-              onclick={() => (activeTab = tab)}
+              onclick={() => selectTab(tab)}
             >
               {tab === InventoryTab.Components
                 ? "Components"
                 : tab === InventoryTab.Systems
                   ? "Systems"
-                  : "Interfaces"}
+                  : "Protocols"}
             </button>
           {/each}
-          {#if activeTab !== InventoryTab.Interfaces}
-            <button
-              type="button"
-              class="btn btn-primary btn-xs ml-auto"
-              disabled={creatingEntity}
-              onclick={() => void handleAddEntity()}
-              data-testid="inventory-add-entity"
-            >
-              {creatingEntity ? "Creating…" : "+ New"}
-            </button>
-          {/if}
+          <button
+            type="button"
+            class="btn btn-primary btn-xs ml-auto"
+            disabled={creatingEntity}
+            onclick={() => void handleAddEntity()}
+            data-testid="inventory-add-entity"
+          >
+            {creatingEntity ? "Creating…" : "+ New"}
+          </button>
         </div>
 
         <!-- Free-text search -->
@@ -699,7 +883,7 @@
           bind:value={query}
         />
 
-        {#if activeTab !== InventoryTab.Interfaces}
+        {#if activeTab !== InventoryTab.Protocols}
           <label class="label cursor-pointer justify-start gap-2 py-0">
             <input
               type="checkbox"
@@ -712,7 +896,28 @@
 
         <!-- Entity list -->
         <div class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1 min-h-0">
-          {#if activeTab === InventoryTab.Systems}
+          {#if activeTab === InventoryTab.Protocols}
+            {#if filteredProtocols.length === 0}
+              <div
+                class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center"
+              >
+                {#if protocols.length === 0}
+                  No protocols in this model yet.
+                {:else}
+                  Nothing matches "{query}".
+                {/if}
+              </div>
+            {:else}
+              {#each filteredProtocols as protocol (protocol.label)}
+                <ProtocolCard
+                  {protocol}
+                  portCount={protocolPortCounts.get(protocol.label) ?? 0}
+                  selected={protocol.label === selectedProtocol}
+                  onselect={(label) => selectProtocol(label)}
+                />
+              {/each}
+            {/if}
+          {:else if activeTab === InventoryTab.Systems}
             {#if filteredSystems.length === 0}
               <div
                 class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center"
@@ -739,8 +944,6 @@
             >
               {#if definitions.length === 0}
                 No component definitions in this model yet.
-              {:else if activeTab === InventoryTab.Interfaces}
-                Interface entities are not available yet.
               {:else}
                 Nothing matches "{query}".
               {/if}
@@ -782,7 +985,15 @@
         data-testid="inventory-diagram"
         class="relative flex-1 min-w-0 min-h-[320px] md:min-h-0 bg-base-300 flex items-center justify-center overflow-hidden"
       >
-        {#if selectedDefinition}
+        {#if activeTab === InventoryTab.Protocols}
+          <div
+            class="flex h-full w-full items-center justify-center p-6 text-center text-sm text-base-content/60"
+            data-testid="inventory-protocol-centre"
+          >
+            Protocols have no diagram. Their details are in the panel on the
+            right.
+          </div>
+        {:else if selectedDefinition}
           <DiagramViewer
             {projectId}
             diagramPath={`${selectedDefinition.label}.hcl`}
@@ -858,18 +1069,38 @@
       onhide={() => (layout = inventoryPanes.hide(layout, "right"))}
       onshow={() => (layout = inventoryPanes.show(layout, "right"))}
     >
-      <DetailPane
-        definition={selectedDefinition}
-        {docContent}
-        ondocsave={handleSaveDoc}
-        onstylechange={selectedIsSystem ? undefined : handleStyleChange}
-        onsystemstylechange={selectedIsSystem
-          ? handleSystemStyleChange
-          : undefined}
-        {deleteBlockers}
-        deleteBlockerKind={selectedIsSystem ? "view" : "instance"}
-        ondelete={handleDeleteEntity}
-      />
+      {#if activeTab === InventoryTab.Protocols}
+        {#if openProtocol !== null && openProtocolUsage !== null}
+          <ProtocolDetailPane
+            {projectId}
+            protocol={openProtocol}
+            allProtocols={protocols}
+            messages={openProtocolMessages}
+            usage={openProtocolUsage}
+            onupdate={handleProtocolUpdate}
+            ondelete={handleDeleteProtocol}
+          />
+        {:else}
+          <div
+            class="flex-1 flex items-center justify-center text-sm text-base-content/50 p-4 text-center"
+          >
+            Select a protocol in the Inventory Browser to inspect it.
+          </div>
+        {/if}
+      {:else}
+        <DetailPane
+          definition={selectedDefinition}
+          {docContent}
+          ondocsave={handleSaveDoc}
+          onstylechange={selectedIsSystem ? undefined : handleStyleChange}
+          onsystemstylechange={selectedIsSystem
+            ? handleSystemStyleChange
+            : undefined}
+          {deleteBlockers}
+          deleteBlockerKind={selectedIsSystem ? "view" : "instance"}
+          ondelete={handleDeleteEntity}
+        />
+      {/if}
     </Pane>
 
     <CreateComponentModal
@@ -885,6 +1116,12 @@
       isOpen={isCreateSystemModalOpen}
       oncreate={(label) => void handleSystemCreate(label)}
       onclose={() => (isCreateSystemModalOpen = false)}
+    />
+    <CreateProtocolModal
+      isOpen={isCreateProtocolModalOpen}
+      existingLabels={protocols.map((p) => p.label)}
+      oncreate={(data) => void handleProtocolCreate(data)}
+      onclose={() => (isCreateProtocolModalOpen = false)}
     />
   {/if}
 </div>
