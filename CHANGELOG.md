@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **core**: add update_connection op and connection read model (W.1)
 - **core**: warn on incomplete connections (W019) and migrate examples
 - **web**: animate book-example view transitions
 - **core**: warn on realization hierarchy and protocol compatibility (W020, W021)
