@@ -47,6 +47,24 @@ export interface SystemPatch {
   icon?: string | undefined;
 }
 
+// Address of one connection: the container it is visible in plus its label.
+// `scopePath` follows `add_connection` / `delete_connection`: a system label,
+// an instance path (`banking/bank-a`) or a top-level definition label. Rust
+// writes it as `ConnectionRef` in rhizz-core `model.rs`.
+export interface ConnectionRef {
+  scopePath: string;
+  label: string;
+}
+
+// The subset of a connection's fields the inspector edits. `undefined` leaves
+// a field untouched; `realized_by` is a full replacement list, like `ports`.
+export interface ConnectionPatch {
+  full_name?: string | undefined;
+  tags?: string[] | undefined;
+  level?: number | undefined;
+  realized_by?: ConnectionRef[] | undefined;
+}
+
 export type ModelAction =
   | { op: "add_system"; label: string; full_name: string }
   | {
@@ -80,7 +98,13 @@ export type ModelAction =
       from: string;
       to: string;
     }
-  | { op: "delete_connection"; scopePath: string; label: string };
+  | { op: "delete_connection"; scopePath: string; label: string }
+  | {
+      op: "update_connection";
+      scopePath: string;
+      label: string;
+      patch: ConnectionPatch;
+    };
 
 export interface ActionLog {
   /** Appends an action to the log. */
@@ -212,6 +236,13 @@ function toMutationOp(action: ModelAction): unknown {
       // The dispatcher resolves the scope itself; the recorded scope is
       // redundant for replay.
       return { kind: "delete_connection_by_label", label: action.label };
+    case "update_connection":
+      return {
+        kind: "update_connection",
+        scopePath: action.scopePath,
+        label: action.label,
+        patch: action.patch,
+      };
   }
 }
 

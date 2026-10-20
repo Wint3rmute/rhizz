@@ -549,4 +549,86 @@ describe("applyModelMutation", () => {
     });
     expect(moved.applied).toBe(true);
   });
+
+  describe("update_connection", () => {
+    // Same two-bank chain as modelView.test.ts, in one file.
+    const CHAIN = `protocol "payment" {}
+protocol "https" {
+  leaf = false
+}
+component "bank" {
+  leaf = true
+  port "pay" {
+    protocol = "payment"
+  }
+  port "web" {
+    protocol = "https"
+  }
+}
+system "banking" {
+  instance "bank-a" {
+    source = "bank"
+  }
+  instance "bank-b" {
+    source = "bank"
+  }
+  connection "fund-transfer" {
+    from        = "bank-a/pay"
+    to          = "bank-b/pay"
+    realized_by = ["http-request"]
+  }
+  connection "http-request" {
+    from = "bank-a/web"
+    to   = "bank-b/web"
+  }
+}
+`;
+
+    it("writes a full name and a realized_by entry to the file", async () => {
+      const fs = memoryFs({ "system.hcl": CHAIN });
+      const result = await applyModelMutation(fs, "system.hcl", CHAIN, {
+        kind: "update_connection",
+        scopePath: "banking",
+        label: "fund-transfer",
+        patch: {
+          full_name: "Funds transfer",
+          realized_by: [{ scopePath: "banking", label: "http-request" }],
+        },
+      });
+      expect(result.applied).toBe(true);
+      const written = fs.store.get("system.hcl") ?? "";
+      expect(written).toContain('"Funds transfer"');
+      expect(written).toContain('realized_by  = ["http-request"]');
+    });
+
+    it("refuses a realized_by cycle and writes nothing", async () => {
+      const fs = memoryFs({ "system.hcl": CHAIN });
+      const result = await applyModelMutation(fs, "system.hcl", CHAIN, {
+        kind: "update_connection",
+        scopePath: "banking",
+        label: "http-request",
+        patch: {
+          realized_by: [{ scopePath: "banking", label: "fund-transfer" }],
+        },
+      });
+      // `fund-transfer` already realizes via `http-request`, so this closes a loop.
+      expect(result.applied).toBe(false);
+      expect(result.refusal).toMatch(/realiz/i);
+      expect(fs.store.get("system.hcl")).toBe(CHAIN);
+    });
+
+    it("refuses a patch whose target does not exist", async () => {
+      const fs = memoryFs({ "system.hcl": CHAIN });
+      const result = await applyModelMutation(fs, "system.hcl", CHAIN, {
+        kind: "update_connection",
+        scopePath: "banking",
+        label: "http-request",
+        patch: {
+          realized_by: [{ scopePath: "banking", label: "nope" }],
+        },
+      });
+      expect(result.applied).toBe(false);
+      expect(fs.store.get("system.hcl")).toBe(CHAIN);
+    });
+  });
 });

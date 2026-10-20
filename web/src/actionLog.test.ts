@@ -233,4 +233,18 @@ describe("actionLog", () => {
         .length - 1,
     ).toBe(1);
   });
+  it("encodes an update_connection call with a realized_by patch", () => {
+    const action: ModelAction = {
+      op: "update_connection",
+      scopePath: "banking/bank-a",
+      label: "tls",
+      patch: {
+        full_name: "Transport",
+        realized_by: [{ scopePath: "banking", label: "http" }],
+      },
+    };
+    expect(encodeCall(action, "fs")).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"update_connection","scopePath":"banking/bank-a","label":"tls","patch":{"full_name":"Transport","realized_by":[{"scopePath":"banking","label":"http"}]}});',
+    );
+  });
 });

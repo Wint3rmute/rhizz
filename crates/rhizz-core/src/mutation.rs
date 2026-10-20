@@ -22,7 +22,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
-use crate::model::BorderStyle;
+use crate::model::{BorderStyle, ConnectionRef};
 use crate::parse::{
     Labeled, RawComponent, RawConnection, RawFile, RawInstance, RawPort, RawProject, RawSystem,
     parse_file,
@@ -121,6 +121,22 @@ pub enum ModelOp {
     /// Delete a connection by label, searching systems then definitions.
     #[serde(rename = "delete_connection_by_label")]
     DeleteConnectionByLabel { label: String },
+    /// Patch a connection's attributes, addressed like `add_connection`
+    /// (`scope_path` + `label`).
+    ///
+    /// An instance path redirects to the definition the connection is
+    /// declared in, so editing a connection of a reusable definition changes
+    /// the definition and therefore every copy of it. Entries of
+    /// `realized_by` are written from the declaring scope (see
+    /// [`ConnectionRef`]); a refusal (`E017`, `E018`, `E019`) leaves the
+    /// model untouched, warnings never refuse.
+    #[serde(rename = "update_connection")]
+    #[serde(rename_all = "camelCase")]
+    UpdateConnection {
+        scope_path: String,
+        label: String,
+        patch: ConnectionPatch,
+    },
 }
 
 /// Options for [`ModelOp::AddDefinition`] / definition-mode creates.
@@ -202,6 +218,27 @@ pub struct PatchJson {
     /// Ports (full replacement).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ports: Option<Vec<PortJson>>,
+}
+
+/// Attribute patch for [`ModelOp::UpdateConnection`].
+///
+/// `None` means untouched. An empty `full_name` clears it, while `tags` and
+/// `realized_by` are full replacements, like `ports` on components.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ConnectionPatch {
+    /// Full official name, expanding abbreviations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    /// Filtering tags (full replacement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    /// Abstraction level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<i32>,
+    /// Connections that realize this one (full replacement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realized_by: Option<Vec<ConnectionRef>>,
 }
 
 /// Attribute patch for [`ModelOp::UpdateSystem`].
@@ -298,6 +335,15 @@ pub enum LoggedAction {
     #[serde(rename = "delete_connection")]
     #[serde(rename_all = "camelCase")]
     DeleteConnection { scope_path: String, label: String },
+    /// A connection was patched (`scope_path` / `label` as addressed, the
+    /// patch as sent: `realized_by` entries stay as [`ConnectionRef`]s).
+    #[serde(rename = "update_connection")]
+    #[serde(rename_all = "camelCase")]
+    UpdateConnection {
+        scope_path: String,
+        label: String,
+        patch: ConnectionPatch,
+    },
 }
 
 // ── Outcome types ─────────────────────────────────────────────────────────────
@@ -632,6 +678,11 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             to,
         } => add_connection(raw, scope_path, label, from, to),
         ModelOp::DeleteConnectionByLabel { label } => Ok(delete_connection_by_label(raw, label)),
+        ModelOp::UpdateConnection {
+            scope_path,
+            label,
+            patch,
+        } => update_connection(raw, scope_path, label, patch),
     }
 }
 
@@ -1231,6 +1282,90 @@ fn delete_connection_by_label(raw: &mut RawFile, label: &str) -> ApplyOutcome {
     idle()
 }
 
+/// Patch the connection `label` declared in `scope_path`. A guard miss (unknown
+/// scope or label) is a refusal without an error.
+fn update_connection(
+    raw: &mut RawFile,
+    scope_path: &str,
+    label: &str,
+    patch: &ConnectionPatch,
+) -> Result<ApplyOutcome, MutationError> {
+    let Some(scope) = resolve_scope_or_idle(raw, scope_path) else {
+        return Ok(idle());
+    };
+    let realized_by = patch
+        .realized_by
+        .as_deref()
+        .map(|refs| realized_by_entries(scope_path, scope, refs));
+    let connections = scope_connections_mut(raw, scope)?;
+    let Some(connection) = connections.iter_mut().find(|c| c.label == label) else {
+        return Ok(idle());
+    };
+    if let Some(full_name) = &patch.full_name {
+        connection.inner.full_name = non_empty(full_name);
+    }
+    if let Some(tags) = &patch.tags {
+        connection.inner.tags.clone_from(tags);
+    }
+    if let Some(level) = patch.level {
+        connection.inner.level = Some(level);
+    }
+    if let Some(entries) = realized_by {
+        connection.inner.realized_by = entries;
+    }
+    Ok(applied(vec![LoggedAction::UpdateConnection {
+        scope_path: scope_path.to_owned(),
+        label: label.to_owned(),
+        patch: patch.clone(),
+    }]))
+}
+
+/// Canonical `realized_by` entries for `targets`, written from the scope that
+/// declares the connection. Duplicates collapse, keeping first occurrence.
+fn realized_by_entries(declaring: &str, scope: Scope, targets: &[ConnectionRef]) -> Vec<String> {
+    let in_definition = matches!(scope, Scope::Definition(_));
+    let mut entries: Vec<String> = Vec::new();
+    for target in targets {
+        let entry = realized_by_entry(declaring, in_definition, target);
+        if !entries.contains(&entry) {
+            entries.push(entry);
+        }
+    }
+    entries
+}
+
+/// One `realized_by` entry (see the reference syntax in proposal 0002).
+///
+/// A target in the declaring scope is a bare label. Inside a system the entry
+/// is always absolute (`/system/instance/label`). Inside a top-level
+/// definition it is relative to the definition, using `..` to go up and
+/// instance labels to go down. A target in another tree is written absolute
+/// and refused by the resolver, since a definition can only realize within its
+/// own tree.
+fn realized_by_entry(declaring: &str, in_definition: bool, target: &ConnectionRef) -> String {
+    let from = path_segments(declaring);
+    let to = path_segments(&target.scope_path);
+    if from == to {
+        return target.label.clone();
+    }
+    let absolute = || format!("/{}/{}", to.join("/"), target.label);
+    if !in_definition {
+        return absolute();
+    }
+    let common = from.iter().zip(&to).take_while(|(a, b)| a == b).count();
+    if common == 0 {
+        return absolute();
+    }
+    let mut parts: Vec<&str> = vec![".."; from.len().saturating_sub(common)];
+    parts.extend(to.get(common..).unwrap_or_default());
+    parts.push(&target.label);
+    parts.join("/")
+}
+
+fn path_segments(path: &str) -> Vec<&str> {
+    path.split('/').filter(|s| !s.is_empty()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1259,6 +1394,7 @@ mod tests {
             r#"{"kind":"delete_system","path":"demo"}"#,
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
+            r#"{"kind":"update_connection","scopePath":"demo","label":"l","patch":{"full_name":"x","realized_by":[{"scopePath":"demo","label":"m"}]}}"#,
         ];
         for json in cases {
             op(json);
@@ -1761,6 +1897,26 @@ mod tests {
         assert_eq!(json["ports"][0]["protocol"], "spi");
         // Absent optionals are skipped, matching the TS `ModelAction` shape.
         assert!(json.get("icon").is_none());
+
+        let action = LoggedAction::UpdateConnection {
+            scope_path: "banking/bank-a".to_owned(),
+            label: "tls".to_owned(),
+            patch: ConnectionPatch {
+                realized_by: Some(vec![ConnectionRef {
+                    scope_path: "banking".to_owned(),
+                    label: "http".to_owned(),
+                }]),
+                ..Default::default()
+            },
+        };
+        let json = serde_json::to_value(&action).expect("json");
+        assert_eq!(json["op"], "update_connection");
+        assert_eq!(json["scopePath"], "banking/bank-a");
+        assert_eq!(json["label"], "tls");
+        assert_eq!(json["patch"]["realized_by"][0]["scopePath"], "banking");
+        assert_eq!(json["patch"]["realized_by"][0]["label"], "http");
+        // Untouched patch fields are skipped, matching `ModelAction`.
+        assert!(json["patch"].get("full_name").is_none());
     }
 }
 
@@ -2048,5 +2204,341 @@ system "banking" {
         .expect("ok");
         let hcl = result.hcl.expect("hcl");
         assert!(hcl.contains("realized_by"), "live entry removed:\n{hcl}");
+    }
+}
+
+#[cfg(test)]
+mod update_connection_tests {
+    use super::{ConnectionPatch, ConnectionRef, ModelOp, mutate_to_hcl};
+    use crate::diagnostics::{Diagnostic, DiagnosticCode};
+
+    fn mutate_op(content: &str, json: &str) -> Result<super::MutationResult, Vec<Diagnostic>> {
+        mutate_to_hcl(
+            "system.hcl",
+            content,
+            &serde_json::from_str::<ModelOp>(json).expect("op JSON must parse"),
+        )
+    }
+
+    /// System `banking` with two connections between the same instance.
+    const TWO_LINKS: &str = r#"
+component "stack" { leaf = true }
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "uplink" {
+    from = "ext"
+    to = "ext"
+  }
+  connection "tls" {
+    from = "ext"
+    to = "ext"
+  }
+}
+"#;
+
+    /// Definition `bank` declares `low` and `high`; system `banking` holds
+    /// instance `bank-a` of it and a connection `tls` to that instance.
+    const BANK_WITH_TLS: &str = r#"
+component "stack" { leaf = true }
+component "bank" {
+  instance "stack" { source = "stack" }
+  connection "low" {
+    from = "stack"
+    to = "stack"
+  }
+  connection "high" {
+    from = "stack"
+    to = "stack"
+  }
+}
+system "banking" {
+  instance "bank-a" { source = "bank" }
+  connection "tls" {
+    from = "bank-a"
+    to = "bank-a"
+  }
+}
+"#;
+
+    #[test]
+    fn full_name_tags_and_level_are_patched() {
+        let result = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"full_name":"Transport layer","tags":["secure"],"level":2}}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(hcl.contains(r#""Transport layer""#), "{hcl}");
+        assert!(hcl.contains(r#"["secure"]"#), "{hcl}");
+        assert!(hcl.contains("= 2"), "{hcl}");
+        assert_eq!(
+            result.actions,
+            vec![super::LoggedAction::UpdateConnection {
+                scope_path: "banking".to_owned(),
+                label: "tls".to_owned(),
+                patch: ConnectionPatch {
+                    full_name: Some("Transport layer".to_owned()),
+                    tags: Some(vec!["secure".to_owned()]),
+                    level: Some(2),
+                    realized_by: None,
+                },
+            }]
+        );
+    }
+
+    #[test]
+    fn empty_full_name_clears_it() {
+        let named = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"full_name":"Transport"}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let cleared = mutate_op(
+            &named,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"full_name":""}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(!cleared.contains("Transport"), "{cleared}");
+    }
+
+    #[test]
+    fn same_scope_realized_by_is_a_bare_label() {
+        let result = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"realized_by":[{"scopePath":"banking","label":"uplink"}]}}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        assert!(
+            hcl.contains(r#"realized_by  = ["uplink"]"#),
+            "expected a bare label:\n{hcl}"
+        );
+    }
+
+    #[test]
+    fn realized_by_into_an_instance_is_an_absolute_path_in_a_system() {
+        let result = mutate_op(
+            BANK_WITH_TLS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"realized_by":[{"scopePath":"banking/bank-a","label":"low"}]}}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        assert!(
+            hcl.contains(r#"realized_by  = ["/banking/bank-a/low"]"#),
+            "{hcl}"
+        );
+    }
+
+    #[test]
+    fn realized_by_replaces_the_whole_list_and_collapses_duplicates() {
+        let with_two = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"realized_by":[{"scopePath":"banking","label":"uplink"},
+                                        {"scopePath":"banking","label":"uplink"}]}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(
+            with_two.contains(r#"realized_by  = ["uplink"]"#),
+            "{with_two}"
+        );
+
+        let cleared = mutate_op(
+            &with_two,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"realized_by":[]}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert!(!cleared.contains("realized_by"), "{cleared}");
+    }
+
+    #[test]
+    fn realized_by_cycle_is_refused_with_e018() {
+        let src = r#"
+component "stack" { leaf = true }
+system "banking" {
+  instance "ext" { source = "stack" }
+  connection "a" {
+    from = "ext"
+    to = "ext"
+    realized_by = ["b"]
+  }
+  connection "b" {
+    from = "ext"
+    to = "ext"
+  }
+}
+"#;
+        let diagnostics = mutate_op(
+            src,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"b",
+                "patch":{"realized_by":[{"scopePath":"banking","label":"a"}]}}"#,
+        )
+        .expect_err("a realized_by cycle must be refused");
+        assert!(
+            diagnostics.iter().any(|d| d.code == DiagnosticCode::E018),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_target_is_refused_with_e017() {
+        let diagnostics = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls",
+                "patch":{"realized_by":[{"scopePath":"banking","label":"nope"}]}}"#,
+        )
+        .expect_err("an unresolved entry must be refused");
+        assert!(
+            diagnostics.iter().any(|d| d.code == DiagnosticCode::E017),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn edit_to_a_definition_connection_applies_to_the_definition() {
+        let result = mutate_op(
+            REALIZED_BANK_FOR_COPIES,
+            r#"{"kind":"update_connection","scopePath":"banking/bank-a","label":"high",
+                "patch":{"full_name":"High tier"}}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        let definition = hcl.find(r#"component "bank""#).expect("definition");
+        let system = hcl.find(r#"system "banking""#).expect("system");
+        let name = hcl.find("High tier").expect("name written");
+        assert!(
+            definition < name && name < system,
+            "name must land in the definition body:\n{hcl}"
+        );
+        assert_eq!(hcl.matches("High tier").count(), 1, "{hcl}");
+    }
+
+    const REALIZED_BANK_FOR_COPIES: &str = r#"
+component "stack" { leaf = true }
+component "bank" {
+  instance "stack" { source = "stack" }
+  connection "low" {
+    from = "stack"
+    to = "stack"
+  }
+  connection "high" {
+    from = "stack"
+    to = "stack"
+    realized_by = ["low"]
+  }
+}
+system "banking" {
+  instance "bank-a" { source = "bank" }
+}
+"#;
+
+    #[test]
+    fn empty_patch_keeps_canonical_output() {
+        let once = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls","patch":{}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let twice = mutate_op(
+            &once,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls","patch":{}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        assert_eq!(once, twice, "an empty patch must not change canonical HCL");
+        assert!(!once.contains("realized_by"), "{once}");
+    }
+
+    #[test]
+    fn unknown_connection_is_a_guard_refusal() {
+        let result = mutate_op(
+            TWO_LINKS,
+            r#"{"kind":"update_connection","scopePath":"banking","label":"missing","patch":{}}"#,
+        )
+        .expect("a guard miss is not an error");
+        assert!(!result.applied);
+        assert!(result.hcl.is_none());
+    }
+
+    #[test]
+    fn unknown_patch_fields_are_rejected() {
+        let parsed = serde_json::from_str::<ModelOp>(
+            r#"{"kind":"update_connection","scopePath":"banking","label":"tls","patch":{"from":"x"}}"#,
+        );
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn realized_by_entry_is_relative_inside_a_definition() {
+        use super::realized_by_entry;
+        let target = |scope: &str, label: &str| ConnectionRef {
+            scope_path: scope.to_owned(),
+            label: label.to_owned(),
+        };
+        // Same scope: bare label.
+        assert_eq!(
+            realized_by_entry("bank", true, &target("bank", "low")),
+            "low"
+        );
+        // Child instance of the definition: walk down.
+        assert_eq!(
+            realized_by_entry("bank", true, &target("bank/stack", "tcp")),
+            "stack/tcp"
+        );
+        // Parent scope: walk up.
+        assert_eq!(
+            realized_by_entry("bank/stack", true, &target("bank", "low")),
+            "../low"
+        );
+        // Sideways: up, then down.
+        assert_eq!(
+            realized_by_entry("bank/stack", true, &target("bank/other", "x")),
+            "../other/x"
+        );
+        // Different tree: absolute, and the resolver refuses it.
+        assert_eq!(
+            realized_by_entry("bank", true, &target("banking/bank-a", "x")),
+            "/banking/bank-a/x"
+        );
+    }
+
+    #[test]
+    fn realized_by_entry_is_absolute_inside_a_system() {
+        use super::realized_by_entry;
+        let target = ConnectionRef {
+            scope_path: "banking/bank-a".to_owned(),
+            label: "low".to_owned(),
+        };
+        assert_eq!(
+            realized_by_entry("banking", false, &target),
+            "/banking/bank-a/low"
+        );
+        let sibling = ConnectionRef {
+            scope_path: "banking".to_owned(),
+            label: "uplink".to_owned(),
+        };
+        assert_eq!(
+            realized_by_entry("banking", false, &sibling),
+            "uplink",
+            "the declaring scope itself is always a bare label"
+        );
     }
 }

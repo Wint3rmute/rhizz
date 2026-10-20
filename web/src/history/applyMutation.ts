@@ -12,7 +12,7 @@
 // the compiled model — there is no second TypeScript model to keep in sync.
 
 import { type ComponentData, type PortData } from "../modelView";
-import type { ModelAction, SystemPatch } from "../actionLog";
+import type { ConnectionPatch, ModelAction, SystemPatch } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
 import { apply_model_op } from "../rhizz_wasm_wrapper";
 
@@ -73,7 +73,13 @@ export type ModelMutationOp =
       to: string;
     }
   | { kind: "delete_connection"; scopePath: string; label: string }
-  | { kind: "delete_connection_by_label"; label: string };
+  | { kind: "delete_connection_by_label"; label: string }
+  | {
+      kind: "update_connection";
+      scopePath: string;
+      label: string;
+      patch: ConnectionPatch;
+    };
 
 export interface ApplyMutationResult {
   applied: boolean;

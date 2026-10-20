@@ -10,6 +10,7 @@
 // Deliberately has zero dependency on Svelte, so it is unit-testable in plain
 // Node (see modelView.test.ts).
 import type { ModelJS } from "rhizz";
+import type { ConnectionRef } from "./actionLog";
 import { componentKeyAt } from "./modelKeys";
 import type { BorderStyle } from "./routes/projects/[id]/modeling/visuals";
 import {
@@ -112,8 +113,24 @@ export interface RawModelPayload {
   }[];
   connections?: {
     label: string;
+    full_name?: string;
+    tags?: string[];
+    level?: number;
     from: { component: number; port?: number | null };
     to: { component: number; port?: number | null };
+    /** Resolved realization targets: arena indices into `connections`. */
+    realized_by_ids?: number[];
+  }[];
+  protocols?: {
+    label: string;
+    full_name?: string;
+    tags?: string[];
+    roles?: string[];
+    leaf?: boolean;
+    /** Declared labels of the protocols this one can carry. */
+    encapsulates?: string[];
+    /** Arena indices into `messages`. */
+    messages?: number[];
   }[];
 }
 
@@ -123,6 +140,28 @@ export type RawComponent = NonNullable<RawModelPayload["components"]>[number];
 export type RawPort = NonNullable<RawModelPayload["ports"]>[number];
 /** One entry of {@link RawModelPayload}'s connection arena. */
 export type RawConnection = NonNullable<RawModelPayload["connections"]>[number];
+/** One entry of {@link RawModelPayload}'s protocol list. */
+export type RawProtocol = NonNullable<RawModelPayload["protocols"]>[number];
+
+/**
+ * A connection as the inspector reads it, projected from `ConnectionJS`.
+ * Fields that the `update_connection` op patches are plain values; the
+ * address (`ref`) is what the op and `realized_by` entries are written with.
+ */
+export interface ConnectionData {
+  ref: ConnectionRef;
+  full_name: string;
+  tags: string[];
+  level: number;
+  from_port?: string | undefined;
+  to_port?: string | undefined;
+  /** Label of the protocol the endpoint ports share, if any. */
+  protocol?: string | undefined;
+  realized_by: ConnectionRef[];
+  complete: boolean;
+  /** Root cause of an incomplete chain, when there is one. */
+  blocking?: ConnectionRef | undefined;
+}
 
 function toRole(role: string | undefined): PortData["role"] {
   const normalized = role?.toLowerCase();
@@ -213,4 +252,60 @@ export function definitionOptions(
       icon: component.icon === "" ? undefined : component.icon,
     }))
     .sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel));
+}
+
+/**
+ * Every connection in the model as a {@link ConnectionData}, in arena order.
+ * Empty for an undefined model.
+ */
+export function connectionDataList(
+  model: ModelJS | undefined,
+): ConnectionData[] {
+  if (model === undefined) return [];
+  return model.connections().map((connection) => {
+    const blocking = connection.blocking;
+    return {
+      ref: { scopePath: connection.scope_path, label: connection.label },
+      full_name: connection.full_name,
+      tags: connection.tags,
+      level: connection.level,
+      from_port: connection.from_port,
+      to_port: connection.to_port,
+      protocol: connection.protocol,
+      realized_by: connection.realized_by.map((target) => ({
+        scopePath: target.scope_path,
+        label: target.label,
+      })),
+      complete: connection.complete,
+      blocking:
+        blocking === undefined
+          ? undefined
+          : { scopePath: blocking.scope_path, label: blocking.label },
+    };
+  });
+}
+
+/** Stable map key for a connection address. */
+export function connectionRefKey(ref: ConnectionRef): string {
+  return JSON.stringify([ref.scopePath, ref.label]);
+}
+
+/** The connection at `ref`, or `undefined` when no connection has that address. */
+export function connectionByRef(
+  connections: readonly ConnectionData[],
+  ref: ConnectionRef,
+): ConnectionData | undefined {
+  const key = connectionRefKey(ref);
+  return connections.find(
+    (connection) => connectionRefKey(connection.ref) === key,
+  );
+}
+
+/** How many connections are typed by `protocol` (its derived protocol). */
+export function protocolUsageCount(
+  connections: readonly ConnectionData[],
+  protocol: string,
+): number {
+  return connections.filter((connection) => connection.protocol === protocol)
+    .length;
 }

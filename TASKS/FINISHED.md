@@ -4,6 +4,50 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — W.1: Connection read model and `update_connection` op
+
+Rust, WASM and TypeScript plumbing for the connection inspector. No UI.
+
+- **Address:** `rhizz_core::ConnectionRef { scope_path, label }`, serialized as
+  `{ scopePath, label }`. `scope_path` follows `add_connection`: a system label
+  (`banking`), an instance path (`banking/bank-a`, one copy, whose declaration
+  lives in its definition), or a top-level definition label (`bank`).
+  `Model::connection_scope_path` and `Model::connection_ref` build it from the
+  resolved model.
+- **Op:** `update_connection { scopePath, label, patch }`. `patch` takes
+  `full_name` (empty clears), `tags` and `realized_by` (full replacement), and
+  `level`. Unknown patch fields are rejected. An instance path redirects to the
+  definition, so an edit lands in the definition and applies to every copy.
+  An unknown scope or label is a guard refusal. An edit that errors (`E017`,
+  `E018`, `E019`) is refused through the existing re-resolve.
+- **`realized_by` entries:** written from the declaring scope. A same-scope
+  target is a bare label. Inside a system the entry is absolute
+  (`/banking/bank-a/low`). Inside a top-level definition it is
+  definition-relative (`stack/tcp`, `../low`). Duplicates collapse.
+- **WASM:** `ConnectionJS` gains `scope_path`, `full_name`, `tags`, `level`,
+  `from_port`, `to_port`, `protocol` (derived label), `realized_by` (as
+  `ConnectionRefJS` values), `complete` and `blocking`. `ProtocolJS` gains
+  `leaf` and `encapsulates`. `ConnectionJS` is now built with model context,
+  not from a bare `Connection`.
+- **Mirrors:** `LoggedAction::UpdateConnection`, `ModelAction`,
+  `toMutationOp`, `ModelMutationOp`, the `ConnectionRef` / `ConnectionPatch`
+  types, and the Rust sync test (`logged_actions_match_typescript_model_action_json`)
+  now covers the new variant.
+- **Read side:** `RawModelPayload` types connections and protocols.
+  `connectionDataList`, `connectionByRef`, `connectionRefKey` and
+  `protocolUsageCount` in `modelView.ts` are pure, with Vitest tests against the
+  real WASM build.
+- **Tests:** Rust unit tests for each patch field, a `realized_by` cycle
+  refusal (`E018`), an unresolved target (`E017`), definition-copy semantics,
+  the empty-patch idempotence, and the entry-path rules. Vitest covers the
+  getters on the banking chain (complete and incomplete), the op's file write,
+  and both refusals.
+- **Not done here:** `SPEC/` and the book do not document `update_connection`
+  yet. The web inspector (W.2) is the first consumer.
+- **Validation:** `just test`, `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task <N> — 0002.5: Completeness warning `W019` and migration
 
 Completes proposal 0002. A connection is complete when its protocol is a leaf,
