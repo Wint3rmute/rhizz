@@ -247,4 +247,34 @@ describe("actionLog", () => {
       'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"update_connection","scopePath":"banking/bank-a","label":"tls","patch":{"full_name":"Transport","realized_by":[{"scopePath":"banking","label":"http"}]}});',
     );
   });
+
+  it("encodes add_protocol, update_protocol and delete_protocol as dispatcher ops", () => {
+    expect(
+      encodeCall(
+        {
+          op: "add_protocol",
+          label: "spi",
+          options: { full_name: "Serial", leaf: true },
+        },
+        "fs",
+      ),
+    ).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"add_protocol","label":"spi","options":{"full_name":"Serial","leaf":true}});',
+    );
+    expect(
+      encodeCall(
+        {
+          op: "update_protocol",
+          path: "spi",
+          patch: { encapsulates: [] },
+        },
+        "fs",
+      ),
+    ).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"update_protocol","path":"spi","patch":{"encapsulates":[]}});',
+    );
+    expect(encodeCall({ op: "delete_protocol", path: "spi" }, "fs")).toBe(
+      'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"delete_protocol","path":"spi"});',
+    );
+  });
 });

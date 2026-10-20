@@ -632,3 +632,106 @@ system "banking" {
     });
   });
 });
+
+describe("protocol ops", () => {
+  const SPI = `protocol "spi" {
+  leaf = true
+}
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "spi"
+    role     = "peer"
+  }
+}
+`;
+
+  it("adds a protocol, writes it, and records the action", async () => {
+    const fs = memoryFs();
+    const actions: ModelAction[] = [];
+    const unsubscribe = subscribeToMutations((action) => actions.push(action));
+    try {
+      const result = await applyModelMutation(fs, "system.hcl", "", {
+        kind: "add_protocol",
+        label: "spi",
+        options: { leaf: true, full_name: "Serial" },
+      });
+      expect(result.applied).toBe(true);
+    } finally {
+      unsubscribe();
+    }
+    expect(fs.store.get("system.hcl")).toContain('protocol "spi"');
+    expect(actions).toEqual([
+      {
+        op: "add_protocol",
+        label: "spi",
+        options: { full_name: "Serial", leaf: true },
+      },
+    ]);
+  });
+
+  it("refuses a second protocol with the same label and says why", async () => {
+    const fs = memoryFs({ "system.hcl": SPI });
+    const result = await applyModelMutation(fs, "system.hcl", SPI, {
+      kind: "add_protocol",
+      label: "spi",
+    });
+    expect(result.applied).toBe(false);
+    expect(result.refusal).toMatch(/already exists/);
+    expect(fs.store.get("system.hcl")).toBe(SPI);
+  });
+
+  it("updates a protocol's leaf flag in place", async () => {
+    const fs = memoryFs({ "system.hcl": SPI });
+    const result = await applyModelMutation(fs, "system.hcl", SPI, {
+      kind: "update_protocol",
+      path: "spi",
+      patch: { leaf: false },
+    });
+    expect(result.applied).toBe(true);
+    expect(fs.store.get("system.hcl")).toContain('protocol "spi" {\n}\n');
+  });
+
+  it("refuses an encapsulates cycle and leaves the file untouched", async () => {
+    const base = `protocol "a" {
+  encapsulates = ["b"]
+}
+protocol "b" {}
+`;
+    const fs = memoryFs({ "system.hcl": base });
+    const result = await applyModelMutation(fs, "system.hcl", base, {
+      kind: "update_protocol",
+      path: "b",
+      patch: { encapsulates: ["a"] },
+    });
+    expect(result.applied).toBe(false);
+    expect(result.refusal).toMatch(/circular protocol encapsulation/);
+    expect(fs.store.get("system.hcl")).toBe(base);
+  });
+
+  it("refuses to delete a protocol a port still uses, naming the port", async () => {
+    const fs = memoryFs({ "system.hcl": SPI });
+    const result = await applyModelMutation(fs, "system.hcl", SPI, {
+      kind: "delete_protocol",
+      path: "spi",
+    });
+    expect(result.applied).toBe(false);
+    expect(result.refusal).toMatch(/port `uart` of `mcu`/);
+    expect(fs.store.get("system.hcl")).toBe(SPI);
+  });
+
+  it("deletes a protocol once no port uses it", async () => {
+    const unused = `protocol "spi" {}
+component "mcu" {
+  leaf = true
+}
+`;
+    const fs = memoryFs({ "system.hcl": unused });
+    const result = await applyModelMutation(fs, "system.hcl", unused, {
+      kind: "delete_protocol",
+      path: "spi",
+    });
+    expect(result.applied).toBe(true);
+    expect(fs.store.get("system.hcl")).not.toContain("protocol");
+  });
+});

@@ -9,6 +9,7 @@ import {
   definitionOptions,
   protocolDataList,
   protocolUnresolvedReason,
+  protocolUsage,
   protocolUsageCount,
 } from "./modelView";
 import { compile_system } from "./rhizz_wasm_wrapper";
@@ -448,14 +449,111 @@ describe("protocolDataList", () => {
     expect(https).toEqual({
       label: "https",
       full_name: "",
+      tags: [],
       roles: [],
       leaf: true,
       encapsulates: ["payment"],
+      messages: [],
     });
     expect(list.map((p) => p.label).sort()).toEqual(["https", "payment"]);
   });
 
   it("is empty for an undefined model", () => {
     expect(protocolDataList(undefined)).toEqual([]);
+  });
+});
+
+describe("protocol messages and usage", () => {
+  const FRAMED = `protocol "frame" {
+  tags = ["wire"]
+  message "header" {
+    field "len" {
+      type = "uint8"
+    }
+  }
+  message "body" {}
+}
+protocol "tunnel" {
+  encapsulates = ["frame"]
+}
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "frame"
+    role     = "peer"
+  }
+}
+component "radio" {
+  leaf = true
+  port "air" {
+    protocol = "frame"
+    role     = "peer"
+  }
+}
+system "drone" {
+  instance "mcu" {
+    source = "mcu"
+  }
+  instance "radio" {
+    source = "radio"
+  }
+  instance "radio-b" {
+    source = "radio"
+  }
+  connection "link" {
+    from = "mcu/uart"
+    to   = "radio/air"
+  }
+}
+`;
+
+  it("lists message labels in declaration order and the tags", () => {
+    const frame = protocolDataList(
+      modelOf([{ filename: "system.hcl", content: FRAMED }]),
+    ).find((p) => p.label === "frame");
+    expect(frame?.messages).toEqual(["header", "body"]);
+    expect(frame?.tags).toEqual(["wire"]);
+  });
+
+  it("finds the definition ports, not the instance copies, that name a protocol", () => {
+    const model = modelOf([{ filename: "system.hcl", content: FRAMED }]);
+    const usage = protocolUsage(
+      "frame",
+      componentDataByKey(model),
+      protocolDataList(model),
+      connectionDataList(model),
+    );
+    expect(usage.ports).toEqual([
+      { componentKey: "mcu", componentLabel: "mcu", portLabel: "uart" },
+      { componentKey: "radio", componentLabel: "radio", portLabel: "air" },
+    ]);
+  });
+
+  it("names the protocols that list it and the connections it types", () => {
+    const model = modelOf([{ filename: "system.hcl", content: FRAMED }]);
+    const usage = protocolUsage(
+      "frame",
+      componentDataByKey(model),
+      protocolDataList(model),
+      connectionDataList(model),
+    );
+    expect(usage.listedBy).toEqual(["tunnel"]);
+    expect(usage.connections).toEqual([{ scopePath: "drone", label: "link" }]);
+  });
+
+  it("reports no usage for an unused protocol", () => {
+    const model = modelOf([{ filename: "system.hcl", content: FRAMED }]);
+    expect(
+      protocolUsage(
+        "tunnel",
+        componentDataByKey(model),
+        protocolDataList(model),
+        connectionDataList(model),
+      ),
+    ).toEqual({
+      ports: [],
+      listedBy: [],
+      connections: [],
+    });
   });
 });
