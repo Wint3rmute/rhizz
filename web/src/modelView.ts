@@ -138,6 +138,16 @@ export interface RawModelPayload {
     full_name?: string;
     tags?: string[];
     level?: number;
+    /** Arena indices into `fields`. */
+    fields?: number[];
+  }[];
+  /** Field arena, referenced by `messages[].fields`. */
+  fields?: {
+    label: string;
+    field_type?: string;
+    full_name?: string;
+    unit?: string;
+    required?: boolean;
   }[];
 }
 
@@ -375,6 +385,56 @@ export function protocolDataList(model: ModelJS | undefined): ProtocolData[] {
       return message === undefined ? [] : [message.label];
     }),
   }));
+}
+
+/** A data field of a protocol message, projected for display. */
+export interface ProtocolFieldData {
+  label: string;
+  /** The field's free-form type string, e.g. `"uint8"`. */
+  type: string;
+  required: boolean;
+}
+
+/** A message a protocol declares, with its fields in declaration order. */
+export interface ProtocolMessageData {
+  label: string;
+  fields: ProtocolFieldData[];
+}
+
+/**
+ * The messages the protocol `label` declares, each with its fields. Empty when
+ * the protocol is unknown or the model is undefined.
+ */
+export function protocolMessages(
+  model: ModelJS | undefined,
+  label: string,
+): ProtocolMessageData[] {
+  if (model === undefined) return [];
+  const raw = model.to_js() as RawModelPayload;
+  const messages = raw.messages ?? [];
+  const fields = raw.fields ?? [];
+  const protocol = (raw.protocols ?? []).find((p) => p.label === label);
+  if (protocol === undefined) return [];
+  return (protocol.messages ?? []).flatMap((index) => {
+    const message = messages[index];
+    if (message === undefined) return [];
+    return [
+      {
+        label: message.label,
+        fields: (message.fields ?? []).flatMap((fieldIndex) => {
+          const field = fields[fieldIndex];
+          if (field === undefined) return [];
+          return [
+            {
+              label: field.label,
+              type: field.field_type ?? "",
+              required: field.required ?? false,
+            },
+          ];
+        }),
+      },
+    ];
+  });
 }
 
 /** A port that names a protocol, with the definition that declares it. */

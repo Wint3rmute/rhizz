@@ -4,6 +4,8 @@
 // Deliberately dependency-free so the logic is unit-testable in isolation and
 // reusable by both the page component and its Storybook stories.
 
+import type { ProtocolData } from "../../../../modelView";
+
 /** Where a component's default (per-component) diagram lives in the VFS. */
 export const DEFAULT_VIEW_DIR = "views";
 
@@ -46,19 +48,19 @@ export interface InventorySystem {
   tags: string[];
 }
 
-/** Sidebar filter tabs. `Interfaces` is a placeholder — no interface entities
- * exist in the model yet, so it always yields an empty list. */
+/** Sidebar filter tabs. `Protocols` lists the project's protocols, which have
+ * their own detail pane and no diagram. */
 export enum InventoryTab {
   Components = "components",
   Systems = "systems",
-  Interfaces = "interfaces",
+  Protocols = "protocols",
 }
 
 /** Sidebar tabs in display order. */
 export const INVENTORY_TABS: readonly InventoryTab[] = [
   InventoryTab.Components,
   InventoryTab.Systems,
-  InventoryTab.Interfaces,
+  InventoryTab.Protocols,
 ];
 
 /** Recomputes the definition's hierarchy depth: 1 for a bare definition,
@@ -283,9 +285,8 @@ function matchesQuery(def: InventoryDefinition, query: string): boolean {
 }
 
 /** Filters the definition list for the sidebar: tab selection + free-text
- * search. Definitions (components) appear on `Components`;
- * `Systems` and `Interfaces` yield an empty list (systems have their own
- * list, interfaces don't exist yet). */
+ * search. Definitions (components) appear on `Components`; `Systems` and
+ * `Protocols` yield an empty list (they have their own lists). */
 export function filterDefinitions(
   definitions: InventoryDefinition[],
   options: { tab: InventoryTab; query: string },
@@ -293,4 +294,34 @@ export function filterDefinitions(
   const { tab, query } = options;
   if (tab !== InventoryTab.Components) return [];
   return definitions.filter((d) => matchesQuery(d, query));
+}
+
+/** Case-insensitive substring match of `query` against a protocol's label and
+ * full name. */
+function matchesProtocolQuery(protocol: ProtocolData, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (q === "") return true;
+  if (protocol.label.toLowerCase().includes(q)) return true;
+  return protocol.full_name.toLowerCase().includes(q);
+}
+
+/** Filters the protocol list for the sidebar: free-text search over label and
+ * full name, sorted by label. */
+export function filterProtocols(
+  protocols: readonly ProtocolData[],
+  query: string,
+): ProtocolData[] {
+  return protocols
+    .filter((protocol) => matchesProtocolQuery(protocol, query))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * The query string that opens the Protocols tab, with `label` as the open
+ * protocol when given. Protocols use a query string rather than the entity
+ * path, because a protocol label can equal a component or system label.
+ */
+export function protocolInventoryQuery(label: string | null): string {
+  if (label === null) return "?tab=protocols";
+  return `?tab=protocols&protocol=${encodeURIComponent(label)}`;
 }

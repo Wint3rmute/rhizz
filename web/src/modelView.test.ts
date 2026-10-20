@@ -8,6 +8,7 @@ import {
   connectionDataList,
   definitionOptions,
   protocolDataList,
+  protocolMessages,
   protocolUnresolvedReason,
   protocolUsage,
   protocolUsageCount,
@@ -555,5 +556,39 @@ system "drone" {
       listedBy: [],
       connections: [],
     });
+  });
+});
+
+describe("protocolMessages", () => {
+  const FRAMED = `protocol "frame" {
+  message "header" {
+    field "len" {
+      type = "uint8"
+      required = true
+    }
+    field "crc" {
+      type = "uint16"
+    }
+  }
+  message "body" {}
+}
+`;
+
+  it("lists each message with its fields in declaration order", () => {
+    const model = modelOf([{ filename: "system.hcl", content: FRAMED }]);
+    const messages = protocolMessages(model, "frame");
+    expect(messages.map((m) => m.label)).toEqual(["header", "body"]);
+    expect(messages[0]?.fields.map((f) => [f.label, f.type])).toEqual([
+      ["len", "uint8"],
+      ["crc", "uint16"],
+    ]);
+    expect(messages[0]?.fields[0]?.required).toBe(true);
+    expect(messages[1]?.fields).toEqual([]);
+  });
+
+  it("is empty for an unknown protocol or an undefined model", () => {
+    const model = modelOf([{ filename: "system.hcl", content: FRAMED }]);
+    expect(protocolMessages(model, "nope")).toEqual([]);
+    expect(protocolMessages(undefined, "frame")).toEqual([]);
   });
 });
