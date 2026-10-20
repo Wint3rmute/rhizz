@@ -2,6 +2,9 @@
 
 ### Feat
 
+- **web**: link a connection's protocol to its Inventory entry
+- **web**: replace the Interfaces placeholder with a Protocols tab
+- **web**: project protocol messages and filter protocols for the inventory
 - **web**: mirror protocol ops and read protocol usage
 - **core**: add add_protocol, update_protocol and delete_protocol ops
 - **web**: extract connection inspector with protocol, connection and realization panels (W.2)
