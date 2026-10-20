@@ -24,8 +24,8 @@ use serde::{Deserialize, Serialize};
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
 use crate::model::{BorderStyle, ConnectionRef};
 use crate::parse::{
-    Labeled, RawComponent, RawConnection, RawFile, RawInstance, RawPort, RawProject, RawSystem,
-    parse_file,
+    Labeled, RawComponent, RawConnection, RawFile, RawInstance, RawPort, RawProject, RawProtocol,
+    RawSystem, parse_file,
 };
 use crate::{Source, resolve, serialize};
 
@@ -137,6 +137,23 @@ pub enum ModelOp {
         label: String,
         patch: ConnectionPatch,
     },
+    /// Add a top-level protocol. A blank label, a label containing `/`, or
+    /// a label that already exists is refused with `E000`.
+    #[serde(rename = "add_protocol")]
+    AddProtocol {
+        label: String,
+        #[serde(default)]
+        options: ProtocolPatch,
+    },
+    /// Patch a protocol's attributes; `path` is its label (labels never
+    /// change here). Messages are kept as they are.
+    #[serde(rename = "update_protocol")]
+    UpdateProtocol { path: String, patch: ProtocolPatch },
+    /// Delete a top-level protocol. Refused with `E000` while a port names
+    /// it or another protocol lists it in `encapsulates`; its messages go
+    /// with it.
+    #[serde(rename = "delete_protocol")]
+    DeleteProtocol { path: String },
 }
 
 /// Options for [`ModelOp::AddDefinition`] / definition-mode creates.
@@ -239,6 +256,32 @@ pub struct ConnectionPatch {
     /// Connections that realize this one (full replacement).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub realized_by: Option<Vec<ConnectionRef>>,
+}
+
+/// Attributes of a protocol, as sent to [`ModelOp::AddProtocol`] (options)
+/// and [`ModelOp::UpdateProtocol`] (patch).
+///
+/// `None` means untouched. `tags`, `roles` and `encapsulates` are full
+/// replacements, so an empty list clears them (empty `roles` means the
+/// protocol permits any role). An empty `full_name` clears it.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ProtocolPatch {
+    /// Full official name, expanding abbreviations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    /// Filtering tags (full replacement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    /// Port roles the protocol permits (full replacement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub roles: Option<Vec<String>>,
+    /// Whether the protocol is concrete enough to need no realization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leaf: Option<bool>,
+    /// Labels of protocols this one can carry (full replacement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encapsulates: Option<Vec<String>>,
 }
 
 /// Attribute patch for [`ModelOp::UpdateSystem`].
@@ -344,6 +387,18 @@ pub enum LoggedAction {
         label: String,
         patch: ConnectionPatch,
     },
+    /// A protocol was added (`options` as sent; absent fields are `{}`).
+    #[serde(rename = "add_protocol")]
+    AddProtocol {
+        label: String,
+        options: ProtocolPatch,
+    },
+    /// A protocol was patched (`path` as addressed, the patch as sent).
+    #[serde(rename = "update_protocol")]
+    UpdateProtocol { path: String, patch: ProtocolPatch },
+    /// A protocol was deleted.
+    #[serde(rename = "delete_protocol")]
+    DeleteProtocol { path: String },
 }
 
 // ── Outcome types ─────────────────────────────────────────────────────────────
@@ -683,6 +738,9 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             label,
             patch,
         } => update_connection(raw, scope_path, label, patch),
+        ModelOp::AddProtocol { label, options } => add_protocol(raw, label, options),
+        ModelOp::UpdateProtocol { path, patch } => Ok(update_protocol(raw, path, patch)),
+        ModelOp::DeleteProtocol { path } => delete_protocol(raw, path),
     }
 }
 
@@ -1366,6 +1424,125 @@ fn path_segments(path: &str) -> Vec<&str> {
     path.split('/').filter(|s| !s.is_empty()).collect()
 }
 
+// ── Protocols ─────────────────────────────────────────────────────────────────
+
+fn find_protocol(raw: &RawFile, label: &str) -> Option<usize> {
+    raw.protocols.iter().position(|p| p.label == label)
+}
+
+/// `roles` as stored: an empty list means "any role", which is no attribute.
+fn roles_option(roles: &[String]) -> Option<Vec<String>> {
+    (!roles.is_empty()).then(|| roles.to_vec())
+}
+
+fn add_protocol(
+    raw: &mut RawFile,
+    label: &str,
+    options: &ProtocolPatch,
+) -> Result<ApplyOutcome, MutationError> {
+    if label.is_empty() {
+        return Err(MutationError::InvalidInput(
+            "protocol label must not be empty".to_owned(),
+        ));
+    }
+    if label.contains('/') {
+        return Err(MutationError::InvalidInput(format!(
+            "protocol label `{label}` must not contain `/`"
+        )));
+    }
+    if find_protocol(raw, label).is_some() {
+        return Err(MutationError::InvalidInput(format!(
+            "protocol `{label}` already exists"
+        )));
+    }
+    raw.protocols.push(Labeled {
+        label: label.to_owned(),
+        inner: RawProtocol {
+            full_name: options.full_name.as_deref().and_then(non_empty),
+            tags: options.tags.clone().unwrap_or_default(),
+            roles: options.roles.as_deref().and_then(roles_option),
+            leaf: options.leaf.unwrap_or(false),
+            encapsulates: options.encapsulates.clone().unwrap_or_default(),
+            messages: Vec::new(),
+        },
+    });
+    Ok(applied(vec![LoggedAction::AddProtocol {
+        label: label.to_owned(),
+        options: options.clone(),
+    }]))
+}
+
+/// Patch the protocol `path`. A guard miss (unknown label) is a refusal
+/// without an error; the resolver refuses the rest (`E009`, `E020`).
+fn update_protocol(raw: &mut RawFile, label: &str, patch: &ProtocolPatch) -> ApplyOutcome {
+    let Some(index) = find_protocol(raw, label) else {
+        return idle();
+    };
+    let Some(labeled) = raw.protocols.get_mut(index) else {
+        return idle();
+    };
+    let protocol = &mut labeled.inner;
+    if let Some(full_name) = &patch.full_name {
+        protocol.full_name = non_empty(full_name);
+    }
+    if let Some(tags) = &patch.tags {
+        protocol.tags.clone_from(tags);
+    }
+    if let Some(roles) = &patch.roles {
+        protocol.roles = roles_option(roles);
+    }
+    if let Some(leaf) = patch.leaf {
+        protocol.leaf = leaf;
+    }
+    if let Some(encapsulates) = &patch.encapsulates {
+        protocol.encapsulates.clone_from(encapsulates);
+    }
+    applied(vec![LoggedAction::UpdateProtocol {
+        path: label.to_owned(),
+        patch: patch.clone(),
+    }])
+}
+
+/// Delete the protocol `path`, refusing while it is still used. The resolver
+/// would only warn (`W014`, `W022`) about dangling references, so the usage
+/// is checked here.
+fn delete_protocol(raw: &mut RawFile, path: &str) -> Result<ApplyOutcome, MutationError> {
+    let Some(index) = find_protocol(raw, path) else {
+        return Ok(idle());
+    };
+    let users = protocol_users(raw, path);
+    if !users.is_empty() {
+        return Err(MutationError::InvalidInput(format!(
+            "protocol `{path}` is still used by {}; remove those first",
+            users.join(", ")
+        )));
+    }
+    raw.protocols.remove(index);
+    Ok(applied(vec![LoggedAction::DeleteProtocol {
+        path: path.to_owned(),
+    }]))
+}
+
+/// Every place that keeps `label` in use: ports naming it and other
+/// protocols listing it in `encapsulates`. Connections are typed through
+/// their ports, so they need no separate entry.
+fn protocol_users(raw: &RawFile, label: &str) -> Vec<String> {
+    let mut users = Vec::new();
+    for component in &raw.components {
+        for port in &component.inner.ports {
+            if port.inner.protocol.as_deref() == Some(label) {
+                users.push(format!("port `{}` of `{}`", port.label, component.label));
+            }
+        }
+    }
+    for protocol in &raw.protocols {
+        if protocol.label != label && protocol.inner.encapsulates.iter().any(|e| e == label) {
+            users.push(format!("protocol `{}`", protocol.label));
+        }
+    }
+    users
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1395,6 +1572,9 @@ mod tests {
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
             r#"{"kind":"update_connection","scopePath":"demo","label":"l","patch":{"full_name":"x","realized_by":[{"scopePath":"demo","label":"m"}]}}"#,
+            r#"{"kind":"add_protocol","label":"spi","options":{"full_name":"x","tags":["t"],"roles":["provider"],"leaf":true,"encapsulates":["p"]}}"#,
+            r#"{"kind":"update_protocol","path":"spi","patch":{"full_name":"x","tags":[],"roles":[],"leaf":false,"encapsulates":[]}}"#,
+            r#"{"kind":"delete_protocol","path":"spi"}"#,
         ];
         for json in cases {
             op(json);
@@ -1917,6 +2097,40 @@ mod tests {
         assert_eq!(json["patch"]["realized_by"][0]["label"], "http");
         // Untouched patch fields are skipped, matching `ModelAction`.
         assert!(json["patch"].get("full_name").is_none());
+
+        let action = LoggedAction::AddProtocol {
+            label: "spi".to_owned(),
+            options: ProtocolPatch {
+                full_name: Some("Serial".to_owned()),
+                leaf: Some(true),
+                ..Default::default()
+            },
+        };
+        let json = serde_json::to_value(&action).expect("json");
+        assert_eq!(json["op"], "add_protocol");
+        assert_eq!(json["label"], "spi");
+        assert_eq!(json["options"]["full_name"], "Serial");
+        assert_eq!(json["options"]["leaf"], true);
+        assert!(json["options"].get("roles").is_none());
+
+        let action = LoggedAction::UpdateProtocol {
+            path: "spi".to_owned(),
+            patch: ProtocolPatch {
+                encapsulates: Some(vec!["frame".to_owned()]),
+                ..Default::default()
+            },
+        };
+        let json = serde_json::to_value(&action).expect("json");
+        assert_eq!(json["op"], "update_protocol");
+        assert_eq!(json["path"], "spi");
+        assert_eq!(json["patch"]["encapsulates"][0], "frame");
+
+        let action = LoggedAction::DeleteProtocol {
+            path: "spi".to_owned(),
+        };
+        let json = serde_json::to_value(&action).expect("json");
+        assert_eq!(json["op"], "delete_protocol");
+        assert_eq!(json["path"], "spi");
     }
 }
 
@@ -2540,5 +2754,317 @@ system "banking" {
             "uplink",
             "the declaring scope itself is always a bare label"
         );
+    }
+}
+
+#[cfg(test)]
+mod protocol_ops_tests {
+    use super::{ModelOp, mutate_to_hcl};
+    use crate::diagnostics::{Diagnostic, DiagnosticCode};
+
+    fn mutate_op(content: &str, json: &str) -> Result<super::MutationResult, Vec<Diagnostic>> {
+        let op: ModelOp = serde_json::from_str(json).expect("op JSON must parse");
+        mutate_to_hcl("system.hcl", content, &op)
+    }
+
+    /// Adds a protocol through the op itself, so the baseline is canonical.
+    fn with_protocol(content: &str, json: &str) -> String {
+        mutate_op(content, json)
+            .expect("baseline op must apply")
+            .hcl
+            .expect("baseline op must write HCL")
+    }
+
+    fn codes(diagnostics: &[Diagnostic]) -> Vec<DiagnosticCode> {
+        diagnostics.iter().map(|d| d.code).collect()
+    }
+
+    #[test]
+    fn add_protocol_writes_every_attribute() {
+        let result = mutate_op(
+            "",
+            r#"{"kind":"add_protocol","label":"spi","options":{"full_name":"Serial Peripheral","tags":["bus"],"roles":["provider","consumer"],"leaf":true,"encapsulates":["frame"]}}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(hcl.contains(r#"protocol "spi""#), "{hcl}");
+        assert!(hcl.contains(r#"full_name = "Serial Peripheral""#), "{hcl}");
+        assert!(hcl.contains(r#"tags        = ["bus"]"#), "{hcl}");
+        assert!(
+            hcl.contains(r#"roles       = ["provider", "consumer"]"#),
+            "{hcl}"
+        );
+        assert!(hcl.contains("leaf        = true"), "{hcl}");
+        assert!(hcl.contains(r#"encapsulates = ["frame"]"#), "{hcl}");
+    }
+
+    #[test]
+    fn add_protocol_without_options_writes_a_bare_block() {
+        let hcl = with_protocol("", r#"{"kind":"add_protocol","label":"bare"}"#);
+        assert_eq!(hcl, "protocol \"bare\" {\n}\n");
+    }
+
+    #[test]
+    fn add_protocol_logs_the_action_for_replay() {
+        let result = mutate_op(
+            "",
+            r#"{"kind":"add_protocol","label":"spi","options":{"leaf":true}}"#,
+        )
+        .expect("ok");
+        let json = serde_json::to_value(&result.actions).expect("json");
+        assert_eq!(json[0]["op"], "add_protocol");
+        assert_eq!(json[0]["label"], "spi");
+        assert_eq!(json[0]["options"]["leaf"], true);
+    }
+
+    #[test]
+    fn add_protocol_refuses_blank_slashed_and_existing_labels() {
+        let base = with_protocol("", r#"{"kind":"add_protocol","label":"spi"}"#);
+        for json in [
+            r#"{"kind":"add_protocol","label":""}"#,
+            r#"{"kind":"add_protocol","label":"a/b"}"#,
+            r#"{"kind":"add_protocol","label":"spi"}"#,
+        ] {
+            let diagnostics = mutate_op(&base, json).expect_err("must refuse");
+            assert_eq!(codes(&diagnostics), vec![DiagnosticCode::E000], "{json}");
+        }
+    }
+
+    #[test]
+    fn update_protocol_patches_only_the_given_fields() {
+        let base = with_protocol(
+            "",
+            r#"{"kind":"add_protocol","label":"spi","options":{"full_name":"Old","tags":["bus"],"leaf":true}}"#,
+        );
+        let result = mutate_op(
+            &base,
+            r#"{"kind":"update_protocol","path":"spi","patch":{"full_name":"New","tags":[]}}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(hcl.contains(r#"full_name = "New""#), "{hcl}");
+        assert!(!hcl.contains("tags"), "tags cleared by []:\n{hcl}");
+        assert!(hcl.contains("leaf        = true"), "leaf kept:\n{hcl}");
+    }
+
+    #[test]
+    fn update_protocol_clears_roles_and_leaf_and_replaces_encapsulates() {
+        let base = with_protocol(
+            "",
+            r#"{"kind":"add_protocol","label":"spi","options":{"roles":["provider"],"leaf":true,"encapsulates":["a"]}}"#,
+        );
+        let result = mutate_op(
+            &base,
+            r#"{"kind":"update_protocol","path":"spi","patch":{"roles":[],"leaf":false,"encapsulates":["b"]}}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        assert!(
+            !hcl.contains("roles"),
+            "empty roles means unrestricted:\n{hcl}"
+        );
+        assert!(!hcl.contains("leaf"), "leaf false is the default:\n{hcl}");
+        assert!(hcl.contains(r#"encapsulates = ["b"]"#), "{hcl}");
+        assert!(!hcl.contains(r#""a""#), "replacement, not merge:\n{hcl}");
+    }
+
+    #[test]
+    fn update_protocol_with_nothing_to_change_keeps_the_canonical_output() {
+        let base = with_protocol(
+            "",
+            r#"{"kind":"add_protocol","label":"spi","options":{"full_name":"Serial","tags":["bus"],"roles":["provider"],"leaf":true}}"#,
+        );
+        let result = mutate_op(
+            &base,
+            r#"{"kind":"update_protocol","path":"spi","patch":{}}"#,
+        )
+        .expect("ok");
+        assert_eq!(result.hcl.as_deref(), Some(base.as_str()));
+    }
+
+    #[test]
+    fn update_protocol_keeps_its_messages() {
+        let base = r#"protocol "spi" {
+  message "frame" {
+    field "len" {
+      type = "uint8"
+    }
+  }
+}
+"#;
+        let result = mutate_op(
+            base,
+            r#"{"kind":"update_protocol","path":"spi","patch":{"leaf":true}}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        assert!(hcl.contains(r#"message "frame""#), "{hcl}");
+        assert!(hcl.contains(r#"field "len""#), "{hcl}");
+    }
+
+    #[test]
+    fn update_protocol_rejects_unknown_fields_and_label_changes() {
+        for json in [
+            r#"{"kind":"update_protocol","path":"spi","patch":{"label":"other"}}"#,
+            r#"{"kind":"update_protocol","path":"spi","patch":{"icon":"x"}}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<ModelOp>(json).is_err(),
+                "must reject {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn update_protocol_on_an_unknown_label_is_a_guard_refusal() {
+        let result = mutate_op(
+            "",
+            r#"{"kind":"update_protocol","path":"ghost","patch":{"leaf":true}}"#,
+        )
+        .expect("a guard miss is not an error");
+        assert!(!result.applied);
+        assert!(result.hcl.is_none());
+    }
+
+    #[test]
+    fn update_protocol_refuses_an_encapsulates_cycle_with_e020() {
+        let base = with_protocol("", r#"{"kind":"add_protocol","label":"a"}"#);
+        let base = with_protocol(
+            &base,
+            r#"{"kind":"add_protocol","label":"b","options":{"encapsulates":["a"]}}"#,
+        );
+        let diagnostics = mutate_op(
+            &base,
+            r#"{"kind":"update_protocol","path":"a","patch":{"encapsulates":["b"]}}"#,
+        )
+        .expect_err("cycle must refuse");
+        assert!(
+            codes(&diagnostics).contains(&DiagnosticCode::E020),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn update_protocol_refuses_a_role_that_a_port_no_longer_has_with_e009() {
+        let base = r#"protocol "serial" {
+  roles = ["provider", "consumer"]
+}
+
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "serial"
+    role     = "consumer"
+  }
+}
+
+system "drone" {
+  instance "mcu" { source = "mcu" }
+}
+"#;
+        let diagnostics = mutate_op(
+            base,
+            r#"{"kind":"update_protocol","path":"serial","patch":{"roles":["provider"]}}"#,
+        )
+        .expect_err("role must refuse");
+        assert!(
+            codes(&diagnostics).contains(&DiagnosticCode::E009),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn delete_protocol_is_refused_while_a_port_uses_it() {
+        let base = r#"protocol "serial" {}
+
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "serial"
+    role     = "peer"
+  }
+}
+"#;
+        let diagnostics = mutate_op(base, r#"{"kind":"delete_protocol","path":"serial"}"#)
+            .expect_err("used protocol must refuse");
+        assert_eq!(codes(&diagnostics), vec![DiagnosticCode::E000]);
+        let message = &diagnostics[0].message;
+        assert!(message.contains("port `uart` of `mcu`"), "{message}");
+    }
+
+    #[test]
+    fn delete_protocol_is_refused_while_another_protocol_encapsulates_it() {
+        let base = r#"protocol "frame" {}
+protocol "tunnel" {
+  encapsulates = ["frame"]
+}
+"#;
+        let diagnostics = mutate_op(base, r#"{"kind":"delete_protocol","path":"frame"}"#)
+            .expect_err("encapsulated protocol must refuse");
+        assert_eq!(codes(&diagnostics), vec![DiagnosticCode::E000]);
+        assert!(diagnostics[0].message.contains("protocol `tunnel`"));
+    }
+
+    #[test]
+    fn delete_protocol_succeeds_once_nothing_uses_it_and_drops_its_messages() {
+        let base = r#"protocol "frame" {
+  message "header" {
+    field "len" {
+      type = "uint8"
+    }
+  }
+}
+protocol "tunnel" {
+  encapsulates = ["frame"]
+}
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "tunnel"
+    role     = "peer"
+  }
+}
+"#;
+        // `tunnel` still lists `frame`, so the delete is refused. Once
+        // `tunnel` stops listing it, nothing uses `frame` and the delete goes
+        // through.
+        let trimmed = r#"protocol "frame" {
+  message "header" {
+    field "len" {
+      type = "uint8"
+    }
+  }
+}
+protocol "tunnel" {
+}
+component "mcu" {
+  leaf = true
+  port "uart" {
+    protocol = "tunnel"
+    role     = "peer"
+  }
+}
+"#;
+        let refused = mutate_op(base, r#"{"kind":"delete_protocol","path":"frame"}"#);
+        assert!(refused.is_err(), "still listed by tunnel");
+
+        let result =
+            mutate_op(trimmed, r#"{"kind":"delete_protocol","path":"frame"}"#).expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"protocol "frame""#), "{hcl}");
+        assert!(
+            !hcl.contains("header"),
+            "messages go with the protocol:\n{hcl}"
+        );
+        assert!(hcl.contains(r#"protocol "tunnel""#), "{hcl}");
+    }
+
+    #[test]
+    fn delete_protocol_on_an_unknown_label_is_a_guard_refusal() {
+        let result = mutate_op("", r#"{"kind":"delete_protocol","path":"ghost"}"#).expect("ok");
+        assert!(!result.applied);
     }
 }
