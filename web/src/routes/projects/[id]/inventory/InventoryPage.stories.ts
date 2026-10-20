@@ -818,3 +818,94 @@ export const PanesHiddenShowsRails: Story = {
     await expect(canvas.getByTestId("inventory-pane-right")).toBeVisible();
   },
 };
+
+// ── Protocols ───────────────────────────────────────────────────────────────
+// The fixture's one protocol, "power", is named by three ports (battery,
+// mcu and styled-module), so the list card counts three.
+
+export const ProtocolsTab: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
+    const cards = await canvas.findAllByTestId("inventory-protocol-card");
+    await expect(cards).toHaveLength(1);
+    await expect(cards[0]?.textContent).toContain("power");
+    await expect(cards[0]?.textContent).toMatch(/3\s+ports/);
+    // The view filter has no meaning for protocols, so it is hidden here.
+    await expect(
+      canvas.queryByRole("checkbox", { name: "Only with defined views" }),
+    ).toBeNull();
+    // "+ New" stays, and opens the protocol modal.
+    await expect(canvas.getByRole("button", { name: "+ New" })).toBeTruthy();
+  },
+};
+
+export const ProtocolDetail: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
+    await userEvent.click(await canvas.findByTestId("inventory-protocol-card"));
+    const pane = within(await canvas.findByTestId("protocol-detail-pane"));
+    await expect(pane.getByRole("heading", { name: "power" })).toBeTruthy();
+    await expect(pane.getByLabelText("Full name")).toHaveValue(
+      "DC power delivery",
+    );
+
+    await userEvent.click(pane.getByRole("tab", { name: "Messages" }));
+    await expect(pane.getByText("voltage")).toBeTruthy();
+    await expect(pane.getByText("volts")).toBeTruthy();
+
+    // Usage lists the definition ports that name the protocol, each linking to
+    // its component in the Inventory.
+    await userEvent.click(pane.getByRole("tab", { name: "Usage" }));
+    await expect(
+      pane.getByRole("link", { name: "battery · power-out" }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("/projects/inventory-story/inventory/battery"),
+    );
+  },
+};
+
+export const ProtocolDeleteBlocked: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
+    await userEvent.click(await canvas.findByTestId("inventory-protocol-card"));
+    const pane = within(await canvas.findByTestId("protocol-detail-pane"));
+    await userEvent.click(pane.getByRole("tab", { name: "Delete" }));
+
+    // Confirmation is disabled while ports still name the protocol, and the
+    // blockers box names each one.
+    const blockers = await pane.findByTestId("inventory-delete-blockers");
+    await expect(
+      within(blockers).getByRole("link", { name: "battery · power-out" }),
+    ).toBeTruthy();
+    await expect(
+      within(blockers).getByRole("link", { name: "mcu · spi" }),
+    ).toBeTruthy();
+    await expect(pane.getByTestId("protocol-delete-confirm")).toBeDisabled();
+  },
+};
+
+export const AddProtocolOpensCreationModal: Story = {
+  loaders: [ensureInventoryProject],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
+    await userEvent.click(canvas.getByRole("button", { name: "+ New" }));
+    const modal = within(await canvas.findByTestId("create-protocol-modal"));
+    // A label that already names a protocol is refused before anything is
+    // written, so the create button stays disabled and says why.
+    await userEvent.type(modal.getByLabelText(/^label/i), "power");
+    await expect(
+      modal.getByTestId("create-protocol-problem"),
+    ).toHaveTextContent("already exists");
+    await expect(
+      modal.getByRole("button", { name: "Create Protocol" }),
+    ).toBeDisabled();
+  },
+};
