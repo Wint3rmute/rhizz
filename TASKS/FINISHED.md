@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — W.4: Protocols tab in the Inventory
+
+Web-only. The "Interfaces" placeholder is now a Protocols tab with a working
+list, editor and delete flow.
+
+- **Tab and list:** `InventoryTab.Protocols` (`?tab=protocols`) with
+  `ProtocolCard`s (label, `leaf` badge, port count, full name), filtered and
+  sorted by label. The view filter is hidden there, "+ New" stays.
+- **Add:** `CreateProtocolModal` (label unique and without `/`, full name,
+  `leaf`) applies `add_protocol`.
+- **Detail pane:** `ProtocolDetailPane` with Overview (editable: full name,
+  tags, roles, `leaf`, and a checkbox list for `encapsulates`), Messages
+  (messages and their fields, read-only), Usage (ports, protocols that list it,
+  connections it types) and Delete (type-to-confirm, blocked by ports and
+  `encapsulates` users listed in `inventory-delete-blockers`). A refused edit
+  shows "Change refused" and puts the control back to the model value.
+- **Deep link:** `protocolInventoryQuery` / `protocolLink.ts` build
+  `?tab=protocols&protocol=<label>`. Unknown labels are ignored.
+- **Connection inspector:** "Edit protocol" link in the Protocol panel.
+- **Tests:** Vitest for the filter, query and message projection; Playwright
+  `inventory-protocols.spec.ts`; the old Interfaces assertions updated; Storybook
+  stories `ProtocolsTab`, `ProtocolDetail`, `ProtocolDeleteBlocked`,
+  `AddProtocolOpensCreationModal`. VRT baselines accepted (60 screenshots).
+
+Known limitation: a port on a nested child definition links to the child's
+label, which the Inventory does not list at top level.
+
+---
+
 ## Task <N> — W.3: Protocol ops (`add_protocol`, `update_protocol`, `delete_protocol`)
 
 Rust, WASM and TypeScript plumbing for the Inventory protocol editor. No UI.
