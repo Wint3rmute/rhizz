@@ -2,6 +2,8 @@
 
 ### Feat
 
+- **web**: extract connection inspector with protocol, connection and realization panels (W.2)
+- **web**: add protocol read helpers for the connection inspector (W.2)
 - **core**: add update_connection op and connection read model (W.1)
 - **core**: warn on incomplete connections (W019) and migrate examples
 - **web**: animate book-example view transitions
