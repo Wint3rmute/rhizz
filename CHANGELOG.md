@@ -2,6 +2,8 @@
 
 ### Feat
 
+- **web**: mirror protocol ops and read protocol usage
+- **core**: add add_protocol, update_protocol and delete_protocol ops
 - **web**: extract connection inspector with protocol, connection and realization panels (W.2)
 - **web**: add protocol read helpers for the connection inspector (W.2)
 - **core**: add update_connection op and connection read model (W.1)
