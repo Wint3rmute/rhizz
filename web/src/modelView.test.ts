@@ -7,6 +7,8 @@ import {
   connectionByRef,
   connectionDataList,
   definitionOptions,
+  protocolDataList,
+  protocolUnresolvedReason,
   protocolUsageCount,
 } from "./modelView";
 import { compile_system } from "./rhizz_wasm_wrapper";
@@ -393,5 +395,67 @@ describe("protocol read model", () => {
     const payment = model?.protocols().find((p) => p.label === "payment");
     expect(payment?.leaf).toBe(false);
     expect(payment?.encapsulates).toEqual([]);
+  });
+});
+
+describe("protocolUnresolvedReason", () => {
+  it("is undefined when both ports share a defined protocol", () => {
+    expect(
+      protocolUnresolvedReason({ protocol: "https" }, { protocol: "https" }, [
+        "https",
+      ]),
+    ).toBeUndefined();
+  });
+
+  it("names a bare endpoint with no port", () => {
+    expect(
+      protocolUnresolvedReason(undefined, { protocol: "https" }, ["https"]),
+    ).toMatch(/bare component/);
+  });
+
+  it("names an untyped port", () => {
+    expect(
+      protocolUnresolvedReason({ protocol: "" }, { protocol: "https" }, [
+        "https",
+      ]),
+    ).toMatch(/no protocol/);
+  });
+
+  it("names a mismatch and both protocols", () => {
+    const reason = protocolUnresolvedReason(
+      { protocol: "https" },
+      { protocol: "i2c" },
+      ["https", "i2c"],
+    );
+    expect(reason).toMatch(/different protocols \(https and i2c\)/);
+  });
+
+  it("names a shared protocol that is not defined", () => {
+    expect(
+      protocolUnresolvedReason({ protocol: "ghost" }, { protocol: "ghost" }, [
+        "https",
+      ]),
+    ).toMatch(/"ghost" is not defined/);
+  });
+});
+
+describe("protocolDataList", () => {
+  it("projects every protocol with its fields, sorted as declared", () => {
+    const list = protocolDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(true) }]),
+    );
+    const https = list.find((p) => p.label === "https");
+    expect(https).toEqual({
+      label: "https",
+      full_name: "",
+      roles: [],
+      leaf: true,
+      encapsulates: ["payment"],
+    });
+    expect(list.map((p) => p.label).sort()).toEqual(["https", "payment"]);
+  });
+
+  it("is empty for an undefined model", () => {
+    expect(protocolDataList(undefined)).toEqual([]);
   });
 });

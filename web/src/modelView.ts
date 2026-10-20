@@ -309,3 +309,54 @@ export function protocolUsageCount(
   return connections.filter((connection) => connection.protocol === protocol)
     .length;
 }
+
+/**
+ * The protocol fields the connection inspector shows. Projected from
+ * {@link RawProtocol}, so the UI never reads the raw payload directly.
+ */
+export interface ProtocolData {
+  label: string;
+  full_name: string;
+  roles: string[];
+  leaf: boolean;
+  /** Declared labels of the protocols this one can carry. */
+  encapsulates: string[];
+}
+
+/**
+ * Why a connection has no derived protocol, for display. `from` / `to` are
+ * the endpoint ports' protocol strings, or `undefined` for a bare endpoint.
+ * Returns `undefined` when the endpoints share a defined protocol.
+ */
+export function protocolUnresolvedReason(
+  from: { protocol: string } | undefined,
+  to: { protocol: string } | undefined,
+  definedProtocols: readonly string[],
+): string | undefined {
+  if (from === undefined || to === undefined) {
+    return "An endpoint is a bare component with no port, so no protocol is shared.";
+  }
+  if (from.protocol === "" || to.protocol === "") {
+    return "A port on this connection has no protocol.";
+  }
+  if (from.protocol !== to.protocol) {
+    return `The ports use different protocols (${from.protocol} and ${to.protocol}).`;
+  }
+  if (!definedProtocols.includes(from.protocol)) {
+    return `Protocol "${from.protocol}" is not defined.`;
+  }
+  return undefined;
+}
+
+/** Every top-level protocol as a {@link ProtocolData}. Empty for an undefined model. */
+export function protocolDataList(model: ModelJS | undefined): ProtocolData[] {
+  if (model === undefined) return [];
+  const raw = model.to_js() as RawModelPayload;
+  return (raw.protocols ?? []).map((protocol) => ({
+    label: protocol.label,
+    full_name: protocol.full_name ?? "",
+    roles: protocol.roles ?? [],
+    leaf: protocol.leaf ?? false,
+    encapsulates: protocol.encapsulates ?? [],
+  }));
+}
