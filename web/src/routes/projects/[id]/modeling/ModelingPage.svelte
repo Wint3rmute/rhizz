@@ -36,6 +36,7 @@
   import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
   import AnnotationInspector from "./AnnotationInspector.svelte";
   import NodeInspector from "./NodeInspector.svelte";
+  import ConnectionInspector from "./ConnectionInspector.svelte";
   import CreateComponentModal from "./CreateComponentModal.svelte";
   import NewViewModal from "./NewViewModal.svelte";
   import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
@@ -49,8 +50,13 @@
   import {
     type ComponentData,
     componentDataByKey,
+    connectionByRef,
+    connectionDataList,
     definitionOptions,
     type PortData,
+    protocolDataList,
+    protocolUnresolvedReason,
+    protocolUsageCount,
   } from "../../../../modelView";
 
   import {
@@ -129,7 +135,12 @@
     rememberLastView,
     resolveViewToOpen,
   } from "./lastView";
-  import { asTestScript, createActionLog } from "../../../../actionLog";
+  import {
+    asTestScript,
+    createActionLog,
+    type ConnectionPatch,
+    type ConnectionRef,
+  } from "../../../../actionLog";
   import { copyToClipboard } from "../../../../clipboard";
   import { renderMarkdownInline } from "../../../../components/markdownRenderer";
   import { componentKeyAt, componentKeyIndex } from "../../../../modelKeys";
@@ -3216,37 +3227,106 @@
 
   let selectedConnection = $state<string | null>(null);
 
-  let selectedConnectionData = $derived.by(() => {
+  // Every connection as ConnectionData, the read model the connection
+  // inspector and its realization list are built from.
+  let allConnectionData = $derived(connectionDataList(model));
+
+  // The connection inspector's view of the selected connection: its data, its
+  // endpoints, its protocol (and why there is none), and what else uses it.
+  let selectedConnectionInspector = $derived.by(() => {
     if (!selectedConnection) return null;
     const conn = connections.find((c) => c.label === selectedConnection);
     if (!conn) return null;
+    const connection = connectionByRef(allConnectionData, {
+      scopePath: conn.scope_path,
+      label: conn.label,
+    });
+    if (!connection) return null;
+
     const fromKey = getComponentKey(conn.from);
     const toKey = getComponentKey(conn.to);
-    const fromCompLabel = components[conn.from]?.label ?? fromKey;
-    const toCompLabel = components[conn.to]?.label ?? toKey;
+    const endpointPort = (key: string, portLabel: string | undefined) =>
+      portLabel === undefined
+        ? undefined
+        : componentData
+            .get(key)
+            ?.ports.find((port) => port.label === portLabel);
+    const fromPort = endpointPort(fromKey, connection.from_port);
+    const toPort = endpointPort(toKey, connection.to_port);
+
+    const protocols = protocolDataList(model);
+    const protocol =
+      connection.protocol === undefined
+        ? undefined
+        : protocols.find((p) => p.label === connection.protocol);
+    const protocolReason =
+      connection.protocol === undefined
+        ? protocolUnresolvedReason(
+            fromPort ? { protocol: fromPort.protocol ?? "" } : undefined,
+            toPort ? { protocol: toPort.protocol ?? "" } : undefined,
+            protocols.map((p) => p.label),
+          )
+        : undefined;
+
+    // Other users of the protocol: this connection is one of them, and its
+    // own two endpoint ports are two of the ports.
+    const protocolUsage =
+      protocol === undefined
+        ? undefined
+        : {
+            connections:
+              protocolUsageCount(allConnectionData, protocol.label) - 1,
+            ports:
+              [...componentData.values()].reduce(
+                (count, data) =>
+                  count +
+                  data.ports.filter((port) => port.protocol === protocol.label)
+                    .length,
+                0,
+              ) - 2,
+          };
+
+    // A connection in a reusable component (anything that is not a system's
+    // own scope) is shared with every copy of it in the instances.
+    const systemLabels = new Set(
+      (projectModel.raw?.systems ?? []).map((system) => system.label),
+    );
+
     return {
-      label: conn.label,
-      from: fromKey,
-      to: toKey,
-      fromCompLabel,
-      toCompLabel,
+      connection,
+      fromLabel: components[conn.from]?.label ?? fromKey,
+      toLabel: components[conn.to]?.label ?? toKey,
       startSide: savedConnections[conn.label]?.startSide,
       endSide: savedConnections[conn.label]?.endSide,
+      sharedWithCopies: !systemLabels.has(connection.ref.scopePath),
+      protocol,
+      protocolReason,
+      protocolUsage,
     };
   });
 
-  // The five routing choices the connection inspector offers for each endpoint:
-  // "Auto" (no override, the router picks a side) plus the four border sides.
-  const SIDE_OPTIONS: {
-    value: ConnectionSide | undefined;
-    label: string;
-  }[] = [
-    { value: undefined, label: "Auto" },
-    { value: "top", label: "Top" },
-    { value: "right", label: "Right" },
-    { value: "bottom", label: "Bottom" },
-    { value: "left", label: "Left" },
-  ];
+  // Applies a patch to the inspected connection's model declaration. One
+  // undo step per edit; a refused edit shows the "Change refused" toast.
+  async function handleUpdateSelectedConnection(
+    patch: ConnectionPatch,
+  ): Promise<void> {
+    const inspected = selectedConnectionInspector;
+    if (!inspected) return;
+    const { ref } = inspected.connection;
+    await runModelLayoutTransaction(`update connection ${ref.label}`, {
+      kind: "update_connection",
+      scopePath: ref.scopePath,
+      label: ref.label,
+      patch,
+    });
+  }
+
+  // Selects a connection from the inspector's realization list. Only placed
+  // connections can be selected on the canvas, so the caller checks that.
+  function selectConnectionByRef(ref: ConnectionRef): void {
+    selectedConnection = ref.label;
+    clearSelection();
+  }
 
   function setConnectionStartSide(side: ConnectionSide | undefined) {
     if (!selectedConnection) return;
@@ -3828,35 +3908,6 @@
   });
 </script>
 
-{#snippet connectionSidePicker(
-  title: string,
-  current: ConnectionSide | undefined,
-  onchange: (side: ConnectionSide | undefined) => void,
-)}
-  <!-- One endpoint's routing override: "Auto" (let the router pick a side)
-       plus the four border sides. Keyed on the label because `value` is
-       undefined for "Auto". -->
-  <div class="space-y-1.5 pt-1">
-    <span
-      class="text-xs font-semibold uppercase tracking-wider text-base-content/70"
-    >
-      {title}
-    </span>
-    <div class="grid grid-cols-5 gap-1 w-full">
-      {#each SIDE_OPTIONS as option (option.label)}
-        <button
-          class="btn btn-xs {current === option.value
-            ? 'btn-primary'
-            : 'btn-ghost border border-base-300'}"
-          onclick={() => onchange(option.value)}
-        >
-          {option.label}
-        </button>
-      {/each}
-    </div>
-  </div>
-{/snippet}
-
 <svelte:window onkeydown={onDiagramKeyDown} onpagehide={flushLayoutWrite} />
 
 <div class="flex flex-row flex-1 w-full overflow-hidden">
@@ -3915,57 +3966,31 @@
           onscalechange={(scale) => handleAnnotationScaleChange(scale)}
           onscalecommitted={() => noteDiagramEdited()}
         />
-      {:else if selectedConnectionData}
-        <div class="space-y-4 text-sm" data-testid="connection-inspector">
-          <div>
-            <div class="text-[11px] text-base-content/50 font-mono uppercase">
-              Connection
-            </div>
-            <h4 class="text-base font-bold text-base-content truncate">
-              {selectedConnectionData.label}
-            </h4>
-          </div>
-
-          <div
-            class="space-y-2 bg-base-200 p-2.5 rounded-box border border-base-300 text-xs font-mono"
-          >
-            <div class="flex items-center justify-between">
-              <span class="text-base-content/60">From:</span>
-              <span class="font-semibold truncate max-w-[150px]"
-                >{selectedConnectionData.from}</span
-              >
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-base-content/60">To:</span>
-              <span class="font-semibold truncate max-w-[150px]"
-                >{selectedConnectionData.to}</span
-              >
-            </div>
-          </div>
-
-          {@render connectionSidePicker(
-            `${selectedConnectionData.fromCompLabel} starting point`,
-            selectedConnectionData.startSide,
-            setConnectionStartSide,
-          )}
-
-          {@render connectionSidePicker(
-            `${selectedConnectionData.toCompLabel} starting point`,
-            selectedConnectionData.endSide,
-            setConnectionEndSide,
-          )}
-
-          <div class="divider my-2"></div>
-          <button
-            class="btn btn-xs btn-outline btn-error w-full"
-            onclick={() =>
-              void deleteConnectionFromModel(selectedConnection ?? "").catch(
-                reportDiagramError,
-              )}
-          >
-            Delete connection
-          </button>
-        </div>
+      {:else if selectedConnectionInspector}
+        <ConnectionInspector
+          connection={selectedConnectionInspector.connection}
+          connections={allConnectionData}
+          fromLabel={selectedConnectionInspector.fromLabel}
+          toLabel={selectedConnectionInspector.toLabel}
+          startSide={selectedConnectionInspector.startSide}
+          endSide={selectedConnectionInspector.endSide}
+          sharedWithCopies={selectedConnectionInspector.sharedWithCopies}
+          protocol={selectedConnectionInspector.protocol}
+          protocolReason={selectedConnectionInspector.protocolReason}
+          protocolUsage={selectedConnectionInspector.protocolUsage}
+          placedLabels={systemConnections.map((row) => row.label)}
+          onupdate={(patch) =>
+            void handleUpdateSelectedConnection(patch).catch(
+              reportDiagramError,
+            )}
+          onselect={selectConnectionByRef}
+          onsetstartside={setConnectionStartSide}
+          onsetendside={setConnectionEndSide}
+          ondelete={() =>
+            void deleteConnectionFromModel(selectedConnection ?? "").catch(
+              reportDiagramError,
+            )}
+        />
       {:else}
         <p class="text-base-content/50 text-sm">
           Select a component or connection on the canvas to edit its properties.
