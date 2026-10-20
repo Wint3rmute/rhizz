@@ -3968,6 +3968,7 @@
         />
       {:else if selectedConnectionInspector}
         <ConnectionInspector
+          {projectId}
           connection={selectedConnectionInspector.connection}
           connections={allConnectionData}
           fromLabel={selectedConnectionInspector.fromLabel}
