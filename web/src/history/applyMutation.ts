@@ -12,7 +12,12 @@
 // the compiled model — there is no second TypeScript model to keep in sync.
 
 import { type ComponentData, type PortData } from "../modelView";
-import type { ConnectionPatch, ModelAction, SystemPatch } from "../actionLog";
+import type {
+  ConnectionPatch,
+  ModelAction,
+  ProtocolPatch,
+  SystemPatch,
+} from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
 import { apply_model_op } from "../rhizz_wasm_wrapper";
 
@@ -79,7 +84,10 @@ export type ModelMutationOp =
       scopePath: string;
       label: string;
       patch: ConnectionPatch;
-    };
+    }
+  | { kind: "add_protocol"; label: string; options?: ProtocolPatch }
+  | { kind: "update_protocol"; path: string; patch: ProtocolPatch }
+  | { kind: "delete_protocol"; path: string };
 
 export interface ApplyMutationResult {
   applied: boolean;

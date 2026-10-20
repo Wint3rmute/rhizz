@@ -30,9 +30,11 @@ const fundTransfer: ConnectionData = {
 const payment: ProtocolData = {
   label: "payment",
   full_name: "Payment message",
+  tags: [],
   roles: [],
   leaf: false,
   encapsulates: [],
+  messages: [],
 };
 
 const noop = () => {};

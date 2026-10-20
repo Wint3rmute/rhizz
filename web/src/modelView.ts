@@ -132,6 +132,13 @@ export interface RawModelPayload {
     /** Arena indices into `messages`. */
     messages?: number[];
   }[];
+  /** Message arena, referenced by `protocols[].messages`. */
+  messages?: {
+    label: string;
+    full_name?: string;
+    tags?: string[];
+    level?: number;
+  }[];
 }
 
 /** One entry of {@link RawModelPayload}'s component arena. */
@@ -311,16 +318,19 @@ export function protocolUsageCount(
 }
 
 /**
- * The protocol fields the connection inspector shows. Projected from
- * {@link RawProtocol}, so the UI never reads the raw payload directly.
+ * A protocol's attributes, projected from {@link RawProtocol} so the UI never
+ * reads the raw payload directly.
  */
 export interface ProtocolData {
   label: string;
   full_name: string;
+  tags: string[];
   roles: string[];
   leaf: boolean;
   /** Declared labels of the protocols this one can carry. */
   encapsulates: string[];
+  /** Labels of the messages the protocol declares, in declaration order. */
+  messages: string[];
 }
 
 /**
@@ -352,11 +362,75 @@ export function protocolUnresolvedReason(
 export function protocolDataList(model: ModelJS | undefined): ProtocolData[] {
   if (model === undefined) return [];
   const raw = model.to_js() as RawModelPayload;
+  const messages = raw.messages ?? [];
   return (raw.protocols ?? []).map((protocol) => ({
     label: protocol.label,
     full_name: protocol.full_name ?? "",
+    tags: protocol.tags ?? [],
     roles: protocol.roles ?? [],
     leaf: protocol.leaf ?? false,
     encapsulates: protocol.encapsulates ?? [],
+    messages: (protocol.messages ?? []).flatMap((index) => {
+      const message = messages[index];
+      return message === undefined ? [] : [message.label];
+    }),
   }));
+}
+
+/** A port that names a protocol, with the definition that declares it. */
+export interface ProtocolPortUsage {
+  /** Diagram key of the declaring definition (its label for top-level ones). */
+  componentKey: string;
+  componentLabel: string;
+  portLabel: string;
+}
+
+/**
+ * Where one protocol is used: the ports naming it, the protocols listing it in
+ * `encapsulates`, and the connections it types. The delete blockers and the
+ * Usage tab both read this.
+ */
+export interface ProtocolUsage {
+  ports: ProtocolPortUsage[];
+  /** Labels of the protocols that list this one in `encapsulates`. */
+  listedBy: string[];
+  connections: ConnectionRef[];
+}
+
+/**
+ * Usage of the protocol `label`, from already-projected data. Instances are
+ * skipped for ports: their ports are the definition's, so counting them would
+ * report one port several times.
+ */
+export function protocolUsage(
+  label: string,
+  components: ReadonlyMap<string, ComponentData>,
+  protocols: readonly ProtocolData[],
+  connections: readonly ConnectionData[],
+): ProtocolUsage {
+  const ports: ProtocolPortUsage[] = [];
+  for (const [componentKey, component] of components) {
+    if (component.source !== undefined) continue;
+    for (const port of component.ports) {
+      if (port.protocol === label) {
+        ports.push({
+          componentKey,
+          componentLabel: component.label,
+          portLabel: port.label,
+        });
+      }
+    }
+  }
+  return {
+    ports,
+    listedBy: protocols
+      .filter(
+        (protocol) =>
+          protocol.label !== label && protocol.encapsulates.includes(label),
+      )
+      .map((protocol) => protocol.label),
+    connections: connections
+      .filter((connection) => connection.protocol === label)
+      .map((connection) => connection.ref),
+  };
 }

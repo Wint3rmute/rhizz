@@ -65,6 +65,17 @@ export interface ConnectionPatch {
   realized_by?: ConnectionRef[] | undefined;
 }
 
+// The subset of a protocol's attributes the protocol ops write. Mirrors Rust
+// `ProtocolPatch`. `undefined` leaves a field untouched; `tags`, `roles` and
+// `encapsulates` are full replacements, so `[]` clears them.
+export interface ProtocolPatch {
+  full_name?: string | undefined;
+  tags?: string[] | undefined;
+  roles?: string[] | undefined;
+  leaf?: boolean | undefined;
+  encapsulates?: string[] | undefined;
+}
+
 export type ModelAction =
   | { op: "add_system"; label: string; full_name: string }
   | {
@@ -104,7 +115,10 @@ export type ModelAction =
       scopePath: string;
       label: string;
       patch: ConnectionPatch;
-    };
+    }
+  | { op: "add_protocol"; label: string; options: ProtocolPatch }
+  | { op: "update_protocol"; path: string; patch: ProtocolPatch }
+  | { op: "delete_protocol"; path: string };
 
 export interface ActionLog {
   /** Appends an action to the log. */
@@ -243,6 +257,20 @@ function toMutationOp(action: ModelAction): unknown {
         label: action.label,
         patch: action.patch,
       };
+    case "add_protocol":
+      return {
+        kind: "add_protocol",
+        label: action.label,
+        options: action.options,
+      };
+    case "update_protocol":
+      return {
+        kind: "update_protocol",
+        path: action.path,
+        patch: action.patch,
+      };
+    case "delete_protocol":
+      return { kind: "delete_protocol", path: action.path };
   }
 }
 
