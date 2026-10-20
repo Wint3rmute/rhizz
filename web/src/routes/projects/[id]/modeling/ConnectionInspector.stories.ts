@@ -43,6 +43,7 @@ const meta = {
   title: "Diagrams/ConnectionInspector",
   component: ConnectionInspector,
   args: {
+    projectId: "bank-demo",
     connection: fundTransfer,
     fromLabel: "bank-a",
     toLabel: "bank-b",
@@ -127,6 +128,13 @@ export const AttributeScopes: Story = {
     await expect(within(protocol).queryByRole("textbox")).toBeNull();
     await expect(within(protocol).queryByRole("spinbutton")).toBeNull();
     await expect(within(protocol).getByText("Payment message")).toBeTruthy();
+    // "Edit protocol" opens the protocol in the Inventory, not in this panel.
+    await expect(
+      within(protocol).getByTestId("edit-protocol-link"),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("/inventory?tab=protocols&protocol=payment"),
+    );
 
     // The connection panel holds the editable fields and the realization.
     await expect(

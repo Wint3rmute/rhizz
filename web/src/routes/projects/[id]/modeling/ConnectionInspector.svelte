@@ -7,8 +7,11 @@
     type ConnectionData,
     type ProtocolData,
   } from "../../../../modelView";
+  import { inventoryProtocolHref } from "../inventory/protocolLink";
 
   interface Props {
+    /** The project the inspector belongs to, for the protocol deep link. */
+    projectId: string | null;
     /** The connection being inspected. */
     connection: ConnectionData;
     /** Every connection in the model, to resolve realization targets. */
@@ -58,6 +61,7 @@
   ];
 
   let {
+    projectId,
     connection,
     connections,
     fromLabel,
@@ -260,6 +264,13 @@
           {protocolUsage.ports === 1 ? "port" : "ports"}.
         </div>
       {/if}
+      <a
+        class="link link-primary text-xs"
+        href={inventoryProtocolHref(projectId, protocol.label)}
+        data-testid="edit-protocol-link"
+      >
+        Edit protocol
+      </a>
     {:else}
       <p class="text-xs text-base-content/60" data-testid="protocol-reason">
         {protocolReason ?? "No protocol is shared by the endpoints."}
