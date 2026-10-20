@@ -4,6 +4,38 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — W.2: Connection inspector with protocol-bound and connection-bound panels
+
+Web-only. The connection inspector moves out of `ModelingPage.svelte` into
+`modeling/ConnectionInspector.svelte`, with typed props and callbacks.
+
+- **Panels**, each with a heading tooltip naming where its fields are written:
+  - **Protocol** (`protocol-attributes`): read-only. Shows label, `leaf`, full
+    name, roles, `encapsulates`, and a usage count. When there is no protocol it
+    shows why (`protocolUnresolvedReason`: bare endpoint, untyped port,
+    mismatch, undefined protocol).
+  - **Connection** (`connection-attributes`): full name, tags and level, each
+    committed on blur or change through `update_connection`. Realization shows a
+    status badge (`realization-status`), the blocker when incomplete, the
+    "Realized by" list (`realized-by-list`) with a Show button per row (disabled
+    when the target is not placed in the view) and a remove button, and an
+    "Add realization" select with no compatibility filter.
+  - **This view** (`view-attributes`): the Start/End side pickers, unchanged.
+- **Edits** run through `runModelLayoutTransaction`, so Ctrl+Z undoes them, and a
+  refused edit shows the "Change refused" toast.
+- **Read model:** `connectionDataList`, `connectionByRef`, and `protocolDataList`
+  supply the data. `protocolUnresolvedReason` is pure and has Vitest tests.
+- **Tests:** Storybook `Diagrams/ConnectionInspector` (`Default`, `Realized`,
+  `Incomplete`, `UndefinedProtocol`, `AttributeScopes`). Playwright
+  `connection-inspector-scopes.spec.ts` (each panel's edit lands only in its file)
+  and `connection-realization.spec.ts` (remove, undo, refused cycle). VRT
+  baselines added for the 10 new screenshots.
+- **Not done here:** the "Edit protocol" link (W.4). The protocol panel stays
+  read-only.
+- **Validation:** `just test`, `just lint`, `just build`, and `just format`.
+
+---
+
 ## Task <N> — W.1: Connection read model and `update_connection` op
 
 Rust, WASM and TypeScript plumbing for the connection inspector. No UI.
