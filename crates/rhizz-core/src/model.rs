@@ -188,6 +188,30 @@ impl Model {
         self.ports.get(id.0)
     }
 
+    /// The `scope_path` a connection is addressed by (see [`ConnectionRef`]).
+    ///
+    /// `None` only when `id` is out of bounds or no scope owns it.
+    #[must_use]
+    pub fn connection_scope_path(&self, id: ConnectionId) -> Option<String> {
+        if let Some(system) = self.systems.iter().find(|s| s.connections.contains(&id)) {
+            return Some(system.label.clone());
+        }
+        let owner = self
+            .components
+            .iter()
+            .position(|c| c.connections.contains(&id))?;
+        Some(self.component_key(ComponentId(owner), &mut HashMap::new()))
+    }
+
+    /// The [`ConnectionRef`] that addresses connection `id`.
+    #[must_use]
+    pub fn connection_ref(&self, id: ConnectionId) -> Option<ConnectionRef> {
+        Some(ConnectionRef {
+            scope_path: self.connection_scope_path(id)?,
+            label: self.connection(id)?.label.clone(),
+        })
+    }
+
     /// Returns a reference to the connection at `id`, or `None` if out of bounds.
     #[must_use]
     pub fn connection(&self, id: ConnectionId) -> Option<&Connection> {
@@ -463,6 +487,29 @@ pub struct Field {
     pub unit: String,
     /// Whether this field is mandatory.
     pub required: bool,
+}
+
+/// Address of one connection: the scope it is visible in, plus its label.
+///
+/// `scope_path` uses the same convention as `add_connection` and
+/// `delete_connection`:
+///
+/// - a connection declared directly in a system is addressed by the system
+///   label, e.g. `banking`;
+/// - a connection declared inside an instance is addressed through the
+///   instance path, e.g. `banking/bank-a`. That path names one copy, but the
+///   declaration itself lives in the instance's definition;
+/// - a connection declared in a top-level definition is addressed by the
+///   definition label, e.g. `bank`.
+///
+/// Serialized as `{ "scopePath": ..., "label": ... }` for the web frontend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConnectionRef {
+    /// Container path of the connection, as described above.
+    pub scope_path: String,
+    /// Connection label, unique within its scope.
+    pub label: String,
 }
 
 // ── View models ───────────────────────────────────────────────────────────────

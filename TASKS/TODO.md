@@ -115,52 +115,6 @@ Web-side work for proposal 0002. Four tasks (W.1 – W.4). These depend on the
 
 ---
 
-## Task <N> — W.1: Connection read model and `update_connection` op
-
-Depends on 0002.5. Rust, WASM and TypeScript plumbing for the connection
-inspector. No UI.
-
-- **WASM getters** (`crates/rhizz-wasm/src/lib.rs`): extend `ConnectionJS` with
-  what the inspector reads: `full_name`, `tags`, `level`, the endpoint ports
-  (`from_port`, `to_port` as optional port labels or indices), the derived
-  protocol (`Option` of the protocol label, using the helper from 0002.3),
-  the `realized_by` targets (as references the UI can display and re-send, see
-  `ConnectionRef` below), and the completeness result from 0002.5 (state plus
-  the first blocking connection). Extend `ProtocolJS` with `leaf` and
-  `encapsulates`. The commented-out fields in `ConnectionJS` are a convention for
-  "not used yet": only add getters that W.2 uses.
-- **Scope and identity.** Add a stable way to address one connection from TS:
-  `ConnectionRef = { scopePath: string; label: string }`. `scopePath` follows the
-  existing `add_connection` / `delete_connection` convention. Document how it is
-  built for a connection declared in a system, in an instance, and in a
-  top-level definition.
-- **Op** (`mutation.rs`): `update_connection { scopePath, label, patch }`.
-  `patch` fields: `full_name`, `tags`, `level`, and `realized_by` as a **full
-  replacement** list of `ConnectionRef`, like `ports` in `update_component`.
-  Rust turns each `ConnectionRef` into the canonical `realized_by` entry (bare
-  label for same-scope, otherwise the path form the serializer writes), so the
-  UI never builds path strings. Unknown patch fields are rejected
-  (`deny_unknown_fields`), as for `update_system`. If the connection lives in a
-  reusable definition, the edit applies to the definition and so to all its
-  copies; say so in the op's doc comment.
-- **Refusals.** A patch that makes the model produce an error (`E017`, `E018`,
-  `E019`) is refused through the existing re-resolve in `mutate_to_hcl`. Warnings
-  are not refusals.
-- **Mirrors:** `LoggedAction::UpdateConnection`, `ModelAction`,
-  `toMutationOp`, `ModelMutationOp` in `applyMutation.ts`, a `ConnectionPatch`
-  type, and the sync test. Extend `RawModelPayload` / `modelView.ts` with typed
-  connection and protocol data, and add small pure helpers (for example
-  "connection data by ref", "protocol usage count") with Vitest tests.
-- **Tests (red first):** Rust unit tests for the op (each patch field, a refusal
-  for a `realized_by` cycle, definition-copy semantics, no change to canonical
-  output for an empty patch), wasm test for the new getters on the banking chain
-  from the proposal, and the `actionLog` replay test.
-
-Definition of done: `just test`, `just lint`, `just build` pass. `just build`
-must succeed, because it also builds the WASM package.
-
----
-
 ## Task <N> — W.2: Connection inspector with protocol-bound and connection-bound panels
 
 Depends on W.1.

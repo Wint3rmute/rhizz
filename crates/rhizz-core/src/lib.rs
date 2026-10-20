@@ -21,9 +21,9 @@ pub use diagnostics::{Diagnostic, DiagnosticCode, Level, ParseWarningLevelError,
 pub use examples::{ExampleFile, ExampleProject, example_projects};
 pub use model::{
     Annotation, Component, ComponentId, ComponentKind, ComponentParent, Connection,
-    ConnectionEndpoint, ConnectionId, ConnectionLayout, ConnectionSide, Field, FieldId, Message,
-    MessageId, Model, NodeLayout, Port, PortId, Project, Protocol, ProtocolId, System, SystemId,
-    ViewDefinition, ViewFilterDefinition,
+    ConnectionEndpoint, ConnectionId, ConnectionLayout, ConnectionRef, ConnectionSide, Field,
+    FieldId, Message, MessageId, Model, NodeLayout, Port, PortId, Project, Protocol, ProtocolId,
+    System, SystemId, ViewDefinition, ViewFilterDefinition,
 };
 pub use mutation::{LoggedAction, ModelOp, MutationResult, mutate_to_hcl};
 pub use score::{CategoryScore, ScoreReport, score};

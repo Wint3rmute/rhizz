@@ -228,38 +228,190 @@ impl From<&rhizz_core::Project> for ProjectJS {
 
 // ── ConnectionJS ───────────────────────────────────────────────────────────────
 
-/// A connection exposed to JavaScript.
+/// Address of one connection (`scope_path` + `label`), as used by
+/// `update_connection` and `realized_by`. See [`rhizz_core::ConnectionRef`]
+/// for how `scope_path` is built.
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct ConnectionRefJS {
+    scope_path: String,
+    label: String,
+}
+
+#[wasm_bindgen]
+impl ConnectionRefJS {
+    /// Container path of the connection (system, instance path or definition).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn scope_path(&self) -> String {
+        self.scope_path.clone()
+    }
+
+    /// Connection label.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn label(&self) -> String {
+        self.label.clone()
+    }
+}
+
+impl From<rhizz_core::ConnectionRef> for ConnectionRefJS {
+    fn from(r: rhizz_core::ConnectionRef) -> Self {
+        Self {
+            scope_path: r.scope_path,
+            label: r.label,
+        }
+    }
+}
+
+/// A connection exposed to JavaScript, with the model context the inspector
+/// needs: its address, its derived protocol, what realizes it, and whether
+/// its realization chain is complete.
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct ConnectionJS {
     label: String,
-    // full_name: String,
-    // tags: Vec<String>,
-    // level: i32,
+    scope_path: String,
+    full_name: String,
+    tags: Vec<String>,
+    level: i32,
+    from_port: Option<String>,
+    to_port: Option<String>,
+    protocol: Option<String>,
+    realized_by: Vec<ConnectionRefJS>,
+    complete: bool,
+    blocking: Option<ConnectionRefJS>,
     pub from: usize,
     pub to: usize,
 }
 
-impl From<&rhizz_core::Connection> for ConnectionJS {
-    fn from(c: &rhizz_core::Connection) -> Self {
+impl ConnectionJS {
+    fn new(
+        model: &rhizz_core::Model,
+        id: rhizz_core::ConnectionId,
+        conn: &rhizz_core::Connection,
+        state: &rhizz_core::validate::Completeness,
+    ) -> Self {
+        let port_label = |port: Option<rhizz_core::PortId>| {
+            port.and_then(|p| model.port(p)).map(|p| p.label.clone())
+        };
+        let (complete, blocking) = match state {
+            rhizz_core::validate::Completeness::Complete => (true, None),
+            rhizz_core::validate::Completeness::Incomplete { blocking } => (
+                false,
+                blocking
+                    .and_then(|b| model.connection_ref(b))
+                    .map(ConnectionRefJS::from),
+            ),
+        };
         Self {
-            label: c.label.clone(),
-            // Uncommented, not used yet anywhere,
-            // otherwise linter complains.
-            // Uncomment when you start using it
-            // level: c.level,
-            from: c.from.component.0,
-            to: c.to.component.0,
+            label: conn.label.clone(),
+            scope_path: model.connection_scope_path(id).unwrap_or_default(),
+            full_name: conn.full_name.clone(),
+            tags: conn.tags.clone(),
+            level: conn.level,
+            from_port: port_label(conn.from.port),
+            to_port: port_label(conn.to.port),
+            protocol: model
+                .connection_protocol(id)
+                .and_then(|pid| model.protocol(pid))
+                .map(|p| p.label.clone()),
+            realized_by: conn
+                .realized_by_ids
+                .iter()
+                .filter_map(|target| model.connection_ref(*target))
+                .map(ConnectionRefJS::from)
+                .collect(),
+            complete,
+            blocking,
+            from: conn.from.component.0,
+            to: conn.to.component.0,
         }
     }
 }
 
 #[wasm_bindgen]
 impl ConnectionJS {
+    /// Connection label.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn label(&self) -> String {
         self.label.clone()
+    }
+
+    /// Address of this connection, usable as `update_connection` target and
+    /// as a `realized_by` entry.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn scope_path(&self) -> String {
+        self.scope_path.clone()
+    }
+
+    /// Full official name, expanding abbreviations.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn full_name(&self) -> String {
+        self.full_name.clone()
+    }
+
+    /// Filtering tags.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+
+    /// Abstraction level.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
+    pub fn level(&self) -> i32 {
+        self.level
+    }
+
+    /// Label of the source endpoint's port, when the endpoint names one.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn from_port(&self) -> Option<String> {
+        self.from_port.clone()
+    }
+
+    /// Label of the target endpoint's port, when the endpoint names one.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn to_port(&self) -> Option<String> {
+        self.to_port.clone()
+    }
+
+    /// Label of the protocol this connection travels over, derived from its
+    /// endpoint ports. `None` for bare endpoints, mismatched ports, or an
+    /// undefined protocol.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn protocol(&self) -> Option<String> {
+        self.protocol.clone()
+    }
+
+    /// Connections that realize this one.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn realized_by(&self) -> Vec<ConnectionRefJS> {
+        self.realized_by.clone()
+    }
+
+    /// Whether this connection's realization chain is complete (see W019).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
+    pub fn complete(&self) -> bool {
+        self.complete
+    }
+
+    /// Root cause of an incomplete chain, when there is one.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn blocking(&self) -> Option<ConnectionRefJS> {
+        self.blocking.clone()
     }
 }
 
@@ -366,6 +518,8 @@ pub struct ProtocolJS {
     full_name: String,
     tags: Vec<String>,
     roles: Vec<String>,
+    leaf: bool,
+    encapsulates: Vec<String>,
 }
 
 #[wasm_bindgen]
@@ -397,6 +551,21 @@ impl ProtocolJS {
     pub fn roles(&self) -> Vec<String> {
         self.roles.clone()
     }
+
+    /// Whether the protocol needs no further realization.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
+    pub fn leaf(&self) -> bool {
+        self.leaf
+    }
+
+    /// Labels of the protocols this one can carry, as declared.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn encapsulates(&self) -> Vec<String> {
+        self.encapsulates.clone()
+    }
 }
 
 impl From<&rhizz_core::Protocol> for ProtocolJS {
@@ -406,6 +575,8 @@ impl From<&rhizz_core::Protocol> for ProtocolJS {
             full_name: proto.full_name.clone(),
             tags: proto.tags.clone(),
             roles: proto.roles.clone(),
+            leaf: proto.leaf,
+            encapsulates: proto.encapsulates.clone(),
         }
     }
 }
@@ -625,10 +796,15 @@ impl ModelJS {
     /// Returns all connections as typed wrappers.
     #[must_use]
     pub fn connections(&self) -> Vec<ConnectionJS> {
+        let completeness = rhizz_core::validate::connection_completeness(&self.inner);
         self.inner
             .connections
             .iter()
-            .map(ConnectionJS::from)
+            .enumerate()
+            .zip(&completeness)
+            .map(|((index, conn), state)| {
+                ConnectionJS::new(&self.inner, rhizz_core::ConnectionId(index), conn, state)
+            })
             .collect()
     }
 

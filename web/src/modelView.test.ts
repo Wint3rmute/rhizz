@@ -2,7 +2,13 @@ import init from "rhizz";
 import * as nodeFs from "node:fs/promises";
 import * as nodePath from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { componentDataByKey, definitionOptions } from "./modelView";
+import {
+  componentDataByKey,
+  connectionByRef,
+  connectionDataList,
+  definitionOptions,
+  protocolUsageCount,
+} from "./modelView";
 import { compile_system } from "./rhizz_wasm_wrapper";
 import type { Source } from "./vfs/compile";
 
@@ -259,5 +265,133 @@ system "main" {
     expect(definitionOptions(model).map((d) => d.sourceLabel)).toEqual([
       "sensor",
     ]);
+  });
+});
+
+/**
+ * Two banks whose `pay` ports share the `payment` protocol. `fund-transfer`
+ * (payment) is realized by `http-request` (https). `httpsLeaf` decides whether
+ * that chain bottoms out, which is the difference between complete and
+ * incomplete.
+ */
+function bankingChain(httpsLeaf: boolean): string {
+  return `protocol "payment" {}
+protocol "https" {
+  leaf         = ${httpsLeaf ? "true" : "false"}
+  encapsulates = ["payment"]
+}
+component "bank" {
+  leaf = true
+  port "pay" {
+    protocol = "payment"
+  }
+  port "web" {
+    protocol = "https"
+  }
+}
+system "banking" {
+  instance "bank-a" {
+    source = "bank"
+  }
+  instance "bank-b" {
+    source = "bank"
+  }
+  connection "fund-transfer" {
+    from        = "bank-a/pay"
+    to          = "bank-b/pay"
+    realized_by = ["http-request"]
+  }
+  connection "http-request" {
+    from = "bank-a/web"
+    to   = "bank-b/web"
+  }
+}
+`;
+}
+
+describe("connectionDataList", () => {
+  const banking = { scopePath: "banking", label: "http-request" };
+  const transfer = { scopePath: "banking", label: "fund-transfer" };
+
+  it("is empty for an undefined model", () => {
+    expect(connectionDataList(undefined)).toEqual([]);
+  });
+
+  it("addresses connections by scope and label, with their endpoint ports", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(true) }]),
+    );
+    const found = connectionByRef(list, transfer);
+    expect(found).toBeDefined();
+    expect(found?.ref).toEqual(transfer);
+    expect(found?.from_port).toBe("pay");
+    expect(found?.to_port).toBe("pay");
+    expect(found?.protocol).toBe("payment");
+  });
+
+  it("lists the realization targets as refs the op can send back", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(true) }]),
+    );
+    expect(connectionByRef(list, transfer)?.realized_by).toEqual([banking]);
+    expect(connectionByRef(list, banking)?.realized_by).toEqual([]);
+  });
+
+  it("reports a complete chain as complete, with no blocker", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(true) }]),
+    );
+    const found = connectionByRef(list, transfer);
+    expect(found?.complete).toBe(true);
+    expect(found?.blocking).toBeUndefined();
+  });
+
+  it("names the root-cause connection of an incomplete chain", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(false) }]),
+    );
+    const found = connectionByRef(list, transfer);
+    expect(found?.complete).toBe(false);
+    expect(found?.blocking).toEqual(banking);
+    // The root cause itself has no blocker: its own protocol is the gap.
+    expect(connectionByRef(list, banking)?.blocking).toBeUndefined();
+  });
+});
+
+describe("connectionByRef and protocolUsageCount", () => {
+  it("returns undefined for an address that names no connection", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(true) }]),
+    );
+    expect(
+      connectionByRef(list, { scopePath: "banking", label: "missing" }),
+    ).toBeUndefined();
+    // Same label, different scope: not the same connection.
+    expect(
+      connectionByRef(list, { scopePath: "bank-a", label: "fund-transfer" }),
+    ).toBeUndefined();
+  });
+
+  it("counts the connections typed by a protocol", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: bankingChain(true) }]),
+    );
+    expect(protocolUsageCount(list, "payment")).toBe(1);
+    expect(protocolUsageCount(list, "https")).toBe(1);
+    expect(protocolUsageCount(list, "ftp")).toBe(0);
+  });
+});
+
+describe("protocol read model", () => {
+  it("exposes leaf and declared encapsulates on each protocol", () => {
+    const model = modelOf([
+      { filename: "system.hcl", content: bankingChain(true) },
+    ]);
+    const https = model?.protocols().find((p) => p.label === "https");
+    expect(https?.leaf).toBe(true);
+    expect(https?.encapsulates).toEqual(["payment"]);
+    const payment = model?.protocols().find((p) => p.label === "payment");
+    expect(payment?.leaf).toBe(false);
+    expect(payment?.encapsulates).toEqual([]);
   });
 });
