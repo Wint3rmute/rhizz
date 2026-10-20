@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ProtocolData } from "../../../../modelView";
 import {
   completionBadge,
   DEFAULT_VIEW_DIR,
@@ -6,6 +7,7 @@ import {
   definitionDepth,
   definitionLabelForNode,
   filterDefinitions,
+  filterProtocols,
   filterSystems,
   filterWithViews,
   hasDefaultView,
@@ -15,6 +17,7 @@ import {
   InventoryTab,
   type PortInfo,
   preferredViewSystem,
+  protocolInventoryQuery,
   systemAsDefinition,
   viewsBoundToSystem,
 } from "./inventory";
@@ -151,9 +154,9 @@ describe("filterDefinitions", () => {
     ).toEqual([sm]);
   });
 
-  it("returns an empty list when nothing matches (Interfaces tab has no entries yet)", () => {
+  it("returns an empty list on the Protocols tab, which lists protocols instead", () => {
     expect(
-      filterDefinitions(all, { tab: InventoryTab.Interfaces, query: "" }),
+      filterDefinitions(all, { tab: InventoryTab.Protocols, query: "" }),
     ).toEqual([]);
     expect(
       filterDefinitions(all, { tab: InventoryTab.Components, query: "zzz" }),
@@ -402,5 +405,53 @@ describe("viewsBoundToSystem", () => {
 
   it("returns [] when nothing is bound to the system", () => {
     expect(viewsBoundToSystem(views, "missing")).toEqual([]);
+  });
+});
+
+describe("filterProtocols", () => {
+  const proto = (overrides: Partial<ProtocolData> = {}): ProtocolData => ({
+    label: "power",
+    full_name: "",
+    tags: [],
+    roles: [],
+    leaf: false,
+    encapsulates: [],
+    messages: [],
+    ...overrides,
+  });
+  const power = proto({ label: "power", full_name: "DC power delivery" });
+  const spi = proto({ label: "spi", tags: ["bus"] });
+  const can = proto({ label: "can", full_name: "Controller area network" });
+
+  it("sorts protocols by label", () => {
+    expect(filterProtocols([power, spi, can], "").map((p) => p.label)).toEqual([
+      "can",
+      "power",
+      "spi",
+    ]);
+  });
+
+  it("searches label and full name, case-insensitively", () => {
+    expect(filterProtocols([power, spi, can], "POWER")).toEqual([power]);
+    expect(filterProtocols([power, spi, can], "area")).toEqual([can]);
+  });
+
+  it("matches nothing for a query no protocol satisfies", () => {
+    expect(filterProtocols([power, spi, can], "zzz")).toEqual([]);
+  });
+});
+
+describe("protocolInventoryQuery", () => {
+  it("opens the Protocols tab with no protocol selected", () => {
+    expect(protocolInventoryQuery(null)).toBe("?tab=protocols");
+  });
+
+  it("names the open protocol, encoding the label", () => {
+    expect(protocolInventoryQuery("power")).toBe(
+      "?tab=protocols&protocol=power",
+    );
+    expect(protocolInventoryQuery("a b/c")).toBe(
+      "?tab=protocols&protocol=a%20b%2Fc",
+    );
   });
 });
