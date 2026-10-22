@@ -60,20 +60,6 @@ pub struct ConnectEnd {
     pub port: PortSpec,
 }
 
-/// Arguments of [`connect_components`].
-pub struct ConnectParams<'a> {
-    /// Scope that declares the connection (same convention as `add_connection`).
-    pub scope_path: &'a str,
-    /// Connection label.
-    pub label: &'a str,
-    /// Source end.
-    pub from: &'a ConnectEnd,
-    /// Target end.
-    pub to: &'a ConnectEnd,
-    /// Label of a stub protocol to create alongside, if any.
-    pub create_protocol: Option<&'a str>,
-}
-
 /// Apply `connect_components` to the raw tree.
 ///
 /// # Errors
@@ -83,29 +69,33 @@ pub struct ConnectParams<'a> {
 /// or a protocol that cannot be created. Nothing is written in that case.
 pub fn connect_components(
     raw: &mut RawFile,
-    params: &ConnectParams<'_>,
+    scope_path: &str,
+    label: &str,
+    from: &ConnectEnd,
+    to: &ConnectEnd,
+    create_protocol: Option<&str>,
 ) -> Result<ApplyOutcome, MutationError> {
-    let Some(scope) = super::resolve_scope_or_idle(raw, params.scope_path) else {
+    let Some(scope) = super::resolve_scope_or_idle(raw, scope_path) else {
         return Ok(super::idle());
     };
-    check_connection_label(raw, scope, params.label)?;
+    check_connection_label(raw, scope, label)?;
 
     // Resolve both definitions before writing anything, so a bad endpoint is
     // reported as such rather than as a consequence of the first edit.
-    let from_definition = end_definition(raw, scope, &params.from.component)?;
-    let to_definition = end_definition(raw, scope, &params.to.component)?;
+    let from_definition = end_definition(raw, scope, &from.component)?;
+    let to_definition = end_definition(raw, scope, &to.component)?;
 
-    if let Some(protocol) = params.create_protocol {
+    if let Some(protocol) = create_protocol {
         super::add_protocol(raw, protocol, &ProtocolPatch::default())?;
     }
-    attach_port(raw, from_definition, &params.from.port)?;
-    attach_port(raw, to_definition, &params.to.port)?;
+    attach_port(raw, from_definition, &from.port)?;
+    attach_port(raw, to_definition, &to.port)?;
 
     super::scope_connections_mut(raw, scope)?.push(Labeled {
-        label: params.label.to_owned(),
+        label: label.to_owned(),
         inner: RawConnection {
-            from: Some(endpoint(params.from)),
-            to: Some(endpoint(params.to)),
+            from: Some(endpoint(from)),
+            to: Some(endpoint(to)),
             ..Default::default()
         },
     });
@@ -114,11 +104,11 @@ pub fn connect_components(
         applied: true,
         path: None,
         actions: vec![LoggedAction::ConnectComponents {
-            scope_path: params.scope_path.to_owned(),
-            label: params.label.to_owned(),
-            from: params.from.clone(),
-            to: params.to.clone(),
-            create_protocol: params.create_protocol.map(str::to_owned),
+            scope_path: scope_path.to_owned(),
+            label: label.to_owned(),
+            from: from.clone(),
+            to: to.clone(),
+            create_protocol: create_protocol.map(str::to_owned),
         }],
     })
 }

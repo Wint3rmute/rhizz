@@ -774,13 +774,11 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             create_protocol,
         } => connect::connect_components(
             raw,
-            &connect::ConnectParams {
-                scope_path,
-                label,
-                from,
-                to,
-                create_protocol: create_protocol.as_deref(),
-            },
+            scope_path,
+            label,
+            from,
+            to,
+            create_protocol.as_deref(),
         ),
         ModelOp::DeleteConnectionByLabel { label } => Ok(delete_connection_by_label(raw, label)),
         ModelOp::UpdateConnection {
