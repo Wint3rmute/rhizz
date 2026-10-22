@@ -13,6 +13,7 @@
 
 import { type ComponentData, type PortData } from "../modelView";
 import type {
+  ConnectEnd,
   ConnectionPatch,
   ModelAction,
   ProtocolPatch,
@@ -76,6 +77,16 @@ export type ModelMutationOp =
       label: string;
       from: string;
       to: string;
+    }
+  | {
+      // A connection together with the ports it ends on (and optionally a
+      // stub protocol for them): one gesture, one atomic op.
+      kind: "connect_components";
+      scopePath: string;
+      label: string;
+      from: ConnectEnd;
+      to: ConnectEnd;
+      createProtocol?: string | undefined;
     }
   | { kind: "delete_connection"; scopePath: string; label: string }
   | { kind: "delete_connection_by_label"; label: string }

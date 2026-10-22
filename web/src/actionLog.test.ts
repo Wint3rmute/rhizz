@@ -118,6 +118,51 @@ describe("actionLog", () => {
     );
   });
 
+  it("encodes connect_components as the op that produced it", () => {
+    const line = encodeCall(
+      {
+        op: "connect_components",
+        scopePath: "main",
+        label: "fc-to-radio",
+        from: {
+          component: "fc",
+          port: {
+            new: { label: "link-radio", protocol: "spi", external: true },
+          },
+        },
+        to: { component: "radio", port: { existing: "link-fc" } },
+        createProtocol: "spi",
+      },
+      "fs",
+    );
+    const opJson = line.slice(line.indexOf("{"), line.lastIndexOf("}") + 1);
+    expect(JSON.parse(opJson)).toEqual({
+      kind: "connect_components",
+      scopePath: "main",
+      label: "fc-to-radio",
+      from: {
+        component: "fc",
+        port: { new: { label: "link-radio", protocol: "spi", external: true } },
+      },
+      to: { component: "radio", port: { existing: "link-fc" } },
+      createProtocol: "spi",
+    });
+  });
+
+  it("omits createProtocol from connect_components when there is none", () => {
+    const line = encodeCall(
+      {
+        op: "connect_components",
+        scopePath: "main",
+        label: "l",
+        from: { component: "a", port: { new: { label: "p" } } },
+        to: { component: "b", port: { new: { label: "q" } } },
+      },
+      "fs",
+    );
+    expect(line).not.toContain("createProtocol");
+  });
+
   it("round-trips quotes and backslashes through op JSON", () => {
     const action: ModelAction = {
       op: "add_component_definition",

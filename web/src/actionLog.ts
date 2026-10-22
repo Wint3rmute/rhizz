@@ -76,6 +76,28 @@ export interface ProtocolPatch {
   encapsulates?: string[] | undefined;
 }
 
+// A port created together with a connection (`connect_components`). Mirrors
+// Rust `NewPort`: `undefined` leaves an attribute at its spec default, and an
+// empty `protocol` / `role` also means unset.
+export interface NewPortSpec {
+  label: string;
+  protocol?: string | undefined;
+  role?: string | undefined;
+  external?: boolean | undefined;
+  required?: boolean | undefined;
+}
+
+// The port one end of a `connect_components` lands on: one the component
+// already has, or one created with the connection. Mirrors Rust `PortSpec`.
+export type ConnectPort = { existing: string } | { new: NewPortSpec };
+
+// One end of a `connect_components`. `component` is an instance path relative
+// to the connection's scope; empty addresses the scope's own component.
+export interface ConnectEnd {
+  component: string;
+  port: ConnectPort;
+}
+
 export type ModelAction =
   | { op: "add_system"; label: string; full_name: string }
   | {
@@ -108,6 +130,14 @@ export type ModelAction =
       label: string;
       from: string;
       to: string;
+    }
+  | {
+      op: "connect_components";
+      scopePath: string;
+      label: string;
+      from: ConnectEnd;
+      to: ConnectEnd;
+      createProtocol?: string | undefined;
     }
   | { op: "delete_connection"; scopePath: string; label: string }
   | {
@@ -245,6 +275,17 @@ function toMutationOp(action: ModelAction): unknown {
         label: action.label,
         from: action.from,
         to: action.to,
+      };
+    case "connect_components":
+      return {
+        kind: "connect_components",
+        scopePath: action.scopePath,
+        label: action.label,
+        from: action.from,
+        to: action.to,
+        ...(action.createProtocol === undefined
+          ? {}
+          : { createProtocol: action.createProtocol }),
       };
     case "delete_connection":
       // The dispatcher resolves the scope itself; the recorded scope is
