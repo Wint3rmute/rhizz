@@ -51,6 +51,7 @@
   import {
     type ComponentData,
     componentDataByKey,
+    connectedPortLabels,
     connectionByRef,
     connectionDataList,
     definitionOptions,
@@ -3274,6 +3275,8 @@
             ?.ports.find((port) => port.label === portLabel);
     const fromPort = endpointPort(fromKey, connection.from_port);
     const toPort = endpointPort(toKey, connection.to_port);
+    const fromComponent = componentData.get(fromKey);
+    const toComponent = componentData.get(toKey);
 
     const protocols = protocolDataList(model);
     const protocol =
@@ -3317,6 +3320,10 @@
       connection,
       fromLabel: components[conn.from]?.label ?? fromKey,
       toLabel: components[conn.to]?.label ?? toKey,
+      fromPorts: fromComponent?.ports ?? [],
+      toPorts: toComponent?.ports ?? [],
+      fromConnectedPorts: connectedPortLabels(model, fromKey),
+      toConnectedPorts: connectedPortLabels(model, toKey),
       startSide: savedConnections[conn.label]?.startSide,
       endSide: savedConnections[conn.label]?.endSide,
       sharedWithCopies: !systemLabels.has(connection.ref.scopePath),
@@ -3994,6 +4001,10 @@
           connections={allConnectionData}
           fromLabel={selectedConnectionInspector.fromLabel}
           toLabel={selectedConnectionInspector.toLabel}
+          fromPorts={selectedConnectionInspector.fromPorts}
+          toPorts={selectedConnectionInspector.toPorts}
+          fromConnectedPorts={selectedConnectionInspector.fromConnectedPorts}
+          toConnectedPorts={selectedConnectionInspector.toConnectedPorts}
           startSide={selectedConnectionInspector.startSide}
           endSide={selectedConnectionInspector.endSide}
           sharedWithCopies={selectedConnectionInspector.sharedWithCopies}

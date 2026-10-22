@@ -302,6 +302,44 @@ export function connectionDataList(
   });
 }
 
+/**
+ * Labels of the ports on the component instance at `componentKey` that at least
+ * one connection in the model uses as an endpoint.
+ *
+ * Per placed instance, not per definition: a connection names an endpoint
+ * component by arena index (which resolves to an instance key for a placed
+ * component) and a port by arena index. Two instances of one definition can
+ * therefore report different connected ports. A connection's own endpoint port
+ * is in the set by definition; the set is useful for spotting its other,
+ * unconnected ports.
+ *
+ * Empty for an undefined model or a key that no longer exists in the model.
+ */
+export function connectedPortLabels(
+  model: ModelJS | undefined,
+  componentKey: string,
+): ReadonlySet<string> {
+  const labels = new Set<string>();
+  if (model === undefined) return labels;
+
+  const raw = model.to_js() as RawModelPayload;
+  const keys = model.component_keys();
+  const componentIndex = keys.indexOf(componentKey);
+  if (componentIndex === -1) return labels;
+
+  const ports = raw.ports ?? [];
+  for (const connection of raw.connections ?? []) {
+    for (const endpoint of [connection.from, connection.to]) {
+      if (endpoint.component !== componentIndex || endpoint.port == null) {
+        continue;
+      }
+      const label = ports[endpoint.port]?.label;
+      if (label !== undefined) labels.add(label);
+    }
+  }
+  return labels;
+}
+
 /** Stable map key for a connection address. */
 export function connectionRefKey(ref: ConnectionRef): string {
   return JSON.stringify([ref.scopePath, ref.label]);

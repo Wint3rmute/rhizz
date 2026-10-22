@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
-import type { ConnectionData, ProtocolData } from "../../../../modelView";
+import type {
+  ConnectionData,
+  PortData,
+  ProtocolData,
+} from "../../../../modelView";
 import ConnectionInspector from "./ConnectionInspector.svelte";
 
 const httpRequest: ConnectionData = {
@@ -37,6 +41,26 @@ const payment: ProtocolData = {
   messages: [],
 };
 
+const paymentPort: PortData = {
+  label: "pay",
+  protocol: "payment",
+  role: "peer",
+};
+
+const webPort: PortData = {
+  label: "web",
+  protocol: "https",
+  role: "peer",
+};
+
+const sparePort: PortData = {
+  label: "spare",
+  protocol: "payment",
+  role: "peer",
+};
+
+const endpointPorts = [paymentPort, webPort, sparePort];
+
 const noop = () => {};
 
 const meta = {
@@ -47,6 +71,10 @@ const meta = {
     connection: fundTransfer,
     fromLabel: "bank-a",
     toLabel: "bank-b",
+    fromPorts: endpointPorts,
+    toPorts: endpointPorts,
+    fromConnectedPorts: new Set(["pay"]),
+    toConnectedPorts: new Set(["pay"]),
     sharedWithCopies: false,
     protocol: payment,
     protocolReason: undefined,
@@ -105,6 +133,32 @@ export const UndefinedProtocol: Story = {
     protocol: undefined,
     protocolReason: "The ports use different protocols (https and i2c).",
     protocolUsage: undefined,
+  },
+};
+
+/**
+ * Every port on both endpoint components is listed with a connected badge.
+ * `pay` is an endpoint of this connection; `web` and `spare` are not, so they
+ * show as not connected. Status is explicitly per placed instance.
+ */
+export const PortConnectionStatus: Story = {
+  args: {
+    connection: fundTransfer,
+    fromPorts: endpointPorts,
+    toPorts: endpointPorts,
+    fromConnectedPorts: new Set(["pay"]),
+    toConnectedPorts: new Set(["pay"]),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const from = await canvas.findByTestId("from-ports");
+    const to = await canvas.findByTestId("to-ports");
+
+    await expect(within(from).getAllByText("Connected")).toHaveLength(1);
+    await expect(within(from).getAllByText("Not connected")).toHaveLength(2);
+    await expect(within(to).getAllByText("Connected")).toHaveLength(1);
+    await expect(within(to).getAllByText("Not connected")).toHaveLength(2);
+    await expect(canvas.getByText(/per placed instance/i)).toBeTruthy();
   },
 };
 
