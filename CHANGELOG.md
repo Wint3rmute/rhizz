@@ -33,6 +33,11 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Refactor
 
+- **web**: reuse action fields for connect op replay
+- **web**: drop unreachable escape branch in dialog
+- **core**: share label checks in connect op
+- **core**: inline connect params into connect components
+- **web**: delete unused LCA connection helper
 - **core**: remove connection.encapsulates
 - **web**: extract shared DiagramSceneView presenter for diagram transitions
 
