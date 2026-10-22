@@ -79,6 +79,8 @@ async function drawAlphaToBeta(page: Page): Promise<void> {
     { steps: 8 },
   );
   await page.mouse.up();
+  // Ready means the name is focused: that is what makes Enter work.
+  await expect(page.getByTestId("new-connection-name")).toBeFocused();
 }
 
 test("Enter creates the connection with the prefilled ports", async ({
@@ -100,6 +102,20 @@ test("Enter creates the connection with the prefilled ports", async ({
     "link-alpha",
   );
   await expect(dialog.getByTestId("new-connection-protocol")).toHaveValue("");
+  // The flags are plain fields of each port, not hidden behind a toggle.
+  await expect(
+    dialog.getByTestId("new-connection-from-external"),
+  ).not.toBeChecked();
+  await expect(
+    dialog.getByTestId("new-connection-from-required"),
+  ).toBeChecked();
+
+  // The preview names the connection under its line, live.
+  const previewName = dialog.getByTestId("new-connection-preview-name");
+  await expect(previewName).toHaveText("alpha-to-beta");
+  await name.fill("power");
+  await expect(previewName).toHaveText("power");
+  await name.fill("alpha-to-beta");
 
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();

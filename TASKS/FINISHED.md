@@ -18,11 +18,11 @@ and the port-less `add_connection` from the canvas are gone.
   the model untouched. Logged as a single `connect_components` action in the op's
   own shape, so "Copy Debug Info" replays the gesture as one call.
 - **Dialog** (`NewConnectionModal.svelte`, logic in `newConnection.ts`): preview
-  of the two components with pins and a role-derived arrow; connection name
-  focused and prefilled `<from>-to-<to>`; protocol combobox (recent, then used,
-  then the rest; "Create protocol…" row creates an empty stub); per-end port name
-  prefilled `link-<other>`, role, and an Advanced section for `external` /
-  `required`. Enter creates, Esc cancels and writes nothing, and a refused op
+  of the two components with pins, a role-derived arrow and the connection name
+  under the line; connection name focused and prefilled `<from>-to-<to>`;
+  protocol combobox (recent, then used, then the rest; "Create protocol…" row
+  creates an empty stub); per-end port name prefilled `link-<other>`, role, and
+  the `external` / `required` checkboxes, all always visible. Enter creates, Esc cancels and writes nothing, and a refused op
   keeps the dialog open.
 - **Defaults:** `required = true`; `external` is `false` for a direct child of the
   connection's scope and `true` when the connection leaves a nested component

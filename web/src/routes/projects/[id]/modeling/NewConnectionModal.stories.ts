@@ -170,9 +170,8 @@ export const NestedEndpoint: Story = {
   },
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
-    await userEvent.click(await modal.findByTestId("new-connection-advanced"));
     await expect(
-      modal.getByTestId("new-connection-from-external"),
+      await modal.findByTestId("new-connection-from-external"),
     ).toBeChecked();
     await expect(
       modal.getByTestId("new-connection-to-external"),
