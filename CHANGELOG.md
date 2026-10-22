@@ -7,6 +7,9 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Feat
 
+- **web**: show port flags inline and name the connection in the dialog preview
+- **web**: add New connection dialog that creates the ports with the connection
+- **core**: add connect_components op that creates a connection with its ports
 - **web**: link a connection's protocol to its Inventory entry
 - **web**: replace the Interfaces placeholder with a Protocols tab
 - **web**: project protocol messages and filter protocols for the inventory
