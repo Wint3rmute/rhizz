@@ -440,10 +440,14 @@ describe("applyModelMutation", () => {
       ...overrides,
     });
 
-    it("writes the ports and the connection in one file write", async () => {
+    const seeded = async () => {
       const fs = memoryFs();
       await seedDemo(fs);
-      const baseline = fs.store.get("system.hcl") ?? "";
+      return { fs, baseline: fs.store.get("system.hcl") ?? "" };
+    };
+
+    it("writes the ports and the connection in one file write", async () => {
+      const { fs, baseline } = await seeded();
       let writes = 0;
       const write = fs.writeFile.bind(fs);
       fs.writeFile = (filePath, content) => {
@@ -470,9 +474,7 @@ describe("applyModelMutation", () => {
     });
 
     it("reports the gesture as a single action", async () => {
-      const fs = memoryFs();
-      await seedDemo(fs);
-      const baseline = fs.store.get("system.hcl") ?? "";
+      const { fs, baseline } = await seeded();
       const seen: ModelAction[] = [];
       const unsubscribe = subscribeToMutations((action) => seen.push(action));
       try {
@@ -489,9 +491,7 @@ describe("applyModelMutation", () => {
     });
 
     it("creates the stub protocol the ports name", async () => {
-      const fs = memoryFs();
-      await seedDemo(fs);
-      const baseline = fs.store.get("system.hcl") ?? "";
+      const { fs, baseline } = await seeded();
       const result = await applyModelMutation(
         fs,
         "system.hcl",
@@ -517,9 +517,7 @@ describe("applyModelMutation", () => {
     });
 
     it("refuses a taken connection name and leaves the file alone", async () => {
-      const fs = memoryFs();
-      await seedDemo(fs);
-      const baseline = fs.store.get("system.hcl") ?? "";
+      const { fs, baseline } = await seeded();
       await applyModelMutation(fs, "system.hcl", baseline, connect());
       const connected = fs.store.get("system.hcl") ?? "";
 
@@ -539,9 +537,7 @@ describe("applyModelMutation", () => {
     });
 
     it("dry-runs the same verdict", async () => {
-      const fs = memoryFs();
-      await seedDemo(fs);
-      const baseline = fs.store.get("system.hcl") ?? "";
+      const { baseline } = await seeded();
       expect(checkModelMutation("system.hcl", baseline, connect())).toBe(
         undefined,
       );

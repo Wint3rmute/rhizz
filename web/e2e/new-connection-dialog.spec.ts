@@ -28,6 +28,9 @@ async function modelText(page: Page): Promise<string> {
   return files["main.hcl"] ?? files["system.hcl"] ?? "";
 }
 
+const pollModel = (page: Page) =>
+  expect.poll(() => modelText(page), { timeout: 10_000 });
+
 // Opens the diagram with both components placed side by side, so a handle
 // drag from one lands on the other.
 async function openDiagram(
@@ -120,9 +123,7 @@ test("Enter creates the connection with the prefilled ports", async ({
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
 
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .toContain('connection "alpha-to-beta"');
+  await pollModel(page).toContain('connection "alpha-to-beta"');
   const model = await modelText(page);
   expect(model).toContain('port "link-beta"');
   expect(model).toContain('port "link-alpha"');
@@ -156,22 +157,16 @@ test("undo removes the connection and its ports in one step", async ({
   await drawAlphaToBeta(page);
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("new-connection-modal")).toBeHidden();
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .toContain('connection "alpha-to-beta"');
+  await pollModel(page).toContain('connection "alpha-to-beta"');
 
   await page.keyboard.press("Control+z");
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .not.toContain("alpha-to-beta");
+  await pollModel(page).not.toContain("alpha-to-beta");
   const model = await modelText(page);
   expect(model).not.toContain("link-beta");
   expect(model).not.toContain("link-alpha");
 
   await page.keyboard.press("Control+y");
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .toContain('connection "alpha-to-beta"');
+  await pollModel(page).toContain('connection "alpha-to-beta"');
   expect(await modelText(page)).toContain('port "link-beta"');
 });
 
@@ -202,9 +197,7 @@ test("a protocol with roles offers them and writes the typed ports", async ({
   await dialog.getByTestId("new-connection-create").click();
   await expect(dialog).toBeHidden();
 
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .toContain('connection "alpha-to-beta"');
+  await pollModel(page).toContain('connection "alpha-to-beta"');
   const model = await modelText(page);
   expect(model.match(/protocol\s*=\s*"spi"/g)).toHaveLength(2);
   expect(model).toMatch(/role\s*=\s*"consumer"/);
@@ -235,9 +228,7 @@ test("a protocol that does not exist yet is created with the connection", async 
   await dialog.getByTestId("new-connection-create").click();
   await expect(dialog).toBeHidden();
 
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .toContain('protocol "uart"');
+  await pollModel(page).toContain('protocol "uart"');
   const model = await modelText(page);
   expect(model.match(/protocol\s*=\s*"uart"/g)).toHaveLength(2);
 });
@@ -279,9 +270,7 @@ test("a role can be typed without a protocol", async ({ page }) => {
   await dialog.getByTestId("new-connection-create").click();
   await expect(dialog).toBeHidden();
 
-  await expect
-    .poll(async () => modelText(page), { timeout: 10_000 })
-    .toMatch(/role\s*=\s*"master"/);
+  await pollModel(page).toMatch(/role\s*=\s*"master"/);
 });
 
 test("a port name the component already has is refused", async ({ page }) => {
