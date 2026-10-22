@@ -885,39 +885,3 @@ export function computeLcaScope(
   };
 }
 
-export interface LcaConnectionEndpoints {
-  lcaScopePath: string;
-  from: string;
-  to: string;
-}
-
-// Computes the Lowest Common Ancestor (LCA) scope path and the relative `from` and `to`
-// endpoint strings for connecting two components across any hierarchy level.
-export function computeLcaConnection(
-  srcKey: string,
-  sourcePortLabel: string | null,
-  targetKey: string,
-  targetPortLabel: string | null,
-): LcaConnectionEndpoints | null {
-  const scope = computeLcaScope(srcKey, targetKey);
-  if (scope === null) return null;
-  const { lcaScopePath, fromComponent: fromComp, toComponent: toComp } = scope;
-
-  const from = sourcePortLabel
-    ? fromComp
-      ? `${fromComp}/${sourcePortLabel}`
-      : sourcePortLabel
-    : fromComp;
-
-  const to = targetPortLabel
-    ? toComp
-      ? `${toComp}/${targetPortLabel}`
-      : targetPortLabel
-    : toComp;
-
-  return {
-    lcaScopePath,
-    from,
-    to,
-  };
-}
