@@ -426,6 +426,137 @@ describe("applyModelMutation", () => {
     );
   });
 
+  describe("connect_components", () => {
+    const connect = (
+      overrides: Partial<
+        Extract<ModelMutationOp, { kind: "connect_components" }>
+      > = {},
+    ): ModelMutationOp => ({
+      kind: "connect_components",
+      scopePath: "demo",
+      label: "a-to-b",
+      from: { component: "a", port: { new: { label: "link-b" } } },
+      to: { component: "b", port: { new: { label: "link-a" } } },
+      ...overrides,
+    });
+
+    it("writes the ports and the connection in one file write", async () => {
+      const fs = memoryFs();
+      await seedDemo(fs);
+      const baseline = fs.store.get("system.hcl") ?? "";
+      let writes = 0;
+      const write = fs.writeFile.bind(fs);
+      fs.writeFile = (filePath, content) => {
+        writes++;
+        return write(filePath, content);
+      };
+
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        baseline,
+        connect(),
+      );
+
+      expect(result.applied).toBe(true);
+      expect(writes).toBe(1);
+      const content = fs.store.get("system.hcl") ?? "";
+      expect(content).toContain('port "link-b"');
+      expect(content).toContain('port "link-a"');
+      expect(content).toContain('connection "a-to-b"');
+      // The serializer writes endpoints as absolute paths.
+      expect(content).toMatch(/from\s*=\s*"\/demo\/a\/link-b"/);
+      expect(content).toMatch(/to\s*=\s*"\/demo\/b\/link-a"/);
+    });
+
+    it("reports the gesture as a single action", async () => {
+      const fs = memoryFs();
+      await seedDemo(fs);
+      const baseline = fs.store.get("system.hcl") ?? "";
+      const seen: ModelAction[] = [];
+      const unsubscribe = subscribeToMutations((action) => seen.push(action));
+      try {
+        await applyModelMutation(
+          fs,
+          "system.hcl",
+          baseline,
+          connect({ createProtocol: "spi" }),
+        );
+      } finally {
+        unsubscribe();
+      }
+      expect(seen.map((a) => a.op)).toEqual(["connect_components"]);
+    });
+
+    it("creates the stub protocol the ports name", async () => {
+      const fs = memoryFs();
+      await seedDemo(fs);
+      const baseline = fs.store.get("system.hcl") ?? "";
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        baseline,
+        connect({
+          createProtocol: "spi",
+          from: {
+            component: "a",
+            port: { new: { label: "link-b", protocol: "spi" } },
+          },
+          to: {
+            component: "b",
+            port: { new: { label: "link-a", protocol: "spi" } },
+          },
+        }),
+      );
+      expect(result.applied).toBe(true);
+      const content = fs.store.get("system.hcl") ?? "";
+      expect(content).toContain('protocol "spi"');
+      expect(
+        compile_system([{ filename: "system.hcl", content }]).error_count(),
+      ).toBe(0);
+    });
+
+    it("refuses a taken connection name and leaves the file alone", async () => {
+      const fs = memoryFs();
+      await seedDemo(fs);
+      const baseline = fs.store.get("system.hcl") ?? "";
+      await applyModelMutation(fs, "system.hcl", baseline, connect());
+      const connected = fs.store.get("system.hcl") ?? "";
+
+      const result = await applyModelMutation(
+        fs,
+        "system.hcl",
+        connected,
+        connect({
+          from: { component: "a", port: { new: { label: "x" } } },
+          to: { component: "b", port: { new: { label: "y" } } },
+        }),
+      );
+
+      expect(result.applied).toBe(false);
+      expect(result.refusal).toContain("already exists");
+      expect(fs.store.get("system.hcl")).toBe(connected);
+    });
+
+    it("dry-runs the same verdict", async () => {
+      const fs = memoryFs();
+      await seedDemo(fs);
+      const baseline = fs.store.get("system.hcl") ?? "";
+      expect(checkModelMutation("system.hcl", baseline, connect())).toBe(
+        undefined,
+      );
+      expect(
+        checkModelMutation(
+          "system.hcl",
+          baseline,
+          connect({
+            from: { component: "ghost", port: { new: { label: "p" } } },
+          }),
+        ),
+      ).toContain("unknown component");
+    });
+  });
+
   it("delete_connection_by_label finds nested scopes", async () => {
     const fs = memoryFs();
     await seedDemo(fs);

@@ -29,6 +29,10 @@ use crate::parse::{
 };
 use crate::{Source, resolve, serialize};
 
+mod connect;
+
+pub use connect::{ConnectEnd, NewPort, PortSpec};
+
 // ── Op input (mirrors the TypeScript `ModelMutationOp` JSON 1:1) ─────────────
 
 /// A single declarative model mutation for the frontend's op JSON.
@@ -117,6 +121,23 @@ pub enum ModelOp {
         label: String,
         from: String,
         to: String,
+    },
+    /// Create a connection together with the ports it ends on, and
+    /// optionally a stub protocol for them, as one atomic op.
+    ///
+    /// Ports are created on the component *definitions* the endpoint
+    /// instances were sourced from. Any refusal (a taken label, an unknown
+    /// component, a role the protocol does not permit, …) leaves the model
+    /// untouched.
+    #[serde(rename = "connect_components")]
+    #[serde(rename_all = "camelCase")]
+    ConnectComponents {
+        scope_path: String,
+        label: String,
+        from: ConnectEnd,
+        to: ConnectEnd,
+        #[serde(default)]
+        create_protocol: Option<String>,
     },
     /// Delete a connection by label, searching systems then definitions.
     #[serde(rename = "delete_connection_by_label")]
@@ -373,6 +394,19 @@ pub enum LoggedAction {
         label: String,
         from: String,
         to: String,
+    },
+    /// A connection was created together with its ports (and optionally a
+    /// stub protocol). Logged as the single gesture it was, in the op's own
+    /// shape, so replaying it re-runs the same op.
+    #[serde(rename = "connect_components")]
+    #[serde(rename_all = "camelCase")]
+    ConnectComponents {
+        scope_path: String,
+        label: String,
+        from: ConnectEnd,
+        to: ConnectEnd,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        create_protocol: Option<String>,
     },
     /// A connection was deleted.
     #[serde(rename = "delete_connection")]
@@ -732,6 +766,22 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             from,
             to,
         } => add_connection(raw, scope_path, label, from, to),
+        ModelOp::ConnectComponents {
+            scope_path,
+            label,
+            from,
+            to,
+            create_protocol,
+        } => connect::connect_components(
+            raw,
+            &connect::ConnectParams {
+                scope_path,
+                label,
+                from,
+                to,
+                create_protocol: create_protocol.as_deref(),
+            },
+        ),
         ModelOp::DeleteConnectionByLabel { label } => Ok(delete_connection_by_label(raw, label)),
         ModelOp::UpdateConnection {
             scope_path,
@@ -1570,6 +1620,7 @@ mod tests {
             r#"{"kind":"delete_component","path":"demo/a"}"#,
             r#"{"kind":"delete_system","path":"demo"}"#,
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
+            r#"{"kind":"connect_components","scopePath":"demo","label":"l","createProtocol":"spi","from":{"component":"a","port":{"new":{"label":"p","protocol":"spi","role":"provider","external":false,"required":true}}},"to":{"component":"b","port":{"existing":"q"}}}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
             r#"{"kind":"update_connection","scopePath":"demo","label":"l","patch":{"full_name":"x","realized_by":[{"scopePath":"demo","label":"m"}]}}"#,
             r#"{"kind":"add_protocol","label":"spi","options":{"full_name":"x","tags":["t"],"roles":["provider"],"leaf":true,"encapsulates":["p"]}}"#,
