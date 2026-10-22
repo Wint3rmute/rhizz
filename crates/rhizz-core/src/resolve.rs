@@ -134,7 +134,7 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     // any direct-child instance regardless of declaration order.
     //
     // Phase A: allocate SystemId, register all instances (recursive)
-    // Phase B: process system-level connections + resolve encapsulates
+    // Phase B: process system-level connections
 
     // Build the reusable-definition map for source resolution, and register
     // each top-level `component` block as a first-class definition in the model
@@ -254,11 +254,6 @@ fn resolve_pass(raw: RawFile) -> Resolver {
         let conn_ids =
             process_connections_in_scope(&mut r, &sw.connections, scope, 0, &sw.label, &decl);
 
-        // Resolve encapsulates now that all sibling connections are registered.
-        for (lc, cid) in sw.connections.iter().zip(conn_ids.iter()) {
-            resolve_encapsulates(&mut r, *cid, &lc.inner.encapsulates, scope, &lc.label);
-        }
-
         if let Some(system) = r.model.system_mut(sw.sid) {
             system.connections = conn_ids;
         }
@@ -364,7 +359,6 @@ fn resolve_pass(raw: RawFile) -> Resolver {
 ///   2. Register all child components in the component's own scope.
 ///   3. Process ports on the component.
 ///   4. Process connections in the component's own scope (from/to resolved).
-///   5. Resolve encapsulates for those connections.
 ///
 /// When `lc.inner.source` is set the body is taken from the top-level
 /// component map instead of from `lc.inner`.  The `ancestors` stack is used
@@ -483,11 +477,6 @@ fn register_component_inner(
     // Step 3: process connections in this component's scope.
     let conn_ids =
         process_connections_in_scope(r, &body.connections, child_scope, level, label, &decl);
-
-    // Step 4: resolve encapsulates for those connections.
-    for (li, conn_id) in body.connections.iter().zip(conn_ids.iter()) {
-        resolve_encapsulates(r, *conn_id, &li.inner.encapsulates, child_scope, &li.label);
-    }
 
     if let Some(component) = r.model.component_mut(cid) {
         component.connections = conn_ids;
@@ -712,7 +701,7 @@ fn process_connections_in_scope(
         // Resolve `to` endpoint
         let to = resolve_endpoint(r, lc.inner.to.as_deref(), scope, &lc.label, "to");
 
-        // Allocate ConnectionId and register in scope so encapsulates can find it.
+        // Allocate ConnectionId and register in scope so realized_by can find it.
         let conn_id = ConnectionId(r.model.connections.len());
         r.scope_index
             .connections
@@ -751,7 +740,6 @@ fn process_connections_in_scope(
             level,
             from: from_ep,
             to: to_ep,
-            encapsulates: vec![], // filled by resolve_encapsulates
             realized_by: lc.inner.realized_by.clone(),
             realized_by_ids: vec![], // filled by resolve_realized_by
         });
@@ -1135,87 +1123,6 @@ fn visit_protocol_encapsulates(
     if let Some(slot) = state.get_mut(node) {
         *slot = VisitState::Done;
     }
-}
-
-/// Resolve `encapsulates` labels for an already-allocated connection.
-/// Emits E003 for missing references and detects E004 circular chains.
-fn resolve_encapsulates(
-    r: &mut Resolver,
-    conn_id: ConnectionId,
-    encapsulates: &[String],
-    scope: Scope,
-    conn_label: &str,
-) {
-    if encapsulates.is_empty() {
-        return;
-    }
-    let mut enc_ids: Vec<ConnectionId> = Vec::new();
-    for label in encapsulates {
-        match r.scope_index.connections.get(&(scope, label.clone())) {
-            Some(enc_cid) => enc_ids.push(*enc_cid),
-            None => {
-                r.push_error(
-                    DiagnosticCode::E003,
-                    format!(
-                        "connection `{conn_label}` encapsulates undefined connection `{label}`"
-                    ),
-                );
-            }
-        }
-    }
-    if let Some(conn) = r.model.connection_mut(conn_id) {
-        conn.encapsulates = enc_ids;
-    }
-
-    // E004 -- detect circular encapsulation by DFS from this connection.
-    if has_encapsulation_cycle(&r.model.connections, conn_id) {
-        r.push_error(
-            DiagnosticCode::E004,
-            format!("circular encapsulation chain detected involving connection `{conn_label}`"),
-        );
-        // Clear the encapsulates list to break the cycle in the model.
-        if let Some(conn) = r.model.connection_mut(conn_id) {
-            conn.encapsulates.clear();
-        }
-    }
-}
-
-/// DFS cycle detection in the encapsulates graph starting from `start`.
-fn has_encapsulation_cycle(connections: &[Connection], start: ConnectionId) -> bool {
-    let mut gray: HashSet<usize> = HashSet::new();
-    let mut black: HashSet<usize> = HashSet::new();
-    let mut stack: Vec<(usize, usize)> = vec![(start.0, 0)];
-
-    while let Some((node, child_idx)) = stack.last_mut() {
-        let node = *node;
-        let Some(conn) = connections.get(node) else {
-            stack.pop();
-            continue;
-        };
-        let children = &conn.encapsulates;
-
-        if *child_idx == 0 {
-            if black.contains(&node) {
-                stack.pop();
-                continue;
-            }
-            if gray.contains(&node) {
-                return true;
-            }
-            gray.insert(node);
-        }
-
-        let idx = *child_idx;
-        if let Some(child) = children.get(idx) {
-            *child_idx = idx.saturating_add(1);
-            stack.push((child.0, 0));
-        } else {
-            gray.remove(&node);
-            black.insert(node);
-            stack.pop();
-        }
-    }
-    false
 }
 
 // ── Message / Field processing ────────────────────────────────────────────────
@@ -3266,42 +3173,5 @@ system "banking" {
         targets.sort_by_key(|c| c.0);
         targets.dedup();
         assert_eq!(targets.len(), 3, "each copy has a distinct target");
-    }
-
-    #[test]
-    fn e003_undefined_encapsulates_label_is_an_error() {
-        let src = r#"
-component "stack" { leaf = true }
-system "banking" {
-  instance "ext" { source = "stack" }
-  connection "c1" {
-    from = "ext"
-    to = "ext"
-    encapsulates = ["missing"]
-  }
-}
-"#;
-        expect_codes(src, &["E003"]);
-    }
-
-    #[test]
-    fn e004_connection_encapsulates_cycle_is_an_error() {
-        let src = r#"
-component "stack" { leaf = true }
-system "banking" {
-  instance "ext" { source = "stack" }
-  connection "c1" {
-    from = "ext"
-    to = "ext"
-    encapsulates = ["c2"]
-  }
-  connection "c2" {
-    from = "ext"
-    to = "ext"
-    encapsulates = ["c1"]
-  }
-}
-"#;
-        expect_codes(src, &["E004"]);
     }
 }

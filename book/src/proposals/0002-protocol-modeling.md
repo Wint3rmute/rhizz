@@ -330,7 +330,7 @@ decomposition (`W019`), hierarchy inconsistency (`W020`) and incompatible layeri
 Warnings follow the existing warning-level rules.
 
 Existing diagnostics for connection endpoint resolution, protocol references,
-protocol mismatch, and connection `encapsulates` cycles (`E003`, `E004`) remain in effect.
+and protocol mismatch remain in effect.
 
 ## Scoring and views
 
@@ -367,8 +367,7 @@ However, validation and scoring behavior may change:
 
 - Connections using protocols without an explicit `leaf = true` or a realization chain receive `W019`. This includes connections with untyped endpoints, because an untyped connection is always incomplete (section 3). Specs that stay at the component level will see `W019` at the `architectural` warning level and above, even though untyped endpoints are otherwise treated as component-level detail.
 - Projects using `--strict` may begin to fail until these warnings are addressed.
-- Existing `connection.encapsulates` declarations retain their current semantics and behavior in this proposal.
-- Connection `encapsulates` and protocol `encapsulates` are different attributes on different blocks. They share a name, not a code path.
+- Connection `encapsulates` was removed (see the task list in `TASKS/TODO.md`). Connections now declare `realized_by`, and a `.hcl` file that still sets `encapsulates` on a connection fails with `E000`.
 - New protocol compatibility checks apply to declared realizations, not retroactively to connections without `realized_by`.
 
 Migration consists of explicitly marking terminal protocols with `leaf = true`,

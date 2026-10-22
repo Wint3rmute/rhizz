@@ -212,10 +212,7 @@ pub struct RawConnection {
     pub from: Option<String>,
     /// Target reference (`"comp"` or `"comp/port"`).
     pub to: Option<String>,
-    /// Labels of sibling connections (higher-level protocols) this connection can carry.
-    pub encapsulates: Vec<String>,
     /// Raw `realized_by` entries: paths to connections that realize this one.
-    /// A different attribute from [`RawConnection::encapsulates`].
     pub realized_by: Vec<String>,
 }
 
@@ -353,8 +350,6 @@ struct ConnectionAttrs {
     from: Option<String>,
     /// Target reference.
     to: Option<String>,
-    /// Encapsulated connection labels.
-    encapsulates: Option<Vec<String>>,
     /// Paths of connections that realize this connection.
     realized_by: Option<Vec<String>>,
 }
@@ -514,7 +509,6 @@ fn parse_connection(body: &hcl::Body) -> ParseResult<RawConnection> {
         level: a.level,
         from: a.from,
         to: a.to,
-        encapsulates: a.encapsulates.unwrap_or_default(),
         realized_by: a.realized_by.unwrap_or_default(),
     })
 }
@@ -1368,7 +1362,6 @@ mod tests {
             conns[0].inner.realized_by,
             vec!["b", "../c", "/banking/n/d"]
         );
-        assert!(conns[0].inner.encapsulates.is_empty());
         assert!(conns[1].inner.realized_by.is_empty());
     }
 
@@ -1498,6 +1491,20 @@ mod tests {
             r#"system "s" { connection "c" { from = "a" to = "b" realized_by = "d" } }"#,
         );
         assert_eq!(err.code, DiagnosticCode::E000);
+    }
+
+    #[test]
+    fn connection_encapsulates_is_rejected_as_unknown() {
+        assert_e000_with_key(
+            r#"system "s" {
+  connection "c" {
+    from         = "a"
+    to           = "b"
+    encapsulates = ["d"]
+  }
+}"#,
+            "encapsulates",
+        );
     }
 
     #[test]

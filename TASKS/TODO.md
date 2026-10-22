@@ -16,34 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Remove `connection.encapsulates`
-
-`connection.encapsulates` (sibling connection labels) is superseded by
-`connection.realized_by` plus `protocol.encapsulates` (proposal 0002). Nothing
-in the W019–W021 realization checks uses it. `SPEC.md` has already been updated
-(§2.7, §3, §9); bring the rest of the repository in line with it.
-
-- Remove the attribute from the core model, parsing, serialization and mutation
-  ops, together with the `E003` and `E004` checks that only exist for it.
-  Remove `SPEC/diagnostics/E003.md` and `E004.md`. Do not reuse the codes.
-- Anything that reads or writes the attribute must stop doing so: web app (TS
-  types, UI, e2e tests, stories), WASM/JSON contracts, `SPEC/*.md`, `book/`,
-  and `examples/`. Find the uses by searching; do not assume the list is
-  complete.
-- Breaking change: unknown attributes are rejected (`E000`), so any `.hcl` that
-  still sets it will fail to compile. Migrate every in-repo `.hcl` file. Decide
-  whether a clearer error message for this specific attribute is worth adding,
-  and if so keep it small.
-- Update the "Naming trap" note in the 0002 shared context below, which
-  currently says `Connection.encapsulates` "keeps its behavior".
-- Do not change `protocol.encapsulates`, `realized_by`, or scoring.
-- Acceptance criteria:
-  - `grep -ri encapsulates` hits only protocol-level uses (plus the changelog
-    and `FINISHED.md` history).
-  - `just test`, `just lint`, and `just build` pass.
-  - A `.hcl` file that sets `encapsulates` on a connection fails with a
-    diagnostic, covered by a test that asserts the exact code.
-
 ## Task <N> — "New connection" dialog: create a connection together with its ports
 
 Today dragging an arrow between two components dispatches a bare
@@ -175,10 +147,9 @@ first, including the "Reference syntax" and "Diagnostics" sections). Tasks
   from `SPEC/diagnostics/*.md` (format: `SPEC/diagnostics.md`). A W file needs a
   `**Warning level:**` line right after the title, an E file must not have one.
   A new W code also needs a row in `SPEC/warning-levels.md`.
-- **Naming trap.** `Connection.encapsulates` (a list of sibling connections)
-  already exists and keeps its behavior. The new `protocol.encapsulates`
-  (protocol labels) and `connection.realized_by` are separate fields. Do not
-  merge or reuse the old code paths.
+- **Naming trap.** `connection.encapsulates` has been removed. The
+  `protocol.encapsulates` (protocol labels) and `connection.realized_by` fields
+  are the only ones. Do not reintroduce a connection-level `encapsulates`.
 - **Already known facts** (verified by reading the code, not by running it):
   - A connection has no protocol field. It is derived from the endpoint ports
     in `validate.rs` (W008) and `score.rs`, from the free-form `Port.protocol`
