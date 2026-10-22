@@ -82,10 +82,9 @@
     return () => cancelAnimationFrame(frame);
   });
 
-  let context = $derived({ takenConnectionLabels, protocols });
   let validation = $derived(
     request !== null && draft !== null
-      ? validateDraft(request, draft, context)
+      ? validateDraft(request, draft, { takenConnectionLabels, protocols })
       : null,
   );
 
@@ -215,11 +214,6 @@
 <svelte:window
   onkeydown={(e) => {
     if (request === null || e.key !== "Escape") return;
-    if (listOpen) {
-      listOpen = false;
-      activeIndex = -1;
-      return;
-    }
     onclose();
   }}
 />
