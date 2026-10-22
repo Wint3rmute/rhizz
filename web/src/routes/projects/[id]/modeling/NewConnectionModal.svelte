@@ -69,11 +69,16 @@
   // Focus the name once the dialog is on screen. A plain `autofocus` is not
   // enough: the dialog opens from the end of a mouse drag, and the `click`
   // that follows the mouse-up hands focus back to the canvas. Waiting for the
-  // next frame lets that settle, so Enter works right away.
+  // next frame lets that settle, so Enter works right away. Focus the user
+  // already moved into the dialog is left alone.
   $effect(() => {
     const input = nameInput;
     if (input === undefined) return;
-    const frame = requestAnimationFrame(() => input.focus());
+    const frame = requestAnimationFrame(() => {
+      const dialog = input.closest('[role="dialog"]');
+      if (dialog?.contains(document.activeElement)) return;
+      input.focus();
+    });
     return () => cancelAnimationFrame(frame);
   });
 
@@ -198,6 +203,7 @@
     fromEnd?.existingPort ?? (draft?.from.name.trim() || "…"),
   );
   let toPort = $derived(toEnd?.existingPort ?? (draft?.to.name.trim() || "…"));
+  let connectionName = $derived(draft?.label.trim() || "…");
   let direction = $derived(
     connectionDirection(
       fromEnd?.existingPort === undefined ? (draft?.from.role ?? "") : "",
@@ -343,6 +349,16 @@
             fill="currentColor"
             data-testid="new-connection-preview-to-port"
             >{shorten(toPort, 18)}</text
+          >
+          <text
+            x="280"
+            y="82"
+            text-anchor="middle"
+            font-size="12"
+            font-weight="600"
+            fill="currentColor"
+            data-testid="new-connection-preview-name"
+            >{shorten(connectionName, 30)}</text
           >
         </svg>
 
@@ -549,55 +565,31 @@
                     </p>
                   {/if}
                 </div>
+
+                <div class="flex flex-col">
+                  <label class="label cursor-pointer justify-start gap-2 py-1">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm"
+                      bind:checked={column.port.external}
+                      data-testid="new-connection-{column.side}-external"
+                    />
+                    <span class="label-text text-sm">External port</span>
+                  </label>
+                  <label class="label cursor-pointer justify-start gap-2 py-1">
+                    <input
+                      type="checkbox"
+                      class="checkbox checkbox-sm"
+                      bind:checked={column.port.required}
+                      data-testid="new-connection-{column.side}-required"
+                    />
+                    <span class="label-text text-sm">Required</span>
+                  </label>
+                </div>
               {/if}
             </fieldset>
           {/each}
         </div>
-
-        {#if fromEnd.existingPort === undefined || toEnd.existingPort === undefined}
-          <details class="collapse collapse-arrow border border-base-300">
-            <summary
-              class="collapse-title text-sm font-semibold min-h-0 py-2"
-              data-testid="new-connection-advanced"
-            >
-              Advanced
-            </summary>
-            <div class="collapse-content grid grid-cols-2 gap-3">
-              {#each [{ side: "from", end: fromEnd, port: draft.from }, { side: "to", end: toEnd, port: draft.to }] as column (column.side)}
-                {#if column.end.existingPort === undefined}
-                  <div class="flex flex-col gap-1">
-                    <label
-                      class="label cursor-pointer justify-start gap-2 py-1"
-                    >
-                      <input
-                        type="checkbox"
-                        class="checkbox checkbox-sm"
-                        bind:checked={column.port.external}
-                        data-testid="new-connection-{column.side}-external"
-                      />
-                      <span class="label-text text-sm"
-                        >{column.end.label}: external port</span
-                      >
-                    </label>
-                    <label
-                      class="label cursor-pointer justify-start gap-2 py-1"
-                    >
-                      <input
-                        type="checkbox"
-                        class="checkbox checkbox-sm"
-                        bind:checked={column.port.required}
-                        data-testid="new-connection-{column.side}-required"
-                      />
-                      <span class="label-text text-sm"
-                        >{column.end.label}: required</span
-                      >
-                    </label>
-                  </div>
-                {/if}
-              {/each}
-            </div>
-          </details>
-        {/if}
       </div>
 
       <div class="modal-action border-t border-base-300 pt-3 mt-0">
