@@ -327,7 +327,6 @@ system "drone" {
     level        = 2
     from         = "flight-controller/mcu/spi"
     to           = "imu/spi"
-    encapsulates = []
   }
 }
 ```
@@ -340,13 +339,11 @@ system "drone" {
 | `full_name`  | string       | no       | `""`             | Full official name, expanding abbreviations                                     |
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
-| `encapsulates` | list(string) | no       | `[]`             | Labels of sibling connections (higher-level protocols) this connection can carry |
+
 | `realized_by`  | list(string) | no       | `[]`             | Paths to connections that realize this connection at the same or a lower level of abstraction (see §3) |
 
-`realized_by` is a **different attribute** from `encapsulates`. `encapsulates`
-lists sibling connections by label; `realized_by` is top-down (the
-higher-level connection declares how it is realized) and may point into other
-scopes of the same system.
+`realized_by` is top-down (the higher-level connection declares how it is
+realized) and may point into other scopes of the same system.
 
 ```hcl
 system "banking" {
@@ -539,7 +536,7 @@ All references use **name-based or UNIX-style path notation**:
 | `connection.from` / `connection.to` (bare label)  | Component path evaluated relative to declaring scope                   |
 | `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component                      |
 | `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path from scope   |
-| `encapsulates` (connection)                       | Sibling `connection` labels in the same parent scope                   |
+
 | `encapsulates` (protocol)                         | Top-level `protocol` labels                                            |
 | `connection.realized_by`                          | `connection` path; the last segment is always a connection label       |
 | `instance.source`                                | Top-level `component` label                                            |
@@ -855,7 +852,7 @@ system "home-monitor" {
 | `type` on fields is a free-form string                          | Supports gradual specification — no type system to fight during early design                                                                                                                                            |
 | `level` auto-increments from parent                             | Reduces boilerplate; explicit override still available                                                                                                                                                                  |
 | Views are top-level blocks                                      | A view can reference any system; decoupled from the model itself                                                                                                                                                        |
-| `encapsulates` is a name-based reference                        | Captures protocol layering (Ethernet encapsulates TCP, TCP encapsulates HTTP) without deep nesting                                                                                                                     |
+| Protocol `encapsulates` is a name-based reference               | Captures protocol layering (Ethernet encapsulates TCP, TCP encapsulates HTTP) without deep nesting                                                                                                                     |
 | Multiple frontends share one compiler core                      | Keeps all model semantics in one tested place; frontends own only I/O and presentation                                                                                                                                  |
 
 **Out of scope for v1, currently non-goals. Candidates for v2:**
