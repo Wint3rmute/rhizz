@@ -1,5 +1,10 @@
 ## Unreleased
 
+### BREAKING CHANGE
+
+- a connection that sets encapsulates no longer compiles.
+Remove E003 and E004 with their spec files; the codes are not reused.
+
 ### Feat
 
 - **web**: link a connection's protocol to its Inventory entry
@@ -25,6 +30,7 @@
 
 ### Refactor
 
+- **core**: remove connection.encapsulates
 - **web**: extract shared DiagramSceneView presenter for diagram transitions
 
 ## 0.6 (2026-10-19)
