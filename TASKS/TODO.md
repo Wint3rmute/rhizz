@@ -123,6 +123,72 @@ and make them deterministic.
 
 ---
 
+## Task <N> — Connection inspector: show whether a port is connected
+
+In the connection inspector (`modeling/`), show for each endpoint port whether
+it is actually used by a connection.
+
+- The inspector already shows From/To. Next to each port, add a clear
+  connected / not connected indicator (DaisyUI badge, reuse the inspector's
+  existing look).
+- "Connected" means some connection in the model ends on that port. Ports live
+  on component *definitions*, so decide whether the answer is per placed
+  instance (preferred, since that is what the user sees on the canvas) or per
+  definition, and state the choice in the UI text.
+- Derive it from the compiled model (connections' `from`/`to` ports), not from
+  a second TypeScript model. A small helper in `modelView.ts` with a Vitest test
+  is enough.
+- A port on a connection's own endpoint is connected by definition, so the
+  indicator matters most for ports the connection does not use. Consider showing
+  the same indicator for the other ports of both endpoint components, so a
+  forgotten, unconnected port is visible.
+- Tests: Vitest for the helper, a Storybook story for the look if no existing
+  inspector story covers it.
+
+---
+
+## Task <N> — Inventory: edit `encapsulates` as a list with search
+
+In the Inventory protocol detail pane (`inventory/ProtocolDetailPane.svelte`),
+replace the "Can carry (encapsulates)" checkbox list of *all* protocols.
+
+- Show only the protocols this protocol can currently carry (its `encapsulates`
+  entries), each with a remove button.
+- Add a protocol search field that adds a protocol to that list. Offer only
+  protocols that are not already in the list and are not the protocol itself.
+- Keep using `update_protocol` (`encapsulates` is a full replacement). A refused
+  edit (for example an `E020` cycle) keeps showing "Change refused" and puts the
+  list back to the model value, as it does today.
+- Empty state: a short "Carries no other protocols" text.
+- Update `inventory-protocols.spec.ts` and the `ProtocolDetail` stories. Reuse
+  the protocol combobox behavior from the New connection dialog if it can be
+  shared without a big refactor; otherwise keep the two separate.
+
+---
+
+## Task <N> — Delete connection popup with port cleanup
+
+In `modeling/`, replace the "Delete connection (...)" browser prompt with a
+full popup (same chrome as the other modals).
+
+- The popup names the connection and its two endpoints, and has a checkbox
+  "Also remove ports on connected components", **unchecked by default**
+  (removing is the destructive choice).
+- Removing ports needs a new op, or an option on the delete op, so the whole
+  thing is one atomic, undoable step and one entry in the action log (mirror it
+  in `LoggedAction`, `ModelAction` and `toMutationOp`, like every op).
+- Ports live on component *definitions*, so removing a port affects every
+  instance of that definition. Only remove a port that no other connection
+  uses, and say in the popup which ports would go. Refuse with a clear message
+  when a port cannot be removed.
+- Keep the keyboard behavior of the old prompt (Delete/Enter confirms, Esc
+  cancels) and update the e2e specs that answer the prompt
+  (`sidebar-delete.spec.ts`, `connection-visibility.spec.ts`).
+- Tests: Rust unit tests for the op (ports removed, shared port kept, refusal),
+  Playwright for the popup flow including undo, a story for the popup's look.
+
+---
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
