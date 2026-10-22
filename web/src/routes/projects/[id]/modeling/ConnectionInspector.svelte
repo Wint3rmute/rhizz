@@ -5,6 +5,7 @@
     connectionByRef,
     connectionRefKey,
     type ConnectionData,
+    type PortData,
     type ProtocolData,
   } from "../../../../modelView";
   import { inventoryProtocolHref } from "../inventory/protocolLink";
@@ -19,6 +20,15 @@
     /** Labels of the components at each end, for the side pickers. */
     fromLabel: string;
     toLabel: string;
+    /** Ports declared on the from/to endpoint component instances. */
+    fromPorts: readonly PortData[];
+    toPorts: readonly PortData[];
+    /**
+     * Labels of those ports that a connection in the model ends on. Per placed
+     * instance: two instances of one definition can differ.
+     */
+    fromConnectedPorts: ReadonlySet<string>;
+    toConnectedPorts: ReadonlySet<string>;
     startSide: ConnectionSide | undefined;
     endSide: ConnectionSide | undefined;
     /**
@@ -66,6 +76,10 @@
     connections,
     fromLabel,
     toLabel,
+    fromPorts,
+    toPorts,
+    fromConnectedPorts,
+    toConnectedPorts,
     startSide,
     endSide,
     sharedWithCopies,
@@ -190,6 +204,42 @@
   </div>
 {/snippet}
 
+{#snippet portList(
+  title: string,
+  ports: readonly PortData[],
+  connected: ReadonlySet<string>,
+  testId: string,
+)}
+  <div class="space-y-1" data-testid={testId}>
+    <span class="font-semibold text-base-content/70">{title}</span>
+    {#if ports.length === 0}
+      <p class="text-xs text-base-content/50 italic">No ports declared.</p>
+    {:else}
+      <ul class="space-y-1">
+        {#each ports as port (port.label)}
+          <li
+            class="flex items-center justify-between gap-2 text-xs"
+            data-testid="endpoint-port-row"
+          >
+            <span class="font-mono truncate">{port.label}</span>
+            <span
+              class="badge badge-xs {connected.has(port.label)
+                ? 'badge-success'
+                : 'badge-ghost'}"
+              data-testid="port-connection-status"
+              title={connected.has(port.label)
+                ? "Some connection in the model ends on this port"
+                : "No connection in the model ends on this port"}
+            >
+              {connected.has(port.label) ? "Connected" : "Not connected"}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+{/snippet}
+
 <div class="space-y-4 text-sm" data-testid="connection-inspector">
   <div>
     <div class="text-[11px] text-base-content/50 font-mono uppercase">
@@ -216,6 +266,36 @@
       <span class="font-semibold truncate max-w-[150px]"
         >{toLabel}{connection.to_port ? `.${connection.to_port}` : ""}</span
       >
+    </div>
+
+    <div class="divider my-0"></div>
+
+    <div class="space-y-2" data-testid="endpoint-ports">
+      <div class="flex items-center justify-between gap-2">
+        <span
+          class="text-[10px] font-semibold uppercase tracking-wider text-base-content/60"
+        >
+          Endpoint ports
+        </span>
+        <span class="text-[10px] text-base-content/50">per placed instance</span
+        >
+      </div>
+      <p class="text-[11px] text-base-content/60">
+        A port counts as connected when any connection in the model ends on it
+        for this component instance.
+      </p>
+      {@render portList(
+        `${fromLabel} ports`,
+        fromPorts,
+        fromConnectedPorts,
+        "from-ports",
+      )}
+      {@render portList(
+        `${toLabel} ports`,
+        toPorts,
+        toConnectedPorts,
+        "to-ports",
+      )}
     </div>
   </div>
 

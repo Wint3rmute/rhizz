@@ -16,30 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Connection inspector: show whether a port is connected
-
-In the connection inspector (`modeling/`), show for each endpoint port whether
-it is actually used by a connection.
-
-- The inspector already shows From/To. Next to each port, add a clear
-  connected / not connected indicator (DaisyUI badge, reuse the inspector's
-  existing look).
-- "Connected" means some connection in the model ends on that port. Ports live
-  on component *definitions*, so decide whether the answer is per placed
-  instance (preferred, since that is what the user sees on the canvas) or per
-  definition, and state the choice in the UI text.
-- Derive it from the compiled model (connections' `from`/`to` ports), not from
-  a second TypeScript model. A small helper in `modelView.ts` with a Vitest test
-  is enough.
-- A port on a connection's own endpoint is connected by definition, so the
-  indicator matters most for ports the connection does not use. Consider showing
-  the same indicator for the other ports of both endpoint components, so a
-  forgotten, unconnected port is visible.
-- Tests: Vitest for the helper, a Storybook story for the look if no existing
-  inspector story covers it.
-
----
-
 ## Task <N> — Inventory: edit `encapsulates` as a list with search
 
 In the Inventory protocol detail pane (`inventory/ProtocolDetailPane.svelte`),

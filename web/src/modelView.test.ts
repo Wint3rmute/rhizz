@@ -4,6 +4,7 @@ import * as nodePath from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   componentDataByKey,
+  connectedPortLabels,
   connectionByRef,
   connectionDataList,
   definitionOptions,
@@ -359,6 +360,54 @@ describe("connectionDataList", () => {
     expect(found?.blocking).toEqual(banking);
     // The root cause itself has no blocker: its own protocol is the gap.
     expect(connectionByRef(list, banking)?.blocking).toBeUndefined();
+  });
+});
+
+describe("connectedPortLabels", () => {
+  const network = `protocol "data" {}
+component "node" {
+  leaf = true
+  port "used" {
+    protocol = "data"
+  }
+  port "spare" {
+    protocol = "data"
+  }
+}
+system "net" {
+  instance "n1" {
+    source = "node"
+  }
+  instance "n2" {
+    source = "node"
+  }
+  connection "link" {
+    from = "n1/used"
+    to   = "n2/used"
+  }
+}
+`;
+
+  it("is empty for an undefined model", () => {
+    expect(connectedPortLabels(undefined, "net/n1").size).toBe(0);
+  });
+
+  it("reports the ports each placed instance uses as connection endpoints", () => {
+    const model = modelOf([{ filename: "system.hcl", content: network }]);
+    expect([...connectedPortLabels(model, "net/n1")]).toEqual(["used"]);
+    expect([...connectedPortLabels(model, "net/n2")]).toEqual(["used"]);
+  });
+
+  it("does not attribute a definition's ports to its instances", () => {
+    const model = modelOf([{ filename: "system.hcl", content: network }]);
+    // Connections name the placed instances, so the reusable definition's own
+    // copy of `used` has no connection ending on it.
+    expect(connectedPortLabels(model, "node").size).toBe(0);
+  });
+
+  it("is empty for a key that is not in the model", () => {
+    const model = modelOf([{ filename: "system.hcl", content: network }]);
+    expect(connectedPortLabels(model, "net/missing").size).toBe(0);
   });
 });
 

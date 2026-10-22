@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Connection inspector: show whether a port is connected
+
+The connection inspector now lists every port on both endpoint components and
+shows a clear connected / not connected badge next to each.
+
+- **Read model:** new `connectedPortLabels(model, componentKey)` helper in
+  `modelView.ts`. It walks the compiled model's connections and returns the
+  labels of ports on that component instance that at least one connection uses
+  as an endpoint. Empty for an undefined model or an unknown key.
+- **Choice:** the answer is **per placed instance**, not per definition. A
+  connection names its endpoint component by arena index, so two instances of
+  one definition can differ. The inspector states this in its UI text: "A port
+  counts as connected when any connection in the model ends on it for this
+  component instance."
+- **UI:** `ConnectionInspector.svelte` lists the from/to components' ports under
+  "Endpoint ports". Each row shows the port label and a DaisyUI badge
+  (`Connected` / `Not connected`). The connection's own endpoint port is
+  connected by definition; the other ports expose forgotten, unused ports.
+  `ModelingPage.svelte` derives the port lists and connected sets from the
+  selected connection's endpoints and passes them in.
+- **Tests:** Vitest for the helper (per-instance attribution, definition ports
+  not attributed to instances, unknown key); a `PortConnectionStatus` story
+  covers the look and badge counts.
+
+Validation: `just lint`, `just test` (all Rust suites, 1182 Vitest tests
+including stories, 152 e2e tests) and `just build` pass. `just format` was run.
+
+---
+
 ## Task <N> — "New connection" dialog: create a connection together with its ports
 
 Dragging an arrow between two components now opens a dialog that creates the
