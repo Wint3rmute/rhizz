@@ -61,7 +61,7 @@ pub struct FieldId(
 // ── Scope ─────────────────────────────────────────────────────────────────────
 
 /// A scope is either a system or a component. Used for resolving sibling
-/// references in `from`, `to`, and `encapsulates`.
+/// references in `from` and `to`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Scope {
     /// Scope of a system block.
@@ -445,11 +445,8 @@ pub struct Connection {
     pub from: ConnectionEndpoint,
     /// Target endpoint.
     pub to: ConnectionEndpoint,
-    /// Sibling connections (higher-level protocols) this connection can carry.
-    pub encapsulates: Vec<ConnectionId>,
     /// Raw `realized_by` entries as declared: paths to the connections that
-    /// realize this one. Not yet resolved to [`ConnectionId`]s, and a
-    /// different attribute from [`Connection::encapsulates`].
+    /// realize this one. Not yet resolved to [`ConnectionId`]s.
     #[serde(default)]
     pub realized_by: Vec<String>,
     /// Resolved [`ConnectionId`]s of [`Connection::realized_by`], deduplicated

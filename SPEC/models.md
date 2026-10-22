@@ -76,11 +76,10 @@ messages / fields. Key semantics:
   labels, `encapsulates_ids` the resolved targets (undefined labels and cycle
   edges are dropped).
 - `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId> },
-  encapsulates, realized_by: Vec<String> }` — `port: None` is a bare (untyped)
-  reference; W007–W009 fire on the typed/untyped and role combinations.
-  `encapsulates` (resolved sibling connections) and `realized_by` (the raw
-  `realized_by` path entries in `realized_by`, resolved in `realized_by_ids`)
-  are different attributes with separate code paths.
+  realized_by: Vec<String> }` — `port: None` is a bare (untyped) reference;
+  W007–W009 fire on the typed/untyped and role combinations. `realized_by` holds
+  the raw path entries, resolved in `realized_by_ids`. A connection cannot carry
+  `encapsulates`: that attribute belongs to `protocol` blocks only.
 
 ## Resolution pass
 
@@ -97,21 +96,20 @@ messages / fields. Key semantics:
    `external = false`, `required = true`.
 6. Connections per scope: parse `from`/`to` paths relative to the declaring
    scope; enforce LCA placement (E015); resolve endpoints (E011/E010).
-7. `encapsulates`: same-scope lookup (E003; E004 on cycles).
-8. `realized_by`: once every connection in every scope is registered, each
+7. `realized_by`: once every connection in every scope is registered, each
    entry resolves to a `ConnectionId` (E017, the entry is dropped). Duplicates
    collapse. A DFS over the resolved graph reports each cycle once (E018) and
    drops its back edge. A connection whose protocol (`Model::connection_protocol`)
    is `leaf` and that declares `realized_by` is E019.
-9. Views (separate pass): one `view` per file with label matching the filename
+8. Views (separate pass): one `view` per file with label matching the filename
    (E016), `system` resolving to a real system (E006); every `node` path checked
    against component keys (W016).
-10. Checks: unconnected ports on placed instances only (definitions never warn;
+9. Checks: unconnected ports on placed instances only (definitions never warn;
     `external` + `required` logic → W010), protocol/role compatibility (W008/W009).
-11. Orphans: top-level component never named by an `instance.source` → W012.
+10. Orphans: top-level component never named by an `instance.source` → W012.
 
 Errors (`E*`) abort; warnings (`W*`) travel with the model. Scopes for
-`from`/`to`/`encapsulates`/`realized_by` resolution are `(System | Component,
+`from`/`to`/`realized_by` resolution are `(System | Component,
 label)` pairs held in a transient index built during resolution. A
 `realized_by` entry resolves through the same `.`/`..`/child walk as an endpoint
 path, and its target must share the declaring system or definition tree.

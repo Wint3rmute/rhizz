@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Remove `connection.encapsulates`
+
+Breaking change. The sibling-connection `encapsulates` attribute is gone; the
+connection-level realization is `realized_by` plus `protocol.encapsulates`.
+
+- **Core:** the field is removed from `Connection`, `RawConnection` and the
+  parser. The E003 and E004 checks, and their `resolve_encapsulates` and
+  cycle code, are deleted with `SPEC/diagnostics/E003.md` and `E004.md`. The
+  codes are not reused. The connection scope index stays, because `realized_by`
+  resolves through it.
+- **Serialization:** connections no longer emit `encapsulates`.
+- **Rejection:** a connection that sets `encapsulates` fails with `E000`,
+  naming the key and the valid attributes (`deny_unknown_fields`). Covered by
+  `connection_encapsulates_is_rejected_as_unknown`. No `.hcl` in the repo set
+  it on a connection, so nothing needed migrating.
+- **Docs:** `SPEC/models.md` (model and resolution steps), the 0002 proposal
+  and the "Naming trap" note in `TODO.md` now describe the removal.
+- **Unchanged:** `protocol.encapsulates`, `realized_by`, scoring, and the web
+  app, which only used the protocol-level attribute.
+
+Validation: `just lint` and `just build` pass. `just test` passes all Rust and
+Vitest suites and 143 of 144 e2e tests. The one failure,
+`command-palette.spec.ts` "choosing a view opens the canvas", also fails on
+untouched `main`, so it predates this change.
+
+---
+
 ## Task <N> — W.4: Protocols tab in the Inventory
 
 Web-only. The "Interfaces" placeholder is now a Protocols tab with a working

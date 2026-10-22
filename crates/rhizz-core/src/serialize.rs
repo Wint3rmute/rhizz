@@ -531,20 +531,6 @@ fn serialize_connection(
         escape_string(&to_str)
     );
 
-    if !conn.encapsulates.is_empty() {
-        let mut enc_labels: Vec<String> = conn
-            .encapsulates
-            .iter()
-            .filter_map(|id| model.connection(*id))
-            .map(|c| c.label.clone())
-            .collect();
-        enc_labels.sort();
-        let _ = writeln!(
-            out,
-            "{inner_indent}encapsulates = {}",
-            format_string_list(&enc_labels)
-        );
-    }
     if !conn.realized_by.is_empty() {
         let _ = writeln!(
             out,
