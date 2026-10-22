@@ -884,4 +884,3 @@ export function computeLcaScope(
     toComponent: targetParts.slice(prefixLen).join("/"),
   };
 }
-
