@@ -128,6 +128,40 @@ impl CompileResultJS {
    overlay panel.
 7. "Export SVG" serialises the current SVG DOM to a downloadable file.
 
+## Drawing a connection
+
+Dragging an arrow from one component to another opens the **New connection**
+dialog. Every connection the editor creates has a port on each end: the dialog
+creates the connection and both ports in one `connect_components` op, so the
+gesture is a single undo step and a single entry in the action log.
+
+Everything is prefilled, so Enter creates with the defaults; Esc cancels and
+writes nothing.
+
+| Field            | Default                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| Connection name  | `<from>-to-<to>`, made unique across the model; focused on open     |
+| Protocol         | none. A name that no protocol has yet creates an empty protocol     |
+| Port name        | `link-<other component>`, made unique within the component          |
+| Role             | unset                                                               |
+| `external`       | `false` for a direct child of the connection's scope (siblings), `true` when the connection leaves a nested component |
+| `required`       | `true` (the spec default)                                           |
+
+- A port name is neutral on purpose: a connection has no direction of its own
+  (roles carry it, see SPEC.md §6), so `to-<other>` would claim one.
+- With a protocol that defines `roles`, each end offers those roles and the
+  source and target start on the first and second one (`E009` otherwise). A
+  protocol without roles shows "No roles defined". Without a protocol the role
+  is free text.
+- Defaults are computed once, when the dialog opens. They are not recomputed
+  when another field changes, apart from the roles following the protocol.
+- Ports are created on the component *definitions* the instances are sourced
+  from, so every instance of a definition gets the new port.
+- A drag that starts or ends on an existing port dot keeps that port and
+  creates one only for the other end.
+- Any refusal (taken label, unknown component, …) leaves the model untouched
+  and the dialog open.
+
 ## Persistence
 
 The editor keeps every project in a virtual filesystem (`web/src/vfs/`), which

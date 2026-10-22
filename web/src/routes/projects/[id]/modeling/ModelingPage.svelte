@@ -38,6 +38,7 @@
   import NodeInspector from "./NodeInspector.svelte";
   import ConnectionInspector from "./ConnectionInspector.svelte";
   import CreateComponentModal from "./CreateComponentModal.svelte";
+  import NewConnectionModal from "./NewConnectionModal.svelte";
   import NewViewModal from "./NewViewModal.svelte";
   import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
   import Pane from "../../../../components/modular_ui/Pane.svelte";
@@ -95,7 +96,7 @@
     annotationBounds,
     boxContains,
     clampWithin,
-    computeLcaConnection,
+    computeLcaScope,
     computePortPositions,
     computeRenderOrder,
     computeResizedBox,
@@ -108,6 +109,11 @@
     unionBox,
   } from "./geometry";
   import type { Box, ConnectionSide, TextAlign } from "./geometry";
+  import {
+    type ConnectionEndInfo,
+    type NewConnectionRequest,
+    protocolUsage,
+  } from "./newConnection";
   import DiagramCanvas from "./DiagramCanvas.svelte";
   import { fitCamera, sceneBounds } from "./blend";
   import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
@@ -1616,6 +1622,7 @@
       !event.shiftKey &&
       !isCreateModalOpen &&
       !isNewViewModalOpen &&
+      newConnectionRequest === null &&
       !isEditableTarget(event)
     );
   }
@@ -2432,65 +2439,79 @@
     return findConnectTarget(point, sourceIndex, candidates);
   }
 
-  async function handleCreateConnection(
+  // The connection being drawn, while its dialog is open. The dialog creates
+  // the connection and a port on each end in one step, so the gesture ends
+  // here rather than in a model write.
+  let newConnectionRequest = $state<NewConnectionRequest | null>(null);
+  let isCreatingConnection = false;
+
+  let protocolList = $derived(protocolDataList(model));
+  let portProtocolUsage = $derived(protocolUsage([...componentData.values()]));
+
+  function connectionEndInfo(
+    key: string,
+    component: string,
+    existingPort: string | null,
+  ): ConnectionEndInfo {
+    const data = componentData.get(key);
+    const label = key.split("/").filter(Boolean).pop() ?? key;
+    return {
+      key,
+      label,
+      component,
+      definition: data?.source ?? label,
+      portLabels: data?.ports.map((port) => port.label) ?? [],
+      existingPort: existingPort ?? undefined,
+    };
+  }
+
+  function handleCreateConnection(
     sourceCompIndex: number,
     sourcePortLabel: string | null,
     targetCompIndex: number,
     targetPortLabel: string | null,
     startSide?: ConnectionSide,
-  ): Promise<void> {
+  ): void {
     if (sourceCompIndex === targetCompIndex) return;
 
     const srcKey = getComponentKey(sourceCompIndex);
     const targetKey = getComponentKey(targetCompIndex);
+    const scope = computeLcaScope(srcKey, targetKey);
 
-    const srcParts = srcKey.split("/").filter(Boolean);
-    const targetParts = targetKey.split("/").filter(Boolean);
-
-    const srcCompLabel = srcParts[srcParts.length - 1];
-    const targetCompLabel = targetParts[targetParts.length - 1];
-
-    const lca = computeLcaConnection(
-      srcKey,
-      sourcePortLabel,
-      targetKey,
-      targetPortLabel,
-    );
-
-    if (!lca) {
+    if (!scope) {
       alert("Cannot connect components across different systems.");
       return;
     }
 
-    const defaultConnLabel = `conn-${srcCompLabel}-${targetCompLabel}`;
-    const connLabel = prompt("Connection name?", defaultConnLabel)?.trim();
-    if (!connLabel) return;
+    newConnectionRequest = {
+      scopePath: scope.lcaScopePath,
+      from: connectionEndInfo(srcKey, scope.fromComponent, sourcePortLabel),
+      to: connectionEndInfo(targetKey, scope.toComponent, targetPortLabel),
+      startSide,
+    };
+  }
 
-    // The backend silently no-ops a same-scope duplicate (the op reports
-    // applied with unchanged HCL), so without this the draw gesture would
-    // accept the name and visibly do nothing.
-    if (connections.some((c) => c.label === connLabel)) {
-      alert(
-        `A connection named "${connLabel}" already exists. Choose a different name.`,
+  // Runs the op the dialog built. The dialog stays open when the model
+  // refuses it, so the user can fix the input instead of drawing again.
+  async function handleNewConnectionCreate(op: ModelMutationOp): Promise<void> {
+    const request = newConnectionRequest;
+    if (request === null || op.kind !== "connect_components") return;
+    if (isCreatingConnection) return;
+    isCreatingConnection = true;
+    try {
+      const applied = await runModelLayoutTransaction(
+        `connect ${op.label}`,
+        op,
+        () => {
+          if (request.startSide) {
+            savedConnections[op.label] = { startSide: request.startSide };
+          }
+        },
       );
-      return;
+      if (applied) newConnectionRequest = null;
+    } finally {
+      isCreatingConnection = false;
     }
-
-    await runModelLayoutTransaction(
-      `connect ${connLabel}`,
-      {
-        kind: "add_connection",
-        scopePath: lca.lcaScopePath,
-        label: connLabel,
-        from: lca.from,
-        to: lca.to,
-      },
-      () => {
-        if (startSide) {
-          savedConnections[connLabel] = { startSide };
-        }
-      },
-    );
   }
 
   // Open context menu state: null when closed, otherwise the click position
@@ -3170,13 +3191,13 @@
         current.sourceComponentIndex,
       );
       if (target) {
-        void handleCreateConnection(
+        handleCreateConnection(
           current.sourceComponentIndex,
           current.sourcePortLabel,
           target.compIndex,
           target.portLabel,
           current.startSide,
-        ).catch(reportDiagramError);
+        );
       }
     }
     if (current.type === "dragging") {
@@ -4399,6 +4420,16 @@
   defaultSystem={systems[0]?.label || "main"}
   oncreate={(data) => void handleNewViewCreate(data).catch(reportDiagramError)}
   onclose={() => (isNewViewModalOpen = false)}
+/>
+
+<NewConnectionModal
+  request={newConnectionRequest}
+  protocols={protocolList}
+  protocolUsage={portProtocolUsage}
+  takenConnectionLabels={connections.map((c) => c.label)}
+  oncreate={(op) =>
+    void handleNewConnectionCreate(op).catch(reportDiagramError)}
+  onclose={() => (newConnectionRequest = null)}
 />
 
 <CreateComponentModal

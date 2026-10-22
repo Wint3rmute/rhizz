@@ -845,20 +845,20 @@ export function findConnectTarget(
   return null;
 }
 
-export interface LcaConnectionEndpoints {
+export interface LcaScope {
   lcaScopePath: string;
-  from: string;
-  to: string;
+  /** The source component's path relative to the scope; empty for the scope itself. */
+  fromComponent: string;
+  /** The target component's path relative to the scope; empty for the scope itself. */
+  toComponent: string;
 }
 
-// Computes the Lowest Common Ancestor (LCA) scope path and the relative `from` and `to`
-// endpoint strings for connecting two components across any hierarchy level.
-export function computeLcaConnection(
+// Computes the Lowest Common Ancestor (LCA) scope of two components and each
+// component's path relative to it. `null` for components of different systems.
+export function computeLcaScope(
   srcKey: string,
-  sourcePortLabel: string | null,
   targetKey: string,
-  targetPortLabel: string | null,
-): LcaConnectionEndpoints | null {
+): LcaScope | null {
   const srcParts = srcKey.split("/").filter(Boolean);
   const targetParts = targetKey.split("/").filter(Boolean);
 
@@ -878,13 +878,30 @@ export function computeLcaConnection(
     prefixLen++;
   }
 
-  const lcaScopePath = srcParts.slice(0, prefixLen).join("/");
+  return {
+    lcaScopePath: srcParts.slice(0, prefixLen).join("/"),
+    fromComponent: srcParts.slice(prefixLen).join("/"),
+    toComponent: targetParts.slice(prefixLen).join("/"),
+  };
+}
 
-  const fromRelParts = srcParts.slice(prefixLen);
-  const toRelParts = targetParts.slice(prefixLen);
+export interface LcaConnectionEndpoints {
+  lcaScopePath: string;
+  from: string;
+  to: string;
+}
 
-  const fromComp = fromRelParts.join("/");
-  const toComp = toRelParts.join("/");
+// Computes the Lowest Common Ancestor (LCA) scope path and the relative `from` and `to`
+// endpoint strings for connecting two components across any hierarchy level.
+export function computeLcaConnection(
+  srcKey: string,
+  sourcePortLabel: string | null,
+  targetKey: string,
+  targetPortLabel: string | null,
+): LcaConnectionEndpoints | null {
+  const scope = computeLcaScope(srcKey, targetKey);
+  if (scope === null) return null;
+  const { lcaScopePath, fromComponent: fromComp, toComponent: toComp } = scope;
 
   const from = sourcePortLabel
     ? fromComp

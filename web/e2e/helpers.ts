@@ -139,3 +139,19 @@ export async function replaceModel(page: Page, content: string): Promise<void> {
     { key: VFS_KEY, content },
   );
 }
+
+/**
+ * Answers the "New connection" dialog that opens after a connection is drawn:
+ * names the connection and creates it with the prefilled ports. Returns once
+ * the dialog is gone.
+ */
+export async function confirmNewConnection(
+  page: Page,
+  name: string,
+): Promise<void> {
+  const dialog = page.getByTestId("new-connection-modal");
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("new-connection-name").fill(name);
+  await dialog.getByTestId("new-connection-create").click();
+  await expect(dialog).toBeHidden();
+}

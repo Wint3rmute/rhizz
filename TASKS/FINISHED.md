@@ -4,6 +4,60 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — "New connection" dialog: create a connection together with its ports
+
+Dragging an arrow between two components now opens a dialog that creates the
+connection and a new port on each end in one undoable step. The old `prompt()`
+and the port-less `add_connection` from the canvas are gone.
+
+- **Core:** new op `connect_components` (`mutation/connect.rs`): scope, label,
+  `from`/`to` ends (`{component, port: {new: {...}} | {existing: label}}`) and an
+  optional `createProtocol` stub. Ports land on the component *definitions* the
+  instances are sourced from. Any refusal (blank or taken connection label, unknown
+  component, missing or clashing port, a role the protocol does not permit) leaves
+  the model untouched. Logged as a single `connect_components` action in the op's
+  own shape, so "Copy Debug Info" replays the gesture as one call.
+- **Dialog** (`NewConnectionModal.svelte`, logic in `newConnection.ts`): preview
+  of the two components with pins and a role-derived arrow; connection name
+  focused and prefilled `<from>-to-<to>`; protocol combobox (recent, then used,
+  then the rest; "Create protocol…" row creates an empty stub); per-end port name
+  prefilled `link-<other>`, role, and an Advanced section for `external` /
+  `required`. Enter creates, Esc cancels and writes nothing, and a refused op
+  keeps the dialog open.
+- **Defaults:** `required = true`; `external` is `false` for a direct child of the
+  connection's scope and `true` when the connection leaves a nested component
+  (or ends on the scope's own component). Defaults are computed once and never
+  recomputed after the user edits a field.
+- **Roles:** free text without a protocol. With a protocol that defines roles the
+  role is a dropdown, preselected (source = first role, target = second or first),
+  because an unset role is `E009` for such a protocol. A protocol without roles
+  shows "No roles defined". There is no dedicated warning for a role without a
+  protocol: an untyped port leaves the connection incomplete (`W019`).
+- **Existing ports:** a drag that starts or ends on a port dot keeps that port and
+  creates one only for the other end (the previous behavior, kept).
+- **Undo:** one `ModelMutationOp` is one snapshot transaction, so undo removes the
+  connection, both ports and a created protocol together.
+- **Tests:** Rust unit tests for the op and its JSON contract; Vitest for
+  `newConnection.ts`, `computeLcaScope`, the action-log encoding and
+  `applyModelMutation`; Playwright `new-connection-dialog.spec.ts` (Enter, Esc,
+  undo/redo, typed and new protocols, keyboard list, free role, port clash);
+  `duplicate-connection`, `connection-visibility` and `sidebar-delete` specs moved
+  from the prompt to the dialog (`confirmNewConnection` helper); 8 Storybook
+  stories with 16 VRT baselines. `SPEC/frontend.md` documents the flow.
+- **Fixed on the way:** `autofocus` did not survive the trailing `click` of the
+  drag, so the name field is focused after the next frame.
+
+Out of scope, as planned: choosing an existing port from a list, quick mode,
+port-less connections (to be deprecated separately), exposing boundary ports on
+parents.
+
+Validation: `just lint`, and `just test` (all Rust suites, 1182 Vitest tests
+including the stories, 152 e2e tests) pass. `just vrt` shows only the 16 new
+screenshots. `just build` was started but interrupted before it finished, so it
+has not been verified by the agent.
+
+---
+
 ## Task <N> — Remove `connection.encapsulates`
 
 Breaking change. The sibling-connection `encapsulates` attribute is gone; the

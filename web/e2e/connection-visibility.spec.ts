@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createNewProject, storedFiles, viewFile } from "./helpers";
+import {
+  confirmNewConnection,
+  createNewProject,
+  storedFiles,
+  viewFile,
+} from "./helpers";
 
 // Hiding a connection removes it from the canvas and unchecks it in the
 // sidebar; the state survives reload; unchecking and re-checking an endpoint
@@ -51,18 +56,11 @@ test("hiding a connection removes it from the canvas and survives reload", async
     nudge++;
   }
 
-  const seenPrompts: string[] = [];
-  page.on("dialog", (dialog) => {
-    if (dialog.type() === "prompt") {
-      seenPrompts.push(dialog.message());
-      const next = seenPrompts.length === 1 ? "link-ab" : "link-bc";
-      void dialog.accept(next);
-    } else {
-      void dialog.dismiss();
-    }
-  });
-
-  async function dragConnect(from: string, to: string): Promise<void> {
+  async function dragConnect(
+    from: string,
+    to: string,
+    name: string,
+  ): Promise<void> {
     await treeRow(from).click();
     const handle = canvas.getByTestId("diagram-side-handle").first();
     await expect(handle).toBeVisible();
@@ -76,9 +74,10 @@ test("hiding a connection removes it from the canvas and survives reload", async
     await page.mouse.down();
     await page.mouse.move(end.x, end.y, { steps: 8 });
     await page.mouse.up();
+    await confirmNewConnection(page, name);
   }
 
-  await dragConnect("vis-a", "vis-b");
+  await dragConnect("vis-a", "vis-b", "link-ab");
   await expect
     .poll(
       async () => {
@@ -92,7 +91,7 @@ test("hiding a connection removes it from the canvas and survives reload", async
   // Both connections land on vis-b (the down-nudged node): drops on it hit
   // the canvas, while drops near the top edge can land under the floating
   // toolbar and never start the gesture.
-  await dragConnect("vis-c", "vis-b");
+  await dragConnect("vis-c", "vis-b", "link-bc");
   await expect
     .poll(
       async () => {
@@ -230,7 +229,6 @@ test("Delete on a selected connection hides it instead of removing it", async ({
   await treeRow("hide-b").click();
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
 
-  page.once("dialog", (dialog) => void dialog.accept("link-hide"));
   await treeRow("hide-a").click();
   const handle = canvas.getByTestId("diagram-side-handle").first();
   await expect(handle).toBeVisible();
@@ -244,6 +242,7 @@ test("Delete on a selected connection hides it instead of removing it", async ({
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 8 });
   await page.mouse.up();
+  await confirmNewConnection(page, "link-hide");
 
   const row = page.getByTestId("connection-row-link-hide");
   await expect(row).toBeVisible();

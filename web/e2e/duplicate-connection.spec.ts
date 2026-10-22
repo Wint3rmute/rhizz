@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createNewProject } from "./helpers";
+import { confirmNewConnection, createNewProject } from "./helpers";
 
 const VFS_KEY = "rhizz:vfs:v1";
 
@@ -37,11 +37,12 @@ async function storedFiles(page: import("@playwright/test").Page) {
   }, VFS_KEY);
 }
 
-// Two connections with the same name in one scope: the second draw must be
-// refused with a message, not silently swallowed (or worse, replacing the
-// first). Drives the real canvas flow — drag handle to node, name prompt —
-// and reads the model file back, so it pins the outcome, not the control.
-test("a duplicate connection name is refused with a message", async ({
+// Two connections with the same name: the dialog must refuse the second one
+// with a message instead of letting it through (or worse, replacing the
+// first). Drives the real canvas flow — drag handle to node, "New connection"
+// dialog — and reads the model file back, so it pins the outcome, not the
+// control.
+test("a duplicate connection name is refused in the dialog", async ({
   page,
 }) => {
   const id = await createNewProject(page, "E2E duplicate connection");
@@ -115,19 +116,8 @@ test("a duplicate connection name is refused with a message", async ({
     await page.mouse.up();
   }
 
-  const seen: string[] = [];
-  page.on("console", (msg) => {
-    if (msg.type() === "error" || msg.type() === "warning") {
-      seen.push(`console-${msg.type()}:${msg.text().slice(0, 200)}`);
-    }
-  });
-  page.on("dialog", (dialog) => {
-    seen.push(`${dialog.type()}:${dialog.message()}`);
-    if (dialog.type() === "prompt") void dialog.accept("test-connection");
-    else void dialog.dismiss();
-  });
-
   await dragConnect("conn-a", "conn-b");
+  await confirmNewConnection(page, "test-connection");
   await expect
     .poll(
       async () => {
@@ -140,11 +130,18 @@ test("a duplicate connection name is refused with a message", async ({
     .toBe(true);
 
   // The same name for a second connection: refused with a message naming
-  // the clash, and the model keeps exactly the first connection.
+  // the clash, Create stays disabled, and the model keeps exactly the first
+  // connection.
   await dragConnect("conn-c", "conn-b");
-  await expect
-    .poll(() => Promise.resolve(seen.join("\n")), { timeout: 10_000 })
-    .toMatch(/already exists/);
+  const dialog = page.getByTestId("new-connection-modal");
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId("new-connection-name").fill("test-connection");
+  await expect(dialog.getByTestId("new-connection-problem")).toContainText(
+    "already exists",
+  );
+  await expect(dialog.getByTestId("new-connection-create")).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
 
   const files = await storedFiles(page);
   const model = files["main.hcl"] ?? files["system.hcl"] ?? "";
