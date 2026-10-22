@@ -9,6 +9,7 @@ import {
   clampWithin,
   computeDirectionalHandles,
   computeLcaConnection,
+  computeLcaScope,
   computePortPositions,
   computeRenderOrder,
   computeResizedBox,
@@ -868,6 +869,32 @@ describe("computeLcaConnection", () => {
       "in",
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("computeLcaScope", () => {
+  it("returns the scope and each component's path relative to it", () => {
+    expect(computeLcaScope("drone/flight-controller/mcu", "drone/imu")).toEqual(
+      {
+        lcaScopePath: "drone",
+        fromComponent: "flight-controller/mcu",
+        toComponent: "imu",
+      },
+    );
+  });
+
+  it("uses an empty path for the scope's own component", () => {
+    expect(
+      computeLcaScope("drone/flight-controller", "drone/flight-controller/mcu"),
+    ).toEqual({
+      lcaScopePath: "drone/flight-controller",
+      fromComponent: "",
+      toComponent: "mcu",
+    });
+  });
+
+  it("rejects cross-system connections", () => {
+    expect(computeLcaScope("drone1/sensor", "drone2/controller")).toBeNull();
   });
 });
 

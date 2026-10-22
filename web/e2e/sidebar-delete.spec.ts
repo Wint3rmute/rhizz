@@ -1,5 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
-import { createNewProject, replaceModel, storedFiles } from "./helpers";
+import {
+  confirmNewConnection,
+  createNewProject,
+  replaceModel,
+  storedFiles,
+} from "./helpers";
 
 // The Components and Connections sidebars of Modeling each carry a trash
 // button on hover. Clicking it removes the item from the system model (not
@@ -98,7 +103,6 @@ async function linkTwoComponents(
   await treeRow(to).click();
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
 
-  page.once("dialog", (dialog) => void dialog.accept(label));
   await treeRow(from).click();
   const handle = canvas.getByTestId("diagram-side-handle").first();
   await expect(handle).toBeVisible();
@@ -112,6 +116,7 @@ async function linkTwoComponents(
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 8 });
   await page.mouse.up();
+  await confirmNewConnection(page, label);
 
   const row = page.getByTestId(`connection-row-${label}`);
   await expect(row).toBeVisible();
