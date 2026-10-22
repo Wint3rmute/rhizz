@@ -276,17 +276,10 @@ function toMutationOp(action: ModelAction): unknown {
         from: action.from,
         to: action.to,
       };
-    case "connect_components":
-      return {
-        kind: "connect_components",
-        scopePath: action.scopePath,
-        label: action.label,
-        from: action.from,
-        to: action.to,
-        ...(action.createProtocol === undefined
-          ? {}
-          : { createProtocol: action.createProtocol }),
-      };
+    case "connect_components": {
+      const { op, ...fields } = action;
+      return { kind: op, ...fields };
+    }
     case "delete_connection":
       // The dispatcher resolves the scope itself; the recorded scope is
       // redundant for replay.
