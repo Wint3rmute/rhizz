@@ -126,19 +126,25 @@ fn check_connection_label(
     scope: Scope,
     label: &str,
 ) -> Result<(), MutationError> {
-    if label.is_empty() {
-        return Err(invalid("connection label must not be empty".to_owned()));
-    }
-    if label.contains('/') {
-        return Err(invalid(format!(
-            "connection label `{label}` must not contain `/`"
-        )));
-    }
+    check_label(label, "connection")?;
     if super::scope_connections_mut(raw, scope)?
         .iter()
         .any(|c| c.label == label)
     {
         return Err(invalid(format!("connection `{label}` already exists")));
+    }
+    Ok(())
+}
+
+/// A label that will be written into paths: non-empty and without `/`.
+fn check_label(label: &str, what: &str) -> Result<(), MutationError> {
+    if label.is_empty() {
+        return Err(invalid(format!("{what} label must not be empty")));
+    }
+    if label.contains('/') {
+        return Err(invalid(format!(
+            "{what} label `{label}` must not contain `/`"
+        )));
     }
     Ok(())
 }
@@ -184,15 +190,7 @@ fn attach_port(raw: &mut RawFile, definition: usize, spec: &PortSpec) -> Result<
             }
         }
         PortSpec::New(new) => {
-            if new.label.is_empty() {
-                return Err(invalid("port label must not be empty".to_owned()));
-            }
-            if new.label.contains('/') {
-                return Err(invalid(format!(
-                    "port label `{}` must not contain `/`",
-                    new.label
-                )));
-            }
+            check_label(&new.label, "port")?;
             if has_port(&new.label, &owner.inner.ports) {
                 return Err(invalid(format!(
                     "component `{owner_label}` already has a port `{}`",
