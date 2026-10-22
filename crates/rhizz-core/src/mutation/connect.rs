@@ -558,19 +558,15 @@ system "demo" {
     }
 
     #[test]
-    fn a_port_label_with_a_slash_is_refused() {
-        let diagnostics = connect(BASELINE, &A_TO_B.replace("link-b", "x/y")).expect_err("refused");
-        assert_eq!(codes(&diagnostics), [DiagnosticCode::E000]);
-    }
-
-    #[test]
-    fn an_unknown_component_is_refused() {
-        let diagnostics = connect(
-            BASELINE,
-            &A_TO_B.replace(r#""component":"a""#, r#""component":"ghost""#),
-        )
-        .expect_err("refused");
-        assert_eq!(codes(&diagnostics), [DiagnosticCode::E000]);
+    fn malformed_endpoints_are_refused() {
+        for json in [
+            A_TO_B.replace("link-b", "x/y"),
+            A_TO_B.replace(r#""component":"a""#, r#""component":"ghost""#),
+            A_TO_B.replace(r#""component":"a""#, r#""component":"""#),
+        ] {
+            let diagnostics = connect(BASELINE, &json).expect_err("refused");
+            assert_eq!(codes(&diagnostics), [DiagnosticCode::E000]);
+        }
     }
 
     #[test]
@@ -666,16 +662,6 @@ system "demo" {
                 ("child".to_owned(), "inner".to_owned())
             ]
         );
-    }
-
-    #[test]
-    fn a_system_scope_has_no_component_of_its_own() {
-        let diagnostics = connect(
-            BASELINE,
-            &A_TO_B.replace(r#""component":"a""#, r#""component":"""#),
-        )
-        .expect_err("refused");
-        assert_eq!(codes(&diagnostics), [DiagnosticCode::E000]);
     }
 
     #[test]
