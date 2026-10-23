@@ -1416,7 +1416,11 @@ fn delete_connection_by_label(
         return Ok(idle());
     };
     let ports = if remove_ports {
-        let kind = if matches!(scope, Scope::System(_)) { "system" } else { "component" };
+        let kind = if matches!(scope, Scope::System(_)) {
+            "system"
+        } else {
+            "component"
+        };
         removable_endpoint_ports(raw, &format!("{kind}:{scope_label}"), label)?
     } else {
         Vec::new()
