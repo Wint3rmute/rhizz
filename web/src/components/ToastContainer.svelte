@@ -25,7 +25,7 @@
       </span>
       <button
         type="button"
-        class="btn btn-ghost btn-xs"
+        class="btn btn-ghost btn-xs justify-self-end"
         aria-label="Dismiss notification"
         onclick={() => state.dismiss(toast.id)}
       >

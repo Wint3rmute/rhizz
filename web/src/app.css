@@ -23,7 +23,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.875em;
   font-weight: inherit;
-  color: inherit;
+  color: var(--color-base-content);
 }
 
 /* The typography plugin brackets prose code in literal backticks via
