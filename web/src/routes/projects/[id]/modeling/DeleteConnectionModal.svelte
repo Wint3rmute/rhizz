@@ -175,7 +175,7 @@
                       ? 'badge-error'
                       : 'badge-ghost'} ml-auto"
                   >
-                    {removePorts ? "Will be removed" : "Removable"}
+                    {removePorts ? "Will be removed" : "Keep"}
                   </span>
                 </li>
               {/each}

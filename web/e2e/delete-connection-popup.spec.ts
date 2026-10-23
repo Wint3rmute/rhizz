@@ -138,6 +138,12 @@ test("checking the box removes the ports too, as one undoable step", async ({
   );
   await modal.getByTestId("delete-connection-confirm").click();
 
+  // The removal is confirmed with a success toast; the connection name is
+  // Markdown, rendered as inline code.
+  const toast = page.getByRole("alert").filter({ hasText: "removed!" });
+  await expect(toast).toHaveText(/connection\s+link\s+removed!/);
+  await expect(toast.locator("code")).toHaveText("link");
+
   await expect
     .poll(
       async () => {

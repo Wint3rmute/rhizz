@@ -51,7 +51,7 @@ export const Default: Story = {
     ).not.toBeChecked();
     await expect(
       modal.getAllByTestId("delete-connection-port")[0],
-    ).toHaveTextContent("Removable");
+    ).toHaveTextContent("Keep");
   },
 };
 

@@ -3449,7 +3449,10 @@
         if (selectedConnection === label) selectedConnection = null;
       },
     );
-    if (applied) deleteConnectionRequest = null;
+    if (applied) {
+      deleteConnectionRequest = null;
+      toastState.show(`connection \`${label}\` removed!`, "success");
+    }
   }
 
   // Removes a component instance from the system model (not just this view),

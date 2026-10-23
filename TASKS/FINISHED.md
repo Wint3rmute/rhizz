@@ -12,11 +12,13 @@ chrome as the other dialogs.
 
 - **Dialog** (`DeleteConnectionModal.svelte`, projection in
   `deleteConnection.ts`): names the connection and both endpoints, and lists the
-  endpoint ports as *Removable* or *Used by <connections>*. The "Also remove
+  endpoint ports as *Keep* or *Used by <connections>*. The "Also remove
   ports on connected components" checkbox is unchecked by default; checking it
   changes the badges to "Will be removed" and reveals a warning when a port is
   still in use. Delete/Enter confirms, Esc cancels (Delete also bypasses the
-  canvas's hide-connection shortcut while the dialog is open).
+  canvas's hide-connection shortcut while the dialog is open). A successful
+  removal shows a success toast: ``connection `name` removed!`` with the name
+  rendered as inline code.
 - **Atomic op** (`delete_connection_by_label` gains `removePorts`): one
   dispatcher call deletes the connection and the unused endpoint ports, so undo
   is one step. Ports are removed from the component *definitions* that declare
