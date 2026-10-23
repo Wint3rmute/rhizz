@@ -1416,7 +1416,8 @@ fn delete_connection_by_label(
         return Ok(idle());
     };
     let ports = if remove_ports {
-        removable_endpoint_ports(raw, scope, label)?
+        let kind = if matches!(scope, Scope::System(_)) { "system" } else { "component" };
+        removable_endpoint_ports(raw, &format!("{kind}:{scope_label}"), label)?
     } else {
         Vec::new()
     };
@@ -1437,7 +1438,7 @@ fn delete_connection_by_label(
 /// else still uses them.
 fn removable_endpoint_ports(
     raw: &RawFile,
-    scope: Scope,
+    decl: &str,
     label: &str,
 ) -> Result<Vec<(String, String)>, MutationError> {
     let (model, _) = resolve::resolve(raw.clone()).map_err(|_| {
@@ -1445,20 +1446,6 @@ fn removable_endpoint_ports(
             "cannot inspect ports of connection `{label}` in an invalid model"
         ))
     })?;
-    let decl = match scope {
-        Scope::System(index) => format!(
-            "system:{}",
-            raw.systems
-                .get(index)
-                .map_or_else(String::new, |s| s.label.clone())
-        ),
-        Scope::Definition(index) => format!(
-            "component:{}",
-            raw.components
-                .get(index)
-                .map_or_else(String::new, |c| c.label.clone())
-        ),
-    };
     let Some(connection) = model
         .connections
         .iter()
