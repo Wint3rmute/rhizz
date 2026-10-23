@@ -16,29 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Delete connection popup with port cleanup
-
-In `modeling/`, replace the "Delete connection (...)" browser prompt with a
-full popup (same chrome as the other modals).
-
-- The popup names the connection and its two endpoints, and has a checkbox
-  "Also remove ports on connected components", **unchecked by default**
-  (removing is the destructive choice).
-- Removing ports needs a new op, or an option on the delete op, so the whole
-  thing is one atomic, undoable step and one entry in the action log (mirror it
-  in `LoggedAction`, `ModelAction` and `toMutationOp`, like every op).
-- Ports live on component *definitions*, so removing a port affects every
-  instance of that definition. Only remove a port that no other connection
-  uses, and say in the popup which ports would go. Refuse with a clear message
-  when a port cannot be removed.
-- Keep the keyboard behavior of the old prompt (Delete/Enter confirms, Esc
-  cancels) and update the e2e specs that answer the prompt
-  (`sidebar-delete.spec.ts`, `connection-visibility.spec.ts`).
-- Tests: Rust unit tests for the op (ports removed, shared port kept, refusal),
-  Playwright for the popup flow including undo, a story for the popup's look.
-
----
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the

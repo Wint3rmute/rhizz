@@ -139,7 +139,13 @@ export type ModelAction =
       to: ConnectEnd;
       createProtocol?: string | undefined;
     }
-  | { op: "delete_connection"; scopePath: string; label: string }
+  | {
+      op: "delete_connection";
+      scopePath: string;
+      label: string;
+      /** Also delete the endpoint ports no other connection uses. */
+      removePorts?: boolean | undefined;
+    }
   | {
       op: "update_connection";
       scopePath: string;
@@ -283,7 +289,13 @@ function toMutationOp(action: ModelAction): unknown {
     case "delete_connection":
       // The dispatcher resolves the scope itself; the recorded scope is
       // redundant for replay.
-      return { kind: "delete_connection_by_label", label: action.label };
+      return {
+        kind: "delete_connection_by_label",
+        label: action.label,
+        // Absent unless the user asked for the port cleanup, keeping old
+        // debug dumps byte-identical.
+        ...(action.removePorts === true ? { removePorts: true } : {}),
+      };
     case "update_connection":
       return {
         kind: "update_connection",

@@ -65,7 +65,7 @@ export type WorkspaceAction =
       from: string;
       to: string;
     }
-  | { type: "delete-connection"; label: string }
+  | { type: "delete-connection"; label: string; removePorts?: boolean }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -242,7 +242,11 @@ export class WorkspaceHarness {
       case "delete-connection":
         await this.executeModelTransaction(
           `disconnect ${action.label}`,
-          { kind: "delete_connection_by_label", label: action.label },
+          {
+            kind: "delete_connection_by_label",
+            label: action.label,
+            ...(action.removePorts === true ? { removePorts: true } : {}),
+          },
           undefined,
           true,
         );
