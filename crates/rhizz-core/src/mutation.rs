@@ -1401,14 +1401,6 @@ fn find_connection(raw: &RawFile, label: &str) -> Option<(Scope, String)> {
     None
 }
 
-fn deleted_connection_action(scope_label: String, label: &str, remove_ports: bool) -> LoggedAction {
-    LoggedAction::DeleteConnection {
-        scope_path: scope_label,
-        label: label.to_owned(),
-        remove_ports: remove_ports.then_some(true),
-    }
-}
-
 /// Delete connection `label`; optionally its endpoint ports too.
 ///
 /// A port is removable only when no connection outside the deleted declaration
@@ -1423,27 +1415,22 @@ fn delete_connection_by_label(
     let Some((scope, scope_label)) = find_connection(raw, label) else {
         return Ok(idle());
     };
-    if !remove_ports {
-        delete_connection(raw, scope, label);
-        return Ok(applied(vec![deleted_connection_action(
-            scope_label,
-            label,
-            false,
-        )]));
-    }
-
-    let ports = removable_endpoint_ports(raw, scope, label)?;
+    let ports = if remove_ports {
+        removable_endpoint_ports(raw, scope, label)?
+    } else {
+        Vec::new()
+    };
     delete_connection(raw, scope, label);
     for (definition, port) in &ports {
         if let Some(component) = raw.components.iter_mut().find(|c| c.label == *definition) {
             component.inner.ports.retain(|p| p.label != *port);
         }
     }
-    Ok(applied(vec![deleted_connection_action(
-        scope_label,
-        label,
-        true,
-    )]))
+    Ok(applied(vec![LoggedAction::DeleteConnection {
+        scope_path: scope_label,
+        label: label.to_owned(),
+        remove_ports: remove_ports.then_some(true),
+    }]))
 }
 
 /// The `(definition, port)` pairs the deleted connection ends on, if nothing
