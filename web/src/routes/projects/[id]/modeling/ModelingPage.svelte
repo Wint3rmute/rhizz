@@ -39,6 +39,11 @@
   import ConnectionInspector from "./ConnectionInspector.svelte";
   import CreateComponentModal from "./CreateComponentModal.svelte";
   import NewConnectionModal from "./NewConnectionModal.svelte";
+  import DeleteConnectionModal from "./DeleteConnectionModal.svelte";
+  import {
+    buildDeleteConnectionRequest,
+    type DeleteConnectionRequest,
+  } from "./deleteConnection";
   import NewViewModal from "./NewViewModal.svelte";
   import EmbedDiagramButton from "./EmbedDiagramButton.svelte";
   import Pane from "../../../../components/modular_ui/Pane.svelte";
@@ -1624,6 +1629,7 @@
       !isCreateModalOpen &&
       !isNewViewModalOpen &&
       newConnectionRequest === null &&
+      deleteConnectionRequest === null &&
       !isEditableTarget(event)
     );
   }
@@ -1662,6 +1668,7 @@
     // or the selected connection (never part of a mixed selection). Never
     // fires while typing in the inspector or HCL editor.
     if (
+      deleteConnectionRequest === null &&
       !isEditableTarget(event) &&
       (event.key === "Delete" || event.key === "Backspace")
     ) {
@@ -2445,6 +2452,9 @@
   // here rather than in a model write.
   let newConnectionRequest = $state<NewConnectionRequest | null>(null);
   let isCreatingConnection = false;
+
+  // The connection whose delete dialog is open, projected from the model.
+  let deleteConnectionRequest = $state<DeleteConnectionRequest | null>(null);
 
   let protocolList = $derived(protocolDataList(model));
   let portProtocolUsage = $derived(protocolUsage([...componentData.values()]));
@@ -3410,30 +3420,36 @@
     return false;
   }
 
-  // Removes a connection from the system model (not just this view), after a
-  // confirm. Used by the inspector button and the Connections sidebar trash.
-  async function deleteConnectionFromModel(label: string): Promise<void> {
-    const op: ModelMutationOp = { kind: "delete_connection_by_label", label };
+  // Opens the delete dialog for a connection from the system model (not just
+  // this view). The dialog decides whether to also remove the endpoint ports;
+  // `handleDeleteConnection` runs the single atomic op.
+  function deleteConnectionFromModel(label: string): void {
+    const request = buildDeleteConnectionRequest(model, label);
+    if (request !== undefined) deleteConnectionRequest = request;
+  }
+
+  // Runs the dialog's op. A refusal (a port another connection still uses)
+  // leaves the dialog open with the reason in a toast.
+  async function handleDeleteConnection(removePorts: boolean): Promise<void> {
+    const request = deleteConnectionRequest;
+    if (request === null) return;
+    const label = request.label;
+    const op: ModelMutationOp = {
+      kind: "delete_connection_by_label",
+      label,
+      ...(removePorts ? { removePorts: true } : {}),
+    };
     if (!(await canApplyModelOp(op))) return;
-    if (
-      !confirm(
-        `Delete connection "${label}"? This will remove it from the system model.`,
-      )
-    ) {
-      return;
-    }
     // Scope search lives in the dispatcher (`delete_connection_by_label`).
-    await runModelLayoutTransaction(
+    const applied = await runModelLayoutTransaction(
       `disconnect ${label}`,
-      {
-        kind: "delete_connection_by_label",
-        label,
-      },
+      op,
       () => {
         delete savedConnections[label];
         if (selectedConnection === label) selectedConnection = null;
       },
     );
+    if (applied) deleteConnectionRequest = null;
   }
 
   // Removes a component instance from the system model (not just this view),
@@ -4019,10 +4035,7 @@
           onselect={selectConnectionByRef}
           onsetstartside={setConnectionStartSide}
           onsetendside={setConnectionEndSide}
-          ondelete={() =>
-            void deleteConnectionFromModel(selectedConnection ?? "").catch(
-              reportDiagramError,
-            )}
+          ondelete={() => deleteConnectionFromModel(selectedConnection ?? "")}
         />
       {:else}
         <p class="text-base-content/50 text-sm">
@@ -4395,10 +4408,8 @@
                   class="ml-auto shrink-0 invisible group-hover:visible text-xs text-base-content/60 hover:text-error"
                   title="Delete connection from the model"
                   aria-label={`Delete connection ${connection.label}`}
-                  onclick={() =>
-                    void deleteConnectionFromModel(connection.label).catch(
-                      reportDiagramError,
-                    )}>🗑</button
+                  onclick={() => deleteConnectionFromModel(connection.label)}
+                  >🗑</button
                 >
               </li>
             {/each}
@@ -4441,6 +4452,13 @@
   oncreate={(op) =>
     void handleNewConnectionCreate(op).catch(reportDiagramError)}
   onclose={() => (newConnectionRequest = null)}
+/>
+
+<DeleteConnectionModal
+  request={deleteConnectionRequest}
+  onconfirm={(removePorts) =>
+    void handleDeleteConnection(removePorts).catch(reportDiagramError)}
+  onclose={() => (deleteConnectionRequest = null)}
 />
 
 <CreateComponentModal

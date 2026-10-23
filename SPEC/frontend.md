@@ -162,6 +162,22 @@ writes nothing.
 - Any refusal (taken label, unknown component, …) leaves the model untouched
   and the dialog open.
 
+## Deleting a connection
+
+Both the connection inspector's button and the Connections sidebar trash open
+the **Delete connection** dialog instead of a browser prompt. It names the
+connection and both endpoints. Delete/Enter confirms and Esc cancels.
+
+- **"Also remove ports on connected components"** is unchecked by default,
+  because removing the ports is the destructive choice. The dialog lists the
+  endpoint ports and marks each *Removable* or *Used by <connections>*.
+- Ports live on component *definitions*, so removing one affects every instance
+  of that definition. Only a port no other connection uses is removable;
+  otherwise the single `delete_connection_by_label` op (with `removePorts`) is
+  refused and the dialog stays open with the reason.
+- Connection and ports are one `delete_connection_by_label` op, so they are one
+  undo step and one `delete_connection` entry in the action log.
+
 ## Persistence
 
 The editor keeps every project in a virtual filesystem (`web/src/vfs/`), which

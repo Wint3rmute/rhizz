@@ -22,7 +22,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
-use crate::model::{BorderStyle, ConnectionRef};
+use crate::model::{BorderStyle, Component, ConnectionRef, Model};
 use crate::parse::{
     Labeled, RawComponent, RawConnection, RawFile, RawInstance, RawPort, RawProject, RawProtocol,
     RawSystem, parse_file,
@@ -140,8 +140,18 @@ pub enum ModelOp {
         create_protocol: Option<String>,
     },
     /// Delete a connection by label, searching systems then definitions.
+    ///
+    /// With `remove_ports`, also delete the endpoint ports it was the only
+    /// user of. Ports live on component *definitions*, so a port another
+    /// connection still uses refuses the whole op instead of being left
+    /// behind half-cleaned.
     #[serde(rename = "delete_connection_by_label")]
-    DeleteConnectionByLabel { label: String },
+    #[serde(rename_all = "camelCase")]
+    DeleteConnectionByLabel {
+        label: String,
+        #[serde(default)]
+        remove_ports: bool,
+    },
     /// Patch a connection's attributes, addressed like `add_connection`
     /// (`scope_path` + `label`).
     ///
@@ -408,10 +418,16 @@ pub enum LoggedAction {
         #[serde(skip_serializing_if = "Option::is_none")]
         create_protocol: Option<String>,
     },
-    /// A connection was deleted.
+    /// A connection was deleted, optionally together with its endpoint ports
+    /// (one gesture, one action).
     #[serde(rename = "delete_connection")]
     #[serde(rename_all = "camelCase")]
-    DeleteConnection { scope_path: String, label: String },
+    DeleteConnection {
+        scope_path: String,
+        label: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remove_ports: Option<bool>,
+    },
     /// A connection was patched (`scope_path` / `label` as addressed, the
     /// patch as sent: `realized_by` entries stay as [`ConnectionRef`]s).
     #[serde(rename = "update_connection")]
@@ -780,7 +796,10 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             to,
             create_protocol.as_deref(),
         ),
-        ModelOp::DeleteConnectionByLabel { label } => Ok(delete_connection_by_label(raw, label)),
+        ModelOp::DeleteConnectionByLabel {
+            label,
+            remove_ports,
+        } => delete_connection_by_label(raw, label, *remove_ports),
         ModelOp::UpdateConnection {
             scope_path,
             label,
@@ -1354,7 +1373,9 @@ fn add_connection(
     })
 }
 
-fn delete_connection_by_label(raw: &mut RawFile, label: &str) -> ApplyOutcome {
+/// The scope that declares `label` (systems first, then definitions, matching
+/// the dispatcher's search order) and that scope's label.
+fn find_connection(raw: &RawFile, label: &str) -> Option<(Scope, String)> {
     if let Some(index) = raw
         .systems
         .iter()
@@ -1364,11 +1385,7 @@ fn delete_connection_by_label(raw: &mut RawFile, label: &str) -> ApplyOutcome {
             .systems
             .get(index)
             .map_or_else(String::new, |s| s.label.clone());
-        delete_connection(raw, Scope::System(index), label);
-        return applied(vec![LoggedAction::DeleteConnection {
-            scope_path: system,
-            label: label.to_owned(),
-        }]);
+        return Some((Scope::System(index), system));
     }
     if let Some(index) = raw
         .components
@@ -1379,13 +1396,144 @@ fn delete_connection_by_label(raw: &mut RawFile, label: &str) -> ApplyOutcome {
             .components
             .get(index)
             .map_or_else(String::new, |c| c.label.clone());
-        delete_connection(raw, Scope::Definition(index), label);
-        return applied(vec![LoggedAction::DeleteConnection {
-            scope_path: definition,
-            label: label.to_owned(),
-        }]);
+        return Some((Scope::Definition(index), definition));
     }
-    idle()
+    None
+}
+
+fn deleted_connection_action(scope_label: String, label: &str, remove_ports: bool) -> LoggedAction {
+    LoggedAction::DeleteConnection {
+        scope_path: scope_label,
+        label: label.to_owned(),
+        remove_ports: remove_ports.then_some(true),
+    }
+}
+
+/// Delete connection `label`; optionally its endpoint ports too.
+///
+/// A port is removable only when no connection outside the deleted declaration
+/// uses it. Ports live on component *definitions*, so deleting one affects
+/// every instance of that definition. A port still in use refuses the whole
+/// op with [`MutationError::InvalidInput`], leaving the model untouched.
+fn delete_connection_by_label(
+    raw: &mut RawFile,
+    label: &str,
+    remove_ports: bool,
+) -> Result<ApplyOutcome, MutationError> {
+    let Some((scope, scope_label)) = find_connection(raw, label) else {
+        return Ok(idle());
+    };
+    if !remove_ports {
+        delete_connection(raw, scope, label);
+        return Ok(applied(vec![deleted_connection_action(
+            scope_label,
+            label,
+            false,
+        )]));
+    }
+
+    let ports = removable_endpoint_ports(raw, scope, label)?;
+    delete_connection(raw, scope, label);
+    for (definition, port) in &ports {
+        if let Some(component) = raw.components.iter_mut().find(|c| c.label == *definition) {
+            component.inner.ports.retain(|p| p.label != *port);
+        }
+    }
+    Ok(applied(vec![deleted_connection_action(
+        scope_label,
+        label,
+        true,
+    )]))
+}
+
+/// The `(definition, port)` pairs the deleted connection ends on, if nothing
+/// else still uses them.
+fn removable_endpoint_ports(
+    raw: &RawFile,
+    scope: Scope,
+    label: &str,
+) -> Result<Vec<(String, String)>, MutationError> {
+    let (model, _) = resolve::resolve(raw.clone()).map_err(|_| {
+        MutationError::InvalidInput(format!(
+            "cannot inspect ports of connection `{label}` in an invalid model"
+        ))
+    })?;
+    let decl = match scope {
+        Scope::System(index) => format!(
+            "system:{}",
+            raw.systems
+                .get(index)
+                .map_or_else(String::new, |s| s.label.clone())
+        ),
+        Scope::Definition(index) => format!(
+            "component:{}",
+            raw.components
+                .get(index)
+                .map_or_else(String::new, |c| c.label.clone())
+        ),
+    };
+    let Some(connection) = model
+        .connections
+        .iter()
+        .find(|c| c.decl == decl && c.label == label)
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut targets: Vec<(String, String)> = Vec::new();
+    for endpoint in [&connection.from, &connection.to] {
+        let Some(target) = endpoint_port_target(&model, endpoint) else {
+            continue;
+        };
+        if !targets.contains(&target) {
+            targets.push(target);
+        }
+    }
+
+    // Copies of the deleted connection share the scope `decl` and its label,
+    // and disappear with it; another connection in the same scope has a
+    // different label and still needs its ports.
+    for other in &model.connections {
+        if other.decl == decl && other.label == label {
+            continue;
+        }
+        for endpoint in [&other.from, &other.to] {
+            let Some(target) = endpoint_port_target(&model, endpoint) else {
+                continue;
+            };
+            if targets.contains(&target) {
+                return Err(MutationError::InvalidInput(format!(
+                    "cannot remove port `{}` on component `{}`: it is still used by connection `{}`",
+                    target.1, target.0, other.label
+                )));
+            }
+        }
+    }
+    Ok(targets)
+}
+
+/// The `(definition label, port label)` an endpoint lands on. A placed
+/// instance resolves to the top-level definition its `source` names, because
+/// ports are declared (and deleted) there.
+fn endpoint_port_target(
+    model: &Model,
+    endpoint: &crate::model::ConnectionEndpoint,
+) -> Option<(String, String)> {
+    let port = model.port(endpoint.port?)?;
+    let component = model.component(endpoint.component)?;
+    let definition = match component.source.as_deref() {
+        Some(source) => definition_by_label(model, source)?,
+        None => component,
+    };
+    Some((definition.label.clone(), port.label.clone()))
+}
+
+fn definition_by_label<'a>(model: &'a Model, label: &str) -> Option<&'a Component> {
+    model
+        .definitions
+        .iter()
+        .filter_map(|id| model.component(*id))
+        .find(|definition| definition.label == label)
 }
 
 /// Patch the connection `label` declared in `scope_path`. A guard miss (unknown
@@ -2088,6 +2236,173 @@ mod tests {
         )
         .expect("ok");
         assert!(!missing.applied);
+    }
+
+    const LINKED: &str = r#"
+component "a" {
+  leaf = true
+  port "out" {}
+}
+component "b" {
+  leaf = true
+  port "in" {}
+}
+system "demo" {
+  instance "a" { source = "a" }
+  instance "b" { source = "b" }
+  connection "link" {
+    from = "a/out"
+    to   = "b/in"
+  }
+}
+"#;
+
+    /// Port labels of the definition `component`, from the emitted HCL.
+    fn ports_in(hcl: &str, component: &str) -> Vec<String> {
+        let model = crate::compile(&[Source {
+            filename: "system.hcl".to_owned(),
+            content: hcl.to_owned(),
+        }]);
+        let model = model.model.expect("model");
+        model
+            .definitions
+            .iter()
+            .filter_map(|id| model.component(*id))
+            .find(|c| c.label == component)
+            .map(|c| {
+                c.ports
+                    .iter()
+                    .filter_map(|id| model.port(*id))
+                    .map(|p| p.label.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn delete_connection_keeps_ports_by_default() {
+        let result = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link"}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"connection "link""#));
+        assert_eq!(ports_in(&hcl, "a"), ["out"]);
+        assert_eq!(ports_in(&hcl, "b"), ["in"]);
+    }
+
+    #[test]
+    fn delete_connection_can_remove_its_endpoint_ports() {
+        let result = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link","removePorts":true}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"connection "link""#));
+        assert!(ports_in(&hcl, "a").is_empty(), "{hcl}");
+        assert!(ports_in(&hcl, "b").is_empty(), "{hcl}");
+    }
+
+    #[test]
+    fn delete_connection_nested_endpoint_ports_are_removed_from_definitions() {
+        let baseline = r#"
+component "child" {
+  leaf = true
+  port "inner" {}
+}
+component "parent" {
+  port "outer" {}
+  instance "c" { source = "child" }
+}
+system "demo" {
+  instance "p" { source = "parent" }
+  connection "cross" {
+    from = "p/c/inner"
+    to   = "p/outer"
+  }
+}
+"#;
+        let result = mutate(
+            baseline,
+            r#"{"kind":"delete_connection_by_label","label":"cross","removePorts":true}"#,
+        )
+        .expect("ok");
+        let hcl = result.hcl.expect("hcl");
+        assert!(ports_in(&hcl, "child").is_empty(), "{hcl}");
+        assert!(ports_in(&hcl, "parent").is_empty(), "{hcl}");
+    }
+
+    #[test]
+    fn delete_connection_refuses_to_remove_a_shared_port() {
+        let baseline = r#"
+component "a" {
+  leaf = true
+  port "out" {}
+}
+component "b" {
+  leaf = true
+  port "in" {}
+  port "spare" {}
+}
+system "demo" {
+  instance "a" { source = "a" }
+  instance "b" { source = "b" }
+  connection "one" {
+    from = "a/out"
+    to   = "b/in"
+  }
+  connection "two" {
+    from = "a/out"
+    to   = "b/spare"
+  }
+}
+"#;
+        let diagnostics = mutate(
+            baseline,
+            r#"{"kind":"delete_connection_by_label","label":"one","removePorts":true}"#,
+        )
+        .expect_err("refused");
+        let errors: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.is_error())
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(errors, [DiagnosticCode::E000]);
+        let message = diagnostics
+            .iter()
+            .find(|d| d.code == DiagnosticCode::E000)
+            .map(|d| d.message.clone())
+            .unwrap_or_default();
+        assert!(message.contains("out"), "{message}");
+        assert!(message.contains("two"), "{message}");
+        // The shared port `out` is what keeps the whole op from applying; no
+        // half-deleted model is written.
+        assert!(baseline.contains(r#"connection "one""#));
+    }
+
+    #[test]
+    fn delete_connection_logs_port_cleanup_as_one_action() {
+        let removed = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link","removePorts":true}"#,
+        )
+        .expect("ok");
+        assert_eq!(removed.actions.len(), 1);
+        let json = serde_json::to_value(&removed.actions).expect("json");
+        assert_eq!(json[0]["op"], "delete_connection");
+        assert_eq!(json[0]["removePorts"], true);
+
+        let plain = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link"}"#,
+        )
+        .expect("ok");
+        let json = serde_json::to_value(&plain.actions).expect("json");
+        assert!(json[0].get("removePorts").is_none());
     }
 
     #[test]
