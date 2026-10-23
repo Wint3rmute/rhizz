@@ -46,10 +46,6 @@ export interface DeleteConnectionRequest {
   keptPorts: KeptConnectionPort[];
 }
 
-function portKey(port: ConnectionPortCleanup): string {
-  return `${port.definition}\0${port.port}`;
-}
-
 /**
  * Builds the dialog's view of connection `label`, or `undefined` when the
  * model is unavailable or has no such connection.
@@ -103,7 +99,7 @@ export function buildDeleteConnectionRequest(
       port: end.port,
       component: end.component,
     };
-    endpointPorts.set(portKey(port), port);
+    endpointPorts.set(`${end.definition}\0${end.port}`, port);
   }
 
   const usedBy = new Map<string, string[]>();
@@ -114,11 +110,7 @@ export function buildDeleteConnectionRequest(
     if (other === target || copy) continue;
     for (const end of [info(other.from), info(other.to)]) {
       if (end.port === undefined || end.definition === undefined) continue;
-      const key = portKey({
-        definition: end.definition,
-        port: end.port,
-        component: end.component,
-      });
+      const key = `${end.definition}\0${end.port}`;
       if (!endpointPorts.has(key)) continue;
       const labels = usedBy.get(key) ?? [];
       if (!labels.includes(other.label)) labels.push(other.label);
