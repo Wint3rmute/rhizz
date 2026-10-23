@@ -7,6 +7,8 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Feat
 
+- **web**: render markdown in DaisyUI toast alerts
+- **inventory**: edit protocol encapsulates as a searchable list
 - **modeling**: show port connection status in connection inspector
 - **web**: show port flags inline and name the connection in the dialog preview
 - **web**: add New connection dialog that creates the ports with the connection
