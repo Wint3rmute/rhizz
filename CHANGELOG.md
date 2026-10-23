@@ -39,6 +39,9 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Refactor
 
+- **modeling**: inline single-use port key helper
+- **core**: reuse known scope label in port cleanup
+- **core**: merge delete connection port branches
 - **modeling**: trim delete-connection request and labels
 - **web**: reuse action fields for connect op replay
 - **web**: drop unreachable escape branch in dialog
