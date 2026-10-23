@@ -44,12 +44,16 @@
 
   // Reset the per-protocol delete confirmation when the open protocol changes,
   // so a half-typed label does not carry over. The tab itself is kept, like
-  // DetailPane does for components.
+  // DetailPane does for components. The encapsulates search is reset too, so a
+  // query typed for one protocol does not filter the next one's options.
   let lastLabel = $state<string | null>(null);
   $effect(() => {
     if (protocol.label !== lastLabel) {
       lastLabel = protocol.label;
       deleteConfirmText = "";
+      carriesQuery = "";
+      carriesListOpen = false;
+      carriesActiveIndex = -1;
     }
   });
 
@@ -57,8 +61,27 @@
   // it in `encapsulates`. Both must be removed before the protocol can go.
   let blockerCount = $derived(usage.ports.length + usage.listedBy.length);
 
-  let otherProtocols = $derived(
-    allProtocols.filter((p) => p.label !== protocol.label),
+  // Protocols this one already carries. Duplicates are collapsed for display;
+  // the model stays authoritative and every edit replaces the whole list.
+  let carriedLabels = $derived([...new Set(protocol.encapsulates)]);
+
+  // Protocols that can be added: every protocol except this one and the ones it
+  // already carries.
+  let addableProtocols = $derived(
+    allProtocols.filter(
+      (p) =>
+        p.label !== protocol.label && !protocol.encapsulates.includes(p.label),
+    ),
+  );
+
+  let carriesQuery = $state("");
+  let carriesListOpen = $state(false);
+  let carriesActiveIndex = $state(-1);
+
+  let carriesOptions = $derived(
+    addableProtocols.filter((p) =>
+      p.label.toLowerCase().includes(carriesQuery.trim().toLowerCase()),
+    ),
   );
 
   function parseList(text: string): string[] {
@@ -95,13 +118,48 @@
     if (!applied) input.checked = protocol.leaf;
   }
 
-  async function commitCarries(event: Event, label: string): Promise<void> {
-    const input = event.currentTarget as HTMLInputElement;
-    const next = input.checked
-      ? [...protocol.encapsulates.filter((l) => l !== label), label]
-      : protocol.encapsulates.filter((l) => l !== label);
-    const applied = await onupdate({ encapsulates: next });
-    if (!applied) input.checked = protocol.encapsulates.includes(label);
+  // Add or remove one protocol from `encapsulates`. The update replaces the
+  // whole list; a refusal leaves the model — and so the list — untouched and is
+  // shown by the caller.
+  async function addCarried(label: string): Promise<void> {
+    const next = [
+      ...protocol.encapsulates.filter((existing) => existing !== label),
+      label,
+    ];
+    await onupdate({ encapsulates: next });
+    carriesQuery = "";
+    carriesListOpen = false;
+    carriesActiveIndex = -1;
+  }
+
+  async function removeCarried(label: string): Promise<void> {
+    const next = protocol.encapsulates.filter((existing) => existing !== label);
+    await onupdate({ encapsulates: next });
+  }
+
+  function onCarriesKeydown(event: KeyboardEvent): void {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (carriesOptions.length === 0) return;
+      carriesListOpen = true;
+      const step = event.key === "ArrowDown" ? 1 : carriesOptions.length - 1;
+      carriesActiveIndex = (carriesActiveIndex + step) % carriesOptions.length;
+      return;
+    }
+    if (event.key === "Enter" && carriesListOpen && carriesActiveIndex >= 0) {
+      const option = carriesOptions[carriesActiveIndex];
+      if (option !== undefined) {
+        event.preventDefault();
+        void addCarried(option.label);
+      }
+      return;
+    }
+    if (event.key === "Escape" && carriesListOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      carriesListOpen = false;
+      carriesActiveIndex = -1;
+    }
   }
 
   function connectionLabel(ref: { scopePath: string; label: string }): string {
@@ -202,29 +260,128 @@
           </span>
         </label>
 
-        <fieldset class="flex flex-col gap-1">
+        <fieldset
+          class="flex flex-col gap-2"
+          data-testid="protocol-encapsulates"
+        >
           <legend class="text-xs font-semibold text-base-content/70 py-1">
             Can carry (encapsulates)
           </legend>
           <p class="text-xs text-base-content/50">
             Protocols this one can carry as payload.
           </p>
-          {#if otherProtocols.length === 0}
-            <p class="text-base-content/50 italic">
-              No other protocols to carry yet.
+
+          {#if carriedLabels.length === 0}
+            <p
+              class="text-base-content/50 italic"
+              data-testid="protocol-encapsulates-empty"
+            >
+              Carries no other protocols
             </p>
+          {:else}
+            <ul
+              class="flex flex-col gap-1"
+              data-testid="protocol-encapsulates-list"
+            >
+              {#each carriedLabels as label (label)}
+                <li
+                  class="flex items-center justify-between gap-2 rounded-box border border-base-300 bg-base-200 px-2 py-1"
+                >
+                  <span class="font-mono text-sm">{label}</span>
+                  <button
+                    type="button"
+                    class="btn btn-xs btn-ghost btn-square text-error"
+                    aria-label="Remove {label}"
+                    title="Remove {label}"
+                    onclick={() => void removeCarried(label)}
+                  >
+                    ✕
+                  </button>
+                </li>
+              {/each}
+            </ul>
           {/if}
-          {#each otherProtocols as other (other.label)}
-            <label class="label cursor-pointer justify-start gap-2 py-0">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-sm"
-                checked={protocol.encapsulates.includes(other.label)}
-                onchange={(e) => void commitCarries(e, other.label)}
-              />
-              <span class="label-text font-mono text-sm">{other.label}</span>
+
+          <div class="form-control relative">
+            <label class="label py-1" for="protocol-encapsulates-search">
+              <span
+                class="label-text text-xs font-semibold text-base-content/70"
+              >
+                Add a protocol
+              </span>
             </label>
-          {/each}
+            <input
+              id="protocol-encapsulates-search"
+              type="text"
+              role="combobox"
+              aria-expanded={carriesListOpen}
+              aria-controls="protocol-encapsulates-options"
+              aria-autocomplete="list"
+              aria-activedescendant={carriesActiveIndex >= 0
+                ? `protocol-encapsulates-option-${String(carriesActiveIndex)}`
+                : undefined}
+              bind:value={carriesQuery}
+              placeholder={addableProtocols.length === 0
+                ? "No protocols left to add"
+                : "Type to search protocols"}
+              class="input input-sm input-bordered w-full"
+              data-testid="protocol-encapsulates-search"
+              autocomplete="off"
+              disabled={addableProtocols.length === 0}
+              oninput={() => {
+                carriesListOpen = true;
+                carriesActiveIndex = -1;
+              }}
+              onfocus={() => (carriesListOpen = true)}
+              onblur={() => {
+                carriesListOpen = false;
+                carriesActiveIndex = -1;
+              }}
+              onkeydown={onCarriesKeydown}
+            />
+            {#if carriesListOpen && carriesOptions.length > 0}
+              <ul
+                id="protocol-encapsulates-options"
+                role="listbox"
+                class="menu menu-sm w-full bg-base-100 border border-base-300 rounded-box shadow-lg absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-y-auto flex-nowrap"
+                data-testid="protocol-encapsulates-options"
+              >
+                {#each carriesOptions as option, index (option.label)}
+                  <li
+                    id="protocol-encapsulates-option-{index}"
+                    role="option"
+                    aria-selected={index === carriesActiveIndex}
+                  >
+                    <!-- mousedown, not click: the input must not blur first. -->
+                    <button
+                      type="button"
+                      tabindex="-1"
+                      class:menu-active={index === carriesActiveIndex}
+                      data-testid="protocol-encapsulates-option"
+                      onmousedown={(e) => {
+                        e.preventDefault();
+                        void addCarried(option.label);
+                      }}
+                    >
+                      <span class="font-medium font-mono">{option.label}</span>
+                      {#if option.full_name}
+                        <span class="text-xs text-base-content/60"
+                          >{option.full_name}</span
+                        >
+                      {/if}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {:else if carriesListOpen && carriesQuery.trim() !== "" && addableProtocols.length > 0}
+              <p
+                class="text-xs text-base-content/50 mt-1"
+                data-testid="protocol-encapsulates-no-match"
+              >
+                No matching protocol.
+              </p>
+            {/if}
+          </div>
         </fieldset>
       </div>
     {:else if activeTab === "Messages"}

@@ -98,10 +98,38 @@ test("the protocol overview edits full name, leaf and encapsulates in the file",
     .poll(() => modelFile(page), { timeout: 10_000 })
     .toMatch(/protocol "power" \{[\s\S]*leaf\s*=\s*true/);
 
-  await pane.getByRole("checkbox", { name: "bus" }).check();
+  // The encapsulates editor starts empty and offers only protocols this one
+  // does not already carry (and not itself).
+  await expect(pane.getByTestId("protocol-encapsulates-empty")).toHaveText(
+    "Carries no other protocols",
+  );
+  const search = pane.getByLabel("Add a protocol");
+  await search.click();
+  const options = pane.getByTestId("protocol-encapsulates-options");
+  await expect(options.getByTestId("protocol-encapsulates-option")).toHaveCount(
+    1,
+  );
+  await expect(options).toContainText("bus");
+  await expect(options).not.toContainText("power");
+
+  await search.fill("bus");
+  await pane.getByTestId("protocol-encapsulates-option").click();
+  await expect(pane.getByTestId("protocol-encapsulates-list")).toContainText(
+    "bus",
+  );
   await expect
     .poll(() => modelFile(page), { timeout: 10_000 })
     .toMatch(/encapsulates\s*=\s*\["bus"\]/);
+
+  // With bus carried there is nothing left to add, so the search is disabled.
+  await expect(search).toBeDisabled();
+
+  // Removing it returns the list to the empty state and removes the attribute.
+  await pane.getByRole("button", { name: "Remove bus" }).click();
+  await expect(pane.getByTestId("protocol-encapsulates-empty")).toBeVisible();
+  await expect
+    .poll(() => modelFile(page), { timeout: 10_000 })
+    .not.toMatch(/encapsulates\s*=/);
 });
 
 test("an encapsulates cycle is refused with a toast and writes nothing", async ({
@@ -110,24 +138,24 @@ test("an encapsulates cycle is refused with a toast and writes nothing", async (
   const id = await seededProject(page, "E2E protocols cycle");
   // power -> bus first, so the reverse edge closes a cycle.
   await openProtocol(page, id, "power");
-  await page
-    .getByTestId("protocol-detail-pane")
-    .getByRole("checkbox", { name: "bus" })
-    .check();
+  const powerPane = page.getByTestId("protocol-detail-pane");
+  await powerPane.getByLabel("Add a protocol").fill("bus");
+  await powerPane.getByTestId("protocol-encapsulates-option").click();
   await expect
     .poll(() => modelFile(page), { timeout: 10_000 })
     .toMatch(/encapsulates\s*=\s*\["bus"\]/);
 
   const before = await modelFile(page);
   await openProtocol(page, id, "bus");
-  const carries = page
-    .getByTestId("protocol-detail-pane")
-    .getByRole("checkbox", { name: "power" });
-  await carries.click();
+  const busPane = page.getByTestId("protocol-detail-pane");
+  await busPane.getByLabel("Add a protocol").fill("power");
+  await busPane.getByTestId("protocol-encapsulates-option").click();
 
   await expect(page.getByText(/Change refused/)).toBeVisible();
-  // The refused box is put back to the model's value, and nothing is written.
-  await expect(carries).not.toBeChecked();
+  // The list stays at the model's value (empty) and nothing is written.
+  await expect(
+    busPane.getByTestId("protocol-encapsulates-empty"),
+  ).toBeVisible();
   expect(await modelFile(page)).toBe(before);
 });
 
