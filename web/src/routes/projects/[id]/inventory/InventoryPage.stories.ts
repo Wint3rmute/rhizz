@@ -51,6 +51,12 @@ protocol "power" {
   }
 }
 
+// Carried by nothing and named by no port, so the encapsulates editor has a
+// protocol to add without disturbing the port-count fixtures.
+protocol "spare" {
+  full_name = "Spare protocol"
+}
+
 component "battery" {
   full_name = "Main power source with a full name"
   leaf        = true
@@ -820,8 +826,9 @@ export const PanesHiddenShowsRails: Story = {
 };
 
 // ── Protocols ───────────────────────────────────────────────────────────────
-// The fixture's one protocol, "power", is named by three ports (battery,
-// mcu and styled-module), so the list card counts three.
+// The fixture's two protocols: "power" is named by three ports (battery, mcu
+// and styled-module), so its list card counts three; "spare" is carried by
+// nothing and named by no port.
 
 export const ProtocolsTab: Story = {
   loaders: [ensureInventoryProject],
@@ -829,9 +836,11 @@ export const ProtocolsTab: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
     const cards = await canvas.findAllByTestId("inventory-protocol-card");
-    await expect(cards).toHaveLength(1);
+    await expect(cards).toHaveLength(2);
+    // The list sorts alphabetically, so "power" comes before "spare".
     await expect(cards[0]?.textContent).toContain("power");
     await expect(cards[0]?.textContent).toMatch(/3\s+ports/);
+    await expect(cards[1]?.textContent).toContain("spare");
     // The view filter has no meaning for protocols, so it is hidden here.
     await expect(
       canvas.queryByRole("checkbox", { name: "Only with defined views" }),
@@ -846,12 +855,36 @@ export const ProtocolDetail: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
-    await userEvent.click(await canvas.findByTestId("inventory-protocol-card"));
+    await userEvent.click(
+      await canvas.findByRole("button", { name: /power/i }),
+    );
     const pane = within(await canvas.findByTestId("protocol-detail-pane"));
     await expect(pane.getByRole("heading", { name: "power" })).toBeTruthy();
     await expect(pane.getByLabelText("Full name")).toHaveValue(
       "DC power delivery",
     );
+
+    // The encapsulates editor lists what the protocol carries and adds via a
+    // filtered search. "power" carries nothing at first, and offers only
+    // "spare" — not itself, and not protocols it already carries.
+    await expect(
+      pane.getByTestId("protocol-encapsulates-empty"),
+    ).toHaveTextContent("Carries no other protocols");
+    const carriesSearch = pane.getByLabelText("Add a protocol");
+    await userEvent.click(carriesSearch);
+    const options = within(
+      await pane.findByTestId("protocol-encapsulates-options"),
+    );
+    await expect(
+      options.getAllByTestId("protocol-encapsulates-option"),
+    ).toHaveLength(1);
+    await expect(options.getByText("spare")).toBeTruthy();
+    await expect(options.queryByText("power")).toBeNull();
+    await userEvent.type(carriesSearch, "spa");
+    await userEvent.click(pane.getByTestId("protocol-encapsulates-option"));
+    await expect(
+      pane.getByTestId("protocol-encapsulates-list"),
+    ).toHaveTextContent("spare");
 
     await userEvent.click(pane.getByRole("tab", { name: "Messages" }));
     await expect(pane.getByText("voltage")).toBeTruthy();
@@ -866,6 +899,9 @@ export const ProtocolDetail: Story = {
       "href",
       expect.stringContaining("/projects/inventory-story/inventory/battery"),
     );
+
+    // Leave the story on the overview so the screenshot shows the new editor.
+    await userEvent.click(pane.getByRole("tab", { name: "Overview" }));
   },
 };
 
@@ -874,7 +910,9 @@ export const ProtocolDeleteBlocked: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("tab", { name: "Protocols" }));
-    await userEvent.click(await canvas.findByTestId("inventory-protocol-card"));
+    await userEvent.click(
+      await canvas.findByRole("button", { name: /power/i }),
+    );
     const pane = within(await canvas.findByTestId("protocol-detail-pane"));
     await userEvent.click(pane.getByRole("tab", { name: "Delete" }));
 

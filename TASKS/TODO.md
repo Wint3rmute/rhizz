@@ -16,25 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Inventory: edit `encapsulates` as a list with search
-
-In the Inventory protocol detail pane (`inventory/ProtocolDetailPane.svelte`),
-replace the "Can carry (encapsulates)" checkbox list of *all* protocols.
-
-- Show only the protocols this protocol can currently carry (its `encapsulates`
-  entries), each with a remove button.
-- Add a protocol search field that adds a protocol to that list. Offer only
-  protocols that are not already in the list and are not the protocol itself.
-- Keep using `update_protocol` (`encapsulates` is a full replacement). A refused
-  edit (for example an `E020` cycle) keeps showing "Change refused" and puts the
-  list back to the model value, as it does today.
-- Empty state: a short "Carries no other protocols" text.
-- Update `inventory-protocols.spec.ts` and the `ProtocolDetail` stories. Reuse
-  the protocol combobox behavior from the New connection dialog if it can be
-  shared without a big refactor; otherwise keep the two separate.
-
----
-
 ## Task <N> — Delete connection popup with port cleanup
 
 In `modeling/`, replace the "Delete connection (...)" browser prompt with a

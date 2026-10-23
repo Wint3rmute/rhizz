@@ -4,6 +4,36 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Inventory: edit `encapsulates` as a list with search
+
+The Inventory protocol detail pane no longer renders a checkbox for every
+protocol. It shows only the protocols the open protocol currently carries,
+each with a remove button, and a search combobox for adding another.
+
+- **UI:** `ProtocolDetailPane.svelte` lists the labels in `protocol.encapsulates`
+  as removable rows. The "Add a protocol" combobox filters to protocols that are
+  not the open protocol and not already carried. It follows the New connection
+  dialog's input/listbox/keyboard pattern, but stays a separate local
+  implementation: the dialog's picker also creates protocols and resets port
+  roles, so extracting it would have been a larger refactor.
+- **Model:** every edit still sends one `update_protocol` op with `encapsulates`
+  as a full replacement. Adding removes any duplicate label first and appends;
+  removing filters the label out. The list is derived from the model, so a
+  refused edit (for example an `E020` cycle) leaves it at the model value and
+  the caller keeps showing "Change refused". The search query and open state
+  reset when the inspected protocol changes.
+- **Empty state:** "Carries no other protocols". With nothing left to add the
+  search input is disabled and says "No protocols left to add".
+- **Tests:** `inventory-protocols.spec.ts` now adds, removes and refuses through
+  the combobox (including that self and already-carried protocols are not
+  offered). The Inventory fixture gained a "spare" protocol and the
+  `ProtocolDetail` story exercises the editor. Eight VRT baselines for the
+  Inventory protocol stories were re-baselined.
+- **Validation:** `just test`, `just lint`, `just build`, `just format` and
+  `just vrt-accept` pass (152 e2e, 1181 Vitest, 346 VRT screenshots).
+
+---
+
 ## Task <N> — Connection inspector: show whether a port is connected
 
 The connection inspector now lists every port on both endpoint components and
