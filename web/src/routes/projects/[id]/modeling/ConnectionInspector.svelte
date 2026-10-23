@@ -316,14 +316,23 @@
       Protocol
     </span>
     {#if protocol !== undefined}
-      <div class="flex items-center gap-2">
+      <div class="flex items-center justify-between">
         <span class="font-mono font-semibold">{protocol.label}</span>
+
+        <a
+          class="badge badge-ghost"
+          href={inventoryProtocolHref(projectId, protocol.label)}
+          data-testid="edit-protocol-link"
+        >
+          Edit protocol
+        </a>
+
         {#if protocol.leaf}
           <span class="badge badge-ghost badge-xs">leaf</span>
         {/if}
       </div>
       {#if protocol.full_name !== ""}
-        <div class="text-xs">{protocol.full_name}</div>
+        <div>{protocol.full_name}</div>
       {/if}
       <div class="text-xs text-base-content/70">
         Roles: <span class="font-mono">{roleSummary}</span>
@@ -344,13 +353,6 @@
           {protocolUsage.ports === 1 ? "port" : "ports"}.
         </div>
       {/if}
-      <a
-        class="link link-primary text-xs"
-        href={inventoryProtocolHref(projectId, protocol.label)}
-        data-testid="edit-protocol-link"
-      >
-        Edit protocol
-      </a>
     {:else}
       <p class="text-xs text-base-content/60" data-testid="protocol-reason">
         {protocolReason ?? "No protocol is shared by the endpoints."}
