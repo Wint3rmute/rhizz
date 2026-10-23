@@ -5,18 +5,8 @@ import type { DeleteConnectionRequest } from "./deleteConnection";
 
 const siblings: DeleteConnectionRequest = {
   label: "fc-power",
-  from: {
-    key: "drone/battery",
-    component: "battery",
-    port: "power-out",
-    definition: "battery",
-  },
-  to: {
-    key: "drone/flight-controller",
-    component: "flight-controller",
-    port: "power-in",
-    definition: "flight-controller",
-  },
+  from: { component: "battery", port: "power-out" },
+  to: { component: "flight-controller", port: "power-in" },
   removablePorts: [
     { definition: "battery", port: "power-out", component: "battery" },
     {
@@ -109,8 +99,8 @@ export const NoPorts: Story = {
   args: {
     request: {
       label: "bare-link",
-      from: { key: "drone/battery", component: "battery" },
-      to: { key: "drone/flight-controller", component: "flight-controller" },
+      from: { component: "battery" },
+      to: { component: "flight-controller" },
       removablePorts: [],
       keptPorts: [],
     },
