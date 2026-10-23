@@ -48,18 +48,8 @@ describe("deleteConnectionRequest", () => {
 
   it("names both endpoints and every unused endpoint port", () => {
     const found = request(LINKED, "link");
-    expect(found?.from).toEqual({
-      key: "demo/a",
-      component: "a",
-      port: "out",
-      definition: "a",
-    });
-    expect(found?.to).toEqual({
-      key: "demo/b",
-      component: "b",
-      port: "in",
-      definition: "b",
-    });
+    expect(found?.from).toEqual({ component: "a", port: "out" });
+    expect(found?.to).toEqual({ component: "b", port: "in" });
     expect(found?.removablePorts).toEqual([
       { definition: "a", port: "out", component: "a" },
       { definition: "b", port: "in", component: "b" },
@@ -161,18 +151,12 @@ system "demo" {
 `,
       "cross",
     );
-    expect(found?.from).toMatchObject({
-      key: "demo/p/c",
-      component: "c",
-      port: "inner",
-      definition: "child",
-    });
-    expect(found?.to).toMatchObject({
-      key: "demo/p",
-      component: "p",
-      port: "outer",
-      definition: "parent",
-    });
+    expect(found?.from).toMatchObject({ component: "c", port: "inner" });
+    expect(found?.to).toMatchObject({ component: "p", port: "outer" });
+    expect(found?.removablePorts).toEqual([
+      { definition: "child", port: "inner", component: "c" },
+      { definition: "parent", port: "outer", component: "p" },
+    ]);
   });
 
   it("reports a bare endpoint with no port to clean up", () => {

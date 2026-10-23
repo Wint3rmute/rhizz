@@ -9,19 +9,14 @@
 // Deliberately has zero dependency on Svelte, so it is unit-testable in plain
 // Node (see deleteConnection.test.ts).
 import type { ModelJS } from "rhizz";
-import { componentKeyAt } from "../../../../modelKeys";
 import type { RawModelPayload } from "../../../../modelView";
 
 /** One endpoint of the connection, as the dialog shows it. */
 export interface DeleteConnectionEndpoint {
-  /** Canonical component key (`main/fc`), for tests and disambiguation. */
-  key: string;
   /** Label of the endpoint component instance. */
   component: string;
   /** Port label, when the endpoint names one. */
   port?: string | undefined;
-  /** Top-level definition that declares the port (and every instance copy). */
-  definition?: string | undefined;
 }
 
 /** A port the cleanup would remove. */
@@ -52,7 +47,7 @@ export interface DeleteConnectionRequest {
 }
 
 function portKey(port: ConnectionPortCleanup): string {
-  return JSON.stringify([port.definition, port.port]);
+  return `${port.definition}\0${port.port}`;
 }
 
 /**
@@ -70,87 +65,79 @@ export function buildDeleteConnectionRequest(
 ): DeleteConnectionRequest | undefined {
   if (model === undefined) return undefined;
   const raw = model.to_js() as RawModelPayload;
-  const keys = model.component_keys();
   const components = raw.components ?? [];
   const ports = raw.ports ?? [];
   const connections = raw.connections ?? [];
-  const targetIndex = connections.findIndex(
-    (connection) => connection.label === label,
-  );
-  const target = connections[targetIndex];
+  const target = connections.find((connection) => connection.label === label);
   if (target === undefined) return undefined;
 
   // The definition a port block lives in: an instance's `source`, or the
   // component itself when it is a definition.
   function definitionIndex(componentIndex: number): number | undefined {
-    const component = components[componentIndex];
-    if (component === undefined) return undefined;
-    const source = component.source;
+    const source = components[componentIndex]?.source;
     if (source === undefined || source === "") return componentIndex;
     return (raw.definitions ?? []).find(
       (index) => components[index]?.label === source,
     );
   }
 
-  function endpoint(
-    end: (typeof connections)[number]["from"],
-  ): DeleteConnectionEndpoint {
+  function info(end: (typeof connections)[number]["from"]) {
     const component = components[end.component];
-    const port = end.port == null ? undefined : ports[end.port]?.label;
     const definition = definitionIndex(end.component);
     return {
-      key: componentKeyAt(keys, end.component),
-      component: component?.label ?? componentKeyAt(keys, end.component),
-      port,
+      component: component?.label ?? "",
+      port: end.port == null ? undefined : ports[end.port]?.label,
       definition:
         definition === undefined ? undefined : components[definition]?.label,
     };
   }
 
-  const from = endpoint(target.from);
-  const to = endpoint(target.to);
+  const from = info(target.from);
+  const to = info(target.to);
 
-  const endpointPorts: ConnectionPortCleanup[] = [];
+  const endpointPorts = new Map<string, ConnectionPortCleanup>();
   for (const end of [from, to]) {
     if (end.port === undefined || end.definition === undefined) continue;
-    const cleanup = {
+    const port = {
       definition: end.definition,
       port: end.port,
       component: end.component,
     };
-    if (!endpointPorts.some((p) => portKey(p) === portKey(cleanup))) {
-      endpointPorts.push(cleanup);
-    }
+    endpointPorts.set(portKey(port), port);
   }
 
   const usedBy = new Map<string, string[]>();
-  connections.forEach((other, index) => {
-    if (index === targetIndex) return;
+  for (const other of connections) {
     const copy =
       other.label === target.label &&
       (target.decl === undefined || other.decl === target.decl);
-    if (copy) return;
-    for (const end of [other.from, other.to]) {
-      const info = endpoint(end);
-      if (info.port === undefined || info.definition === undefined) continue;
+    if (other === target || copy) continue;
+    for (const end of [info(other.from), info(other.to)]) {
+      if (end.port === undefined || end.definition === undefined) continue;
       const key = portKey({
-        definition: info.definition,
-        port: info.port,
-        component: info.component,
+        definition: end.definition,
+        port: end.port,
+        component: end.component,
       });
-      if (!endpointPorts.some((p) => portKey(p) === key)) continue;
+      if (!endpointPorts.has(key)) continue;
       const labels = usedBy.get(key) ?? [];
       if (!labels.includes(other.label)) labels.push(other.label);
       usedBy.set(key, labels);
     }
-  });
+  }
 
-  const removablePorts = endpointPorts.filter(
-    (port) => !usedBy.has(portKey(port)),
-  );
-  const keptPorts = endpointPorts
-    .filter((port) => usedBy.has(portKey(port)))
-    .map((port) => ({ ...port, usedBy: usedBy.get(portKey(port)) ?? [] }));
+  const removablePorts = [...endpointPorts]
+    .filter(([key]) => !usedBy.has(key))
+    .map(([, port]) => port);
+  const keptPorts = [...endpointPorts]
+    .filter(([key]) => usedBy.has(key))
+    .map(([key, port]) => ({ ...port, usedBy: usedBy.get(key) ?? [] }));
 
-  return { label, from, to, removablePorts, keptPorts };
+  return {
+    label,
+    from: { component: from.component, port: from.port },
+    to: { component: to.component, port: to.port },
+    removablePorts,
+    keptPorts,
+  };
 }
