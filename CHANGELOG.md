@@ -32,6 +32,7 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Fix
 
+- **web**: make inline code readable and keep toast dismiss button visible
 - **server**: allow public hostname on MCP endpoint
 
 ### Refactor
