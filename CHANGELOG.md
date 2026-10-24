@@ -7,6 +7,7 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Feat
 
+- **modeling**: animate connection preview line
 - **modeling**: say Keep and confirm connection removal with a toast
 - **modeling**: delete connection popup with port cleanup
 - **web**: render markdown in DaisyUI toast alerts
