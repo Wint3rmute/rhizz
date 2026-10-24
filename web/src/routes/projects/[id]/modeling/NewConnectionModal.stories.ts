@@ -76,7 +76,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 // Everything prefilled: Enter creates with these.
-export const Default: Story = {};
+export const Default: Story = {
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    const line = await modal.findByTestId("new-connection-preview-line");
+    await expect(line).toHaveAttribute("stroke-dasharray", "6 4");
+  },
+};
 
 export const ProtocolPicker: Story = {
   play: async ({ canvasElement }) => {
