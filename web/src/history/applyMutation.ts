@@ -89,7 +89,12 @@ export type ModelMutationOp =
       createProtocol?: string | undefined;
     }
   | { kind: "delete_connection"; scopePath: string; label: string }
-  | { kind: "delete_connection_by_label"; label: string }
+  | {
+      kind: "delete_connection_by_label";
+      label: string;
+      /** Also delete the endpoint ports no other connection uses. */
+      removePorts?: boolean;
+    }
   | {
       kind: "update_connection";
       scopePath: string;

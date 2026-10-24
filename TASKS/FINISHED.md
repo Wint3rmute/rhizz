@@ -4,6 +4,47 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Delete connection popup with port cleanup
+
+The "Delete connection (...)" browser prompt is gone. Both the connection
+inspector's button and the Connections sidebar trash open a modal with the same
+chrome as the other dialogs.
+
+- **Dialog** (`DeleteConnectionModal.svelte`, projection in
+  `deleteConnection.ts`): names the connection and both endpoints, and lists the
+  endpoint ports as *Keep* or *Used by <connections>*. The "Also remove
+  ports on connected components" checkbox is unchecked by default; checking it
+  changes the badges to "Will be removed" and reveals a warning when a port is
+  still in use. Delete/Enter confirms, Esc cancels (Delete also bypasses the
+  canvas's hide-connection shortcut while the dialog is open). A successful
+  removal shows a success toast: ``connection `name` removed!`` with the name
+  rendered as inline code.
+- **Atomic op** (`delete_connection_by_label` gains `removePorts`): one
+  dispatcher call deletes the connection and the unused endpoint ports, so undo
+  is one step. Ports are removed from the component *definitions* that declare
+  them (every instance shares them). A port any other connection uses refuses
+  the whole op with a message naming the port, definition and connection; copies
+  of the deleted declaration are not counted as other users.
+- **Action log:** `LoggedAction::DeleteConnection` carries the optional
+  `removePorts`, mirrored in `ModelAction` and `toMutationOp` (omitted when
+  false, so old dumps stay byte-identical).
+- **Read path:** `buildDeleteConnectionRequest` maps placement instances to the
+  definitions that own their ports and marks shared ports; it skips copies that
+  share the target's declaration.
+- **Tests:** Rust unit tests for both no-cleanup and cleanup deletion, nested
+  endpoints, shared-port refusal and the action JSON; Vitest for the projection
+  (shared ports, definition copies, nested/bare endpoints) and the log encoding;
+  Playwright `delete-connection-popup.spec.ts` (defaults, cancel/Esc,
+  Delete/Enter, no-cleanup deletion + undo, port cleanup + undo, refusal);
+  `sidebar-delete.spec.ts` now drives the dialog. Four Storybook stories with
+  eight VRT baselines.
+- **Spec:** `SPEC/frontend.md` documents the dialog and its semantics.
+
+Validation: `just test` (all Rust suites, 158 e2e), `just lint` and
+`just build` pass; `just format` was run.
+
+---
+
 ## Task <N> — Inventory: edit `encapsulates` as a list with search
 
 The Inventory protocol detail pane no longer renders a checkbox for every

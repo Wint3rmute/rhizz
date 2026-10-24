@@ -113,6 +113,8 @@ export interface RawModelPayload {
   }[];
   connections?: {
     label: string;
+    /** Declaration marker: copies of one declaration share it. */
+    decl?: string;
     full_name?: string;
     tags?: string[];
     level?: number;

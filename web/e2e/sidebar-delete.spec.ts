@@ -142,20 +142,24 @@ test("trash on a connection row removes the connection from the model after conf
   );
 
   // Cancel: the connection stays.
-  page.once("dialog", (dialog) => void dialog.dismiss());
   await row.hover();
   await row
     .getByRole("button", { name: "Delete connection link-trash" })
     .click();
+  const modal = page.getByTestId("delete-connection-modal");
+  await expect(modal).toBeVisible();
+  await modal.getByRole("button", { name: "Cancel" }).click();
+  await expect(modal).toBeHidden();
   await expect(row).toBeVisible();
   expect(await modelText(page)).toContain('connection "link-trash"');
 
   // Confirm: the connection leaves the model and its row disappears.
-  page.once("dialog", (dialog) => void dialog.accept());
   await row.hover();
   await row
     .getByRole("button", { name: "Delete connection link-trash" })
     .click();
+  await expect(modal).toBeVisible();
+  await modal.getByTestId("delete-connection-confirm").click();
   await expect(row).toBeHidden();
   await expect
     .poll(

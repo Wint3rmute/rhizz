@@ -7,6 +7,8 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Feat
 
+- **modeling**: say Keep and confirm connection removal with a toast
+- **modeling**: delete connection popup with port cleanup
 - **web**: render markdown in DaisyUI toast alerts
 - **inventory**: edit protocol encapsulates as a searchable list
 - **modeling**: show port connection status in connection inspector
@@ -37,6 +39,10 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Refactor
 
+- **modeling**: inline single-use port key helper
+- **core**: reuse known scope label in port cleanup
+- **core**: merge delete connection port branches
+- **modeling**: trim delete-connection request and labels
 - **web**: reuse action fields for connect op replay
 - **web**: drop unreachable escape branch in dialog
 - **core**: share label checks in connect op
