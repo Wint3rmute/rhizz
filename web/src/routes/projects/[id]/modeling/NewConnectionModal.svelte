@@ -304,6 +304,9 @@
             y2="60"
             stroke="currentColor"
             stroke-width="2"
+            stroke-dasharray="6 4"
+            class="new-connection-flow"
+            data-testid="new-connection-preview-line"
             marker-end={direction === "forward" || direction === "both"
               ? "url(#new-conn-arrow)"
               : undefined}
@@ -600,3 +603,26 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* A dashed preview that slowly flows from the connection origin (left) to
+     the target (right). The line is 220 units long; one dash period is 10
+     units, so animating the offset by one period loops seamlessly. Negative
+     offsets move the dashes towards the end of the path. */
+  .new-connection-flow {
+    stroke-dashoffset: 0;
+    animation: new-connection-flow 2.5s linear infinite;
+  }
+
+  @keyframes new-connection-flow {
+    to {
+      stroke-dashoffset: -10;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .new-connection-flow {
+      animation: none;
+    }
+  }
+</style>
