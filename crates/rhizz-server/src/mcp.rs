@@ -1,9 +1,9 @@
 //! Proof-of-concept Model Context Protocol (MCP) endpoint.
 //!
-//! Exposes a single tool, `fetch_projects`, over the MCP Streamable HTTP
-//! transport. The endpoint is mounted at `/mcp` by [`crate::server::app`].
-//! Projects are returned ten per page, most recently updated first, and the
-//! tool reports the totals so a caller knows when to ask for the next page.
+//! Exposes read-only tools over the MCP Streamable HTTP transport, mounted at
+//! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
+//! `read_file`, and `check_project`. They only read the data dir; they never
+//! touch `system.hcl`, docs, or locks.
 //!
 //! This is a POC: there is no authentication, so it must not be exposed beyond
 //! localhost.
@@ -47,11 +47,44 @@ impl RhizzMcp {
 /// Number of projects each `fetch_projects` page returns.
 const PAGE_SIZE: usize = 10;
 
+/// Default number of lines `read_file` returns when `limit` is omitted.
+const READ_FILE_DEFAULT_LIMIT: usize = 100;
+
+/// Largest window `read_file` returns in one call.
+const READ_FILE_MAX_LIMIT: usize = 500;
+
 /// Arguments accepted by the `fetch_projects` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct FetchProjectsParams {
     /// The 1-based page to fetch; when omitted, page 1.
     page: Option<i64>,
+}
+
+/// Arguments accepted by the `list_files` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ListFilesParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+}
+
+/// Arguments accepted by the `read_file` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ReadFileParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// A path relative to the project root.
+    path: String,
+    /// The 0-based line to start at; when omitted, line 0.
+    offset: Option<usize>,
+    /// The number of lines to return; when omitted, 100. Maximum 500.
+    limit: Option<usize>,
+}
+
+/// Arguments accepted by the `check_project` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CheckProjectParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
 }
 
 #[tool_router]
@@ -131,12 +164,188 @@ impl RhizzMcp {
             }
         }
     }
+
+    /// Lists one project's files and directories, mirroring the VFS walk:
+    /// hidden entries and symlinks are excluded.
+    #[tool(
+        name = "list_files",
+        description = "List the files of one Rhizz project: pass the project id from fetch_projects. Returns `files` as JSON objects with `path` and `kind` (\"file\" or \"directory\"); files also carry the mtime-based `revision` and a content-hash `version`. An unknown project is reported as a tool error."
+    )]
+    async fn list_files(
+        &self,
+        params: Parameters<ListFilesParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let project = params.0.project;
+        let project_for_walk = project.clone();
+        let joined = tokio::task::spawn_blocking(move || {
+            storage::project_entries(&data_dir, &project_for_walk)
+        })
+        .await;
+        let loaded = match joined {
+            Ok(inner) => inner,
+            Err(err) => {
+                tracing::error!(?err, "list_files: loader task failed");
+                return Ok(tool_error("failed to read project"));
+            }
+        };
+        let entries = match loaded {
+            Ok(Some(entries)) => entries,
+            Ok(None) => return Ok(tool_error(format!("unknown project `{project}`"))),
+            Err(err) => {
+                tracing::error!(?err, "list_files: failed to read project");
+                return Ok(tool_error("failed to read project"));
+            }
+        };
+
+        let files: Vec<Value> = entries
+            .iter()
+            .map(|entry| match entry {
+                storage::ProjectEntry::Dir { path } => {
+                    json!({ "path": path, "kind": "directory" })
+                }
+                storage::ProjectEntry::File { path, revision, version } => json!({
+                    "path": path,
+                    "kind": "file",
+                    "revision": revision,
+                    "version": version,
+                }),
+            })
+            .collect();
+        match serde_json::to_string(&json!({ "files": files })) {
+            Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+            Err(err) => {
+                tracing::error!(?err, "list_files: failed to encode entries");
+                Ok(tool_error("failed to encode entries"))
+            }
+        }
+    }
+
+    /// Reads a window of lines of one project file.
+    #[tool(
+        name = "read_file",
+        description = "Read a window of lines of a file in a Rhizz project: pass the project id, a path relative to the project root, a 0-based `offset` (default 0) and a `limit` (default 100, maximum 500). Returns the lines, `totalLines`, and a content-hash `version` that changes whenever the file changes. Reading a directory or a missing path is a tool error."
+    )]
+    async fn read_file(
+        &self,
+        params: Parameters<ReadFileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let project = params.0.project;
+        let path = params.0.path;
+        let offset = params.0.offset.unwrap_or(0);
+        let limit = params
+            .0
+            .limit
+            .unwrap_or(READ_FILE_DEFAULT_LIMIT)
+            .min(READ_FILE_MAX_LIMIT);
+
+        let loaded = tokio::task::spawn_blocking(move || {
+            let root = match storage::resolve_project(&data_dir, &project) {
+                Ok(root) => root,
+                Err(storage::ProjectError::Unknown(id)) => {
+                    return Ok(tool_error(format!("unknown project `{id}`")));
+                }
+                Err(storage::ProjectError::Io(err)) => {
+                    tracing::error!(?err, "read_file: failed to access project");
+                    return Ok(tool_error("failed to read project"));
+                }
+            };
+            let absolute = match storage::resolve_confined_path(&root, std::path::Path::new(&path))
+            {
+                Ok(absolute) => absolute,
+                Err(err) => return Ok(tool_error(err.to_string())),
+            };
+            let content = match std::fs::read_to_string(&absolute) {
+                Ok(content) => content,
+                Err(err) if err.kind() == std::io::ErrorKind::IsADirectory => {
+                    return Ok(tool_error("path is a directory, not a file"));
+                }
+                Err(_) => return Ok(tool_error("cannot read path")),
+            };
+            let lines: Vec<&str> = content.lines().skip(offset).take(limit).collect();
+            let result = json!({
+                "lines": lines,
+                "totalLines": content.lines().count(),
+                "version": storage::file_version(&content),
+            });
+            match serde_json::to_string(&result) {
+                Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+                Err(err) => {
+                    tracing::error!(?err, "read_file: failed to encode window");
+                    Ok(tool_error("failed to encode window"))
+                }
+            }
+        })
+        .await;
+
+        loaded.unwrap_or_else(|err| {
+            tracing::error!(?err, "read_file: loader task failed");
+            Ok(tool_error("failed to read file"))
+        })
+    }
+
+    /// Compiles one project and reports diagnostics plus the completion score.
+    #[tool(
+        name = "check_project",
+        description = "Compile one Rhizz project (as `rhizz check` would) and return its `diagnostics` (code, severity, file, line, message) and the completion `score` when the model resolved. Pass the project id from fetch_projects."
+    )]
+    async fn check_project(
+        &self,
+        params: Parameters<CheckProjectParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let project = params.0.project;
+        let loaded = tokio::task::spawn_blocking(move || {
+            let sources = match storage::project_sources(&data_dir, &project) {
+                Ok(Some(sources)) => sources,
+                Ok(None) => return Ok(tool_error(format!("unknown project `{project}`"))),
+                Err(err) => {
+                    tracing::error!(?err, "check_project: failed to read project");
+                    return Ok(tool_error("failed to read project"));
+                }
+            };
+            let result = rhizz_core::compile(&sources);
+            let diagnostics: Vec<Value> = result
+                .diagnostics
+                .iter()
+                .map(|d| {
+                    json!({
+                        "code": d.code.to_string(),
+                        "severity": diagnostic_severity(d.code.level),
+                        "file": d.file.as_ref().map(|f| f.display().to_string()),
+                        "line": d.line,
+                        "message": d.message,
+                    })
+                })
+                .collect();
+            let score = result
+                .model
+                .as_ref()
+                .map(rhizz_core::score)
+                .map(|report| score_json(&report));
+            let payload = json!({ "diagnostics": diagnostics, "score": score });
+            match serde_json::to_string(&payload) {
+                Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+                Err(err) => {
+                    tracing::error!(?err, "check_project: failed to encode result");
+                    Ok(tool_error("failed to encode result"))
+                }
+            }
+        })
+        .await;
+
+        loaded.unwrap_or_else(|err| {
+            tracing::error!(?err, "check_project: loader task failed");
+            Ok(tool_error("failed to compile project"))
+        })
+    }
 }
 
 /// A tool-level failure: reported to the client as `isError`, not as a
 /// protocol error, so the model can see it and the session stays usable.
-fn tool_error(message: &'static str) -> CallToolResult {
-    CallToolResult::error(vec![ContentBlock::text(message)])
+fn tool_error(message: impl Into<String>) -> CallToolResult {
+    CallToolResult::error(vec![ContentBlock::text(message.into())])
 }
 
 /// The `updatedAt` stamp of a project, or an empty string when absent.
@@ -150,6 +359,45 @@ fn project_updated_at(project: &Value) -> &str {
 /// The `id` of a project, or an empty string when absent.
 fn project_id(project: &Value) -> &str {
     project.get("id").and_then(Value::as_str).unwrap_or("")
+}
+
+/// The JSON `severity` string for a diagnostic `Level`.
+const fn diagnostic_severity(level: rhizz_core::Level) -> &'static str {
+    match level {
+        rhizz_core::Level::Error => "error",
+        rhizz_core::Level::Warning => "warning",
+        rhizz_core::Level::Note => "note",
+        rhizz_core::Level::Help => "help",
+    }
+}
+
+/// The completion score in the same JSON shape as `rhizz --json build`.
+fn score_json(report: &rhizz_core::ScoreReport) -> Value {
+    let percent = (report.overall_percentage() * 10.0).round() / 10.0;
+    json!({
+        "components": {
+            "complete": report.components.complete,
+            "total": report.components.total(),
+        },
+        "connections": {
+            "complete": report.connections.complete,
+            "total": report.connections.total(),
+        },
+        "messages": {
+            "complete": report.messages.complete,
+            "total": report.messages.total(),
+        },
+        "overall": {
+            "complete": report.overall_complete(),
+            "percent": percent,
+            "total": report.overall_total(),
+        },
+        "ports": {
+            "complete": report.ports.complete,
+            "total": report.ports.total(),
+        },
+        "system": report.project_name,
+    })
 }
 
 /// Hand-written rather than `#[tool_handler]`: the macro generates `async`
@@ -280,6 +528,33 @@ mod tests {
         std::fs::write(drone.join("system.hcl"), "system \"drone\" {}\n").unwrap();
     }
 
+    /// Writes a project with a view, a doc, a hidden entry and a symlink.
+    fn write_full_project(data_dir: &std::path::Path) {
+        let drone = data_dir.join("drone");
+        std::fs::create_dir_all(drone.join("views")).unwrap();
+        std::fs::create_dir_all(drone.join("docs")).unwrap();
+        std::fs::write(
+            drone.join("system.hcl"),
+            "line one\nline two\nline three\nline four\n",
+        )
+        .unwrap();
+        std::fs::write(drone.join("views/main.hcl"), "view \"main\" {}\n").unwrap();
+        std::fs::write(drone.join("docs/battery.md"), "# battery\n").unwrap();
+        std::fs::write(drone.join(".hidden"), "x\n").unwrap();
+        std::os::unix::fs::symlink(drone.join("system.hcl"), drone.join("linked.hcl")).unwrap();
+    }
+
+    /// Writes a project whose model fails to resolve (undefined component).
+    fn write_broken_project(data_dir: &std::path::Path) {
+        let broken = data_dir.join("broken");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join("system.hcl"),
+            "system \"broken\" {\n  instance \"part\" { source = \"missing-component\" }\n}\n",
+        )
+        .unwrap();
+    }
+
     /// Writes `count` projects named `p00`..`p{count-1}`, each with a distinct
     /// mtime increasing with the id, so most-recently-updated-first ordering is
     /// `p{count-1}` .. `p00`.
@@ -320,8 +595,34 @@ mod tests {
         serde_json::from_str(text).unwrap()
     }
 
+    /// Calls a tool by name with `arguments` and returns the full JSON-RPC
+    /// payload.
+    async fn call_tool(
+        app: &Router,
+        session: &str,
+        id: i64,
+        name: &str,
+        arguments: Value,
+    ) -> Value {
+        let call = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": { "name": name, "arguments": arguments }
+        });
+        let (status, _, payload) = post_rpc(app, &call, Some(session)).await;
+        assert_eq!(status, StatusCode::OK);
+        payload.expect("tools/call must reply")
+    }
+
+    /// The parsed text content of a successful tool result.
+    fn result_value(payload: &Value) -> Value {
+        let text = payload["result"]["content"][0]["text"].as_str().unwrap();
+        serde_json::from_str(text).unwrap()
+    }
+
     #[tokio::test]
-    async fn tools_list_exposes_exactly_one_tool_named_fetch_projects() {
+    async fn tools_list_exposes_the_four_read_only_tools() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
@@ -332,15 +633,23 @@ mod tests {
 
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 1, "expected exactly one tool: {tools:?}");
-        assert_eq!(tools[0]["name"], json!("fetch_projects"));
+        let mut names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            vec!["check_project", "fetch_projects", "list_files", "read_file"]
+        );
 
-        let description = tools[0]["description"].as_str().unwrap();
+        let fetch = tools
+            .iter()
+            .find(|t| t["name"] == json!("fetch_projects"))
+            .unwrap();
+        let description = fetch["description"].as_str().unwrap();
         assert!(
             description.to_lowercase().contains("page"),
             "tool description must describe the page argument: {description}"
         );
-        let schema = tools[0]["inputSchema"].as_object().unwrap();
+        let schema = fetch["inputSchema"].as_object().unwrap();
         assert!(
             schema
                 .get("properties")
@@ -484,5 +793,219 @@ mod tests {
             .unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn tools_call_list_files_lists_the_projects_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload =
+            call_tool(&app, &session, 30, "list_files", json!({ "project": "drone" })).await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let files = result_value(&payload)["files"].as_array().unwrap().clone();
+
+        let paths: Vec<&str> = files.iter().filter_map(|f| f["path"].as_str()).collect();
+        assert!(paths.contains(&"system.hcl"));
+        assert!(paths.contains(&"views"));
+        assert!(paths.contains(&"docs/battery.md"));
+        assert!(!paths.contains(&".hidden"));
+        assert!(!paths.contains(&"linked.hcl"));
+
+        let system = files.iter().find(|f| f["path"] == json!("system.hcl")).unwrap();
+        assert_eq!(system["kind"], json!("file"));
+        assert!(system["revision"].is_u64());
+        assert_eq!(system["version"].as_str().unwrap().len(), 64);
+
+        let views = files.iter().find(|f| f["path"] == json!("views")).unwrap();
+        assert_eq!(views["kind"], json!("directory"));
+        assert!(views.get("version").is_none());
+    }
+
+    #[tokio::test]
+    async fn tools_call_list_files_on_unknown_project_is_a_tool_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload =
+            call_tool(&app, &session, 31, "list_files", json!({ "project": "ghost" })).await;
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_returns_a_window_total_lines_and_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            32,
+            "read_file",
+            json!({ "project": "drone", "path": "system.hcl", "offset": 1, "limit": 2 }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+        assert_eq!(result["totalLines"], json!(4));
+        assert_eq!(result["lines"], json!(["line two", "line three"]));
+        let version = result["version"].as_str().unwrap().to_owned();
+        assert_eq!(version.len(), 64);
+
+        // The version stays equal while content is unchanged and flips with it.
+        let again = call_tool(
+            &app,
+            &session,
+            33,
+            "read_file",
+            json!({ "project": "drone", "path": "system.hcl" }),
+        )
+        .await;
+        assert_eq!(result_value(&again)["version"], json!(version));
+
+        std::fs::write(tmp.path().join("drone/system.hcl"), "system \"other\" {}\n").unwrap();
+        let changed = call_tool(
+            &app,
+            &session,
+            34,
+            "read_file",
+            json!({ "project": "drone", "path": "system.hcl" }),
+        )
+        .await;
+        assert_ne!(result_value(&changed)["version"], json!(version));
+        assert_eq!(result_value(&changed)["totalLines"], json!(1));
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_offset_past_end_returns_an_empty_window() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            35,
+            "read_file",
+            json!({ "project": "drone", "path": "system.hcl", "offset": 100 }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+        assert_eq!(result["lines"], json!([]));
+        assert_eq!(result["totalLines"], json!(4));
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_refuses_traversal_symlink_and_hidden_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        for (i, bad) in [
+            "../outside",
+            "/etc/passwd",
+            "views/.hidden",
+            ".git/config",
+            "linked.hcl",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let id = 40 + i64::try_from(i).unwrap();
+            let payload = call_tool(
+                &app,
+                &session,
+                id,
+                "read_file",
+                json!({ "project": "drone", "path": bad }),
+            )
+            .await;
+            assert_eq!(payload["result"]["isError"], json!(true), "{bad}: {payload}");
+        }
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_on_a_directory_or_missing_path_is_a_tool_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        for (i, bad) in ["views", "no-such-file.hcl"].iter().enumerate() {
+            let id = 50 + i64::try_from(i).unwrap();
+            let payload = call_tool(
+                &app,
+                &session,
+                id,
+                "read_file",
+                json!({ "project": "drone", "path": bad }),
+            )
+            .await;
+            assert_eq!(payload["result"]["isError"], json!(true), "{bad}: {payload}");
+        }
+    }
+
+    #[tokio::test]
+    async fn tools_call_check_project_reports_known_diagnostic_codes() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_broken_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload =
+            call_tool(&app, &session, 60, "check_project", json!({ "project": "broken" })).await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+        let diagnostics = result["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics.iter().any(|d| d["code"] == json!("E014")),
+            "expected E014 among diagnostics: {result}"
+        );
+        let error = diagnostics.iter().find(|d| d["code"] == json!("E014")).unwrap();
+        assert_eq!(error["severity"], json!("error"));
+        assert!(result["score"].is_null());
+    }
+
+    #[tokio::test]
+    async fn tools_call_check_project_reports_a_clean_score_for_the_drone_example() {
+        let examples = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+        if !examples.is_dir() {
+            return; // examples/ is not part of a published crate
+        }
+        let app = app(examples);
+        let session = handshake(&app).await;
+
+        let payload =
+            call_tool(&app, &session, 61, "check_project", json!({ "project": "drone" })).await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+        let diagnostics = result["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics.iter().all(|d| d["severity"] == json!("warning")),
+            "the drone example must compile with only warnings: {result}"
+        );
+        let score = &result["score"];
+        assert_eq!(score["system"], json!("drone-system"));
+        assert!(score["overall"]["percent"].is_number());
+        assert!(score["components"]["total"].is_u64());
+    }
+
+    #[tokio::test]
+    async fn tools_call_check_project_on_unknown_project_is_a_tool_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload =
+            call_tool(&app, &session, 62, "check_project", json!({ "project": "ghost" })).await;
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 }
