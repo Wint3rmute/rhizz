@@ -4,6 +4,39 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — MCP: connection, port and protocol mutation tools, plus the proposal update
+
+The core had ops that proposal 0003's table did not list. Exposed them and
+brought the proposal up to date.
+
+- **Ops exposed** (all exist in `ModelOp`): `connect_components`,
+  `update_connection`, `add_protocol`, `update_protocol`, `delete_protocol`.
+  Parameter names follow `ModelOp`: `connect_components` takes `scopePath`,
+  `label`, `from`/`to` ends (`{component, port: {existing} | {new: {label,
+  protocol, role, external, required}}}`) and optional `createProtocol`;
+  `update_connection` takes `scopePath`/`label`/`patch` (`realized_by` as
+  `{scopePath, label}` refs); `add_protocol` takes `label`/`options`;
+  `update_protocol` takes `path`/`patch`; `delete_protocol` takes `path`.
+- **Decision:** `connect_components` is the documented connection path for AI
+  clients (creates ports too, one atomic op); `add_connection` stays for
+  port-less bare connections. Recorded in 0003.
+- **Proposal:** 0003's step 2 table now matches the full `ModelOp` set and the
+  connections/ports open question is closed (answered by
+  `connect_components`). The "new `ModelOp` gets a tool in the same change"
+  rule is enforced by an exhaustive `tool_name_for_op` match (no wildcard)
+  plus the `op_tool_mapping_covers_every_model_op` test, so the table cannot
+  silently drift.
+- **Tests:** through `/mcp` RPC — `connect_components` creates the connection
+  and its ports in one call and one persisted write; a refused
+  `delete_protocol` (still referenced by a port, `E000`) leaves the file
+  unchanged; the drift test fails if a `ModelOp` variant has no MCP tool.
+
+Validation: `cargo test -p rhizz-server`, `cargo clippy --all-targets
+--all-features -- -D warnings` and `cargo doc --no-deps --all` pass;
+`cargo fmt` was run.
+
+---
+
 ## Task <N> — MCP: model-mutation tools, part 2 (`update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`)
 
 Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), second slice,

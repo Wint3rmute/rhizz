@@ -71,11 +71,24 @@ one tool per op, with the op's name and parameters.
 | `delete_component` | `delete_component` |
 | `delete_system` | `delete_system` |
 | `add_connection` | `add_connection` |
+| `connect_components` | `connect_components` |
 | `delete_connection_by_label` | `delete_connection_by_label` |
+| `update_connection` | `update_connection` |
+| `add_protocol` | `add_protocol` |
+| `update_protocol` | `update_protocol` |
+| `delete_protocol` | `delete_protocol` |
 
 - **Not exposed:** `create_component`. It is a UI convenience with implicit
   container fallbacks. AI clients use the explicit `add_component_definition`
   and `add_instance` instead.
+- **Documented connection path:** `connect_components` is the documented path
+  for AI clients: it creates the connection and the ports it ends on (plus an
+  optional protocol stub) as one atomic op. `add_connection` stays for
+  port-less bare connections (gradual specification) but is not the path
+  clients should reach for first. This closes the open question on
+  connections and ports below: ports are created through
+  `connect_components`, patched through `update_component`, and cleaned up
+  through `delete_connection_by_label` with `remove_ports`.
 - **Results:** a tool returns whether the op applied, the created path where
   relevant, and any warnings. A refused op (a guard refusal, or a model that
   would no longer resolve, such as deleting a definition still in use) is
@@ -85,7 +98,16 @@ one tool per op, with the op's name and parameters.
   so a deleted component may leave dangling view nodes, which the compiler
   reports as warnings.
 - **New operations:** a new `ModelOp` gets a tool in the same change. The op
-  set stays defined in one place, `rhizz-core`.
+  set stays defined in one place, `rhizz-core`. `tool_name_for_op` in
+  `mcp.rs` maps every `ModelOp` variant to its tool (or to nothing for the
+  `create_component` exception) with an exhaustive match and no wildcard arm,
+  and the `op_tool_mapping_covers_every_model_op` test checks the mapped
+  names against the live `tools/list` response — so the table above cannot
+  silently drift from the core's op set.
+- **Implemented (2026-10, part 3):** `connect_components`,
+  `update_connection`, `add_protocol`, `update_protocol` and
+  `delete_protocol` ship on `/mcp`, completing the step-2 surface: every
+  `ModelOp` except `create_component` is now exposed.
 - **Locking:** mutations are writes like any other and respect project locking
   ([0004](0004-locking-and-collab.md)). An op acquires the lock and is
   refused while a human holds it. Mutations act as the hardcoded user `AI`,
@@ -159,6 +181,10 @@ canonical form, exactly as the web editor does.
   ops based on a stale read.~~ Resolved for docs in step 3: the version is a
   content hash, and `edit_doc` and `create_doc` require it. Whether the step 2
   mutation tools should also require it is still open.
-- Whether connections and ports need dedicated ops. The core only has
+- ~~Whether connections and ports need dedicated ops. The core only has
   `add_connection`/`delete_connection_by_label`, and ports only through
-  component patches.
+  component patches.~~ Resolved: `connect_components` is the dedicated
+  connection-plus-ports op (one atomic call creates the connection and its
+  endpoint ports, plus an optional protocol stub). Ports are otherwise
+  managed through `update_component` patches and `delete_connection_by_label`
+  with `remove_ports`.

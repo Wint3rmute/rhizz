@@ -329,6 +329,171 @@ struct DeleteConnectionByLabelParams {
     remove_ports: bool,
 }
 
+/// A port created together with a `connect_components` end, mirroring
+/// `rhizz_core::mutation::NewPort`.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ConnectNewPortJson {
+    /// Port label, unique within the owning component definition.
+    label: String,
+    /// Protocol label (or free-form protocol name).
+    #[serde(default)]
+    protocol: Option<String>,
+    /// Role string; validated against the protocol's `roles` when it has any.
+    #[serde(default)]
+    role: Option<String>,
+    /// Whether the port is an external boundary interface.
+    #[serde(default)]
+    external: Option<bool>,
+    /// Whether the port must be connected when its component is instantiated.
+    #[serde(default)]
+    required: Option<bool>,
+}
+
+/// The port one `connect_components` end lands on: exactly one of
+/// `existing` (a port the component already has) or `new` (created with the
+/// connection) must be set.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+struct ConnectPortJson {
+    /// A port the component already has, by label.
+    #[serde(default)]
+    existing: Option<String>,
+    /// A port created together with the connection.
+    #[serde(default)]
+    new: Option<ConnectNewPortJson>,
+}
+
+/// One end of a `connect_components` connection, mirroring
+/// `rhizz_core::mutation::ConnectEnd`.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ConnectEndJson {
+    /// Instance path relative to the connection's scope (`"mcu"`,
+    /// `"fc/mcu"`). Empty addresses the scope's own component.
+    component: String,
+    /// The port on that component.
+    port: ConnectPortJson,
+}
+
+/// Arguments accepted by the `connect_components` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct ConnectComponentsParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Scope the connection is declared in (system or definition path).
+    scope_path: String,
+    /// New connection label within the scope.
+    label: String,
+    /// One end of the connection.
+    from: ConnectEndJson,
+    /// The other end of the connection.
+    to: ConnectEndJson,
+    /// Optional protocol stub to create for the new ports.
+    #[serde(default)]
+    create_protocol: Option<String>,
+}
+
+/// A connection reference inside an `update_connection` patch, mirroring
+/// `rhizz_core::model::ConnectionRef`.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConnectionRefJson {
+    /// Container path of the connection (system or instance path).
+    scope_path: String,
+    /// Connection label, unique within its scope.
+    label: String,
+}
+
+/// Attribute patch for `update_connection`, mirroring
+/// `rhizz_core::mutation::ConnectionPatch`.
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ConnectionPatchJson {
+    /// Full official name, expanding abbreviations.
+    #[serde(default)]
+    full_name: Option<String>,
+    /// Filtering tags (full replacement).
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    /// Abstraction level.
+    #[serde(default)]
+    level: Option<i32>,
+    /// Connections that realize this one (full replacement).
+    #[serde(default)]
+    realized_by: Option<Vec<ConnectionRefJson>>,
+}
+
+/// Arguments accepted by the `update_connection` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct UpdateConnectionParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Scope the connection is declared in (system or definition path).
+    scope_path: String,
+    /// Connection label within the scope.
+    label: String,
+    /// Attribute patch (`full_name`, `tags`, `level`, `realized_by`).
+    patch: ConnectionPatchJson,
+}
+
+/// Protocol attributes, mirroring `rhizz_core::mutation::ProtocolPatch`
+/// (used as `options` for `add_protocol` and as `patch` for
+/// `update_protocol`).
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ProtocolPatchJson {
+    /// Full official name, expanding abbreviations.
+    #[serde(default)]
+    full_name: Option<String>,
+    /// Filtering tags (full replacement).
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    /// Port roles the protocol permits (full replacement).
+    #[serde(default)]
+    roles: Option<Vec<String>>,
+    /// Whether the protocol is concrete enough to need no realization.
+    #[serde(default)]
+    leaf: Option<bool>,
+    /// Labels of protocols this one can carry (full replacement).
+    #[serde(default)]
+    encapsulates: Option<Vec<String>>,
+}
+
+/// Arguments accepted by the `add_protocol` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct AddProtocolParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// New top-level protocol label (must not be empty or contain `/`).
+    label: String,
+    /// Protocol attributes (`full_name`, `tags`, `roles`, `leaf`,
+    /// `encapsulates`).
+    #[serde(default)]
+    options: Option<ProtocolPatchJson>,
+}
+
+/// Arguments accepted by the `update_protocol` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct UpdateProtocolParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Protocol label (labels never change).
+    path: String,
+    /// Attribute patch (`full_name`, `tags`, `roles`, `leaf`, `encapsulates`).
+    patch: ProtocolPatchJson,
+}
+
+/// Arguments accepted by the `delete_protocol` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct DeleteProtocolParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Top-level protocol label.
+    path: String,
+}
+
 #[tool_router]
 impl RhizzMcp {
     /// Lists the projects only (no nodes), as a JSON object in the text
@@ -782,6 +947,109 @@ impl RhizzMcp {
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
+
+    /// Creates a connection together with the ports it ends on. This is the
+    /// documented connection path for AI clients: one atomic op instead of
+    /// separate port patches plus `add_connection`. Last-writer-wins: proposal
+    /// 0004 locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "connect_components",
+        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. This is the documented connection path for AI clients; `add_connection` stays for port-less bare connections. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn connect_components(
+        &self,
+        params: Parameters<ConnectComponentsParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let from = match connect_end_from_json(&params.0.from) {
+            Ok(end) => end,
+            Err(message) => return Ok(tool_error(message)),
+        };
+        let to = match connect_end_from_json(&params.0.to) {
+            Ok(end) => end,
+            Err(message) => return Ok(tool_error(message)),
+        };
+        let op = rhizz_core::mutation::ModelOp::ConnectComponents {
+            scope_path: params.0.scope_path.clone(),
+            label: params.0.label.clone(),
+            from,
+            to,
+            create_protocol: params.0.create_protocol.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Patches a connection's attributes. Last-writer-wins: proposal 0004
+    /// locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "update_connection",
+        description = "Patch a connection's attributes (`ModelOp update_connection`). Pass the project id, `scopePath`, `label`, and `patch` (`full_name`, `tags`, `level`, `realized_by` as `{scopePath, label}` refs). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op (E017/E018/E019) is a tool error and leaves system.hcl untouched."
+    )]
+    async fn update_connection(
+        &self,
+        params: Parameters<UpdateConnectionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::UpdateConnection {
+            scope_path: params.0.scope_path.clone(),
+            label: params.0.label.clone(),
+            patch: connection_patch_from_json(&params.0.patch),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Adds a top-level protocol. Last-writer-wins: proposal 0004 locking is
+    /// not implemented, so no lock is taken.
+    #[tool(
+        name = "add_protocol",
+        description = "Add a top-level protocol (`ModelOp add_protocol`). Pass the project id, `label`, and optional `options` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates`). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op (blank/`/`-containing/existing label) is a tool error and leaves system.hcl untouched."
+    )]
+    async fn add_protocol(
+        &self,
+        params: Parameters<AddProtocolParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::AddProtocol {
+            label: params.0.label.clone(),
+            options: params
+                .0
+                .options
+                .as_ref()
+                .map(protocol_patch_from_json)
+                .unwrap_or_default(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Patches a protocol's attributes. Last-writer-wins: proposal 0004
+    /// locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "update_protocol",
+        description = "Patch a protocol's attributes (`ModelOp update_protocol`; labels never change). Pass the project id, `path` (the protocol label), and `patch` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates` as full replacements). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn update_protocol(
+        &self,
+        params: Parameters<UpdateProtocolParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::UpdateProtocol {
+            path: params.0.path.clone(),
+            patch: protocol_patch_from_json(&params.0.patch),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Deletes a top-level protocol. Last-writer-wins: proposal 0004 locking
+    /// is not implemented, so no lock is taken.
+    #[tool(
+        name = "delete_protocol",
+        description = "Delete a top-level protocol (`ModelOp delete_protocol`). Refused while a port names it or another protocol lists it in `encapsulates`. Pass the project id and `path`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn delete_protocol(
+        &self,
+        params: Parameters<DeleteProtocolParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::DeleteProtocol {
+            path: params.0.path.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
 }
 
 impl RhizzMcp {
@@ -866,6 +1134,108 @@ fn component_patch_from_json(patch: &ComponentPatchJson) -> rhizz_core::mutation
             .ports
             .as_ref()
             .map(|ports| ports.iter().map(port_json_from_mutation).collect()),
+    }
+}
+
+/// Converts one `connect_components` end to the core op shape.
+///
+/// Exactly one of `existing`/`new` must be set; anything else is an invalid
+/// op and is reported as a tool error without touching the file.
+fn connect_end_from_json(end: &ConnectEndJson) -> Result<rhizz_core::mutation::ConnectEnd, String> {
+    let port = match (&end.port.existing, &end.port.new) {
+        (Some(label), None) => rhizz_core::mutation::PortSpec::Existing(label.clone()),
+        (None, Some(new)) => {
+            if new.label.is_empty() {
+                return Err("op refused (E000): new port label must not be empty".to_owned());
+            }
+            if new.label.contains('/') {
+                return Err(format!(
+                    "op refused (E000): port label `{}` must not contain `/`",
+                    new.label
+                ));
+            }
+            rhizz_core::mutation::PortSpec::New(rhizz_core::mutation::NewPort {
+                label: new.label.clone(),
+                protocol: new.protocol.clone(),
+                role: new.role.clone(),
+                external: new.external,
+                required: new.required,
+            })
+        }
+        _ => {
+            return Err(
+                "op refused (E000): exactly one of `existing` or `new` must be set".to_owned(),
+            );
+        }
+    };
+    Ok(rhizz_core::mutation::ConnectEnd {
+        component: end.component.clone(),
+        port,
+    })
+}
+
+/// Converts a mutation-tool connection patch to the core op shape.
+fn connection_patch_from_json(
+    patch: &ConnectionPatchJson,
+) -> rhizz_core::mutation::ConnectionPatch {
+    rhizz_core::mutation::ConnectionPatch {
+        full_name: patch.full_name.clone(),
+        tags: patch.tags.clone(),
+        level: patch.level,
+        realized_by: patch.realized_by.as_ref().map(|refs| {
+            refs.iter()
+                .map(|reference| rhizz_core::model::ConnectionRef {
+                    scope_path: reference.scope_path.clone(),
+                    label: reference.label.clone(),
+                })
+                .collect()
+        }),
+    }
+}
+
+/// Converts a mutation-tool protocol patch to the core op shape.
+fn protocol_patch_from_json(patch: &ProtocolPatchJson) -> rhizz_core::mutation::ProtocolPatch {
+    rhizz_core::mutation::ProtocolPatch {
+        full_name: patch.full_name.clone(),
+        tags: patch.tags.clone(),
+        roles: patch.roles.clone(),
+        leaf: patch.leaf,
+        encapsulates: patch.encapsulates.clone(),
+    }
+}
+
+/// Maps one [`rhizz_core::mutation::ModelOp`] to the MCP tool that exposes
+/// it, or `None` for the UI-only `create_component` convenience op.
+///
+/// Deliberately exhaustive with no wildcard arm: adding a `ModelOp` variant
+/// breaks compilation here, forcing the same change to expose the tool (the
+/// "new `ModelOp` gets a tool in the same change" rule from proposal 0003).
+/// The `op_tool_mapping_covers_every_model_op` test then checks the mapped
+/// names against the live `tools/list` response.
+///
+/// Only exercised by tests; the exhaustiveness is the point in normal builds.
+#[allow(dead_code)]
+const fn tool_name_for_op(op: &rhizz_core::mutation::ModelOp) -> Option<&'static str> {
+    match op {
+        rhizz_core::mutation::ModelOp::AddSystem { .. } => Some("add_system"),
+        rhizz_core::mutation::ModelOp::AddDefinition { .. } => Some("add_component_definition"),
+        rhizz_core::mutation::ModelOp::AddInstance { .. } => Some("add_instance"),
+        rhizz_core::mutation::ModelOp::CreateComponent { .. } => None,
+        rhizz_core::mutation::ModelOp::Reparent { .. } => Some("reparent_component"),
+        rhizz_core::mutation::ModelOp::Rename { .. } => Some("rename_component"),
+        rhizz_core::mutation::ModelOp::Update { .. } => Some("update_component"),
+        rhizz_core::mutation::ModelOp::UpdateSystem { .. } => Some("update_system"),
+        rhizz_core::mutation::ModelOp::Delete { .. } => Some("delete_component"),
+        rhizz_core::mutation::ModelOp::DeleteSystem { .. } => Some("delete_system"),
+        rhizz_core::mutation::ModelOp::AddConnection { .. } => Some("add_connection"),
+        rhizz_core::mutation::ModelOp::ConnectComponents { .. } => Some("connect_components"),
+        rhizz_core::mutation::ModelOp::DeleteConnectionByLabel { .. } => {
+            Some("delete_connection_by_label")
+        }
+        rhizz_core::mutation::ModelOp::UpdateConnection { .. } => Some("update_connection"),
+        rhizz_core::mutation::ModelOp::AddProtocol { .. } => Some("add_protocol"),
+        rhizz_core::mutation::ModelOp::UpdateProtocol { .. } => Some("update_protocol"),
+        rhizz_core::mutation::ModelOp::DeleteProtocol { .. } => Some("delete_protocol"),
     }
 }
 
@@ -1217,10 +1587,13 @@ mod tests {
                 "add_component_definition",
                 "add_connection",
                 "add_instance",
+                "add_protocol",
                 "add_system",
                 "check_project",
+                "connect_components",
                 "delete_component",
                 "delete_connection_by_label",
+                "delete_protocol",
                 "delete_system",
                 "fetch_projects",
                 "list_files",
@@ -1228,6 +1601,8 @@ mod tests {
                 "rename_component",
                 "reparent_component",
                 "update_component",
+                "update_connection",
+                "update_protocol",
                 "update_system",
             ]
         );
@@ -2164,5 +2539,304 @@ mod tests {
 
         let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
         assert_eq!(before, after, "a refused delete must not touch system.hcl");
+    }
+
+    #[tokio::test]
+    async fn tools_call_connect_components_creates_connection_and_ports() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            110,
+            "connect_components",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "a-to-b",
+                "from": { "component": "a", "port": { "new": { "label": "out" } } },
+                "to": { "component": "b", "port": { "new": { "label": "in" } } },
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        // One call, one persisted write: the connection and both ports land
+        // together in a single `system.hcl` rewrite.
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("connection \"a-to-b\""), "{content}");
+        assert!(content.contains("port \"out\""), "{content}");
+        assert!(content.contains("port \"in\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_delete_referenced_protocol_is_refused_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "protocol \"spi\" {}\ncomponent \"cpu\" {\n  leaf = true\n  port \"bus\" { protocol = \"spi\" }\n}\nsystem \"demo\" {\n  instance \"a\" { source = \"cpu\" }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        // `spi` is still referenced by a port, so the delete is refused.
+        let payload = call_tool(
+            &app,
+            &session,
+            111,
+            "delete_protocol",
+            json!({ "project": "demo", "path": "spi" }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E000"), "expected E000 in refusal: {text}");
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused delete must not touch system.hcl");
+    }
+
+    #[tokio::test]
+    async fn tools_call_protocol_ops_apply_and_persist() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            112,
+            "add_protocol",
+            json!({ "project": "demo", "label": "spi", "options": { "leaf": true } }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let payload = call_tool(
+            &app,
+            &session,
+            113,
+            "update_protocol",
+            json!({ "project": "demo", "path": "spi", "patch": { "full_name": "Serial bus" } }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("protocol \"spi\""), "{content}");
+        assert!(content.contains("Serial bus"), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_update_connection_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let created = call_tool(
+            &app,
+            &session,
+            114,
+            "add_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "link",
+                "from": "a",
+                "to": "b",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+
+        let payload = call_tool(
+            &app,
+            &session,
+            115,
+            "update_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "link",
+                "patch": { "full_name": "Main link" },
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("Main link"), "{content}");
+    }
+
+    /// One example op per `ModelOp` variant. `tool_name_for_op` is exhaustive
+    /// with no wildcard arm, so adding a variant breaks compilation here and
+    /// forces the same change to expose the tool.
+    fn every_model_op() -> Vec<rhizz_core::mutation::ModelOp> {
+        use rhizz_core::mutation::{
+            ConnectEnd, ConnectionPatch, DefinitionOptions, ModelOp, NewPort, PatchJson, PortSpec,
+            ProtocolPatch, SystemPatchJson,
+        };
+        vec![
+            ModelOp::AddSystem {
+                label: "s".to_owned(),
+                full_name: String::new(),
+            },
+            ModelOp::AddDefinition {
+                label: "c".to_owned(),
+                options: DefinitionOptions::default(),
+            },
+            ModelOp::AddInstance {
+                parent_path: "s".to_owned(),
+                label: "i".to_owned(),
+                source: "c".to_owned(),
+            },
+            ModelOp::CreateComponent {
+                label: "c".to_owned(),
+                parent_key: String::new(),
+                source_label: String::new(),
+                leaf: None,
+                full_name: None,
+                tags: None,
+                ports: None,
+            },
+            ModelOp::Reparent {
+                source_path: "s/i".to_owned(),
+                target_parent_path: "s".to_owned(),
+            },
+            ModelOp::Rename {
+                path: "s/i".to_owned(),
+                new_label: "j".to_owned(),
+            },
+            ModelOp::Update {
+                path: "c".to_owned(),
+                patch: PatchJson::default(),
+            },
+            ModelOp::UpdateSystem {
+                path: "s".to_owned(),
+                patch: SystemPatchJson::default(),
+            },
+            ModelOp::Delete {
+                path: "s/i".to_owned(),
+            },
+            ModelOp::DeleteSystem {
+                path: "s".to_owned(),
+            },
+            ModelOp::AddConnection {
+                scope_path: "s".to_owned(),
+                label: "l".to_owned(),
+                from: "i".to_owned(),
+                to: "i".to_owned(),
+            },
+            ModelOp::ConnectComponents {
+                scope_path: "s".to_owned(),
+                label: "l".to_owned(),
+                from: ConnectEnd {
+                    component: "i".to_owned(),
+                    port: PortSpec::New(NewPort {
+                        label: "p".to_owned(),
+                        ..Default::default()
+                    }),
+                },
+                to: ConnectEnd {
+                    component: "i".to_owned(),
+                    port: PortSpec::Existing("q".to_owned()),
+                },
+                create_protocol: None,
+            },
+            ModelOp::DeleteConnectionByLabel {
+                label: "l".to_owned(),
+                remove_ports: false,
+            },
+            ModelOp::UpdateConnection {
+                scope_path: "s".to_owned(),
+                label: "l".to_owned(),
+                patch: ConnectionPatch::default(),
+            },
+            ModelOp::AddProtocol {
+                label: "p".to_owned(),
+                options: ProtocolPatch::default(),
+            },
+            ModelOp::UpdateProtocol {
+                path: "p".to_owned(),
+                patch: ProtocolPatch::default(),
+            },
+            ModelOp::DeleteProtocol {
+                path: "p".to_owned(),
+            },
+        ]
+    }
+
+    #[tokio::test]
+    async fn op_tool_mapping_covers_every_model_op() {
+        // `create_component` is the documented exception: a UI convenience
+        // with implicit container fallbacks, never exposed on MCP.
+        let mut mapped = 0;
+        for op in every_model_op() {
+            match super::tool_name_for_op(&op) {
+                Some(_) => mapped += 1,
+                None => assert!(
+                    matches!(op, rhizz_core::mutation::ModelOp::CreateComponent { .. }),
+                    "only create_component may lack a tool"
+                ),
+            }
+        }
+        assert_eq!(mapped, 16, "every op except create_component must map");
+
+        // And every mapped name must actually be served on `/mcp`.
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let list = json!({ "jsonrpc": "2.0", "id": 200, "method": "tools/list" });
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("tools/list must reply");
+        let tools = payload["result"]["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
+        for op in every_model_op() {
+            if let Some(name) = super::tool_name_for_op(&op) {
+                assert!(names.contains(&name), "tool `{name}` must be served");
+            }
+        }
+
+        // `ConnectEnd` round-trips through the MCP shape (regression guard
+        // for the `existing`/`new` decoding in `connect_end_from_json`).
+        let end = super::connect_end_from_json(&super::ConnectEndJson {
+            component: "a".to_owned(),
+            port: super::ConnectPortJson {
+                existing: None,
+                new: Some(super::ConnectNewPortJson {
+                    label: "out".to_owned(),
+                    protocol: Some("spi".to_owned()),
+                    role: None,
+                    external: None,
+                    required: None,
+                }),
+            },
+        })
+        .expect("new-port end must decode");
+        assert!(matches!(end.port, rhizz_core::mutation::PortSpec::New(_)));
+        assert!(
+            super::connect_end_from_json(&super::ConnectEndJson {
+                component: "a".to_owned(),
+                port: super::ConnectPortJson {
+                    existing: None,
+                    new: None,
+                },
+            })
+            .is_err(),
+            "an end with neither port form must be refused"
+        );
     }
 }
