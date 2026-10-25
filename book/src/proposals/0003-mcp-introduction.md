@@ -1,6 +1,6 @@
 # 0003: MCP Introduction
 
-- **Status:** draft
+- **Status:** in progress — step 1 (reading) implemented
 - **Author:** @wint3rmute
 - **Created:** 2026.10.19
 
@@ -40,6 +40,16 @@ All tools are read-only.
 same text a human would in a text editor. Paths are confined to the project's
 directory, with the same exclusions as the VFS storage (hidden entries,
 symlinks).
+
+**Implemented (2026-10):** all four tools ship on `/mcp` in `rhizz-server`.
+The version for `read_file` and `list_files` files is hex SHA-256 of the whole
+file content — deliberately not the VFS's mtime-based `revision` — and is the
+value step 3's compare-and-swap edits will require. `read_file`'s `offset` is
+0-based, a past-the-end offset returns an empty window, `limit` defaults to
+100 and is capped at 500, and a window includes `totalLines`. `list_files`
+entries carry `kind` (`"file"`/`"directory"`); files also carry `revision`
+and `version`. Unknown projects, confinement violations, and reading a
+directory or missing path are tool errors (`isError`), not protocol errors.
 
 ### Step 2: mutations
 
