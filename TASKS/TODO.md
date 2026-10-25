@@ -16,6 +16,133 @@ How to work on this file:
 
 ---
 
+## Task <N> — MCP: model-mutation tools, part 1 (`add_system`, `add_component_definition`, `add_instance`, `rename_component`, `reparent_component`)
+
+Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), first slice. Add
+the write tools for the structural ops to the `/mcp` router in
+`crates/rhizz-server/src/mcp.rs`. Each tool maps one `ModelOp` variant from
+`rhizz-core` (`crates/rhizz-core/src/mutation.rs`), so the MCP layer keeps no
+model logic.
+
+- **Write path (shared, in `storage.rs`):** load the project's `system.hcl`
+  (the single primary file, so the write path is one file), call
+  `rhizz_core::mutate_to_hcl`, and on success write the canonical `hcl` through
+  `write_atomic`. On refusal (`applied: false` or `Err(diagnostics)`), return a
+  tool error with the diagnostics and leave the file untouched. Reuse the
+  confinement helpers from read-only step 1 so the path is never outside the
+  project.
+- **Tools:** one per op, with the op's own parameter names, as the proposal's
+  table says. Each returns `applied`, `path` (where relevant) and `warnings`.
+- **Not exposed:** `create_component`, as the proposal says.
+- **Identity:** no lock yet (0004 is a draft and the server has no locking),
+  so these writes are last-writer-wins for now. Record this in the proposal's
+  step 2 and in the tool descriptions, so clients know.
+- **Tests (red first):** through `/mcp` RPC, a broken model is never persisted
+  (refused ops leave `system.hcl` byte-identical); a successful `add_instance`
+  rewrites `system.hcl` canonically and a follow-up `check_project` is clean;
+  `reparent_component` and `rename_component` refuse unknown paths with the
+  core's diagnostic code.
+- **Out of scope:** the other ops (next task), locking (0004), docs edits
+  (step 3).
+
+Definition of done: `just test`, `just lint`, `just build` pass, and the five
+tools are covered by the tests above.
+
+---
+
+## Task <N> — MCP: model-mutation tools, part 2 (`update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`)
+
+Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), second slice.
+Builds on part 1's write path (`mutate_to_hcl` → `write_atomic`, refusal leaves
+the file untouched).
+
+- **Tools:** one per op: `update_component`, `update_system`, `delete_component`,
+  `delete_system`, `add_connection`, `delete_connection_by_label`. Parameter
+  names follow `ModelOp` (`PatchJson`, `SystemPatchJson` and so on).
+- **Deletions:** a definition still in use is refused by the resolver, and the
+  tool must report that refusal and not persist. Check that `delete_connection_by_label`
+  with `remove_ports` is exposed and that its refusal (shared port) is reported.
+- **Tests (red first):** through `/mcp`: each tool applies and persists one
+  canonical change; deleting an instanced definition is refused and the file is
+  byte-identical; a connection with an unknown endpoint is refused with its
+  diagnostic code.
+- **Out of scope:** the connection, protocol and port ops listed in the next
+  task.
+
+Definition of done: `just test`, `just lint`, `just build` pass.
+
+---
+
+## Task <N> — MCP: connection, port and protocol mutation tools, plus the proposal update
+
+The core has ops that proposal 0003's table does not list. Decide and expose them,
+and bring the proposal up to date.
+
+- **Ops to expose** (all exist in `ModelOp`): `connect_components`,
+  `update_connection`, `add_protocol`, `update_protocol`, `delete_protocol`.
+- **Decide** whether `connect_components` replaces `add_connection` as the
+  documented connection path for AI clients (it creates the ports too, one
+  atomic op). Record the decision in 0003.
+- **Proposal:** update 0003's step 2 table to match the full `ModelOp` set and
+  close the open question on connections and ports (it is answered by
+  `connect_components`). Keep the "new `ModelOp` gets a tool in the same change"
+  rule, and check the core's op set against the table with a test so it cannot
+  silently drift.
+- **Tests (red first):** through `/mcp`: `connect_components` creates the
+  connection and its ports in one call and one persisted write; a refused
+  `delete_protocol` (still referenced by a port) leaves the file unchanged; an
+  op-set drift test fails if a `ModelOp` variant has no MCP tool.
+- **Out of scope:** locking (0004) and docs edits (step 3).
+
+Definition of done: `just test`, `just lint`, `just build` pass, and 0003 states
+the final op set.
+
+---
+
+## Task <N> — MCP: `edit_documentation` tool for `docs/**.md`
+
+Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), editing only.
+Add an `edit_documentation` tool to the `/mcp` router in
+`crates/rhizz-server/src/mcp.rs`. It replaces one exact span of text in an
+existing Markdown doc. Docs are not HCL, so this does not go through `ModelOp`.
+
+- **Parameters:** `project`, `path` (a doc path under `docs/`, `.md` only),
+  `old_text`, `new_text`, and `version`, the value `read_file` returned for the
+  file the client last read.
+- **Matching:** `old_text` must occur exactly once in the file. Zero matches
+  and several matches are both refused as tool errors, and the file is left
+  untouched. An empty `old_text` is refused.
+- **Version guard (compare-and-swap):** refuse when `version` differs from
+  `storage::file_version` of the file on disk, with a message telling the client
+  to re-read. Read, check, and write happen under one held lock inside the
+  blocking task, so two calls in the same process cannot both pass the check.
+- **Paths:** reuse `resolve_project` and `resolve_confined_path` from step 1.
+  The path must be under `docs/` and end in `.md`. Otherwise refuse, using the
+  same confinement as `read_file` (hidden entries and symlinks excluded). A
+  missing file is a tool error, since creating docs is a separate tool.
+- **Write:** through the existing atomic write (`write_atomic` in
+  `storage.rs`, made `pub(crate)` if needed), so a failed write never leaves a
+  partial file. Do not write `system.hcl`, views, or anything outside `docs/`.
+- **Result:** the new `version` and `totalLines`, so the client can chain
+  another edit without re-reading.
+- **Locking and identity:** 0004 is not implemented, so this is compare-and-swap
+  only, with no project lock and no `AI` identity. Say so in the tool
+  description and in 0003's step 3 notes.
+- **Tests (red first), through `/mcp` RPC:** a single exact match is replaced and
+  the file content is the expected text; zero matches, two matches and an empty
+  `old_text` are refused with the file byte-identical; a stale `version` is
+  refused and the file is unchanged, and the same edit with the fresh version
+  succeeds; a path outside `docs/`, a `.hcl` path, a `..` path, and a hidden or
+  symlinked doc are each refused; a missing doc is refused; a concurrent-edit
+  test shows that two edits sent with the same version cannot both apply.
+- **Out of scope:** `create_doc` (a separate task), locking (0004), and any
+  `system.hcl` change.
+
+Definition of done: `just test`, `just lint`, `just build` pass, and 0003's
+step 3 table names the tool it ships as.
+
+---
+
 ## Task <N> - Animatd connection line in "new connection" popup
 
 Currently, the "new connection" popup displays a minimal visualisation of the
