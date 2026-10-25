@@ -53,6 +53,10 @@ const READ_FILE_DEFAULT_LIMIT: usize = 100;
 /// Largest window `read_file` returns in one call.
 const READ_FILE_MAX_LIMIT: usize = 500;
 
+/// Largest file `read_file` will load. Larger files are refused rather than
+/// read whole into memory just to return a window of lines.
+const READ_FILE_MAX_BYTES: u64 = 4 * 1024 * 1024;
+
 /// Arguments accepted by the `fetch_projects` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct FetchProjectsParams {
@@ -260,12 +264,22 @@ impl RhizzMcp {
                 Ok(absolute) => absolute,
                 Err(err) => return Ok(tool_error(err.to_string())),
             };
-            let content = match std::fs::read_to_string(&absolute) {
-                Ok(content) => content,
-                Err(err) if err.kind() == std::io::ErrorKind::IsADirectory => {
-                    return Ok(tool_error("path is a directory, not a file"));
-                }
-                Err(_) => return Ok(tool_error("cannot read path")),
+            // Checked before opening: opening a FIFO or device would block this
+            // worker thread, and a regular file is all the VFS ever stores.
+            let Ok(metadata) = std::fs::symlink_metadata(&absolute) else {
+                return Ok(tool_error("cannot read path"));
+            };
+            if !metadata.is_file() {
+                return Ok(tool_error("path is not a regular file"));
+            }
+            if metadata.len() > READ_FILE_MAX_BYTES {
+                return Ok(tool_error(format!(
+                    "file is {} bytes, over the {READ_FILE_MAX_BYTES}-byte read limit",
+                    metadata.len()
+                )));
+            }
+            let Ok(content) = std::fs::read_to_string(&absolute) else {
+                return Ok(tool_error("cannot read path"));
             };
             let lines: Vec<&str> = content.lines().skip(offset).take(limit).collect();
             let result = json!({
@@ -439,6 +453,7 @@ impl ServerHandler for RhizzMcp {
 
 #[cfg(test)]
 mod tests {
+    use super::READ_FILE_MAX_BYTES;
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
@@ -1040,6 +1055,73 @@ mod tests {
         assert_eq!(score["system"], json!("drone-system"));
         assert!(score["overall"]["percent"].is_number());
         assert!(score["components"]["total"].is_u64());
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_refuses_a_folder_that_is_not_a_project() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("notes")).unwrap();
+        std::fs::write(tmp.path().join("notes/scratch.md"), "# scratch\n").unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            70,
+            "read_file",
+            json!({ "project": "notes", "path": "scratch.md" }),
+        )
+        .await;
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_refuses_a_fifo_without_blocking() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let fifo = tmp.path().join("drone/pipe.hcl");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        assert!(status.success(), "mkfifo failed");
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            call_tool(
+                &app,
+                &session,
+                71,
+                "read_file",
+                json!({ "project": "drone", "path": "pipe.hcl" }),
+            ),
+        )
+        .await
+        .expect("read_file must not block on a FIFO");
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_refuses_a_file_over_the_byte_limit() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let big = vec![b'a'; usize::try_from(READ_FILE_MAX_BYTES).unwrap() + 1];
+        std::fs::write(tmp.path().join("drone/big.hcl"), big).unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            72,
+            "read_file",
+            json!({ "project": "drone", "path": "big.hcl" }),
+        )
+        .await;
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 
     #[tokio::test]
