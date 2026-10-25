@@ -4,6 +4,42 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — MCP: read-only tools (`list_files`, `read_file`, `check_project`)
+
+Step 1 of [0003](book/src/proposals/0003-mcp-introduction.md): the `/mcp`
+endpoint now exposes four read-only tools alongside `fetch_projects`.
+
+- **`list_files`** (`project`): lists a project's tree as JSON (`path`,
+  `kind`, and for files mtime `revision` and content-hash `version`). Unknown
+  projects are tool errors, not protocol errors.
+- **`read_file`** (`project`, `path`, `offset`, `limit`): returns a window of
+  lines (0-based `offset`; `limit` default 100, max 500; a past-the-end
+  offset yields an empty window), plus `totalLines` and `version`. `version`
+  is hex SHA-256 of the whole file content — not the mtime `revision` — so it
+  stays equal across reads and flips when content changes; it is the value
+  step 3's compare-and-swap will require.
+- **`check_project`** (`project`): runs `rhizz_core::compile` over the
+  project's sources (project-relative filenames) and returns `diagnostics`
+  (code, severity, file, line, message) plus the `score` (same JSON shape as
+  `rhizz --json build`) when a model resolved.
+- **Confinement:** shared helpers in `storage.rs` (`resolve_project`,
+  `resolve_confined_path`, `project_entries`, `project_sources`,
+  `file_version`) reuse the VFS walker's exclusions: hidden entries and
+  symlinks are excluded, `..` and absolute paths are refused, and reading a
+  directory or a missing path is a tool error.
+- **Tests:** Rust unit tests in `storage.rs` and `mcp.rs` (through `/mcp`
+  RPC) covering `tools/list`, `list_files` on a fixture project, `read_file`
+  windowing/`totalLines`/version stability and change, traversal/symlink/
+  hidden refusals, and `check_project` reporting E014 for a broken fixture
+  and a clean score for the drone example.
+- **Docs:** proposal 0003 marks step 1 implemented and records the hash
+  algorithm and read limits.
+
+Validation: `just test` (93 server unit tests, 158 e2e), `just lint` and
+`just build` pass; `just format` was run.
+
+---
+
 ## Task <N> — Delete connection popup with port cleanup
 
 The "Delete connection (...)" browser prompt is gone. Both the connection

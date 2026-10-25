@@ -16,53 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — MCP: remaining read-only tools (`list_files`, `read_file`, `check_project`)
-
-Finish step 1 of [0003](book/src/proposals/0003-mcp-introduction.md). The MCP
-endpoint at `/mcp` already exposes `fetch_projects` (`crates/rhizz-server/src/mcp.rs`).
-Add the three remaining read-only tools to the same `RhizzMcp` tool router. They
-are read-only and must not touch `system.hcl`, docs, or locks.
-
-- **`list_files`** (`project`): lists the files of one project as JSON
-  (`path`, `kind`, and for files `revision`/`version`). Unknown project is a tool
-  error, not a protocol error.
-- **`read_file`** (`project`, `path`, `offset`, `limit`): returns a window of
-  lines of one project file, plus `totalLines` and `version`. `version` is a
-  content hash of the whole file (not the mtime-based `revision` the VFS uses),
-  so a client can detect changes between pages. Raw text as stored, no
-  normalisation.
-- **`check_project`** (`project`): runs `rhizz_core::compile` over the project's
-  sources and returns `diagnostics` (code, severity, file, line, message) and the
-  `score` from `rhizz_core::score` when a model resolved.
-- **Confinement** (shared by `list_files` and `read_file`): paths are relative to
-  the project directory and must resolve inside it. Reuse the storage rules:
-  hidden entries and symlinks are excluded, `..` and absolute paths are refused.
-  Reading a directory or a missing path is a tool error.
-- **Shared code:** put project/path resolution in `storage.rs` (or a helper it
-  exports) so the walker's exclusions are not duplicated. Keep the MCP layer free
-  of model logic; it only does I/O and presentation.
-- **Limits:** `limit` has a default and a maximum (choose and document them) so
-  one call cannot return a whole large file by accident. `offset` is 0-based;
-  an offset past the end returns an empty window, not an error.
-- **Tool descriptions:** each tool has a clear `description` and typed params,
-  as `fetch_projects` does.
-- **Tests (red first):** Rust unit tests in `mcp.rs` and `storage.rs` for: tools
-  listed in `tools/list`; `list_files` on a fixture project; `read_file` windowing,
-  `totalLines`, and `version` changing when content changes and staying equal when
-  it does not; path traversal, symlink, and hidden-entry refusals; `check_project`
-  reporting a known diagnostic code for a broken fixture and a clean score for the
-  drone example. Assert exact diagnostic codes.
-- **Docs:** update the tool list in `book/` (MCP page, if present) and mark step 1
-  of 0003 as covered in the proposal's status notes if the book tracks it.
-- **Out of scope:** mutations (step 2) and doc edits (step 3). The `version`
-  semantics chosen here are what step 3's compare-and-swap will use, so record
-  the hash algorithm in the spec or proposal.
-
-Definition of done: `just test`, `just lint`, `just build` pass; the three tools
-are callable over `/mcp` and covered by the tests above.
-
----
-
 ## Task <N> - Animatd connection line in "new connection" popup
 
 Currently, the "new connection" popup displays a minimal visualisation of the
