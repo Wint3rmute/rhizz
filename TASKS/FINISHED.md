@@ -4,6 +4,43 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — MCP: model-mutation tools, part 1 (`add_system`, `add_component_definition`, `add_instance`, `rename_component`, `reparent_component`)
+
+Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), first slice. The
+`/mcp` router now exposes five structural write tools alongside the read-only
+ones.
+
+- **Write path (shared, in `storage.rs`):** `mutate_project` loads the
+  project's `system.hcl` (falling back to `main.hcl`), calls
+  `rhizz_core::mutate_to_hcl`, and on success writes the canonical HCL through
+  `write_atomic`. On refusal (`applied: false` or `Err(diagnostics)`) it
+  returns the diagnostics and leaves the file untouched. It reuses
+  `resolve_project` and `resolve_confined_path`, so the path never escapes the
+  project and hidden entries/symlinks are refused.
+- **Tools:** one per op with the op's own parameter names
+  (`add_system`: `label`/`full_name`; `add_component_definition`:
+  `label`/`options`; `add_instance`: `parentPath`/`label`/`source`;
+  `rename_component`: `path`/`newLabel`; `reparent_component`:
+  `sourcePath`/`targetParentPath`). Each returns `applied`, `path` (where
+  relevant) and `warnings`. Resolver refusals are tool errors carrying the
+  core diagnostics; guard refusals (`applied: false`) are tool errors with
+  `E000`.
+- **Not exposed:** `create_component`, as the proposal says.
+- **Identity:** no lock yet (0004 is a draft and the server has no locking),
+  so these writes are last-writer-wins. Recorded in 0003's step 2 and in each
+  tool description.
+- **Tests:** through `/mcp` RPC — a refused `add_instance` (unknown `source`,
+  `E014`) leaves `system.hcl` byte-identical; a successful `add_instance`
+  rewrites `system.hcl` canonically and a follow-up `check_project` has no
+  errors; `reparent_component` and `rename_component` refuse unknown paths
+  with `E000`; `add_system` + `add_component_definition` apply and persist.
+
+Validation: `cargo test -p rhizz-server`, `cargo clippy --all-targets
+--all-features -- -D warnings` and `cargo doc --no-deps --all` pass;
+`cargo fmt` was run.
+
+---
+
 ## Task <N> — MCP: read-only tools (`list_files`, `read_file`, `check_project`)
 
 Step 1 of [0003](book/src/proposals/0003-mcp-introduction.md): the `/mcp`

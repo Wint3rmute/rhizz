@@ -16,40 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — MCP: model-mutation tools, part 1 (`add_system`, `add_component_definition`, `add_instance`, `rename_component`, `reparent_component`)
-
-Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), first slice. Add
-the write tools for the structural ops to the `/mcp` router in
-`crates/rhizz-server/src/mcp.rs`. Each tool maps one `ModelOp` variant from
-`rhizz-core` (`crates/rhizz-core/src/mutation.rs`), so the MCP layer keeps no
-model logic.
-
-- **Write path (shared, in `storage.rs`):** load the project's `system.hcl`
-  (the single primary file, so the write path is one file), call
-  `rhizz_core::mutate_to_hcl`, and on success write the canonical `hcl` through
-  `write_atomic`. On refusal (`applied: false` or `Err(diagnostics)`), return a
-  tool error with the diagnostics and leave the file untouched. Reuse the
-  confinement helpers from read-only step 1 so the path is never outside the
-  project.
-- **Tools:** one per op, with the op's own parameter names, as the proposal's
-  table says. Each returns `applied`, `path` (where relevant) and `warnings`.
-- **Not exposed:** `create_component`, as the proposal says.
-- **Identity:** no lock yet (0004 is a draft and the server has no locking),
-  so these writes are last-writer-wins for now. Record this in the proposal's
-  step 2 and in the tool descriptions, so clients know.
-- **Tests (red first):** through `/mcp` RPC, a broken model is never persisted
-  (refused ops leave `system.hcl` byte-identical); a successful `add_instance`
-  rewrites `system.hcl` canonically and a follow-up `check_project` is clean;
-  `reparent_component` and `rename_component` refuse unknown paths with the
-  core's diagnostic code.
-- **Out of scope:** the other ops (next task), locking (0004), docs edits
-  (step 3).
-
-Definition of done: `just test`, `just lint`, `just build` pass, and the five
-tools are covered by the tests above.
-
----
-
 ## Task <N> — MCP: model-mutation tools, part 2 (`update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`)
 
 Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), second slice.
