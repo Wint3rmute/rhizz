@@ -124,23 +124,31 @@ text-oriented interface rather than `ModelOp`s. The tools are:
 | Tool | Purpose |
 | ---- | ------- |
 | `create_doc` | Create a new doc file, or overwrite an existing one whole. |
-| `edit_doc` | Replace one exact span of text in an existing doc. |
+| `edit_documentation` | Replace one exact span of text in an existing doc. |
 
-- **Edit mode:** `edit_doc` takes `path`, `old_text`, `new_text`, and the
-  `version` the client last read. `old_text` must match exactly once in the
-  file. Zero matches or several matches are refused, and the file is left
-  untouched. Line-number edits and unified diffs are not offered: line numbers
-  go stale as soon as the file changes, and models produce malformed diffs.
-- **Version guard:** the version is a content hash of the file. `edit_doc`
-  and `create_doc` (on an existing file) are refused when the supplied version
-  differs from the file on disk, so the client re-reads before retrying. This
-  is compare-and-swap, and it resolves the stale-read question in step 1.
+- **Edit mode:** `edit_documentation` takes `path`, `old_text`, `new_text`,
+  and the `version` the client last read. `old_text` must match exactly once
+  in the file. Zero matches or several matches are refused, and the file is
+  left untouched. Line-number edits and unified diffs are not offered: line
+  numbers go stale as soon as the file changes, and models produce malformed
+  diffs.
+- **Version guard:** the version is a content hash of the file.
+  `edit_documentation` and `create_doc` (on an existing file) are refused when
+  the supplied version differs from the file on disk, so the client re-reads
+  before retrying. This is compare-and-swap, and it resolves the stale-read
+  question in step 1.
 - **Paths:** the same confinement as `read_file`: `docs/**.md` within the
   project, with hidden entries and symlinks excluded.
 - **Writes:** atomic, through the same write path as the VFS save, so a
   failed write never leaves a partial file.
 - **Locking and identity:** as in step 2, the edit acquires the project lock
   and is refused while a human holds it, and acts as user `AI`.
+- **Implemented (2026-10, editing only):** `edit_documentation` ships on
+  `/mcp`; it replaces one exact span in an existing `docs/**.md` file and
+  returns the new `version` and `totalLines`. 0004 is not implemented, so this
+  is compare-and-swap only, with no project lock and no `AI` identity: the
+  read, version check, and write happen under one held lock inside the
+  blocking task, so two edits sent with the same version cannot both apply.
 - **Scope:** docs only. Changes to `system.hcl` still go through the step 2
   ops.
 

@@ -2,18 +2,17 @@
 //!
 //! Exposes tools over the MCP Streamable HTTP transport, mounted at
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
-//! `read_file`, `check_project`, and the step-2 structural mutation tools
-//! (`add_system`, `add_component_definition`, `add_instance`,
-//! `rename_component`, `reparent_component`, `update_component`,
-//! `update_system`, `delete_component`, `delete_system`, `add_connection`,
-//! `delete_connection_by_label`). Reads only touch the data dir;
-//! mutations load the project's single primary file (`system.hcl`), apply
-//! one `rhizz_core::ModelOp` through `mutate_to_hcl`, and write the canonical
-//! HCL back atomically. A refused op leaves the file untouched.
+//! `read_file`, `check_project`, the step-2 structural mutation tools, and
+//! the step-3 `edit_documentation` doc-editing tool. Reads only touch the
+//! data dir; mutations load the project's single primary file (`system.hcl`),
+//! apply one `rhizz_core::ModelOp` through `mutate_to_hcl`, and write the
+//! canonical HCL back atomically. Doc edits replace one exact span in a
+//! `docs/**.md` file under a compare-and-swap version guard. A refused op
+//! leaves the file untouched.
 //!
 //! This is a POC: there is no authentication and no project locking (proposal
-//! 0004 is not implemented), so writes are last-writer-wins. It must not be
-//! exposed beyond localhost.
+//! 0004 is not implemented), so writes are last-writer-wins and doc edits are
+//! compare-and-swap only. It must not be exposed beyond localhost.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -492,6 +491,21 @@ struct DeleteProtocolParams {
     project: String,
     /// Top-level protocol label.
     path: String,
+}
+
+/// Arguments accepted by the `edit_documentation` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct EditDocumentationParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// A doc path under `docs/`, ending in `.md`.
+    path: String,
+    /// The exact span to replace; must occur exactly once (empty is refused).
+    old_text: String,
+    /// The replacement text.
+    new_text: String,
+    /// The content-hash `version` `read_file` returned for the file.
+    version: String,
 }
 
 #[tool_router]
@@ -1050,6 +1064,59 @@ impl RhizzMcp {
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
+
+    /// Replaces one exact span of text in an existing Markdown doc.
+    /// Compare-and-swap only: proposal 0004 locking is not implemented, so no
+    /// project lock is taken and there is no `AI` identity — concurrent edits
+    /// sent with the same version are serialized and only one applies.
+    #[tool(
+        name = "edit_documentation",
+        description = "Replace one exact span of text in an existing Markdown doc in a Rhizz project (proposal 0003 step 3, editing only; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), `old_text` (must occur exactly once in the file; empty is refused), `new_text`, and the content-hash `version` `read_file` returned. Returns the new `version` and `totalLines` so another edit can chain without re-reading. Compare-and-swap only: no project lock is taken and there is no `AI` identity (0004 is not implemented) — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
+    )]
+    async fn edit_documentation(
+        &self,
+        params: Parameters<EditDocumentationParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let params = params.0;
+        let loaded = tokio::task::spawn_blocking(move || {
+            storage::edit_documentation(
+                &data_dir,
+                &params.project,
+                &params.path,
+                &params.old_text,
+                &params.new_text,
+                &params.version,
+            )
+        })
+        .await;
+        let result = match loaded {
+            Ok(Ok(result)) => result,
+            Ok(Err(storage::EditDocError::Unknown(id))) => {
+                return Ok(tool_error(format!("unknown project `{id}`")));
+            }
+            Ok(Err(storage::EditDocError::Io(err))) => {
+                tracing::error!(?err, "edit_documentation: failed to read or write doc");
+                return Ok(tool_error("failed to read or write doc"));
+            }
+            Ok(Err(storage::EditDocError::Refused(message))) => return Ok(tool_error(message)),
+            Err(err) => {
+                tracing::error!(?err, "edit_documentation: worker task failed");
+                return Ok(tool_error("failed to edit doc"));
+            }
+        };
+        let payload = json!({
+            "version": result.version,
+            "totalLines": result.total_lines,
+        });
+        match serde_json::to_string(&payload) {
+            Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+            Err(err) => {
+                tracing::error!(?err, "edit_documentation: failed to encode result");
+                Ok(tool_error("failed to encode result"))
+            }
+        }
+    }
 }
 
 impl RhizzMcp {
@@ -1595,6 +1662,7 @@ mod tests {
                 "delete_connection_by_label",
                 "delete_protocol",
                 "delete_system",
+                "edit_documentation",
                 "fetch_projects",
                 "list_files",
                 "read_file",
@@ -2837,6 +2905,277 @@ mod tests {
             })
             .is_err(),
             "an end with neither port form must be refused"
+        );
+    }
+
+    /// Writes a project with a doc for the `edit_documentation` tests,
+    /// including a hidden doc and a symlinked doc that must both be refused.
+    fn write_docs_project(data_dir: &std::path::Path) {
+        let project = data_dir.join("demo");
+        std::fs::create_dir_all(project.join("docs")).unwrap();
+        std::fs::write(project.join("system.hcl"), "system \"demo\" {}\n").unwrap();
+        std::fs::write(project.join("docs/note.md"), "# Note\n\nalpha\n\nbeta\n").unwrap();
+        std::fs::write(project.join("docs/.secret.md"), "hidden\n").unwrap();
+        std::os::unix::fs::symlink(project.join("docs/note.md"), project.join("docs/linked.md"))
+            .unwrap();
+    }
+
+    /// Reads a doc's content-hash `version` through the `read_file` tool, the
+    /// same value `edit_documentation` requires.
+    async fn read_doc_version(app: &Router, session: &str, id: i64, path: &str) -> String {
+        let payload = call_tool(
+            app,
+            session,
+            id,
+            "read_file",
+            json!({ "project": "demo", "path": path }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        result_value(&payload)["version"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_documentation_replaces_a_single_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let version = read_doc_version(&app, &session, 300, "docs/note.md").await;
+        let payload = call_tool(
+            &app,
+            &session,
+            301,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "old_text": "alpha",
+                "new_text": "ALPHA",
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert_eq!(content, "# Note\n\nALPHA\n\nbeta\n");
+        assert_eq!(result["totalLines"], json!(content.lines().count()));
+        assert_eq!(result["version"].as_str().unwrap().len(), 64);
+        assert_ne!(result["version"], json!(version));
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_documentation_refuses_zero_two_and_empty_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let version = read_doc_version(&app, &session, 302, "docs/note.md").await;
+        let before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
+
+        // Zero matches, several matches (`a` occurs three times), and an
+        // empty `old_text` are all refused.
+        for (id, old) in [(303, "missing"), (304, "a"), (305, "")] {
+            let payload = call_tool(
+                &app,
+                &session,
+                id,
+                "edit_documentation",
+                json!({
+                    "project": "demo",
+                    "path": "docs/note.md",
+                    "old_text": old,
+                    "new_text": "X",
+                    "version": version,
+                }),
+            )
+            .await;
+            assert_eq!(
+                payload["result"]["isError"],
+                json!(true),
+                "{old:?}: {payload}"
+            );
+        }
+
+        let after = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert_eq!(before, after, "refused edits must not touch the file");
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_documentation_stale_version_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let stale = read_doc_version(&app, &session, 306, "docs/note.md").await;
+        let applied = call_tool(
+            &app,
+            &session,
+            307,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "old_text": "alpha",
+                "new_text": "ALPHA",
+                "version": stale,
+            }),
+        )
+        .await;
+        assert_ne!(applied["result"]["isError"], json!(true), "{applied}");
+        let fresh = result_value(&applied)["version"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        // A different span edited with the stale version is refused and the
+        // message tells the client to re-read.
+        let refused = call_tool(
+            &app,
+            &session,
+            308,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "old_text": "beta",
+                "new_text": "BETA",
+                "version": stale,
+            }),
+        )
+        .await;
+        let text = tool_error_text(&refused);
+        assert!(
+            text.to_lowercase().contains("re-read"),
+            "stale refusal must tell the client to re-read: {text}"
+        );
+
+        // The same edit with the fresh version succeeds.
+        let retried = call_tool(
+            &app,
+            &session,
+            309,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "old_text": "beta",
+                "new_text": "BETA",
+                "version": fresh,
+            }),
+        )
+        .await;
+        assert_ne!(retried["result"]["isError"], json!(true), "{retried}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert_eq!(content, "# Note\n\nALPHA\n\nBETA\n");
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_documentation_refuses_paths_outside_docs() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
+
+        for (id, bad) in [
+            (310, "system.hcl"),
+            (311, "docs/note.hcl"),
+            (312, "../outside"),
+            (313, "docs/.secret.md"),
+            (314, "docs/linked.md"),
+            (315, "docs/nope.md"),
+        ] {
+            let payload = call_tool(
+                &app,
+                &session,
+                id,
+                "edit_documentation",
+                json!({
+                    "project": "demo",
+                    "path": bad,
+                    "old_text": "alpha",
+                    "new_text": "X",
+                    "version": "deadbeef",
+                }),
+            )
+            .await;
+            assert_eq!(
+                payload["result"]["isError"],
+                json!(true),
+                "{bad}: {payload}"
+            );
+        }
+
+        let after = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert_eq!(before, after, "refused edits must not touch the file");
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_documentation_concurrent_edits_cannot_both_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let version = read_doc_version(&app, &session, 316, "docs/note.md").await;
+        let edit_alpha = call_tool(
+            &app,
+            &session,
+            317,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "old_text": "alpha",
+                "new_text": "ALPHA",
+                "version": version,
+            }),
+        );
+        let edit_beta = call_tool(
+            &app,
+            &session,
+            318,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "old_text": "beta",
+                "new_text": "BETA",
+                "version": version,
+            }),
+        );
+        let (alpha, beta) = tokio::join!(edit_alpha, edit_beta);
+        let alpha_ok = alpha["result"]["isError"] != json!(true);
+        let beta_ok = beta["result"]["isError"] != json!(true);
+        assert!(
+            alpha_ok ^ beta_ok,
+            "exactly one same-version edit must apply: {alpha} / {beta}"
+        );
+        let loser = if alpha_ok {
+            tool_error_text(&beta)
+        } else {
+            tool_error_text(&alpha)
+        };
+        assert!(
+            loser.to_lowercase().contains("version"),
+            "the loser must be a version refusal: {loser}"
+        );
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert!(
+            (content.contains("ALPHA") && !content.contains("BETA"))
+                || (!content.contains("ALPHA") && content.contains("BETA")),
+            "the winner's edit alone must persist: {content}"
         );
     }
 }

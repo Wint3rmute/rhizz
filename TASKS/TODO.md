@@ -16,50 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — MCP: `edit_documentation` tool for `docs/**.md`
-
-Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), editing only.
-Add an `edit_documentation` tool to the `/mcp` router in
-`crates/rhizz-server/src/mcp.rs`. It replaces one exact span of text in an
-existing Markdown doc. Docs are not HCL, so this does not go through `ModelOp`.
-
-- **Parameters:** `project`, `path` (a doc path under `docs/`, `.md` only),
-  `old_text`, `new_text`, and `version`, the value `read_file` returned for the
-  file the client last read.
-- **Matching:** `old_text` must occur exactly once in the file. Zero matches
-  and several matches are both refused as tool errors, and the file is left
-  untouched. An empty `old_text` is refused.
-- **Version guard (compare-and-swap):** refuse when `version` differs from
-  `storage::file_version` of the file on disk, with a message telling the client
-  to re-read. Read, check, and write happen under one held lock inside the
-  blocking task, so two calls in the same process cannot both pass the check.
-- **Paths:** reuse `resolve_project` and `resolve_confined_path` from step 1.
-  The path must be under `docs/` and end in `.md`. Otherwise refuse, using the
-  same confinement as `read_file` (hidden entries and symlinks excluded). A
-  missing file is a tool error, since creating docs is a separate tool.
-- **Write:** through the existing atomic write (`write_atomic` in
-  `storage.rs`, made `pub(crate)` if needed), so a failed write never leaves a
-  partial file. Do not write `system.hcl`, views, or anything outside `docs/`.
-- **Result:** the new `version` and `totalLines`, so the client can chain
-  another edit without re-reading.
-- **Locking and identity:** 0004 is not implemented, so this is compare-and-swap
-  only, with no project lock and no `AI` identity. Say so in the tool
-  description and in 0003's step 3 notes.
-- **Tests (red first), through `/mcp` RPC:** a single exact match is replaced and
-  the file content is the expected text; zero matches, two matches and an empty
-  `old_text` are refused with the file byte-identical; a stale `version` is
-  refused and the file is unchanged, and the same edit with the fresh version
-  succeeds; a path outside `docs/`, a `.hcl` path, a `..` path, and a hidden or
-  symlinked doc are each refused; a missing doc is refused; a concurrent-edit
-  test shows that two edits sent with the same version cannot both apply.
-- **Out of scope:** `create_doc` (a separate task), locking (0004), and any
-  `system.hcl` change.
-
-Definition of done: `just test`, `just lint`, `just build` pass, and 0003's
-step 3 table names the tool it ships as.
-
----
-
 ## Task <N> - Animatd connection line in "new connection" popup
 
 Currently, the "new connection" popup displays a minimal visualisation of the

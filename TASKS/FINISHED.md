@@ -4,6 +4,39 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — MCP: `edit_documentation` tool for `docs/**.md`
+
+Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), editing only.
+`edit_documentation` on the `/mcp` router replaces one exact span of text in
+an existing Markdown doc (docs are not HCL, so not via `ModelOp`).
+
+- **Parameters:** `project`, `path` (under `docs/`, `.md` only), `old_text`,
+  `new_text`, and `version` (the `read_file` content hash).
+- **Matching:** `old_text` must occur exactly once; zero matches, several
+  matches, and empty `old_text` are refused as tool errors, file untouched.
+- **Version guard (compare-and-swap):** stale `version` is refused with a
+  message telling the client to re-read. Read, check, and write happen under
+  one held lock (`DOC_EDIT_LOCK` in `storage.rs`) inside the blocking task, so
+  two same-version edits cannot both apply.
+- **Paths:** `resolve_project` + `resolve_confined_path`; must be under
+  `docs/` and end in `.md`; hidden entries and symlinks excluded; missing
+  file refused (creation is separate).
+- **Write:** atomic `write_atomic`; never touches `system.hcl`, views, or
+  anything outside `docs/`.
+- **Result:** new `version` and `totalLines` for chaining.
+- **Locking and identity:** 0004 unimplemented — CAS-only, no lock, no `AI`
+  identity; stated in the tool description and 0003's step 3 notes.
+- **Tests:** through `/mcp` RPC — single-match replace; zero/two/empty
+  refused byte-identical; stale refused then fresh succeeds; outside/`hcl`/
+  `..`/hidden/symlink/missing each refused; concurrent same-version edits
+  cannot both apply.
+
+Validation: `cargo test -p rhizz-server`, `cargo clippy --all-targets
+--all-features -- -D warnings` and `cargo doc --no-deps --all` pass;
+`cargo fmt` was run. 0003's step 3 table names `edit_documentation`.
+
+---
+
 ## Task <N> — MCP: connection, port and protocol mutation tools, plus the proposal update
 
 The core had ops that proposal 0003's table did not list. Exposed them and
