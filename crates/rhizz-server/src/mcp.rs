@@ -4,7 +4,9 @@
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
 //! `read_file`, `check_project`, and the step-2 structural mutation tools
 //! (`add_system`, `add_component_definition`, `add_instance`,
-//! `rename_component`, `reparent_component`). Reads only touch the data dir;
+//! `rename_component`, `reparent_component`, `update_component`,
+//! `update_system`, `delete_component`, `delete_system`, `add_connection`,
+//! `delete_connection_by_label`). Reads only touch the data dir;
 //! mutations load the project's single primary file (`system.hcl`), apply
 //! one `rhizz_core::ModelOp` through `mutate_to_hcl`, and write the canonical
 //! HCL back atomically. A refused op leaves the file untouched.
@@ -211,6 +213,120 @@ struct ReparentComponentParams {
     source_path: String,
     /// Container path to move it into.
     target_parent_path: String,
+}
+
+/// Attribute patch for `update_component`, mirroring
+/// `rhizz_core::mutation::PatchJson`.
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+struct ComponentPatchJson {
+    /// Full official name, expanding abbreviations.
+    #[serde(default)]
+    full_name: Option<String>,
+    /// Optional icon name.
+    #[serde(default)]
+    icon: Option<String>,
+    /// Optional border color; `"default"` clears it.
+    #[serde(default)]
+    color: Option<String>,
+    /// Border style; `"solid"` and empty clear it.
+    #[serde(default)]
+    border: Option<String>,
+    /// Optional font style; `"unstyled"` clears it.
+    #[serde(default)]
+    font: Option<String>,
+    /// Filtering tags (full replacement).
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    /// Atomic flag.
+    #[serde(default)]
+    leaf: Option<bool>,
+    /// Ports (full replacement).
+    #[serde(default)]
+    ports: Option<Vec<MutationPortJson>>,
+}
+
+/// Attribute patch for `update_system`, mirroring
+/// `rhizz_core::mutation::SystemPatchJson` (systems carry only `full_name`
+/// and `icon`; anything else is rejected).
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct SystemPatchJsonMcp {
+    /// Full official name, expanding abbreviations.
+    #[serde(default)]
+    full_name: Option<String>,
+    /// Optional icon name.
+    #[serde(default)]
+    icon: Option<String>,
+}
+
+/// Arguments accepted by the `update_component` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct UpdateComponentParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Definition label or instance path (instance paths redirect to their definition).
+    path: String,
+    /// Attribute patch (`full_name`, icon, color, border, font, tags, leaf, ports).
+    patch: ComponentPatchJson,
+}
+
+/// Arguments accepted by the `update_system` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct UpdateSystemParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Bare system label.
+    path: String,
+    /// Attribute patch (`full_name` and `icon` only).
+    patch: SystemPatchJsonMcp,
+}
+
+/// Arguments accepted by the `delete_component` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct DeleteComponentParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Definition label (bare) or placed instance path (e.g. `"demo/motor"`).
+    path: String,
+}
+
+/// Arguments accepted by the `delete_system` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct DeleteSystemParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Bare system label.
+    path: String,
+}
+
+/// Arguments accepted by the `add_connection` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct AddConnectionParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Scope the connection is declared in (system or definition path).
+    scope_path: String,
+    /// New connection label within the scope.
+    label: String,
+    /// `from` endpoint (`"comp"`, `"comp/port"`, or a relative path).
+    from: String,
+    /// `to` endpoint (`"comp"`, `"comp/port"`, or a relative path).
+    to: String,
+}
+
+/// Arguments accepted by the `delete_connection_by_label` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct DeleteConnectionByLabelParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Connection label (systems are searched first, then definitions).
+    label: String,
+    /// Also delete endpoint ports no other connection uses. Refused when a
+    /// port is still used elsewhere.
+    #[serde(default)]
+    remove_ports: bool,
 }
 
 #[tool_router]
@@ -561,6 +677,111 @@ impl RhizzMcp {
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
+
+    /// Patches a definition's attributes. Last-writer-wins: proposal 0004
+    /// locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "update_component",
+        description = "Patch a component definition's attributes (`ModelOp update_component`; instance paths redirect to their definition). Pass the project id, `path`, and `patch` (full_name, icon, color, border, font, tags, leaf, ports). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn update_component(
+        &self,
+        params: Parameters<UpdateComponentParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::Update {
+            path: params.0.path.clone(),
+            patch: component_patch_from_json(&params.0.patch),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Patches a system's attributes. Last-writer-wins: proposal 0004 locking
+    /// is not implemented, so no lock is taken.
+    #[tool(
+        name = "update_system",
+        description = "Patch a system's attributes (`ModelOp update_system`; only `full_name` and `icon` are honored). Pass the project id, bare system `path`, and `patch`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn update_system(
+        &self,
+        params: Parameters<UpdateSystemParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::UpdateSystem {
+            path: params.0.path.clone(),
+            patch: rhizz_core::mutation::SystemPatchJson {
+                full_name: params.0.patch.full_name.clone(),
+                icon: params.0.patch.icon.clone(),
+            },
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Deletes a definition or a placed instance. Last-writer-wins: proposal
+    /// 0004 locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "delete_component",
+        description = "Delete a component definition (bare label) or a placed instance (e.g. `demo/motor`) (`ModelOp delete_component`). A definition still in use is refused by the resolver. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn delete_component(
+        &self,
+        params: Parameters<DeleteComponentParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::Delete {
+            path: params.0.path.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Deletes a system. Last-writer-wins: proposal 0004 locking is not
+    /// implemented, so no lock is taken.
+    #[tool(
+        name = "delete_system",
+        description = "Delete a system by bare label (`ModelOp delete_system`). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn delete_system(
+        &self,
+        params: Parameters<DeleteSystemParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::DeleteSystem {
+            path: params.0.path.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Adds a connection inside a scope. Last-writer-wins: proposal 0004
+    /// locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "add_connection",
+        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (bare `comp`, `comp/port`, or relative paths). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
+    )]
+    async fn add_connection(
+        &self,
+        params: Parameters<AddConnectionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::AddConnection {
+            scope_path: params.0.scope_path.clone(),
+            label: params.0.label.clone(),
+            from: params.0.from.clone(),
+            to: params.0.to.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Deletes a connection by label. Last-writer-wins: proposal 0004 locking
+    /// is not implemented, so no lock is taken.
+    #[tool(
+        name = "delete_connection_by_label",
+        description = "Delete a connection by label, searching systems then definitions (`ModelOp delete_connection_by_label`). Pass the project id, `label`, and optional `removePorts` to also delete endpoint ports no other connection uses (refused with E000 when a port is still used elsewhere). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn delete_connection_by_label(
+        &self,
+        params: Parameters<DeleteConnectionByLabelParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::DeleteConnectionByLabel {
+            label: params.0.label.clone(),
+            remove_ports: params.0.remove_ports,
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
 }
 
 impl RhizzMcp {
@@ -625,6 +846,23 @@ fn definition_options_from_json(
         border: options.border.clone(),
         font: options.font.clone(),
         ports: options
+            .ports
+            .as_ref()
+            .map(|ports| ports.iter().map(port_json_from_mutation).collect()),
+    }
+}
+
+/// Converts a mutation-tool component patch to the core op shape.
+fn component_patch_from_json(patch: &ComponentPatchJson) -> rhizz_core::mutation::PatchJson {
+    rhizz_core::mutation::PatchJson {
+        full_name: patch.full_name.clone(),
+        icon: patch.icon.clone(),
+        color: patch.color.clone(),
+        border: patch.border.clone(),
+        font: patch.font.clone(),
+        tags: patch.tags.clone(),
+        leaf: patch.leaf,
+        ports: patch
             .ports
             .as_ref()
             .map(|ports| ports.iter().map(port_json_from_mutation).collect()),
@@ -977,14 +1215,20 @@ mod tests {
             names,
             vec![
                 "add_component_definition",
+                "add_connection",
                 "add_instance",
                 "add_system",
                 "check_project",
+                "delete_component",
+                "delete_connection_by_label",
+                "delete_system",
                 "fetch_projects",
                 "list_files",
                 "read_file",
                 "rename_component",
                 "reparent_component",
+                "update_component",
+                "update_system",
             ]
         );
 
@@ -1656,5 +1900,269 @@ mod tests {
         let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
         assert!(content.contains("system \"other\""), "{content}");
         assert!(content.contains("component \"gpu\""), "{content}");
+    }
+
+    /// Writes a project with two instances for connection tests.
+    fn write_connected_project(data_dir: &std::path::Path) {
+        let project = data_dir.join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "component \"cpu\" {\n  leaf = true\n}\ncomponent \"gpu\" {\n  leaf = true\n}\nsystem \"demo\" {\n  instance \"a\" { source = \"cpu\" }\n  instance \"b\" { source = \"gpu\" }\n}\n",
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn tools_call_update_component_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            90,
+            "update_component",
+            json!({ "project": "demo", "path": "cpu", "patch": { "full_name": "Central chip" } }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("Central chip"), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_update_system_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            91,
+            "update_system",
+            json!({ "project": "demo", "path": "demo", "patch": { "full_name": "Demo rig" } }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("Demo rig"), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_delete_component_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            92,
+            "delete_component",
+            json!({ "project": "demo", "path": "demo/b" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(!content.contains("instance \"b\""), "{content}");
+        assert!(content.contains("instance \"a\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_delete_system_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        // A second system so the project still has a model source afterwards.
+        let created = call_tool(
+            &app,
+            &session,
+            93,
+            "add_system",
+            json!({ "project": "demo", "label": "other" }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+
+        let payload = call_tool(
+            &app,
+            &session,
+            94,
+            "delete_system",
+            json!({ "project": "demo", "path": "other" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(!content.contains("system \"other\""), "{content}");
+        assert!(content.contains("system \"demo\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_add_connection_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            95,
+            "add_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "link",
+                "from": "a",
+                "to": "b",
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("connection \"link\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_delete_connection_applies_and_persists() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let created = call_tool(
+            &app,
+            &session,
+            96,
+            "add_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "link",
+                "from": "a",
+                "to": "b",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+
+        let payload = call_tool(
+            &app,
+            &session,
+            97,
+            "delete_connection_by_label",
+            json!({ "project": "demo", "label": "link" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(!content.contains("connection \"link\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_delete_instanced_definition_is_refused_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        // `cpu` is still instanced as `demo/a`, so the resolver refuses with E014.
+        let payload = call_tool(
+            &app,
+            &session,
+            98,
+            "delete_component",
+            json!({ "project": "demo", "path": "cpu" }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E014"), "expected E014 in refusal: {text}");
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused delete must not touch system.hcl");
+    }
+
+    #[tokio::test]
+    async fn tools_call_add_connection_with_unknown_endpoint_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        let payload = call_tool(
+            &app,
+            &session,
+            99,
+            "add_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "bad",
+                "from": "ghost",
+                "to": "b",
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(
+            text.contains('E'),
+            "expected a diagnostic code in refusal: {text}"
+        );
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused op must not touch system.hcl");
+    }
+
+    #[tokio::test]
+    async fn tools_call_delete_connection_with_shared_port_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "component \"a\" {\n  leaf = true\n  port \"out\" {}\n}\ncomponent \"b\" {\n  leaf = true\n  port \"in\" {}\n  port \"spare\" {}\n}\nsystem \"demo\" {\n  instance \"a\" { source = \"a\" }\n  instance \"b\" { source = \"b\" }\n  connection \"one\" {\n    from = \"a/out\"\n    to = \"b/in\"\n  }\n  connection \"two\" {\n    from = \"a/out\"\n    to = \"b/spare\"\n  }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        // `out` is still used by `two`, so removing ports refuses with E000.
+        let payload = call_tool(
+            &app,
+            &session,
+            100,
+            "delete_connection_by_label",
+            json!({ "project": "demo", "label": "one", "removePorts": true }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E000"), "expected E000 in refusal: {text}");
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused delete must not touch system.hcl");
     }
 }

@@ -16,29 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — MCP: model-mutation tools, part 2 (`update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`)
-
-Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), second slice.
-Builds on part 1's write path (`mutate_to_hcl` → `write_atomic`, refusal leaves
-the file untouched).
-
-- **Tools:** one per op: `update_component`, `update_system`, `delete_component`,
-  `delete_system`, `add_connection`, `delete_connection_by_label`. Parameter
-  names follow `ModelOp` (`PatchJson`, `SystemPatchJson` and so on).
-- **Deletions:** a definition still in use is refused by the resolver, and the
-  tool must report that refusal and not persist. Check that `delete_connection_by_label`
-  with `remove_ports` is exposed and that its refusal (shared port) is reported.
-- **Tests (red first):** through `/mcp`: each tool applies and persists one
-  canonical change; deleting an instanced definition is refused and the file is
-  byte-identical; a connection with an unknown endpoint is refused with its
-  diagnostic code.
-- **Out of scope:** the connection, protocol and port ops listed in the next
-  task.
-
-Definition of done: `just test`, `just lint`, `just build` pass.
-
----
-
 ## Task <N> — MCP: connection, port and protocol mutation tools, plus the proposal update
 
 The core has ops that proposal 0003's table does not list. Decide and expose them,
