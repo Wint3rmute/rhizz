@@ -16,32 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — MCP: connection, port and protocol mutation tools, plus the proposal update
-
-The core has ops that proposal 0003's table does not list. Decide and expose them,
-and bring the proposal up to date.
-
-- **Ops to expose** (all exist in `ModelOp`): `connect_components`,
-  `update_connection`, `add_protocol`, `update_protocol`, `delete_protocol`.
-- **Decide** whether `connect_components` replaces `add_connection` as the
-  documented connection path for AI clients (it creates the ports too, one
-  atomic op). Record the decision in 0003.
-- **Proposal:** update 0003's step 2 table to match the full `ModelOp` set and
-  close the open question on connections and ports (it is answered by
-  `connect_components`). Keep the "new `ModelOp` gets a tool in the same change"
-  rule, and check the core's op set against the table with a test so it cannot
-  silently drift.
-- **Tests (red first):** through `/mcp`: `connect_components` creates the
-  connection and its ports in one call and one persisted write; a refused
-  `delete_protocol` (still referenced by a port) leaves the file unchanged; an
-  op-set drift test fails if a `ModelOp` variant has no MCP tool.
-- **Out of scope:** locking (0004) and docs edits (step 3).
-
-Definition of done: `just test`, `just lint`, `just build` pass, and 0003 states
-the final op set.
-
----
-
 ## Task <N> — MCP: `edit_documentation` tool for `docs/**.md`
 
 Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), editing only.
