@@ -7,6 +7,7 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Feat
 
+- **mcp**: add model-mutation tools part 1
 - **server**: add MCP tools: `list_files`, `read_file`, `check_project`
 - **modeling**: animate connection preview line
 - **modeling**: say Keep and confirm connection removal with a toast
