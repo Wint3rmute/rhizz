@@ -4,6 +4,33 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — MCP: model-mutation tools, part 2 (`update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`)
+
+Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), second slice,
+built on part 1's write path (`mutate_to_hcl` → `write_atomic`, refusal leaves
+the file untouched).
+
+- **Tools:** one per op with the op's own parameter names
+  (`update_component`: `path`/`patch`; `update_system`: `path`/`patch`
+  (`full_name`/`icon` only); `delete_component`: `path`; `delete_system`:
+  `path`; `add_connection`: `scopePath`/`label`/`from`/`to`;
+  `delete_connection_by_label`: `label`/`removePorts`). Each returns
+  `applied`, `path` (where relevant) and `warnings`; refusals are tool errors
+  with the core diagnostics.
+- **Deletions:** an instanced definition is refused by the resolver (`E014`)
+  and not persisted; `delete_connection_by_label` exposes `removePorts` and
+  its shared-port refusal (`E000`) is reported.
+- **Tests:** through `/mcp` RPC — each of the six tools applies and persists
+  one canonical change; deleting an instanced definition is refused and the
+  file is byte-identical; a connection with an unknown endpoint is refused
+  with its diagnostic code and the file is byte-identical.
+
+Validation: `cargo test -p rhizz-server`, `cargo clippy --all-targets
+--all-features -- -D warnings` and `cargo doc --no-deps --all` pass;
+`cargo fmt` was run.
+
+---
+
 ## Task <N> — MCP: model-mutation tools, part 1 (`add_system`, `add_component_definition`, `add_instance`, `rename_component`, `reparent_component`)
 
 Step 2 of [0003](book/src/proposals/0003-mcp-introduction.md), first slice. The
