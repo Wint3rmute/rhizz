@@ -554,9 +554,7 @@ pub fn resolve_confined_path(root: &Path, relative: &Path) -> Result<PathBuf, Co
                     return Err(ConfinedPathError::Excluded);
                 }
                 let next = resolved.join(name);
-                if fs::symlink_metadata(&next)
-                    .is_ok_and(|meta| meta.file_type().is_symlink())
-                {
+                if fs::symlink_metadata(&next).is_ok_and(|meta| meta.file_type().is_symlink()) {
                     return Err(ConfinedPathError::Excluded);
                 }
                 resolved = next;
@@ -622,8 +620,8 @@ fn collect_project_entries(
 
 /// Lists one project's tree as [`ProjectEntry`] values.
 ///
-/// Returns `None` when `project_id` is not a project (see
-/// [`collect_project_entries`]).
+/// Returns `None` when `project_id` is not a project: missing, not an
+/// address, a symlink, or holding no model source.
 ///
 /// # Errors
 ///
@@ -1925,7 +1923,13 @@ mod tests {
     #[test]
     fn resolve_confined_path_refuses_escapes_and_absolute_paths() {
         let dir = tempfile::tempdir().unwrap();
-        for bad in ["..", "../outside", "views/../../outside", "/etc/passwd", "a/../.."] {
+        for bad in [
+            "..",
+            "../outside",
+            "views/../../outside",
+            "/etc/passwd",
+            "a/../..",
+        ] {
             assert_eq!(
                 resolve_confined_path(dir.path(), Path::new(bad)),
                 Err(ConfinedPathError::Outside),
@@ -1976,7 +1980,9 @@ mod tests {
         )
         .unwrap();
 
-        let entries = project_entries(dir.path(), "drone").unwrap().expect("project");
+        let entries = project_entries(dir.path(), "drone")
+            .unwrap()
+            .expect("project");
         let mut by_path: HashMap<&str, &ProjectEntry> = HashMap::new();
         for entry in &entries {
             let path = match entry {
@@ -1989,7 +1995,10 @@ mod tests {
         assert!(matches!(by_path["views"], &ProjectEntry::Dir { .. }));
         assert!(matches!(by_path["docs"], &ProjectEntry::Dir { .. }));
 
-        let ProjectEntry::File { revision, version, .. } = by_path["views/main.hcl"] else {
+        let ProjectEntry::File {
+            revision, version, ..
+        } = by_path["views/main.hcl"]
+        else {
             panic!("views/main.hcl should be a file");
         };
         assert!(*revision > 0);
@@ -2006,9 +2015,11 @@ mod tests {
         assert!(project_entries(dir.path(), "../escape").unwrap().is_none());
         write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
         assert!(project_entries(dir.path(), "notes").unwrap().is_none());
-        assert!(project_entries(&dir.path().join("missing"), "drone")
-            .unwrap()
-            .is_none());
+        assert!(
+            project_entries(&dir.path().join("missing"), "drone")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -2034,9 +2045,14 @@ mod tests {
         write_file(&dir.path().join("drone/docs/battery.md"), "# battery\n");
         write_file(&dir.path().join("drone/README.md"), "readme\n");
 
-        let sources = project_sources(dir.path(), "drone").unwrap().expect("project");
+        let sources = project_sources(dir.path(), "drone")
+            .unwrap()
+            .expect("project");
         let names: Vec<&str> = sources.iter().map(|s| s.filename.as_str()).collect();
-        assert_eq!(names, vec!["docs/battery.md", "system.hcl", "views/main.hcl"]);
+        assert_eq!(
+            names,
+            vec!["docs/battery.md", "system.hcl", "views/main.hcl"]
+        );
         assert_eq!(sources[1].content, "system \"quadcopter\" {}\n");
         assert!(project_sources(dir.path(), "ghost").unwrap().is_none());
     }

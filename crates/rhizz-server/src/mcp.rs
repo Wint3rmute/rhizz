@@ -204,7 +204,11 @@ impl RhizzMcp {
                 storage::ProjectEntry::Dir { path } => {
                     json!({ "path": path, "kind": "directory" })
                 }
-                storage::ProjectEntry::File { path, revision, version } => json!({
+                storage::ProjectEntry::File {
+                    path,
+                    revision,
+                    version,
+                } => json!({
                     "path": path,
                     "kind": "file",
                     "revision": revision,
@@ -802,8 +806,14 @@ mod tests {
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let payload =
-            call_tool(&app, &session, 30, "list_files", json!({ "project": "drone" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            30,
+            "list_files",
+            json!({ "project": "drone" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let files = result_value(&payload)["files"].as_array().unwrap().clone();
 
@@ -814,7 +824,10 @@ mod tests {
         assert!(!paths.contains(&".hidden"));
         assert!(!paths.contains(&"linked.hcl"));
 
-        let system = files.iter().find(|f| f["path"] == json!("system.hcl")).unwrap();
+        let system = files
+            .iter()
+            .find(|f| f["path"] == json!("system.hcl"))
+            .unwrap();
         assert_eq!(system["kind"], json!("file"));
         assert!(system["revision"].is_u64());
         assert_eq!(system["version"].as_str().unwrap().len(), 64);
@@ -830,8 +843,14 @@ mod tests {
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let payload =
-            call_tool(&app, &session, 31, "list_files", json!({ "project": "ghost" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            31,
+            "list_files",
+            json!({ "project": "ghost" }),
+        )
+        .await;
         assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 
@@ -928,7 +947,11 @@ mod tests {
                 json!({ "project": "drone", "path": bad }),
             )
             .await;
-            assert_eq!(payload["result"]["isError"], json!(true), "{bad}: {payload}");
+            assert_eq!(
+                payload["result"]["isError"],
+                json!(true),
+                "{bad}: {payload}"
+            );
         }
     }
 
@@ -949,7 +972,11 @@ mod tests {
                 json!({ "project": "drone", "path": bad }),
             )
             .await;
-            assert_eq!(payload["result"]["isError"], json!(true), "{bad}: {payload}");
+            assert_eq!(
+                payload["result"]["isError"],
+                json!(true),
+                "{bad}: {payload}"
+            );
         }
     }
 
@@ -960,8 +987,14 @@ mod tests {
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let payload =
-            call_tool(&app, &session, 60, "check_project", json!({ "project": "broken" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            60,
+            "check_project",
+            json!({ "project": "broken" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let result = result_value(&payload);
         let diagnostics = result["diagnostics"].as_array().unwrap();
@@ -969,7 +1002,10 @@ mod tests {
             diagnostics.iter().any(|d| d["code"] == json!("E014")),
             "expected E014 among diagnostics: {result}"
         );
-        let error = diagnostics.iter().find(|d| d["code"] == json!("E014")).unwrap();
+        let error = diagnostics
+            .iter()
+            .find(|d| d["code"] == json!("E014"))
+            .unwrap();
         assert_eq!(error["severity"], json!("error"));
         assert!(result["score"].is_null());
     }
@@ -983,13 +1019,21 @@ mod tests {
         let app = app(examples);
         let session = handshake(&app).await;
 
-        let payload =
-            call_tool(&app, &session, 61, "check_project", json!({ "project": "drone" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            61,
+            "check_project",
+            json!({ "project": "drone" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let result = result_value(&payload);
         let diagnostics = result["diagnostics"].as_array().unwrap();
         assert!(
-            diagnostics.iter().all(|d| d["severity"] == json!("warning")),
+            diagnostics
+                .iter()
+                .all(|d| d["severity"] == json!("warning")),
             "the drone example must compile with only warnings: {result}"
         );
         let score = &result["score"];
@@ -1004,8 +1048,14 @@ mod tests {
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let payload =
-            call_tool(&app, &session, 62, "check_project", json!({ "project": "ghost" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            62,
+            "check_project",
+            json!({ "project": "ghost" }),
+        )
+        .await;
         assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 }
