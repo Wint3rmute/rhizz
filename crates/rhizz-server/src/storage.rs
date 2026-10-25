@@ -514,9 +514,48 @@ pub fn resolve_project(data_dir: &Path, project_id: &str) -> Result<PathBuf, Pro
     }
     let root = data_dir.join(project_id);
     match fs::symlink_metadata(&root) {
-        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => Ok(root),
-        Ok(_) | Err(_) => Err(ProjectError::Unknown(project_id.to_owned())),
+        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => {}
+        Ok(_) | Err(_) => return Err(ProjectError::Unknown(project_id.to_owned())),
     }
+    match has_model_source_on_disk(&root, Path::new("")) {
+        Ok(true) => Ok(root),
+        Ok(false) => Err(ProjectError::Unknown(project_id.to_owned())),
+        Err(err) => Err(ProjectError::Io(err)),
+    }
+}
+
+/// Whether the project at `root` holds a model source, by the same rules as
+/// [`walk_project`] and [`has_model_source`]: a non-hidden, non-symlink `.hcl`
+/// file outside `views`, whose content is valid UTF-8.
+///
+/// Stops at the first match. Only the matching file's content is read, so a
+/// large project is not loaded just to decide whether it exists.
+fn has_model_source_on_disk(root: &Path, prefix: &Path) -> Result<bool, std::io::Error> {
+    for (name, entry) in sorted_entries(&root.join(prefix))? {
+        if is_hidden(&name) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = path.symlink_metadata() else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        let relative = prefix.join(&name);
+        if metadata.is_dir() {
+            if has_model_source_on_disk(root, &relative)? {
+                return Ok(true);
+            }
+        } else if metadata.is_file()
+            && is_hcl_path(&relative)
+            && !is_view_path(&relative)
+            && fs::read_to_string(&path).is_ok()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Why a project-relative path was refused confinement.
@@ -2006,6 +2045,30 @@ mod tests {
 
         assert!(!by_path.contains_key(".hidden"));
         assert!(!by_path.contains_key("linked.hcl"));
+    }
+
+    #[test]
+    fn resolve_project_refuses_directories_without_a_model_source() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        write_file(&dir.path().join("notes/views/only.hcl"), "view \"v\" {}\n");
+        write_file(&dir.path().join("notes/.secret.hcl"), "system \"s\" {}\n");
+        write_file(&dir.path().join("bad/system.hcl"), "");
+        fs::write(dir.path().join("bad/system.hcl"), [0xff, 0xfe, 0xfd]).unwrap();
+
+        for id in ["notes", "bad"] {
+            assert!(
+                matches!(
+                    resolve_project(dir.path(), id),
+                    Err(ProjectError::Unknown(_))
+                ),
+                "{id} is not a project"
+            );
+        }
+        assert_eq!(
+            resolve_project(dir.path(), "drone").unwrap(),
+            dir.path().join("drone")
+        );
     }
 
     #[test]
