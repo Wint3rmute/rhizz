@@ -611,7 +611,7 @@
      offsets move the dashes towards the end of the path. */
   .new-connection-flow {
     stroke-dashoffset: 0;
-    animation: new-connection-flow 2.5s linear infinite;
+    animation: new-connection-flow 1s linear infinite;
   }
 
   @keyframes new-connection-flow {
