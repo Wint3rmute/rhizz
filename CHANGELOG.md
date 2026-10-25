@@ -7,6 +7,7 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Feat
 
+- **server**: add MCP tools: `list_files`, `read_file`, `check_project`
 - **modeling**: animate connection preview line
 - **modeling**: say Keep and confirm connection removal with a toast
 - **modeling**: delete connection popup with port cleanup
@@ -40,6 +41,7 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Refactor
 
+- cargo update
 - **modeling**: inline single-use port key helper
 - **core**: reuse known scope label in port cleanup
 - **core**: merge delete connection port branches
