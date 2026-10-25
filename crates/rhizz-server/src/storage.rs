@@ -54,6 +54,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result};
@@ -1156,6 +1157,140 @@ pub fn mutate_project(
         Ok(_) => Err(MutateProjectError::NotApplied),
         Err(diagnostics) => Err(MutateProjectError::Refused(diagnostics)),
     }
+}
+
+/// Serializes `edit_documentation` read-check-write sequences within this
+/// process, so two edits sent with the same version cannot both pass the
+/// version check. This is compare-and-swap without a project lock (proposal
+/// 0004 is not implemented).
+static DOC_EDIT_LOCK: Mutex<()> = Mutex::new(());
+
+/// The outcome of an `edit_documentation` call.
+#[derive(Debug)]
+pub struct EditDocResult {
+    /// Content-hash version of the file after the edit, for chaining
+    /// another edit without re-reading.
+    pub version: String,
+    /// Total line count of the file after the edit.
+    pub total_lines: usize,
+}
+
+/// Why a documentation edit was not persisted. Every variant leaves the file
+/// untouched.
+#[derive(Debug, Error)]
+pub enum EditDocError {
+    /// No project with this id.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    /// The edit was refused: bad path, match failure, or a stale version.
+    #[error("{0}")]
+    Refused(String),
+}
+
+/// Replaces one exact span of text in an existing Markdown doc under
+/// `docs/`.
+///
+/// The read, the version check, and the write happen under one held lock, so
+/// two edits sent with the same version cannot both apply: the loser sees
+/// the winner's version and is refused. `old_text` must occur exactly once;
+/// zero matches, several matches, and an empty `old_text` are all refused.
+/// The version must equal [`file_version`] of the file on disk, or the edit
+/// is refused with a message telling the client to re-read.
+///
+/// Confinement mirrors the read-only tools: the project is resolved with
+/// [`resolve_project`] and the path with [`resolve_confined_path`], so the
+/// path never escapes the project and hidden entries or symlinks are
+/// refused. The path must live under `docs/` and end in `.md`; anything else
+/// — `system.hcl`, views, or anything outside `docs/` — is refused, and a
+/// missing doc is refused since creating docs is a separate tool. Writes go
+/// through `write_atomic`.
+///
+/// # Errors
+///
+/// Returns [`EditDocError::Unknown`] for unknown projects,
+/// [`EditDocError::Io`] when the filesystem fails, and
+/// [`EditDocError::Refused`] with a human-readable reason otherwise.
+pub fn edit_documentation(
+    data_dir: &Path,
+    project_id: &str,
+    doc_path: &str,
+    old_text: &str,
+    new_text: &str,
+    version: &str,
+) -> Result<EditDocResult, EditDocError> {
+    let _guard = DOC_EDIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => EditDocError::Unknown(id),
+        ProjectError::Io(err) => EditDocError::Io(err),
+    })?;
+
+    let relative = Path::new(doc_path);
+    let absolute =
+        resolve_confined_path(&root, relative).map_err(|e| EditDocError::Refused(e.to_string()))?;
+
+    if !relative.starts_with("docs") || relative.components().count() < 2 {
+        return Err(EditDocError::Refused(format!(
+            "path `{doc_path}` is not under `docs/`"
+        )));
+    }
+    if relative.extension().is_none_or(|ext| ext != "md") {
+        return Err(EditDocError::Refused(format!(
+            "path `{doc_path}` is not a Markdown doc (`.md` only)"
+        )));
+    }
+
+    let metadata = fs::symlink_metadata(&absolute).map_err(|_| {
+        EditDocError::Refused(format!(
+            "unknown doc `{doc_path}` (creating docs is a separate tool)"
+        ))
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(EditDocError::Refused(format!(
+            "path `{doc_path}` is not a regular file"
+        )));
+    }
+
+    let content = fs::read_to_string(&absolute)?;
+    if old_text.is_empty() {
+        return Err(EditDocError::Refused(
+            "`old_text` must not be empty".to_owned(),
+        ));
+    }
+    match content.matches(old_text).count() {
+        0 => {
+            return Err(EditDocError::Refused(format!(
+                "`old_text` does not occur in `{doc_path}`"
+            )));
+        }
+        1 => {}
+        count => {
+            return Err(EditDocError::Refused(format!(
+                "`old_text` occurs {count} times in `{doc_path}`; it must occur exactly once"
+            )));
+        }
+    }
+    if file_version(&content) != version {
+        return Err(EditDocError::Refused(format!(
+            "version mismatch: `{doc_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
+            file_version(&content)
+        )));
+    }
+
+    let updated = content.replacen(old_text, new_text, 1);
+    write_atomic(&absolute, &updated).map_err(|e| match e {
+        SaveVfsError::Malformed(message) => EditDocError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => EditDocError::Io(err),
+    })?;
+    Ok(EditDocResult {
+        version: file_version(&updated),
+        total_lines: updated.lines().count(),
+    })
 }
 
 #[cfg(test)]
