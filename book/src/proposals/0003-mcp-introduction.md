@@ -79,11 +79,15 @@ one tool per op, with the op's name and parameters.
 - **Results:** a tool returns whether the op applied, the created path where
   relevant, and any warnings. A refused op (a guard refusal, or a model that
   would no longer resolve, such as deleting a definition still in use) is
-  reported with its diagnostics, and the file is left untouched. A mutation
-  can never persist a broken model.
-- **Scope of a mutation:** `system.hcl` only. Views and docs are not touched,
-  so a deleted component may leave dangling view nodes, which the compiler
-  reports as warnings.
+  reported as a tool error with its diagnostics, and the file is left
+  untouched. A mutation can never persist a broken model. Guard refusals
+  (`applied: false`, e.g. unknown paths) are reported as a tool error with
+  the core `E000` code.
+- **Scope of a mutation:** `system.hcl` only (falling back to `main.hcl` when
+  that is the primary file). Views and docs are not touched, so a deleted
+  component may leave dangling view nodes, which the compiler reports as
+  warnings. The shared write path lives in `storage.rs` (`mutate_project`:
+  confined `system.hcl` load, `mutate_to_hcl`, atomic `write_atomic`).
 - **New operations:** a new `ModelOp` gets a tool in the same change. The op
   set stays defined in one place, `rhizz-core`.
 - **Locking:** mutations are writes like any other and respect project locking
@@ -91,6 +95,10 @@ one tool per op, with the op's name and parameters.
   refused while a human holds it. Mutations act as the hardcoded user `AI`,
   the identity 0004 reserves for MCP clients. The mutation step should not
   ship before 0004, or must accept last-writer-wins.
+- **Implemented (2026-10, part 1):** `add_system`, `add_component_definition`,
+  `add_instance`, `rename_component` and `reparent_component` ship on `/mcp`.
+  0004 is not implemented, so these writes are last-writer-wins with no lock
+  and no `AI` identity yet — the tool descriptions say so.
 - **No auth:** like the rest of the server, the endpoint has no authentication
   at this stage of the project and assumes a trusted environment.
 

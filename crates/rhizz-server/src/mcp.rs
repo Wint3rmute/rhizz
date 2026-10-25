@@ -1,12 +1,17 @@
 //! Proof-of-concept Model Context Protocol (MCP) endpoint.
 //!
-//! Exposes read-only tools over the MCP Streamable HTTP transport, mounted at
+//! Exposes tools over the MCP Streamable HTTP transport, mounted at
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
-//! `read_file`, and `check_project`. They only read the data dir; they never
-//! touch `system.hcl`, docs, or locks.
+//! `read_file`, `check_project`, and the step-2 structural mutation tools
+//! (`add_system`, `add_component_definition`, `add_instance`,
+//! `rename_component`, `reparent_component`). Reads only touch the data dir;
+//! mutations load the project's single primary file (`system.hcl`), apply
+//! one `rhizz_core::ModelOp` through `mutate_to_hcl`, and write the canonical
+//! HCL back atomically. A refused op leaves the file untouched.
 //!
-//! This is a POC: there is no authentication, so it must not be exposed beyond
-//! localhost.
+//! This is a POC: there is no authentication and no project locking (proposal
+//! 0004 is not implemented), so writes are last-writer-wins. It must not be
+//! exposed beyond localhost.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -89,6 +94,123 @@ struct ReadFileParams {
 struct CheckProjectParams {
     /// The project id as returned by `fetch_projects`.
     project: String,
+}
+
+/// A port block carried inside `add_component_definition` options.
+#[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+struct MutationPortJson {
+    /// Port label (required).
+    label: String,
+    /// Optional full name.
+    #[serde(default)]
+    full_name: Option<String>,
+    /// Protocol name; empty clears it.
+    #[serde(default)]
+    protocol: Option<String>,
+    /// Role string; defaults to `"peer"` when omitted.
+    #[serde(default)]
+    role: Option<String>,
+    /// External boundary flag.
+    #[serde(default)]
+    external: Option<bool>,
+    /// Required flag.
+    #[serde(default)]
+    required: Option<bool>,
+    /// Filtering tags.
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+}
+
+/// Options for `add_component_definition`, mirroring
+/// `rhizz_core::mutation::DefinitionOptions`.
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+struct DefinitionOptionsJson {
+    /// Atomic flag.
+    #[serde(default)]
+    leaf: Option<bool>,
+    /// Full official name, expanding abbreviations.
+    #[serde(default)]
+    full_name: Option<String>,
+    /// Filtering tags.
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    /// Optional icon name.
+    #[serde(default)]
+    icon: Option<String>,
+    /// Optional border color.
+    #[serde(default)]
+    color: Option<String>,
+    /// Border style (`"dashed"` / `"dotted"`; `"solid"` and empty clear it).
+    #[serde(default)]
+    border: Option<String>,
+    /// Optional font style.
+    #[serde(default)]
+    font: Option<String>,
+    /// Ports declared on the definition.
+    #[serde(default)]
+    ports: Option<Vec<MutationPortJson>>,
+}
+
+/// Arguments accepted by the `add_system` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct AddSystemParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// New system label (must not be empty).
+    label: String,
+    /// Full official name, expanding abbreviations.
+    #[serde(default)]
+    full_name: Option<String>,
+}
+
+/// Arguments accepted by the `add_component_definition` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct AddComponentDefinitionParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// New top-level component label (must not be empty).
+    label: String,
+    /// Definition options (`leaf`, `full_name`, tags, icon, color, border, font, ports).
+    #[serde(default)]
+    options: Option<DefinitionOptionsJson>,
+}
+
+/// Arguments accepted by the `add_instance` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct AddInstanceParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Container path: a bare system or definition label, or a nested instance path.
+    parent_path: String,
+    /// New instance label within the container.
+    label: String,
+    /// Label of the top-level component to instantiate.
+    source: String,
+}
+
+/// Arguments accepted by the `rename_component` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct RenameComponentParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Instance path to rename (e.g. `"demo/motor"`).
+    path: String,
+    /// New label within the same container.
+    new_label: String,
+}
+
+/// Arguments accepted by the `reparent_component` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct ReparentComponentParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// Instance path to move (e.g. `"demo/motor"`).
+    source_path: String,
+    /// Container path to move it into.
+    target_parent_path: String,
 }
 
 #[tool_router]
@@ -324,19 +446,7 @@ impl RhizzMcp {
                 }
             };
             let result = rhizz_core::compile(&sources);
-            let diagnostics: Vec<Value> = result
-                .diagnostics
-                .iter()
-                .map(|d| {
-                    json!({
-                        "code": d.code.to_string(),
-                        "severity": diagnostic_severity(d.code.level),
-                        "file": d.file.as_ref().map(|f| f.display().to_string()),
-                        "line": d.line,
-                        "message": d.message,
-                    })
-                })
-                .collect();
+            let diagnostics: Vec<Value> = result.diagnostics.iter().map(diagnostic_json).collect();
             let score = result
                 .model
                 .as_ref()
@@ -358,6 +468,215 @@ impl RhizzMcp {
             Ok(tool_error("failed to compile project"))
         })
     }
+
+    /// Adds a system block. Last-writer-wins: proposal 0004 locking is not
+    /// implemented, so no lock is taken and a concurrent human edit can be
+    /// overwritten.
+    #[tool(
+        name = "add_system",
+        description = "Add a system block to a Rhizz project (`ModelOp add_system`). Pass the project id, the new `label`, and optional `full_name`. Returns `applied`, `warnings`, and no `path`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched; a mutation can never persist a broken model."
+    )]
+    async fn add_system(
+        &self,
+        params: Parameters<AddSystemParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::AddSystem {
+            label: params.0.label.clone(),
+            full_name: params.0.full_name.clone().unwrap_or_default(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Adds a top-level component definition. Last-writer-wins: proposal 0004
+    /// locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "add_component_definition",
+        description = "Add a top-level component definition to a Rhizz project (`ModelOp add_component_definition`). Pass the project id, the new `label`, and optional `options` (leaf, full_name, tags, icon, color, border, font, ports). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn add_component_definition(
+        &self,
+        params: Parameters<AddComponentDefinitionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let options = params
+            .0
+            .options
+            .as_ref()
+            .map(definition_options_from_json)
+            .unwrap_or_default();
+        let op = rhizz_core::mutation::ModelOp::AddDefinition {
+            label: params.0.label.clone(),
+            options,
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Adds an instance of a definition. Last-writer-wins: proposal 0004
+    /// locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "add_instance",
+        description = "Add an instance of a top-level component inside a system or definition (`ModelOp add_instance`). Pass the project id, `parentPath` (a bare system/definition label or a nested instance path), `label`, and `source` (a top-level component label). Returns `applied`, the created `path`, and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+    )]
+    async fn add_instance(
+        &self,
+        params: Parameters<AddInstanceParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::AddInstance {
+            parent_path: params.0.parent_path.clone(),
+            label: params.0.label.clone(),
+            source: params.0.source.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Renames a placed instance. Last-writer-wins: proposal 0004 locking is
+    /// not implemented, so no lock is taken.
+    #[tool(
+        name = "rename_component",
+        description = "Rename a placed instance (`ModelOp rename_component`). Pass the project id, the instance `path` (e.g. `demo/motor`), and `newLabel`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
+    )]
+    async fn rename_component(
+        &self,
+        params: Parameters<RenameComponentParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::Rename {
+            path: params.0.path.clone(),
+            new_label: params.0.new_label.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Moves a placed instance between containers. Last-writer-wins: proposal
+    /// 0004 locking is not implemented, so no lock is taken.
+    #[tool(
+        name = "reparent_component",
+        description = "Move a placed instance between containers (`ModelOp reparent_component`). Pass the project id, `sourcePath` (e.g. `demo/motor`), and `targetParentPath`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
+    )]
+    async fn reparent_component(
+        &self,
+        params: Parameters<ReparentComponentParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizz_core::mutation::ModelOp::Reparent {
+            source_path: params.0.source_path.clone(),
+            target_parent_path: params.0.target_parent_path.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+}
+
+impl RhizzMcp {
+    /// Runs one structural op through the shared storage write path
+    /// (`system.hcl` load, `mutate_to_hcl`, atomic write).
+    ///
+    /// Blocking filesystem work happens on the blocking pool; the returned
+    /// value is already a tool result, never a protocol error.
+    async fn run_mutation(
+        &self,
+        project: String,
+        op: rhizz_core::mutation::ModelOp,
+    ) -> CallToolResult {
+        let data_dir = self.data_dir.clone();
+        let loaded =
+            tokio::task::spawn_blocking(move || storage::mutate_project(&data_dir, &project, &op))
+                .await;
+        match loaded {
+            Ok(Ok(result)) => mutation_success(&result),
+            Ok(Err(storage::MutateProjectError::Unknown(id))) => {
+                tool_error(format!("unknown project `{id}`"))
+            }
+            Ok(Err(storage::MutateProjectError::Io(err))) => {
+                tracing::error!(?err, "mutation: failed to read or write project");
+                tool_error("failed to read or write project")
+            }
+            Ok(Err(storage::MutateProjectError::Refused(diagnostics))) => {
+                mutation_refused(&diagnostics)
+            }
+            Ok(Err(storage::MutateProjectError::NotApplied)) => mutation_not_applied(),
+            Err(err) => {
+                tracing::error!(?err, "mutation: worker task failed");
+                tool_error("failed to apply mutation")
+            }
+        }
+    }
+}
+
+/// Converts a mutation-tool port to the core op shape.
+fn port_json_from_mutation(port: &MutationPortJson) -> rhizz_core::mutation::PortJson {
+    rhizz_core::mutation::PortJson {
+        label: port.label.clone(),
+        full_name: port.full_name.clone(),
+        protocol: port.protocol.clone(),
+        role: port.role.clone(),
+        external: port.external,
+        required: port.required,
+        tags: port.tags.clone(),
+    }
+}
+
+/// Converts mutation-tool definition options to the core op shape.
+fn definition_options_from_json(
+    options: &DefinitionOptionsJson,
+) -> rhizz_core::mutation::DefinitionOptions {
+    rhizz_core::mutation::DefinitionOptions {
+        leaf: options.leaf,
+        full_name: options.full_name.clone(),
+        tags: options.tags.clone(),
+        icon: options.icon.clone(),
+        color: options.color.clone(),
+        border: options.border.clone(),
+        font: options.font.clone(),
+        ports: options
+            .ports
+            .as_ref()
+            .map(|ports| ports.iter().map(port_json_from_mutation).collect()),
+    }
+}
+
+/// Encodes one diagnostic as the `check_project` JSON shape.
+fn diagnostic_json(diagnostic: &rhizz_core::Diagnostic) -> Value {
+    json!({
+        "code": diagnostic.code.to_string(),
+        "severity": diagnostic_severity(diagnostic.code.level),
+        "file": diagnostic.file.as_ref().map(|f| f.display().to_string()),
+        "line": diagnostic.line,
+        "message": diagnostic.message,
+    })
+}
+
+/// Encodes a successful mutation: whether it applied, the created path where
+/// relevant, and any non-blocking warnings.
+fn mutation_success(result: &rhizz_core::mutation::MutationResult) -> CallToolResult {
+    let warnings: Vec<Value> = result.warnings.iter().map(diagnostic_json).collect();
+    let payload = json!({
+        "applied": true,
+        "path": result.path,
+        "warnings": warnings,
+    });
+    match serde_json::to_string(&payload) {
+        Ok(text) => CallToolResult::success(vec![ContentBlock::text(text)]),
+        Err(err) => {
+            tracing::error!(?err, "mutation: failed to encode result");
+            tool_error("failed to encode result")
+        }
+    }
+}
+
+/// Encodes a resolver refusal (`Err(diagnostics)`): the file was left
+/// untouched. Reported as a tool error carrying the core diagnostic codes.
+fn mutation_refused(diagnostics: &[rhizz_core::Diagnostic]) -> CallToolResult {
+    let diagnostics: Vec<Value> = diagnostics.iter().map(diagnostic_json).collect();
+    let payload = json!({ "applied": false, "diagnostics": diagnostics });
+    serde_json::to_string(&payload).map_or_else(|_| tool_error("op refused"), tool_error)
+}
+
+/// Encodes a guard refusal (`applied: false`): unknown path, collision, or no
+/// change. The file was left untouched. Reported as a tool error with the
+/// core `E000` code, matching `MutationError::InvalidInput`.
+fn mutation_not_applied() -> CallToolResult {
+    let diagnostic = rhizz_core::Diagnostic::error(
+        rhizz_core::DiagnosticCode::E000,
+        "op refused (applied: false): unknown path, collision, or no change; file left untouched",
+    );
+    mutation_refused(std::slice::from_ref(&diagnostic))
 }
 
 /// A tool-level failure: reported to the client as `isError`, not as a
@@ -656,7 +975,17 @@ mod tests {
         names.sort_unstable();
         assert_eq!(
             names,
-            vec!["check_project", "fetch_projects", "list_files", "read_file"]
+            vec![
+                "add_component_definition",
+                "add_instance",
+                "add_system",
+                "check_project",
+                "fetch_projects",
+                "list_files",
+                "read_file",
+                "rename_component",
+                "reparent_component",
+            ]
         );
 
         let fetch = tools
@@ -1139,5 +1468,193 @@ mod tests {
         )
         .await;
         assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
+    }
+
+    /// Writes a minimal project with one system and one leaf definition.
+    fn write_mutation_project(data_dir: &std::path::Path) {
+        let project = data_dir.join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "component \"cpu\" {\n  leaf = true\n}\nsystem \"demo\" {}\n",
+        )
+        .unwrap();
+    }
+
+    /// The `isError` text of a refused tool call.
+    fn tool_error_text(payload: &Value) -> String {
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
+        payload["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[tokio::test]
+    async fn tools_call_add_instance_rewrites_canonically_and_check_is_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            80,
+            "add_instance",
+            json!({
+                "project": "demo",
+                "parentPath": "demo",
+                "label": "a",
+                "source": "cpu",
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+        assert_eq!(result["applied"], json!(true), "{result}");
+        assert_eq!(result["path"], json!("demo/a"), "{result}");
+
+        let rewritten = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(
+            rewritten.contains("instance \"a\""),
+            "canonical rewrite must contain the instance: {rewritten}"
+        );
+
+        let check = call_tool(
+            &app,
+            &session,
+            81,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        assert_ne!(check["result"]["isError"], json!(true), "{check}");
+        let check_result = result_value(&check);
+        let diagnostics = check_result["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics.iter().all(|d| d["severity"] != json!("error")),
+            "follow-up check must be clean: {check_result}"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_refused_mutation_leaves_system_hcl_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        // `source` names no top-level component, so the resolver refuses with E014.
+        let payload = call_tool(
+            &app,
+            &session,
+            82,
+            "add_instance",
+            json!({
+                "project": "demo",
+                "parentPath": "demo",
+                "label": "bad",
+                "source": "missing-component",
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E014"), "expected E014 in refusal: {text}");
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused op must not touch system.hcl");
+    }
+
+    #[tokio::test]
+    async fn tools_call_rename_refuses_unknown_paths_with_e000() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        let payload = call_tool(
+            &app,
+            &session,
+            83,
+            "rename_component",
+            json!({
+                "project": "demo",
+                "path": "demo/ghost",
+                "newLabel": "renamed",
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E000"), "expected E000 in refusal: {text}");
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused rename must not touch system.hcl");
+    }
+
+    #[tokio::test]
+    async fn tools_call_reparent_refuses_unknown_paths_with_e000() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        let payload = call_tool(
+            &app,
+            &session,
+            84,
+            "reparent_component",
+            json!({
+                "project": "demo",
+                "sourcePath": "demo/ghost",
+                "targetParentPath": "demo",
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E000"), "expected E000 in refusal: {text}");
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(
+            before, after,
+            "a refused reparent must not touch system.hcl"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_add_system_and_definition_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            85,
+            "add_system",
+            json!({ "project": "demo", "label": "other" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true));
+
+        let payload = call_tool(
+            &app,
+            &session,
+            86,
+            "add_component_definition",
+            json!({ "project": "demo", "label": "gpu", "options": { "leaf": true } }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true));
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("system \"other\""), "{content}");
+        assert!(content.contains("component \"gpu\""), "{content}");
     }
 }

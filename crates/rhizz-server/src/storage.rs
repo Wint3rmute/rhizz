@@ -953,7 +953,7 @@ fn disk_entries(root: &Path) -> Vec<(PathBuf, bool)> {
 
 /// Writes `content` to `path` through a hidden temp file, so a crash cannot
 /// leave a half-written file where a valid one used to be.
-fn write_atomic(path: &Path, content: &str) -> Result<(), SaveVfsError> {
+pub(crate) fn write_atomic(path: &Path, content: &str) -> Result<(), SaveVfsError> {
     let name = path
         .file_name()
         .and_then(OsStr::to_str)
@@ -1068,6 +1068,94 @@ pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
     }
 
     Ok(())
+}
+
+/// Why a model mutation was not persisted.
+#[derive(Debug, Error)]
+pub enum MutateProjectError {
+    /// No project with this id.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    /// The op input or the mutated model was rejected; the file was left
+    /// untouched.
+    #[error("refused")]
+    Refused(Vec<rhizz_core::Diagnostic>),
+    /// The op was a guard refusal (`applied: false`): unknown path, no
+    /// change, or a collision. The file was left untouched.
+    #[error("op refused: no change applied")]
+    NotApplied,
+}
+
+/// Applies one [`rhizz_core::mutation::ModelOp`] to a project's single
+/// primary model file (`system.hcl`, falling back to `main.hcl`).
+///
+/// The file is read, passed through `rhizz_core::mutate_to_hcl`, and on
+/// success the canonical HCL is written back through `write_atomic`. On
+/// refusal — a guard refusal (`applied: false`) or resolver diagnostics —
+/// the file is left untouched and the diagnostics are returned for the
+/// caller to report.
+///
+/// Confinement mirrors the read-only tools: the project is resolved with
+/// [`resolve_project`] and the primary file with [`resolve_confined_path`],
+/// so the path never escapes the project and hidden entries or symlinks are
+/// refused.
+///
+/// # Errors
+///
+/// Returns [`MutateProjectError::Unknown`] for unknown projects,
+/// [`MutateProjectError::Io`] when the filesystem fails,
+/// [`MutateProjectError::Refused`] with the resolver diagnostics, and
+/// [`MutateProjectError::NotApplied`] for guard refusals.
+pub fn mutate_project(
+    data_dir: &Path,
+    project_id: &str,
+    op: &rhizz_core::mutation::ModelOp,
+) -> Result<rhizz_core::mutation::MutationResult, MutateProjectError> {
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => MutateProjectError::Unknown(id),
+        ProjectError::Io(err) => MutateProjectError::Io(err),
+    })?;
+
+    let mut primary: Option<(PathBuf, String)> = None;
+    for candidate in ["system.hcl", "main.hcl"] {
+        let Ok(absolute) = resolve_confined_path(&root, Path::new(candidate)) else {
+            continue;
+        };
+        let Ok(metadata) = std::fs::symlink_metadata(&absolute) else {
+            continue;
+        };
+        if metadata.is_file() && !metadata.file_type().is_symlink() {
+            primary = Some((absolute, candidate.to_owned()));
+            break;
+        }
+    }
+    let Some((absolute, filename)) = primary else {
+        return Err(MutateProjectError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no system.hcl (or main.hcl) in project",
+        )));
+    };
+
+    let content = std::fs::read_to_string(&absolute)?;
+    match rhizz_core::mutate_to_hcl(&filename, &content, op) {
+        Ok(result) if result.applied => {
+            let Some(hcl) = result.hcl.as_ref() else {
+                return Err(MutateProjectError::NotApplied);
+            };
+            write_atomic(&absolute, hcl).map_err(|e| match e {
+                SaveVfsError::Malformed(message) => {
+                    MutateProjectError::Io(std::io::Error::other(message))
+                }
+                SaveVfsError::Io(err) => MutateProjectError::Io(err),
+            })?;
+            Ok(result)
+        }
+        Ok(_) => Err(MutateProjectError::NotApplied),
+        Err(diagnostics) => Err(MutateProjectError::Refused(diagnostics)),
+    }
 }
 
 #[cfg(test)]
