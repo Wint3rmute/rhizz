@@ -1,3 +1,10 @@
+## Unreleased
+
+### Feat
+
+- **mcp**: add model-mutation tools part 2
+- **mcp**: add model-mutation tools part 1
+
 ## 0.7.0 (2026-10-25)
 
 ### BREAKING CHANGE
