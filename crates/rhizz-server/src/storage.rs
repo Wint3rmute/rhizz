@@ -57,6 +57,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result};
+use rhizz_core::Source;
 use serde_json::{Value, json};
 use thiserror::Error;
 
@@ -461,6 +462,235 @@ pub fn load_vfs(data_dir: &Path) -> Result<Value> {
         obj.insert("nodes".to_owned(), Value::Array(nodes));
     }
     Ok(vfs)
+}
+
+/// A single entry of a project's tree as seen by the MCP read-only tools.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectEntry {
+    /// A directory in the project.
+    Dir {
+        /// The project-relative path of the directory.
+        path: String,
+    },
+    /// A regular file in the project.
+    ///
+    /// Carries the same mtime-derived `revision` the VFS uses plus a
+    /// content-hash `version`.
+    File {
+        /// The project-relative path of the file.
+        path: String,
+        /// The mtime-derived revision, the same value the VFS reports.
+        revision: u64,
+        /// The content-hash version (see [`file_version`]).
+        version: String,
+    },
+}
+
+/// Error returned when a directory is not usable as a project root.
+#[derive(Debug, Error)]
+pub enum ProjectError {
+    /// No project with this id: unknown, not a valid address, or not a
+    /// directory.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// The filesystem refused to inspect the directory.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Resolves `project_id` to its directory inside `data_dir`.
+///
+/// Refuses ids that are not valid addresses (which would otherwise be path
+/// traversal) and roots that are missing, symlinks, or not directories.
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for non-address ids and missing or
+/// non-directory roots, and [`ProjectError::Io`] when the filesystem cannot
+/// be inspected.
+pub fn resolve_project(data_dir: &Path, project_id: &str) -> Result<PathBuf, ProjectError> {
+    if !is_address(project_id) {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    }
+    let root = data_dir.join(project_id);
+    match fs::symlink_metadata(&root) {
+        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => Ok(root),
+        Ok(_) | Err(_) => Err(ProjectError::Unknown(project_id.to_owned())),
+    }
+}
+
+/// Why a project-relative path was refused confinement.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ConfinedPathError {
+    /// Absolute, or escaping the project through `..`.
+    #[error("path must be relative and stay inside the project")]
+    Outside,
+    /// A segment is hidden or is a symlink.
+    #[error("path traverses a hidden entry or symlink")]
+    Excluded,
+}
+
+/// Resolves `relative` against `root`, refusing paths that leave it.
+///
+/// Applies the same exclusions as the VFS walker — absolute paths, parent
+/// escapes (`..`), hidden entries, and symlinks — so the MCP tools see
+/// exactly what the VFS sees. The final path is not required to exist;
+/// callers decide that.
+///
+/// # Errors
+///
+/// Returns [`ConfinedPathError::Outside`] for absolute or parent-escaping
+/// paths, and [`ConfinedPathError::Excluded`] for hidden entries and
+/// symlinks.
+pub fn resolve_confined_path(root: &Path, relative: &Path) -> Result<PathBuf, ConfinedPathError> {
+    if relative.is_absolute() {
+        return Err(ConfinedPathError::Outside);
+    }
+    let mut resolved = root.to_path_buf();
+    for component in relative.components() {
+        match component {
+            Component::Normal(name) => {
+                if name.to_string_lossy().starts_with('.') {
+                    return Err(ConfinedPathError::Excluded);
+                }
+                let next = resolved.join(name);
+                if fs::symlink_metadata(&next)
+                    .is_ok_and(|meta| meta.file_type().is_symlink())
+                {
+                    return Err(ConfinedPathError::Excluded);
+                }
+                resolved = next;
+            }
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(ConfinedPathError::Outside);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// The MCP file `version`: hex SHA-256 of the file's content.
+///
+/// Step 3's compare-and-swap edits key off this value, so it is deliberately
+/// not the mtime-based `revision` the VFS uses — a rewrite that preserves
+/// content leaves it unchanged, and any content change flips it.
+#[must_use]
+pub fn file_version(content: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    const HEX: [u8; 16] = *b"0123456789abcdef";
+    let digest = Sha256::digest(content.as_bytes());
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        let hi = HEX.get(usize::from(byte >> 4)).copied().unwrap_or(b'0');
+        let lo = HEX.get(usize::from(byte & 0x0f)).copied().unwrap_or(b'0');
+        out.push(char::from(hi));
+        out.push(char::from(lo));
+    }
+    out
+}
+
+/// Walks `project_id`'s directory and returns its entries.
+///
+/// Returns `None` when it is not a project at all: missing, not an address,
+/// a symlink, or holding no model source. Mirrors `load_vfs`'s discovery
+/// rules one-to-one.
+fn collect_project_entries(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<Found>>, std::io::Error> {
+    if !is_address(project_id) {
+        return Ok(None);
+    }
+    let dir = data_dir.join(project_id);
+    let Ok(metadata) = fs::symlink_metadata(&dir) else {
+        return Ok(None);
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Ok(None);
+    }
+
+    let mut found = Vec::new();
+    let mut stats = (i64::MAX, i64::MIN);
+    walk_project(project_id, &dir, Path::new(""), &mut found, &mut stats)?;
+    if !has_model_source(project_id, &found) {
+        return Ok(None);
+    }
+    Ok(Some(found))
+}
+
+/// Lists one project's tree as [`ProjectEntry`] values.
+///
+/// Returns `None` when `project_id` is not a project (see
+/// [`collect_project_entries`]).
+///
+/// # Errors
+///
+/// Returns an [`std::io::Error`] when the project directory cannot be
+/// walked.
+pub fn project_entries(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<ProjectEntry>>, std::io::Error> {
+    let Some(found) = collect_project_entries(data_dir, project_id)? else {
+        return Ok(None);
+    };
+
+    let entries = found
+        .into_iter()
+        .map(|entry| match entry {
+            Found::Dir { id, .. } => ProjectEntry::Dir {
+                path: relative_of(project_id, &id).to_owned(),
+            },
+            Found::File {
+                id,
+                content,
+                revision,
+                ..
+            } => ProjectEntry::File {
+                path: relative_of(project_id, &id).to_owned(),
+                revision,
+                version: file_version(&content),
+            },
+        })
+        .collect();
+    Ok(Some(entries))
+}
+
+/// Loads a project's compile-ready sources, or `None` when it is not a
+/// project.
+///
+/// Every `.hcl` file plus docs are collected, as the CLI discovers them.
+/// Filenames are project-relative, so diagnostics carry the same paths a
+/// human sees in the project directory.
+///
+/// # Errors
+///
+/// Returns an [`std::io::Error`] when the project directory cannot be
+/// walked.
+pub fn project_sources(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<Source>>, std::io::Error> {
+    let Some(found) = collect_project_entries(data_dir, project_id)? else {
+        return Ok(None);
+    };
+
+    let mut sources = Vec::new();
+    for entry in &found {
+        let Found::File { id, content, .. } = entry else {
+            continue;
+        };
+        let path = relative_of(project_id, id);
+        if is_hcl_path(Path::new(path)) || rhizz_core::is_docs_source(path) {
+            sources.push(Source {
+                filename: path.to_owned(),
+                content: content.clone(),
+            });
+        }
+    }
+    Ok(Some(sources))
 }
 
 /// Error type for [`save_vfs`], letting the caller distinguish a malformed
@@ -1663,5 +1893,151 @@ mod tests {
             ],
         );
         assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    // ── MCP read-only helpers ─────────────────────────────────────────────
+
+    #[test]
+    fn file_version_is_stable_and_content_sensitive() {
+        let version = file_version("system \"s\" {}\n");
+        assert_eq!(version.len(), 64, "hex SHA-256 is 64 chars");
+        assert_eq!(file_version("system \"s\" {}\n"), version);
+        assert_ne!(file_version("system \"s\" {}"), version);
+        assert_ne!(file_version(""), version);
+    }
+
+    #[test]
+    fn resolve_confined_path_resolves_nested_relative_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("views")).unwrap();
+        write_file(&dir.path().join("views/main.hcl"), "view \"main\" {}\n");
+
+        assert_eq!(
+            resolve_confined_path(dir.path(), Path::new("views/main.hcl")).unwrap(),
+            dir.path().join("views/main.hcl")
+        );
+        assert_eq!(
+            resolve_confined_path(dir.path(), Path::new("./views/main.hcl")).unwrap(),
+            dir.path().join("views/main.hcl")
+        );
+    }
+
+    #[test]
+    fn resolve_confined_path_refuses_escapes_and_absolute_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        for bad in ["..", "../outside", "views/../../outside", "/etc/passwd", "a/../.."] {
+            assert_eq!(
+                resolve_confined_path(dir.path(), Path::new(bad)),
+                Err(ConfinedPathError::Outside),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_confined_path_refuses_hidden_entries_and_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir.path().join("outside.hcl"), "system \"out\" {}\n");
+        fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::os::unix::fs::symlink(
+            dir.path().join("outside.hcl"),
+            dir.path().join("linked.hcl"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            dir.path().join("outside.hcl"),
+            dir.path().join("sub/linked.hcl"),
+        )
+        .unwrap();
+
+        for bad in [
+            "views/.hidden",
+            ".git/config",
+            ".hidden.hcl",
+            "linked.hcl",
+            "sub/linked.hcl",
+        ] {
+            assert_eq!(
+                resolve_confined_path(dir.path(), Path::new(bad)),
+                Err(ConfinedPathError::Excluded),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn project_entries_lists_the_tree_with_kinds_revisions_and_versions() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/battery.md"), "# battery\n");
+        write_file(&dir.path().join("drone/.hidden"), "x\n");
+        std::os::unix::fs::symlink(
+            dir.path().join("drone/system.hcl"),
+            dir.path().join("drone/linked.hcl"),
+        )
+        .unwrap();
+
+        let entries = project_entries(dir.path(), "drone").unwrap().expect("project");
+        let mut by_path: HashMap<&str, &ProjectEntry> = HashMap::new();
+        for entry in &entries {
+            let path = match entry {
+                ProjectEntry::Dir { path } | ProjectEntry::File { path, .. } => path.as_str(),
+            };
+            by_path.insert(path, entry);
+        }
+
+        assert!(matches!(by_path["system.hcl"], &ProjectEntry::File { .. }));
+        assert!(matches!(by_path["views"], &ProjectEntry::Dir { .. }));
+        assert!(matches!(by_path["docs"], &ProjectEntry::Dir { .. }));
+
+        let ProjectEntry::File { revision, version, .. } = by_path["views/main.hcl"] else {
+            panic!("views/main.hcl should be a file");
+        };
+        assert!(*revision > 0);
+        assert_eq!(version, &file_version("view \"main\" {}\n"));
+
+        assert!(!by_path.contains_key(".hidden"));
+        assert!(!by_path.contains_key("linked.hcl"));
+    }
+
+    #[test]
+    fn project_entries_returns_none_for_unknown_or_non_projects() {
+        let dir = data_dir_with_drone();
+        assert!(project_entries(dir.path(), "ghost").unwrap().is_none());
+        assert!(project_entries(dir.path(), "../escape").unwrap().is_none());
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        assert!(project_entries(dir.path(), "notes").unwrap().is_none());
+        assert!(project_entries(&dir.path().join("missing"), "drone")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn resolve_project_finds_real_projects_and_refuses_everything_else() {
+        let dir = data_dir_with_drone();
+        assert_eq!(
+            resolve_project(dir.path(), "drone").unwrap(),
+            dir.path().join("drone")
+        );
+        assert!(matches!(
+            resolve_project(dir.path(), "ghost"),
+            Err(ProjectError::Unknown(_))
+        ));
+        assert!(matches!(
+            resolve_project(dir.path(), "../escape"),
+            Err(ProjectError::Unknown(_))
+        ));
+    }
+
+    #[test]
+    fn project_sources_collects_hcl_and_docs_as_relative_filenames() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/battery.md"), "# battery\n");
+        write_file(&dir.path().join("drone/README.md"), "readme\n");
+
+        let sources = project_sources(dir.path(), "drone").unwrap().expect("project");
+        let names: Vec<&str> = sources.iter().map(|s| s.filename.as_str()).collect();
+        assert_eq!(names, vec!["docs/battery.md", "system.hcl", "views/main.hcl"]);
+        assert_eq!(sources[1].content, "system \"quadcopter\" {}\n");
+        assert!(project_sources(dir.path(), "ghost").unwrap().is_none());
     }
 }
