@@ -36,6 +36,7 @@ Remove E003 and E004 with their spec files; the codes are not reused.
 
 ### Fix
 
+- **server**: require a model source for read_file and refuse non-regular or oversized files
 - **web**: make inline code readable and keep toast dismiss button visible
 - **server**: allow public hostname on MCP endpoint
 
