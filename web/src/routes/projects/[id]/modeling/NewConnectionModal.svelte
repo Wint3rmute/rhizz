@@ -307,28 +307,12 @@
             stroke-dasharray="6 4"
             class="new-connection-flow"
             data-testid="new-connection-preview-line"
-            marker-end={direction === "forward" || direction === "both"
+            marker-end={direction === "backward"
+              ? undefined
+              : "url(#new-conn-arrow)"}
+            marker-start={direction === "backward"
               ? "url(#new-conn-arrow)"
               : undefined}
-            marker-start={direction === "backward" || direction === "both"
-              ? "url(#new-conn-arrow)"
-              : undefined}
-          />
-          <rect
-            x="164"
-            y="54"
-            width="12"
-            height="12"
-            rx="2"
-            style="fill: var(--color-primary);"
-          />
-          <rect
-            x="384"
-            y="54"
-            width="12"
-            height="12"
-            rx="2"
-            style="fill: var(--color-primary);"
           />
           <text
             x="182"
@@ -480,10 +464,10 @@
         <div class="grid grid-cols-2 gap-3">
           {#each [{ side: "from", end: fromEnd, port: draft.from, nameProblem: validation?.problems.fromName, roleProblem: validation?.problems.fromRole }, { side: "to", end: toEnd, port: draft.to, nameProblem: validation?.problems.toName, roleProblem: validation?.problems.toRole }] as column (column.side)}
             <fieldset
-              class="border border-base-300 rounded-box p-3 flex flex-col gap-2"
+              class="flex flex-col gap-2"
               data-testid="new-connection-{column.side}-column"
             >
-              <legend class="px-1 text-sm font-semibold">
+              <legend class="text-sm font-semibold">
                 {column.end.label}
                 <span class="font-normal text-base-content/60">port</span>
               </legend>
