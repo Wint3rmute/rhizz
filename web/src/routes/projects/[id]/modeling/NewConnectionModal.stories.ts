@@ -81,6 +81,9 @@ export const Default: Story = {
     const modal = within(canvasElement);
     const line = await modal.findByTestId("new-connection-preview-line");
     await expect(line).toHaveAttribute("stroke-dasharray", "6 4");
+    // A single arrowhead marks the connection's direction.
+    await expect(line).toHaveAttribute("marker-end", "url(#new-conn-arrow)");
+    await expect(line).not.toHaveAttribute("marker-start");
   },
 };
 
