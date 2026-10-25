@@ -12,6 +12,7 @@ alias w := wasm
 alias t := test
 alias d := dev
 alias s := storybook
+alias f := format
 alias fmt := format
 alias bs := book-serve
 
