@@ -2,18 +2,22 @@
 
 ### Feat
 
+- **web**: auto-capture landing backgrounds in VRT flow
 - **modeling**: unify ports across read-only diagrams, labels only, no dots
 - **modeling**: persist per-view port outline spots in view HCL
 - **modeling**: prototype draggable port dots with labels and follow-the-dot edges
 
 ### Fix
 
+- **web**: refresh README/book landing shot from VRT baseline
+- **web**: fill landing hero to viewport height in EmptyLanding shot
 - **modeling**: keep port tooltip on one line for stable title text
 - **modeling**: slide ports along the outline during tweens
 - **modeling**: carry ports through view transition tweens
 
 ### Refactor
 
+- **web**: copy landing backgrounds in vrt-accept recipe
 - **modeling**: require portsByIndex on all diagram views
 
 ## 0.8.0 (2026-10-28)
