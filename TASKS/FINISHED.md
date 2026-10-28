@@ -4,6 +4,35 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Interactive brainstorming - visualise ports in system diagrams
+
+Ports are first-class on the canvas: labeled dots on the node outline (labels
+inside the border, 9px), draggable along the perimeter with snap-to-grid,
+edges anchored to the dots, dots drawn above lines, hover pop with an
+overshoot ease. Dots show only when their component or connection is selected
+(always during a connect drag); read-only diagrams (Explore, Inventory,
+embeds, book example) show the same labels, outline placement, and anchored
+edges with no dots — `portsByIndex` is a required prop on every diagram view
+so no surface can silently render port-less.
+
+- **Persistence:** `PortLayout` (`port`, `side`, `offset` 0..1 clamped) nested
+  in view `node` blocks; load/save/undo/cut-out views all carry spots;
+  stale-wasm-pkg dataloss guard; SPEC.md §2.10 + SPEC/models.md updated.
+- **Transitions:** the scene blend carries ports and lerps them along the
+  outline, so undo/redo and view switches slide dots instead of dropping
+  them or falling back to box-side routing.
+- **Settled brainstorm (no follow-ups):** no touch, no keyboard nudge, snap
+  follows the toolbar grid size, tooltip + cursor discoverability is enough,
+  no a11y pass, no label-collision handling, no reset-to-default (pinning is
+  permanent), elbows accepted with anchored cases folded into the "more
+  advanced connection routing" task.
+
+Validation: `just test` / `lint` / `build` green (cargo, 1210 vitest, 358 VRT
+re-baselined with port labels, 159 e2e; one flaky palette failure unrelated,
+passes on retry). Branch: `feat/ports-visibility`.
+
+---
+
 ## Task <N> — MCP: `create_doc` tool for `docs/**.md`
 
 Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), creation:
