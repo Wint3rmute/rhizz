@@ -10,7 +10,6 @@ import {
   computeRenderOrder,
   type ConnectionOrientation,
   type ConnectionSide,
-  type PortSpot,
   type TextAlign,
 } from "./geometry";
 import type {
@@ -22,14 +21,6 @@ import type {
 } from "./types";
 
 export type DiagramNodeHandles = "none" | "connect" | "resize" | "both";
-
-export interface DiagramPort {
-  label: string;
-  role: "provider" | "consumer" | "peer";
-  protocol?: string;
-  /** Perimeter-slider override (per-view prototype): exact outline spot. */
-  spot?: PortSpot | undefined;
-}
 
 export interface DiagramNode {
   id: string;
@@ -46,7 +37,7 @@ export interface DiagramNode {
   /** Read-only "no detail view" affordance. Not a glow. */
   dimmed: boolean;
   reparentTarget: boolean;
-  ports: DiagramPort[];
+  ports: DiagramStaticPort[];
   handles: DiagramNodeHandles;
   /** 1 while resting. Below 1 only while a transition is fading this node. */
   opacity?: number | undefined;
@@ -110,22 +101,6 @@ function textAlignOf(align: TextAlign | undefined): TextAlign {
   return align ?? "center";
 }
 
-type NodePort = DiagramNode["ports"][number];
-
-function toNodePort(port: {
-  label: string;
-  role: NodePort["role"];
-  protocol?: string;
-  spot?: PortSpot;
-}): NodePort {
-  return {
-    label: port.label,
-    role: port.role,
-    ...(port.protocol !== undefined ? { protocol: port.protocol } : {}),
-    ...(port.spot !== undefined ? { spot: port.spot } : {}),
-  };
-}
-
 // Merges a component's own ports with indexed spots: the component owns
 // label/role/protocol, the index overlays outline spots by label (and may
 // contribute whole ports the component does not declare). Either side may
@@ -133,14 +108,25 @@ function toNodePort(port: {
 function mergePorts(
   base: DiagramStaticPort[] | undefined,
   indexed: DiagramStaticPort[] | undefined,
-): NodePort[] {
-  const out: NodePort[] = (base ?? []).map((port) => {
-    const spot = indexed?.find((entry) => entry.label === port.label)?.spot;
-    return toNodePort({ ...port, ...(spot !== undefined ? { spot } : {}) });
+): DiagramStaticPort[] {
+  const out: DiagramStaticPort[] = (base ?? []).map((port) => {
+    const spot =
+      indexed?.find((entry) => entry.label === port.label)?.spot ?? port.spot;
+    return {
+      label: port.label,
+      role: port.role,
+      ...(port.protocol ? { protocol: port.protocol } : {}),
+      ...(spot !== undefined ? { spot } : {}),
+    };
   });
   for (const port of indexed ?? []) {
     if (!out.some((existing) => existing.label === port.label)) {
-      out.push(toNodePort(port));
+      out.push({
+        label: port.label,
+        role: port.role,
+        ...(port.protocol ? { protocol: port.protocol } : {}),
+        ...(port.spot !== undefined ? { spot: port.spot } : {}),
+      });
     }
   }
   return out;
@@ -257,7 +243,7 @@ export interface EditorSceneNodeInput {
   color?: string | undefined;
   border?: string | undefined;
   font?: string | undefined;
-  ports?: DiagramPort[] | undefined;
+  ports?: DiagramStaticPort[] | undefined;
 }
 
 export interface EditorSceneEdgeInput {

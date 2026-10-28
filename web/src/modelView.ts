@@ -13,6 +13,7 @@ import type { ModelJS } from "rhizz";
 import type { ConnectionRef } from "./actionLog";
 import { componentKeyAt } from "./modelKeys";
 import type { PortSpot } from "./routes/projects/[id]/modeling/geometry";
+import type { DiagramStaticPort } from "./routes/projects/[id]/modeling/types";
 import type { BorderStyle } from "./routes/projects/[id]/modeling/visuals";
 import {
   type ComponentColor,
@@ -62,14 +63,6 @@ export interface ComponentData {
   ports: PortData[];
 }
 
-export interface StaticPort {
-  label: string;
-  role: "provider" | "consumer" | "peer";
-  protocol?: string;
-  /** Per-view outline spot. Absent means the role default applies. */
-  spot?: PortSpot;
-}
-
 /**
  * Ports for read-only scenes, keyed by arena index: the model's port data
  * with per-view outline spots applied. Drives labels and edge anchoring in
@@ -80,8 +73,8 @@ export function staticPortsByIndex(
   model: ModelJS | undefined,
   componentKeys: readonly string[],
   layoutPorts: Record<string, Record<string, PortSpot>> | undefined,
-): Map<number, StaticPort[]> {
-  const out = new Map<number, StaticPort[]>();
+): Map<number, DiagramStaticPort[]> {
+  const out = new Map<number, DiagramStaticPort[]>();
   if (model === undefined) return out;
   const byKey = componentDataByKey(model);
   componentKeys.forEach((key, index) => {

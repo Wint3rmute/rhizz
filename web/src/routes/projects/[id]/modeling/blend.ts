@@ -14,6 +14,7 @@ import type {
   DiagramNote,
   DiagramScene,
 } from "./scene";
+import type { DiagramStaticPort } from "./types";
 
 export const TRANSITION_MS = 320;
 export const FIT_FRACTION = 0.8;
@@ -160,13 +161,9 @@ function blendPorts(
   const toOriginal = new Map(to.map((port) => [port.label, port]));
   const out: DiagramNode["ports"] = [];
   const toDiagramPort = (
-    port: {
-      label: string;
-      role: "provider" | "consumer" | "peer";
-      protocol?: string;
-    },
+    port: DiagramStaticPort,
     spot: PortSpot,
-  ): DiagramNode["ports"][number] => ({
+  ): DiagramStaticPort => ({
     label: port.label,
     role: port.role,
     ...(port.protocol !== undefined ? { protocol: port.protocol } : {}),
