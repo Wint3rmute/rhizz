@@ -118,6 +118,66 @@ describe("blendScenes", () => {
     ]);
   });
 
+  it("slides a port back to its role default on undo", () => {
+    // Dragged right/0.8, undone to no-spot: the midpoint rides the outline
+    // between the dragged dot and the provider default (right middle).
+    const from = scene({
+      nodes: [
+        node("a", 0, 0, {
+          ports: [
+            {
+              label: "p",
+              role: "provider",
+              spot: { side: "right", offset: 0.8 },
+            },
+          ],
+        }),
+      ],
+    });
+    const to = scene({
+      nodes: [node("a", 0, 0, { ports: [{ label: "p", role: "provider" }] })],
+    });
+    const mid = blendScenes(from, to, 0.5);
+    const spot = mid.nodes[0]?.ports[0]?.spot;
+    expect(spot?.side).toBe("right");
+    // Dragged y = 0.8 * 40 = 32, default y = 20 → midpoint 26 → offset 0.65.
+    expect(spot?.offset).toBeCloseTo(0.65, 5);
+  });
+
+  it("slides a port along the outline when its side changes", () => {
+    const from = scene({
+      nodes: [
+        node("a", 0, 0, {
+          ports: [
+            {
+              label: "p",
+              role: "peer",
+              spot: { side: "left", offset: 0.5 },
+            },
+          ],
+        }),
+      ],
+    });
+    const to = scene({
+      nodes: [
+        node("a", 0, 0, {
+          ports: [
+            {
+              label: "p",
+              role: "peer",
+              spot: { side: "right", offset: 0.5 },
+            },
+          ],
+        }),
+      ],
+    });
+    const mid = blendScenes(from, to, 0.5);
+    // Straight-line midpoint (50, 20) projects onto the nearest side — the
+    // dot travels the outline instead of cutting through the node.
+    const spot = mid.nodes[0]?.ports[0]?.spot;
+    expect(["top", "bottom"]).toContain(spot?.side);
+  });
+
   it("keeps edge port refs so anchored routing survives the tween", () => {
     const edge = {
       id: "e:0:1",
