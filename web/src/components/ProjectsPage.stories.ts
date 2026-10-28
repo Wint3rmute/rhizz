@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import type { Project } from "../vfs/types";
+import AppContentShell from "./AppContentShell.svelte";
 import ProjectsPage from "./ProjectsPage.svelte";
 
 const sampleProject = (
@@ -117,6 +118,11 @@ export const WithProjects: Story = {
 };
 
 export const EmptyLanding: Story = {
+  // Rendered inside the app content shell: without a definite-height parent
+  // the hero is content-height and the full-page capture pads the rest with
+  // white. The shell reproduces the running app, so the card sits centered
+  // with even margins — the shot used for README/docs.
+  decorators: [() => ({ Component: AppContentShell })],
   args: {
     projects: [],
   },
