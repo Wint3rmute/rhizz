@@ -1293,6 +1293,100 @@ pub fn edit_documentation(
     })
 }
 
+/// Creates a new Markdown doc under `docs/`, or overwrites an existing one
+/// whole.
+///
+/// A missing doc is created with `content` (parent directories are created as
+/// needed); an existing doc is replaced whole, but only when `version` equals
+/// [`file_version`] of the file on disk — overwriting without a version, or
+/// with a stale one, is refused with a message telling the client to re-read.
+/// A `version` passed for a doc that does not exist yet is ignored: there is
+/// nothing to check it against. The check and the write happen under the same
+/// `DOC_EDIT_LOCK` as [`edit_documentation`], so a create racing an edit of
+/// the same path cannot silently win over it.
+///
+/// Confinement mirrors [`edit_documentation`]: the project is resolved with
+/// [`resolve_project`] and the path with [`resolve_confined_path`], the path
+/// must live under `docs/` and end in `.md`, and symlinks, hidden entries,
+/// directories, and anything outside `docs/` are refused. Writes go through
+/// `write_atomic`.
+///
+/// # Errors
+///
+/// Returns [`EditDocError::Unknown`] for unknown projects,
+/// [`EditDocError::Io`] when the filesystem fails, and
+/// [`EditDocError::Refused`] with a human-readable reason otherwise.
+pub fn create_doc(
+    data_dir: &Path,
+    project_id: &str,
+    doc_path: &str,
+    content: &str,
+    version: Option<&str>,
+) -> Result<EditDocResult, EditDocError> {
+    let _guard = DOC_EDIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => EditDocError::Unknown(id),
+        ProjectError::Io(err) => EditDocError::Io(err),
+    })?;
+
+    let relative = Path::new(doc_path);
+    let absolute =
+        resolve_confined_path(&root, relative).map_err(|e| EditDocError::Refused(e.to_string()))?;
+
+    if !relative.starts_with("docs") || relative.components().count() < 2 {
+        return Err(EditDocError::Refused(format!(
+            "path `{doc_path}` is not under `docs/`"
+        )));
+    }
+    if relative.extension().is_none_or(|ext| ext != "md") {
+        return Err(EditDocError::Refused(format!(
+            "path `{doc_path}` is not a Markdown doc (`.md` only)"
+        )));
+    }
+
+    match fs::symlink_metadata(&absolute) {
+        Ok(metadata) => {
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                return Err(EditDocError::Refused(format!(
+                    "path `{doc_path}` is not a regular file"
+                )));
+            }
+            let current = fs::read_to_string(&absolute)?;
+            match version {
+                Some(version) if file_version(&current) == version => {}
+                Some(_) => {
+                    return Err(EditDocError::Refused(format!(
+                        "version mismatch: `{doc_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
+                        file_version(&current)
+                    )));
+                }
+                None => {
+                    return Err(EditDocError::Refused(format!(
+                        "doc `{doc_path}` already exists; pass the `version` `read_file` returned to overwrite it whole"
+                    )));
+                }
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(EditDocError::Io(err)),
+    }
+
+    if let Some(parent) = absolute.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    write_atomic(&absolute, content).map_err(|e| match e {
+        SaveVfsError::Malformed(message) => EditDocError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => EditDocError::Io(err),
+    })?;
+    Ok(EditDocResult {
+        version: file_version(content),
+        total_lines: content.lines().count(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

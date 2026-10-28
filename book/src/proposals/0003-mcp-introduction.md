@@ -1,6 +1,6 @@
 # 0003: MCP Introduction
 
-- **Status:** in progress — step 1 (reading) implemented
+- **Status:** implemented (steps 1–3; 0004 locking/`AI` identity still open)
 - **Author:** @wint3rmute
 - **Created:** 2026.10.19
 
@@ -143,12 +143,15 @@ text-oriented interface rather than `ModelOp`s. The tools are:
   failed write never leaves a partial file.
 - **Locking and identity:** as in step 2, the edit acquires the project lock
   and is refused while a human holds it, and acts as user `AI`.
-- **Implemented (2026-10, editing only):** `edit_documentation` ships on
-  `/mcp`; it replaces one exact span in an existing `docs/**.md` file and
-  returns the new `version` and `totalLines`. 0004 is not implemented, so this
-  is compare-and-swap only, with no project lock and no `AI` identity: the
-  read, version check, and write happen under one held lock inside the
-  blocking task, so two edits sent with the same version cannot both apply.
+- **Implemented (2026-10):** `edit_documentation` and `create_doc` ship on
+  `/mcp`. `edit_documentation` replaces one exact span in an existing
+  `docs/**.md` file; `create_doc` creates a new doc (parents included) or
+  overwrites an existing one whole, requiring the `version` `read_file`
+  returned when the file already exists. Both return the new `version` and
+  `totalLines`. 0004 is not implemented, so this is compare-and-swap only,
+  with no project lock and no `AI` identity: reads, version checks, and
+  writes happen under one held lock inside the blocking task, so two writes
+  sent with the same version cannot both apply.
 - **Scope:** docs only. Changes to `system.hcl` still go through the step 2
   ops.
 

@@ -493,6 +493,21 @@ struct DeleteProtocolParams {
     path: String,
 }
 
+/// Arguments accepted by the `create_doc` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CreateDocParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// A doc path under `docs/`, ending in `.md`.
+    path: String,
+    /// The whole file content to write.
+    content: String,
+    /// The content-hash `version` `read_file` returned for the file. Required
+    /// when the file already exists (compare-and-swap overwrite); ignored
+    /// when creating a new file.
+    version: Option<String>,
+}
+
 /// Arguments accepted by the `edit_documentation` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct EditDocumentationParams {
@@ -1063,6 +1078,59 @@ impl RhizzMcp {
             path: params.0.path.clone(),
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Creates a new Markdown doc, or overwrites an existing one whole.
+    /// Compare-and-swap only: proposal 0004 locking is not implemented, so no
+    /// project lock is taken and there is no `AI` identity — concurrent writes
+    /// to the same path are serialized and an overwrite needs the version
+    /// `read_file` returned.
+    #[tool(
+        name = "create_doc",
+        description = "Create a new Markdown doc in a Rhizz project, or overwrite an existing one whole (proposal 0003 step 3; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. Returns the new `version` and `totalLines` so another write can chain without re-reading. Compare-and-swap only: no project lock is taken and there is no `AI` identity (0004 is not implemented). Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
+    )]
+    async fn create_doc(
+        &self,
+        params: Parameters<CreateDocParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let params = params.0;
+        let loaded = tokio::task::spawn_blocking(move || {
+            storage::create_doc(
+                &data_dir,
+                &params.project,
+                &params.path,
+                &params.content,
+                params.version.as_deref(),
+            )
+        })
+        .await;
+        let result = match loaded {
+            Ok(Ok(result)) => result,
+            Ok(Err(storage::EditDocError::Unknown(id))) => {
+                return Ok(tool_error(format!("unknown project `{id}`")));
+            }
+            Ok(Err(storage::EditDocError::Io(err))) => {
+                tracing::error!(?err, "create_doc: failed to read or write doc");
+                return Ok(tool_error("failed to read or write doc"));
+            }
+            Ok(Err(storage::EditDocError::Refused(message))) => return Ok(tool_error(message)),
+            Err(err) => {
+                tracing::error!(?err, "create_doc: worker task failed");
+                return Ok(tool_error("failed to create doc"));
+            }
+        };
+        let payload = json!({
+            "version": result.version,
+            "totalLines": result.total_lines,
+        });
+        match serde_json::to_string(&payload) {
+            Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+            Err(err) => {
+                tracing::error!(?err, "create_doc: failed to encode result");
+                Ok(tool_error("failed to encode result"))
+            }
+        }
     }
 
     /// Replaces one exact span of text in an existing Markdown doc.
@@ -1658,6 +1726,7 @@ mod tests {
                 "add_system",
                 "check_project",
                 "connect_components",
+                "create_doc",
                 "delete_component",
                 "delete_connection_by_label",
                 "delete_protocol",
@@ -3176,6 +3245,192 @@ mod tests {
             (content.contains("ALPHA") && !content.contains("BETA"))
                 || (!content.contains("ALPHA") && content.contains("BETA")),
             "the winner's edit alone must persist: {content}"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_doc_creates_then_edit_documentation_extends() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        // 1. A new doc (including a nested path whose parents do not exist
+        // yet) is created whole, without any version.
+        let created = call_tool(
+            &app,
+            &session,
+            319,
+            "create_doc",
+            json!({
+                "project": "demo",
+                "path": "docs/guides/getting-started.md",
+                "content": "# Getting started\n\nintro\n",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+        let created_result = result_value(&created);
+        assert_eq!(created_result["totalLines"], json!(3));
+        assert_eq!(created_result["version"].as_str().unwrap().len(), 64);
+
+        let path = tmp.path().join("demo/docs/guides/getting-started.md");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "# Getting started\n\nintro\n");
+
+        // 2. The created doc is extended through `edit_documentation`,
+        // chaining on the created version without re-reading.
+        let version = created_result["version"].as_str().unwrap().to_owned();
+        let edited = call_tool(
+            &app,
+            &session,
+            320,
+            "edit_documentation",
+            json!({
+                "project": "demo",
+                "path": "docs/guides/getting-started.md",
+                "old_text": "intro",
+                "new_text": "intro\n\nmore\n",
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(edited["result"]["isError"], json!(true), "{edited}");
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "# Getting started\n\nintro\n\nmore\n\n");
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_doc_overwrite_needs_matching_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let created = call_tool(
+            &app,
+            &session,
+            321,
+            "create_doc",
+            json!({
+                "project": "demo",
+                "path": "docs/plan.md",
+                "content": "v1\n",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+        let version = result_value(&created)["version"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        // Overwriting without a version is refused: the file already exists.
+        let missing = call_tool(
+            &app,
+            &session,
+            322,
+            "create_doc",
+            json!({
+                "project": "demo",
+                "path": "docs/plan.md",
+                "content": "v2\n",
+            }),
+        )
+        .await;
+        assert_eq!(missing["result"]["isError"], json!(true), "{missing}");
+
+        // Overwriting with a stale version is refused and leaves the file.
+        let stale = call_tool(
+            &app,
+            &session,
+            323,
+            "create_doc",
+            json!({
+                "project": "demo",
+                "path": "docs/plan.md",
+                "content": "v2\n",
+                "version": "deadbeef",
+            }),
+        )
+        .await;
+        assert_eq!(stale["result"]["isError"], json!(true), "{stale}");
+        assert!(tool_error_text(&stale).to_lowercase().contains("re-read"));
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/plan.md")).unwrap();
+        assert_eq!(
+            content, "v1\n",
+            "refused overwrites must not touch the file"
+        );
+
+        // Overwriting with the matching version replaces the file whole.
+        let overwritten = call_tool(
+            &app,
+            &session,
+            324,
+            "create_doc",
+            json!({
+                "project": "demo",
+                "path": "docs/plan.md",
+                "content": "v2\n",
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(
+            overwritten["result"]["isError"],
+            json!(true),
+            "{overwritten}"
+        );
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/plan.md")).unwrap();
+        assert_eq!(content, "v2\n");
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_doc_refuses_paths_outside_docs() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        for (id, bad) in [
+            (325, "system.hcl"),
+            (326, "docs/note.hcl"),
+            (327, "../outside.md"),
+            (328, "docs/.secret.md"),
+            (329, "docs/linked.md"),
+            (330, "docs/note.md"),
+        ] {
+            let payload = call_tool(
+                &app,
+                &session,
+                id,
+                "create_doc",
+                json!({
+                    "project": "demo",
+                    "path": bad,
+                    "content": "new\n",
+                }),
+            )
+            .await;
+            assert_eq!(
+                payload["result"]["isError"],
+                json!(true),
+                "{bad}: {payload}"
+            );
+        }
+
+        assert!(
+            !tmp.path().join("demo/docs/.secret.md").exists()
+                || std::fs::read_to_string(tmp.path().join("demo/docs/.secret.md")).unwrap()
+                    == "hidden\n",
+            "refused creates must not touch anything"
+        );
+        assert!(
+            !tmp.path().join("demo/outside.md").exists(),
+            "a confined-out path must not be created"
         );
     }
 }
