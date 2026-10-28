@@ -319,6 +319,7 @@ export const NodeVisualStyles: Story = {
 // Even a selected node keeps labels only; the dot layer needs port handlers
 // the static renderer never passes.
 export const WithPorts: Story = {
+  tags: ["no-vrt"],
   args: {
     components: [
       {
