@@ -18,6 +18,7 @@
 
 ### Refactor
 
+- **modeling**: unify port types on DiagramStaticPort, drop dead code
 - **web**: copy landing backgrounds in vrt-accept recipe
 - **modeling**: require portsByIndex on all diagram views
 
