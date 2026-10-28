@@ -1,3 +1,20 @@
+## Unreleased
+
+### Feat
+
+- **modeling**: unify ports across read-only diagrams, labels only, no dots
+- **modeling**: persist per-view port outline spots in view HCL
+- **modeling**: prototype draggable port dots with labels and follow-the-dot edges
+
+### Fix
+
+- **modeling**: slide ports along the outline during tweens
+- **modeling**: carry ports through view transition tweens
+
+### Refactor
+
+- **modeling**: require portsByIndex on all diagram views
+
 ## 0.8.0 (2026-10-28)
 
 ### Feat
