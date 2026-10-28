@@ -1,6 +1,13 @@
 // Pure diagram transitions. Pages say "show this scene" and whether the
 // change is a cut or a tween. They do not interpolate boxes or cameras.
-import { annotationBounds, type Box, unionBox } from "./geometry";
+import {
+  annotationBounds,
+  type Box,
+  computePortPositions,
+  nearestPortSpot,
+  type PortSpot,
+  unionBox,
+} from "./geometry";
 import type {
   DiagramEdge,
   DiagramNode,
@@ -123,37 +130,61 @@ function restingNode(
   };
 }
 
-// Blends port spots of a node present in both scenes: same-label ports on
-// the same side slide along the outline (offset lerps); anything else
-// (side changed, port added or removed) takes the target discretely, since
-// there is no continuous path between sides. Unmatched ports are dropped —
-// ports have no opacity, so they cannot crossfade like boxes do.
+// Blends port spots of a node present in both scenes so the dot slides
+// along the outline instead of jumping. Both sides are first resolved to
+// node-local x/y (explicit spots win, otherwise the role default from
+// `computePortPositions`), lerped, then re-projected onto the in-between box
+// with `nearestPortSpot` — so same-side drags, undo-to-default, and even
+// side changes all travel the perimeter. Ports added mid-tween appear at
+// their target; removed ones vanish (ports have no opacity to crossfade).
 function blendPorts(
+  fromBox: Box,
   from: DiagramNode["ports"],
+  toBox: Box,
   to: DiagramNode["ports"],
   t: number,
 ): DiagramNode["ports"] {
-  const toByLabel = new Map(to.map((port) => [port.label, port]));
+  const fromAt = new Map(
+    computePortPositions(fromBox.width, fromBox.height, from).map((port) => [
+      port.label,
+      port,
+    ]),
+  );
+  const toAt = new Map(
+    computePortPositions(toBox.width, toBox.height, to).map((port) => [
+      port.label,
+      port,
+    ]),
+  );
+  const box = lerpBox(fromBox, toBox, t);
+  const toOriginal = new Map(to.map((port) => [port.label, port]));
   const out: DiagramNode["ports"] = [];
-  for (const port of from) {
-    const target = toByLabel.get(port.label);
-    if (target === undefined) continue;
-    const fromSpot = port.spot;
-    const toSpot = target.spot;
-    if (fromSpot !== undefined && toSpot?.side === fromSpot.side) {
-      out.push({
-        ...target,
-        spot: {
-          side: toSpot.side,
-          offset: lerp(fromSpot.offset, toSpot.offset, t),
-        },
-      });
-    } else {
-      out.push(target);
-    }
+  const toDiagramPort = (
+    port: {
+      label: string;
+      role: "provider" | "consumer" | "peer";
+      protocol?: string;
+    },
+    spot: PortSpot,
+  ): DiagramNode["ports"][number] => ({
+    label: port.label,
+    role: port.role,
+    ...(port.protocol !== undefined ? { protocol: port.protocol } : {}),
+    spot,
+  });
+  for (const [label, fromPort] of fromAt) {
+    const toPort = toAt.get(label);
+    if (toPort === undefined) continue;
+    const x = lerp(fromPort.x, toPort.x, t);
+    const y = lerp(fromPort.y, toPort.y, t);
+    out.push(
+      toDiagramPort(toPort, nearestPortSpot(box.width, box.height, x, y)),
+    );
   }
-  for (const target of to) {
-    if (!from.some((port) => port.label === target.label)) out.push(target);
+  for (const [label] of toAt) {
+    if (fromAt.has(label)) continue;
+    const original = toOriginal.get(label);
+    if (original !== undefined) out.push({ ...original });
   }
   return out;
 }
@@ -171,15 +202,16 @@ export function blendScenes(
   for (const node of from.nodes) {
     const match = takeMatch(incoming, (item) => item.id, node.id);
     if (match) {
+      const box = {
+        ...lerpBox(node.box, match.box, t),
+        textAlign: match.box.textAlign,
+      };
       nodes.push(
         restingNode(
           match,
-          {
-            ...lerpBox(node.box, match.box, t),
-            textAlign: match.box.textAlign,
-          },
+          box,
           1,
-          blendPorts(node.ports, match.ports, t),
+          blendPorts(node.box, node.ports, match.box, match.ports, t),
         ),
       );
     } else {
