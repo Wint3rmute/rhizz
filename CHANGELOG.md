@@ -8,6 +8,7 @@
 
 ### Fix
 
+- **modeling**: keep port tooltip on one line for stable title text
 - **modeling**: slide ports along the outline during tweens
 - **modeling**: carry ports through view transition tweens
 
