@@ -165,6 +165,91 @@ export const EditorChrome: Story = {
   },
 };
 
+// Routing cases: a right-edge port into a top-edge port takes one knee;
+// same-axis ports keep the double knee. Both pin the path to the dots and
+// point the arrowhead along the arrival axis.
+const kneeScene = (toSpot: {
+  side: "top" | "left";
+  offset: number;
+}): DiagramScene => ({
+  nodes: [
+    {
+      id: "sys/a",
+      index: 0,
+      label: "A",
+      box: { x: 0, y: 0, width: 100, height: 60, textAlign: "center" },
+      selected: false,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [
+        {
+          label: "out",
+          role: "provider",
+          spot: { side: "right", offset: 0.5 },
+        },
+      ],
+      handles: "none",
+    },
+    {
+      id: "sys/b",
+      index: 1,
+      label: "B",
+      box: { x: 200, y: 200, width: 100, height: 60, textAlign: "center" },
+      selected: false,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [{ label: "in", role: "consumer", spot: toSpot }],
+      handles: "none",
+    },
+  ],
+  edges: [
+    {
+      id: "wire:0:1",
+      label: "wire",
+      from: 0,
+      to: 1,
+      fromPort: "out",
+      toPort: "in",
+      selected: false,
+    },
+  ],
+  notes: [],
+  overlays: [],
+});
+
+export const SingleKnee: Story = {
+  args: { scene: kneeScene({ side: "top", offset: 0.5 }) },
+  play: async ({ canvasElement }) => {
+    // Dots at (100, 30) and (250, 200): leave horizontal, arrive vertical.
+    // Corner (250, 30) clears both boxes, so one knee suffices.
+    const edge = canvasElement.querySelector("[data-testid='diagram-edge']");
+    const path = edge?.querySelector("path:not([stroke='transparent'])");
+    await expect(path?.getAttribute("d")).toBe(
+      elbowPath(100, 30, 250, 200, "horizontal", 10, "vertical"),
+    );
+    // Arrowhead arrives pointing down into the top-edge dot.
+    await expect(edge?.querySelector("polygon")?.getAttribute("points")).toBe(
+      "250,200 247,192 253,192",
+    );
+  },
+};
+
+export const DoubleKnee: Story = {
+  args: { scene: kneeScene({ side: "left", offset: 0.75 }) },
+  play: async ({ canvasElement }) => {
+    // Dots at (100, 30) and (200, 245): same axis, offset — H-V-H jog.
+    const edge = canvasElement.querySelector("[data-testid='diagram-edge']");
+    const path = edge?.querySelector("path:not([stroke='transparent'])");
+    await expect(path?.getAttribute("d")).toBe(
+      elbowPath(100, 30, 200, 245, "horizontal", 10, "horizontal"),
+    );
+    // Arrowhead arrives pointing right into the left-edge dot.
+    await expect(edge?.querySelector("polygon")?.getAttribute("points")).toBe(
+      "200,245 192,248 192,242",
+    );
+  },
+};
+
 const readOnlyScene = buildReadOnlyScene({
   components: [
     { label: "goggles" },

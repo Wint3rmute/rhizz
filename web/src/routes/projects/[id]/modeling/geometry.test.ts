@@ -23,7 +23,9 @@ import {
   nearestPortSpot,
   nodeLabelLayout,
   normalizeAnnotationScale,
+  type PortAnchor,
   portSpotToXY,
+  routeConnection,
   snapPortSpot,
   TEXT_ALIGN_PADDING,
   textPosition,
@@ -415,6 +417,143 @@ describe("elbowPath", () => {
     expect(points[1]?.y).toBe(100);
     expect(points.at(-2)?.y).toBe(0);
   });
+
+  it("draws a single knee when the end orientation differs (leave horizontal, arrive vertical)", () => {
+    const d = elbowPath(0, 0, 200, 100, "horizontal", 10, "vertical");
+    const points = waypoints(d);
+    // M a, L into the corner, A around it, L b — one turning point.
+    expect(points).toHaveLength(4);
+    expect(points[0]).toEqual({ x: 0, y: 0 });
+    expect(points.at(-1)).toEqual({ x: 200, y: 100 });
+    // First leg travels horizontally away from a; last leg arrives vertically.
+    expect(points[1]?.y).toBe(0);
+    expect(points.at(-2)?.x).toBe(200);
+  });
+
+  it("draws a single knee when leaving vertical and arriving horizontal", () => {
+    const d = elbowPath(0, 0, 200, 100, "vertical", 10, "horizontal");
+    const points = waypoints(d);
+    expect(points).toHaveLength(4);
+    expect(points[0]).toEqual({ x: 0, y: 0 });
+    expect(points.at(-1)).toEqual({ x: 200, y: 100 });
+    expect(points[1]?.x).toBe(0);
+    expect(points.at(-2)?.y).toBe(100);
+  });
+
+  it("is unchanged when the end orientation is omitted or equal", () => {
+    expect(elbowPath(0, 0, 200, 100, "horizontal", 10, "horizontal")).toBe(
+      elbowPath(0, 0, 200, 100, "horizontal"),
+    );
+  });
+});
+
+describe("routeConnection", () => {
+  it("routes straight (0 knees) when same-axis ends are aligned", () => {
+    expect(
+      routeConnection({ x: 100, y: 25 }, "right", { x: 200, y: 25 }, "left"),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "horizontal",
+      knees: 0,
+    });
+  });
+
+  it("routes a double knee when same-axis ends are offset", () => {
+    expect(
+      routeConnection({ x: 100, y: 0 }, "right", { x: 200, y: 100 }, "left"),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "horizontal",
+      knees: 2,
+    });
+  });
+
+  it("routes a single knee when the ends leave on different axes", () => {
+    expect(
+      routeConnection({ x: 100, y: 25 }, "right", { x: 200, y: 0 }, "top"),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "vertical",
+      knees: 1,
+    });
+    expect(
+      routeConnection({ x: 100, y: 0 }, "bottom", { x: 200, y: 25 }, "left"),
+    ).toEqual({
+      orientation: "vertical",
+      endOrientation: "horizontal",
+      knees: 1,
+    });
+  });
+
+  it("keeps the single knee when the corner clears both boxes", () => {
+    const boxA: Box = { x: 0, y: 0, width: 100, height: 60 };
+    const boxB: Box = { x: 200, y: 200, width: 100, height: 60 };
+    // Corner (250, 30): right of A, above B's top — both legs stay outside.
+    expect(
+      routeConnection(
+        { x: 100, y: 30 },
+        "right",
+        { x: 250, y: 200 },
+        "top",
+        boxA,
+        boxB,
+      ),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "vertical",
+      knees: 1,
+    });
+  });
+
+  it("falls back to a double knee when the corner would cut through a node", () => {
+    const boxA: Box = { x: 0, y: 0, width: 100, height: 60 };
+    const boxB: Box = { x: 200, y: 0, width: 100, height: 60 };
+    // Corner (250, 30) sits inside B: the L would travel through the node.
+    expect(
+      routeConnection(
+        { x: 100, y: 30 },
+        "right",
+        { x: 250, y: 0 },
+        "top",
+        boxA,
+        boxB,
+      ),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "horizontal",
+      knees: 2,
+    });
+  });
+
+  it("falls back to center-based routing when no sides are known", () => {
+    expect(
+      routeConnection({ x: 0, y: 0 }, undefined, { x: 200, y: 0 }, undefined),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "horizontal",
+      knees: 0,
+    });
+    expect(
+      routeConnection({ x: 0, y: 0 }, undefined, { x: 200, y: 100 }, undefined),
+    ).toEqual({
+      orientation: "horizontal",
+      endOrientation: "horizontal",
+      knees: 2,
+    });
+    expect(
+      routeConnection({ x: 0, y: 0 }, undefined, { x: 50, y: 200 }, undefined),
+    ).toEqual({
+      orientation: "vertical",
+      endOrientation: "vertical",
+      knees: 2,
+    });
+  });
+
+  it("uses the known side when only one end names one", () => {
+    expect(
+      routeConnection({ x: 0, y: 0 }, "left", { x: 200, y: 100 }, undefined),
+    ).toMatchObject({ orientation: "horizontal", knees: 2 });
+  });
 });
 
 describe("depthOf", () => {
@@ -554,6 +693,73 @@ describe("computeVisibleConnections", () => {
     const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
     expect(visBoth[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
     expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
+  });
+
+  it("anchors port-named ends to their dots and reports the knee count", () => {
+    const getPort = (index: number, label: string): PortAnchor | undefined => {
+      if (index === 0 && label === "out")
+        return { x: 100, y: 10, side: "right" };
+      if (index === 1 && label === "in") return { x: 200, y: 40, side: "left" };
+      return undefined;
+    };
+    // Same axis (right -> left): double knee, anchored at the dots.
+    const same = computeVisibleConnections(
+      [{ from: 0, to: 1, label: "bus", fromPort: "out", toPort: "in" }],
+      (i) => boxes[i],
+      getPort,
+    );
+    expect(same).toHaveLength(1);
+    expect(same[0]?.a).toEqual({ x: 100, y: 10 });
+    expect(same[0]?.b).toEqual({ x: 200, y: 40 });
+    expect(same[0]?.orientation).toBe("horizontal");
+    expect(same[0]?.endOrientation).toBe("horizontal");
+    expect(same[0]?.knees).toBe(2);
+  });
+
+  it("routes a single knee when anchored ports face different axes", () => {
+    const placed: Record<number, Box> = {
+      0: { x: 0, y: 0, width: 100, height: 50 },
+      1: { x: 200, y: 200, width: 100, height: 50 },
+    };
+    const getPort = (index: number, label: string): PortAnchor | undefined => {
+      if (index === 0 && label === "out")
+        return { x: 100, y: 10, side: "right" };
+      // Top edge below the source: corner (250, 10) clears both boxes.
+      if (index === 1 && label === "in") return { x: 250, y: 200, side: "top" };
+      return undefined;
+    };
+    const visible = computeVisibleConnections(
+      [{ from: 0, to: 1, label: "bus", fromPort: "out", toPort: "in" }],
+      (i) => placed[i],
+      getPort,
+    );
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.a).toEqual({ x: 100, y: 10 });
+    expect(visible[0]?.b).toEqual({ x: 250, y: 200 });
+    expect(visible[0]?.orientation).toBe("horizontal");
+    expect(visible[0]?.endOrientation).toBe("vertical");
+    expect(visible[0]?.knees).toBe(1);
+  });
+
+  it("falls back to box sides when a named port has no anchor", () => {
+    const visible = computeVisibleConnections(
+      [
+        {
+          from: 0,
+          to: 1,
+          label: "bus",
+          fromPort: "missing",
+          startSide: "right",
+          endSide: "left",
+        },
+      ],
+      (i) => boxes[i],
+      () => undefined,
+    );
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.a).toEqual({ x: 100, y: 25 });
+    expect(visible[0]?.b).toEqual({ x: 200, y: 25 });
+    expect(visible[0]?.knees).toBe(0);
   });
 });
 

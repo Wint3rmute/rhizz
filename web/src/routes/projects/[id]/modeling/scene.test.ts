@@ -265,4 +265,33 @@ describe("buildReadOnlyScene ports", () => {
     expect(scene.edges[0]).toMatchObject({ fromPort: "out" });
     expect(scene.edges[0]).not.toHaveProperty("toPort");
   });
+
+  it("overlays indexed spots onto component ports by label", () => {
+    const scene = buildReadOnlyScene({
+      components: [
+        {
+          label: "a",
+          ports: [
+            { label: "p", role: "provider" },
+            { label: "q", role: "consumer" },
+          ],
+        },
+      ],
+      connections: [],
+      boxes: { 0: box(0, 0) },
+      portsByIndex: {
+        0: [
+          { label: "p", role: "provider", spot: { side: "top", offset: 0.5 } },
+        ],
+      },
+    });
+    expect(scene.nodes[0]?.ports).toEqual([
+      {
+        label: "p",
+        role: "provider",
+        spot: { side: "top", offset: 0.5 },
+      },
+      { label: "q", role: "consumer" },
+    ]);
+  });
 });
