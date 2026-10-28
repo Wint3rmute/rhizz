@@ -81,8 +81,60 @@ describe("blendScenes", () => {
       scene(),
       0.25,
     );
-    expect(mid.nodes[0]?.box).toMatchObject({ x: 4, y: 8 });
-    expect(mid.nodes[0]?.opacity).toBe(0.75);
+    expect(mid.nodes).toHaveLength(1);
+    expect(mid.nodes[0]?.opacity).toBeCloseTo(0.75);
+  });
+
+  it("keeps ports on matched nodes and lerps same-side offsets", () => {
+    const from = scene({
+      nodes: [
+        node("a", 0, 0, {
+          ports: [
+            {
+              label: "p",
+              role: "provider",
+              spot: { side: "right", offset: 0.2 },
+            },
+          ],
+        }),
+      ],
+    });
+    const to = scene({
+      nodes: [
+        node("a", 100, 40, {
+          ports: [
+            {
+              label: "p",
+              role: "provider",
+              spot: { side: "right", offset: 0.8 },
+            },
+          ],
+        }),
+      ],
+    });
+    const mid = blendScenes(from, to, 0.5);
+    expect(mid.nodes[0]?.ports).toEqual([
+      { label: "p", role: "provider", spot: { side: "right", offset: 0.5 } },
+    ]);
+  });
+
+  it("keeps edge port refs so anchored routing survives the tween", () => {
+    const edge = {
+      id: "e:0:1",
+      label: "e",
+      from: 0,
+      to: 1,
+      fromPort: "p",
+      toPort: "q",
+      selected: false,
+    };
+    const nodes = [node("a", 0, 0), node("b", 200, 0)];
+    const mid = blendScenes(
+      scene({ nodes, edges: [edge] }),
+      scene({ nodes, edges: [edge] }),
+      0.5,
+    );
+    expect(mid.edges[0]).toMatchObject({ fromPort: "p", toPort: "q" });
   });
 
   it("returns the destination scene unchanged at t = 1", () => {

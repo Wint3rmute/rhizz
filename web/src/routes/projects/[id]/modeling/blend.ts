@@ -109,6 +109,7 @@ function restingNode(
   node: DiagramNode,
   box: DiagramNode["box"],
   opacity: number,
+  ports: DiagramNode["ports"],
 ): DiagramNode {
   return {
     ...node,
@@ -117,9 +118,44 @@ function restingNode(
     selected: false,
     dimmed: false,
     reparentTarget: false,
-    ports: [],
+    ports,
     handles: "none",
   };
+}
+
+// Blends port spots of a node present in both scenes: same-label ports on
+// the same side slide along the outline (offset lerps); anything else
+// (side changed, port added or removed) takes the target discretely, since
+// there is no continuous path between sides. Unmatched ports are dropped —
+// ports have no opacity, so they cannot crossfade like boxes do.
+function blendPorts(
+  from: DiagramNode["ports"],
+  to: DiagramNode["ports"],
+  t: number,
+): DiagramNode["ports"] {
+  const toByLabel = new Map(to.map((port) => [port.label, port]));
+  const out: DiagramNode["ports"] = [];
+  for (const port of from) {
+    const target = toByLabel.get(port.label);
+    if (target === undefined) continue;
+    const fromSpot = port.spot;
+    const toSpot = target.spot;
+    if (fromSpot !== undefined && toSpot?.side === fromSpot.side) {
+      out.push({
+        ...target,
+        spot: {
+          side: toSpot.side,
+          offset: lerp(fromSpot.offset, toSpot.offset, t),
+        },
+      });
+    } else {
+      out.push(target);
+    }
+  }
+  for (const target of to) {
+    if (!from.some((port) => port.label === target.label)) out.push(target);
+  }
+  return out;
 }
 
 export function blendScenes(
@@ -143,14 +179,15 @@ export function blendScenes(
             textAlign: match.box.textAlign,
           },
           1,
+          blendPorts(node.ports, match.ports, t),
         ),
       );
     } else {
-      nodes.push(restingNode(node, node.box, 1 - t));
+      nodes.push(restingNode(node, node.box, 1 - t, node.ports));
     }
   }
   for (const node of incoming) {
-    nodes.push(restingNode(node, node.box, t));
+    nodes.push(restingNode(node, node.box, t, node.ports));
   }
 
   const incomingEdges = [...to.edges];
