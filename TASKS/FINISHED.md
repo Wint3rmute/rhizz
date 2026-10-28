@@ -4,6 +4,39 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — MCP: `create_doc` tool for `docs/**.md`
+
+Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), creation:
+`create_doc` on the `/mcp` router creates a new Markdown doc (parent
+directories included) or overwrites an existing one whole.
+
+- **Parameters:** `project`, `path` (under `docs/`, `.md` only), `content`
+  (the whole file), and optional `version`.
+- **Semantics:** a missing doc is created; an existing doc is replaced whole
+  only when `version` equals the content hash on disk. Overwriting without a
+  version, or with a stale one, is refused with a re-read message; a
+  `version` passed for a not-yet-existing doc is ignored. Symlinks, hidden
+  entries, directories, and paths outside `docs/` (or not ending in `.md`)
+  are refused, file untouched.
+- **Locking and identity:** shares `DOC_EDIT_LOCK` (and the
+  `EditDocError`/`EditDocResult` types) with `edit_documentation`, so a
+  create racing an edit of the same path cannot silently win; still
+  compare-and-swap only, no project lock and no `AI` identity (0004 is not
+  implemented).
+- **Tests:** through `/mcp` RPC — create a nested doc then extend it via
+  `edit_documentation` chained on the created `version`; overwrite without /
+  with stale version refused byte-identical, with matching version replaces
+  whole; bad paths (`system.hcl`, non-`.md`, `..`, hidden, symlink,
+  existing-without-version) all refused; `tools/list` now serves 21 tools.
+- **Proposal:** 0003's step-3 notes and status header updated — step 3 is no
+  longer "editing only".
+
+Validation: `cargo test -p rhizz-server`, `just lint-rust`
+(`cargo clippy --all-targets --all-features -- -D warnings` and
+`cargo doc --no-deps --all`) and `just format` pass.
+
+---
+
 ## Task <N> — MCP: `edit_documentation` tool for `docs/**.md`
 
 Step 3 of [0003](book/src/proposals/0003-mcp-introduction.md), editing only.
