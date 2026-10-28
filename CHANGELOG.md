@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **mcp**: add create_doc tool for docs
 - **mcp**: add edit_documentation tool for docs
 - **mcp**: add connection, port and protocol mutation tools
 - **mcp**: add model-mutation tools part 2
