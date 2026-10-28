@@ -10,9 +10,14 @@ name: docker
 #
 # The `deploy` job then runs `fly deploy --image` on that exact pushed tag, so
 # Fly never builds anything itself.
+#
+# Version tags (bare semver per cz.toml, e.g. `0.6.0`) also build and push:
+# the tag name is published verbatim as an image tag (`0.6.0`), alongside
+# the usual sha + date tags. Tag builds never deploy to Fly.io.
 on:
   push:
     branches: [main]
+    tags: ['*']
   workflow_dispatch:
 
 jobs:
@@ -61,9 +66,12 @@ jobs:
           # `latest` is published from the default branch only, so a
           # feature-branch build can never overwrite what production pulls.
           # The short sha and date stamp are applied to every build, which
-          # keeps any pushed image traceable.
+          # keeps any pushed image traceable. A version git tag (e.g. `0.6.0`)
+          # is published verbatim as an image tag; tag pushes never touch
+          # `latest` (`is_default_branch` is false for tags).
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
             type=sha,format=short
             type=raw,value={{ date 'YYYYMMDD-HHmmss' }}
 
