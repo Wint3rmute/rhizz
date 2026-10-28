@@ -3,8 +3,10 @@
 A full-page screenshot of every Storybook story in dark and light, diffed
 against baselines in `__screenshots__/` (committed), with a static review
 gallery. The same run also captures the landing-page background screenshots
-(`src/screenshots/background_*.png`, light theme, `apollo-11` example) — see
-`backgrounds.spec.ts`.
+(light theme, `apollo-11` example) — see `backgrounds.spec.ts`. Their VRT
+baselines are the source of truth; `just vrt-accept` copies the four captures
+over to `src/screenshots/background_*.png`, the regular files the app bundles
+(the LFS baselines themselves can't be bundled).
 
 ```bash
 just vrt              # rebuild wasm + Storybook, screenshot, diff

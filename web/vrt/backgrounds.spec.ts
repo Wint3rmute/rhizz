@@ -1,5 +1,3 @@
-import { copyFile, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 // Live-app screenshots for the landing/projects scrolling background
@@ -7,23 +5,19 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 // `ProjectsPage.svelte`). Four views of the `apollo-11` example, matching the
 // previous hand-taken set: modeling+inspector, overview, code editor, explore.
 //
-// Runs in the standard VRT flow: `just vrt` verifies both the page rendering
-// (via `toHaveScreenshot` against `vrt/__screenshots__/backgrounds/*`, with
-// the usual 0.02 threshold) and that `src/screenshots/background_N.png` is an
-// exact copy of that baseline. `just vrt-accept` (`--update-snapshots=all`)
-// refreshes the VRT baseline and mirrors it into `src/screenshots/`.
-//
-// Light theme only: the committed set is light, and the background component
-// blurs + overlays it anyway, so one theme halves the churn.
+// Runs in the standard VRT flow: `just vrt` diffs the live page against the
+// baselines in `vrt/__screenshots__/backgrounds-*` (light theme, 0.02
+// threshold). `just vrt-accept` re-baselines and copies the four captures
+// over to `src/screenshots/` (see the `vrt-accept` recipe) — regular files
+// the app can bundle, since the LFS baselines themselves can't be bundled.
 
 const APP_URL = "http://127.0.0.1:5199";
-const SRC_DIR = resolve(import.meta.dirname, "../src/screenshots");
 
 const BACKGROUNDS = [
-  { n: 1, storyId: "backgrounds-background-1", file: "background_1.png" },
-  { n: 2, storyId: "backgrounds-background-2", file: "background_2.png" },
-  { n: 3, storyId: "backgrounds-background-3", file: "background_3.png" },
-  { n: 4, storyId: "backgrounds-background-4", file: "background_4.png" },
+  { n: 1, storyId: "backgrounds-background-1" },
+  { n: 2, storyId: "backgrounds-background-2" },
+  { n: 3, storyId: "backgrounds-background-3" },
+  { n: 4, storyId: "backgrounds-background-4" },
 ] as const;
 
 function annotate(testInfo: TestInfo, storyId: string, n: number): string {
@@ -148,30 +142,6 @@ async function stabilise(page: Page): Promise<void> {
   await hideBlinkingCursors(page);
 }
 
-// After toHaveScreenshot verifies/updates the VRT baseline, keep
-// src/screenshots/ in sync: on --update-snapshots mirror baseline -> src,
-// otherwise fail when src has drifted from baseline.
-async function syncSrc(
-  testInfo: TestInfo,
-  snapshotFile: string,
-  srcFile: string,
-): Promise<void> {
-  const baselinePath = testInfo.snapshotPath(snapshotFile);
-  const targetPath = resolve(SRC_DIR, srcFile);
-  if (testInfo.config.updateSnapshots === "all") {
-    await copyFile(baselinePath, targetPath);
-  } else {
-    const [baseline, current] = await Promise.all([
-      readFile(baselinePath),
-      readFile(targetPath),
-    ]);
-    expect(
-      baseline.equals(current),
-      `${srcFile} outdated — run just vrt-accept`,
-    ).toBe(true);
-  }
-}
-
 test("backgrounds background_1 light", async ({ page }, testInfo) => {
   const snapshotFile = annotate(testInfo, BACKGROUNDS[0].storyId, 1);
   await page.emulateMedia({ colorScheme: "light" });
@@ -188,7 +158,6 @@ test("backgrounds background_1 light", async ({ page }, testInfo) => {
   await expect(page.getByTestId("node-inspector")).toBeVisible();
   await stabilise(page);
   await expect(page).toHaveScreenshot(snapshotFile, { fullPage: true });
-  await syncSrc(testInfo, snapshotFile, BACKGROUNDS[0].file);
 });
 
 test("backgrounds background_2 light", async ({ page }, testInfo) => {
@@ -201,7 +170,6 @@ test("backgrounds background_2 light", async ({ page }, testInfo) => {
   await expect(page.getByText(/Model fully specified/)).toBeVisible();
   await stabilise(page);
   await expect(page).toHaveScreenshot(snapshotFile, { fullPage: true });
-  await syncSrc(testInfo, snapshotFile, BACKGROUNDS[1].file);
 });
 
 test("backgrounds background_3 light", async ({ page }, testInfo) => {
@@ -218,7 +186,6 @@ test("backgrounds background_3 light", async ({ page }, testInfo) => {
   if (await main.isVisible()) await main.click();
   await stabilise(page);
   await expect(page).toHaveScreenshot(snapshotFile, { fullPage: true });
-  await syncSrc(testInfo, snapshotFile, BACKGROUNDS[2].file);
 });
 
 test("backgrounds background_4 light", async ({ page }, testInfo) => {
@@ -232,5 +199,4 @@ test("backgrounds background_4 light", async ({ page }, testInfo) => {
   await expect(page.locator("svg").first()).toBeVisible();
   await stabilise(page);
   await expect(page).toHaveScreenshot(snapshotFile, { fullPage: true });
-  await syncSrc(testInfo, snapshotFile, BACKGROUNDS[3].file);
 });
