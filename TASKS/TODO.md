@@ -16,14 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Animatd connection line in "new connection" popup
-
-Currently, the "new connection" popup displays a minimal visualisation of the
-connection to be added between components.
-
-Add a minimal animation which would make the dashed and moving, slowly "flowing"
-from the connection origin to the target. If possible, build this CSS-only
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
