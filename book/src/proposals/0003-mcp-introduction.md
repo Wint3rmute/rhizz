@@ -1,6 +1,6 @@
 # 0003: MCP Introduction
 
-- **Status:** implemented (steps 1–3; 0004 locking/`AI` identity still open)
+- **Status:** implemented
 - **Author:** @wint3rmute
 - **Created:** 2026.10.19
 
