@@ -602,12 +602,111 @@ export interface PortGeometry {
   protocol?: string;
   x: number;
   y: number;
+  side: ConnectionSide;
+}
+
+/** Where a port sits on the node outline: which side + 0..1 along that side.
+ *
+ * Prototype for the ports-visualisation brainstorm: per-view, free placement
+ * (no role → side rule once dragged). `offset` 0 is the start of the side
+ * (top/left), 1 is the end (bottom/right), clamped with a small inset so the
+ * dot never sits exactly on a corner.
+ */
+export interface PortSpot {
+  side: ConnectionSide;
+  offset: number;
+}
+
+export function orientationForSide(side: ConnectionSide): ConnectionOrientation {
+  return side === "left" || side === "right" ? "horizontal" : "vertical";
+}
+
+const PORT_CORNER_INSET = 0.08;
+
+function clampOffset(value: number): number {
+  if (Number.isNaN(value)) return 0.5;
+  return Math.min(1 - PORT_CORNER_INSET, Math.max(PORT_CORNER_INSET, value));
+}
+
+// Converts a perimeter spot to node-local coordinates.
+export function portSpotToXY(
+  width: number,
+  height: number,
+  spot: PortSpot,
+): { x: number; y: number } {
+  const offset = clampOffset(spot.offset);
+  switch (spot.side) {
+    case "left":
+      return { x: 0, y: offset * height };
+    case "right":
+      return { x: width, y: offset * height };
+    case "top":
+      return { x: offset * width, y: 0 };
+    case "bottom":
+      return { x: offset * width, y: height };
+  }
+}
+
+// Projects a node-local point onto the nearest outline side. Used while
+// dragging a port dot: the dot slides along the perimeter (perimeter-slider).
+export function nearestPortSpot(
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+): PortSpot {
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+  const distLeft = Math.abs(x);
+  const distRight = Math.abs(x - safeWidth);
+  const distTop = Math.abs(y);
+  const distBottom = Math.abs(y - safeHeight);
+  const min = Math.min(distLeft, distRight, distTop, distBottom);
+  if (min === distLeft) return { side: "left", offset: clampOffset(y / safeHeight) };
+  if (min === distRight)
+    return { side: "right", offset: clampOffset(y / safeHeight) };
+  if (min === distTop) return { side: "top", offset: clampOffset(x / safeWidth) };
+  return { side: "bottom", offset: clampOffset(x / safeWidth) };
+}
+
+// Snap-aware perimeter spot: picks the nearest side from the pointer, then
+// snaps the *sliding* world coordinate to the grid and re-expresses it as an
+// offset — so the dot stays glued to the outline while its along-edge
+// position snaps like nodes do. The fixed axis stays exactly on the outline
+// (it can't snap without moving the node itself).
+export function snapPortSpot(
+  width: number,
+  height: number,
+  boxX: number,
+  boxY: number,
+  pointerWorldX: number,
+  pointerWorldY: number,
+  snap: (value: number) => number,
+): PortSpot {
+  const side = nearestPortSpot(
+    width,
+    height,
+    pointerWorldX - boxX,
+    pointerWorldY - boxY,
+  ).side;
+  if (side === "left" || side === "right") {
+    return {
+      side,
+      offset: clampOffset(
+        (snap(pointerWorldY) - boxY) / Math.max(1, height),
+      ),
+    };
+  }
+  return {
+    side,
+    offset: clampOffset((snap(pointerWorldX) - boxX) / Math.max(1, width)),
+  };
 }
 
 // Computes relative (x, y) coordinates for ports around a node's border.
-// - Consumers on the left border
-// - Providers on the right border
-// - Peers on the bottom border
+// Default (no spot override): consumers left, providers right, peers bottom.
+// A port with `spot` is placed exactly there — free placement, any side — so
+// a dragged port stays where the user dropped it (perimeter-slider prototype).
 export function computePortPositions(
   width: number,
   height: number,
@@ -615,21 +714,34 @@ export function computePortPositions(
     label: string;
     role: "provider" | "consumer" | "peer";
     protocol?: string;
+    spot?: PortSpot | undefined;
   }[],
 ): PortGeometry[] {
-  const providers = ports.filter((p) => p.role === "provider");
-  const consumers = ports.filter((p) => p.role === "consumer");
+  const providers = ports.filter(
+    (p) => p.role === "provider" && p.spot === undefined,
+  );
+  const consumers = ports.filter(
+    (p) => p.role === "consumer" && p.spot === undefined,
+  );
   const peers = ports.filter(
-    (p) => p.role !== "provider" && p.role !== "consumer",
+    (p) => p.role !== "provider" && p.role !== "consumer" && p.spot === undefined,
   );
 
   const result: PortGeometry[] = [];
+
+  // Dragged ports first: exact user placement wins over the role default.
+  for (const p of ports) {
+    if (p.spot === undefined) continue;
+    const { x, y } = portSpotToXY(width, height, p.spot);
+    result.push({ ...p, x, y, side: p.spot.side });
+  }
 
   consumers.forEach((p, i) => {
     result.push({
       ...p,
       x: 0,
       y: ((i + 1) * height) / (consumers.length + 1),
+      side: "left",
     });
   });
 
@@ -638,6 +750,7 @@ export function computePortPositions(
       ...p,
       x: width,
       y: ((i + 1) * height) / (providers.length + 1),
+      side: "right",
     });
   });
 
@@ -646,6 +759,7 @@ export function computePortPositions(
       ...p,
       x: ((i + 1) * width) / (peers.length + 1),
       y: height,
+      side: "bottom",
     });
   });
 

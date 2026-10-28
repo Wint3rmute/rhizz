@@ -10,6 +10,7 @@ import {
   computeRenderOrder,
   type ConnectionOrientation,
   type ConnectionSide,
+  type PortSpot,
   type TextAlign,
 } from "./geometry";
 import type {
@@ -25,6 +26,8 @@ export interface DiagramPort {
   label: string;
   role: "provider" | "consumer" | "peer";
   protocol?: string;
+  /** Perimeter-slider override (per-view prototype): exact outline spot. */
+  spot?: PortSpot | undefined;
 }
 
 export interface DiagramNode {
@@ -55,6 +58,10 @@ export interface DiagramEdge {
   to: number;
   startSide?: ConnectionSide;
   endSide?: ConnectionSide;
+  /** Port labels the connection endpoints name, when typed. Edges anchor
+   * to those port dots when the ports are placed (prototype: follow-the-dot). */
+  fromPort?: string | undefined;
+  toPort?: string | undefined;
   selected: boolean;
   opacity?: number | undefined;
 }
@@ -210,6 +217,8 @@ export interface EditorSceneEdgeInput {
   toKey?: string | undefined;
   startSide?: ConnectionSide | undefined;
   endSide?: ConnectionSide | undefined;
+  fromPort?: string | undefined;
+  toPort?: string | undefined;
 }
 
 export function buildEditorScene(input: {
@@ -280,6 +289,8 @@ export function buildEditorScene(input: {
       };
       if (edge.startSide !== undefined) built.startSide = edge.startSide;
       if (edge.endSide !== undefined) built.endSide = edge.endSide;
+      if (edge.fromPort !== undefined) built.fromPort = edge.fromPort;
+      if (edge.toPort !== undefined) built.toPort = edge.toPort;
       return built;
     }),
     notes: input.notes.map((note, index) =>

@@ -18,6 +18,7 @@
     computeVisibleConnections,
     type ConnectionSide,
     elbowPath,
+    orientationForSide,
     type ResizeHandle,
   } from "./geometry";
   import { resolveIcon } from "../../../../iconHelper";
@@ -43,6 +44,7 @@
     onNodeContextMenu,
     onNodeHover,
     onPortPointerDown,
+    onPortDragStart,
     onResizePointerDown,
     onEdgeClick,
     onEdgeContextMenu,
@@ -51,6 +53,7 @@
     onNoteContextMenu,
     onNoteResizePointerDown,
     frozen = false,
+    revealAllPorts = false,
   }: {
     scene: DiagramScene;
     /** Prefix for the arrow markers, so two canvases on one page do not share an id. */
@@ -82,6 +85,11 @@
           startSide?: ConnectionSide | undefined,
         ) => void)
       | undefined;
+    /** Perimeter-slider drag of a port dot (plain left-drag). Alt/Shift+drag
+     * on a port still starts a connection via `onPortPointerDown`. */
+    onPortDragStart?:
+      | ((event: MouseEvent, index: number, portLabel: string) => void)
+      | undefined;
     onResizePointerDown?:
       | ((event: MouseEvent, index: number, handle: ResizeHandle) => void)
       | undefined;
@@ -103,6 +111,10 @@
       | undefined;
     /** Ignore hits while a transition is moving nodes out from under the cursor. */
     frozen?: boolean | undefined;
+    /** Show every port regardless of selection — set while a connection drag
+     * is in progress so drop targets stay visible. Resting state still shows
+     * only selected-component / selected-connection ports. */
+    revealAllPorts?: boolean | undefined;
   } = $props();
 
   function fade(opacity: number | undefined): number | undefined {
@@ -129,6 +141,10 @@
   }
 
   let selectedMarkerId = $derived(`${markerId}-selected`);
+  // Hovered port dot (`<node index>:<port label>`), for the hover pop.
+  // Modeling-only affordance: read-only scenes render no ports, so this
+  // stays null there and costs nothing.
+  let hoveredPortKey: string | null = $state(null);
   let edgeInteractive = $derived(
     onEdgeClick !== undefined || onEdgeContextMenu !== undefined,
   );
@@ -145,9 +161,76 @@
     return map;
   });
 
-  let visibleEdges = $derived(
-    computeVisibleConnections(scene.edges, (index) => boxesByIndex.get(index)),
-  );
+  // World-space port dots per node, for follow-the-dot edge anchoring.
+  // Key: node index → port label → { x, y (world), side }.
+  let portWorldByNode = $derived.by(() => {
+    const outer = new SvelteMap<
+      number,
+      Map<string, { x: number; y: number; side: ConnectionSide }>
+    >();
+    for (const node of scene.nodes) {
+      if (node.ports.length === 0) continue;
+      const inner = new Map<string, { x: number; y: number; side: ConnectionSide }>();
+      for (const port of computePortPositions(
+        node.box.width,
+        node.box.height,
+        node.ports,
+      )) {
+        inner.set(port.label, {
+          x: node.box.x + port.x,
+          y: node.box.y + port.y,
+          side: port.side,
+        });
+      }
+      outer.set(node.index, inner);
+    }
+    return outer;
+  });
+
+  let visibleEdges = $derived.by(() => {
+    // Anchor to port dots when the edge names ports that are placed;
+    // otherwise fall back to the box-side routing.
+    const anchored: {
+      conn: (typeof scene.edges)[number];
+      a: { x: number; y: number };
+      b: { x: number; y: number };
+      orientation: "horizontal" | "vertical";
+    }[] = [];
+    const fallback: typeof scene.edges = [];
+    for (const edge of scene.edges) {
+      const fromPorts = portWorldByNode.get(edge.from);
+      const toPorts = portWorldByNode.get(edge.to);
+      const fromDot =
+        edge.fromPort !== undefined ? fromPorts?.get(edge.fromPort) : undefined;
+      const toDot = edge.toPort !== undefined ? toPorts?.get(edge.toPort) : undefined;
+      if (fromDot !== undefined || toDot !== undefined) {
+        const boxA = boxesByIndex.get(edge.from);
+        const boxB = boxesByIndex.get(edge.to);
+        if (boxA === undefined || boxB === undefined) continue;
+        // Unanchored end falls back to the box-side routing for that end.
+        const single = computeVisibleConnections(
+          [edge],
+          (index) => boxesByIndex.get(index),
+        )[0];
+        const a = fromDot ?? single?.a;
+        const b = toDot ?? single?.b;
+        if (a === undefined || b === undefined) continue;
+        const orientation =
+          fromDot !== undefined
+            ? orientationForSide(fromDot.side)
+            : toDot !== undefined
+              ? orientationForSide(toDot.side)
+              : (single?.orientation ?? "horizontal");
+        anchored.push({ conn: edge, a, b, orientation });
+      } else {
+        fallback.push(edge);
+      }
+    }
+    return [
+      ...anchored,
+      ...computeVisibleConnections(fallback, (index) => boxesByIndex.get(index)),
+    ];
+  });
 
   function worldPoint(
     node: DiagramNode,
@@ -199,10 +282,6 @@
 {#snippet nodeGraphic(node: DiagramNode)}
   {@const showConnect = node.handles === "connect" || node.handles === "both"}
   {@const showResize = node.handles === "resize" || node.handles === "both"}
-  {@const portPositions =
-    showConnect && node.ports.length > 0
-      ? computePortPositions(node.box.width, node.box.height, node.ports)
-      : []}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <g
     data-testid="diagram-node"
@@ -312,36 +391,6 @@
             fill-opacity="0.85"
             stroke="var(--color-base-100)"
             stroke-width="1"
-            style="pointer-events: none"
-          />
-        </g>
-      {/each}
-      {#each portPositions as port (port.label)}
-        <g data-testid="diagram-port" transform="translate({port.x}, {port.y})">
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <circle
-            r="8"
-            fill="transparent"
-            class="cursor-crosshair"
-            onmousedown={onPortPointerDown
-              ? (event) =>
-                  onPortPointerDown?.(
-                    event,
-                    node.index,
-                    port.label,
-                    worldPoint(node, port),
-                  )
-              : undefined}
-          >
-            <title
-              >{port.label} ({port.role}, {port.protocol || "untyped"})</title
-            >
-          </circle>
-          <circle
-            r="4"
-            fill={portFill(port.role)}
-            stroke="var(--color-base-100)"
-            stroke-width="1.5"
             style="pointer-events: none"
           />
         </g>
@@ -458,6 +507,102 @@
       {conn.label}
     </text>
   </g>
+{/each}
+
+<!--
+  Ports above connections: edges are drawn after node bodies so crossing
+  lines stay visible over unrelated fills — but a line ending at a port
+  would then bury the dot (worse when selected: thicker + primary). This
+  layer re-draws ports on top of every edge.
+
+  Visibility (prototype): labels always show; the dot (hit area + dot)
+  shows only when its component is selected, a selected connection names
+  that port, or a connection drag is revealing all drop targets. Positions
+  stay stable (computed from all ports) so selecting doesn't reflow labels.
+-->
+{#each scene.nodes as node (node.id)}
+  {@const allPortPositions =
+    node.ports.length > 0
+      ? computePortPositions(node.box.width, node.box.height, node.ports)
+      : []}
+  {@const selectedPortLabels = new Set(
+    scene.edges.flatMap((edge) => {
+      if (!edge.selected) return [];
+      if (edge.from === node.index && edge.fromPort !== undefined)
+        return [edge.fromPort];
+      if (edge.to === node.index && edge.toPort !== undefined) return [edge.toPort];
+      return [];
+    }),
+  )}
+  {#each allPortPositions as port (port.label)}
+    {@const portKey = `${String(node.index)}:${port.label}`}
+    {@const hovered = hoveredPortKey === portKey}
+    {@const world = worldPoint(node, port)}
+    {@const dotVisible =
+      revealAllPorts || node.selected || selectedPortLabels.has(port.label)}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <g
+      data-testid="diagram-port"
+      transform="translate({world.x}, {world.y})"
+      opacity={fade(node.opacity)}
+      style:pointer-events={frozen || fade(node.opacity) !== undefined
+        ? "none"
+        : undefined}
+    >
+      {#if dotVisible}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <circle
+        r="8"
+        fill="transparent"
+        class={onPortDragStart ? "cursor-move" : "cursor-crosshair"}
+        onmouseenter={() => (hoveredPortKey = portKey)}
+        onmouseleave={() => {
+          if (hoveredPortKey === portKey) hoveredPortKey = null;
+        }}
+        onmousedown={(event) => {
+          // Plain left-drag moves the port along the outline;
+          // Alt/Shift+drag starts a connection from the existing port.
+          if (event.button !== 0) return;
+          if (event.altKey || event.shiftKey) {
+            onPortPointerDown?.(event, node.index, port.label, world);
+          } else if (onPortDragStart) {
+            onPortDragStart(event, node.index, port.label);
+          } else {
+            onPortPointerDown?.(event, node.index, port.label, world);
+          }
+        }}
+      >
+        <title
+          >{port.label} ({port.role}, {port.protocol ||
+          "untyped"}) — drag to move, Alt+drag to connect</title
+        >
+      </circle>
+      <circle
+        r="4"
+        fill={portFill(port.role)}
+        fill-opacity={hovered ? 1 : 0.85}
+        stroke="var(--color-base-100)"
+        stroke-width={hovered ? 2 : 1.5}
+        style="pointer-events: none; transform-box: fill-box; transform-origin: center; transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), fill-opacity 150ms ease-out, stroke-width 150ms ease-out; transform: scale({hovered ? 1.4 : 1})"
+      />
+      {/if}
+      <text
+        x={port.side === "left" ? 7 : port.side === "right" ? -7 : 0}
+        y={port.side === "top" ? 10 : port.side === "bottom" ? -6 : 3.5}
+        text-anchor={port.side === "left"
+          ? "start"
+          : port.side === "right"
+            ? "end"
+            : "middle"}
+        font-size="9"
+        fill="var(--color-base-content)"
+        fill-opacity="0.8"
+        style="pointer-events: none; user-select: none"
+      >
+        {port.label}
+      </text>
+    </g>
+  {/each}
 {/each}
 
 {#each scene.notes as note (note.id)}
