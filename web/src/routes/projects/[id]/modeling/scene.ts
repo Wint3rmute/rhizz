@@ -135,11 +135,12 @@ export function buildReadOnlyScene(input: {
   linked?: ReadonlySet<number>;
   /** When set, nodes absent from `linked` are dimmed. Explore/embed pass this only when a click handler exists, matching the old opacity rule. */
   dimUnlinked?: boolean;
-  /** Stable component keys, index-aligned. View transitions match on these, not arena indexes. */
+  /** Stable component keys, index-aligned with `components`. View transitions match on these, not arena indexes. */
   ids?: readonly string[];
-  /** Port data by component index, for label rendering and edge anchoring.
-   * Read-only scenes never show dots — labels only. */
-  portsByIndex?: Record<number, DiagramStaticPort[]> | undefined;
+  /** Port data by component index, for labels and edge anchoring.
+   * Required so every diagram renders ports the same way — pass `{}` when
+   * the caller has no port data. Read-only scenes never show dots. */
+  portsByIndex: Record<number, DiagramStaticPort[]>;
 }): DiagramScene {
   const selected = input.selected ?? new Set<number>();
   const linked = input.linked ?? new Set<number>();
@@ -163,7 +164,7 @@ export function buildReadOnlyScene(input: {
       selected: selected.has(index),
       dimmed: input.dimUnlinked === true && !linked.has(index),
       reparentTarget: false,
-      ports: component.ports ?? input.portsByIndex?.[index] ?? [],
+      ports: component.ports ?? input.portsByIndex[index] ?? [],
       handles: "none",
     };
     if (component.parent_component_index !== undefined) {
@@ -197,8 +198,10 @@ export function buildReadOnlyScene(input: {
         from_port?: string | null;
         to_port?: string | null;
       };
-      if (typed.from_port != null) edge.fromPort = typed.from_port;
-      if (typed.to_port != null) edge.toPort = typed.to_port;
+      const fromPort = conn.fromPort ?? typed.from_port ?? undefined;
+      const toPort = conn.toPort ?? typed.to_port ?? undefined;
+      if (fromPort !== undefined) edge.fromPort = fromPort;
+      if (toPort !== undefined) edge.toPort = toPort;
       return edge;
     }),
     notes: (input.annotations ?? []).map((ann, index) =>

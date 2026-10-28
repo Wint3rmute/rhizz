@@ -27,6 +27,10 @@ export interface DiagramStaticConnection {
   label: string;
   startSide?: "top" | "bottom" | "left" | "right";
   endSide?: "top" | "bottom" | "left" | "right";
+  /** Port label on the `from` component. Anchors the edge to that dot. */
+  fromPort?: string | undefined;
+  /** Port label on the `to` component. Anchors the edge to that dot. */
+  toPort?: string | undefined;
 }
 
 /** A placed node's position/size/label alignment — `textAlign` defaults to "center" when omitted. */

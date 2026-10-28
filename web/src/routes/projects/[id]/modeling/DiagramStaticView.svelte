@@ -13,6 +13,7 @@
     DiagramStaticBox,
     DiagramStaticComponent,
     DiagramStaticConnection,
+    DiagramStaticPort,
   } from "./types";
 
   let {
@@ -20,6 +21,7 @@
     connections = [],
     boxes = {},
     annotations = [],
+    portsByIndex,
     padding = 40,
     selected = new Set<number>(),
     linked = new Set<number>(),
@@ -33,6 +35,9 @@
     boxes: Record<number, DiagramStaticBox>;
     /** View-level text annotations, rendered at absolute positions. */
     annotations?: DiagramStaticAnnotation[];
+    /** Port data by component index, for labels and edge anchoring (no dots).
+     * Required so every diagram renders ports the same way. */
+    portsByIndex: Record<number, DiagramStaticPort[]>;
     /** Empty space (world units) left around the content's bounding box in the auto-fit viewBox. */
     padding?: number;
     /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
@@ -74,6 +79,7 @@
     {connections}
     {boxes}
     {annotations}
+    {portsByIndex}
     {selected}
     {linked}
     {onnodeclick}

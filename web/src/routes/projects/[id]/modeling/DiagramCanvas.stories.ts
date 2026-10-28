@@ -176,6 +176,7 @@ const readOnlyScene = buildReadOnlyScene({
     0: { x: 0, y: 0, width: 80, height: 40 },
     1: { x: 120, y: 10, width: 80, height: 40 },
   },
+  portsByIndex: {},
   linked: new Set([1]),
   dimUnlinked: true,
 });
