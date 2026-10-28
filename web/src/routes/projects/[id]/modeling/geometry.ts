@@ -674,9 +674,7 @@ export interface PortSpot {
   offset: number;
 }
 
-export function orientationForSide(
-  side: ConnectionSide,
-): ConnectionOrientation {
+function orientationForSide(side: ConnectionSide): ConnectionOrientation {
   return side === "left" || side === "right" ? "horizontal" : "vertical";
 }
 

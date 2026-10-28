@@ -18,7 +18,7 @@
     computeVisibleConnections,
     type ConnectionSide,
     elbowPath,
-    orientationForSide,
+    type PortAnchor,
     type ResizeHandle,
   } from "./geometry";
   import { resolveIcon } from "../../../../iconHelper";
@@ -170,16 +170,10 @@
   // World-space port dots per node, for follow-the-dot edge anchoring.
   // Key: node index → port label → { x, y (world), side }.
   let portWorldByNode = $derived.by(() => {
-    const outer = new SvelteMap<
-      number,
-      SvelteMap<string, { x: number; y: number; side: ConnectionSide }>
-    >();
+    const outer = new SvelteMap<number, SvelteMap<string, PortAnchor>>();
     for (const node of scene.nodes) {
       if (node.ports.length === 0) continue;
-      const inner = new SvelteMap<
-        string,
-        { x: number; y: number; side: ConnectionSide }
-      >();
+      const inner = new SvelteMap<string, PortAnchor>();
       for (const port of computePortPositions(
         node.box.width,
         node.box.height,
