@@ -82,7 +82,7 @@ const editorScene: DiagramScene = {
 };
 
 export const EditorChrome: Story = {
-  args: { scene: editorScene },
+  args: { scene: editorScene, onPortPointerDown: () => {} },
   play: async ({ canvasElement }) => {
     const visible = computeVisibleConnections(
       editorScene.edges,

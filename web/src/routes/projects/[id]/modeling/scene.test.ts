@@ -218,3 +218,47 @@ describe("buildEditorScene", () => {
     expect(scene.overlays).toEqual([]);
   });
 });
+
+describe("buildReadOnlyScene ports", () => {
+  it("passes component ports, indexed ports, and endpoint ports through", () => {
+    const scene = buildReadOnlyScene({
+      components: [
+        {
+          label: "a",
+          ports: [
+            {
+              label: "out",
+              role: "provider",
+              spot: { side: "top", offset: 0.25 },
+            },
+          ],
+        },
+        { label: "b" },
+      ],
+      connections: [
+        {
+          from: 0,
+          to: 1,
+          label: "bus",
+          // ConnectionJS shape: wasm getters surface as plain properties.
+          from_port: "out",
+        } as unknown as { from: number; to: number; label: string },
+      ],
+      boxes: { 0: box(0, 0), 1: box(200, 0) },
+      portsByIndex: {
+        1: [{ label: "in", role: "consumer" }],
+      },
+    });
+
+    expect(scene.nodes[0]?.ports).toEqual([
+      {
+        label: "out",
+        role: "provider",
+        spot: { side: "top", offset: 0.25 },
+      },
+    ]);
+    expect(scene.nodes[1]?.ports).toEqual([{ label: "in", role: "consumer" }]);
+    expect(scene.edges[0]).toMatchObject({ fromPort: "out" });
+    expect(scene.edges[0]).not.toHaveProperty("toPort");
+  });
+});

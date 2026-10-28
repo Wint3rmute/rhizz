@@ -63,6 +63,7 @@
         connections={view.connections}
         boxes={view.boxes}
         annotations={view.annotations}
+        portsByIndex={view.portsByIndex}
         {projectId}
         diagramPath={normalizedDiagramPath}
         linked={view.linked}

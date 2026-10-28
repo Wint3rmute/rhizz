@@ -28,7 +28,8 @@
     readDiagramLayoutFile,
     VIEW_LAYOUT_DIR,
   } from "./persistence";
-  import type { DiagramStaticBox } from "./types";
+  import type { DiagramStaticBox, DiagramStaticPort } from "./types";
+  import { staticPortsByIndex } from "../../../../modelView";
   import { buildReadOnlyScene, type DiagramNode } from "./scene";
   import DiagramSceneView from "./DiagramSceneView.svelte";
 
@@ -37,6 +38,8 @@
     connections: ConnectionJS[];
     boxes: Record<number, DiagramStaticBox>;
     annotations: Annotation[];
+    /** Port data by component index, for labels and edge anchoring (no dots). */
+    portsByIndex: Record<number, DiagramStaticPort[]>;
     linked: Set<number>;
     onnodeclick: (index: number) => void;
     onnodehover: (index: number | null, event?: MouseEvent) => void;
@@ -258,6 +261,20 @@
     layoutLoaded && Object.keys(boxes).length === 0 && annotations.length === 0,
   );
 
+  // Same ports (labels, placement, edge anchoring — no dots) as the editor:
+  // model port data with this view's outline spots applied.
+  let portsByIndex = $derived.by(() => {
+    const out: Record<number, DiagramStaticPort[]> = {};
+    for (const [index, ports] of staticPortsByIndex(
+      projectModel.model,
+      componentKeys,
+      layout.ports,
+    )) {
+      out[index] = ports;
+    }
+    return out;
+  });
+
   let desiredScene = $derived(
     buildReadOnlyScene({
       components,
@@ -267,6 +284,7 @@
       linked,
       ids: componentKeys,
       dimUnlinked: onOpenDiagram !== undefined,
+      portsByIndex,
     }),
   );
 </script>
@@ -287,6 +305,7 @@
       connections,
       boxes,
       annotations,
+      portsByIndex,
       linked,
       onnodeclick,
       onnodehover,

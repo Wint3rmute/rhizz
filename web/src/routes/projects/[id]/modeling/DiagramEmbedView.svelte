@@ -8,6 +8,7 @@
     DiagramStaticBox,
     DiagramStaticComponent,
     DiagramStaticConnection,
+    DiagramStaticPort,
   } from "./types";
 
   let {
@@ -15,6 +16,7 @@
     connections = [],
     boxes = {},
     annotations = [],
+    portsByIndex,
     projectId = null,
     diagramPath = null,
     selected = new Set<number>(),
@@ -26,6 +28,8 @@
     connections: DiagramStaticConnection[];
     boxes: Record<number, DiagramStaticBox>;
     annotations?: DiagramStaticAnnotation[];
+    /** Port data by component index, for labels and edge anchoring (no dots). */
+    portsByIndex?: Record<number, DiagramStaticPort[]> | undefined;
     projectId?: string | null;
     diagramPath?: string | null;
     /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
@@ -65,6 +69,7 @@
       {connections}
       {boxes}
       {annotations}
+      {portsByIndex}
       markerId="embed-arrow"
       {selected}
       {linked}

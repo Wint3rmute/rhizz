@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolveIcon } from "../../iconHelper";
   import { componentKeyIndex } from "../../modelKeys";
+  import { staticPortsByIndex } from "../../modelView";
   import { getTheme, toggleTheme } from "../../ThemeState.svelte";
   import { getWarningLevel } from "../../WarningLevelState.svelte";
   import {
@@ -16,7 +17,10 @@
   } from "../projects/[id]/modeling/persistence";
   import { buildReadOnlyScene } from "../projects/[id]/modeling/scene";
   import DiagramSceneView from "../projects/[id]/modeling/DiagramSceneView.svelte";
-  import type { DiagramStaticAnnotation } from "../projects/[id]/modeling/types";
+  import type {
+    DiagramStaticAnnotation,
+    DiagramStaticPort,
+  } from "../projects/[id]/modeling/types";
   import { postExampleHeight } from "./autosize";
   import { copyToClipboard } from "../../clipboard";
   import { highlightHcl } from "./hclHighlight";
@@ -237,6 +241,19 @@
   let boxes = $derived(
     mapLayoutToBoxes(viewsToLayout(selectedViews).checked, keyToIndex),
   );
+  // Same ports (labels, placement, edge anchoring — no dots) as the editor:
+  // model port data with this view's outline spots applied.
+  let portsByIndex = $derived.by(() => {
+    const out: Record<number, DiagramStaticPort[]> = {};
+    for (const [index, ports] of staticPortsByIndex(
+      model,
+      componentKeys,
+      viewsToLayout(selectedViews).ports,
+    )) {
+      out[index] = ports;
+    }
+    return out;
+  });
   let annotations = $derived.by((): DiagramStaticAnnotation[] => {
     const out: DiagramStaticAnnotation[] = [];
     for (const view of selectedViews) {
@@ -263,6 +280,7 @@
       boxes,
       annotations,
       ids: componentKeys,
+      portsByIndex,
     }),
   );
 

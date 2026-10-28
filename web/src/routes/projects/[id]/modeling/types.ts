@@ -1,4 +1,12 @@
-import type { Box, TextAlign } from "./geometry";
+import type { Box, PortSpot, TextAlign } from "./geometry";
+
+export interface DiagramStaticPort {
+  label: string;
+  role: "provider" | "consumer" | "peer";
+  protocol?: string;
+  /** Per-view outline spot. Absent means the role default applies. */
+  spot?: PortSpot;
+}
 
 export interface DiagramStaticComponent {
   label: string;
@@ -8,6 +16,9 @@ export interface DiagramStaticComponent {
   font?: string | undefined;
   /** Index (into `components`) of this component's parent, if it has one — used only to decide render order (children drawn on top of their parent). */
   parent_component_index?: number | undefined;
+  /** Ports for label rendering and edge anchoring. Read-only scenes never
+   * show dots (no interactivity) — labels only. */
+  ports?: DiagramStaticPort[] | undefined;
 }
 
 export interface DiagramStaticConnection {
