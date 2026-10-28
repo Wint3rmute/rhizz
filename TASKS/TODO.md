@@ -35,6 +35,30 @@ It appears that connection arrows don't fade out when the component to which the
 arrow points to is not supposed to exist in the target view. They stay fully
 visible until the transition completes, then disappear abruptly.
 
+## Task <N> - Investigate weird component instance rename behavior
+
+Behavior I noticed when using the app:
+
+1. Create a new system
+2. Create 2 component instances, connect them via a connection (with ports and everything)
+3. Go to the component inspector and try renaming the component instance
+
+#### Expected result
+
+Component instance is renamed, "it just works".
+
+#### Actual result
+
+Error appears in the UI popup:
+
+> Change refused: connection test-connection references undefined component test in 'to'; connection test-connection references undefined component test in 'from'
+
+#### Expected resolution
+
+Make sure this behavior reproduces via some kind of test (unit/integration/e2e).
+If it does not reproduce, abort and inform the user. If it reproduces, treat the
+reproduction test as a red test and fix the behavior.
+
 ## Task <N> - Changing project name does not respect lower/uppercase
 
 Steps to reproduce:
