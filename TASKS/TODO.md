@@ -29,47 +29,33 @@ Preliminary requirements (to be narrowed down during brainstorming):
 Focus on fast implementation and immediate user feedback, skip quality & test
 gates until the user is happy with the design.
 
-### Open questions — interaction leftovers (prototype implements the simple default in each case)
+### Open questions — interaction leftovers (all resolved; prototype behavior is final)
 
-1. **Touch support.** The whole canvas is mouse-only today (`mousedown`/
-   `mousemove`, including node drag). Port drag follows suit. Do we add touch
-   for ports alone, or wait for a canvas-wide pointer-events migration? On
-   touch there is no Alt key — what gesture distinguishes move from connect
-   (long-press, second finger, mode toggle)?
-2. **Keyboard nudge.** Nodes nudge with arrow keys when selected, but ports
-   have no selection model. Do ports need keyboard placement at all? If yes,
-   how is a port selected (click-to-select, Tab cycle, inspector list) and
-   what step does a nudge use?
-3. **Snap granularity.** Port sliding snaps to full grid steps like nodes. On
-   small nodes at the default grid this feels coarse. Keep full steps, use
-   half-steps for ports, or make it follow the grid-size dropdown as-is?
-4. **Move vs. connect discoverability.** Plain drag moves, Alt/Shift+drag
-   connects; the only hint is the dot tooltip and the cursor (`move` vs.
-   `crosshair`). Previously dragging a port *started* a connection. Is the
-   tooltip enough, or do we need visible affordance (e.g. different cursor
-   on hover is already there — is it sufficient)?
-5. **Hover feedback on touch.** The 1.4x overshoot pop is hover-only and
-   therefore invisible on touch. Acceptable while touch is out of scope, or a
-   reason to prioritize it?
-6. **Accessibility.** Port dots are mouse-only with no keyboard focus and no
-   ARIA role; labels are `pointer-events: none` text. Side handles and resize
-   handles have the same status (precedent), but what level does canvas
-   chrome need — same-as-existing, or a first a11y pass for ports?
-7. **Label collisions.** Labels sit inside the node and can overlap the
-   component name/icon on small nodes or with many ports. Mitigation: none
-   (prototype), truncation, smaller font, hide labels below a node size, or
-   labels-on-hover-only?
-8. **Reset to default.** A dragged port keeps its spot forever; there is no
-   way back to the role default except dragging it there by hand. Needed:
-   double-click to reset, context-menu entry, numeric offset in the
-   inspector — or nothing?
-9. **Anchored edge routing.** Anchored ends orient the elbow from the
-   from-side; both-ends-anchored routes can look awkward when the sides face
-   each other. Accept for now, or fold into the "more advanced connection
-   routing" task below?
-10. **Scope gate.** Are any of the above merge blockers for the ports branch,
-    or do they all become follow-up tasks once the persisted prototype is
-    accepted?
+1. **Touch support.** ~~Do we add touch for ports alone, or wait?~~ Resolved:
+   don't add, out of scope (canvas is mouse-only throughout).
+2. **Keyboard nudge.** ~~Do ports need keyboard placement?~~ Resolved: don't
+   add, dragging only.
+3. **Snap granularity.** ~~Full steps, half-steps, or follow the dropdown?~~
+   Resolved: follow the current "snap to grid" size from the modeling
+   toolbar (already implemented via `snapPortSpot`).
+4. **Move vs. connect discoverability.** ~~Is tooltip + cursor enough?~~
+   Resolved: current state (tooltip + `move`/`crosshair` cursors) is enough,
+   no change.
+5. **Hover feedback on touch.** ~~Acceptable or a reason to prioritize
+   touch?~~ Resolved: no touch support, don't implement.
+6. **Accessibility.** ~~What level does canvas chrome need?~~ Resolved:
+   don't implement (same status as all other canvas chrome).
+7. **Label collisions.** ~~Truncation, smaller font, hide, hover-only?~~
+   Resolved: don't implement.
+8. **Reset to default.** ~~Double-click, context menu, inspector, nothing?~~
+   Resolved: don't implement, keep pinning as-is (a dragged port keeps its
+   explicit spot; role defaults apply only to never-dragged ports).
+9. **Anchored edge routing.** ~~Accept or fold into routing task?~~ Resolved:
+   accept current elbows; the "more advanced connection routing" task above
+   now explicitly covers port-anchored endpoints (same-side/facing cases) and
+   the 1-vs-2-knee decision.
+10. **Scope gate.** ~~Blockers or follow-ups?~~ Resolved: all settled —
+    nothing left blocks the ports work; no follow-up tasks created.
 
 ## Task <N> - During view transitions, connection arrows don't fade out
 
@@ -119,13 +105,29 @@ everything and it also appears that it does not respect upper/lowercase.
 
 ## Task <N> - more advanced connection routing on canvas
 
-Currently, the connections are always routed using a "double-knee" approach,
-with 2 turning points on each connection. This does not always work.
+Currently, every connection is routed with a "double-knee" elbow
+(horizontal-vertical-horizontal or vertical-horizontal-vertical jog — see
+`elbowPath` in `web/src/routes/projects/[id]/modeling/geometry.ts`), always
+with 2 turning points. This does not always work.
 
-Think about existing well-thought solutions to structuring connections in such
-diagram editors and suggest a more flexible option, which will smartly figure
-out whether to use connections with 2 turning points or just a single turning
-point.
+Design a smarter router. Cases it must cover:
+
+- **1 vs. 2 knees:** smartly decide whether a single turning point suffices
+  or two are needed, from the relative node positions and the sides the ends
+  leave from — instead of always using two.
+- **Port-anchored endpoints:** since the ports work, an edge end can sit
+  anywhere on the outline (`DiagramEdge.fromPort`/`toPort` plus `PortSpot`),
+  not just at a side midpoint. Same-side endpoints (both dots on e.g. the
+  right edge) and facing edges currently produce awkward loops; the router
+  must take the exact anchor points and their sides as inputs.
+- **Out of scope here:** multiple connections between the same 2 components
+  drawing over each other — that stays in the "routing multiple connections
+  between 2 components" task below (PCB-style shared path with offset).
+
+Think about existing well-thought solutions in diagram editors and propose
+the smallest router covering the cases above. Geometry-level unit tests
+(`geometry.test.ts`) and VRT stories for each case first, then the canvas
+change.
 
 ## Task <N> — Detect isolated component trees in systems
 
