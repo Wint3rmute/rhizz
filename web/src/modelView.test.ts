@@ -13,6 +13,7 @@ import {
   protocolUnresolvedReason,
   protocolUsage,
   protocolUsageCount,
+  staticPortsByIndex,
 } from "./modelView";
 import { compile_system } from "./rhizz_wasm_wrapper";
 import type { Source } from "./vfs/compile";
@@ -639,5 +640,59 @@ describe("protocolMessages", () => {
     const model = modelOf([{ filename: "system.hcl", content: FRAMED }]);
     expect(protocolMessages(model, "nope")).toEqual([]);
     expect(protocolMessages(undefined, "frame")).toEqual([]);
+  });
+});
+
+describe("staticPortsByIndex", () => {
+  const HCL = `component "fc" {
+  leaf = true
+  port "in" {
+    protocol = "spi"
+    role     = "consumer"
+  }
+  port "out" {
+    protocol = "spi"
+    role     = "provider"
+  }
+}
+system "demo" {
+  instance "fc" {
+    source = "fc"
+  }
+}
+`;
+
+  it("is empty for an undefined model", () => {
+    expect(staticPortsByIndex(undefined, ["demo/fc"], undefined).size).toBe(0);
+  });
+
+  it("projects model ports keyed by arena index, spots applied", () => {
+    const model = modelOf([{ filename: "system.hcl", content: HCL }]);
+    const keys = model?.component_keys() ?? [];
+    const index = keys.indexOf("demo/fc");
+    expect(index).toBeGreaterThanOrEqual(0);
+    const byIndex = staticPortsByIndex(model, keys, {
+      "demo/fc": { out: { side: "top", offset: 0.25 } },
+    });
+    expect(byIndex.get(index)).toEqual([
+      { label: "in", role: "consumer", protocol: "spi" },
+      {
+        label: "out",
+        role: "provider",
+        protocol: "spi",
+        spot: { side: "top", offset: 0.25 },
+      },
+    ]);
+  });
+
+  it("omits components without ports", () => {
+    const model = modelOf([{ filename: "system.hcl", content: HCL }]);
+    const keys = model?.component_keys() ?? [];
+    const byIndex = staticPortsByIndex(model, keys, undefined);
+    // The definition "fc" carries the ports; instances share them by key.
+    expect(byIndex.size).toBeGreaterThan(0);
+    for (const ports of byIndex.values()) {
+      expect(ports.length).toBeGreaterThan(0);
+    }
   });
 });

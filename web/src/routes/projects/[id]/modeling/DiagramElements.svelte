@@ -10,6 +10,7 @@
     DiagramStaticBox,
     DiagramStaticComponent,
     DiagramStaticConnection,
+    DiagramStaticPort,
   } from "./types";
 
   let {
@@ -17,6 +18,7 @@
     connections = [],
     boxes = {},
     annotations = [],
+    portsByIndex,
     markerId = "arrow",
     selected = new Set<number>(),
     linked = new Set<number>(),
@@ -28,6 +30,8 @@
     boxes: Record<number, DiagramStaticBox>;
     /** View-level text annotations (absolute canvas positions). */
     annotations?: DiagramStaticAnnotation[];
+    /** Port data by component index, for labels and edge anchoring (no dots). */
+    portsByIndex?: Record<number, DiagramStaticPort[]> | undefined;
     markerId?: string;
     /** Component indices to show as selected (drawn with a transparent dotted outline on top). */
     selected?: Set<number>;
@@ -47,6 +51,7 @@
       selected,
       linked,
       dimUnlinked: onnodeclick !== undefined,
+      portsByIndex,
     }),
   );
 </script>

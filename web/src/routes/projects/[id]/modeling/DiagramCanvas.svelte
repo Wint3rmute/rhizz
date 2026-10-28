@@ -141,6 +141,12 @@
   }
 
   let selectedMarkerId = $derived(`${markerId}-selected`);
+  // Dots are an editing affordance: they render only where a gesture can
+  // start one (the modeling page passes handlers; read-only scenes pass
+  // neither and get labels only). Labels always render.
+  let portsInteractive = $derived(
+    onPortDragStart !== undefined || onPortPointerDown !== undefined,
+  );
   // Hovered port dot (`<node index>:<port label>`), for the hover pop.
   // Modeling-only affordance: read-only scenes render no ports, so this
   // stays null there and costs nothing.
@@ -545,7 +551,8 @@
     {@const hovered = hoveredPortKey === portKey}
     {@const world = worldPoint(node, port)}
     {@const dotVisible =
-      revealAllPorts || node.selected || selectedPortLabels.has(port.label)}
+      portsInteractive &&
+      (revealAllPorts || node.selected || selectedPortLabels.has(port.label))}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <g
       data-testid="diagram-port"
