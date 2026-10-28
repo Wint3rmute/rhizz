@@ -16,6 +16,19 @@ How to work on this file:
 
 ---
 
+## Task <N> - Interactive brainstorming - visualise ports in system diagrams
+
+I want to start visualising ports in system diagrams. This will be an
+interactive design back-and-forth activity between the user and a coding agent.
+
+Preliminary requirements (to be narrowed down during brainstorming):
+
+- Ports shall be visible in the component block, ideally right next to edges
+- It shall be possible to move the location of the port along the component block outline
+
+Focus on fast implementation and immediate user feedback, skip quality & test
+gates until the user is happy with the design.
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
