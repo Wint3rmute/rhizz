@@ -139,15 +139,16 @@ vrt-quick *args:
     {{run}} sh -c 'cd web && npm run test:vrt -- {{args}}'
 
 # Re-baselines every changed/new screenshot (review the gallery first!).
-# Also mirrors the landing-background captures into src/screenshots/:
-# regular files the app bundles (ScrollingBackground.svelte), since the VRT
-# baselines themselves live in Git LFS and can't be bundled.
+# Also mirrors derived artifacts into regular files the app/book can bundle
+# (ScrollingBackground sources, README/book landing shot): the VRT baselines
+# themselves live in Git LFS and can't be bundled.
 vrt-accept *args:
     {{run}} sh -c 'cd web && npm run test:vrt:accept -- {{args}}'
     cp web/vrt/__screenshots__/backgrounds-background-1--light.png web/src/screenshots/background_1.png
     cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png
     cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png
     cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
+    cp web/vrt/__screenshots__/pages-projects--empty-landing--light.png book/src/rhizz_landing.png
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm

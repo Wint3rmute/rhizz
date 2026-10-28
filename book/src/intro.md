@@ -1,6 +1,6 @@
 # Introduction
 
-![](./rhizz_landing.jpg)
+![](./rhizz_landing.png)
 
 Rhizz is a systems modeling language, built for architects who want to go
 beyond design documents and diagrams sketched on whiteboards (or their digital
