@@ -110,8 +110,11 @@
     findConnectTarget,
     findReparentTarget,
     MIN_NODE_SIZE,
+    nearestPortSpot,
     normalizeAnnotationScale,
+    type PortSpot,
     type ResizeHandle,
+    snapPortSpot,
     unionBox,
   } from "./geometry";
   import type { Box, ConnectionSide, TextAlign } from "./geometry";
@@ -427,6 +430,14 @@
     filter?: ViewFilterDefinition | undefined;
   }>({});
   let savedConnections = $state<Record<string, StoredConnection>>({});
+  // Prototype (ports brainstorm): per-view port outline spots.
+  // Outer key = componentKey (same stable key as `checked`), inner = port label.
+  // Session-only for now — not yet written to view HCL. Survives view switches
+  // in-memory via `portPositionsByView`; cleared only on project change/reload.
+  // Dragging a port dot writes here; `editorScene` reads it back as `spot`.
+  let portPositionsByView = $state<
+    Record<string, Record<string, Record<string, PortSpot>>>
+  >({});
   let annotations = $state<Annotation[]>([]);
   // Indices into `annotations` currently selected (for drag/delete).
   // SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
@@ -531,6 +542,13 @@
     selectedDiagramPath === null
       ? null
       : `${VIEW_LAYOUT_DIR}/${selectedDiagramPath}`,
+  );
+
+  // Port spots for the currently open view (prototype: session-only).
+  let portPositions = $derived(
+    (selectedDiagramPath !== null
+      ? (portPositionsByView[selectedDiagramPath] ?? {})
+      : {}) as Record<string, Record<string, PortSpot>>,
   );
 
   async function refreshDiagramEntries(): Promise<void> {
@@ -2053,6 +2071,13 @@
         startSide?: ConnectionSide | undefined;
         sourcePoint: { x: number; y: number };
         currentPoint: { x: number; y: number };
+      }
+    | {
+        // Perimeter-slider drag of a port dot along its node's outline.
+        // Prototype: session-only, per-view (see `portPositionsByView`).
+        type: "port-dragging";
+        componentIndex: number;
+        portLabel: string;
       };
 
   let interaction: Interaction = $state({ type: "idle" });
@@ -2414,6 +2439,38 @@
     };
   }
 
+  // Prototype: plain left-drag on a port dot moves it along the outline.
+  // Alt/Shift+drag still connects (handled in DiagramCanvas). Session-only,
+  // per-view — see `portPositionsByView`.
+  function onPortDragStart(
+    event: MouseEvent,
+    compIndex: number,
+    portLabel: string,
+  ): void {
+    if (event.button !== 0) return;
+    if (autoLayoutRunning) return;
+    event.stopPropagation();
+    event.preventDefault();
+    focusCanvas();
+    interaction = { type: "port-dragging", componentIndex: compIndex, portLabel };
+  }
+
+  function writePortSpot(
+    compIndex: number,
+    portLabel: string,
+    spot: PortSpot,
+  ): void {
+    if (selectedDiagramPath === null) return;
+    const viewKey = selectedDiagramPath;
+    const compKey = getComponentKey(compIndex);
+    const viewEntry = portPositionsByView[viewKey] ?? {};
+    const compEntry = viewEntry[compKey] ?? {};
+    portPositionsByView[viewKey] = {
+      ...viewEntry,
+      [compKey]: { ...compEntry, [portLabel]: spot },
+    };
+  }
+
   function findHoveredTarget(
     point: { x: number; y: number },
     sourceIndex: number,
@@ -2424,15 +2481,23 @@
       if (!box) return [];
       const key = getComponentKey(i);
       const compData = componentData.get(key);
+      const spots = portPositions[key];
       const ports =
         compData && compData.ports.length > 0
-          ? computePortPositions(box.width, box.height, compData.ports).map(
-              (p) => ({
-                label: p.label,
-                x: p.x,
-                y: p.y,
-              }),
-            )
+          ? computePortPositions(
+              box.width,
+              box.height,
+              compData.ports.map((p) => ({
+                ...p,
+                ...(spots?.[p.label] !== undefined
+                  ? { spot: spots[p.label] }
+                  : {}),
+              })),
+            ).map((p) => ({
+              label: p.label,
+              x: p.x,
+              y: p.y,
+            }))
           : [];
       return [
         {
@@ -3176,6 +3241,28 @@
         };
         return;
       }
+      case "port-dragging": {
+        const box = nodeBox(current.componentIndex);
+        if (!box) return;
+        const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
+        const local = { x: svgCoords.x - box.x, y: svgCoords.y - box.y };
+        // Snap-to-grid (when active — Ctrl/Cmd temporarily disables it, same
+        // as nodes) snaps the sliding world coordinate while the dot stays
+        // glued to the outline; see `snapPortSpot`.
+        const spot = snapActive
+          ? snapPortSpot(
+              box.width,
+              box.height,
+              box.x,
+              box.y,
+              svgCoords.x,
+              svgCoords.y,
+              snap,
+            )
+          : nearestPortSpot(box.width, box.height, local.x, local.y);
+        writePortSpot(current.componentIndex, current.portLabel, spot);
+        return;
+      }
       case "marquee": {
         const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
         interaction = { ...current, x: svgCoords.x, y: svgCoords.y };
@@ -3196,6 +3283,12 @@
 
   function onSvgMouseUp() {
     const current = interaction;
+    if (current.type === "port-dragging") {
+      // Prototype: the spot is already written live on every mousemove;
+      // nothing to commit. No undo point yet (added once the design sticks).
+      interaction = { type: "idle" };
+      return;
+    }
     if (current.type === "connecting") {
       const target = findHoveredTarget(
         current.currentPoint,
@@ -3561,6 +3654,7 @@
       if (!box || !component) return [];
       const compKey = getComponentKey(index);
       const compData = componentData.get(compKey);
+      const spots = portPositions[compKey];
       return [
         {
           id: compKey,
@@ -3572,7 +3666,15 @@
           color: compData?.color || component.color,
           border: compData?.border ?? component.border,
           font: compData?.font ?? component.font,
-          ports: compData && compData.ports.length > 0 ? compData.ports : [],
+          ports:
+            compData && compData.ports.length > 0
+              ? compData.ports.map((p) => ({
+                  ...p,
+                  ...(spots?.[p.label] !== undefined
+                    ? { spot: spots[p.label] }
+                    : {}),
+                }))
+              : [],
         },
       ];
     });
@@ -3592,6 +3694,11 @@
         fromKey: getComponentKey(conn.from),
         toKey: getComponentKey(conn.to),
       };
+      // Follow-the-dot: anchor to the port dots when the model names ports.
+      const fromPort = (conn as unknown as { from_port?: string }).from_port;
+      const toPort = (conn as unknown as { to_port?: string }).to_port;
+      if (fromPort !== undefined) edge.fromPort = fromPort;
+      if (toPort !== undefined) edge.toPort = toPort;
       const saved = savedConnections[conn.label];
       if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
       if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
@@ -3906,6 +4013,8 @@
         return "Dragging";
       case "connecting":
         return "Connecting";
+      case "port-dragging":
+        return "Moving port";
       case "resizing":
         return "Resizing";
       case "panning":
@@ -4193,10 +4302,12 @@
           markerId="arrow"
           busy={autoLayoutRunning}
           frozen={stage.settling}
+          revealAllPorts={interaction.type === "connecting"}
           onNodePointerDown={onNodeMouseDown}
           {onNodeDblClick}
           onNodeContextMenu={openNodeContextMenu}
           onPortPointerDown={onPortMouseDown}
+          onPortDragStart={onPortDragStart}
           onResizePointerDown={onResizeHandleMouseDown}
           onEdgeClick={(event, edge) => {
             event.stopPropagation();

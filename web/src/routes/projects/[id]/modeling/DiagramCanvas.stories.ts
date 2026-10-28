@@ -55,6 +55,7 @@ const editorScene: DiagramScene = {
       label: "wire",
       from: 0,
       to: 1,
+      fromPort: "out",
       selected: true,
     },
   ],
@@ -132,7 +133,7 @@ export const EditorChrome: Story = {
       `translate(${String(expectedPort.x)}, ${String(expectedPort.y)})`,
     );
     await expect(ports[0]?.querySelector("title")?.textContent).toBe(
-      "out (provider, untyped)",
+      "out (provider, untyped) — drag to move, Alt+drag to connect",
     );
 
     const side = computeDirectionalHandles(100, 60)[0];
