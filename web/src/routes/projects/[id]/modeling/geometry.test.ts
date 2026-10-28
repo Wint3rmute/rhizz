@@ -20,8 +20,11 @@ import {
   findConnectTarget,
   findReparentTarget,
   MIN_ANNOTATION_SCALE,
+  nearestPortSpot,
   nodeLabelLayout,
   normalizeAnnotationScale,
+  portSpotToXY,
+  snapPortSpot,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
@@ -736,6 +739,62 @@ describe("computePortPositions", () => {
     const peer = positions.find((p) => p.label === "bus");
     expect(peer?.x).toBe(60);
     expect(peer?.y).toBe(80);
+  });
+
+  it("places a dragged port at its spot on any side, ignoring its role", () => {
+    const positions = computePortPositions(120, 80, [
+      {
+        label: "in",
+        role: "consumer" as const,
+        spot: { side: "top", offset: 0.25 },
+      },
+    ]);
+    expect(positions).toHaveLength(1);
+    expect(positions[0]).toMatchObject({ x: 30, y: 0, side: "top" });
+  });
+});
+
+describe("nearestPortSpot", () => {
+  it("projects onto the nearest side with a corner inset", () => {
+    expect(nearestPortSpot(100, 60, -5, 30)).toMatchObject({
+      side: "left",
+      offset: 0.5,
+    });
+    expect(nearestPortSpot(100, 60, 50, 70)).toMatchObject({ side: "bottom" });
+    // Corners never sit exactly on the edge: the inset clamps the offset.
+    expect(nearestPortSpot(100, 60, 0, 0).offset).toBeGreaterThan(0);
+    expect(nearestPortSpot(100, 60, 100, 60).offset).toBeLessThan(1);
+  });
+});
+
+describe("portSpotToXY", () => {
+  it("converts a spot back to node-local coordinates", () => {
+    expect(portSpotToXY(100, 60, { side: "right", offset: 0.5 })).toEqual({
+      x: 100,
+      y: 30,
+    });
+    expect(portSpotToXY(100, 60, { side: "top", offset: 0.25 })).toEqual({
+      x: 25,
+      y: 0,
+    });
+  });
+});
+
+describe("snapPortSpot", () => {
+  const snapTo10 = (value: number): number => Math.round(value / 10) * 10;
+
+  it("snaps the sliding coordinate while staying glued to the outline", () => {
+    // Pointer near the left edge at world y=23 snaps the along-edge
+    // coordinate to 20; the fixed x stays exactly on the outline.
+    const spot = snapPortSpot(100, 60, 0, 0, 2, 23, snapTo10);
+    expect(spot.side).toBe("left");
+    expect(portSpotToXY(100, 60, spot)).toEqual({ x: 0, y: 20 });
+  });
+
+  it("snaps horizontal sides along x", () => {
+    const spot = snapPortSpot(100, 60, 0, 0, 23, 2, snapTo10);
+    expect(spot.side).toBe("top");
+    expect(portSpotToXY(100, 60, spot)).toEqual({ x: 20, y: 0 });
   });
 });
 

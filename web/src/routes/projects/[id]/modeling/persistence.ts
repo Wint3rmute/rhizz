@@ -15,7 +15,7 @@ import {
   type ViewDefinition,
   type ViewFilterDefinition,
 } from "../../../../rhizz_wasm_wrapper";
-import type { Box, ConnectionSide, TextAlign } from "./geometry";
+import type { Box, ConnectionSide, PortSpot, TextAlign } from "./geometry";
 
 // Re-export the canvas's alignment/side unions so persistence consumers share
 // one definition (`geometry.ts` remains the source of truth).
@@ -72,6 +72,10 @@ export interface DiagramLayout {
   system?: string;
   checked: Record<string, StoredBox>;
   connections?: Record<string, StoredConnection>;
+  /** Per-view port outline spots: component key → port label → outline spot.
+   * Absent entries mean role defaults apply. Survives uncheck/re-check like
+   * `savedLayout` (keyed separately so unplacing never prunes it). */
+  ports?: Record<string, Record<string, PortSpot>>;
   annotations?: Annotation[];
   /**
    * View-level attributes the canvas does not own, carried verbatim so a
@@ -88,7 +92,7 @@ export interface DiagramLayout {
 }
 
 export function emptyDiagramLayout(system = ""): DiagramLayout {
-  return { system, checked: {}, connections: {}, annotations: [] };
+  return { system, checked: {}, connections: {}, ports: {}, annotations: [] };
 }
 
 /**
@@ -107,6 +111,7 @@ export function layoutFromSelection(
   checked: Record<string, StoredBox>,
   selectedKeys: Iterable<string>,
   selectedNotes: readonly Annotation[] = [],
+  ports: Record<string, Record<string, PortSpot>> = {},
 ): DiagramLayout {
   const layout = emptyDiagramLayout(system);
   for (const key of selectedKeys) {
@@ -114,6 +119,12 @@ export function layoutFromSelection(
     // A selected key with no box is not on the canvas, so it is not in the
     // picture either — same rule `mapLayoutToBoxes` applies to stale keys.
     if (box) layout.checked[key] = { ...box };
+    // Port spots ride along with their component; a dragged port keeps its
+    // outline position in the cut-out view.
+    if (box && ports[key] !== undefined) {
+      layout.ports ??= {};
+      layout.ports[key] = { ...ports[key] };
+    }
   }
   layout.annotations = selectedNotes.map((note) => ({ ...note }));
   return layout;
@@ -193,6 +204,17 @@ export function layoutToHcl(
     if (box.width !== undefined) node.width = box.width;
     if (box.height !== undefined) node.height = box.height;
     if (box.textAlign !== undefined) node.text_align = box.textAlign;
+    const spots = layout.ports?.[component];
+    if (spots !== undefined) {
+      const ports = Object.entries(spots)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([port, spot]) => ({
+          port,
+          side: spot.side,
+          offset: spot.offset,
+        }));
+      if (ports.length > 0) node.ports = ports;
+    }
     return node;
   });
 
@@ -245,11 +267,18 @@ export function layoutToHcl(
 export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
   const connections: Record<string, StoredConnection> = {};
+  const ports: Record<string, Record<string, PortSpot>> = {};
   const annotations: Annotation[] = [];
   const system = views[0]?.system ?? "";
   // Carried through verbatim from the first view: these are view-block
   // attributes, and the canvas has no say over them.
-  const layout: DiagramLayout = { system, checked, connections, annotations };
+  const layout: DiagramLayout = {
+    system,
+    checked,
+    connections,
+    ports,
+    annotations,
+  };
   if (views[0]?.full_name !== undefined) layout.fullName = views[0].full_name;
   if (views[0]?.tags !== undefined) layout.tags = views[0].tags;
   if (views[0]?.filter !== undefined) layout.filter = views[0].filter;
@@ -264,6 +293,15 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
       const textAlign = asTextAlign(node.text_align);
       if (textAlign !== undefined) box.textAlign = textAlign;
       checked[node.component] = box;
+      for (const port of node.ports ?? []) {
+        const side = asConnectionSide(port.side);
+        if (side === undefined) continue;
+        const offset =
+          typeof port.offset === "number" && !Number.isNaN(port.offset)
+            ? Math.min(1, Math.max(0, port.offset))
+            : 0.5;
+        (ports[node.component] ??= {})[port.port] = { side, offset };
+      }
     }
     for (const conn of view.connections ?? []) {
       const entry: StoredConnection = {};
@@ -349,6 +387,24 @@ export async function writeDiagramLayoutFile(
       `[PERSIST] DATALOSS-GUARD: ${String(
         layoutAnnotationCount,
       )} annotation(s) in memory ` +
+        `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
+        `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
+        `\`just build\`), then restart the dev server and hard-refresh the browser.`,
+    );
+  }
+  // Same guard for port spots: a stale serializer drops `port` blocks the
+  // same silent way. Count `port "` blocks (node blocks never contain that
+  // string otherwise).
+  const layoutPortCount = Object.values(layout.ports ?? {}).reduce(
+    (count, byPort) => count + Object.keys(byPort).length,
+    0,
+  );
+  const portBlocks = (hclContent.match(/port "/g) ?? []).length;
+  if (layoutPortCount > 0 && portBlocks === 0) {
+    throw new Error(
+      `[PERSIST] DATALOSS-GUARD: ${String(
+        layoutPortCount,
+      )} port spot(s) in memory ` +
         `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
         `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
         `\`just build\`), then restart the dev server and hard-refresh the browser.`,

@@ -126,6 +126,11 @@ per-view `hidden` flag (omitted when `false`). Connections are keyed by name
 within a system: copies of one declaration share the name and hide together,
 while two different declarations sharing a name in one system fail with E001.
 
+A view `node` block may carry nested `port` blocks (`PortLayout`: port label,
+`side`, `offset` 0..1 clamped). They pin port dots to exact outline spots in
+that view; ports without a block use the role default. Unknown sides are
+skipped on parse (same as connection sides); `offset` defaults to `0.5`.
+
 ## Design notes
 
 - Owned `String`s throughout — the HCL source doesn't outlive parsing.

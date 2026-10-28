@@ -1404,6 +1404,7 @@ system "other" {
                     width: None,
                     height: None,
                     text_align: None,
+                    ports: vec![],
                 })
                 .collect(),
             ..ViewDefinition::default()

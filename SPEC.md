@@ -464,6 +464,29 @@ view "overview" {
 | `height`     | number | no       | —       | Box height in world units                 |
 | `text_align` | string | no       | —       | Label placement (`center`, `top-center`)  |
 
+A `node` may carry nested `port` blocks (zero or more) pinning a port dot to
+an exact outline spot in this view. Ports without a block fall back to the
+role default (consumers left, providers right, peers bottom).
+
+```hcl
+node "mini-drone/flight-controller" {
+  x      = 20
+  y      = 50
+  width  = 100
+  height = 50
+
+  port "dshot" {
+    side   = "right"
+    offset = 0.75
+  }
+}
+```
+
+| Attribute | Type   | Required | Default | Description                                             |
+| --------- | ------ | -------- | ------- | ------------------------------------------------------- |
+| `side`    | string | no       | —       | Outline side (`top`, `bottom`, `left`, `right`)         |
+| `offset`  | number | no       | `0.5`   | Position along the side, 0..1 (clamped; 0 = top/left end) |
+
 Optional `filter` sub-block (selection predicate) — **not implemented yet**:
 parsed and round-tripped, but no renderer applies it. See §9.
 

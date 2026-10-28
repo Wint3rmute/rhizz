@@ -166,11 +166,14 @@
   let portWorldByNode = $derived.by(() => {
     const outer = new SvelteMap<
       number,
-      Map<string, { x: number; y: number; side: ConnectionSide }>
+      SvelteMap<string, { x: number; y: number; side: ConnectionSide }>
     >();
     for (const node of scene.nodes) {
       if (node.ports.length === 0) continue;
-      const inner = new Map<string, { x: number; y: number; side: ConnectionSide }>();
+      const inner = new SvelteMap<
+        string,
+        { x: number; y: number; side: ConnectionSide }
+      >();
       for (const port of computePortPositions(
         node.box.width,
         node.box.height,
@@ -202,15 +205,15 @@
       const toPorts = portWorldByNode.get(edge.to);
       const fromDot =
         edge.fromPort !== undefined ? fromPorts?.get(edge.fromPort) : undefined;
-      const toDot = edge.toPort !== undefined ? toPorts?.get(edge.toPort) : undefined;
+      const toDot =
+        edge.toPort !== undefined ? toPorts?.get(edge.toPort) : undefined;
       if (fromDot !== undefined || toDot !== undefined) {
         const boxA = boxesByIndex.get(edge.from);
         const boxB = boxesByIndex.get(edge.to);
         if (boxA === undefined || boxB === undefined) continue;
         // Unanchored end falls back to the box-side routing for that end.
-        const single = computeVisibleConnections(
-          [edge],
-          (index) => boxesByIndex.get(index),
+        const single = computeVisibleConnections([edge], (index) =>
+          boxesByIndex.get(index),
         )[0];
         const a = fromDot ?? single?.a;
         const b = toDot ?? single?.b;
@@ -228,7 +231,9 @@
     }
     return [
       ...anchored,
-      ...computeVisibleConnections(fallback, (index) => boxesByIndex.get(index)),
+      ...computeVisibleConnections(fallback, (index) =>
+        boxesByIndex.get(index),
+      ),
     ];
   });
 
@@ -530,7 +535,8 @@
       if (!edge.selected) return [];
       if (edge.from === node.index && edge.fromPort !== undefined)
         return [edge.fromPort];
-      if (edge.to === node.index && edge.toPort !== undefined) return [edge.toPort];
+      if (edge.to === node.index && edge.toPort !== undefined)
+        return [edge.toPort];
       return [];
     }),
   )}
@@ -550,41 +556,43 @@
         : undefined}
     >
       {#if dotVisible}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <circle
-        r="8"
-        fill="transparent"
-        class={onPortDragStart ? "cursor-move" : "cursor-crosshair"}
-        onmouseenter={() => (hoveredPortKey = portKey)}
-        onmouseleave={() => {
-          if (hoveredPortKey === portKey) hoveredPortKey = null;
-        }}
-        onmousedown={(event) => {
-          // Plain left-drag moves the port along the outline;
-          // Alt/Shift+drag starts a connection from the existing port.
-          if (event.button !== 0) return;
-          if (event.altKey || event.shiftKey) {
-            onPortPointerDown?.(event, node.index, port.label, world);
-          } else if (onPortDragStart) {
-            onPortDragStart(event, node.index, port.label);
-          } else {
-            onPortPointerDown?.(event, node.index, port.label, world);
-          }
-        }}
-      >
-        <title
-          >{port.label} ({port.role}, {port.protocol ||
-          "untyped"}) — drag to move, Alt+drag to connect</title
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <circle
+          r="8"
+          fill="transparent"
+          class={onPortDragStart ? "cursor-move" : "cursor-crosshair"}
+          onmouseenter={() => (hoveredPortKey = portKey)}
+          onmouseleave={() => {
+            if (hoveredPortKey === portKey) hoveredPortKey = null;
+          }}
+          onmousedown={(event) => {
+            // Plain left-drag moves the port along the outline;
+            // Alt/Shift+drag starts a connection from the existing port.
+            if (event.button !== 0) return;
+            if (event.altKey || event.shiftKey) {
+              onPortPointerDown?.(event, node.index, port.label, world);
+            } else if (onPortDragStart) {
+              onPortDragStart(event, node.index, port.label);
+            } else {
+              onPortPointerDown?.(event, node.index, port.label, world);
+            }
+          }}
         >
-      </circle>
-      <circle
-        r="4"
-        fill={portFill(port.role)}
-        fill-opacity={hovered ? 1 : 0.85}
-        stroke="var(--color-base-100)"
-        stroke-width={hovered ? 2 : 1.5}
-        style="pointer-events: none; transform-box: fill-box; transform-origin: center; transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), fill-opacity 150ms ease-out, stroke-width 150ms ease-out; transform: scale({hovered ? 1.4 : 1})"
-      />
+          <title
+            >{port.label} ({port.role}, {port.protocol || "untyped"}) — drag to
+            move, Alt+drag to connect</title
+          >
+        </circle>
+        <circle
+          r="4"
+          fill={portFill(port.role)}
+          fill-opacity={hovered ? 1 : 0.85}
+          stroke="var(--color-base-100)"
+          stroke-width={hovered ? 2 : 1.5}
+          style="pointer-events: none; transform-box: fill-box; transform-origin: center; transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), fill-opacity 150ms ease-out, stroke-width 150ms ease-out; transform: scale({hovered
+            ? 1.4
+            : 1})"
+        />
       {/if}
       <text
         x={port.side === "left" ? 7 : port.side === "right" ? -7 : 0}
