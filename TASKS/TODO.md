@@ -16,47 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Interactive brainstorming - visualise ports in system diagrams
-
-I want to start visualising ports in system diagrams. This will be an
-interactive design back-and-forth activity between the user and a coding agent.
-
-Preliminary requirements (to be narrowed down during brainstorming):
-
-- Ports shall be visible in the component block, ideally right next to edges
-- It shall be possible to move the location of the port along the component block outline
-
-Focus on fast implementation and immediate user feedback, skip quality & test
-gates until the user is happy with the design.
-
-### Open questions — interaction leftovers (all resolved; prototype behavior is final)
-
-1. **Touch support.** ~~Do we add touch for ports alone, or wait?~~ Resolved:
-   don't add, out of scope (canvas is mouse-only throughout).
-2. **Keyboard nudge.** ~~Do ports need keyboard placement?~~ Resolved: don't
-   add, dragging only.
-3. **Snap granularity.** ~~Full steps, half-steps, or follow the dropdown?~~
-   Resolved: follow the current "snap to grid" size from the modeling
-   toolbar (already implemented via `snapPortSpot`).
-4. **Move vs. connect discoverability.** ~~Is tooltip + cursor enough?~~
-   Resolved: current state (tooltip + `move`/`crosshair` cursors) is enough,
-   no change.
-5. **Hover feedback on touch.** ~~Acceptable or a reason to prioritize
-   touch?~~ Resolved: no touch support, don't implement.
-6. **Accessibility.** ~~What level does canvas chrome need?~~ Resolved:
-   don't implement (same status as all other canvas chrome).
-7. **Label collisions.** ~~Truncation, smaller font, hide, hover-only?~~
-   Resolved: don't implement.
-8. **Reset to default.** ~~Double-click, context menu, inspector, nothing?~~
-   Resolved: don't implement, keep pinning as-is (a dragged port keeps its
-   explicit spot; role defaults apply only to never-dragged ports).
-9. **Anchored edge routing.** ~~Accept or fold into routing task?~~ Resolved:
-   accept current elbows; the "more advanced connection routing" task above
-   now explicitly covers port-anchored endpoints (same-side/facing cases) and
-   the 1-vs-2-knee decision.
-10. **Scope gate.** ~~Blockers or follow-ups?~~ Resolved: all settled —
-    nothing left blocks the ports work; no follow-up tasks created.
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
