@@ -216,7 +216,18 @@ export interface VisibleConnection<T> {
   conn: T;
   a: { x: number; y: number };
   b: { x: number; y: number };
+  /** Axis the route leaves `a` on. */
   orientation: ConnectionOrientation;
+  /** Axis the route arrives at `b` on. Differs for single-knee routes. */
+  endOrientation: ConnectionOrientation;
+  knees: KneeCount;
+}
+
+/** A port dot in world coordinates, for edge anchoring. */
+export interface PortAnchor {
+  x: number;
+  y: number;
+  side: ConnectionSide;
 }
 
 // Computes the anchor point on a specific border side of `box`.
@@ -236,63 +247,77 @@ export function boxSidePoint(
   }
 }
 
-// Computes boundary connection points and orientation for visible connections
-// between placed node boxes.
+// Computes boundary connection points and routing for visible connections
+// between placed node boxes. Port-anchored ends (via `getPort`) pin the
+// endpoint to the dot and route from its side; otherwise the legacy box-side
+// / center logic applies. The knee decision comes from `routeConnection`.
 export function computeVisibleConnections<
   T extends {
     from: number;
     to: number;
     startSide?: ConnectionSide;
     endSide?: ConnectionSide;
+    fromPort?: string | undefined;
+    toPort?: string | undefined;
   },
 >(
   connections: T[],
   getBox: (index: number) => Box | null | undefined,
+  getPort?: (index: number, portLabel: string) => PortAnchor | undefined,
 ): VisibleConnection<T>[] {
   return connections.flatMap((conn) => {
     const boxA = getBox(conn.from);
     const boxB = getBox(conn.to);
     if (!boxA || !boxB) return [];
 
-    if (conn.startSide && conn.endSide) {
-      const a = boxSidePoint(boxA, conn.startSide);
-      const b = boxSidePoint(boxB, conn.endSide);
+    const portA =
+      conn.fromPort !== undefined
+        ? getPort?.(conn.from, conn.fromPort)
+        : undefined;
+    const portB =
+      conn.toPort !== undefined ? getPort?.(conn.to, conn.toPort) : undefined;
+    const sideA = portA?.side ?? conn.startSide;
+    const sideB = portB?.side ?? conn.endSide;
+
+    let a: { x: number; y: number };
+    let b: { x: number; y: number };
+    if (portA && portB) {
+      a = { x: portA.x, y: portA.y };
+      b = { x: portB.x, y: portB.y };
+    } else if (portA) {
+      a = { x: portA.x, y: portA.y };
+      b =
+        sideB !== undefined
+          ? boxSidePoint(boxB, sideB)
+          : boxBoundaryPoint(boxB, a, orientationForSide(sideA ?? "right"));
+    } else if (portB) {
+      b = { x: portB.x, y: portB.y };
+      a =
+        sideA !== undefined
+          ? boxSidePoint(boxA, sideA)
+          : boxBoundaryPoint(boxA, b, orientationForSide(sideB ?? "left"));
+    } else if (conn.startSide && conn.endSide) {
+      a = boxSidePoint(boxA, conn.startSide);
+      b = boxSidePoint(boxB, conn.endSide);
+    } else if (conn.startSide) {
+      a = boxSidePoint(boxA, conn.startSide);
+      b = boxBoundaryPoint(boxB, a, orientationForSide(conn.startSide));
+    } else if (conn.endSide) {
+      b = boxSidePoint(boxB, conn.endSide);
+      a = boxBoundaryPoint(boxA, b, orientationForSide(conn.endSide));
+    } else {
+      const centerA = boxCenter(boxA);
+      const centerB = boxCenter(boxB);
       const orientation: ConnectionOrientation =
-        conn.startSide === "left" || conn.startSide === "right"
+        Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
           ? "horizontal"
           : "vertical";
-      return [{ conn, a, b, orientation }];
+      a = boxBoundaryPoint(boxA, centerB, orientation);
+      b = boxBoundaryPoint(boxB, centerA, orientation);
     }
 
-    if (conn.startSide) {
-      const a = boxSidePoint(boxA, conn.startSide);
-      const orientation: ConnectionOrientation =
-        conn.startSide === "left" || conn.startSide === "right"
-          ? "horizontal"
-          : "vertical";
-      const b = boxBoundaryPoint(boxB, a, orientation);
-      return [{ conn, a, b, orientation }];
-    }
-
-    if (conn.endSide) {
-      const b = boxSidePoint(boxB, conn.endSide);
-      const orientation: ConnectionOrientation =
-        conn.endSide === "left" || conn.endSide === "right"
-          ? "horizontal"
-          : "vertical";
-      const a = boxBoundaryPoint(boxA, b, orientation);
-      return [{ conn, a, b, orientation }];
-    }
-
-    const centerA = boxCenter(boxA);
-    const centerB = boxCenter(boxB);
-    const orientation: ConnectionOrientation =
-      Math.abs(centerB.x - centerA.x) >= Math.abs(centerB.y - centerA.y)
-        ? "horizontal"
-        : "vertical";
-    const a = boxBoundaryPoint(boxA, centerB, orientation);
-    const b = boxBoundaryPoint(boxB, centerA, orientation);
-    return [{ conn, a, b, orientation }];
+    const routed = routeConnection(a, sideA, b, sideB, boxA, boxB);
+    return [{ conn, a, b, ...routed }];
   });
 }
 
@@ -482,6 +507,12 @@ export function boxBoundaryPoint(
 // back to a straight line when the two points are already aligned on the
 // jog axis (no bend needed).
 //
+// When `endOrientation` differs from `orientation`, draws a single-knee
+// L instead: leave along `orientation`, round one corner, arrive along
+// `endOrientation`. Used when the two ends face different axes (e.g. a
+// right-edge port to a top-edge port), where a double knee would add a
+// pointless jog.
+//
 // Both variants share one abstract shape, built in terms of a "primary"
 // axis p (the leave/enter direction) and "secondary" axis s (the jog
 // direction); only the final p/s -> x/y mapping differs. Swapping which
@@ -495,6 +526,7 @@ export function elbowPath(
   by: number,
   orientation: ConnectionOrientation,
   r = 10,
+  endOrientation: ConnectionOrientation = orientation,
 ): string {
   const horizontal = orientation === "horizontal";
   const toXY = (p: number, s: number): [number, number] =>
@@ -506,6 +538,31 @@ export function elbowPath(
   const [bp, bs] = horizontal ? [bx, by] : [by, bx];
   const dp = bp - ap;
   const ds = bs - as_;
+
+  if (endOrientation !== orientation) {
+    // Single knee: the corner sits at (bp, as_) in (p, s) space — i.e.
+    // (bx, ay) for a horizontal leave, (ax, by) for a vertical one.
+    const sp = dp >= 0 ? 1 : -1;
+    const ss = ds >= 0 ? 1 : -1;
+    const rc = Math.min(r, Math.abs(dp) / 2, Math.abs(ds) / 2);
+    const [x0, y0] = toXY(ap, as_);
+    const [x1, y1] = toXY(bp - sp * rc, as_);
+    const [x2, y2] = toXY(bp, as_ + ss * rc);
+    const [x3, y3] = toXY(bp, bs);
+    // Sweep follows the turn handedness in screen (y-down) coordinates:
+    // clockwise (positive cross product) rounds with flag 1.
+    const [lx, ly] = horizontal ? [sp, 0] : [0, sp];
+    const [ex, ey] = horizontal ? [0, ss] : [ss, 0];
+    const turn: 0 | 1 = lx * ey - ly * ex > 0 ? 1 : 0;
+    return [
+      `M ${String(x0)},${String(y0)}`,
+      `L ${String(x1)},${String(y1)}`,
+      `A ${String(rc)},${String(rc)} 0 0,${String(turn)} ${String(x2)},${String(
+        y2,
+      )}`,
+      `L ${String(x3)},${String(y3)}`,
+    ].join(" ");
+  }
 
   if (Math.abs(ds) < 0.5) {
     const [x1, y1] = toXY(ap, as_);
@@ -773,6 +830,103 @@ export interface DirectionalHandle {
   side: ConnectionSide;
   x: number;
   y: number;
+}
+
+/** How many turning points a routed connection has: 0 (straight), 1 (L),
+ * or 2 (double-knee jog). */
+export type KneeCount = 0 | 1 | 2;
+
+export interface RoutedConnection {
+  /** Axis the route leaves `a` on. */
+  orientation: ConnectionOrientation;
+  /** Axis the route arrives at `b` on. Differs for single-knee routes. */
+  endOrientation: ConnectionOrientation;
+  knees: KneeCount;
+}
+
+// Whether point `p` lies strictly beyond `side` of `box` — i.e. in the
+// outward half-plane, not touching the box. A single-knee corner must clear
+// both boxes this way, otherwise a leg would travel inside a node.
+function beyondSide(
+  p: { x: number; y: number },
+  side: ConnectionSide,
+  box: Box,
+): boolean {
+  switch (side) {
+    case "left":
+      return p.x < box.x;
+    case "right":
+      return p.x > box.x + box.width;
+    case "top":
+      return p.y < box.y;
+    case "bottom":
+      return p.y > box.y + box.height;
+  }
+}
+
+// Decides how many knees a connection needs from its endpoints, the sides
+// they leave from, and (optionally) the node boxes for a containment check.
+// Same-axis ends keep the legacy behavior (straight when aligned, double
+// knee otherwise). Different-axis ends get a single knee — but only when
+// the corner clears both boxes; otherwise the L would cut through a node
+// and the legacy double knee degrades more gracefully. Unknown sides fall
+// back to the legacy center-based rule.
+export function routeConnection(
+  a: { x: number; y: number },
+  sideA: ConnectionSide | undefined,
+  b: { x: number; y: number },
+  sideB: ConnectionSide | undefined,
+  boxA?: Box,
+  boxB?: Box,
+): RoutedConnection {
+  const axisA = sideA === undefined ? undefined : orientationForSide(sideA);
+  const axisB = sideB === undefined ? undefined : orientationForSide(sideB);
+  if (
+    axisA !== undefined &&
+    axisB !== undefined &&
+    sideA !== undefined &&
+    sideB !== undefined
+  ) {
+    if (axisA !== axisB) {
+      // Corner of the candidate L: (bx, ay) for a horizontal leave.
+      const corner =
+        axisA === "horizontal" ? { x: b.x, y: a.y } : { x: a.x, y: b.y };
+      const clean =
+        boxA === undefined ||
+        boxB === undefined ||
+        (beyondSide(corner, sideA, boxA) && beyondSide(corner, sideB, boxB));
+      if (clean) return { orientation: axisA, endOrientation: axisB, knees: 1 };
+    }
+    const aligned =
+      axisA === "horizontal"
+        ? Math.abs(b.y - a.y) < 0.5
+        : Math.abs(b.x - a.x) < 0.5;
+    return {
+      orientation: axisA,
+      endOrientation: axisA,
+      knees: aligned ? 0 : 2,
+    };
+  }
+  const known = axisA ?? axisB;
+  if (known !== undefined) {
+    const aligned =
+      known === "horizontal"
+        ? Math.abs(b.y - a.y) < 0.5
+        : Math.abs(b.x - a.x) < 0.5;
+    return {
+      orientation: known,
+      endOrientation: known,
+      knees: aligned ? 0 : 2,
+    };
+  }
+  const horizontal = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
+  const orientation: ConnectionOrientation = horizontal
+    ? "horizontal"
+    : "vertical";
+  const aligned = horizontal
+    ? Math.abs(b.y - a.y) < 0.5
+    : Math.abs(b.x - a.x) < 0.5;
+  return { orientation, endOrientation: orientation, knees: aligned ? 0 : 2 };
 }
 
 // Computes 4 connection handle positions (top, right, bottom, left border midpoints)

@@ -124,7 +124,7 @@
   // Marker heads are painted in their own viewport and ignore the path's
   // opacity, so a fading connection would leave a solid arrow behind. The
   // head is drawn in the same group as the line; the last elbow segment
-  // always arrives along the orientation axis.
+  // always arrives along the end-orientation axis.
   function arrowHead(
     tipX: number,
     tipY: number,
@@ -196,52 +196,13 @@
     return outer;
   });
 
-  let visibleEdges = $derived.by(() => {
-    // Anchor to port dots when the edge names ports that are placed;
-    // otherwise fall back to the box-side routing.
-    const anchored: {
-      conn: (typeof scene.edges)[number];
-      a: { x: number; y: number };
-      b: { x: number; y: number };
-      orientation: "horizontal" | "vertical";
-    }[] = [];
-    const fallback: typeof scene.edges = [];
-    for (const edge of scene.edges) {
-      const fromPorts = portWorldByNode.get(edge.from);
-      const toPorts = portWorldByNode.get(edge.to);
-      const fromDot =
-        edge.fromPort !== undefined ? fromPorts?.get(edge.fromPort) : undefined;
-      const toDot =
-        edge.toPort !== undefined ? toPorts?.get(edge.toPort) : undefined;
-      if (fromDot !== undefined || toDot !== undefined) {
-        const boxA = boxesByIndex.get(edge.from);
-        const boxB = boxesByIndex.get(edge.to);
-        if (boxA === undefined || boxB === undefined) continue;
-        // Unanchored end falls back to the box-side routing for that end.
-        const single = computeVisibleConnections([edge], (index) =>
-          boxesByIndex.get(index),
-        )[0];
-        const a = fromDot ?? single?.a;
-        const b = toDot ?? single?.b;
-        if (a === undefined || b === undefined) continue;
-        const orientation =
-          fromDot !== undefined
-            ? orientationForSide(fromDot.side)
-            : toDot !== undefined
-              ? orientationForSide(toDot.side)
-              : (single?.orientation ?? "horizontal");
-        anchored.push({ conn: edge, a, b, orientation });
-      } else {
-        fallback.push(edge);
-      }
-    }
-    return [
-      ...anchored,
-      ...computeVisibleConnections(fallback, (index) =>
-        boxesByIndex.get(index),
-      ),
-    ];
-  });
+  let visibleEdges = $derived.by(() =>
+    computeVisibleConnections(
+      scene.edges,
+      (index) => boxesByIndex.get(index),
+      (index, portLabel) => portWorldByNode.get(index)?.get(portLabel),
+    ),
+  );
 
   function worldPoint(
     node: DiagramNode,
@@ -455,7 +416,7 @@
   behind an opaque node fill. A route may still cross an unrelated node;
   dodging nodes is a separate routing change.
 -->
-{#each visibleEdges as { conn, a, b, orientation } (conn.id)}
+{#each visibleEdges as { conn, a, b, orientation, endOrientation } (conn.id)}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <g
@@ -472,14 +433,14 @@
   >
     {#if edgeInteractive}
       <path
-        d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+        d={elbowPath(a.x, a.y, b.x, b.y, orientation, 10, endOrientation)}
         stroke="transparent"
         stroke-width="14"
         fill="none"
       />
     {/if}
     <path
-      d={elbowPath(a.x, a.y, b.x, b.y, orientation)}
+      d={elbowPath(a.x, a.y, b.x, b.y, orientation, 10, endOrientation)}
       stroke={conn.selected
         ? "var(--color-primary)"
         : "var(--color-base-content)"}
@@ -492,8 +453,8 @@
       points={arrowHead(
         b.x,
         b.y,
-        orientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
-        orientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
+        endOrientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
+        endOrientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
       )}
       fill={conn.selected
         ? "var(--color-primary)"

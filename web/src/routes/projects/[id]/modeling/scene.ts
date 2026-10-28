@@ -110,6 +110,42 @@ function textAlignOf(align: TextAlign | undefined): TextAlign {
   return align ?? "center";
 }
 
+type NodePort = DiagramNode["ports"][number];
+
+function toNodePort(port: {
+  label: string;
+  role: NodePort["role"];
+  protocol?: string;
+  spot?: PortSpot;
+}): NodePort {
+  return {
+    label: port.label,
+    role: port.role,
+    ...(port.protocol !== undefined ? { protocol: port.protocol } : {}),
+    ...(port.spot !== undefined ? { spot: port.spot } : {}),
+  };
+}
+
+// Merges a component's own ports with indexed spots: the component owns
+// label/role/protocol, the index overlays outline spots by label (and may
+// contribute whole ports the component does not declare). Either side may
+// be absent.
+function mergePorts(
+  base: DiagramStaticPort[] | undefined,
+  indexed: DiagramStaticPort[] | undefined,
+): NodePort[] {
+  const out: NodePort[] = (base ?? []).map((port) => {
+    const spot = indexed?.find((entry) => entry.label === port.label)?.spot;
+    return toNodePort({ ...port, ...(spot !== undefined ? { spot } : {}) });
+  });
+  for (const port of indexed ?? []) {
+    if (!out.some((existing) => existing.label === port.label)) {
+      out.push(toNodePort(port));
+    }
+  }
+  return out;
+}
+
 function noteOf(
   ann: { text: string; x: number; y: number; scale?: number },
   index: number,
@@ -164,7 +200,7 @@ export function buildReadOnlyScene(input: {
       selected: selected.has(index),
       dimmed: input.dimUnlinked === true && !linked.has(index),
       reparentTarget: false,
-      ports: component.ports ?? input.portsByIndex[index] ?? [],
+      ports: mergePorts(component.ports, input.portsByIndex[index]),
       handles: "none",
     };
     if (component.parent_component_index !== undefined) {

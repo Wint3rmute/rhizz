@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import DiagramStaticView from "./DiagramStaticView.svelte";
-import { nodeLabelLayout } from "./geometry";
+import { elbowPath, nodeLabelLayout } from "./geometry";
 import type {
   DiagramStaticBox,
   DiagramStaticComponent,
@@ -372,5 +372,97 @@ export const WithPorts: Story = {
     // The edge anchors to the dragged spot, not the box midpoint.
     const edge = canvasElement.querySelector("[data-testid='diagram-edge']");
     await expect(edge?.querySelector("text")?.textContent).toBe("read-sensor");
+  },
+};
+
+// Single-knee routing: a right-edge port into a top-edge port draws one
+// corner and arrives vertically. Pixel-covered here (static view); the
+// interaction-level assertions live in DiagramCanvas.stories.ts.
+export const SingleKnee: Story = {
+  args: {
+    components: [
+      {
+        label: "a",
+        ports: [{ label: "out", role: "provider" }],
+      },
+      {
+        label: "b",
+        ports: [{ label: "in", role: "consumer" }],
+      },
+    ],
+    connections: [
+      { from: 0, to: 1, label: "wire", fromPort: "out", toPort: "in" },
+    ],
+    boxes: {
+      0: { x: 0, y: 0, width: 100, height: 60 },
+      1: { x: 200, y: 200, width: 100, height: 60 },
+    },
+    portsByIndex: {
+      0: [
+        {
+          label: "out",
+          role: "provider",
+          spot: { side: "right", offset: 0.5 },
+        },
+      ],
+      1: [
+        { label: "in", role: "consumer", spot: { side: "top", offset: 0.5 } },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const edge = canvasElement.querySelector("[data-testid='diagram-edge']");
+    const path = edge?.querySelector("path:not([stroke='transparent'])");
+    await expect(path?.getAttribute("d")).toBe(
+      elbowPath(100, 30, 250, 200, "horizontal", 10, "vertical"),
+    );
+    await expect(edge?.querySelector("polygon")?.getAttribute("points")).toBe(
+      "250,200 247,192 253,192",
+    );
+  },
+};
+
+// Double-knee routing: same-axis ports keep the H-V-H jog.
+export const DoubleKnee: Story = {
+  args: {
+    components: [
+      {
+        label: "a",
+        ports: [{ label: "out", role: "provider" }],
+      },
+      {
+        label: "b",
+        ports: [{ label: "in", role: "consumer" }],
+      },
+    ],
+    connections: [
+      { from: 0, to: 1, label: "wire", fromPort: "out", toPort: "in" },
+    ],
+    boxes: {
+      0: { x: 0, y: 0, width: 100, height: 60 },
+      1: { x: 200, y: 0, width: 100, height: 60 },
+    },
+    portsByIndex: {
+      0: [
+        {
+          label: "out",
+          role: "provider",
+          spot: { side: "right", offset: 0.5 },
+        },
+      ],
+      1: [
+        { label: "in", role: "consumer", spot: { side: "left", offset: 0.75 } },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const edge = canvasElement.querySelector("[data-testid='diagram-edge']");
+    const path = edge?.querySelector("path:not([stroke='transparent'])");
+    await expect(path?.getAttribute("d")).toBe(
+      elbowPath(100, 30, 200, 45, "horizontal", 10, "horizontal"),
+    );
+    await expect(edge?.querySelector("polygon")?.getAttribute("points")).toBe(
+      "200,45 192,48 192,42",
+    );
   },
 };
