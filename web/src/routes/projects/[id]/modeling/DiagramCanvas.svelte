@@ -586,8 +586,7 @@
           }}
         >
           <title
-            >{port.label} ({port.role}, {port.protocol || "untyped"}) — drag to
-            move, Alt+drag to connect</title
+            >{`${port.label} (${port.role}, ${port.protocol || "untyped"}) — drag to move, Alt+drag to connect`}</title
           >
         </circle>
         <circle
