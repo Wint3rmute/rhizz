@@ -64,9 +64,21 @@ export default defineConfig({
       ],
     },
   },
-  webServer: {
-    command: `node vrt/serve.ts storybook-static ${PORT}`,
-    url: `http://127.0.0.1:${PORT}/iframe.html`,
-    reuseExistingServer: true,
-  },
+  webServer: [
+    {
+      command: `node vrt/serve.ts storybook-static ${PORT}`,
+      url: `http://127.0.0.1:${PORT}/iframe.html`,
+      reuseExistingServer: true,
+    },
+    // Live app for landing-background screenshots (vrt/backgrounds.spec.ts).
+    // Playwright starts both servers; stories.spec.ts keeps using baseURL
+    // (storybook), backgrounds.spec.ts talks to APP_URL below explicitly.
+    // Same `vite dev` the e2e suite uses, so example seeding via the UI works.
+    {
+      command: "npm run dev -- --port 5199 --host 127.0.0.1",
+      url: "http://127.0.0.1:5199",
+      reuseExistingServer: true,
+      timeout: 120000,
+    },
+  ],
 });
