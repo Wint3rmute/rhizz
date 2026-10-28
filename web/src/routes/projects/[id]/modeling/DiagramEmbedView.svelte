@@ -28,8 +28,9 @@
     connections: DiagramStaticConnection[];
     boxes: Record<number, DiagramStaticBox>;
     annotations?: DiagramStaticAnnotation[];
-    /** Port data by component index, for labels and edge anchoring (no dots). */
-    portsByIndex?: Record<number, DiagramStaticPort[]> | undefined;
+    /** Port data by component index, for labels and edge anchoring (no dots).
+     * Required so every diagram renders ports the same way. */
+    portsByIndex: Record<number, DiagramStaticPort[]>;
     projectId?: string | null;
     diagramPath?: string | null;
     /** Component indices to show as selected (drawn with a transparent dotted outline on top). */

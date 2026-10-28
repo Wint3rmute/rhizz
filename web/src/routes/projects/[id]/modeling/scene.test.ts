@@ -25,6 +25,7 @@ describe("buildReadOnlyScene", () => {
         2: { ...box(40, 40), textAlign: "top-left" },
         9: box(80, 80),
       },
+      portsByIndex: {},
     });
 
     expect(scene.nodes.map((node) => node.label)).toEqual(["root", "leaf"]);
@@ -53,6 +54,7 @@ describe("buildReadOnlyScene", () => {
         2: box(40, 40),
         0: box(0, 0),
       },
+      portsByIndex: {},
     });
 
     expect(scene.nodes.map((node) => node.label)).toEqual(["root", "leaf"]);
@@ -65,6 +67,7 @@ describe("buildReadOnlyScene", () => {
       boxes: { 0: box(0, 0), 1: box(20, 0) },
       selected: new Set([1]),
       linked: new Set([0]),
+      portsByIndex: {},
     };
 
     expect(buildReadOnlyScene(input).nodes.map((node) => node.dimmed)).toEqual([
@@ -88,6 +91,7 @@ describe("buildReadOnlyScene", () => {
       components: [{ label: "a" }, { label: "b" }],
       connections: [{ from: 0, to: 1, label: "bus", startSide: "right" }],
       boxes: { 0: box(0, 0) },
+      portsByIndex: {},
       annotations: [
         { text: "hi", x: 4, y: 8 },
         {

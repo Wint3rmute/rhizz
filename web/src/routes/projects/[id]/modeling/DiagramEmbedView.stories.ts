@@ -13,6 +13,9 @@ const meta = {
   parameters: {
     layout: "fullscreen",
   },
+  args: {
+    portsByIndex: {},
+  },
 } satisfies Meta<typeof DiagramEmbedView>;
 
 export default meta;

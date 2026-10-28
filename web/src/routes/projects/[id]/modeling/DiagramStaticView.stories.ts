@@ -16,6 +16,9 @@ const meta = {
   parameters: {
     layout: "fullscreen",
   },
+  args: {
+    portsByIndex: {},
+  },
 } satisfies Meta<typeof DiagramStaticView>;
 
 export default meta;
@@ -308,5 +311,65 @@ export const NodeVisualStyles: Story = {
     const outline = bodies[1]?.querySelectorAll("rect")[1];
     await expect(outline?.getAttribute("stroke")).toBe("var(--color-primary)");
     await expect(outline?.getAttribute("fill")).toBe("none");
+  },
+};
+
+// Port unification: read-only diagrams show the same labels, outline spots,
+// and anchored edges as the editor — but never dots (no interactivity).
+// Even a selected node keeps labels only; the dot layer needs port handlers
+// the static renderer never passes.
+export const WithPorts: Story = {
+  args: {
+    components: [
+      {
+        label: "sensor",
+        ports: [{ label: "i2c", role: "provider" }],
+      },
+      {
+        label: "controller",
+        ports: [{ label: "i2c-in", role: "consumer" }],
+      },
+    ],
+    connections: [
+      {
+        from: 0,
+        to: 1,
+        label: "read-sensor",
+        fromPort: "i2c",
+        toPort: "i2c-in",
+      },
+    ],
+    boxes: {
+      0: { x: 0, y: 40, width: 140, height: 80 },
+      1: { x: 220, y: 40, width: 140, height: 80 },
+    },
+    portsByIndex: {
+      1: [
+        {
+          label: "i2c-in",
+          role: "consumer",
+          spot: { side: "left", offset: 0.25 },
+        },
+      ],
+    },
+    selected: new Set([0]),
+  },
+  play: async ({ canvasElement }) => {
+    const ports = canvasElement.querySelectorAll(
+      "[data-testid='diagram-port']",
+    );
+    await expect(ports.length).toBe(2);
+    const labels = Array.from(ports).map(
+      (port) => port.querySelector("text")?.textContent,
+    );
+    await expect(labels).toEqual(["i2c", "i2c-in"]);
+    // Labels only: no dots (and no hit areas) without port handlers.
+    await expect(
+      canvasElement.querySelectorAll("[data-testid='diagram-port'] circle")
+        .length,
+    ).toBe(0);
+    // The edge anchors to the dragged spot, not the box midpoint.
+    const edge = canvasElement.querySelector("[data-testid='diagram-edge']");
+    await expect(edge?.querySelector("text")?.textContent).toBe("read-sensor");
   },
 };
