@@ -531,6 +531,20 @@ pub struct NodeLayout {
     /// Optional text alignment ("center", "top-center", "top-left").
     #[serde(default)]
     pub text_align: Option<String>,
+    /// Per-view port outline spots. Empty means role defaults apply.
+    #[serde(default)]
+    pub ports: Vec<PortLayout>,
+}
+
+/// Per-view outline spot of a port on its node's border.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PortLayout {
+    /// Port label on the component.
+    pub port: String,
+    /// Outline side the dot sits on.
+    pub side: ConnectionSide,
+    /// Position along the side, 0..1 (0 = top/left end, 1 = bottom/right end).
+    pub offset: f64,
 }
 
 /// Optional rendering attributes for a component/connection box.

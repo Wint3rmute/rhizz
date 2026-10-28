@@ -2,8 +2,8 @@ use std::fmt::Write as _;
 
 use proptest::prelude::*;
 use rhizz_core::{
-    ConnectionLayout, ConnectionSide, NodeLayout, Source, ViewDefinition, ViewFilterDefinition,
-    compile, parse_views, serialize_model, serialize_views,
+    ConnectionLayout, ConnectionSide, NodeLayout, PortLayout, Source, ViewDefinition,
+    ViewFilterDefinition, compile, parse_views, serialize_model, serialize_views,
 };
 
 #[derive(Debug)]
@@ -347,6 +347,7 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                     Just("center".to_owned()),
                     Just("top-left".to_owned())
                 ]),
+                prop::collection::vec((identifier_suffix(), side(), 0.0_f64..1.0), 0..3),
             ),
             0..5,
         ),
@@ -389,13 +390,22 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                     .into_iter()
                     .enumerate()
                     .map(
-                        |(index, (component, x, y, width, height, text_align))| NodeLayout {
+                        |(index, (component, x, y, width, height, text_align, ports))| NodeLayout {
                             component: format!("component-{index}-{component}"),
                             x,
                             y,
                             width,
                             height,
                             text_align,
+                            ports: ports
+                                .into_iter()
+                                .enumerate()
+                                .map(|(port_index, (port, side, offset))| PortLayout {
+                                    port: format!("port-{port_index}-{port}"),
+                                    side,
+                                    offset,
+                                })
+                                .collect(),
                         },
                     )
                     .collect(),

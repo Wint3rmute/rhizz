@@ -430,14 +430,11 @@
     filter?: ViewFilterDefinition | undefined;
   }>({});
   let savedConnections = $state<Record<string, StoredConnection>>({});
-  // Prototype (ports brainstorm): per-view port outline spots.
-  // Outer key = componentKey (same stable key as `checked`), inner = port label.
-  // Session-only for now — not yet written to view HCL. Survives view switches
-  // in-memory via `portPositionsByView`; cleared only on project change/reload.
-  // Dragging a port dot writes here; `editorScene` reads it back as `spot`.
-  let portPositionsByView = $state<
-    Record<string, Record<string, Record<string, PortSpot>>>
-  >({});
+  // Prototype persisted: per-view port outline spots, component key → port
+  // label → spot. Loaded from the view file, written back through the same
+  // debounced layout save as boxes. Survives uncheck/re-check (keyed
+  // separately from `checked`, never pruned on unplace).
+  let portPositions = $state<Record<string, Record<string, PortSpot>>>({});
   let annotations = $state<Annotation[]>([]);
   // Indices into `annotations` currently selected (for drag/delete).
   // SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
@@ -542,13 +539,6 @@
     selectedDiagramPath === null
       ? null
       : `${VIEW_LAYOUT_DIR}/${selectedDiagramPath}`,
-  );
-
-  // Port spots for the currently open view (prototype: session-only).
-  let portPositions = $derived(
-    (selectedDiagramPath !== null
-      ? (portPositionsByView[selectedDiagramPath] ?? {})
-      : {}) as Record<string, Record<string, PortSpot>>,
   );
 
   async function refreshDiagramEntries(): Promise<void> {
@@ -842,6 +832,7 @@
       checked = {};
       savedLayout = {};
       savedConnections = {};
+      portPositions = {};
       annotations = [];
       carriedMeta = {};
       selectedSystem = "";
@@ -867,6 +858,7 @@
         // seed the page-local memory from the placed nodes.
         savedLayout = { ...layout.checked };
         savedConnections = layout.connections ?? {};
+        portPositions = layout.ports ?? {};
         annotations = layout.annotations ?? [];
         carriedMeta = {
           fullName: layout.fullName,
@@ -919,6 +911,7 @@
       system: effectiveSystem,
       checked: $state.snapshot(checked),
       connections: $state.snapshot(savedConnections),
+      ports: $state.snapshot(portPositions),
       annotations: $state.snapshot(annotations),
       // Carried, not owned: read back from the file this view was loaded from.
       fullName: carriedMeta.fullName,
@@ -1373,6 +1366,7 @@
     checked: Record<string, StoredBox>;
     savedLayout: Record<string, StoredBox>;
     connections: Record<string, StoredConnection>;
+    ports: Record<string, Record<string, PortSpot>>;
     annotations: Annotation[];
   };
 
@@ -1416,6 +1410,12 @@
       checked: { ...checked },
       savedLayout: { ...savedLayout },
       connections: { ...savedConnections },
+      ports: Object.fromEntries(
+        Object.entries(portPositions).map(([key, byPort]) => [
+          key,
+          { ...byPort },
+        ]),
+      ),
       annotations: annotations.map((ann) => ({ ...ann })),
     };
   }
@@ -1425,6 +1425,12 @@
     checked = { ...snapshot.checked };
     savedLayout = { ...snapshot.savedLayout };
     savedConnections = { ...(snapshot.connections || {}) };
+    portPositions = Object.fromEntries(
+      Object.entries(snapshot.ports ?? {}).map(([key, byPort]) => [
+        key,
+        { ...byPort },
+      ]),
+    );
     annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
     clearSelection();
     selectedConnection = null;
@@ -1859,7 +1865,13 @@
       await writeDiagramLayoutFile(
         fs,
         `${VIEW_LAYOUT_DIR}/${path}`,
-        layoutFromSelection(system, checked, selectedKeys, notes),
+        layoutFromSelection(
+          system,
+          checked,
+          selectedKeys,
+          notes,
+          portPositions,
+        ),
         system,
       );
       await refreshDiagramEntries();
@@ -2074,7 +2086,8 @@
       }
     | {
         // Perimeter-slider drag of a port dot along its node's outline.
-        // Prototype: session-only, per-view (see `portPositionsByView`).
+        // Persisted per view (see `DiagramLayout.ports`); one undo point per
+        // gesture, recorded at drag start.
         type: "port-dragging";
         componentIndex: number;
         portLabel: string;
@@ -2440,8 +2453,8 @@
   }
 
   // Prototype: plain left-drag on a port dot moves it along the outline.
-  // Alt/Shift+drag still connects (handled in DiagramCanvas). Session-only,
-  // per-view — see `portPositionsByView`.
+  // Alt/Shift+drag still connects (handled in DiagramCanvas). One undo point
+  // per drag gesture, recorded here at drag start (see recordUndoPoint).
   function onPortDragStart(
     event: MouseEvent,
     compIndex: number,
@@ -2452,7 +2465,12 @@
     event.stopPropagation();
     event.preventDefault();
     focusCanvas();
-    interaction = { type: "port-dragging", componentIndex: compIndex, portLabel };
+    recordUndoPoint();
+    interaction = {
+      type: "port-dragging",
+      componentIndex: compIndex,
+      portLabel,
+    };
   }
 
   function writePortSpot(
@@ -2460,15 +2478,10 @@
     portLabel: string,
     spot: PortSpot,
   ): void {
-    if (selectedDiagramPath === null) return;
-    const viewKey = selectedDiagramPath;
+    noteDiagramEdited();
     const compKey = getComponentKey(compIndex);
-    const viewEntry = portPositionsByView[viewKey] ?? {};
-    const compEntry = viewEntry[compKey] ?? {};
-    portPositionsByView[viewKey] = {
-      ...viewEntry,
-      [compKey]: { ...compEntry, [portLabel]: spot },
-    };
+    const compEntry = portPositions[compKey] ?? {};
+    portPositions[compKey] = { ...compEntry, [portLabel]: spot };
   }
 
   function findHoveredTarget(
@@ -3284,8 +3297,8 @@
   function onSvgMouseUp() {
     const current = interaction;
     if (current.type === "port-dragging") {
-      // Prototype: the spot is already written live on every mousemove;
-      // nothing to commit. No undo point yet (added once the design sticks).
+      // The spot was written live on every mousemove; the undo point was
+      // recorded at drag start. Nothing left to commit.
       interaction = { type: "idle" };
       return;
     }
@@ -4307,7 +4320,7 @@
           {onNodeDblClick}
           onNodeContextMenu={openNodeContextMenu}
           onPortPointerDown={onPortMouseDown}
-          onPortDragStart={onPortDragStart}
+          {onPortDragStart}
           onResizePointerDown={onResizeHandleMouseDown}
           onEdgeClick={(event, edge) => {
             event.stopPropagation();

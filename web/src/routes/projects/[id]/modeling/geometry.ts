@@ -617,7 +617,9 @@ export interface PortSpot {
   offset: number;
 }
 
-export function orientationForSide(side: ConnectionSide): ConnectionOrientation {
+export function orientationForSide(
+  side: ConnectionSide,
+): ConnectionOrientation {
   return side === "left" || side === "right" ? "horizontal" : "vertical";
 }
 
@@ -662,10 +664,12 @@ export function nearestPortSpot(
   const distTop = Math.abs(y);
   const distBottom = Math.abs(y - safeHeight);
   const min = Math.min(distLeft, distRight, distTop, distBottom);
-  if (min === distLeft) return { side: "left", offset: clampOffset(y / safeHeight) };
+  if (min === distLeft)
+    return { side: "left", offset: clampOffset(y / safeHeight) };
   if (min === distRight)
     return { side: "right", offset: clampOffset(y / safeHeight) };
-  if (min === distTop) return { side: "top", offset: clampOffset(x / safeWidth) };
+  if (min === distTop)
+    return { side: "top", offset: clampOffset(x / safeWidth) };
   return { side: "bottom", offset: clampOffset(x / safeWidth) };
 }
 
@@ -692,9 +696,7 @@ export function snapPortSpot(
   if (side === "left" || side === "right") {
     return {
       side,
-      offset: clampOffset(
-        (snap(pointerWorldY) - boxY) / Math.max(1, height),
-      ),
+      offset: clampOffset((snap(pointerWorldY) - boxY) / Math.max(1, height)),
     };
   }
   return {
@@ -724,7 +726,8 @@ export function computePortPositions(
     (p) => p.role === "consumer" && p.spot === undefined,
   );
   const peers = ports.filter(
-    (p) => p.role !== "provider" && p.role !== "consumer" && p.spot === undefined,
+    (p) =>
+      p.role !== "provider" && p.role !== "consumer" && p.spot === undefined,
   );
 
   const result: PortGeometry[] = [];

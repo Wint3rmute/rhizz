@@ -19,7 +19,7 @@ use std::fmt::Write as _;
 use crate::model::{
     Annotation, BorderStyle, Component, ComponentKind, ComponentParent, Connection,
     ConnectionEndpoint, ConnectionLayout, ConnectionSide, Field, Message, Model, NodeLayout, Port,
-    Project, Protocol, System, ViewDefinition, ViewFilterDefinition,
+    PortLayout, Project, Protocol, System, ViewDefinition, ViewFilterDefinition,
 };
 use anyhow::Context;
 use serde::Deserialize;
@@ -720,6 +720,15 @@ fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
     if let Some(ref align) = node.text_align {
         let _ = writeln!(out, "    text_align = {}", escape_string(align));
     }
+    let mut sorted_ports: Vec<&PortLayout> = node.ports.iter().collect();
+    sorted_ports.sort_by(|a, b| a.port.cmp(&b.port));
+    for port in sorted_ports {
+        out.push('\n');
+        let _ = writeln!(out, "    port {} {{", escape_string(&port.port));
+        let _ = writeln!(out, "      side   = {}", escape_string(port.side.as_str()));
+        let _ = writeln!(out, "      offset = {}", format_number(port.offset));
+        out.push_str("    }\n");
+    }
     out.push_str("  }\n");
 }
 
@@ -805,6 +814,13 @@ struct RawConnectionLayoutAttrs {
 
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
+struct RawPortLayoutAttrs {
+    side: Option<String>,
+    offset: Option<f64>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawAnnotationAttrs {
     x: Option<f64>,
     y: Option<f64>,
@@ -820,6 +836,35 @@ fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
         Some("right") => Some(ConnectionSide::Right),
         _ => None,
     }
+}
+
+/// Parses nested `port` blocks of a view `node` block into [`PortLayout`]s.
+/// Unknown sides are skipped (same as connection sides), so a newer side
+/// value round-trips as absent rather than failing the whole view.
+fn parse_port_layouts(body: &hcl::Body) -> anyhow::Result<Vec<PortLayout>> {
+    let mut ports = Vec::new();
+    for port_block in body.blocks() {
+        if port_block.identifier() != "port" {
+            continue;
+        }
+        let port_label = port_block
+            .labels()
+            .first()
+            .map(|l| l.as_str().to_owned())
+            .ok_or_else(|| anyhow::anyhow!("port layout block is missing a label"))?;
+        let pa: RawPortLayoutAttrs = view_attrs(
+            port_block.body(),
+            "failed to deserialize port layout attributes",
+        )?;
+        if let Some(side) = parse_connection_side(pa.side.as_deref()) {
+            ports.push(PortLayout {
+                port: port_label,
+                side,
+                offset: pa.offset.unwrap_or(0.5).clamp(0.0, 1.0),
+            });
+        }
+    }
+    Ok(ports)
 }
 
 /// Deserialize attribute-only fields from a view block body, stripping child
@@ -879,6 +924,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             .ok_or_else(|| anyhow::anyhow!("node block is missing a label"))?;
                         let na: RawNodeAttrs =
                             view_attrs(child.body(), "failed to deserialize node attributes")?;
+                        let ports = parse_port_layouts(child.body())?;
                         nodes.push(NodeLayout {
                             component: node_label,
                             x: na.x.unwrap_or(0.0),
@@ -886,6 +932,7 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                             width: na.width,
                             height: na.height,
                             text_align: na.text_align,
+                            ports,
                         });
                     }
                     "connection" => {
@@ -1686,6 +1733,78 @@ system "apollo" {
 
         let parsed2 = parse_views(&serialized1).expect("should parse serialized views");
         assert_eq!(parsed1, parsed2);
+    }
+
+    #[test]
+    fn port_layout_round_trips_through_views_hcl() {
+        let hcl = r#"view "overview" {
+  system      = "s"
+
+  node "fc" {
+    x          = 100
+    y          = 200
+
+    port "in" {
+      side   = "left"
+      offset = 0.25
+    }
+
+    port "out" {
+      side   = "right"
+      offset = 0.75
+    }
+  }
+}
+"#;
+
+        let parsed1 = parse_views(hcl).expect("should parse views HCL with ports");
+        assert_eq!(parsed1.len(), 1);
+        let node = &parsed1[0].nodes[0];
+        assert_eq!(node.component, "fc");
+        assert_eq!(node.ports.len(), 2);
+        assert_eq!(node.ports[0].port, "in");
+        assert_eq!(node.ports[0].side, crate::model::ConnectionSide::Left);
+        assert!((node.ports[0].offset - 0.25).abs() < f64::EPSILON);
+        let serialized1 = serialize_views(&parsed1);
+        assert_eq!(serialized1, hcl);
+
+        let parsed2 = parse_views(&serialized1).expect("should parse serialized views");
+        assert_eq!(parsed1, parsed2);
+    }
+
+    #[test]
+    fn port_layout_with_unknown_side_is_skipped() {
+        let hcl = r#"view "main" {
+  system = "s"
+  node "a" {
+    x = 1
+    y = 2
+    port "p" {
+      side   = "diagonal"
+      offset = 0.5
+    }
+  }
+}"#;
+        let parsed = parse_views(hcl).expect("unknown port side should not fail");
+        assert_eq!(parsed.len(), 1);
+        assert!(parsed[0].nodes[0].ports.is_empty());
+    }
+
+    #[test]
+    fn port_layout_offset_is_clamped_to_unit_range() {
+        let hcl = r#"view "main" {
+  system = "s"
+  node "a" {
+    x = 1
+    y = 2
+    port "p" {
+      side   = "top"
+      offset = 5
+    }
+  }
+}"#;
+        let parsed = parse_views(hcl).expect("should parse");
+        assert!((parsed[0].nodes[0].ports[0].offset - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]

@@ -276,6 +276,64 @@ describe("HCL View conversion and persistence", () => {
     });
   });
 
+  it("persists and reads per-view port outline spots", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+      },
+      ports: {
+        "sys/a": {
+          out: { side: "right" as const, offset: 0.75 },
+          in: { side: "left" as const, offset: 0.25 },
+        },
+      },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).toContain('port "out"');
+    expect(content).toContain('side   = "right"');
+    expect(content).toContain("offset = 0.75");
+
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.ports?.["sys/a"]).toEqual({
+      out: { side: "right", offset: 0.75 },
+      in: { side: "left", offset: 0.25 },
+    });
+  });
+
+  it("omits port blocks when no spots are placed", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+      },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).not.toContain('port "');
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.ports ?? {}).toEqual({});
+  });
+
+  it("carries port spots for selected components into a cut-out view", () => {
+    const layout = layoutFromSelection(
+      "sys",
+      {
+        "sys/a": { x: 10, y: 20 },
+        "sys/b": { x: 200, y: 20 },
+      },
+      ["sys/a"],
+      [],
+      { "sys/a": { p: { side: "top", offset: 0.5 } } },
+    );
+    expect(layout.ports?.["sys/a"]).toEqual({
+      p: { side: "top", offset: 0.5 },
+    });
+    expect(layout.ports?.["sys/b"]).toBeUndefined();
+  });
+
   it("creates the containing directory on first write", async () => {
     const fs = await projectFs();
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());
