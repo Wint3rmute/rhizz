@@ -29,6 +29,48 @@ Preliminary requirements (to be narrowed down during brainstorming):
 Focus on fast implementation and immediate user feedback, skip quality & test
 gates until the user is happy with the design.
 
+### Open questions — interaction leftovers (prototype implements the simple default in each case)
+
+1. **Touch support.** The whole canvas is mouse-only today (`mousedown`/
+   `mousemove`, including node drag). Port drag follows suit. Do we add touch
+   for ports alone, or wait for a canvas-wide pointer-events migration? On
+   touch there is no Alt key — what gesture distinguishes move from connect
+   (long-press, second finger, mode toggle)?
+2. **Keyboard nudge.** Nodes nudge with arrow keys when selected, but ports
+   have no selection model. Do ports need keyboard placement at all? If yes,
+   how is a port selected (click-to-select, Tab cycle, inspector list) and
+   what step does a nudge use?
+3. **Snap granularity.** Port sliding snaps to full grid steps like nodes. On
+   small nodes at the default grid this feels coarse. Keep full steps, use
+   half-steps for ports, or make it follow the grid-size dropdown as-is?
+4. **Move vs. connect discoverability.** Plain drag moves, Alt/Shift+drag
+   connects; the only hint is the dot tooltip and the cursor (`move` vs.
+   `crosshair`). Previously dragging a port *started* a connection. Is the
+   tooltip enough, or do we need visible affordance (e.g. different cursor
+   on hover is already there — is it sufficient)?
+5. **Hover feedback on touch.** The 1.4x overshoot pop is hover-only and
+   therefore invisible on touch. Acceptable while touch is out of scope, or a
+   reason to prioritize it?
+6. **Accessibility.** Port dots are mouse-only with no keyboard focus and no
+   ARIA role; labels are `pointer-events: none` text. Side handles and resize
+   handles have the same status (precedent), but what level does canvas
+   chrome need — same-as-existing, or a first a11y pass for ports?
+7. **Label collisions.** Labels sit inside the node and can overlap the
+   component name/icon on small nodes or with many ports. Mitigation: none
+   (prototype), truncation, smaller font, hide labels below a node size, or
+   labels-on-hover-only?
+8. **Reset to default.** A dragged port keeps its spot forever; there is no
+   way back to the role default except dragging it there by hand. Needed:
+   double-click to reset, context-menu entry, numeric offset in the
+   inspector — or nothing?
+9. **Anchored edge routing.** Anchored ends orient the elbow from the
+   from-side; both-ends-anchored routes can look awkward when the sides face
+   each other. Accept for now, or fold into the "more advanced connection
+   routing" task below?
+10. **Scope gate.** Are any of the above merge blockers for the ports branch,
+    or do they all become follow-up tasks once the persisted prototype is
+    accepted?
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
