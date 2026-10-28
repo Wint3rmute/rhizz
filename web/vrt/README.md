@@ -2,7 +2,9 @@
 
 A full-page screenshot of every Storybook story in dark and light, diffed
 against baselines in `__screenshots__/` (committed), with a static review
-gallery.
+gallery. The same run also captures the landing-page background screenshots
+(`src/screenshots/background_*.png`, light theme, `apollo-11` example) — see
+`backgrounds.spec.ts`.
 
 ```bash
 just vrt              # rebuild wasm + Storybook, screenshot, diff
