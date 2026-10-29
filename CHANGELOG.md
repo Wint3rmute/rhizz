@@ -10,6 +10,7 @@
 
 ### Fix
 
+- **book**: name port paths in book examples
 - **web**: use port paths in connection unit tests
 - **server**: require port paths in connection tools
 - **core**: require port path in every connection endpoint (E003)
