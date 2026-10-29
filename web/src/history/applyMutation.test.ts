@@ -219,10 +219,22 @@ describe("applyModelMutation", () => {
   it("builds nested instances with relative endpoints that compile", async () => {
     const fs = memoryFs();
     let baseline = "";
-    for (const op of [
-      { kind: "add_component_definition", label: "antenna" },
-      { kind: "add_component_definition", label: "rf" },
-      { kind: "add_component_definition", label: "dsp" },
+    const ops: ModelMutationOp[] = [
+      {
+        kind: "add_component_definition",
+        label: "antenna",
+        options: { ports: [{ label: "in", role: "peer" }] },
+      },
+      {
+        kind: "add_component_definition",
+        label: "rf",
+        options: { ports: [{ label: "out", role: "peer" }] },
+      },
+      {
+        kind: "add_component_definition",
+        label: "dsp",
+        options: { ports: [{ label: "in", role: "peer" }] },
+      },
       { kind: "add_component_definition", label: "baseband" },
       { kind: "add_system", label: "mobile" },
       {
@@ -253,22 +265,23 @@ describe("applyModelMutation", () => {
         kind: "add_connection",
         scopePath: "mobile",
         label: "rf-antenna",
-        from: "baseband/rf",
-        to: "antenna",
+        from: "baseband/rf/out",
+        to: "antenna/in",
       },
       {
         kind: "add_connection",
         scopePath: "mobile",
         label: "rf-dsp",
-        from: "baseband/rf",
-        to: "baseband/dsp",
+        from: "baseband/rf/out",
+        to: "baseband/dsp/in",
       },
-    ] as const) {
+    ];
+    for (const op of ops) {
       const result = await applyModelMutation(fs, "system.hcl", baseline, op);
       if (!result.applied) throw new Error(`seed op failed: ${op.kind}`);
       baseline = fs.store.get("system.hcl") ?? "";
     }
-    expect(baseline).toContain('from         = "/mobile/baseband/rf"');
+    expect(baseline).toContain('"/mobile/baseband/rf/out"');
     expect(baseline).not.toContain("baseband:rf");
     expect(
       compile_system([
@@ -377,10 +390,18 @@ describe("applyModelMutation", () => {
     // silently dropped the connection — instance blocks carry only `source`.
     const fs = memoryFs();
     let baseline = "";
-    for (const op of [
+    const ops: ModelMutationOp[] = [
       { kind: "add_component_definition", label: "drone" },
-      { kind: "add_component_definition", label: "battery" },
-      { kind: "add_component_definition", label: "flight-controller" },
+      {
+        kind: "add_component_definition",
+        label: "battery",
+        options: { ports: [{ label: "out", role: "peer" }] },
+      },
+      {
+        kind: "add_component_definition",
+        label: "flight-controller",
+        options: { ports: [{ label: "in", role: "peer" }] },
+      },
       { kind: "add_system", label: "main" },
       {
         kind: "add_instance",
@@ -400,7 +421,8 @@ describe("applyModelMutation", () => {
         label: "flight-controller",
         source: "flight-controller",
       },
-    ] as const) {
+    ];
+    for (const op of ops) {
       const seeded = await applyModelMutation(fs, "system.hcl", baseline, op);
       if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
       baseline = fs.store.get("system.hcl") ?? "";
@@ -409,8 +431,8 @@ describe("applyModelMutation", () => {
       kind: "add_connection",
       scopePath: "main/drone",
       label: "power-supply",
-      from: "battery",
-      to: "flight-controller",
+      from: "battery/out",
+      to: "flight-controller/in",
     });
     expect(added.applied).toBe(true);
     const content = fs.store.get("system.hcl") ?? "";
@@ -557,12 +579,29 @@ describe("applyModelMutation", () => {
     const fs = memoryFs();
     await seedDemo(fs);
     let baseline = fs.store.get("system.hcl") ?? "";
+    const ops: ModelMutationOp[] = [
+      {
+        kind: "update_component",
+        path: "demo/a",
+        patch: { ports: [{ label: "out", role: "peer" }] },
+      },
+      {
+        kind: "update_component",
+        path: "demo/b",
+        patch: { ports: [{ label: "in", role: "peer" }] },
+      },
+    ];
+    for (const op of ops) {
+      const seeded = await applyModelMutation(fs, "system.hcl", baseline, op);
+      if (!seeded.applied) throw new Error(`seed op failed: ${op.kind}`);
+      baseline = fs.store.get("system.hcl") ?? "";
+    }
     const added = await applyModelMutation(fs, "system.hcl", baseline, {
       kind: "add_connection",
       scopePath: "demo",
       label: "link",
-      from: "a",
-      to: "b",
+      from: "a/out",
+      to: "b/in",
     });
     expect(added.applied).toBe(true);
     baseline = fs.store.get("system.hcl") ?? "";
@@ -619,9 +658,13 @@ describe("applyModelMutation", () => {
       {
         kind: "add_component_definition",
         label: "cpu",
-        options: { leaf: true },
+        options: { leaf: true, ports: [{ label: "p", role: "peer" }] },
       },
-      { kind: "add_component_definition", label: "fc" },
+      {
+        kind: "add_component_definition",
+        label: "fc",
+        options: { ports: [{ label: "q", role: "peer" }] },
+      },
       { kind: "add_instance", parentPath: "fc", label: "mcu", source: "cpu" },
       { kind: "add_system", label: "demo" },
       { kind: "add_instance", parentPath: "demo", label: "f", source: "fc" },
@@ -629,8 +672,8 @@ describe("applyModelMutation", () => {
         kind: "add_connection",
         scopePath: "demo",
         label: "link",
-        from: "/demo/f/mcu",
-        to: "/demo/f",
+        from: "/demo/f/mcu/p",
+        to: "/demo/f/q",
       },
     ];
     for (const op of setup) {

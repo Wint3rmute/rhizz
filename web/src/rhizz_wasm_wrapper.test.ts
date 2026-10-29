@@ -167,8 +167,14 @@ system "computer-setup" {
     const sources = [
       {
         filename: "main.hcl",
-        content: `component "c1" { leaf = true }
-component "c2" { leaf = true }
+        content: `component "c1" {
+  leaf = true
+  port "out" {}
+}
+component "c2" {
+  leaf = true
+  port "in" {}
+}
 system "demo" {
   instance "c1" {
     source = "c1"
@@ -177,8 +183,8 @@ system "demo" {
     source = "c2"
   }
   connection "link" {
-    from = "c1"
-    to   = "c2"
+    from = "c1/out"
+    to   = "c2/in"
   }
 }
 `,
