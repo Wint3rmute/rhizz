@@ -10,6 +10,7 @@
 
 ### Fix
 
+- **web**: use port paths in refused-delete e2e fixture
 - **book**: name port paths in book examples
 - **web**: use port paths in connection unit tests
 - **server**: require port paths in connection tools
