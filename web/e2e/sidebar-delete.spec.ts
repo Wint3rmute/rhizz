@@ -207,18 +207,25 @@ test("deleting a component that has a connection removes both, without a refusal
 // before any confirm prompt.
 const REFUSED_MODEL = `component "cpu" {
   leaf = true
+  port "p" {
+    role = "provider"
+  }
 }
 
 component "fc" {
   instance "mcu" { source = "cpu" }
+
+  port "q" {
+    role = "provider"
+  }
 }
 
 system "demo" {
   instance "f" { source = "fc" }
 
   connection "link" {
-    from = "/demo/f/mcu"
-    to   = "/demo/f"
+    from = "/demo/f/mcu/p"
+    to   = "/demo/f/q"
   }
 }
 `;
