@@ -290,9 +290,9 @@ sibling or outside component.
 
 #### Addressing & Resolution
 
-The `from` and `to` fields accept UNIX-style path references evaluated relative
+The `from` and `to` fields accept UNIX-style port path references evaluated relative
 to the block declaring the connection (e.g. `mcu/spi`, `sensors/imu/spi`,
-`../sibling/port`, `/system/comp/port`). When a port is named, protocol and role
+`../sibling/port`, `/system/comp/port`). Protocol and role
 compatibility is validated at resolution time. The connection carries no
 messages and no direction — both are derived from the connected ports.
 
@@ -334,8 +334,8 @@ system "drone" {
 | Attribute      | Type         | Required | Default          | Description                                                    |
 | -------------- | ------------ | -------- | ---------------- | -------------------------------------------------------------- |
 | _label_        | string       | **yes**  | —                | Unique identifier within parent scope                          |
-| `from`         | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or relative path from declaring scope |
-| `to`           | string       | **yes**  | —                | `"comp"`, `"comp/port"`, or relative path from declaring scope |
+| `from`         | string       | **yes**  | —                | `"comp/port"` or relative path from declaring scope ending in a port |
+| `to`           | string       | **yes**  | —                | `"comp/port"` or relative path from declaring scope ending in a port |
 | `full_name`  | string       | no       | `""`             | Full official name, expanding abbreviations                                     |
 | `tags`         | list(string) | no       | `[]`             | Filtering tags                                                 |
 | `level`        | integer      | no       | parent level + 1 | Abstraction level                                              |
@@ -556,9 +556,8 @@ All references use **name-based or UNIX-style path notation**:
 | Context                                           | Reference resolves to                                                  |
 | ------------------------------------------------- | ---------------------------------------------------------------------- |
 | `port.protocol`                                   | Top-level `protocol` label (or freeform protocol name if undefined)    |
-| `connection.from` / `connection.to` (bare label)  | Component path evaluated relative to declaring scope                   |
 | `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component                      |
-| `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute path from scope   |
+| `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute port path from scope |
 
 | `encapsulates` (protocol)                         | Top-level `protocol` labels                                            |
 | `connection.realized_by`                          | `connection` path; the last segment is always a connection label       |
@@ -644,6 +643,9 @@ unit-level checks) vs. verifying a fully instantiated system:
 - A connection must be declared within the Lowest Common Ancestor (LCA) enclosing both `from` and `to` endpoints, or an ancestor above it.
 - Declaring a connection inside a child component that references sibling or external components is an error (E011/E015).
 
+### Connection Endpoint Typing
+- A connection `from`/`to` value names a port path such as `comp/port`. Resolution reports E003 when an endpoint names a component without naming one of its ports. Protocol and role checks (W008/W009), completeness (W019), and direction inference (§6) read the named ports.
+
 ### Realization Validation
 
 Checked for every connection `A` and each connection `B` in its resolved
@@ -667,9 +669,8 @@ Checked for every connection `c` (`W019`, architectural). A connection is
 **complete** when its protocol is a leaf protocol, or when it has `realized_by`
 entries and every one of them is complete:
 
-- A connection whose protocol is undefined is always incomplete. This covers a
-  bare endpoint, an untyped port, endpoints with differing protocols, and an
-  undefined protocol.
+- A connection whose protocol is undefined is always incomplete. This covers
+  endpoints with differing protocols and an undefined protocol.
 - A non-leaf protocol without `realized_by` is incomplete.
 - `W019` is reported on every incomplete connection, including the connections
   in a realization chain. Its message names the first incomplete connection in
@@ -706,7 +707,7 @@ aggregated.
 | **Component** (leaf)     | Has full_name AND all defined ports complete          | Has full_name but ≥1 port incomplete        | No full_name      |
 | **Component** (non-leaf) | ≥1 child component, all children complete               | ≥1 child component, not all children complete | No child components |
 | **Port**                 | Bound protocol has ≥1 message, all messages complete    | Bound protocol has ≥1 message, not all complete | No bound protocol or protocol has no messages |
-| **Connection**           | Both sides typed (`comp/port`) with matching `protocol` | One side typed                                | Both sides untyped  |
+| **Connection**           | Both sides name ports with matching `protocol` | Both sides name ports with differing `protocol` | Both sides name ports with undefined `protocol` |
 | **Message**              | ≥1 field (defined inside a protocol)                    | —                                             | No fields           |
 
 A leaf component with a full_name and no ports scores Complete (1.0) — ports
@@ -751,7 +752,6 @@ Connection direction is inferred from the `role` values of the connected ports:
 | `provider`          | `consumer`               | unidirectional (`from` → `to`) |
 | `consumer`          | `provider`               | unidirectional (`to` → `from`) |
 | `peer`              | `peer`                   | bidirectional                  |
-| either side untyped | —                        | unknown                        |
 | `provider`          | `provider`               | ambiguous → W009               |
 | `consumer`          | `consumer`               | ambiguous → W009               |
 | `peer`              | `provider` or `consumer` | ambiguous → W009               |
@@ -833,7 +833,7 @@ The preceding sections describe each block in isolation; here is how they fit
 together. The canonical small example is
 [`examples/single-file/system.hcl`](./examples/single-file/system.hcl)
 (home-monitor — 2 protocols, 3 leaf components, 1 system with 3 instances and
-2 typed connections), whose system block is reproduced below as it shows the
+2 connections), whose system block is reproduced below as it shows the
 instance pattern in one place:
 
 ```hcl
@@ -868,7 +868,7 @@ system "home-monitor" {
 | Connections declared in Lowest Common Ancestor (LCA) or higher  | Connects components across any hierarchy level cleanly while ensuring the connection belongs to the orchestrating ancestor, not either endpoint                                                                         |
 | Reusable top-level `protocol` blocks                            | Extracts message and field schemas from individual components, enabling protocol reuse across ports and components                                                                                                      |
 | Port `external` and `required` attributes                       | Enables locality of verification: components can be checked in isolation as reusable units without false unused-port warnings, while ensuring required interfaces are bound when instantiated in a system             |
-| Ports are optional (`comp/port` syntax is additive)             | Supports gradual specification — bare component refs compile with warnings, ports add typed detail incrementally                                                                                                        |
+| Connections name port paths (`comp/port`)                   | Port paths make protocol, role, and direction inference possible                                                                                                                                                  |
 | Messages live exclusively on protocols, not components or ports | Messages represent communication exchanged between components across protocols; keeping schemas on protocols prevents duplication and makes components purely structural                                                 |
 | Top-level components + `source` label reference                 | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
 | Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable                                                                                                                                         |

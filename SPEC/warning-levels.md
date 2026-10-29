@@ -55,7 +55,7 @@ The rule of thumb, which also drives the mapping below:
   definitions, dangling view nodes) is what an architectural pass is for.
   → `architectural`
 - **Missing detail on an individual entity** (no full_name, no fields, no
-  messages, an untyped endpoint, an unconnected port) is exactly what a
+  messages, an unconnected port) is exactly what a
   high-level spec legitimately has not written yet. → `component`
 
 ## Warning code mapping
@@ -73,7 +73,6 @@ a generated-by-hand summary. Change the level in the diagnostic file.
 | W004 | Missing full_name | `component` |
 | W005 | Self-connection | `business` |
 | W006 | Level decreases relative to parent | `business` |
-| W007 | Mixed typed and bare connection endpoints | `component` |
 | W008 | Protocol mismatch | `business` |
 | W009 | Incompatible port roles (not yet implemented) | `business` |
 | W010 | Unused port | `component` |

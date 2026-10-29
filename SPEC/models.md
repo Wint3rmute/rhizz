@@ -76,8 +76,9 @@ messages / fields. Key semantics:
   labels, `encapsulates_ids` the resolved targets (undefined labels and cycle
   edges are dropped).
 - `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId> },
-  realized_by: Vec<String> }` — `port: None` is a bare (untyped) reference;
-  W007–W009 fire on the typed/untyped and role combinations. `realized_by` holds
+  realized_by: Vec<String> }` — `port` holds the named port; `None` appears only
+  on error paths that abort compilation. W008–W009 fire on protocol and role
+  combinations. `realized_by` holds
   the raw path entries, resolved in `realized_by_ids`. A connection cannot carry
   `encapsulates`: that attribute belongs to `protocol` blocks only.
 
@@ -94,8 +95,8 @@ messages / fields. Key semantics:
 4. Expand each system's `instance`s depth-first (E012/E014/E013, clone body).
 5. Ports: allocate, validate `role` (E009), link `protocol_id`, default
    `external = false`, `required = true`.
-6. Connections per scope: parse `from`/`to` paths relative to the declaring
-   scope; enforce LCA placement (E015); resolve endpoints (E011/E010).
+6. Connections per scope: parse `from`/`to` port paths relative to the declaring
+   scope; enforce LCA placement (E015); resolve endpoints (E003/E011/E010).
 7. `realized_by`: once every connection in every scope is registered, each
    entry resolves to a `ConnectionId` (E017, the entry is dropped). Duplicates
    collapse. A DFS over the resolved graph reports each cycle once (E018) and
