@@ -10,6 +10,7 @@
   import { SvelteMap } from "svelte/reactivity";
   import AnnotationText from "./AnnotationText.svelte";
   import DiagramNodeBody from "./DiagramNodeBody.svelte";
+  import DiagramPortLabel from "./DiagramPortLabel.svelte";
   import {
     annotationBounds,
     computeDirectionalHandles,
@@ -517,6 +518,11 @@
         ? "none"
         : undefined}
     >
+      <DiagramPortLabel
+        label={port.label}
+        side={port.side}
+        color={node.color}
+      />
       {#if dotVisible}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <circle
@@ -555,21 +561,6 @@
             : 1})"
         />
       {/if}
-      <text
-        x={port.side === "left" ? 7 : port.side === "right" ? -7 : 0}
-        y={port.side === "top" ? 10 : port.side === "bottom" ? -6 : 3.5}
-        text-anchor={port.side === "left"
-          ? "start"
-          : port.side === "right"
-            ? "end"
-            : "middle"}
-        font-size="9"
-        fill="var(--color-base-content)"
-        fill-opacity="0.8"
-        style="pointer-events: none; user-select: none"
-      >
-        {port.label}
-      </text>
     </g>
   {/each}
 {/each}

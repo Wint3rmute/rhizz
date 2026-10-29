@@ -44,6 +44,7 @@
 
   let borderSvg = $derived(borderStyleToSvg({ color, border }));
   let fontSvg = $derived(fontStyleToSvg(font));
+  let iconFill = $derived(borderSvg.stroke ?? "var(--color-base-content)");
 
   // The rendered width of the label, measured from the DOM. Only the
   // top-center layout needs it (to center the icon+label row), and it is
@@ -115,7 +116,7 @@
       width={iconBox.size}
       height={iconBox.size}
       viewBox="0 0 {icon.width} {icon.height}"
-      fill="var(--color-base-content)"
+      fill={iconFill}
       opacity="0.85"
     >
       <path d={icon.svgPath} />
