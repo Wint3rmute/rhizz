@@ -241,6 +241,13 @@ component "manual-qa" {
   icon        = "clipboard-check"
   tags        = ["team", "testing"]
   leaf        = true
+
+  port "suites-in" {
+    full_name = "Receives regression suites"
+    protocol    = "test-suites"
+    role        = "consumer"
+    tags        = ["process", "testing"]
+  }
 }
 
 component "operations" {
@@ -299,7 +306,7 @@ component "product" {
     full_name  = "Designers deliver specs to PMs for grooming"
     tags         = ["process"]
     from         = "designers/design-out"
-    to           = "product-managers"
+    to           = "product-managers/design-in"
   }
 }
 
@@ -308,6 +315,13 @@ component "product-managers" {
   icon        = "briefcase"
   tags        = ["team", "business"]
   leaf        = true
+
+  port "design-in" {
+    full_name = "Receives design specs"
+    protocol    = "design"
+    role        = "consumer"
+    tags        = ["process"]
+  }
 }
 
 component "qa" {
@@ -339,7 +353,7 @@ component "qa" {
     full_name  = "Automation team provides regression suites to manual QA"
     tags         = ["process", "testing"]
     from         = "automation-qa/suites-out"
-    to           = "manual-qa"
+    to           = "manual-qa/suites-in"
   }
 }
 

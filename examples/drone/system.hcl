@@ -103,6 +103,13 @@ component "barometer" {
   full_name = "BMP390 barometric pressure sensor"
   tags        = ["electronics", "sensor"]
   leaf        = true
+
+  port "i2c" {
+    full_name = "I2C sensor bus"
+    protocol    = "i2c"
+    role        = "consumer"
+    tags        = ["data"]
+  }
 }
 
 component "battery" {
@@ -186,6 +193,14 @@ component "flight-controller" {
     external    = true
   }
 
+  port "power-in" {
+    full_name = "5V BEC power input"
+    protocol    = "power-dc"
+    role        = "consumer"
+    tags        = ["power"]
+    external    = true
+  }
+
   instance "barometer" { source = "barometer" }
 
   instance "imu" { source = "imu" }
@@ -195,8 +210,8 @@ component "flight-controller" {
   connection "i2c-baro" {
     full_name  = "I2C bus: MCU ↔ barometer"
     tags         = ["data"]
-    from         = "mcu"
-    to           = "barometer"
+    from         = "mcu/i2c"
+    to           = "barometer/i2c"
   }
 
   connection "spi-imu" {
@@ -211,6 +226,13 @@ component "goggles" {
   full_name = "FPV goggles with DVR"
   tags        = ["electronics", "video"]
   leaf        = true
+
+  port "video-in" {
+    full_name = "Analog video input"
+    protocol    = "analog-video"
+    role        = "consumer"
+    tags        = ["video"]
+  }
 }
 
 component "gps" {
@@ -231,6 +253,20 @@ component "gps" {
 
 component "ground-station-pc" {
   tags        = ["compute"]
+
+  port "control-in" {
+    full_name = "Control link from transmitter"
+    protocol    = "crsf"
+    role        = "consumer"
+    tags        = ["rf", "control"]
+  }
+
+  port "video-out" {
+    full_name = "Video output to goggles"
+    protocol    = "analog-video"
+    role        = "provider"
+    tags        = ["video"]
+  }
 }
 
 component "imu" {
@@ -257,6 +293,13 @@ component "mcu" {
     role        = "provider"
     tags        = ["data"]
   }
+
+  port "i2c" {
+    full_name = "I2C master bus"
+    protocol    = "i2c"
+    role        = "provider"
+    tags        = ["data"]
+  }
 }
 
 component "radio-rx" {
@@ -276,6 +319,13 @@ component "transmitter" {
   full_name = "ELRS radio transmitter"
   tags        = ["electronics", "rf"]
   leaf        = true
+
+  port "control-out" {
+    full_name = "Control link output"
+    protocol    = "crsf"
+    role        = "provider"
+    tags        = ["rf", "control"]
+  }
 }
 
 component "vtx" {
@@ -304,15 +354,15 @@ system "ground-control" {
   connection "rf-control" {
     full_name  = "868MHz control link: TX → drone"
     tags         = ["rf", "control"]
-    from         = "/ground-control/transmitter"
-    to           = "/ground-control/ground-station-pc"
+    from         = "/ground-control/transmitter/control-out"
+    to           = "/ground-control/ground-station-pc/control-in"
   }
 
   connection "video-downlink" {
     full_name  = "5.8GHz analog video reception"
     tags         = ["video", "rf"]
-    from         = "/ground-control/ground-station-pc"
-    to           = "/ground-control/goggles"
+    from         = "/ground-control/ground-station-pc/video-out"
+    to           = "/ground-control/goggles/video-in"
   }
 }
 
@@ -353,7 +403,7 @@ system "quadcopter" {
     full_name  = "ESC 5V BEC → flight controller"
     tags         = ["power"]
     from         = "/quadcopter/esc/bec-out"
-    to           = "/quadcopter/flight-controller"
+    to           = "/quadcopter/flight-controller/power-in"
   }
 
   connection "power-main" {

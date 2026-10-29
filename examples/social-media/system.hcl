@@ -134,15 +134,15 @@ component "backend" {
   connection "rec-to-feed" {
     full_name  = "Recommendation scores fed into feed assembly"
     tags         = ["data"]
-    from         = "recommendation-engine"
-    to           = "feed-service"
+    from         = "recommendation-engine/scores-out"
+    to           = "feed-service/scores-in"
   }
 
   connection "user-to-feed" {
     full_name  = "Follow graph lookup for Following tab"
     tags         = ["data"]
-    from         = "feed-service"
-    to           = "user-service"
+    from         = "feed-service/follow-out"
+    to           = "user-service/follow-in"
   }
 }
 
@@ -183,12 +183,33 @@ component "feed-service" {
   full_name = "Feed assembly from recommendation + follow graph"
   tags        = ["backend", "data"]
   leaf        = true
+
+  port "follow-out" {
+    full_name = "Follow graph lookup"
+    protocol    = "grpc"
+    role        = "provider"
+    tags        = ["data"]
+  }
+
+  port "scores-in" {
+    full_name = "Recommendation scores input"
+    protocol    = "grpc"
+    role        = "consumer"
+    tags        = ["data"]
+  }
 }
 
 component "feed-ui" {
   full_name = "Scrollable video feed (For-You / Following)"
   tags        = ["client", "ui"]
   leaf        = true
+
+  port "play-out" {
+    full_name = "Playback request output"
+    protocol    = "hls"
+    role        = "provider"
+    tags        = ["client", "video"]
+  }
 }
 
 component "mobile-app" {
@@ -228,8 +249,8 @@ component "mobile-app" {
   connection "playback" {
     full_name  = "Feed UI requests playback from player"
     tags         = ["client"]
-    from         = "feed-ui"
-    to           = "video-player"
+    from         = "feed-ui/play-out"
+    to           = "video-player/play-in"
   }
 }
 
@@ -249,18 +270,39 @@ component "object-store" {
 component "recommendation-engine" {
   full_name = "ML-based video ranking"
   tags        = ["backend", "ml"]
+
+  port "scores-out" {
+    full_name = "Ranked scores output"
+    protocol    = "grpc"
+    role        = "provider"
+    tags        = ["data"]
+  }
 }
 
 component "user-service" {
   full_name = "Accounts, profiles, follow graph"
   tags        = ["backend", "data"]
   leaf        = true
+
+  port "follow-in" {
+    full_name = "Follow graph query endpoint"
+    protocol    = "grpc"
+    role        = "consumer"
+    tags        = ["data"]
+  }
 }
 
 component "video-player" {
   full_name = "Adaptive bitrate video player"
   tags        = ["client", "video"]
   leaf        = true
+
+  port "play-in" {
+    full_name = "Playback input"
+    protocol    = "hls"
+    role        = "consumer"
+    tags        = ["client", "video"]
+  }
 }
 
 component "video-recorder" {
