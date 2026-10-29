@@ -1,17 +1,25 @@
 # Connections & Ports
 
 This chapter focuses on how to model connections between the components of your
-system. You've already seen the basic component-to-component connection schema:
+system. You've already seen the basic port-to-port connection schema:
 
 ```rhizz,level=architectural
 component "server" {
   full_name = "Server in the cloud"
   leaf = true
+
+  port "api" {
+    role = "provider"
+  }
 }
 
 component "client" {
   full_name = "Client's computer"
   leaf = true
+
+  port "api" {
+    role = "consumer"
+  }
 }
 
 system "banking-application" {
@@ -22,18 +30,17 @@ system "banking-application" {
 
   connection "api-access" {
     full_name = "REST API with OAuth2"
-    from = "server"
-    to = "client"
+    from = "server/api"
+    to = "client/api"
   }
 }
 ```
 
-This is fine, but high-level. We just know that two components talk to each
-other and that's it. What if we wanted to dig deeper, how about:
+This names the port paths the connection uses. To dig deeper, how about:
 
-- What kind of `protocol` is used to talk between those components?
+- What kind of `protocol` is used to talk between those ports?
 - Is `client` even supporting that protocol?
-- Does `server` has any `port` for the client to connect to?
+- Does `server` name the same protocol on its port?
 
 > [!NOTE]
 > Programmers reading this probably think about `ports` in terms of
@@ -44,11 +51,10 @@ other and that's it. What if we wanted to dig deeper, how about:
 While this model compiles without any errors, the model completion score
 points us towards things to specify further:
 
-- There are 0 `ports` defined
 - There are 0 `messages` defined
 
-The connection is also reported as incomplete (`W019`): with no ports there is
-no protocol to type it, and an untyped connection can never be complete. See
+The connection is also reported as incomplete (`W019`): the ports name no
+protocol, so the protocol is undefined. See
 [Protocols](07_protocols.md) for how a connection gets its protocol and how it
 is completed.
 

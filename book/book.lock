@@ -2,65 +2,6 @@
   "entries": [
     {
       "chapter": "01_basics.md",
-      "hcl": "component \"tire\" {\n  full_name = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  full_name = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n}\n\ncomponent \"fork\" {\n  full_name = \"Holds the front wheel\"\n  leaf = true\n}\n\ncomponent \"frame\"  {\n  full_name = \"main component of a bicycle\"\n  leaf = true\n}\n\nsystem \"bicycle\" {\n  full_name = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    full_name = \"keeps the front wheel attached\"\n    from = \"./front-wheel\"\n    to = \"fork\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    full_name = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel\"\n    to = \"./frame\"\n  }\n\n  connection \"fork-mount\" {\n    full_name = \"bearing connecting the fork to the frame\"\n    from = \"./fork\"\n    to = \"./frame\"\n  }\n}",
-      "input_sha256": "02d93e57014e0170af1abc6fd5fd34c5470ac6873a412219428514b15a8bfee0",
-      "level": "architectural",
-      "output": {
-        "errors": [],
-        "score": {
-          "components": {
-            "complete": 11,
-            "total": 11
-          },
-          "connections": {
-            "complete": 0,
-            "total": 3
-          },
-          "messages": {
-            "complete": 0,
-            "total": 0
-          },
-          "overall": {
-            "complete": 11,
-            "percent": 78.6,
-            "total": 14
-          },
-          "ports": {
-            "complete": 0,
-            "total": 0
-          },
-          "system": ""
-        },
-        "warnings": [
-          {
-            "code": "W003",
-            "message": "component `tire` (source `tire`) is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component `tire` (source `tire`) is not referenced by any connection"
-          },
-          {
-            "code": "W003",
-            "message": "component `tire` (source `tire`) is not referenced by any connection"
-          },
-          {
-            "code": "W019",
-            "message": "connection `fork-mount` is incomplete: its protocol is not defined"
-          },
-          {
-            "code": "W019",
-            "message": "connection `front-wheel-mount` is incomplete: its protocol is not defined"
-          },
-          {
-            "code": "W019",
-            "message": "connection `rear-wheel-mount` is incomplete: its protocol is not defined"
-          }
-        ]
-      }
-    },
-    {
-      "chapter": "01_basics.md",
       "hcl": "component \"wheel\" {\n  full_name = \"A spinning round object\"\n}",
       "input_sha256": "50ee71ff8253a3cd8f0eb663fddb091056fad96693381349452246ddabbdc3a6",
       "level": "architectural",
@@ -94,6 +35,65 @@
           {
             "code": "W001",
             "message": "component `wheel` is non-leaf but has no child components"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "01_basics.md",
+      "hcl": "component \"tire\" {\n  full_name = \"A 24in bicycle tire\"\n  leaf = true\n}\n\ncomponent \"wheel\" {\n  full_name = \"A spinning round object\"\n  instance \"tire\" {source = \"tire\"}\n\n  port \"mount\" {\n    role = \"peer\"\n  }\n}\n\ncomponent \"fork\" {\n  full_name = \"Holds the front wheel\"\n  leaf = true\n\n  port \"mount\" {\n    role = \"peer\"\n  }\n}\n\ncomponent \"frame\"  {\n  full_name = \"main component of a bicycle\"\n  leaf = true\n\n  port \"mount\" {\n    role = \"peer\"\n  }\n}\n\nsystem \"bicycle\" {\n  full_name = \"Personal transport vehicle\"\n\n  instance \"front-wheel\" {source = \"wheel\"}\n  instance \"rear-wheel\" {source = \"wheel\"}\n  instance \"fork\" {source = \"fork\"}\n  instance \"frame\" {source = \"frame\"}\n\n  connection \"front-wheel-mount\" {\n    full_name = \"keeps the front wheel attached\"\n    from = \"./front-wheel/mount\"\n    to = \"fork/mount\"\n  }\n\n  connection \"rear-wheel-mount\" {\n    full_name = \"keeps the rear wheel attached\"\n    from = \"./rear-wheel/mount\"\n    to = \"./frame/mount\"\n  }\n\n  connection \"fork-mount\" {\n    full_name = \"bearing connecting the fork to the frame\"\n    from = \"./fork/mount\"\n    to = \"./frame/mount\"\n  }\n}",
+      "input_sha256": "5af45ec391e4d2d9d097dacbe01ba2c6643a9555b5f75c66911723f17a87aab8",
+      "level": "architectural",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 11,
+            "total": 11
+          },
+          "connections": {
+            "complete": 0,
+            "total": 3
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 11,
+            "percent": 52.4,
+            "total": 21
+          },
+          "ports": {
+            "complete": 0,
+            "total": 7
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W003",
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
+          },
+          {
+            "code": "W003",
+            "message": "component `tire` (source `tire`) is not referenced by any connection"
+          },
+          {
+            "code": "W019",
+            "message": "connection `fork-mount` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `front-wheel-mount` is incomplete: its protocol is not defined"
+          },
+          {
+            "code": "W019",
+            "message": "connection `rear-wheel-mount` is incomplete: its protocol is not defined"
           }
         ]
       }
@@ -266,6 +266,45 @@
     },
     {
       "chapter": "03_connections_ports.md",
+      "hcl": "component \"server\" {\n  full_name = \"Server in the cloud\"\n  leaf = true\n\n  port \"api\" {\n    role = \"provider\"\n  }\n}\n\ncomponent \"client\" {\n  full_name = \"Client's computer\"\n  leaf = true\n\n  port \"api\" {\n    role = \"consumer\"\n  }\n}\n\nsystem \"banking-application\" {\n  full_name = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    full_name = \"REST API with OAuth2\"\n    from = \"server/api\"\n    to = \"client/api\"\n  }\n}",
+      "input_sha256": "1673ce6a195586054a7931ed436b96e865fdb199de51e6087412203199787671",
+      "level": "architectural",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 4,
+            "total": 4
+          },
+          "connections": {
+            "complete": 0,
+            "total": 1
+          },
+          "messages": {
+            "complete": 0,
+            "total": 0
+          },
+          "overall": {
+            "complete": 4,
+            "percent": 44.4,
+            "total": 9
+          },
+          "ports": {
+            "complete": 0,
+            "total": 4
+          },
+          "system": ""
+        },
+        "warnings": [
+          {
+            "code": "W019",
+            "message": "connection `api-access` is incomplete: its protocol is not defined"
+          }
+        ]
+      }
+    },
+    {
+      "chapter": "03_connections_ports.md",
       "hcl": "component \"computer\" {\n  full_name = \"Personal Computer (PC)\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\ncomponent \"mouse\" {\n  full_name = \"Computer Mouse\"\n  leaf = true\n  port \"usb-c\" { }\n}\n\nsystem \"work-computer\" {\n  full_name = \"My work computer\"\n  instance \"computer\" { source = \"computer\" }\n  instance \"mouse\" { source = \"mouse\" }\n\n  connection \"mouse-to-computer\" {\n    full_name = \"Mouse connected to the PC by a USB-C cable\"\n    from = \"computer/usb-c\"\n    to = \"mouse/usb-c\"\n  }\n}",
       "input_sha256": "6d31856fbba069c9fb6f9e2daeb6b0a3c5b38d23bb50199c5d98aa4c0b815c82",
       "level": "architectural",
@@ -286,7 +325,7 @@
           },
           "overall": {
             "complete": 4,
-            "percent": 50.0,
+            "percent": 44.4,
             "total": 9
           },
           "ports": {
@@ -299,45 +338,6 @@
           {
             "code": "W019",
             "message": "connection `mouse-to-computer` is incomplete: its protocol is not defined"
-          }
-        ]
-      }
-    },
-    {
-      "chapter": "03_connections_ports.md",
-      "hcl": "component \"server\" {\n  full_name = \"Server in the cloud\"\n  leaf = true\n}\n\ncomponent \"client\" {\n  full_name = \"Client's computer\"\n  leaf = true\n}\n\nsystem \"banking-application\" {\n  full_name = \"Internet-based access to your bank account\"\n\n  instance \"server\" { source = \"server\" }\n  instance \"client\" { source = \"client\" }\n\n  connection \"api-access\" {\n    full_name = \"REST API with OAuth2\"\n    from = \"server\"\n    to = \"client\"\n  }\n}",
-      "input_sha256": "c63e9940ef24c65947997e768ba9f75a5a63b18001bd039db01dd9aa9899642e",
-      "level": "architectural",
-      "output": {
-        "errors": [],
-        "score": {
-          "components": {
-            "complete": 4,
-            "total": 4
-          },
-          "connections": {
-            "complete": 0,
-            "total": 1
-          },
-          "messages": {
-            "complete": 0,
-            "total": 0
-          },
-          "overall": {
-            "complete": 4,
-            "percent": 80.0,
-            "total": 5
-          },
-          "ports": {
-            "complete": 0,
-            "total": 0
-          },
-          "system": ""
-        },
-        "warnings": [
-          {
-            "code": "W019",
-            "message": "connection `api-access` is incomplete: its protocol is not defined"
           }
         ]
       }
@@ -409,14 +409,14 @@
       "files": [
         {
           "path": "system.hcl",
-          "sha256": "7a8d9ccbc34a7ec1c508694b2115cad5b4f1835112934453296a1efd72063ad3"
+          "sha256": "50591e49fc32d6d962e90c67071e3cb4e2df8440d856445f0b010498ff53b181"
         },
         {
           "path": "views/main.hcl",
           "sha256": "fa324ce5491316606c4d3ae4740265cb3c93c996db78b78bc29af3be37a6cb74"
         }
       ],
-      "input_sha256": "83f5bf2e4e4c06b3a9920b6c91ed180720bdd11cf74161d8ad012e52250ac786",
+      "input_sha256": "daad18d3767eb84882ba5a7fa2e5a0d2dcf34ce7da43b807bdff593e7df57750",
       "output": {
         "errors": [],
         "score": {
@@ -434,12 +434,12 @@
           },
           "overall": {
             "complete": 11,
-            "percent": 78.6,
-            "total": 14
+            "percent": 52.4,
+            "total": 21
           },
           "ports": {
             "complete": 0,
-            "total": 0
+            "total": 7
           },
           "system": ""
         },
@@ -478,7 +478,7 @@
       "files": [
         {
           "path": "system.hcl",
-          "sha256": "50cb65dafe320c959dda2d4d72afc7c3760971c92a904b64e41f924c6288326b"
+          "sha256": "c9ae3bbc343570b25aa9a621e9d8879691f7eca3813f2eb7a2139e4215017f27"
         },
         {
           "path": "views/overview.hcl",
@@ -489,7 +489,7 @@
           "sha256": "296f54542669615288b3e3247c29a2549878f09f293bf041331bd360f2589dcf"
         }
       ],
-      "input_sha256": "52784e46bf2adc9284b8a1109acfbbb18e20d9db3907aef23002618e610e60f3",
+      "input_sha256": "c61c4474552c99c731991fdbcc2aa31f78744ddd0057cf6379e07c78d37bb643",
       "output": {
         "errors": [],
         "score": {
@@ -507,12 +507,12 @@
           },
           "overall": {
             "complete": 10,
-            "percent": 76.9,
-            "total": 13
+            "percent": 43.5,
+            "total": 23
           },
           "ports": {
             "complete": 0,
-            "total": 0
+            "total": 10
           },
           "system": ""
         },
@@ -539,14 +539,14 @@
       "files": [
         {
           "path": "system.hcl",
-          "sha256": "50cb65dafe320c959dda2d4d72afc7c3760971c92a904b64e41f924c6288326b"
+          "sha256": "c9ae3bbc343570b25aa9a621e9d8879691f7eca3813f2eb7a2139e4215017f27"
         },
         {
           "path": "views/overview.hcl",
           "sha256": "fd14f276fbdb6faa4d72532432cadfdedb42c471a11ab65fd13c2d9a0766a55b"
         }
       ],
-      "input_sha256": "c86fc8ea48fceca08888e4f91f5a38c28763c64e43781a32e7438f74cb4e4118",
+      "input_sha256": "d7e73cae056ae8cd4fb29fce13a76765307916d9c4ed4b178512fc58ff808fb8",
       "output": {
         "errors": [],
         "score": {
@@ -564,12 +564,12 @@
           },
           "overall": {
             "complete": 10,
-            "percent": 76.9,
-            "total": 13
+            "percent": 43.5,
+            "total": 23
           },
           "ports": {
             "complete": 0,
-            "total": 0
+            "total": 10
           },
           "system": ""
         },
