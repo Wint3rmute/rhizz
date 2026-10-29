@@ -1812,6 +1812,7 @@ mod tests {
                 "edit_documentation",
                 "fetch_projects",
                 "list_files",
+                "overwrite_model",
                 "read_file",
                 "rename_component",
                 "reparent_component",
