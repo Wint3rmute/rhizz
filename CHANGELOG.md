@@ -12,6 +12,7 @@
 
 ### Fix
 
+- **mcp**: include overwrite_model in tools/list expectation
 - **web**: use port paths in refused-delete e2e fixture
 - **book**: name port paths in book examples
 - **web**: use port paths in connection unit tests
