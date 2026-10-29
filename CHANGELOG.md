@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **mcp**: add overwrite_model whole-file repair tool
 - **modeling**: restyle port labels as solid node-colored tags
 - **modeling**: smart single- vs double-knee connection routing
 - **web**: auto-capture landing backgrounds in VRT flow
