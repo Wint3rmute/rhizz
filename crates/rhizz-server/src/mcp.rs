@@ -945,7 +945,7 @@ impl RhizzMcp {
     /// locking is not implemented, so no lock is taken.
     #[tool(
         name = "add_connection",
-        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (bare `comp`, `comp/port`, or relative paths). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
+        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (`comp/port` or relative paths ending in a port). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
     )]
     async fn add_connection(
         &self,
@@ -983,7 +983,7 @@ impl RhizzMcp {
     /// 0004 locking is not implemented, so no lock is taken.
     #[tool(
         name = "connect_components",
-        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. This is the documented connection path for AI clients; `add_connection` stays for port-less bare connections. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. This is the documented connection path for AI clients. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn connect_components(
         &self,
@@ -2420,7 +2420,7 @@ mod tests {
         std::fs::create_dir_all(&project).unwrap();
         std::fs::write(
             project.join("system.hcl"),
-            "component \"cpu\" {\n  leaf = true\n}\ncomponent \"gpu\" {\n  leaf = true\n}\nsystem \"demo\" {\n  instance \"a\" { source = \"cpu\" }\n  instance \"b\" { source = \"gpu\" }\n}\n",
+            "component \"cpu\" {\n  leaf = true\n  port \"out\" { role = \"provider\" }\n}\ncomponent \"gpu\" {\n  leaf = true\n  port \"in\" { role = \"consumer\" }\n}\nsystem \"demo\" {\n  instance \"a\" { source = \"cpu\" }\n  instance \"b\" { source = \"gpu\" }\n}\n",
         )
         .unwrap();
     }
@@ -2542,8 +2542,8 @@ mod tests {
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "link",
-                "from": "a",
-                "to": "b",
+                "from": "a/out",
+                "to": "b/in",
             }),
         )
         .await;
@@ -2570,8 +2570,8 @@ mod tests {
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "link",
-                "from": "a",
-                "to": "b",
+                "from": "a/out",
+                "to": "b/in",
             }),
         )
         .await;
@@ -2633,8 +2633,8 @@ mod tests {
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "bad",
-                "from": "ghost",
-                "to": "b",
+                "from": "ghost/port",
+                "to": "b/in",
             }),
         )
         .await;
@@ -2694,15 +2694,15 @@ mod tests {
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "a-to-b",
-                "from": { "component": "a", "port": { "new": { "label": "out" } } },
-                "to": { "component": "b", "port": { "new": { "label": "in" } } },
+                "from": { "component": "a", "port": { "existing": "out" } },
+                "to": { "component": "b", "port": { "existing": "in" } },
             }),
         )
         .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
 
-        // One call, one persisted write: the connection and both ports land
+        // One call, one persisted write: the connection lands
         // together in a single `system.hcl` rewrite.
         let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
         assert!(content.contains("connection \"a-to-b\""), "{content}");
@@ -2790,8 +2790,8 @@ mod tests {
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "link",
-                "from": "a",
-                "to": "b",
+                "from": "a/out",
+                "to": "b/in",
             }),
         )
         .await;
