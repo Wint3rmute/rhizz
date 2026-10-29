@@ -16,49 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Forbid bare connection endpoints (E003): spec + compiler + examples
-
-Every connection endpoint must name a port (`comp/port` or a path ending in a
-port). Single-segment `from`/`to` paths become the error E003 (reused — E003
-and E004 were retired with `connection.encapsulates` in 8686b818; MVP churn is
-allowed, no backwards compatibility; E004 stays retired).
-
-Framing rule (applies to all three tasks): describe only the world as it is —
-connections terminate at ports, always have. No "bare", "direct",
-"forbidden", "not allowed", or "previously" language anywhere in spec,
-diagnostics, code, or comments. `E003.md` states what IS required (a port
-path) with a fix; it must not name the forbidden concept.
-
-- Spec:
-  - §2.7: `from`/`to` attribute descriptions → port paths only; rewrite the
-    Addressing & Resolution prose (Placement Rule untouched); audit the
-    banking example so its endpoints read as ports.
-  - §4: new "Connection Endpoint Typing" subsection; new
-    `SPEC/diagnostics/E003.md` (error, no warning level); delete
-    `SPEC/diagnostics/W007.md` (mixed typed/bare can no longer occur); drop
-    the W007 row from `SPEC/warning-levels.md`.
-  - `SPEC/models.md`: resolution pass step 6 emits E003; resolved-model
-    `ConnectionEndpoint` note — `port: None` is unrepresentable.
-  - §5 scoring table: rewrite the Connection row (Partial/Incomplete can no
-    longer mean untyped sides — define via protocol mismatch / incomplete
-    realization instead).
-  - §6 direction table: drop the "either side untyped → unknown" row.
-  - §9: rewrite the "Ports are optional" decision row positively (ports are
-    what make validation and direction inference possible).
-- Compiler (`rhizz-core`, red/green TDD, assert exact codes):
-  - Emit E003 in endpoint resolution for single-segment paths; errors abort
-    per the existing E-code contract.
-  - Remove the W007 emitter in `validate.rs` + the `w007_mixed_typed_untyped`
-    test; add E003 tests (bare `from`, bare `to`, both bare).
-  - Update the `model.rs` doc comment referencing W007/W008.
-  - Update integration tests that assert W007 on the worked examples.
-- Examples (integration tests exercise them — they must compile clean):
-  - `examples/drone/system.hcl` (`i2c-baro`), `examples/social-media/system.hcl`
-    (`rec-to-feed`, `user-to-feed`, `playback`),
-    `examples/software-house/system.hcl` (`design-handoff`, `test-handoff`) —
-    add the missing ports, retype the endpoints.
-- Definition of done: `just test`, `just lint`, `just build` green.
-
 ## Task <N> — Remove bare-connection support from the frontend (after E003 lands)
 
 - Audit the bare `add_connection` path (MCP + any UI entry): either require
@@ -70,17 +27,6 @@ path) with a fix; it must not name the forbidden concept.
 - Update e2e/VRT coverage that asserts bare-endpoint behavior, if any.
 - Same framing rule as above. Definition of done: `just test`, `just lint`,
   `just build` green.
-
-## Task <N> — Migrate book examples to port-terminated connections (after E003 lands)
-
-- `book/src/basics/demo/system.hcl` (3 bare connections),
-  `book/src/views-intro/1_example_simple/system.hcl` (`pci`, `hdmi`),
-  `book/src/views-intro/2_example_error/system.hcl` (`pci`, `hdmi`) — add ports,
-  retype endpoints. For `2_example_error`, first check which error it demonstrates and keep it
-  demonstrating the same error.
-- Grep book prose (`.md`) for bare-endpoint descriptions and update.
-- Regenerate `book/book.lock` (`just book-accept`, review the per-block diff).
-- Same framing rule as above. Definition of done: `just book` green.
 
 ## Task <N> - During view transitions, connection arrows don't fade out
 
