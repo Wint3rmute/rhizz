@@ -74,8 +74,8 @@ A connection is complete when its protocol is a leaf, or when it has
 `W019` on every incomplete connection:
 
 - A connection with an undefined protocol is always incomplete. That covers a
-  bare endpoint (`from = "bank-a"`), a port without a protocol, endpoints on
-  different protocols, and an undefined protocol name.
+  port without a protocol, endpoints on different protocols, and an undefined
+  protocol name.
 - A non-leaf protocol with no `realized_by` is incomplete.
 - The message names the first incomplete connection in the chain, when there
   is one.

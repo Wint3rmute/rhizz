@@ -3,26 +3,42 @@ component "computer" {
   instance "cpu" { source = "cpu" }
   instance "gpu" { source = "gpu" }
 
+  port "hdmi" {
+    role = "provider"
+  }
+
   connection "pci" {
     full_name = "PCI bus"
-    from        = "cpu"
-    to          = "gpu"
+    from        = "cpu/pci"
+    to          = "gpu/pci"
   }
 }
 
 component "gpu" {
   full_name = "Graphics Card"
   leaf        = true
+
+  port "pci" {
+    role = "consumer"
+  }
 }
 
 component "cpu" {
   full_name = "Central Processing Unit"
   leaf        = true
+
+  port "pci" {
+    role = "provider"
+  }
 }
 
 component "monitor" {
   full_name = "FullHD Monitor"
   leaf        = true
+
+  port "hdmi" {
+    role = "consumer"
+  }
 }
 
 system "computer-setup" {
@@ -33,7 +49,7 @@ system "computer-setup" {
 
   connection "hdmi" {
     full_name = "HDMI connection"
-    from        = "computer"
-    to          = "monitor"
+    from        = "computer/hdmi"
+    to          = "monitor/hdmi"
   }
 }
