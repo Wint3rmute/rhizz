@@ -4,6 +4,53 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Migrate book examples to port-terminated connections (after E003 lands)
+
+All book connections now terminate at ports. `book/src/basics/demo/system.hcl`
+(3 connections: `front-wheel-mount`, `rear-wheel-mount`, `fork-mount`) plus
+`book/src/views-intro/1_example_simple/system.hcl` and
+`book/src/views-intro/2_example_error/system.hcl` (`pci`, `hdmi`) name port
+paths (`cpu/pci`, `computer/hdmi`, `./front-wheel/mount`, …) with provider /
+consumer / peer roles. `2_example_error` still demonstrates the same view
+error (`W016` on `computer-setup/not-a-computer` in `overview.hcl`; systems
+were already identical pre-migration). Prose updated to port-to-port language
+(`01_basics.md`, `03_connections_ports.md`, `07_protocols.md`);
+`book/book.lock` regenerated with matching sha256 content.
+
+Validation: inspection of `70035eb1` + current tree (all `from`/`to` contain a
+port segment, prose grep clean in main chapters, lock fresh). Commits:
+`70035eb1`.
+
+---
+
+## Task <N> — Forbid single-segment connection endpoints (E003): spec + compiler + examples
+
+Every connection endpoint names a port (`comp/port` or path ending in a
+port). Single-segment `from`/`to` paths are error E003 (E003/E004 retired with
+`connection.encapsulates` in 8686b818; E004 stays retired).
+
+- **Spec:** §2.7 `from`/`to` → port paths only, Addressing & Resolution
+  rewritten (Placement Rule untouched), banking example port-typed;
+  §4 "Connection Endpoint Typing" + `SPEC/diagnostics/E003.md` (error),
+  `W007.md` deleted, W007 row dropped from `warning-levels.md`;
+  `SPEC/models.md` step 6 emits E003, `port: None` unrepresentable;
+  §5 Connection row via protocol match / mismatch / undefined protocol;
+  §6 direction table without untyped row; §9 positively worded.
+- **Compiler:** E003 emitted in endpoint resolution; W007 emitter +
+  `w007_mixed_typed_untyped` test removed; E003 tests (`from`, `to`, both);
+  `model.rs` doc updated; integration W007 assertions removed.
+- **Examples:** `drone` (`i2c-baro` → `mcu/i2c` + `barometer/i2c`),
+  `social-media` (`rec-to-feed`, `user-to-feed`, `playback`),
+  `software-house` (`design-handoff`, `test-handoff`) — ports added, endpoints
+  retyped.
+
+Validation: inspection of `1a31176c`, `4d5101dd`, `4262cddf` + current tree
+(E003 present, no W007 in `crates/`/`SPEC/`, all 6 worked-example connections
+port-typed, E003 message framing-clean). Commits: `1a31176c`, `4d5101dd`,
+`4262cddf`.
+
+---
+
 ## Task <N> — Interactive brainstorming - visualise ports in system diagrams
 
 Ports are first-class on the canvas: labeled dots on the node outline (labels
