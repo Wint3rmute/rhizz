@@ -1427,16 +1427,16 @@ system "s" {
     realized_by = ["/s/low", "./low2", "low3"]
   }
   connection "low" {
-    from = "n"
-    to   = "m"
+    from = "n/p"
+    to   = "m/p"
   }
   connection "low2" {
-    from = "n"
-    to   = "m"
+    from = "n/p"
+    to   = "m/p"
   }
   connection "low3" {
-    from = "n"
-    to   = "m"
+    from = "n/p"
+    to   = "m/p"
   }
 }
 "#;
@@ -2056,12 +2056,18 @@ system "plane" {
         let hcl = r#"
 component "radio" {
     leaf = true
+
+    port "sig" {}
 }
 component "obc" {
     leaf = true
+
+    port "sig" {}
 }
 component "ground-station" {
     leaf = true
+
+    port "sig" {}
 }
 component "satellite" {
     instance "radio" { source = "radio" }
@@ -2072,12 +2078,12 @@ system "main" {
     instance "ground-station" { source = "ground-station" }
 
     connection "radio-ground-station" {
-        from = "satellite/radio"
-        to   = "ground-station"
+        from = "satellite/radio/sig"
+        to   = "ground-station/sig"
     }
     connection "radio-obc" {
-        from = "satellite/radio"
-        to   = "satellite/obc"
+        from = "satellite/radio/sig"
+        to   = "satellite/obc/sig"
     }
 }
 "#;

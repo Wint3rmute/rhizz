@@ -59,11 +59,9 @@ fn score_connection(idx: usize, model: &Model) -> f64 {
     let Some(conn) = model.connections.get(idx) else {
         return 0.0;
     };
-    let from_typed = conn.from.port.is_some();
-    let to_typed = conn.to.port.is_some();
 
     if let (Some(from_port), Some(to_port)) = (conn.from.port, conn.to.port) {
-        // Both typed -- check protocol match.
+        // Both endpoints name ports — check protocol match.
         let from_proto = model
             .port(from_port)
             .map(|p| p.protocol.as_str())
@@ -72,16 +70,15 @@ fn score_connection(idx: usize, model: &Model) -> f64 {
             .port(to_port)
             .map(|p| p.protocol.as_str())
             .unwrap_or_default();
-        if !from_proto.is_empty() && !to_proto.is_empty() && from_proto == to_proto {
+        if from_proto.is_empty() || to_proto.is_empty() {
+            0.0
+        } else if from_proto == to_proto {
             1.0
         } else {
             0.5
         }
-    } else if from_typed || to_typed {
-        // One side typed -> partial.
-        0.5
     } else {
-        // Both untyped -> incomplete.
+        // E003 aborts compilation, so a compiled model always names ports.
         0.0
     }
 }
@@ -396,16 +393,18 @@ mod tests {
             component "a" {
               full_name = "has one"
               leaf = true
+              port "p" { role = "provider" }
             }
             component "b" {
               leaf = true
+              port "q" { role = "consumer" }
             }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
         "#;
@@ -427,16 +426,18 @@ mod tests {
         let src = r#"
             component "a" {
               leaf = true
+              port "p" { role = "provider" }
             }
             component "parent" {
               leaf = false
+              port "q" { role = "consumer" }
             }
             system "s" {
               instance "a" { source = "a" }
               instance "parent" { source = "parent" }
               connection "c" {
-                from = "a"
-                to   = "parent"
+                from = "a/p"
+                to   = "parent/q"
               }
             }
         "#;
@@ -473,21 +474,28 @@ mod tests {
                 role     = "provider"
               }
             }
-            component "b" { leaf = true }
+            component "b" {
+              leaf = true
+              port "q" {
+                protocol = "proto"
+                role     = "consumer"
+              }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        // Port appears on the definition and on the placed instance.
-        assert_eq!(report.ports.partial, 2);
+        // Each port appears on the definition and on the placed instance,
+        // so two ports with partial protocol yield four partial entries.
+        assert_eq!(report.ports.partial, 4);
         assert_eq!(report.ports.complete, 0);
         assert_eq!(report.ports.incomplete, 0);
     }
@@ -509,20 +517,27 @@ mod tests {
                 role     = "provider"
               }
             }
-            component "b" { leaf = true }
+            component "b" {
+              leaf = true
+              port "q" {
+                protocol = "proto"
+                role     = "consumer"
+              }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        assert_eq!(report.ports.complete, 2);
+        // Two ports, each counted for definition and placed instance.
+        assert_eq!(report.ports.complete, 4);
         assert_eq!(report.ports.partial, 0);
         assert_eq!(report.ports.incomplete, 0);
         assert_eq!(report.messages.complete, 1);
@@ -557,7 +572,7 @@ mod tests {
     // ── unit: connection scoring ──────────────────────────────────────────────
 
     #[test]
-    fn connection_both_typed_matching_protocol() {
+    fn connection_matching_protocol_scores_complete() {
         let src = r#"
             component "a" {
               leaf = true
@@ -585,14 +600,11 @@ mod tests {
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        assert_eq!(
-            report.connections.complete, 1,
-            "both typed, matching protocol -> 1.0"
-        );
+        assert_eq!(report.connections.complete, 1, "matching protocol -> 1.0");
     }
 
     #[test]
-    fn connection_one_typed_scores_partial() {
+    fn connection_mismatched_protocol_scores_partial() {
         let src = r#"
             component "a" {
               leaf = true
@@ -601,39 +613,54 @@ mod tests {
                 role = "provider"
               }
             }
-            component "b" { leaf = true }
+            component "b" {
+              leaf = true
+              port "p2" {
+                protocol = "i2c"
+                role = "consumer"
+              }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
                 from = "a/p1"
-                to   = "b"
+                to   = "b/p2"
               }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        assert_eq!(report.connections.partial, 1, "one typed -> 0.5");
+        assert_eq!(report.connections.partial, 1, "differing protocols -> 0.5");
     }
 
     #[test]
-    fn connection_both_untyped_scores_incomplete() {
+    fn connection_undefined_protocol_scores_incomplete() {
         let src = r#"
-            component "a" { leaf = true }
-            component "b" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p1" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "p2" { role = "consumer" }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b"
+                from = "a/p1"
+                to   = "b/p2"
               }
             }
         "#;
         let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
-        assert_eq!(report.connections.incomplete, 1, "both untyped -> 0.0");
+        assert_eq!(
+            report.connections.incomplete, 1,
+            "undefined protocol -> 0.0"
+        );
     }
 }

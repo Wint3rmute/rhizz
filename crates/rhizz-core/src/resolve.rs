@@ -899,9 +899,8 @@ fn endpoint_segments<'a>(
 /// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
 ///
 /// Supports UNIX-style path notation:
-/// - Relative sibling bare component: `"comp"` or `"./comp"`
 /// - Relative sibling port: `"comp/port"`
-/// - Nested subcomponents: `"comp/subcomp/port"` or `"comp/subcomp"`
+/// - Nested ports: `"comp/subcomp/port"`
 /// - Parent traversal: `"../sibling/port"`
 /// - Absolute root path: `"/system-name/comp/subcomp/port"`
 ///
@@ -962,16 +961,19 @@ fn resolve_endpoint(
         }
     };
 
-    // The last segment is a component, or a port of the component it names.
-    if let Some(cid) = r
-        .scope_index
+    // The last segment names a port on the component found via `prefix`.
+    // A component match without a port is E003.
+    if r.scope_index
         .components
-        .get(&(owner_scope, last.to_owned()))
+        .contains_key(&(owner_scope, last.to_owned()))
     {
-        return Some(ConnectionEndpoint {
-            component: *cid,
-            port: None,
-        });
+        r.push_error(
+            DiagnosticCode::E003,
+            format!(
+                "connection `{conn_label}` requires a port path in '{field}' (e.g. `comp/port`)"
+            ),
+        );
+        return None;
     }
     if let Scope::Component(cid) = owner_scope {
         if let Some(pid) = r.scope_index.ports.get(&(cid, last.to_owned())) {
@@ -1591,7 +1593,7 @@ mod tests {
         assert!(model.components[mcu_cid.0].leaf);
         assert!(model.components[imu_cid.0].leaf);
 
-        // spi-imu connection is inside flight-controller scope: from=mcu:spi, to=imu:spi
+        // spi-imu connection is inside flight-controller scope: from=mcu/spi, to=imu/spi
         let spi_conn_id = fc
             .connections
             .iter()
@@ -1613,7 +1615,7 @@ mod tests {
             .find(|cid| model.connections[cid.0].label == "motor-control")
             .expect("motor-control");
         let mc = &model.connections[mc_conn_id.0];
-        // from=flight-controller:motor-out, to=esc:motor-in
+        // from=flight-controller/motor-out, to=esc/motor-in
         assert_eq!(mc.from.component, fc_cid);
         assert!(
             mc.from.port.is_some(),
@@ -1700,7 +1702,7 @@ mod tests {
             .expect("recommendation-engine");
         assert!(model.components[rec_cid.0].children.is_empty());
 
-        // rec-to-feed connection: from=recommendation-engine, to=feed-service (bare)
+        // rec-to-feed connection: from=recommendation-engine/scores-out, to=feed-service/scores-in
         let feed_service_cid = backend
             .children
             .iter()
@@ -1716,6 +1718,14 @@ mod tests {
         let rec_conn = &model.connections[rec_conn.0];
         assert_eq!(rec_conn.from.component, rec_cid);
         assert_eq!(rec_conn.to.component, feed_service_cid);
+        assert_eq!(
+            rec_conn.from.port.map(|p| model.ports[p.0].label.as_str()),
+            Some("scores-out")
+        );
+        assert_eq!(
+            rec_conn.to.port.map(|p| model.ports[p.0].label.as_str()),
+            Some("scores-in")
+        );
 
         // Warnings: W001 for recommendation-engine
         assert!(
@@ -1762,7 +1772,7 @@ mod tests {
         assert!(ops.children.is_empty());
         assert!(ops.full_name.is_empty());
 
-        // sprint-planning connection: from=product:sprint-out, to=engineering:sprint-in
+        // sprint-planning connection: from=product/sprint-out, to=engineering/sprint-in
         let product_cid = acme
             .components
             .iter()
@@ -1804,11 +1814,14 @@ mod tests {
     #[test]
     fn e002_undefined_from_to() {
         let src = r#"
-            component "a" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
             system "s" {
               instance "a" { source = "a" }
               connection "c" {
-                from = "a"
+                from = "a/p"
                 to   = "nonexistent"
               }
             }
@@ -1851,20 +1864,26 @@ mod tests {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "data" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
             component "right" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "data" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
-            component "a" { leaf = true }
-            component "b" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
               instance "l" { source = "left" }
               instance "r" { source = "right" }
@@ -1896,19 +1915,25 @@ mod tests {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "data" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
-            component "a" { leaf = true }
-            component "b" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
               instance "x" { source = "a" }
               instance "y" { source = "b" }
               instance "inner" { source = "sub" }
               connection "data" {
-                from = "x"
-                to   = "y"
+                from = "x/p"
+                to   = "y/q"
               }
             }
         "#;
@@ -1934,12 +1959,18 @@ mod tests {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "data" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
-            component "a" { leaf = true }
-            component "b" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
               instance "l" { source = "pair" }
               instance "r" { source = "pair" }
@@ -2013,14 +2044,20 @@ mod tests {
     #[test]
     fn e010_port_not_found() {
         let src = r#"
-            component "a" { leaf = true }
-            component "b" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
                 from = "a/nonexistent"
-                to   = "b"
+                to   = "b/q"
               }
             }
         "#;
@@ -2035,12 +2072,108 @@ mod tests {
     }
 
     #[test]
-    fn e011_comp_not_found_in_typed_ref() {
+    fn e003_from_requires_port_path() {
         let src = r#"
+            component "a" { leaf = true }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
-              component "a" { leaf = true }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a"
+                to   = "b/q"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(
+            result.is_err(),
+            "expected Err for endpoint without port path"
+        );
+        let diags = result.unwrap_err();
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E003
+                && d.message.contains("`c`")
+                && d.message.contains("'from'")),
+            "expected E003 for 'from', got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn e003_to_requires_port_path() {
+        let src = r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" { leaf = true }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "c" {
+                from = "a/p"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(
+            result.is_err(),
+            "expected Err for endpoint without port path"
+        );
+        let diags = result.unwrap_err();
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E003
+                && d.message.contains("`c`")
+                && d.message.contains("'to'")),
+            "expected E003 for 'to', got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn e003_both_require_port_paths() {
+        let src = r#"
+            component "a" { leaf = true }
+            component "b" { leaf = true }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "c" {
+                from = "a"
+                to   = "b"
+              }
+            }
+        "#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let result = resolve(raw);
+        assert!(
+            result.is_err(),
+            "expected Err for endpoints without port paths"
+        );
+        let diags = result.unwrap_err();
+        let count = diags
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E003)
+            .count();
+        assert_eq!(count, 2, "expected two E003, got: {diags:?}");
+    }
+
+    #[test]
+    fn e011_comp_not_found_in_typed_ref() {
+        let src = r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            system "s" {
+              instance "a" { source = "a" }
+              connection "c" {
+                from = "a/p"
                 to   = "ghost/port"
               }
             }
@@ -2058,10 +2191,14 @@ mod tests {
     #[test]
     fn diagnostic_messages_wrap_entity_names_in_backticks() {
         let src = r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
             system "s" {
-              component "a" { leaf = true }
+              instance "a" { source = "a" }
               connection "c" {
-                from = "a"
+                from = "a/p"
                 to   = "ghost/port"
               }
             }
@@ -2081,12 +2218,20 @@ mod tests {
     #[test]
     fn non_unix_path_with_colon_emits_error() {
         let src = r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
-              component "a" { leaf = true }
-              component "b" { leaf = true }
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
               connection "c" {
                 from = "a:port"
-                to   = "b"
+                to   = "b/q"
               }
             }
         "#;
@@ -2105,14 +2250,20 @@ mod tests {
     #[test]
     fn defaults_applied() {
         let src = r#"
-            component "a" { leaf = true }
-            component "b" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
         "#;
@@ -2843,24 +2994,27 @@ system "drone" {
     fn realized_fixture(entry: &str) -> String {
         format!(
             r#"
-component "stack" {{ leaf = true }}
+component "stack" {{
+  leaf = true
+  port "p" {{ role = "provider" }}
+}}
 component "bank" {{
   instance "stack" {{ source = "stack" }}
   connection "http-request" {{
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }}
 }}
 system "banking" {{
   instance "bank-a" {{ source = "bank" }}
   instance "ext" {{ source = "stack" }}
   connection "uplink" {{
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
   }}
   connection "tls-session" {{
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = [{entry}]
   }}
 }}
@@ -2983,19 +3137,22 @@ system "banking" {{
     #[test]
     fn e017_reference_into_another_system() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+  port "p" { role = "provider" }
+}
 system "other" {
   instance "o" { source = "stack" }
   connection "far" {
-    from = "o"
-    to = "o"
+    from = "o/p"
+    to = "o/p"
   }
 }
 system "banking" {
   instance "ext" { source = "stack" }
   connection "tls-session" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = ["/other/far"]
   }
 }
@@ -3016,17 +3173,20 @@ system "banking" {
     #[test]
     fn e018_two_connection_cycle_reported_once() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+  port "p" { role = "provider" }
+}
 system "banking" {
   instance "ext" { source = "stack" }
   connection "a" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = ["b"]
   }
   connection "b" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = ["a"]
   }
 }
@@ -3039,17 +3199,20 @@ system "banking" {
     #[test]
     fn e018_cycle_inside_definition_body() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+  port "p" { role = "provider" }
+}
 component "bank" {
   instance "stack" { source = "stack" }
   connection "x" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
     realized_by = ["y"]
   }
   connection "y" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
     realized_by = ["x"]
   }
 }
@@ -3094,10 +3257,12 @@ component "a" {
   leaf = true
   port "x" { protocol = "p" }
   port "z" { protocol = "q" }
+  port "u" { role = "provider" }
 }
 component "b" {
   leaf = true
   port "y" { protocol = "p" }
+  port "v" { role = "consumer" }
 }
 system "s" {
   instance "ia" { source = "a" }
@@ -3110,9 +3275,9 @@ system "s" {
     from = "ia/z"
     to = "ib/y"
   }
-  connection "bare" {
-    from = "ia"
-    to = "ib/y"
+  connection "plain" {
+    from = "ia/u"
+    to = "ib/v"
   }
 }
 "#;
@@ -3127,22 +3292,29 @@ system "s" {
         };
         assert_eq!(protocol_of("same"), Some(ProtocolId(0)));
         assert_eq!(protocol_of("mixed"), None, "undefined vs defined protocol");
-        assert_eq!(protocol_of("bare"), None, "bare endpoint has no protocol");
+        assert_eq!(
+            protocol_of("plain"),
+            None,
+            "ports without protocol agree on none"
+        );
     }
 
     #[test]
     fn realized_by_copies_of_a_definition_resolve_independently() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+  port "p" { role = "provider" }
+}
 component "bank" {
   instance "stack" { source = "stack" }
   connection "low" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }
   connection "high" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
     realized_by = ["low"]
   }
 }

@@ -172,22 +172,7 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W007 -- one side of a connection is typed (comp/port), the other is not
-    for conn in &model.connections {
-        let from_typed = conn.from.port.is_some();
-        let to_typed = conn.to.port.is_some();
-        if from_typed != to_typed {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W007,
-                format!(
-                    "connection `{}`: one side is typed (comp/port) but the other is bare",
-                    conn.label
-                ),
-            ));
-        }
-    }
-
-    // W008 -- both sides typed but protocol values differ
+    // W008 -- both sides name ports but protocol values differ
     for conn in &model.connections {
         if let (Some(from_pid), Some(to_pid)) = (conn.from.port, conn.to.port) {
             let from_proto = model
@@ -825,13 +810,19 @@ mod tests {
                 role     = "provider"
               }
             }
-            component "b" { leaf = true }
+            component "b" {
+              leaf = true
+              port "q" {
+                protocol = "proto"
+                role     = "consumer"
+              }
+            }
             system "s" {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b"
+                from = "a/p"
+                to   = "b/q"
               }
             }
         "#;
@@ -852,12 +843,16 @@ mod tests {
     #[test]
     fn w005_from_equals_to() {
         let src = r#"
-            component "a" { leaf = true }
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+              port "q" { role = "consumer" }
+            }
             system "s" {
               instance "a" { source = "a" }
               connection "self-loop" {
-                from = "a"
-                to   = "a"
+                from = "a/p"
+                to   = "a/q"
               }
             }
         "#;
@@ -900,37 +895,6 @@ mod tests {
                 .iter()
                 .any(|d| d.code == DiagnosticCode::W006 && d.message.contains('c')),
             "expected W006 for component 'c', got: {:?}",
-            warning_codes(&warnings)
-        );
-    }
-
-    // ── W007 ───────────────────────────────────────────────────────────────
-
-    #[test]
-    fn w007_mixed_typed_untyped() {
-        let src = r#"
-            component "a" {
-              leaf = true
-              port "p" { role = "provider" }
-            }
-            component "b" { leaf = true }
-            system "s" {
-              instance "a" { source = "a" }
-              instance "b" { source = "b" }
-              connection "mixed" {
-                from = "a/p"
-                to   = "b"
-              }
-            }
-        "#;
-        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let (model, _) = resolve(raw).unwrap();
-        let warnings = validate(&model);
-        assert!(
-            warnings
-                .iter()
-                .any(|d| d.code == DiagnosticCode::W007 && d.message.contains("mixed")),
-            "expected W007 for mixed, got: {:?}",
             warning_codes(&warnings)
         );
     }
@@ -1638,15 +1602,25 @@ system "s" {{
 
     #[test]
     fn w021_skipped_when_parent_protocol_is_undefined() {
-        // A bare parent endpoint has no protocol, so W021 has nothing to check.
-        let src = realization_fixture("bank-a", "bank-a/core/http", "bank-b/core/http", "");
+        // A parent endpoint without a defined protocol has nothing to check.
+        let src = realization_fixture(
+            "bank-a/core/http",
+            "bank-a/core/http",
+            "bank-b/core/http",
+            "",
+        );
         assert_eq!(realization_warnings(&src), Vec::<&str>::new());
     }
 
     #[test]
     fn w020_descendant_endpoint_of_parent_component_passes() {
-        // `bank-a/core` is a descendant of the parent's bare `bank-a` endpoint.
-        let src = realization_fixture("bank-a", "bank-a/core/http", "bank-b/core/http", "\"fund\"");
+        // Both endpoints name ports on the same component.
+        let src = realization_fixture(
+            "bank-a/core/fund",
+            "bank-a/core/http",
+            "bank-b/core/http",
+            "\"fund\"",
+        );
         assert_eq!(realization_warnings(&src), Vec::<&str>::new());
     }
 
@@ -1752,21 +1726,25 @@ system "s" {{
     }
 
     #[test]
-    fn w019_untyped_endpoints_are_always_incomplete() {
+    fn w019_undefined_protocol_is_incomplete() {
         let src = r#"
-component "node" { leaf = true }
+component "node" {
+  leaf = true
+  port "p" { role = "provider" }
+  port "q" { role = "consumer" }
+}
 system "s" {
   instance "a" { source = "node" }
   instance "b" { source = "node" }
-  connection "bare" {
-    from = "a"
-    to = "b"
+  connection "link" {
+    from = "a/p"
+    to = "b/q"
   }
 }
 "#;
         assert_eq!(
             w019_messages(src),
-            vec!["connection `bare` is incomplete: its protocol is not defined"]
+            vec!["connection `link` is incomplete: its protocol is not defined"]
         );
     }
 
