@@ -1159,6 +1159,142 @@ pub fn mutate_project(
     }
 }
 
+/// Serializes whole-model overwrites within this process, so two overwrites
+/// sent with the same version cannot both pass the version check. This is
+/// compare-and-swap without a project lock (proposal 0004 is not
+/// implemented), mirroring [`DOC_EDIT_LOCK`] for docs.
+static MODEL_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// The outcome of an `overwrite_model` call.
+#[derive(Debug)]
+pub struct OverwriteModelResult {
+    /// Content-hash version of the file after the write, for chaining
+    /// another write without re-reading.
+    pub version: String,
+    /// Total line count of the file after the write.
+    pub total_lines: usize,
+    /// Non-blocking resolve warnings accompanying the new model.
+    pub warnings: Vec<rhizz_core::Diagnostic>,
+}
+
+/// Why a whole-model overwrite was not persisted. Every variant leaves the
+/// file untouched.
+#[derive(Debug, Error)]
+pub enum OverwriteModelError {
+    /// No project with this id.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    /// The overwrite was refused: missing/stale version or no primary file.
+    /// Carries a human-readable message telling the client to re-read.
+    #[error("{0}")]
+    Refused(String),
+    /// The new content does not resolve; carries the resolver diagnostics.
+    #[error("refused")]
+    Invalid(Vec<rhizz_core::Diagnostic>),
+}
+
+/// Replaces a project's primary model file (`system.hcl`, falling back to
+/// `main.hcl`) whole with `content`.
+///
+/// This is the repair hatch for models that `ModelOp` mutations can no longer
+/// touch: a broken model refuses every incremental op (a mutation can never
+/// persist a broken model), so the only way forward is to replace the file
+/// whole and validate once. The replacement is parsed and resolved; on
+/// resolver errors nothing is written and the diagnostics are returned. On
+/// success the canonical HCL is written back through `write_atomic` — exactly
+/// what the web editor persists — so the file on disk is always the
+/// deterministic serialization, never the client's raw text.
+///
+/// Compare-and-swap: `version` must equal [`file_version`] of the file on
+/// disk when the file exists — overwriting without a version, or with a
+/// stale one, is refused. When no primary file exists yet the target defaults
+/// to `system.hcl` and `version` is ignored. The check and the write happen
+/// under the same `MODEL_WRITE_LOCK`, so two overwrites sent with the same
+/// version cannot both apply.
+///
+/// Confinement mirrors [`mutate_project`]: the project is resolved with
+/// [`resolve_project`] and the primary file is one of the two known names,
+/// so the path never escapes the project and hidden entries or symlinks are
+/// refused.
+///
+/// # Errors
+///
+/// Returns [`OverwriteModelError::Unknown`] for unknown projects,
+/// [`OverwriteModelError::Io`] when the filesystem fails,
+/// [`OverwriteModelError::Refused`] with a human-readable reason for
+/// version mismatches, and [`OverwriteModelError::Invalid`] with the resolver
+/// diagnostics when the new content does not resolve.
+pub fn overwrite_model(
+    data_dir: &Path,
+    project_id: &str,
+    content: &str,
+    version: Option<&str>,
+) -> Result<OverwriteModelResult, OverwriteModelError> {
+    let _guard = MODEL_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => OverwriteModelError::Unknown(id),
+        ProjectError::Io(err) => OverwriteModelError::Io(err),
+    })?;
+
+    let mut primary: Option<(PathBuf, String)> = None;
+    for candidate in ["system.hcl", "main.hcl"] {
+        let Ok(absolute) = resolve_confined_path(&root, Path::new(candidate)) else {
+            continue;
+        };
+        let Ok(metadata) = std::fs::symlink_metadata(&absolute) else {
+            continue;
+        };
+        if metadata.is_file() && !metadata.file_type().is_symlink() {
+            primary = Some((absolute, candidate.to_owned()));
+            break;
+        }
+    }
+
+    let (absolute, filename) =
+        primary.unwrap_or_else(|| (root.join("system.hcl"), "system.hcl".to_owned()));
+    let existed = absolute.exists();
+    if existed {
+        let current = std::fs::read_to_string(&absolute)?;
+        match version {
+            Some(version) if file_version(&current) == version => {}
+            Some(_) => {
+                return Err(OverwriteModelError::Refused(format!(
+                    "version mismatch: model changed since it was read (current version {}); re-read it with `read_file` and retry",
+                    file_version(&current)
+                )));
+            }
+            None => {
+                return Err(OverwriteModelError::Refused(
+                    "model already exists; pass the `version` `read_file` returned to overwrite it whole"
+                        .to_owned(),
+                ));
+            }
+        }
+    }
+
+    let raw = rhizz_core::parse::parse_file(content, Path::new(&filename))
+        .map_err(|e| vec![rhizz_core::Diagnostic::error(e.code, e.message)])
+        .map_err(OverwriteModelError::Invalid)?;
+    let (model, warnings) =
+        rhizz_core::resolve::resolve(raw).map_err(OverwriteModelError::Invalid)?;
+    let hcl = rhizz_core::serialize::serialize_model(&model);
+    write_atomic(&absolute, &hcl).map_err(|e| match e {
+        SaveVfsError::Malformed(message) => OverwriteModelError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => OverwriteModelError::Io(err),
+    })?;
+    Ok(OverwriteModelResult {
+        version: file_version(&hcl),
+        total_lines: hcl.lines().count(),
+        warnings,
+    })
+}
+
 /// Serializes `edit_documentation` read-check-write sequences within this
 /// process, so two edits sent with the same version cannot both pass the
 /// version check. This is compare-and-swap without a project lock (proposal
@@ -2435,5 +2571,69 @@ mod tests {
         );
         assert_eq!(sources[1].content, "system \"quadcopter\" {}\n");
         assert!(project_sources(dir.path(), "ghost").unwrap().is_none());
+    }
+
+    #[test]
+    fn overwrite_model_replaces_a_broken_model_whole() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"quadcopter\" {\n  instance \"a\" { source = \"missing\" }\n}\n",
+        );
+        let current = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let version = file_version(&current);
+
+        let fixed = "system \"quadcopter\" {\n  full_name = \"Quad\"\n}\n";
+        let result = overwrite_model(dir.path(), "drone", fixed, Some(&version))
+            .expect("valid content must apply");
+        let stored = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        assert_eq!(result.version.len(), 64);
+        assert_eq!(result.total_lines, stored.lines().count());
+        assert!(
+            stored.contains("full_name"),
+            "canonical HCL must be persisted, got: {stored}"
+        );
+        assert_eq!(result.version, file_version(&stored));
+    }
+
+    #[test]
+    fn overwrite_model_refuses_invalid_content_and_stale_versions() {
+        let dir = data_dir_with_drone();
+        let before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let version = file_version(&before);
+
+        // Broken replacement: unknown source is E014, so nothing is written.
+        let broken = "system \"quadcopter\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
+        assert!(
+            matches!(
+                overwrite_model(dir.path(), "drone", broken, Some(&version)),
+                Err(OverwriteModelError::Invalid(_))
+            ),
+            "unresolvable content must be refused"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "refused overwrites must not touch the file"
+        );
+
+        // Stale and missing versions are refused without touching the file.
+        let fixed = "system \"quadcopter\" {\n  full_name = \"Quad\"\n}\n";
+        assert!(matches!(
+            overwrite_model(dir.path(), "drone", fixed, Some("0".repeat(64).as_str())),
+            Err(OverwriteModelError::Refused(_))
+        ));
+        assert!(matches!(
+            overwrite_model(dir.path(), "drone", fixed, None),
+            Err(OverwriteModelError::Refused(_))
+        ));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before
+        );
+        assert!(matches!(
+            overwrite_model(dir.path(), "ghost", fixed, None),
+            Err(OverwriteModelError::Unknown(_))
+        ));
     }
 }
