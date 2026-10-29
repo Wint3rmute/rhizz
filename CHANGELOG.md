@@ -10,6 +10,10 @@
 
 ### Fix
 
+- **web**: use port paths in connection unit tests
+- **server**: require port paths in connection tools
+- **core**: require port path in every connection endpoint (E003)
+- **examples**: name port paths in all connections
 - **web**: refresh README/book landing shot from VRT baseline
 - **web**: fill landing hero to viewport height in EmptyLanding shot
 - **modeling**: keep port tooltip on one line for stable title text
