@@ -493,6 +493,21 @@ struct DeleteProtocolParams {
     path: String,
 }
 
+/// Arguments accepted by the `overwrite_model` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct OverwriteModelParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// The whole new content of the primary model file (`system.hcl` or
+    /// `main.hcl`). It is parsed and resolved; on resolver errors nothing is
+    /// written.
+    content: String,
+    /// The content-hash `version` `read_file` returned for the primary file.
+    /// Required when the file already exists (compare-and-swap overwrite);
+    /// ignored when no primary file exists yet.
+    version: Option<String>,
+}
+
 /// Arguments accepted by the `create_doc` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct CreateDocParams {
@@ -1078,6 +1093,69 @@ impl RhizzMcp {
             path: params.0.path.clone(),
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Replaces a project's primary model file whole. This is the repair
+    /// hatch for models that incremental `ModelOp` mutations can no longer
+    /// touch: a broken model refuses every op (a mutation can never persist
+    /// a broken model), so the only way forward is to replace the file whole
+    /// and validate once. Compare-and-swap only: proposal 0004 locking is not
+    /// implemented, so no project lock is taken and there is no `AI`
+    /// identity — concurrent writes to the same file are serialized and an
+    /// overwrite needs the version `read_file` returned.
+    #[tool(
+        name = "overwrite_model",
+        description = "Replace a project's primary model file (`system.hcl`, falling back to `main.hcl`) whole with new HCL content. The content is parsed and resolved; on resolver errors nothing is written and the diagnostics are returned. On success the canonical HCL is persisted (exactly what the web editor writes) and the new content-hash `version` and `totalLines` are returned with any warnings. When the file already exists, the `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed when no primary file exists yet is ignored. Compare-and-swap only: no project lock is taken and there is no `AI` identity (0004 is not implemented). Any refusal leaves the file untouched and never touches views or docs."
+    )]
+    async fn overwrite_model(
+        &self,
+        params: Parameters<OverwriteModelParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let params = params.0;
+        let loaded = tokio::task::spawn_blocking(move || {
+            storage::overwrite_model(
+                &data_dir,
+                &params.project,
+                &params.content,
+                params.version.as_deref(),
+            )
+        })
+        .await;
+        let result = match loaded {
+            Ok(Ok(result)) => result,
+            Ok(Err(storage::OverwriteModelError::Unknown(id))) => {
+                return Ok(tool_error(format!("unknown project `{id}`")));
+            }
+            Ok(Err(storage::OverwriteModelError::Io(err))) => {
+                tracing::error!(?err, "overwrite_model: failed to read or write model");
+                return Ok(tool_error("failed to read or write model"));
+            }
+            Ok(Err(storage::OverwriteModelError::Refused(message))) => {
+                return Ok(tool_error(message));
+            }
+            Ok(Err(storage::OverwriteModelError::Invalid(diagnostics))) => {
+                return Ok(mutation_refused(&diagnostics));
+            }
+            Err(err) => {
+                tracing::error!(?err, "overwrite_model: worker task failed");
+                return Ok(tool_error("failed to overwrite model"));
+            }
+        };
+        let warnings: Vec<Value> = result.warnings.iter().map(diagnostic_json).collect();
+        let payload = json!({
+            "applied": true,
+            "version": result.version,
+            "totalLines": result.total_lines,
+            "warnings": warnings,
+        });
+        match serde_json::to_string(&payload) {
+            Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+            Err(err) => {
+                tracing::error!(?err, "overwrite_model: failed to encode result");
+                Ok(tool_error("failed to encode result"))
+            }
+        }
     }
 
     /// Creates a new Markdown doc, or overwrites an existing one whole.
@@ -3431,6 +3509,114 @@ mod tests {
         assert!(
             !tmp.path().join("demo/outside.md").exists(),
             "a confined-out path must not be created"
+        );
+    }
+
+    /// Reads the primary model file's content-hash `version` through the
+    /// `read_file` tool, the same value `overwrite_model` requires.
+    async fn read_model_version(app: &Router, session: &str, id: i64) -> String {
+        let payload = call_tool(
+            app,
+            session,
+            id,
+            "read_file",
+            json!({ "project": "demo", "path": "system.hcl" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        result_value(&payload)["version"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[tokio::test]
+    async fn tools_call_overwrite_model_replaces_a_broken_model_whole() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        // Break the model the way homelab broke: a connection without ports.
+        std::fs::write(
+            tmp.path().join("demo/system.hcl"),
+            "system \"demo\" {\n  connection \"broken\" {\n    from = \"a\"\n    to   = \"b\"\n  }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let version = read_model_version(&app, &session, 400).await;
+        let fixed = "system \"demo\" {\n  full_name = \"Demo\"\n}\n";
+        let payload = call_tool(
+            &app,
+            &session,
+            401,
+            "overwrite_model",
+            json!({ "project": "demo", "content": fixed, "version": version }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let result = result_value(&payload);
+        assert_eq!(result["applied"], json!(true));
+        assert_eq!(result["version"].as_str().unwrap().len(), 64);
+
+        let stored = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(
+            stored.contains("full_name"),
+            "canonical HCL must persist: {stored}"
+        );
+        assert_eq!(result["totalLines"], json!(stored.lines().count()));
+    }
+
+    #[tokio::test]
+    async fn tools_call_overwrite_model_refuses_invalid_content_and_stale_versions() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let before = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        let version = read_model_version(&app, &session, 402).await;
+
+        // Unresolvable content is refused with diagnostics, file untouched.
+        let broken = "system \"demo\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
+        let refused = call_tool(
+            &app,
+            &session,
+            403,
+            "overwrite_model",
+            json!({ "project": "demo", "content": broken, "version": version }),
+        )
+        .await;
+        assert_eq!(refused["result"]["isError"], json!(true), "{refused}");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap(),
+            before,
+            "refused overwrites must not touch the file"
+        );
+
+        // Missing and stale versions are refused without touching the file.
+        let fixed = "system \"demo\" {\n  full_name = \"Demo\"\n}\n";
+        let missing = call_tool(
+            &app,
+            &session,
+            404,
+            "overwrite_model",
+            json!({ "project": "demo", "content": fixed }),
+        )
+        .await;
+        assert_eq!(missing["result"]["isError"], json!(true), "{missing}");
+        let stale = call_tool(
+            &app,
+            &session,
+            405,
+            "overwrite_model",
+            json!({ "project": "demo", "content": fixed, "version": "deadbeef" }),
+        )
+        .await;
+        assert_eq!(stale["result"]["isError"], json!(true), "{stale}");
+        assert!(tool_error_text(&stale).to_lowercase().contains("re-read"));
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap(),
+            before
         );
     }
 }
