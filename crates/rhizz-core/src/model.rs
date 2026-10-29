@@ -227,8 +227,8 @@ impl Model {
     ///
     /// Both endpoints must name a port, both ports must declare the same
     /// non-empty protocol, and that protocol must resolve to a top-level
-    /// protocol. Used by the `realized_by` checks; W007/W008 read the port
-    /// strings directly and are not affected.
+    /// protocol. Used by the `realized_by` checks; W008 reads the port
+    /// strings and is not affected.
     #[must_use]
     pub fn connection_protocol(&self, id: ConnectionId) -> Option<ProtocolId> {
         let conn = self.connection(id)?;

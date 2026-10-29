@@ -1938,7 +1938,7 @@ mod tests {
     fn delete_instance_also_removes_connections_using_it() {
         let hcl = mutate(
             "",
-            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true}}"#,
+            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
         )
         .expect("ok")
         .hcl
@@ -1963,7 +1963,7 @@ mod tests {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"a","to":"b"}"#,
+            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"a/p","to":"b/p"}"#,
         )
         .expect("ok")
         .hcl
@@ -2178,7 +2178,7 @@ mod tests {
         // Endpoints must resolve: an instance inside the definition scope.
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_component_definition","label":"a","options":{"leaf":true}}"#,
+            r#"{"kind":"add_component_definition","label":"a","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
         )
         .expect("ok")
         .hcl
@@ -2192,7 +2192,7 @@ mod tests {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"bus","label":"link","from":"x","to":"x"}"#,
+            r#"{"kind":"add_connection","scopePath":"bus","label":"link","from":"x/p","to":"x/p"}"#,
         )
         .expect("ok")
         .hcl
@@ -2671,16 +2671,22 @@ mod leaf_and_visual_tests {
     /// Definition `bank` declares `low` and `high` (which realizes `low`), and
     /// system `banking` holds one copy of it.
     const REALIZED_BANK: &str = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 component "bank" {
+  port "p" {}
+
   instance "stack" { source = "stack" }
   connection "low" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }
   connection "high" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
     realized_by = ["low"]
   }
 }
@@ -2704,20 +2710,26 @@ system "banking" {
     #[test]
     fn delete_instance_drops_realized_by_entries_into_it() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 component "bank" {
+  port "p" {}
+
   instance "stack" { source = "stack" }
   connection "http-request" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }
 }
 system "banking" {
   instance "bank-a" { source = "bank" }
   instance "ext" { source = "stack" }
   connection "tls" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = ["bank-a/http-request"]
   }
 }
@@ -2735,21 +2747,25 @@ system "banking" {
     #[test]
     fn delete_keeps_realized_by_entries_that_still_resolve() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 system "banking" {
   instance "ext" { source = "stack" }
   connection "uplink" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
   }
   connection "tls" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = ["uplink"]
   }
   connection "spare" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
   }
 }
 "#;
@@ -2778,16 +2794,20 @@ mod update_connection_tests {
 
     /// System `banking` with two connections between the same instance.
     const TWO_LINKS: &str = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 system "banking" {
   instance "ext" { source = "stack" }
   connection "uplink" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
   }
   connection "tls" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
   }
 }
 "#;
@@ -2795,23 +2815,29 @@ system "banking" {
     /// Definition `bank` declares `low` and `high`; system `banking` holds
     /// instance `bank-a` of it and a connection `tls` to that instance.
     const BANK_WITH_TLS: &str = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 component "bank" {
+  port "p" {}
+
   instance "stack" { source = "stack" }
   connection "low" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }
   connection "high" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }
 }
 system "banking" {
   instance "bank-a" { source = "bank" }
   connection "tls" {
-    from = "bank-a"
-    to = "bank-a"
+    from = "bank-a/p"
+    to = "bank-a/p"
   }
 }
 "#;
@@ -2925,17 +2951,21 @@ system "banking" {
     #[test]
     fn realized_by_cycle_is_refused_with_e018() {
         let src = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 system "banking" {
   instance "ext" { source = "stack" }
   connection "a" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
     realized_by = ["b"]
   }
   connection "b" {
-    from = "ext"
-    to = "ext"
+    from = "ext/p"
+    to = "ext/p"
   }
 }
 "#;
@@ -2985,16 +3015,22 @@ system "banking" {
     }
 
     const REALIZED_BANK_FOR_COPIES: &str = r#"
-component "stack" { leaf = true }
+component "stack" {
+  leaf = true
+
+  port "p" {}
+}
 component "bank" {
+  port "p" {}
+
   instance "stack" { source = "stack" }
   connection "low" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
   }
   connection "high" {
-    from = "stack"
-    to = "stack"
+    from = "stack/p"
+    to = "stack/p"
     realized_by = ["low"]
   }
 }
