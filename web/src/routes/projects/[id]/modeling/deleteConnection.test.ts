@@ -159,11 +159,12 @@ system "demo" {
     ]);
   });
 
-  it("reports a bare endpoint with no port to clean up", () => {
+  it("reports an endpoint with its port to clean up", () => {
     const found = request(
       `
 component "a" {
   leaf = true
+  port "out" {}
 }
 component "b" {
   leaf = true
@@ -173,15 +174,16 @@ system "demo" {
   instance "a" { source = "a" }
   instance "b" { source = "b" }
   connection "link" {
-    from = "a"
+    from = "a/out"
     to   = "b/in"
   }
 }
 `,
       "link",
     );
-    expect(found?.from.port).toBeUndefined();
+    expect(found?.from.port).toBe("out");
     expect(found?.removablePorts).toEqual([
+      { definition: "a", port: "out", component: "a" },
       { definition: "b", port: "in", component: "b" },
     ]);
   });
