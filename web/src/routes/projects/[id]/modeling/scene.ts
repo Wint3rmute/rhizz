@@ -97,6 +97,28 @@ export function diagramNoteId(index: number): string {
   return `note-${String(index)}`;
 }
 
+/**
+ * Port labels named by `edges` at `nodeIndex`. A port label renders only
+ * when a drawn edge names it (or its node is selected, or a connect drag is
+ * revealing drop targets) — ports whose connections are not in this view
+ * stay hidden instead of cluttering the outline.
+ */
+export function portsUsedByEdges(
+  edges: readonly Pick<DiagramEdge, "from" | "to" | "fromPort" | "toPort">[],
+  nodeIndex: number,
+): Set<string> {
+  const out = new Set<string>();
+  for (const edge of edges) {
+    if (edge.from === nodeIndex && edge.fromPort !== undefined) {
+      out.add(edge.fromPort);
+    }
+    if (edge.to === nodeIndex && edge.toPort !== undefined) {
+      out.add(edge.toPort);
+    }
+  }
+  return out;
+}
+
 function textAlignOf(align: TextAlign | undefined): TextAlign {
   return align ?? "center";
 }

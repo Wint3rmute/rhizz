@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildEditorScene, buildReadOnlyScene, diagramEdgeId } from "./scene";
+import {
+  buildEditorScene,
+  buildReadOnlyScene,
+  diagramEdgeId,
+  portsUsedByEdges,
+} from "./scene";
 
 const box = (x: number, y: number) => ({
   x,
@@ -293,5 +298,28 @@ describe("buildReadOnlyScene ports", () => {
       },
       { label: "q", role: "consumer" },
     ]);
+  });
+});
+
+describe("portsUsedByEdges", () => {
+  it("collects endpoint ports named by edges at a node", () => {
+    const edges = [
+      { from: 0, to: 1, fromPort: "out", toPort: "in" },
+      { from: 0, to: 2, fromPort: "out" },
+    ];
+    expect(portsUsedByEdges(edges, 0)).toEqual(new Set(["out"]));
+    expect(portsUsedByEdges(edges, 1)).toEqual(new Set(["in"]));
+    expect(portsUsedByEdges(edges, 2)).toEqual(new Set());
+  });
+
+  it("ignores edges that name no ports", () => {
+    const edges = [{ from: 0, to: 1 }];
+    expect(portsUsedByEdges(edges, 0)).toEqual(new Set());
+    expect(portsUsedByEdges(edges, 1)).toEqual(new Set());
+  });
+
+  it("ignores edges at other nodes", () => {
+    const edges = [{ from: 1, to: 2, fromPort: "x", toPort: "y" }];
+    expect(portsUsedByEdges(edges, 0)).toEqual(new Set());
   });
 });
