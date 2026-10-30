@@ -116,6 +116,9 @@ export const PanesOpenByDefault: Story = {
 // Hiding swaps the panel for its restore rail without unmounting it;
 // restoring brings the same content back.
 export const PanesHideAndRestore: Story = {
+  // VRT duplicate of PanesOpenByDefault (byte-identical baselines: ends open).
+  // Play still runs in vitest.
+  tags: ["no-vrt"],
   loaders: [ensurePanesProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -146,6 +149,9 @@ export const PanesHideAndRestore: Story = {
 // its rail, restoring brings the same tree back (still bound to the open
 // view's system).
 export const ComponentsPaneHideAndRestore: Story = {
+  // VRT duplicate of PanesOpenByDefault (byte-identical baselines: ends open).
+  // Play still runs in vitest.
+  tags: ["no-vrt"],
   loaders: [ensurePanesProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
