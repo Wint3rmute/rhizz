@@ -5,32 +5,83 @@
   // the ones another connection still uses.
   //
   // The decision data comes from `deleteConnection.ts`; the Rust dispatcher
-  // performs the deletion (and refuses a shared port) as one atomic op.
+  // performs the deletion as one atomic op. Ports another connection still
+  // uses are kept while the selected unshared ports are removed.
   import type { DeleteConnectionRequest } from "./deleteConnection";
 
   interface Props {
     /** What is being deleted; `null` keeps the dialog closed. */
     request: DeleteConnectionRequest | null;
-    /** Runs the op; a refusal leaves the dialog open. */
-    onconfirm: (removePorts: boolean) => void | Promise<void>;
+    /** Runs the op with the selected `definition/port` entries to remove. */
+    onconfirm: (ports: string[]) => void | Promise<void>;
     onclose: () => void;
   }
 
   let { request, onconfirm, onclose }: Props = $props();
 
-  // Unchecked by default: removing ports is the destructive choice.
-  let removePorts = $state(false);
+  function portKey(definition: string, port: string): string {
+    return `${definition}/${port}`;
+  }
+
+  // Selected `definition/port` entries to remove. Unchecked by default:
+  // removing ports is the destructive choice. Kept ports cannot be selected.
+  let selected: string[] = $state([]);
   let submitting = $state(false);
 
   $effect(() => {
-    if (request !== null) removePorts = false;
+    if (request !== null) selected = [];
   });
+
+  function toggleAll(checked: boolean): void {
+    if (request === null) return;
+    selected = checked
+      ? request.removablePorts.map((port) => portKey(port.definition, port.port))
+      : [];
+  }
+
+  function toggleOne(key: string, checked: boolean): void {
+    selected = checked
+      ? [...selected, key]
+      : selected.filter((entry) => entry !== key);
+  }
+
+  let allChecked = $derived(
+    request !== null &&
+      request.removablePorts.length > 0 &&
+      request.removablePorts.every((port) =>
+        selected.includes(portKey(port.definition, port.port)),
+      ),
+  );
+
+  // Human-readable summary for the partial cleanup: which selected ports go,
+  // and which shared ports stay.
+  let keptSummary = $derived(
+    request === null
+      ? ""
+      : request.keptPorts
+          .map(
+            (port) =>
+              `\`${port.port}\` (also used by connection \`${port.usedBy.join(", ")}\`)`,
+          )
+          .join(", "),
+  );
+
+  let selectedSummary = $derived(
+    request === null
+      ? ""
+      : request.removablePorts
+          .filter((port) =>
+            selected.includes(portKey(port.definition, port.port)),
+          )
+          .map((port) => `\`${port.port}\``)
+          .join(", "),
+  );
 
   async function submit(): Promise<void> {
     if (request === null || submitting) return;
     submitting = true;
     try {
-      await onconfirm(removePorts);
+      await onconfirm([...selected]);
     } finally {
       submitting = false;
     }
@@ -138,7 +189,8 @@
           <input
             type="checkbox"
             class="checkbox checkbox-sm checkbox-error"
-            bind:checked={removePorts}
+            checked={allChecked}
+            onchange={(e) => toggleAll(e.currentTarget.checked)}
             data-testid="delete-connection-remove-ports"
             disabled={request.removablePorts.length === 0}
           />
@@ -146,7 +198,8 @@
             Also remove ports on connected components
             <span class="block text-xs text-base-content/60">
               Ports live on component definitions, so every instance of a
-              definition loses them.
+              definition loses them. Tick individual ports below to select
+              which ones go.
             </span>
           </span>
         </label>
@@ -164,18 +217,28 @@
           {:else}
             <ul class="space-y-1 text-sm">
               {#each request.removablePorts as port (port.definition + "/" + port.port)}
+                {@const key = portKey(port.definition, port.port)}
+                {@const checked = selected.includes(key)}
                 <li
                   class="flex items-center gap-2"
                   data-testid="delete-connection-port"
                 >
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-xs checkbox-error"
+                    checked={checked}
+                    onchange={(e) => toggleOne(key, e.currentTarget.checked)}
+                    data-testid="delete-connection-port-checkbox"
+                    aria-label={`Remove port ${port.port} on ${port.definition}`}
+                  />
                   <code class="font-mono">{port.port}</code>
                   <span class="text-base-content/70">on {port.definition}</span>
                   <span
-                    class="badge badge-sm {removePorts
+                    class="badge badge-sm {checked
                       ? 'badge-error'
                       : 'badge-ghost'} ml-auto"
                   >
-                    {removePorts ? "Will be removed" : "Keep"}
+                    {checked ? "Will be removed" : "Keep"}
                   </span>
                 </li>
               {/each}
@@ -184,6 +247,13 @@
                   class="flex items-center gap-2"
                   data-testid="delete-connection-kept-port"
                 >
+                  <input
+                    type="checkbox"
+                    class="checkbox checkbox-xs"
+                    disabled
+                    checked={false}
+                    aria-label={`Port ${port.port} on ${port.definition} is used elsewhere`}
+                  />
                   <code class="font-mono">{port.port}</code>
                   <span class="text-base-content/70">on {port.definition}</span>
                   <span class="badge badge-sm badge-warning ml-auto">
@@ -195,14 +265,13 @@
           {/if}
         </div>
 
-        {#if removePorts && request.keptPorts.length > 0}
+        {#if selected.length > 0 && request.keptPorts.length > 0}
           <div
-            class="alert alert-warning text-sm"
+            class="alert alert-info text-sm"
             data-testid="delete-connection-port-conflict"
           >
-            A port above is still used by another connection, so the deletion
-            will be refused. Leave the checkbox off, or delete the other
-            connection first.
+            Only {selectedSummary} will be removed, as {keptSummary} is also used
+            by another connection.
           </div>
         {/if}
       </div>

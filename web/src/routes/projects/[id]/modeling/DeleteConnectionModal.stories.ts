@@ -57,8 +57,27 @@ export const PortCleanup: Story = {
   },
 };
 
-// A port another connection uses: it stays, and checking the box warns that
-// the op will be refused.
+// A single removable port can be selected while the other stays.
+export const SelectivePort: Story = {
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    const boxes = await modal.findAllByTestId(
+      "delete-connection-port-checkbox",
+    );
+    const first = boxes[0];
+    if (first === undefined) throw new Error("expected a port checkbox");
+    await userEvent.click(first);
+    await expect(
+      modal.getAllByTestId("delete-connection-port")[0],
+    ).toHaveTextContent("Will be removed");
+    await expect(
+      modal.getAllByTestId("delete-connection-port")[1],
+    ).toHaveTextContent("Keep");
+  },
+};
+
+// A port another connection uses: it stays while the selected unshared port
+// goes, and the dialog says which is which.
 export const SharedPort: Story = {
   args: {
     request: {
@@ -85,11 +104,15 @@ export const SharedPort: Story = {
     await expect(
       await modal.findByTestId("delete-connection-kept-port"),
     ).toHaveTextContent("Used by battery-telemetry");
-    await userEvent.click(modal.getByTestId("delete-connection-remove-ports"));
-    // The warning sits below the fold in a short canvas; its presence and
+    await userEvent.click(
+      await modal.findByTestId("delete-connection-port-checkbox"),
+    );
+    // The note sits below the fold in a short canvas; its presence and
     // wording matter, not its scroll position.
     await expect(
       await modal.findByTestId("delete-connection-port-conflict"),
-    ).toHaveTextContent("still used by another connection");
+    ).toHaveTextContent(
+      "Only `power-in` will be removed, as `power-out`",
+    );
   },
 };

@@ -322,10 +322,14 @@ struct DeleteConnectionByLabelParams {
     project: String,
     /// Connection label (systems are searched first, then definitions).
     label: String,
-    /// Also delete endpoint ports no other connection uses. Refused when a
-    /// port is still used elsewhere.
+    /// Also delete endpoint ports no other connection uses. Ports still used
+    /// elsewhere are kept while the unshared endpoint ports are removed.
     #[serde(default)]
     remove_ports: bool,
+    /// Only delete these endpoint ports (`definition/port` entries). A shared
+    /// endpoint port in the list is kept while the unshared ones are removed.
+    #[serde(default)]
+    ports: Option<Vec<String>>,
 }
 
 /// A port created together with a `connect_components` end, mirroring
@@ -979,7 +983,7 @@ impl RhizzMcp {
     /// is not implemented, so no lock is taken.
     #[tool(
         name = "delete_connection_by_label",
-        description = "Delete a connection by label, searching systems then definitions (`ModelOp delete_connection_by_label`). Pass the project id, `label`, and optional `removePorts` to also delete endpoint ports no other connection uses (refused with E000 when a port is still used elsewhere). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Delete a connection by label, searching systems then definitions (`ModelOp delete_connection_by_label`). Pass the project id, `label`, optional `removePorts` to also delete endpoint ports no other connection uses (ports still used elsewhere are kept while the unshared ones are removed), and optional `ports` (`definition/port` entries) to delete only a subset of the unshared endpoint ports. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_connection_by_label(
         &self,
@@ -988,6 +992,7 @@ impl RhizzMcp {
         let op = rhizz_core::mutation::ModelOp::DeleteConnectionByLabel {
             label: params.0.label.clone(),
             remove_ports: params.0.remove_ports,
+            ports: params.0.ports.clone(),
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
@@ -2728,7 +2733,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_delete_connection_with_shared_port_refusal() {
+    async fn tools_call_delete_connection_with_shared_port_keeps_it() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("demo");
         std::fs::create_dir_all(&project).unwrap();
@@ -2739,9 +2744,8 @@ mod tests {
         .unwrap();
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
-        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
-        // `out` is still used by `two`, so removing ports refuses with E000.
+        // `out` is still used by `two`, so it is kept while `in` is removed.
         let payload = call_tool(
             &app,
             &session,
@@ -2750,11 +2754,12 @@ mod tests {
             json!({ "project": "demo", "label": "one", "removePorts": true }),
         )
         .await;
-        let text = tool_error_text(&payload);
-        assert!(text.contains("E000"), "expected E000 in refusal: {text}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
 
-        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
-        assert_eq!(before, after, "a refused delete must not touch system.hcl");
+        let after = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(!after.contains("connection \"one\""), "{after}");
+        assert!(after.contains("port \"out\""), "{after}");
+        assert!(!after.contains("port \"in\""), "{after}");
     }
 
     #[tokio::test]
@@ -2974,6 +2979,7 @@ mod tests {
             ModelOp::DeleteConnectionByLabel {
                 label: "l".to_owned(),
                 remove_ports: false,
+                ports: None,
             },
             ModelOp::UpdateConnection {
                 scope_path: "s".to_owned(),

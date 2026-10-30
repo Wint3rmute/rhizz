@@ -93,6 +93,26 @@ describe("actionLog", () => {
     });
   });
 
+  it("encodes delete_connection selective ports as the op's list", () => {
+    const line = encodeCall(
+      {
+        op: "delete_connection",
+        scopePath: "main",
+        label: "rf-link",
+        removePorts: true,
+        ports: ["a/out"],
+      },
+      "fs",
+    );
+    const opJson = line.slice(line.indexOf("{"), line.lastIndexOf("}") + 1);
+    expect(JSON.parse(opJson)).toEqual({
+      kind: "delete_connection_by_label",
+      label: "rf-link",
+      removePorts: true,
+      ports: ["a/out"],
+    });
+  });
+
   it("encodes rename/delete/reparent actions as their dispatcher ops", () => {
     expect(
       encodeCall(
