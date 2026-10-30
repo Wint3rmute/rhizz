@@ -4,6 +4,26 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Remove port-less connection support from the frontend (after E003 lands)
+
+`add_connection` now requires port paths: `mutation.rs` refuses single-segment
+`from`/`to` with an E000 port-path message (E003-style wording), so MCP and web
+callers get a refusal with the file untouched. `NewConnectionModal` was
+already `connect_components`-only; no UI path emits `add_connection`, and no
+production UI caller remains. Inspector/diagnostics copy uses port-path
+language (`protocolUnresolvedReason` requires a port path on each endpoint);
+VRT `NoPorts` story removed and the delete dialog empty-state reworded to
+"could not be resolved" (port-less is unrepresentable in a compiled model).
+MCP param docs updated to port-only; `actionLog`, `mutation` fixtures and the
+op-mapping test use port paths.
+
+Validation: `cargo test` (core/server/cli), 1227 vitest, 159 e2e, `clippy` /
+`cargo doc` / `eslint` / `svelte-check` / `cz check` clean, Storybook +
+`web-build` + `cargo build --release --all-targets` green.
+Branch: `feat/remove-bare-connection-frontend`.
+
+---
+
 ## Task <N> — Migrate book examples to port-terminated connections (after E003 lands)
 
 All book connections now terminate at ports. `book/src/basics/demo/system.hcl`
