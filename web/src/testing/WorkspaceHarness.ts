@@ -65,7 +65,12 @@ export type WorkspaceAction =
       from: string;
       to: string;
     }
-  | { type: "delete-connection"; label: string; removePorts?: boolean; ports?: string[] }
+  | {
+      type: "delete-connection";
+      label: string;
+      removePorts?: boolean;
+      ports?: string[];
+    }
   | { type: "undo" }
   | { type: "redo" };
 

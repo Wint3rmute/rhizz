@@ -35,7 +35,9 @@
   function toggleAll(checked: boolean): void {
     if (request === null) return;
     selected = checked
-      ? request.removablePorts.map((port) => portKey(port.definition, port.port))
+      ? request.removablePorts.map((port) =>
+          portKey(port.definition, port.port),
+        )
       : [];
   }
 
@@ -198,8 +200,8 @@
             Also remove ports on connected components
             <span class="block text-xs text-base-content/60">
               Ports live on component definitions, so every instance of a
-              definition loses them. Tick individual ports below to select
-              which ones go.
+              definition loses them. Tick individual ports below to select which
+              ones go.
             </span>
           </span>
         </label>
@@ -226,7 +228,7 @@
                   <input
                     type="checkbox"
                     class="checkbox checkbox-xs checkbox-error"
-                    checked={checked}
+                    {checked}
                     onchange={(e) => toggleOne(key, e.currentTarget.checked)}
                     data-testid="delete-connection-port-checkbox"
                     aria-label={`Remove port ${port.port} on ${port.definition}`}

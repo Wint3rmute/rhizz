@@ -274,12 +274,12 @@ test("a single port can be selected while the other is kept", async ({
   const boxes = modal.getByTestId("delete-connection-port-checkbox");
   await expect(boxes).toHaveCount(2);
   await boxes.nth(0).check();
-  await expect(modal.getByTestId("delete-connection-port").nth(0)).toContainText(
-    "Will be removed",
-  );
-  await expect(modal.getByTestId("delete-connection-port").nth(1)).toContainText(
-    "Keep",
-  );
+  await expect(
+    modal.getByTestId("delete-connection-port").nth(0),
+  ).toContainText("Will be removed");
+  await expect(
+    modal.getByTestId("delete-connection-port").nth(1),
+  ).toContainText("Keep");
   await modal.getByTestId("delete-connection-confirm").click();
 
   await expect
