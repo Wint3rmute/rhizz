@@ -159,7 +159,7 @@
           </h4>
           {#if request.removablePorts.length === 0 && request.keptPorts.length === 0}
             <p class="text-sm text-base-content/60">
-              This connection has no endpoint ports.
+              Endpoint ports could not be resolved for this connection.
             </p>
           {:else}
             <ul class="space-y-1 text-sm">

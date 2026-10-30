@@ -420,7 +420,8 @@ export interface ProtocolData {
 
 /**
  * Why a connection has no derived protocol, for display. `from` / `to` are
- * the endpoint ports' protocol strings, or `undefined` for a bare endpoint.
+ * the endpoint ports' protocol strings, or `undefined` when an endpoint
+ * names no port.
  * Returns `undefined` when the endpoints share a defined protocol.
  */
 export function protocolUnresolvedReason(
@@ -429,7 +430,7 @@ export function protocolUnresolvedReason(
   definedProtocols: readonly string[],
 ): string | undefined {
   if (from === undefined || to === undefined) {
-    return "An endpoint is a bare component with no port, so no protocol is shared.";
+    return "This connection requires a port path on each endpoint (e.g. `comp/port`).";
   }
   if (from.protocol === "" || to.protocol === "") {
     return "A port on this connection has no protocol.";

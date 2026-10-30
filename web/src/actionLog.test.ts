@@ -126,13 +126,13 @@ describe("actionLog", () => {
           op: "add_connection",
           scopePath: "main",
           label: "rf-link",
-          from: "fc",
-          to: "radio",
+          from: "fc/link-radio",
+          to: "radio/link-fc",
         },
         "fs",
       ),
     ).toContain(
-      '{"kind":"add_connection","scopePath":"main","label":"rf-link","from":"fc","to":"radio"}',
+      '{"kind":"add_connection","scopePath":"main","label":"rf-link","from":"fc/link-radio","to":"radio/link-fc"}',
     );
   });
 
