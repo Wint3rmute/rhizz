@@ -59,7 +59,7 @@ No new composite `Showcase` stories were added. Rationale: the kept representati
 | `Components/Palette/CommandPalette / EscapeCloses` | `CommandPalette` | `components-palette-commandpalette--escape-closes--dark.png`, `--light.png` | `BrowseAll` | Same as above (`isOpen` controlled prop, so Escape does not visually close). Close callback still asserted via play. |
 | `Components/Palette/CommandPalette / ScrimWithoutBlur` | `CommandPalette` | `components-palette-commandpalette--scrim-without-blur--dark.png`, `--light.png` | `BrowseAll` | Same open palette (identical hash). No-blur/scrim CSS still asserted via `getComputedStyle` in play. |
 | `Diagrams/ConnectionInspector / AttributeScopes` | `ConnectionInspector` | `diagrams-connectioninspector--attribute-scopes--dark.png`, `--light.png` | `Diagrams/ConnectionInspector / Default` | Same args except `sharedWithCopies` (tooltip-only, invisible in screenshot). Panel split still asserted via play. |
-| `Diagrams/ConnectionInspector / Realized` | `ConnectionInspector` | `diagrams-connectioninspector--realized--dark.png`, `--light.png` | `Diagrams/ConnectionInspector / PortConnectionStatus` | Same `fund-transfer` realized connection (identical hash). Kept has play (per-instance Connected badges); removed had no play. |
+| `Diagrams/ConnectionInspector / Realized` | `ConnectionInspector` | `diagrams-connectioninspector--realized--dark.png`, `--light.png` | `Diagrams/ConnectionInspector / PortConnectionStatus` (story deleted, not just `no-vrt`) | Same `fund-transfer` realized connection (identical hash) with no `play` and args identical to `meta` defaults; `PortConnectionStatus` covers the same visual plus badge assertions. |
 | `Diagrams/NodeInspector / AttributeScopes` | `NodeInspector` | `diagrams-nodeinspector--attribute-scopes--dark.png`, `--light.png` | `Diagrams/NodeInspector / Default` | Same empty args (identical hash). Component/view panel split still asserted via play. |
 | `Overview/DiagnosticsStatusBar / ResizablePanel` | `DiagnosticsStatusBar` | `overview-diagnosticsstatusbar--resizable-panel--dark.png`, `--light.png` | `Overview/DiagnosticsStatusBar / Expanded` | Same expanded 3-row panel + strip (identical hash, slider visible in both). Kept asserts color seam (visual); removed resize/hide cycle still runs via play. |
 | `Pages/Diagrams/Modeling Panes / PanesHideAndRestore` | `ModelingPage` | `pages-diagrams-modeling-panes--panes-hide-and-restore--dark.png`, `--light.png` | `Pages/Diagrams/Modeling Panes / PanesOpenByDefault` | All three end open (identical hash; hide→restore). Hide/restore still asserted via play. |
@@ -108,7 +108,7 @@ Viewports/themes/locales/edge cases preserved: `mobile1` stories (`Navbar Mobile
 
 ## 5. Summary
 
-- Stories: 200 total. VRT stories **179 → 161** (−18). `no-vrt` 21 → 39.
+- Stories: 199 total (200 − deleted `Realized`). VRT stories **179 → 161** (−18). `no-vrt` 21 → 38.
 - Snapshots: **364 → 326 files** (−38: 18 stories ×2 + 1 orphan story ×2). Unique bases 184 → 165 (161 story + 4 backgrounds).
 - Tests: `just vrt` **362 → 326** (−36; 18 stories ×2). Post-change run: **326 passed, 0 changed, 0 new, 0 errors, 326 unchanged** (5.2m wall, fully parallel).
 - Runtime: −10% test count; wall-time saving ≈10% (≈30s on this machine, more on slower CI runners). No new baselines needed (`just vrt-accept` not run; no `Showcase` stories added, no thresholds touched).

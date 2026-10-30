@@ -105,18 +105,6 @@ export const Default: Story = {
   },
 };
 
-/** A complete chain: `fund-transfer` is realized by `http-request`, which is itself complete. */
-export const Realized: Story = {
-  // VRT duplicate of PortConnectionStatus (byte-identical baselines): same
-  // fund-transfer connection. Covered visually there.
-  tags: ["no-vrt"],
-  args: {
-    connection: fundTransfer,
-    protocol: payment,
-    connections: [fundTransfer, httpRequest],
-  },
-};
-
 /** The realizing connection is missing its own realization: the inspector names the blocker. */
 export const Incomplete: Story = {
   args: {
