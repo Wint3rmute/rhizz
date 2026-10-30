@@ -1473,7 +1473,7 @@ fn delete_connection_by_label(
         remove_ports: wants_cleanup.then_some(true),
         ports: only_ports
             .filter(|ports| !ports.is_empty())
-            .map(|ports| ports.to_vec()),
+            .map(<[String]>::to_vec),
     }]))
 }
 
@@ -1535,40 +1535,38 @@ fn removable_endpoint_ports(
         .filter(|target| !shared.contains(target))
         .collect();
 
-    if let Some(only) = only_ports {
-        if !only.is_empty() {
-            let mut selected: Vec<(String, String)> = Vec::new();
-            for entry in only {
-                let Some((definition, port)) = entry.rsplit_once('/') else {
-                    return Err(MutationError::InvalidInput(format!(
-                        "cannot remove port `{entry}`: expected `definition/port`"
-                    )));
-                };
-                let wanted = (definition.to_owned(), port.to_owned());
-                if !removable.contains(&wanted) {
-                    // Shared endpoint ports are quietly kept so the unshared
-                    // selection can still apply; anything else is a caller bug.
-                    let is_endpoint = model.connections.iter().any(|c| {
-                        c.decl == decl
-                            && c.label == label
-                            && [&c.from, &c.to].iter().any(|endpoint| {
-                                endpoint_port_target(&model, endpoint)
-                                    .is_some_and(|target| target == wanted)
-                            })
-                    });
-                    if is_endpoint {
-                        continue;
-                    }
-                    return Err(MutationError::InvalidInput(format!(
-                        "cannot remove port `{port}` on component `{definition}`: it is not an endpoint port of connection `{label}`"
-                    )));
+    if let Some(only) = only_ports.filter(|only| !only.is_empty()) {
+        let mut selected: Vec<(String, String)> = Vec::new();
+        for entry in only {
+            let Some((definition, port)) = entry.rsplit_once('/') else {
+                return Err(MutationError::InvalidInput(format!(
+                    "cannot remove port `{entry}`: expected `definition/port`"
+                )));
+            };
+            let wanted = (definition.to_owned(), port.to_owned());
+            if !removable.contains(&wanted) {
+                // Shared endpoint ports are quietly kept so the unshared
+                // selection can still apply; anything else is a caller bug.
+                let is_endpoint = model.connections.iter().any(|c| {
+                    c.decl == decl
+                        && c.label == label
+                        && [&c.from, &c.to].iter().any(|endpoint| {
+                            endpoint_port_target(&model, endpoint)
+                                .is_some_and(|target| target == wanted)
+                        })
+                });
+                if is_endpoint {
+                    continue;
                 }
-                if !selected.contains(&wanted) {
-                    selected.push(wanted);
-                }
+                return Err(MutationError::InvalidInput(format!(
+                    "cannot remove port `{port}` on component `{definition}`: it is not an endpoint port of connection `{label}`"
+                )));
             }
-            removable = selected;
+            if !selected.contains(&wanted) {
+                selected.push(wanted);
+            }
         }
+        removable = selected;
     }
     Ok(removable)
 }
