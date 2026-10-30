@@ -38,6 +38,9 @@ export const WithScore: Story = {
 
 /** No score yet: the badge renders nothing at all, rather than a zero. */
 export const NoScore: Story = {
+  // VRT blank (byte-identical to PaletteHost/EscapeCloses and
+  // DiagramStaticView/Empty): renders nothing. Play still runs in vitest.
+  tags: ["no-vrt"],
   args: {
     score: null,
   },

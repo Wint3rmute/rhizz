@@ -262,6 +262,9 @@ export const Expanded: Story = {
 // (expand → reload → still open). Dragging and the keyboard are e2e's job
 // too (pointer capture + reload persistence need a real page).
 export const ResizablePanel: Story = {
+  // VRT duplicate of Expanded (byte-identical baselines): same expanded
+  // panel with slider. Play still runs in vitest.
+  tags: ["no-vrt"],
   loaders: [resetDiagnosticsBar],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
