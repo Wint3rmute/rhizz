@@ -93,25 +93,3 @@ export const SharedPort: Story = {
     ).toHaveTextContent("still used by another connection");
   },
 };
-
-// Bare endpoints: nothing to clean up, so the checkbox is disabled.
-export const NoPorts: Story = {
-  args: {
-    request: {
-      label: "bare-link",
-      from: { component: "battery" },
-      to: { component: "flight-controller" },
-      removablePorts: [],
-      keptPorts: [],
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const modal = within(canvasElement);
-    await expect(
-      await modal.findByTestId("delete-connection-remove-ports"),
-    ).toBeDisabled();
-    await expect(
-      modal.getByTestId("delete-connection-ports"),
-    ).toHaveTextContent("no endpoint ports");
-  },
-};

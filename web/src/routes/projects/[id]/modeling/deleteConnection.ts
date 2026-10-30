@@ -15,7 +15,7 @@ import type { RawModelPayload } from "../../../../modelView";
 export interface DeleteConnectionEndpoint {
   /** Label of the endpoint component instance. */
   component: string;
-  /** Port label, when the endpoint names one. */
+  /** Port label (always present in a compiled model). */
   port?: string | undefined;
 }
 

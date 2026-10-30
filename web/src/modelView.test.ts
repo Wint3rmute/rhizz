@@ -459,10 +459,10 @@ describe("protocolUnresolvedReason", () => {
     ).toBeUndefined();
   });
 
-  it("names a bare endpoint with no port", () => {
+  it("requires a port path on each endpoint", () => {
     expect(
       protocolUnresolvedReason(undefined, { protocol: "https" }, ["https"]),
-    ).toMatch(/bare component/);
+    ).toMatch(/requires a port path/);
   });
 
   it("names an untyped port", () => {
