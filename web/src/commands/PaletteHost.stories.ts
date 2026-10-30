@@ -132,6 +132,9 @@ export const CommandsAndFilesInOneList: Story = {
 };
 
 export const CommandsComeFirst: Story = {
+  // VRT duplicate of CommandsAndFilesInOneList (byte-identical baselines):
+  // same untouched palette, same pixels. Play still runs in vitest.
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     await openVia();
     const canvas = within(canvasElement);
@@ -194,6 +197,9 @@ export const FindsAView: Story = {
 // some other page. Kept as two stories so each baseline shows one state —
 // this one the untouched list, which is the thing a screenshot can pin.
 export const InventorySectionOnInventory: Story = {
+  // VRT duplicate of ComponentIconsOnInventory (byte-identical baselines):
+  // same untouched inventory palette. Play still runs in vitest.
+  tags: ["no-vrt"],
   args: { pathname: "/projects/p/inventory" },
   play: async ({ canvasElement }) => {
     await openVia();
@@ -301,6 +307,10 @@ export const InventoryFindsByFullName: Story = {
 // consequently no "closed by default" story here: the shell's own stories
 // cover the closed state.)
 export const EscapeCloses: Story = {
+  // VRT blank (byte-identical to ScoreBadge/NoScore and
+  // DiagramStaticView/Empty): palette closed, no pixels to pin.
+  // Play still runs in vitest.
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     await openVia();
     const canvas = within(canvasElement);
