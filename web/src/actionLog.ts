@@ -145,6 +145,8 @@ export type ModelAction =
       label: string;
       /** Also delete the endpoint ports no other connection uses. */
       removePorts?: boolean | undefined;
+      /** Only delete these endpoint ports (`definition/port`). Shared ones are kept. */
+      ports?: string[] | undefined;
     }
   | {
       op: "update_connection";
@@ -295,6 +297,9 @@ function toMutationOp(action: ModelAction): unknown {
         // Absent unless the user asked for the port cleanup, keeping old
         // debug dumps byte-identical.
         ...(action.removePorts === true ? { removePorts: true } : {}),
+        ...(action.ports !== undefined && action.ports.length > 0
+          ? { ports: [...action.ports] }
+          : {}),
       };
     case "update_connection":
       return {

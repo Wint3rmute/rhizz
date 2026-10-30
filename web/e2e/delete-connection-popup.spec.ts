@@ -198,7 +198,7 @@ test("Delete and Enter confirm, as the old prompt did", async ({ page }) => {
     .toBe(false);
 });
 
-test("a shared port is refused with a clear message and nothing changes", async ({
+test("a shared port is kept while the unshared one is removed", async ({
   page,
 }) => {
   await openModeling(
@@ -245,12 +245,49 @@ system "main" {
   await expect(modal).toBeVisible();
   await modal.getByTestId("delete-connection-kept-port").first().waitFor();
   await modal.getByTestId("delete-connection-remove-ports").check();
+  await expect(
+    modal.getByTestId("delete-connection-port-conflict"),
+  ).toContainText("Only `in` will be removed");
+  await expect(
+    modal.getByTestId("delete-connection-port-conflict"),
+  ).toContainText("also used by");
   await modal.getByTestId("delete-connection-confirm").click();
 
-  await expect(page.getByText("Change refused")).toBeVisible();
-  await expect(page.getByText(/still used by connection/)).toBeVisible();
-  await expect(modal).toBeVisible();
+  await expect(modal).toBeHidden();
+  await expect
+    .poll(async () => (await modelText(page)).includes('connection "one"'), {
+      timeout: 10_000,
+    })
+    .toBe(false);
   const hcl = await modelText(page);
-  expect(hcl).toContain('connection "one"');
   expect(hcl).toContain('port "out"');
+  expect(hcl).toContain('port "spare"');
+  expect(hcl).not.toContain('port "in"');
+  expect(hcl).toContain('connection "two"');
+});
+
+test("a single port can be selected while the other is kept", async ({
+  page,
+}) => {
+  await openModeling(page, "E2E delete connection selective", LINKED);
+  const modal = await openDeleteDialog(page);
+  const boxes = modal.getByTestId("delete-connection-port-checkbox");
+  await expect(boxes).toHaveCount(2);
+  await boxes.nth(0).check();
+  await expect(modal.getByTestId("delete-connection-port").nth(0)).toContainText(
+    "Will be removed",
+  );
+  await expect(modal.getByTestId("delete-connection-port").nth(1)).toContainText(
+    "Keep",
+  );
+  await modal.getByTestId("delete-connection-confirm").click();
+
+  await expect
+    .poll(async () => (await modelText(page)).includes('connection "link"'), {
+      timeout: 10_000,
+    })
+    .toBe(false);
+  const hcl = await modelText(page);
+  expect(hcl).not.toContain('port "out"');
+  expect(hcl).toContain('port "in"');
 });

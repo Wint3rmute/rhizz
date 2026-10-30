@@ -65,7 +65,7 @@ export type WorkspaceAction =
       from: string;
       to: string;
     }
-  | { type: "delete-connection"; label: string; removePorts?: boolean }
+  | { type: "delete-connection"; label: string; removePorts?: boolean; ports?: string[] }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -246,6 +246,9 @@ export class WorkspaceHarness {
             kind: "delete_connection_by_label",
             label: action.label,
             ...(action.removePorts === true ? { removePorts: true } : {}),
+            ...(action.ports !== undefined && action.ports.length > 0
+              ? { ports: [...action.ports] }
+              : {}),
           },
           undefined,
           true,

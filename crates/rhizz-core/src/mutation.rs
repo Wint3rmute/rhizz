@@ -144,14 +144,17 @@ pub enum ModelOp {
     ///
     /// With `remove_ports`, also delete the endpoint ports it was the only
     /// user of. Ports live on component *definitions*, so a port another
-    /// connection still uses refuses the whole op instead of being left
-    /// behind half-cleaned.
+    /// connection still uses is kept while the unshared endpoint ports are
+    /// removed. Pass `ports` (`definition/port` entries) to delete only a
+    /// subset of the unshared endpoint ports.
     #[serde(rename = "delete_connection_by_label")]
     #[serde(rename_all = "camelCase")]
     DeleteConnectionByLabel {
         label: String,
         #[serde(default)]
         remove_ports: bool,
+        #[serde(default)]
+        ports: Option<Vec<String>>,
     },
     /// Patch a connection's attributes, addressed like `add_connection`
     /// (`scope_path` + `label`).
@@ -420,7 +423,8 @@ pub enum LoggedAction {
         create_protocol: Option<String>,
     },
     /// A connection was deleted, optionally together with its endpoint ports
-    /// (one gesture, one action).
+    /// (one gesture, one action). `ports` (as `definition/port`) records a
+    /// selective port cleanup; absent means every unshared endpoint port went.
     #[serde(rename = "delete_connection")]
     #[serde(rename_all = "camelCase")]
     DeleteConnection {
@@ -428,6 +432,8 @@ pub enum LoggedAction {
         label: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         remove_ports: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        ports: Option<Vec<String>>,
     },
     /// A connection was patched (`scope_path` / `label` as addressed, the
     /// patch as sent: `realized_by` entries stay as [`ConnectionRef`]s).
@@ -800,7 +806,8 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
         ModelOp::DeleteConnectionByLabel {
             label,
             remove_ports,
-        } => delete_connection_by_label(raw, label, *remove_ports),
+            ports,
+        } => delete_connection_by_label(raw, label, *remove_ports, ports.as_deref()),
         ModelOp::UpdateConnection {
             scope_path,
             label,
@@ -1426,23 +1433,30 @@ fn find_connection(raw: &RawFile, label: &str) -> Option<(Scope, String)> {
 ///
 /// A port is removable only when no connection outside the deleted declaration
 /// uses it. Ports live on component *definitions*, so deleting one affects
-/// every instance of that definition. A port still in use refuses the whole
-/// op with [`MutationError::InvalidInput`], leaving the model untouched.
+/// every instance of that definition. A port still in use is kept while the
+/// unshared endpoint ports are removed. `only_ports` (`definition/port`
+/// entries) narrows the cleanup to a user-selected subset.
 fn delete_connection_by_label(
     raw: &mut RawFile,
     label: &str,
     remove_ports: bool,
+    only_ports: Option<&[String]>,
 ) -> Result<ApplyOutcome, MutationError> {
     let Some((scope, scope_label)) = find_connection(raw, label) else {
         return Ok(idle());
     };
-    let ports = if remove_ports {
+    let ports = if remove_ports || only_ports.is_some_and(|ports| !ports.is_empty()) {
         let kind = if matches!(scope, Scope::System(_)) {
             "system"
         } else {
             "component"
         };
-        removable_endpoint_ports(raw, &format!("{kind}:{scope_label}"), label)?
+        removable_endpoint_ports(
+            raw,
+            &format!("{kind}:{scope_label}"),
+            label,
+            only_ports,
+        )?
     } else {
         Vec::new()
     };
@@ -1452,19 +1466,28 @@ fn delete_connection_by_label(
             component.inner.ports.retain(|p| p.label != *port);
         }
     }
+    let wants_cleanup = remove_ports || only_ports.is_some_and(|ports| !ports.is_empty());
     Ok(applied(vec![LoggedAction::DeleteConnection {
         scope_path: scope_label,
         label: label.to_owned(),
-        remove_ports: remove_ports.then_some(true),
+        remove_ports: wants_cleanup.then_some(true),
+        ports: only_ports
+            .filter(|ports| !ports.is_empty())
+            .map(|ports| ports.to_vec()),
     }]))
 }
 
 /// The `(definition, port)` pairs the deleted connection ends on, if nothing
-/// else still uses them.
+/// else still uses them. Shared ports are skipped, not refused, so the caller
+/// can delete the unshared endpoint ports while keeping the shared ones.
+/// `only_ports` (`definition/port` entries) narrows the result to a
+/// user-selected subset; an entry naming no endpoint port of this connection
+/// is refused.
 fn removable_endpoint_ports(
     raw: &RawFile,
     decl: &str,
     label: &str,
+    only_ports: Option<&[String]>,
 ) -> Result<Vec<(String, String)>, MutationError> {
     let (model, _) = resolve::resolve(raw.clone()).map_err(|_| {
         MutationError::InvalidInput(format!(
@@ -1491,7 +1514,9 @@ fn removable_endpoint_ports(
 
     // Copies of the deleted connection share the scope `decl` and its label,
     // and disappear with it; another connection in the same scope has a
-    // different label and still needs its ports.
+    // different label and still needs its ports. Shared endpoint ports are
+    // kept; only the unshared ones come out.
+    let mut shared: Vec<(String, String)> = Vec::new();
     for other in &model.connections {
         if other.decl == decl && other.label == label {
             continue;
@@ -1500,15 +1525,52 @@ fn removable_endpoint_ports(
             let Some(target) = endpoint_port_target(&model, endpoint) else {
                 continue;
             };
-            if targets.contains(&target) {
-                return Err(MutationError::InvalidInput(format!(
-                    "cannot remove port `{}` on component `{}`: it is still used by connection `{}`",
-                    target.1, target.0, other.label
-                )));
+            if targets.contains(&target) && !shared.contains(&target) {
+                shared.push(target);
             }
         }
     }
-    Ok(targets)
+    let mut removable: Vec<(String, String)> = targets
+        .into_iter()
+        .filter(|target| !shared.contains(target))
+        .collect();
+
+    if let Some(only) = only_ports {
+        if !only.is_empty() {
+            let mut selected: Vec<(String, String)> = Vec::new();
+            for entry in only {
+                let Some((definition, port)) = entry.rsplit_once('/') else {
+                    return Err(MutationError::InvalidInput(format!(
+                        "cannot remove port `{entry}`: expected `definition/port`"
+                    )));
+                };
+                let wanted = (definition.to_owned(), port.to_owned());
+                if !removable.contains(&wanted) {
+                    // Shared endpoint ports are quietly kept so the unshared
+                    // selection can still apply; anything else is a caller bug.
+                    let is_endpoint = model.connections.iter().any(|c| {
+                        c.decl == decl
+                            && c.label == label
+                            && [&c.from, &c.to].iter().any(|endpoint| {
+                                endpoint_port_target(&model, endpoint)
+                                    .is_some_and(|target| target == wanted)
+                            })
+                    });
+                    if is_endpoint {
+                        continue;
+                    }
+                    return Err(MutationError::InvalidInput(format!(
+                        "cannot remove port `{port}` on component `{definition}`: it is not an endpoint port of connection `{label}`"
+                    )));
+                }
+                if !selected.contains(&wanted) {
+                    selected.push(wanted);
+                }
+            }
+            removable = selected;
+        }
+    }
+    Ok(removable)
 }
 
 /// The `(definition label, port label)` an endpoint lands on. A placed
@@ -1767,6 +1829,7 @@ mod tests {
             r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a/out","to":"b/in"}"#,
             r#"{"kind":"connect_components","scopePath":"demo","label":"l","createProtocol":"spi","from":{"component":"a","port":{"new":{"label":"p","protocol":"spi","role":"provider","external":false,"required":true}}},"to":{"component":"b","port":{"existing":"q"}}}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
+            r#"{"kind":"delete_connection_by_label","label":"l","removePorts":true,"ports":["a/out"]}"#,
             r#"{"kind":"update_connection","scopePath":"demo","label":"l","patch":{"full_name":"x","realized_by":[{"scopePath":"demo","label":"m"}]}}"#,
             r#"{"kind":"add_protocol","label":"spi","options":{"full_name":"x","tags":["t"],"roles":["provider"],"leaf":true,"encapsulates":["p"]}}"#,
             r#"{"kind":"update_protocol","path":"spi","patch":{"full_name":"x","tags":[],"roles":[],"leaf":false,"encapsulates":[]}}"#,
@@ -2356,7 +2419,7 @@ system "demo" {
     }
 
     #[test]
-    fn delete_connection_refuses_to_remove_a_shared_port() {
+    fn delete_connection_keeps_a_shared_port_and_removes_the_other() {
         let baseline = r#"
 component "a" {
   leaf = true
@@ -2380,9 +2443,75 @@ system "demo" {
   }
 }
 "#;
-        let diagnostics = mutate(
+        let result = mutate(
             baseline,
             r#"{"kind":"delete_connection_by_label","label":"one","removePorts":true}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"connection "one""#));
+        // `a/out` stays: `two` still uses it. `b/in` goes: nothing else uses it.
+        assert_eq!(ports_in(&hcl, "a"), ["out"]);
+        assert_eq!(ports_in(&hcl, "b"), ["spare"]);
+    }
+
+    #[test]
+    fn delete_connection_selective_ports_remove_only_the_chosen_unshared_port() {
+        let result = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link","removePorts":true,"ports":["a/out"]}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"connection "link""#));
+        assert!(ports_in(&hcl, "a").is_empty(), "{hcl}");
+        assert_eq!(ports_in(&hcl, "b"), ["in"]);
+    }
+
+    #[test]
+    fn delete_connection_selective_ports_skip_a_shared_port_without_refusal() {
+        let baseline = r#"
+component "a" {
+  leaf = true
+  port "out" {}
+}
+component "b" {
+  leaf = true
+  port "in" {}
+  port "spare" {}
+}
+system "demo" {
+  instance "a" { source = "a" }
+  instance "b" { source = "b" }
+  connection "one" {
+    from = "a/out"
+    to   = "b/in"
+  }
+  connection "two" {
+    from = "a/out"
+    to   = "b/spare"
+  }
+}
+"#;
+        let result = mutate(
+            baseline,
+            r#"{"kind":"delete_connection_by_label","label":"one","removePorts":true,"ports":["a/out","b/in"]}"#,
+        )
+        .expect("ok");
+        assert!(result.applied);
+        let hcl = result.hcl.expect("hcl");
+        assert!(!hcl.contains(r#"connection "one""#));
+        assert_eq!(ports_in(&hcl, "a"), ["out"]);
+        assert_eq!(ports_in(&hcl, "b"), ["spare"]);
+    }
+
+    #[test]
+    fn delete_connection_selective_ports_refuse_a_non_endpoint_port() {
+        let diagnostics = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link","removePorts":true,"ports":["a/bogus"]}"#,
         )
         .expect_err("refused");
         let errors: Vec<_> = diagnostics
@@ -2391,16 +2520,6 @@ system "demo" {
             .map(|d| d.code)
             .collect();
         assert_eq!(errors, [DiagnosticCode::E000]);
-        let message = diagnostics
-            .iter()
-            .find(|d| d.code == DiagnosticCode::E000)
-            .map(|d| d.message.clone())
-            .unwrap_or_default();
-        assert!(message.contains("out"), "{message}");
-        assert!(message.contains("two"), "{message}");
-        // The shared port `out` is what keeps the whole op from applying; no
-        // half-deleted model is written.
-        assert!(baseline.contains(r#"connection "one""#));
     }
 
     #[test]
@@ -2414,6 +2533,15 @@ system "demo" {
         let json = serde_json::to_value(&removed.actions).expect("json");
         assert_eq!(json[0]["op"], "delete_connection");
         assert_eq!(json[0]["removePorts"], true);
+        assert!(json[0].get("ports").is_none());
+
+        let selective = mutate(
+            LINKED,
+            r#"{"kind":"delete_connection_by_label","label":"link","removePorts":true,"ports":["a/out"]}"#,
+        )
+        .expect("ok");
+        let json = serde_json::to_value(&selective.actions).expect("json");
+        assert_eq!(json[0]["ports"], serde_json::json!(["a/out"]));
 
         let plain = mutate(
             LINKED,

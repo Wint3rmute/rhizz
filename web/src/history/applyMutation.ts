@@ -94,6 +94,8 @@ export type ModelMutationOp =
       label: string;
       /** Also delete the endpoint ports no other connection uses. */
       removePorts?: boolean;
+      /** Only delete these endpoint ports (`definition/port`). Shared ones are kept. */
+      ports?: string[];
     }
   | {
       kind: "update_connection";

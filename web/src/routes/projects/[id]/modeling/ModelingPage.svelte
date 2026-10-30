@@ -3527,23 +3527,24 @@
   }
 
   // Opens the delete dialog for a connection from the system model (not just
-  // this view). The dialog decides whether to also remove the endpoint ports;
+  // this view). The dialog decides which endpoint ports to also remove;
   // `handleDeleteConnection` runs the single atomic op.
   function deleteConnectionFromModel(label: string): void {
     const request = buildDeleteConnectionRequest(model, label);
     if (request !== undefined) deleteConnectionRequest = request;
   }
 
-  // Runs the dialog's op. A refusal (a port another connection still uses)
-  // leaves the dialog open with the reason in a toast.
-  async function handleDeleteConnection(removePorts: boolean): Promise<void> {
+  // Runs the dialog's op. A refusal (an unknown port selection) leaves the
+  // dialog open with the reason in a toast. Ports another connection still
+  // uses are kept while the selected unshared ports are removed.
+  async function handleDeleteConnection(ports: string[]): Promise<void> {
     const request = deleteConnectionRequest;
     if (request === null) return;
     const label = request.label;
     const op: ModelMutationOp = {
       kind: "delete_connection_by_label",
       label,
-      ...(removePorts ? { removePorts: true } : {}),
+      ...(ports.length > 0 ? { removePorts: true, ports } : {}),
     };
     if (!(await canApplyModelOp(op))) return;
     // Scope search lives in the dispatcher (`delete_connection_by_label`).
@@ -4583,8 +4584,8 @@
 
 <DeleteConnectionModal
   request={deleteConnectionRequest}
-  onconfirm={(removePorts) =>
-    void handleDeleteConnection(removePorts).catch(reportDiagramError)}
+  onconfirm={(ports) =>
+    void handleDeleteConnection(ports).catch(reportDiagramError)}
   onclose={() => (deleteConnectionRequest = null)}
 />
 
