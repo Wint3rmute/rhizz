@@ -29,6 +29,55 @@ there's only one correct behavior to show ports:
 - Never show them otherwise, no matter what component is selected or what subpage is open
 
 
+---
+
+## Task <N> - Deduplicate and consolidate unit tests
+
+### Goal
+
+Remove redundant unit tests and merge overlapping ones so the suite runs faster and is easier to maintain. Keep every distinct behavior covered.
+
+### Inputs
+- **Unit tests:** `<TEST_DIR>` (e.g. `web/src/**/*.test.ts`)
+- **Runner:** `<TEST_COMMAND>` (e.g. `just test`)
+- **Coverage command:** reported automatically during `just test`
+- **Source (read-only):** `web/src`
+
+### Process
+
+1. **Inventory.** List each test with its file, unit under test, inputs, mocks, and asserted behavior. Run coverage on the current suite and save the report as the baseline.
+2. **Identify redundancy.** A test is redundant if another test asserts the same behavior with the same or weaker inputs. Common cases:
+   - Duplicate tests across files or `describe` blocks.
+   - Several tests that differ only by one value and could be a table-driven test (`test.each` or equivalent).
+   - Tests that check a behavior already implied by a more complete test (e.g., a "renders title" test when a "renders full card" test asserts the title).
+   - Tests that re-test framework or library behavior rather than project code.
+3. **Consolidate.** Merge redundant tests into one parameterized test or one fuller test. Keep separate tests for different branches, error paths, boundary values, and regressions with a known bug.
+4. **Preserve coverage.** Never remove a test that covers a unique branch, input class, or error path. Compare line, branch, and function coverage before and after. Flag any drop instead of accepting it.
+5. **Keep tests meaningful.** Do not remove assertions just to make a test pass. Do not weaken assertions, skip tests, or add `.only`/`.skip`.
+6. **Remove and verify.** Delete redundant tests and update consolidated ones. Run the full suite, lint, and type checks. Confirm coverage is equal or higher than the baseline.
+
+### Deliverables
+
+1. **`UNIT_TEST_DEDUP.md`** containing:
+   - **Removal and consolidation log**
+
+     | Removed test | File | Replacement | Justification |
+     |---|---|---|---|
+
+     Each justification names the specific reason (e.g., "same input and asserted output as `parses empty string`; covered by the table case `''`").
+   - **Flagged items:** ambiguous cases left in place, with reasons.
+   - **Coverage comparison:** line, branch, and function coverage before and after.
+   - **Summary:** test count and run time before and after.
+
+### Constraints
+
+- Do not change code in `web/src`.
+- Only change test files and test configuration references to deleted tests.
+- Do not weaken assertions, thresholds, or coverage requirements.
+- If the suite fails after changes, restore the affected test and flag it.
+- One commit per logical group, with the group described in the commit message.
+
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
