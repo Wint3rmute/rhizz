@@ -46,16 +46,6 @@ Make sure this behavior reproduces via some kind of test (unit/integration/e2e).
 If it does not reproduce, abort and inform the user. If it reproduces, treat the
 reproduction test as a red test and fix the behavior.
 
-## Task <N> - Allow selecting which ports to remove in "Delete connection"
-
-Currently, the "delete connetion" popup has a single "Also remove ports on connected components" boolean selector.
-This is nice, but it's not enough. When one port is used by multiple connections, you cannot delete any of the ports.
-This message appears:
-
-> A port above is still used by another connection, so the deletion will be refused. Leave the checkbox off, or delete the other connection first.
-
-**Definition of done:** Change the behavior, allow deletion of only a single port, while keeping the multi-connected port. Inform the user about it, e.g. "Only `port_name_a` will be removed, as `port_name_b` is also used by connection `name`.
-
 ## Task <N> - Changing project name does not respect lower/uppercase
 
 Steps to reproduce:
