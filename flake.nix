@@ -118,6 +118,8 @@
               wasm-pack
               nodejs
               just
+              # ImageMagick for `scripts/make-landing.sh` (README hero image).
+              imagemagick
               # Conventional-commit tooling (`cz commit`, `cz check`, `cz bump`);
               # config lives in cz.toml. Driven through the `just` recipes.
               commitizen
