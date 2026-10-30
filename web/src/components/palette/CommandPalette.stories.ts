@@ -195,6 +195,8 @@ export const BrowseAll: Story = {
 // So three separate things, asserted separately: no blur, a real scrim, and
 // none of the classes that caused the jump.
 export const ScrimWithoutBlur: Story = {
+  // VRT duplicate of BrowseAll (byte-identical baselines). Play still runs.
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const backdrop = within(canvasElement).getByTestId("command-palette");
     for (const daisyModalClass of ["modal", "modal-open", "modal-box"]) {
@@ -291,6 +293,9 @@ export const ArrowKeysWrapAround: Story = {
 };
 
 export const EnterRunsTheAction: Story = {
+  // VRT duplicate of BrowseAll (byte-identical baselines): same open palette.
+  // Play still runs in vitest.
+  tags: ["no-vrt"],
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
@@ -304,6 +309,8 @@ export const EnterRunsTheAction: Story = {
 };
 
 export const ClickRunsTheAction: Story = {
+  // VRT duplicate of BrowseAll (byte-identical baselines). Play still runs.
+  tags: ["no-vrt"],
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(
@@ -316,6 +323,9 @@ export const ClickRunsTheAction: Story = {
 };
 
 export const EscapeCloses: Story = {
+  // VRT duplicate of BrowseAll (byte-identical baselines): isOpen stays true,
+  // so the open palette is captured. Play still runs in vitest.
+  tags: ["no-vrt"],
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
