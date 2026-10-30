@@ -16,59 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> Deduplicate and consolidate Storybook visual regression tests
-
-### Goal
-
-Remove redundant visual tests and consolidate small, isolated story screenshots
-into fewer stories that capture large UI surfaces with multiple elements in one
-image. Keep all unique visual coverage.
-
-### Inputs
-
-- **Tests:** Storybook stories, each automatically screenshotted by the VRT run. A story is a visual test.
-- **Snapshots:** `web/vrt/__screenshots__`
-- **Runner:** `just vrt` (run the suite), `just vrt-accept` (update baselines)
-- **Component source (read-only):** `web/src`
-
-### Process
-
-1. **Inventory.** Read the `justfile` and the VRT setup to confirm how stories are discovered and screenshotted. List every story with its component, viewport, theme, locale, and any args or decorators that change rendering. Map each story to its snapshot.
-2. **Review screenshots.** View each snapshot and group by what it shows, not by story name.
-3. **Identify redundancy.** A story is redundant if another story renders the same state under the same conditions. Common cases:
-   - Duplicate stories with identical args.
-   - Single-element stories whose element already appears in a larger story's screenshot.
-   - Stories differing only by a no-op change (e.g., a hover with no visible effect).
-   - Identical images under different story names.
-4. **Consolidate.** Where several isolated stories cover one page or section, add one composite story (for example, a `Showcase` or `Overview` story) that renders those elements together at the same viewport and theme. Remove the isolated stories once the composite covers them. Keep states that cannot appear together (loading, empty, error) as separate stories.
-5. **Preserve coverage.** Never drop a distinct viewport, theme, locale, text direction, edge-case data (long text, overflow, truncation), or meaningful state (focus, selected, disabled, expanded). When unsure, render both versions and compare. Flag ambiguous cases instead of deleting them.
-6. **Check dependencies.** Before removing a story, search for other references to it (docs pages, `play` functions, other tests, MDX). Update or flag them.
-7. **Update baselines carefully.** Run `just vrt` first to see the diffs. Use `just vrt-accept` only for new or consolidated stories, and check that it does not overwrite baselines for unrelated stories. If it does, revert those files.
-8. **Verify.** Run `just vrt` and confirm it passes with no new diffs on kept stories. Run lint and type checks. Produce a before/after mapping showing every original UI state is still covered.
-
-### Deliverables
-
-1. **`VISUAL_TEST_DEDUP.md`** containing:
-   - **Removal and consolidation log**
-
-     | Removed story | Component | Snapshots removed | Replacement | Justification |
-     |---|---|---|---|---|
-
-     Each justification names the specific reason (e.g., "same args and viewport as `Button/Primary`; the element appears in `Showcase/Forms`").
-   - **Flagged items:** ambiguous cases left in place, with reasons.
-   - **Coverage mapping:** each distinct UI state and the story that now covers it.
-   - **Summary:** story and snapshot counts before and after, and the estimated change in run time.
-
-### Constraints
-
-- Do not change code in `web/src`.
-- Only change Storybook story files, VRT config, and snapshots.
-- Do not weaken thresholds or assertions.
-- If the suite fails after changes, restore the affected story and flag it.
-- One commit per logical group, with the group described in the commit message.
-
----
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
