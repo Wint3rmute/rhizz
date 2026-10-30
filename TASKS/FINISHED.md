@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Allow selecting which ports to remove in "Delete connection"
+
+Replaced the single "Also remove ports" boolean with per-port checkboxes.
+The Rust dispatcher (`delete_connection_by_label` with optional
+`ports: ["definition/port"]`) now keeps ports another connection still uses
+while removing the selected unshared endpoint ports — no more whole-op E000
+refusal. The dialog informs with "Only `X` will be removed, as `Y` is also
+used by connection `Z`", and the master checkbox toggles all removable ports.
+
+Validation: `cargo test` (core 305, server 126), 1232 vitest, 7
+delete-connection e2e + sidebar/visibility e2e, `clippy` / `cargo doc` /
+`eslint` / `svelte-check` / `cz check` clean, `just build` green.
+Branch: `feat/delete-connection-select-ports`.
+
+---
+
 ## Task <N> — Deduplicate and consolidate Storybook visual regression tests
 
 Removed 18 byte-identical redundant VRT stories via `tags: ["no-vrt"]`
