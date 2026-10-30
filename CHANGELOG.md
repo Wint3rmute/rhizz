@@ -14,6 +14,7 @@
 
 ### Fix
 
+- unify port visibility to drawn connections only
 - **core**: satisfy clippy for selective port removal
 - **web**: drop port-less connection coverage, use port-path language
 - **core**: require port paths in add_connection, clean endpoint language
