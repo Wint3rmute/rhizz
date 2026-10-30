@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 import { createNewProject, replaceModel } from "./helpers";
 
 // Ports whose connections are not drawn in the view stay hidden: only ports
-// named by a drawn edge (or on a selected node, or during a connect drag)
-// render labels. Repro: the homelab main view showed `lan`/`wifi` on `me`
-// while neither lan-access nor wifi was drawn.
+// named by a drawn edge (or during a connect drag) render labels.
+// Repro: the homelab main view showed `lan`/`wifi` on `me` while neither
+// lan-access nor wifi was drawn.
 const MODEL = `component "alpha" {
   leaf = true
   port "used" {
@@ -51,6 +51,13 @@ test("port labels hide when their connection is not drawn", async ({
       .check();
   }
   const canvas = page.getByTestId("diagram-canvas");
+  await expect(canvas.getByText("used", { exact: true })).toBeVisible();
+  await expect(canvas.getByText("sink", { exact: true })).toBeVisible();
+  await expect(canvas.getByText("idle", { exact: true })).toHaveCount(0);
+
+  // Selecting a component must not reveal its unused ports: only ports
+  // named by a drawn edge render, no matter the selection.
+  await tree.getByRole("button", { name: "alpha", exact: true }).click();
   await expect(canvas.getByText("used", { exact: true })).toBeVisible();
   await expect(canvas.getByText("sink", { exact: true })).toBeVisible();
   await expect(canvas.getByText("idle", { exact: true })).toHaveCount(0);

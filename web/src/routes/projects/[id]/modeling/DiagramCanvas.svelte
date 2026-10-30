@@ -113,9 +113,9 @@
       | undefined;
     /** Ignore hits while a transition is moving nodes out from under the cursor. */
     frozen?: boolean | undefined;
-    /** Show every port regardless of selection — set while a connection drag
-     * is in progress so drop targets stay visible. Resting state still shows
-     * only selected-component / selected-connection ports. */
+    /** Show every port regardless of connections — set while a connection drag
+     * is in progress so drop targets stay visible. Resting state shows only
+     * ports a drawn edge names. */
     revealAllPorts?: boolean | undefined;
   } = $props();
 
@@ -483,39 +483,28 @@
   would then bury the dot (worse when selected: thicker + primary). This
   layer re-draws ports on top of every edge.
 
-  Visibility: a label shows only for ports a drawn edge names (or on a
-  selected node, or while a connection drag reveals all drop targets) —
-  ports whose connections are not in this view stay hidden. The dot (hit
-  area + dot) shows only when its component is selected, a selected
-  connection names that port, or a connection drag is revealing all drop
-  targets. Positions stay stable (computed from all ports) so showing or
-  hiding labels never reflows the outline.
+  Visibility: a label and its dot show only for ports a drawn edge names
+  (or while a connection drag reveals all drop targets) — ports whose
+  connections are not in this view stay hidden, no matter what is selected
+  or which subpage hosts the diagram. Positions stay stable (computed from
+  all ports) so showing or hiding labels never reflows the outline.
 -->
 {#each scene.nodes as node (node.id)}
   {@const allPortPositions =
     node.ports.length > 0
       ? computePortPositions(node.box.width, node.box.height, node.ports)
       : []}
-  {@const usedPortLabels = portsUsedByEdges(scene.edges, node.index)}
-  {@const selectedPortLabels = new Set(
-    scene.edges.flatMap((edge) => {
-      if (!edge.selected) return [];
-      if (edge.from === node.index && edge.fromPort !== undefined)
-        return [edge.fromPort];
-      if (edge.to === node.index && edge.toPort !== undefined)
-        return [edge.toPort];
-      return [];
-    }),
+  {@const usedPortLabels = portsUsedByEdges(
+    visibleEdges.map((visible) => visible.conn),
+    node.index,
   )}
   {#each allPortPositions as port (port.label)}
     {@const portKey = `${String(node.index)}:${port.label}`}
     {@const hovered = hoveredPortKey === portKey}
     {@const world = worldPoint(node, port)}
-    {@const labelVisible =
-      revealAllPorts || node.selected || usedPortLabels.has(port.label)}
+    {@const labelVisible = revealAllPorts || usedPortLabels.has(port.label)}
     {@const dotVisible =
-      portsInteractive &&
-      (revealAllPorts || node.selected || selectedPortLabels.has(port.label))}
+      portsInteractive && (revealAllPorts || usedPortLabels.has(port.label))}
     {#if labelVisible || dotVisible}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <g
