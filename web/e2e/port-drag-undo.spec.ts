@@ -8,6 +8,7 @@ import {
 
 // Dragging a port dot along the outline persists a per-view spot, and one
 // undo step removes it again — the port falls back to its role default.
+// The port must be used by a drawn connection to render at all.
 const MODEL = `component "sensor" {
   leaf = true
   port "data" {
@@ -16,8 +17,22 @@ const MODEL = `component "sensor" {
   }
 }
 
+component "hub" {
+  leaf = true
+  port "in" {
+    protocol = "mqtt"
+    role     = "consumer"
+  }
+}
+
 system "demo" {
   instance "sensor" { source = "sensor" }
+  instance "hub" { source = "hub" }
+
+  connection "link" {
+    from = "sensor/data"
+    to   = "hub/in"
+  }
 }
 `;
 
@@ -34,20 +49,23 @@ test("dragging a port persists its spot; undo removes it", async ({ page }) => {
   await page.goto(`/projects/${id}/modeling`);
   await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
 
-  // Place and select the instance so its port dot renders (the tree row
-  // button selects; the SVG label itself is pointer-events:none).
+  // Place both instances so the connection is drawn and its ports render;
+  // select the instance (the tree row button selects; the SVG label itself
+  // is pointer-events:none).
   const tree = page.getByTestId("modeling-pane-right");
-  await tree
-    .locator("li", { hasText: "sensor" })
-    .first()
-    .getByRole("checkbox")
-    .check();
+  for (const name of ["sensor", "hub"]) {
+    await tree
+      .locator("li", { hasText: name })
+      .first()
+      .getByRole("checkbox")
+      .check();
+  }
   await tree.getByRole("button", { name: "sensor", exact: true }).click();
   const canvas = page.getByTestId("diagram-canvas");
 
   const dot = canvas.getByTestId("diagram-port").first();
-  // Two circles = hit area + dot: proves the node is selected (labels alone
-  // render no circles).
+  // Two circles = hit area + dot: proves the port is used by a drawn edge
+  // (labels alone render no circles).
   await expect(dot.locator("circle")).toHaveCount(2);
   const start = await dot.locator("circle").first().boundingBox();
   if (!start) throw new Error("no port dot box");

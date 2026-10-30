@@ -4,6 +4,27 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Unify port visibility to drawn connections only
+
+Removed `node.selected` and selected-edge cases from `DiagramCanvas` port
+visibility: labels and dots now render only for ports a drawn edge names
+(`portsUsedByEdges(visibleEdges)`), plus the transient `revealAllPorts`
+drop-target reveal during connection drags. Selecting a component no longer
+reveals its unused ports, and explore/embed/read-only views (which never pass
+port handlers, so dots never render there) follow the same label rule —
+fixing the modeling-vs-explore split and unplaced-connection leaks via
+visible-edge filtering.
+
+Validation: 1233 vitest (110 files, incl. new
+`HidesUnusedPortsWhenSelected` story), 4 e2e
+(port-label-visibility with new selection assertion — red on main, green
+with fix — plus port-drag-undo updated to a connected model and
+connection-visibility), `clippy` / `cargo doc` / `eslint` / `svelte-check`
+clean, `just build` green.
+Branch: `feat/unified-port-visibility`.
+
+---
+
 ## Task <N> — Allow selecting which ports to remove in "Delete connection"
 
 Replaced the single "Also remove ports" boolean with per-port checkboxes.

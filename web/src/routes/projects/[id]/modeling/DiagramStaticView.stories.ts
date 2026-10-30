@@ -316,7 +316,7 @@ export const NodeVisualStyles: Story = {
 
 // Port unification: read-only diagrams show the same labels, outline spots,
 // and anchored edges as the editor — but never dots (no interactivity).
-// Even a selected node keeps labels only; the dot layer needs port handlers
+// Selection never reveals extra ports; the dot layer needs port handlers
 // the static renderer never passes.
 export const WithPorts: Story = {
   tags: ["no-vrt"],
@@ -375,10 +375,10 @@ export const WithPorts: Story = {
   },
 };
 
-// Unused-port hiding: labels render only for ports a drawn edge names (or on
-// a selected node). The sensor's `idle` port has no edge, so only `i2c` and
-// `i2c-in` appear — the same rule the editor canvas applies, which keeps
-// views like homelab's `main` (lan/wifi unused there) free of clutter.
+// Unused-port hiding: labels render only for ports a drawn edge names.
+// The sensor's `idle` port has no edge, so only `i2c` and `i2c-in` appear —
+// the same rule the editor canvas applies, which keeps views like homelab's
+// `main` (lan/wifi unused there) free of clutter.
 // No VRT: the play assertions pin the rule; screenshots add nothing.
 export const HidesPortsUnusedByDrawnEdges: Story = {
   tags: ["no-vrt"],
@@ -409,6 +409,52 @@ export const HidesPortsUnusedByDrawnEdges: Story = {
       0: { x: 0, y: 40, width: 140, height: 80 },
       1: { x: 220, y: 40, width: 140, height: 80 },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const ports = canvasElement.querySelectorAll(
+      "[data-testid='diagram-port']",
+    );
+    await expect(ports.length).toBe(2);
+    const labels = Array.from(ports).map(
+      (port) => port.querySelector("text")?.textContent,
+    );
+    await expect(labels).toEqual(["i2c", "i2c-in"]);
+  },
+};
+
+// Selection never reveals unused ports: the sensor is selected yet its
+// `idle` port (no drawn edge) stays hidden — only `i2c` and `i2c-in`
+// render. Locks in the unified "shown connection only" rule.
+export const HidesUnusedPortsWhenSelected: Story = {
+  tags: ["no-vrt"],
+  args: {
+    components: [
+      {
+        label: "sensor",
+        ports: [
+          { label: "i2c", role: "provider" },
+          { label: "idle", role: "peer" },
+        ],
+      },
+      {
+        label: "controller",
+        ports: [{ label: "i2c-in", role: "consumer" }],
+      },
+    ],
+    connections: [
+      {
+        from: 0,
+        to: 1,
+        label: "read-sensor",
+        fromPort: "i2c",
+        toPort: "i2c-in",
+      },
+    ],
+    boxes: {
+      0: { x: 0, y: 40, width: 140, height: 80 },
+      1: { x: 220, y: 40, width: 140, height: 80 },
+    },
+    selected: new Set([0]),
   },
   play: async ({ canvasElement }) => {
     const ports = canvasElement.querySelectorAll(

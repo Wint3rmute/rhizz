@@ -98,10 +98,10 @@ export function diagramNoteId(index: number): string {
 }
 
 /**
- * Port labels named by `edges` at `nodeIndex`. A port label renders only
- * when a drawn edge names it (or its node is selected, or a connect drag is
- * revealing drop targets) — ports whose connections are not in this view
- * stay hidden instead of cluttering the outline.
+ * Port labels named by `edges` at `nodeIndex`. A port renders only when a
+ * drawn edge names it (or a connect drag is revealing drop targets) —
+ * ports whose connections are not in this view stay hidden instead of
+ * cluttering the outline, no matter what is selected.
  */
 export function portsUsedByEdges(
   edges: readonly Pick<DiagramEdge, "from" | "to" | "fromPort" | "toPort">[],
