@@ -16,18 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Remove bare-connection support from the frontend (after E003 lands)
-
-- Audit the bare `add_connection` path (MCP + any UI entry): either require
-  `from`/`to` ports or remove the op and migrate callers to
-  `connect_components` (which already creates ports). No new bare-creation UX.
-- Verify NewConnectionModal has no bare path left; check the inspector and
-  diagnostics rendering for stale untyped copy (grep found no W007 references
-  as of scoping — re-verify).
-- Update e2e/VRT coverage that asserts bare-endpoint behavior, if any.
-- Same framing rule as above. Definition of done: `just test`, `just lint`,
-  `just build` green.
-
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
