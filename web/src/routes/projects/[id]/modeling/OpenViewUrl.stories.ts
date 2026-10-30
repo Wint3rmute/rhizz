@@ -150,6 +150,9 @@ export const UnknownViewFallsBack: Story = {
 
 /** An unknown link reopens the remembered view while it still exists. */
 export const UnknownViewReopensRemembered: Story = {
+  // VRT duplicate of DeepLinkedView (byte-identical baselines: both end on
+  // actuator.hcl). Play still runs in vitest.
+  tags: ["no-vrt"],
   args: {
     requestedView: "renamed-away.hcl",
   },
