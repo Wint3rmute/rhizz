@@ -384,8 +384,8 @@ impl ConnectionJS {
     }
 
     /// Label of the protocol this connection travels over, derived from its
-    /// endpoint ports. `None` for bare endpoints, mismatched ports, or an
-    /// undefined protocol.
+    /// endpoint ports. `None` when the endpoint ports share no defined
+    /// protocol, use mismatched protocols, or name an undefined protocol.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn protocol(&self) -> Option<String> {
