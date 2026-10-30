@@ -16,6 +16,19 @@ How to work on this file:
 
 ---
 
+## Task <N> - Despite being hidden, ports still show when component is selected
+
+System diagrams don't show component ports when their connections are not
+selected in the system view. However, I noticed that when I select a component
+in modeling/, it's ports are still shown, even though they should not be
+visible. Moreover, the explore/ view always shows all ports, working differently
+from modeling page. I believe it needs to be unified and simplified, so that
+there's only one correct behavior to show ports:
+
+- Show them when the connection using them is shown
+- Never show them otherwise, no matter what component is selected or what subpage is open
+
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
