@@ -44,6 +44,13 @@ const VIEWPORTS: Record<string, { width: number; height: number }> = {
   desktop: { width: 1280, height: 1024 },
 };
 
+// Per-story capture sizes that differ from the 1280×800 default (and from the
+// story's own Storybook viewport, which only affects the manager UI).
+// Used for screenshots that double as high-res sources, e.g. the README hero.
+const SIZE_OVERRIDES: Record<string, { width: number; height: number }> = {
+  "pages-projects--empty-landing": { width: 1920, height: 1080 },
+};
+
 async function waitForStory(page: Page): Promise<void> {
   const shown = await page.waitForFunction(() => {
     const cls = document.body.classList;
@@ -281,7 +288,9 @@ for (const story of loadStories()) {
       await waitForStory(page);
 
       const viewport = await storyViewport(page);
-      const size = viewport ? VIEWPORTS[viewport] : undefined;
+      const size =
+        SIZE_OVERRIDES[story.id] ??
+        (viewport ? VIEWPORTS[viewport] : undefined);
       if (size) {
         // Reload so layouts measured on mount see the final size.
         await page.setViewportSize(size);
@@ -291,7 +300,7 @@ for (const story of loadStories()) {
       testInfo.annotations.push({
         type: "viewport",
         description: size
-          ? `${viewport ?? ""} ${size.width}×${size.height}`
+          ? `${viewport ?? "override"} ${size.width}×${size.height}`
           : "default 1280×800",
       });
 
