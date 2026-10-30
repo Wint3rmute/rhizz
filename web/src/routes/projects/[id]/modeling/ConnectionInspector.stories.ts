@@ -105,15 +105,6 @@ export const Default: Story = {
   },
 };
 
-/** A complete chain: `fund-transfer` is realized by `http-request`, which is itself complete. */
-export const Realized: Story = {
-  args: {
-    connection: fundTransfer,
-    protocol: payment,
-    connections: [fundTransfer, httpRequest],
-  },
-};
-
 /** The realizing connection is missing its own realization: the inspector names the blocker. */
 export const Incomplete: Story = {
   args: {
@@ -168,6 +159,9 @@ export const PortConnectionStatus: Story = {
  * file it writes to, on hover.
  */
 export const AttributeScopes: Story = {
+  // VRT duplicate of Default (byte-identical baselines): sharedWithCopies
+  // only changes hover tooltips. Play still runs in vitest.
+  tags: ["no-vrt"],
   args: {
     connection: { ...fundTransfer, realized_by: [] },
     sharedWithCopies: true,

@@ -93,6 +93,8 @@ export const AtomicLeaf: Story = {
  * heading carries a hover popup naming its file.
  */
 export const AttributeScopes: Story = {
+  // VRT duplicate of Default (byte-identical baselines). Play still runs.
+  tags: ["no-vrt"],
   args: {},
   globals: {
     viewport: { value: "phone" },

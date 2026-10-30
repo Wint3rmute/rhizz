@@ -377,6 +377,9 @@ async function openDocEditor(canvas: ReturnType<typeof within>) {
 }
 
 export const DocumentationTab: Story = {
+  // VRT duplicate of Desktop (byte-identical baselines: ends on Battery
+  // viewer). Play still runs in vitest.
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -437,6 +440,10 @@ export const DeepLinkedEntity: Story = {
 // diagram. Asserted as the workspace's computed flex-direction *and* the two
 // rects not overlapping, so neither can drift on its own.
 export const DetailPaneStacksBelowTheDiagram: Story = {
+  // VRT duplicate of Desktop (byte-identical baselines: VRT ignores the
+  // custom narrowPane viewport and captures at 1280 wide). The narrow
+  // stacking is asserted by play. Play still runs in vitest.
+  tags: ["no-vrt"],
   parameters: { viewport: NARROW_VIEWPORT },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -723,6 +730,9 @@ export const DeleteTabBlockedForSystemWithViews: Story = {
 // and keyboard nudges live at desktop width and are covered by
 // e2e/inventory-layout.spec.ts instead.
 export const PanesOpenByDefault: Story = {
+  // VRT duplicate of Desktop (byte-identical baselines: VRT captures at 1280
+  // wide, ignoring narrowPane). Play still runs in vitest.
+  tags: ["no-vrt"],
   parameters: { viewport: NARROW_VIEWPORT },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {

@@ -28,6 +28,7 @@
     SELECTION_OUTLINE_OPACITY,
   } from "./visuals";
   import type { DiagramNode, DiagramScene } from "./scene";
+  import { portsUsedByEdges } from "./scene";
 
   // Same hit-area sizes the modeling page used before this canvas existed.
   const CORNER_HANDLE_SIZE = 10;
@@ -482,16 +483,20 @@
   would then bury the dot (worse when selected: thicker + primary). This
   layer re-draws ports on top of every edge.
 
-  Visibility (prototype): labels always show; the dot (hit area + dot)
-  shows only when its component is selected, a selected connection names
-  that port, or a connection drag is revealing all drop targets. Positions
-  stay stable (computed from all ports) so selecting doesn't reflow labels.
+  Visibility: a label shows only for ports a drawn edge names (or on a
+  selected node, or while a connection drag reveals all drop targets) —
+  ports whose connections are not in this view stay hidden. The dot (hit
+  area + dot) shows only when its component is selected, a selected
+  connection names that port, or a connection drag is revealing all drop
+  targets. Positions stay stable (computed from all ports) so showing or
+  hiding labels never reflows the outline.
 -->
 {#each scene.nodes as node (node.id)}
   {@const allPortPositions =
     node.ports.length > 0
       ? computePortPositions(node.box.width, node.box.height, node.ports)
       : []}
+  {@const usedPortLabels = portsUsedByEdges(scene.edges, node.index)}
   {@const selectedPortLabels = new Set(
     scene.edges.flatMap((edge) => {
       if (!edge.selected) return [];
@@ -506,62 +511,68 @@
     {@const portKey = `${String(node.index)}:${port.label}`}
     {@const hovered = hoveredPortKey === portKey}
     {@const world = worldPoint(node, port)}
+    {@const labelVisible =
+      revealAllPorts || node.selected || usedPortLabels.has(port.label)}
     {@const dotVisible =
       portsInteractive &&
       (revealAllPorts || node.selected || selectedPortLabels.has(port.label))}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <g
-      data-testid="diagram-port"
-      transform="translate({world.x}, {world.y})"
-      opacity={fade(node.opacity)}
-      style:pointer-events={frozen || fade(node.opacity) !== undefined
-        ? "none"
-        : undefined}
-    >
-      <DiagramPortLabel
-        label={port.label}
-        side={port.side}
-        color={node.color}
-      />
-      {#if dotVisible}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <circle
-          r="8"
-          fill="transparent"
-          class={onPortDragStart ? "cursor-move" : "cursor-crosshair"}
-          onmouseenter={() => (hoveredPortKey = portKey)}
-          onmouseleave={() => {
-            if (hoveredPortKey === portKey) hoveredPortKey = null;
-          }}
-          onmousedown={(event) => {
-            // Plain left-drag moves the port along the outline;
-            // Alt/Shift+drag starts a connection from the existing port.
-            if (event.button !== 0) return;
-            if (event.altKey || event.shiftKey) {
-              onPortPointerDown?.(event, node.index, port.label, world);
-            } else if (onPortDragStart) {
-              onPortDragStart(event, node.index, port.label);
-            } else {
-              onPortPointerDown?.(event, node.index, port.label, world);
-            }
-          }}
-        >
-          <title
-            >{`${port.label} (${port.role}, ${port.protocol || "untyped"}) — drag to move, Alt+drag to connect`}</title
+    {#if labelVisible || dotVisible}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <g
+        data-testid="diagram-port"
+        transform="translate({world.x}, {world.y})"
+        opacity={fade(node.opacity)}
+        style:pointer-events={frozen || fade(node.opacity) !== undefined
+          ? "none"
+          : undefined}
+      >
+        {#if labelVisible}
+          <DiagramPortLabel
+            label={port.label}
+            side={port.side}
+            color={node.color}
+          />
+        {/if}
+        {#if dotVisible}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <circle
+            r="8"
+            fill="transparent"
+            class={onPortDragStart ? "cursor-move" : "cursor-crosshair"}
+            onmouseenter={() => (hoveredPortKey = portKey)}
+            onmouseleave={() => {
+              if (hoveredPortKey === portKey) hoveredPortKey = null;
+            }}
+            onmousedown={(event) => {
+              // Plain left-drag moves the port along the outline;
+              // Alt/Shift+drag starts a connection from the existing port.
+              if (event.button !== 0) return;
+              if (event.altKey || event.shiftKey) {
+                onPortPointerDown?.(event, node.index, port.label, world);
+              } else if (onPortDragStart) {
+                onPortDragStart(event, node.index, port.label);
+              } else {
+                onPortPointerDown?.(event, node.index, port.label, world);
+              }
+            }}
           >
-        </circle>
-        <circle
-          r="4"
-          fill={portFill(port.role)}
-          fill-opacity={hovered ? 1 : 0.85}
-          stroke="var(--color-base-100)"
-          stroke-width={hovered ? 2 : 1.5}
-          style="pointer-events: none; transform-box: fill-box; transform-origin: center; transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), fill-opacity 150ms ease-out, stroke-width 150ms ease-out; transform: scale({hovered
-            ? 1.4
-            : 1})"
-        />
-      {/if}
-    </g>
+            <title
+              >{`${port.label} (${port.role}, ${port.protocol || "untyped"}) — drag to move, Alt+drag to connect`}</title
+            >
+          </circle>
+          <circle
+            r="4"
+            fill={portFill(port.role)}
+            fill-opacity={hovered ? 1 : 0.85}
+            stroke="var(--color-base-100)"
+            stroke-width={hovered ? 2 : 1.5}
+            style="pointer-events: none; transform-box: fill-box; transform-origin: center; transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), fill-opacity 150ms ease-out, stroke-width 150ms ease-out; transform: scale({hovered
+              ? 1.4
+              : 1})"
+          />
+        {/if}
+      </g>
+    {/if}
   {/each}
 {/each}
 

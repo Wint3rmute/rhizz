@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Deduplicate and consolidate Storybook visual regression tests
+
+Removed 18 byte-identical redundant VRT stories via `tags: ["no-vrt"]`
+(play functions still run in vitest) and deleted 38 baselines (36 +
+orphaned `DeleteConnectionModal/NoPorts` from the port-less removal).
+No new Showcase stories: kept representatives already are the large-surface
+composites (BrowseAll, Desktop, PanesOpenByDefault, Expanded). See
+`VISUAL_TEST_DEDUP.md` for removal log, coverage mapping, and flagged items.
+
+Validation: `just vrt` 326 passed / 0 changed (was 362), `just vrt-quick`
+326 passed after baseline deletion, `just lint` (clippy / cargo doc /
+eslint / svelte-check / cz check) clean.
+Branch: `test/vrt-dedup`.
+
+---
+
 ## Task <N> — Remove port-less connection support from the frontend (after E003 lands)
 
 `add_connection` now requires port paths: `mutation.rs` refuses single-segment
