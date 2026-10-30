@@ -12,6 +12,8 @@
 
 ### Fix
 
+- **web**: drop port-less connection coverage, use port-path language
+- **core**: require port paths in add_connection, clean endpoint language
 - **mcp**: include overwrite_model in tools/list expectation
 - **web**: use port paths in refused-delete e2e fixture
 - **book**: name port paths in book examples
