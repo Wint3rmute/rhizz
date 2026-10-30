@@ -944,9 +944,9 @@ system "s" {
 "#;
 
     /// Raises only component-level warnings: a protocol without messages
-    /// (W011). Both instances are wired, so no W003. The connection is typed on
-    /// a leaf protocol so it is complete and raises no architectural W019; a
-    /// bare endpoint would be incomplete by definition.
+    /// (W011). Both instances are wired, so no W003. The connection names
+    /// ports on a leaf protocol with matching protocols, so it is complete
+    /// and raises no architectural W019.
     const COMPONENT_ONLY: &str = r#"protocol "bus" {
   full_name = "d"
   leaf      = true

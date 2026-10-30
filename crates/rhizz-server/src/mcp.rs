@@ -308,9 +308,9 @@ struct AddConnectionParams {
     scope_path: String,
     /// New connection label within the scope.
     label: String,
-    /// `from` endpoint (`"comp"`, `"comp/port"`, or a relative path).
+    /// `from` endpoint (`comp/port` or a relative path ending in a port).
     from: String,
-    /// `to` endpoint (`"comp"`, `"comp/port"`, or a relative path).
+    /// `to` endpoint (`comp/port` or a relative path ending in a port).
     to: String,
 }
 
@@ -2952,8 +2952,8 @@ mod tests {
             ModelOp::AddConnection {
                 scope_path: "s".to_owned(),
                 label: "l".to_owned(),
-                from: "i".to_owned(),
-                to: "i".to_owned(),
+                from: "i/p".to_owned(),
+                to: "i/q".to_owned(),
             },
             ModelOp::ConnectComponents {
                 scope_path: "s".to_owned(),

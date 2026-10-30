@@ -113,7 +113,8 @@ pub enum ModelOp {
     /// never the definition.
     #[serde(rename = "delete_system")]
     DeleteSystem { path: String },
-    /// Add a connection inside a scope.
+    /// Add a connection inside a scope. Both endpoints name port paths
+    /// (`comp/port` or a relative path ending in a port).
     #[serde(rename = "add_connection")]
     #[serde(rename_all = "camelCase")]
     AddConnection {
@@ -1339,6 +1340,24 @@ fn delete_system(raw: &mut RawFile, path: &str) -> ApplyOutcome {
     }])
 }
 
+/// Endpoints name port paths (`comp/port` or a relative path ending in a
+/// port). A single-segment value cannot name a port, so it is refused here;
+/// longer values that still resolve to a component without a port are
+/// refused by the resolver as E003.
+fn require_port_path(label: &str, field: &str, value: &str) -> Result<(), MutationError> {
+    let segments: Vec<&str> = value.split('/').filter(|s| !s.is_empty()).collect();
+    let port_like = segments.len() >= 2
+        && segments
+            .last()
+            .is_none_or(|last| *last != "." && *last != "..");
+    if port_like {
+        return Ok(());
+    }
+    Err(MutationError::InvalidInput(format!(
+        "connection `{label}` requires a port path in '{field}' (e.g. `comp/port`)"
+    )))
+}
+
 fn add_connection(
     raw: &mut RawFile,
     scope_path: &str,
@@ -1346,6 +1365,8 @@ fn add_connection(
     from: &str,
     to: &str,
 ) -> Result<ApplyOutcome, MutationError> {
+    require_port_path(label, "from", from)?;
+    require_port_path(label, "to", to)?;
     let Some(scope) = resolve_scope_or_idle(raw, scope_path) else {
         return Ok(idle());
     };
@@ -1743,7 +1764,7 @@ mod tests {
             r#"{"kind":"update_system","path":"demo","patch":{"full_name":"x"}}"#,
             r#"{"kind":"delete_component","path":"demo/a"}"#,
             r#"{"kind":"delete_system","path":"demo"}"#,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a","to":"b"}"#,
+            r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a/out","to":"b/in"}"#,
             r#"{"kind":"connect_components","scopePath":"demo","label":"l","createProtocol":"spi","from":{"component":"a","port":{"new":{"label":"p","protocol":"spi","role":"provider","external":false,"required":true}}},"to":{"component":"b","port":{"existing":"q"}}}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
             r#"{"kind":"update_connection","scopePath":"demo","label":"l","patch":{"full_name":"x","realized_by":[{"scopePath":"demo","label":"m"}]}}"#,
@@ -2214,6 +2235,26 @@ mod tests {
         )
         .expect("ok");
         assert!(!missing.applied);
+    }
+
+    #[test]
+    fn add_connection_refuses_endpoints_without_port_path() {
+        for (from, to, field) in [
+            ("a", "b/in", "from"),
+            ("a/out", "b", "to"),
+            ("a", "b", "from"),
+        ] {
+            let json = format!(
+                r#"{{"kind":"add_connection","scopePath":"demo","label":"l","from":"{from}","to":"{to}"}}"#
+            );
+            let diagnostics = mutate("", &json).expect_err("must refuse");
+            assert!(
+                diagnostics.iter().any(|d| d.code == DiagnosticCode::E000
+                    && d.message.contains("requires a port path")
+                    && d.message.contains(field)),
+                "expected E000 port-path refusal for {from}/{to}, got: {diagnostics:?}"
+            );
+        }
     }
 
     const LINKED: &str = r#"
