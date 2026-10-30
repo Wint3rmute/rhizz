@@ -1451,12 +1451,7 @@ fn delete_connection_by_label(
         } else {
             "component"
         };
-        removable_endpoint_ports(
-            raw,
-            &format!("{kind}:{scope_label}"),
-            label,
-            only_ports,
-        )?
+        removable_endpoint_ports(raw, &format!("{kind}:{scope_label}"), label, only_ports)?
     } else {
         Vec::new()
     };

@@ -111,8 +111,6 @@ export const SharedPort: Story = {
     // wording matter, not its scroll position.
     await expect(
       await modal.findByTestId("delete-connection-port-conflict"),
-    ).toHaveTextContent(
-      "Only `power-in` will be removed, as `power-out`",
-    );
+    ).toHaveTextContent("Only `power-in` will be removed, as `power-out`");
   },
 };
