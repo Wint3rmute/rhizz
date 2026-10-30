@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **modeling**: allow selecting which ports to remove on delete
 - **modeling**: hide port labels unused by drawn edges
 - **mcp**: add overwrite_model whole-file repair tool
 - **modeling**: restyle port labels as solid node-colored tags
@@ -13,6 +14,7 @@
 
 ### Fix
 
+- **core**: satisfy clippy for selective port removal
 - **web**: drop port-less connection coverage, use port-path language
 - **core**: require port paths in add_connection, clean endpoint language
 - **mcp**: include overwrite_model in tools/list expectation
