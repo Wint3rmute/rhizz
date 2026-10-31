@@ -2094,14 +2094,9 @@ mod tests {
               }
             }
         "#;
-        let cases: &[(&str, &str, &str)] = &[
-            ("a", "b/q", "'from'"),
-            ("a/p", "b", "'to'"),
-        ];
+        let cases: &[(&str, &str, &str)] = &[("a", "b/q", "'from'"), ("a/p", "b", "'to'")];
         for (from, to, side) in cases {
-            let src = fixture
-                .replace("__FROM__", from)
-                .replace("__TO__", to);
+            let src = fixture.replace("__FROM__", from).replace("__TO__", to);
             let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
             let result = resolve(raw);
             assert!(
