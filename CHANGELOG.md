@@ -14,6 +14,8 @@
 
 ### Fix
 
+- revert bundled landing images to unblock VRT, keep port baselines
+- run vrt-accept landing steps under nix for reproducibility
 - unify port visibility to drawn connections only
 - **core**: satisfy clippy for selective port removal
 - **web**: drop port-less connection coverage, use port-path language
