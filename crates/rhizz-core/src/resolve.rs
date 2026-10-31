@@ -2072,9 +2072,15 @@ mod tests {
     }
 
     #[test]
-    fn e003_from_requires_port_path() {
-        let src = r#"
-            component "a" { leaf = true }
+    fn e003_requires_port_path() {
+        // Table-driven consolidation of the former `e003_from_*` and
+        // `e003_to_*` tests: same E003 assertion, only the bare side differs.
+        // Shared fixture exposes a port on both components.
+        let fixture = r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
             component "b" {
               leaf = true
               port "q" { role = "consumer" }
@@ -2083,56 +2089,33 @@ mod tests {
               instance "a" { source = "a" }
               instance "b" { source = "b" }
               connection "c" {
-                from = "a"
-                to   = "b/q"
+                from = "__FROM__"
+                to   = "__TO__"
               }
             }
         "#;
-        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let result = resolve(raw);
-        assert!(
-            result.is_err(),
-            "expected Err for endpoint without port path"
-        );
-        let diags = result.unwrap_err();
-        assert!(
-            diags.iter().any(|d| d.code == DiagnosticCode::E003
-                && d.message.contains("`c`")
-                && d.message.contains("'from'")),
-            "expected E003 for 'from', got: {diags:?}"
-        );
-    }
-
-    #[test]
-    fn e003_to_requires_port_path() {
-        let src = r#"
-            component "a" {
-              leaf = true
-              port "p" { role = "provider" }
-            }
-            component "b" { leaf = true }
-            system "s" {
-              instance "a" { source = "a" }
-              instance "b" { source = "b" }
-              connection "c" {
-                from = "a/p"
-                to   = "b"
-              }
-            }
-        "#;
-        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
-        let result = resolve(raw);
-        assert!(
-            result.is_err(),
-            "expected Err for endpoint without port path"
-        );
-        let diags = result.unwrap_err();
-        assert!(
-            diags.iter().any(|d| d.code == DiagnosticCode::E003
-                && d.message.contains("`c`")
-                && d.message.contains("'to'")),
-            "expected E003 for 'to', got: {diags:?}"
-        );
+        let cases: &[(&str, &str, &str)] = &[
+            ("a", "b/q", "'from'"),
+            ("a/p", "b", "'to'"),
+        ];
+        for (from, to, side) in cases {
+            let src = fixture
+                .replace("__FROM__", from)
+                .replace("__TO__", to);
+            let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
+            let result = resolve(raw);
+            assert!(
+                result.is_err(),
+                "expected Err for endpoint without port path ({from} -> {to})"
+            );
+            let diags = result.unwrap_err();
+            assert!(
+                diags.iter().any(|d| d.code == DiagnosticCode::E003
+                    && d.message.contains("`c`")
+                    && d.message.contains(side)),
+                "expected E003 for {side}, got: {diags:?}"
+            );
+        }
     }
 
     #[test]
