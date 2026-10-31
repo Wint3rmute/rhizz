@@ -4,6 +4,23 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Deduplicate and consolidate unit tests
+
+Removed 2 redundant unit tests (exact-duplicate Components-tab filter test,
+subset deleteConnection endpoint test) and merged 15 overlapping groups into
+`it.each` tables across 14 test files, with no `web/src` source changes and
+no weakened assertions. See `UNIT_TEST_DEDUP.md` for the removal log,
+flagged ambiguous items left in place, and the coverage comparison.
+
+Validation: `vitest run --coverage` green (110 files, 1233 → 1231 tests),
+coverage identical to `main` (78.06% stmts / 63.90% branch / 79.63% funcs /
+77.31% lines), `just lint` (clippy / cargo doc / eslint / svelte-check /
+cz check) clean. Rust unit tests, e2e, and `just build` not re-run (no
+source changes; test files only).
+Branch: `test/unit-test-dedup`.
+
+---
+
 ## Task <N> — Unify port visibility to drawn connections only
 
 Removed `node.selected` and selected-edge cases from `DiagramCanvas` port
