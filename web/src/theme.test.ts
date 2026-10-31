@@ -24,7 +24,7 @@ describe("loadSelection", () => {
     [JSON.stringify("blue"), "auto"],
     ["  dark  ", "dark"],
   ])("loadSelection(%j) = %j", (stored, expected) => {
-    expect(loadSelection(stored as string | null)).toBe(expected);
+    expect(loadSelection(stored)).toBe(expected);
   });
 });
 
