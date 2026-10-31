@@ -4,6 +4,26 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Deduplicate and consolidate Rust unit tests
+
+Removed 22 redundant Rust tests and merged them into 5 table-driven loop
+tests across `rhizz-core`, `rhizz-cli`, and `rhizz-server` (564 → 547 tests),
+with no `crates/` production-code changes and no weakened assertions. See
+`UNIT_TEST_DEDUP.md` for the removal log, flagged ambiguous items left in
+place, and the coverage comparison.
+
+Validation: `cargo test --workspace` green (90 book + 30 cli + 5
+integration + 294 core + 2 proptest + 126 server), `cargo clippy
+--workspace --all-targets --all-features -- -D warnings` and `cargo doc
+--no-deps --all` clean, `cargo fmt --check` clean, `cz check` clean.
+Coverage via `cargo llvm-cov` (project `just coverage` recipe): lines
+94.03% → 94.00%, branches 91.56% → 91.47%, functions 94.38% → 94.37%,
+with missed counts unchanged (1653 lines / 151 branches / 1054 functions) —
+drops are test-code removal only.
+Branch: `test/rust-unit-test-dedup`.
+
+---
+
 ## Task <N> — Deduplicate and consolidate unit tests
 
 Removed 2 redundant unit tests (exact-duplicate Components-tab filter test,
