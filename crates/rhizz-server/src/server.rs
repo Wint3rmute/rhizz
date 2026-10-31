@@ -292,14 +292,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unknown_route_falls_back_to_spa_shell() {
-        let tmp = tempfile::tempdir().unwrap();
-        let response = app_at(&tmp)
-            .oneshot(Request::builder().uri("/nope").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_content_type(&response, "text/html");
+    async fn client_routes_fall_back_to_spa_shell() {
+        // Table-driven consolidation of the former unknown_route,
+        // deep_client_route, and dot_in_segment fallback tests: same
+        // 200 + text/html assertion, only the URI differs. Mirrors the
+        // existing loop in spa_shell_carries_document_policy_for_profiling.
+        // The last URI covers a client-side route whose path contains a dot
+        // in a segment (here the `main.hcl` file name) — it must still get
+        // the SPA shell, not a missing-asset error.
+        for uri in [
+            "/nope",
+            "/projects/staging/diagrams",
+            "/projects/04e58d81-8bc3-4cc6-9a04-b9da48b996bb/diagrams/embed/main.hcl",
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let response = app_at(&tmp)
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "uri: {uri}");
+            assert_content_type(&response, "text/html");
+        }
     }
 
     #[tokio::test]
@@ -315,41 +328,6 @@ mod tests {
             .await
             .unwrap();
         assert!(!body.is_empty());
-    }
-
-    #[tokio::test]
-    async fn deep_client_route_falls_back_to_spa_shell() {
-        let tmp = tempfile::tempdir().unwrap();
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .uri("/projects/staging/diagrams")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_content_type(&response, "text/html");
-    }
-
-    #[tokio::test]
-    async fn client_route_with_dot_in_segment_falls_back_to_spa_shell() {
-        // A client-side route whose path contains a dot in a segment (here
-        // the `main.hcl` file name) must still get the SPA shell — it is not
-        // a missing static asset.
-        let tmp = tempfile::tempdir().unwrap();
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .uri("/projects/04e58d81-8bc3-4cc6-9a04-b9da48b996bb/diagrams/embed/main.hcl")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_content_type(&response, "text/html");
     }
 
     #[tokio::test]
