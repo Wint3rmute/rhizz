@@ -144,18 +144,18 @@ vrt-quick *args:
 # themselves live in Git LFS and can't be bundled.
 vrt-accept *args:
     {{run}} sh -c 'cd web && npm run test:vrt:accept -- {{args}}'
-    cp web/vrt/__screenshots__/backgrounds-background-1--light.png web/src/screenshots/background_1.png
-    cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png
-    cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png
-    cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
-    ./scripts/make-landing.sh
+    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-1--light.png web/src/screenshots/background_1.png'
+    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png'
+    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png'
+    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png'
+    {{run}} ./scripts/make-landing.sh
 
 # Cool 3D README/book hero: perspective + drop shadow + gradient background.
 # Regenerates book/src/rhizz_landing.png from the VRT landing screenshot.
 # Pass a custom screenshot to preview with your own capture, e.g.:
 #   just landing my-apollo-shot.png
 landing input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
-    ./scripts/make-landing.sh {{input}} assets/landing-gradient.jpg book/src/rhizz_landing.png
+    {{run}} ./scripts/make-landing.sh {{input}} assets/landing-gradient.jpg book/src/rhizz_landing.png
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
