@@ -16,6 +16,58 @@ How to work on this file:
 
 ---
 
+## Task <N> - Deduplicate and consolidate Rust unit tests
+
+### Goal
+Remove redundant Rust tests and merge overlapping ones so the suite runs faster and is easier to maintain. Keep every distinct behavior covered.
+
+### Inputs
+- **Crates:** `crates/` (Cargo workspace)
+- **Runner:** `cargo test --workspace` (check the `justfile` for a project-specific recipe and use it if one exists)
+- **Coverage (optional):** `cargo llvm-cov --workspace` or `cargo tarpaulin`, whichever the project already uses
+- **Source (read-only, except test code):** `crates/`
+
+### Scope
+Unit tests live in two places:
+- `#[cfg(test)] mod tests` blocks inside `src/` files
+- Files under each crate's `tests/` directory (integration-style tests)
+
+Edit only test code. Do not change non-test production code, public APIs, or signatures.
+
+### Process
+1. **Inventory.** List each test with its crate, file, unit under test, inputs, and asserted behavior. Note `#[ignore]`, `#[should_panic]`, and feature-gated tests. Run the coverage tool and save the report as the baseline.
+2. **Identify redundancy.** A test is redundant if another test asserts the same behavior with the same or weaker inputs. Common cases:
+   - Near-identical `#[test]` functions that differ only by literal values. Merge these into one table-driven test (`rstest` `#[case]` if the crate already uses it, otherwise a loop over an array of cases).
+   - Tests in both a `#[cfg(test)]` module and `tests/` that check the same public behavior.
+   - Tests that a fuller test already implies (e.g., a "parses name" test when a "parses full record" test asserts the name).
+   - Tests of derived traits (`Debug`, `Clone`, `PartialEq`) or standard library behavior, rather than project logic.
+   - Several `proptest` cases that cover the same property as an existing example test with no extra edge cases.
+3. **Consolidate.** Merge redundant tests into one parameterized or fuller test. Keep separate tests for different match arms, error variants, boundary values, `Result::Err` paths, panics (`#[should_panic]` with distinct messages), and regressions tied to a known bug.
+4. **Preserve coverage.** Never remove a test that covers a unique branch, error variant, or input class. Compare line, branch, and function coverage before and after. Flag any drop.
+5. **Keep tests meaningful.** Do not weaken assertions, delete assertions to make tests pass, or add `#[ignore]`. Do not change `#[should_panic(expected = ...)]` strings to make them match new behavior.
+6. **Handle ignored tests carefully.** Do not delete `#[ignore]`d tests without flagging them. They may be known gaps.
+7. **Verify.** Run `cargo test --workspace`, `cargo clippy --workspace --all-targets`, and `cargo fmt --check`. Confirm coverage is equal to or higher than the baseline. Also confirm the number of test cases in the output (`cargo test -- --list`) matches your log.
+
+### Deliverables
+1. **`UNIT_TEST_DEDUP.md`** containing:
+   - **Removal and consolidation log**
+
+     | Removed test | Crate / file | Replacement | Justification |
+     |---|---|---|---|
+
+     Each justification names the specific reason (e.g., "same input and asserted output as `parses_empty_string`; covered by the `rstest` case `\"\"`").
+   - **Flagged items:** ambiguous cases left in place, with reasons (including `#[ignore]`d tests).
+   - **Coverage comparison:** line, branch, and function coverage before and after.
+   - **Summary:** test count and run time before and after (`cargo test` time, ideally after a warm build).
+
+### Constraints
+- Do not change non-test production code in `crates/`.
+- Do not change public APIs or test-only helpers used by other crates unless all callers are updated.
+- Do not weaken assertions, thresholds, or coverage requirements.
+- Do not add `#[ignore]`, `#[allow(dead_code)]` to hide unused test helpers, or `.unwrap()` replacements that change failure behavior.
+- If the suite fails after changes, restore the affected test and flag it.
+- One commit per logical group (for example, one crate or one kind of consolidation), with the group described in the commit message.
+
 ## Task <N> - During view transitions, connection arrows don't fade out
 
 It appears that connection arrows don't fade out when the component to which the
