@@ -2,24 +2,14 @@ import { describe, expect, it } from "vitest";
 import { InvalidProjectNameError, projectSlug } from "./slug";
 
 describe("projectSlug", () => {
-  it("lower-cases and hyphenates a spaced name", () => {
-    expect(projectSlug("Drone System")).toBe("drone-system");
-  });
-
-  it("is already-stable for a name that is a slug", () => {
-    expect(projectSlug("drone-system")).toBe("drone-system");
-  });
-
-  it("collapses runs of punctuation and whitespace into one hyphen", () => {
-    expect(projectSlug("Drone   System!! (v2)")).toBe("drone-system-v2");
-  });
-
-  it("trims leading and trailing separators", () => {
-    expect(projectSlug("  *Drone System*  ")).toBe("drone-system");
-  });
-
-  it("keeps digits and inner separators", () => {
-    expect(projectSlug("MQTT gateway 2")).toBe("mqtt-gateway-2");
+  it.each([
+    ["Drone System", "drone-system"],
+    ["drone-system", "drone-system"],
+    ["Drone   System!! (v2)", "drone-system-v2"],
+    ["  *Drone System*  ", "drone-system"],
+    ["MQTT gateway 2", "mqtt-gateway-2"],
+  ])("normalizes %j to %j", (input, expected) => {
+    expect(projectSlug(input)).toBe(expected);
   });
 
   it("folds case so differently-cased names collide on one address", () => {

@@ -75,13 +75,13 @@ describe("readProjectSources", () => {
     ]);
   });
 
-  it("returns an empty array for a project with no .hcl files", async () => {
+  it("returns an empty array when no compilable sources exist", async () => {
     await fs.writeFile("notes.txt", "just some notes");
     expect(await readProjectSources(fs)).toEqual([]);
-  });
-
-  it("returns an empty array for an empty project", async () => {
-    expect(await readProjectSources(fs)).toEqual([]);
+    const emptyStore = new InMemoryProjectStore();
+    const emptyProject = await emptyStore.createProject("empty-probe");
+    const emptyFs = openProjectFs(emptyStore, emptyProject.id);
+    expect(await readProjectSources(emptyFs)).toEqual([]);
   });
 
   it("unpacks example diagrams into views/ at the project root without duplicating", async () => {

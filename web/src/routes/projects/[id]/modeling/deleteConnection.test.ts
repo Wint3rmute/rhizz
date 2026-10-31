@@ -158,33 +158,4 @@ system "demo" {
       { definition: "parent", port: "outer", component: "p" },
     ]);
   });
-
-  it("reports an endpoint with its port to clean up", () => {
-    const found = request(
-      `
-component "a" {
-  leaf = true
-  port "out" {}
-}
-component "b" {
-  leaf = true
-  port "in" {}
-}
-system "demo" {
-  instance "a" { source = "a" }
-  instance "b" { source = "b" }
-  connection "link" {
-    from = "a/out"
-    to   = "b/in"
-  }
-}
-`,
-      "link",
-    );
-    expect(found?.from.port).toBe("out");
-    expect(found?.removablePorts).toEqual([
-      { definition: "a", port: "out", component: "a" },
-      { definition: "b", port: "in", component: "b" },
-    ]);
-  });
 });

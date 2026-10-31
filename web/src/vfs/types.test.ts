@@ -34,15 +34,13 @@ describe("FsFileSchema", () => {
     expect(FsFileSchema.safeParse(validFile).success).toBe(true);
   });
 
-  it("rejects a file with a non-integer revision", () => {
-    const result = FsFileSchema.safeParse({ ...validFile, revision: 1.5 });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a file with a negative revision", () => {
-    const result = FsFileSchema.safeParse({ ...validFile, revision: -1 });
-    expect(result.success).toBe(false);
-  });
+  it.each([1.5, -1])(
+    "rejects a file with an invalid revision (%s)",
+    (revision) => {
+      const result = FsFileSchema.safeParse({ ...validFile, revision });
+      expect(result.success).toBe(false);
+    },
+  );
 
   it("rejects a file missing required fields", () => {
     const { content, ...withoutContent } = validFile;

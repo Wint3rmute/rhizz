@@ -59,62 +59,40 @@ describe("annotation undo/redo (unified layout history)", () => {
     expect(current.annotations.map((a) => a.text)).toEqual(["keep", "remove"]);
   });
 
-  it("editing annotation text is undone", () => {
+  it.each([
+    {
+      name: "editing annotation text",
+      start: [{ text: "before", x: 0, y: 0 }],
+      next: [{ text: "after", x: 0, y: 0 }],
+      check: (a: { text: string }) => expect(a.text).toBe("before"),
+    },
+    {
+      name: "dragging an annotation",
+      start: [{ text: "note", x: 10, y: 20 }],
+      next: [{ text: "note", x: 99, y: 88 }],
+      check: (a: { x: number; y: number }) =>
+        expect(a).toMatchObject({ x: 10, y: 20 }),
+    },
+    {
+      name: "resizing an annotation (scale)",
+      start: [{ text: "note", x: 0, y: 0, scale: 1 }],
+      next: [{ text: "note", x: 0, y: 0, scale: 2 }],
+      check: (a: { scale?: number }) => expect(a.scale).toBe(1),
+    },
+  ])("$name is undone", ({ start, next, check }) => {
     const stack = createHistoryStack<DiagramContent>();
     let current: DiagramContent = {
       ...emptyContent(),
-      annotations: [{ text: "before", x: 0, y: 0 }],
+      annotations: start,
     };
 
-    // undo point recorded when editing STARTS (before keystrokes mutate)
     pushHistory(stack, snapshotDiagramContent(current), 100);
-    current = {
-      ...current,
-      annotations: [{ text: "after", x: 0, y: 0 }],
-    };
+    current = { ...current, annotations: next };
 
     const undone = undoHistory(stack, snapshotDiagramContent(current), 100);
     if (undone === null) throw new Error("expected undo entry");
     current = applyDiagramSnapshotContent(undone);
-    expect(current.annotations[0]?.text).toBe("before");
-  });
-
-  it("dragging an annotation is undone", () => {
-    const stack = createHistoryStack<DiagramContent>();
-    let current: DiagramContent = {
-      ...emptyContent(),
-      annotations: [{ text: "note", x: 10, y: 20 }],
-    };
-
-    pushHistory(stack, snapshotDiagramContent(current), 100);
-    current = {
-      ...current,
-      annotations: [{ text: "note", x: 99, y: 88 }],
-    };
-
-    const undone = undoHistory(stack, snapshotDiagramContent(current), 100);
-    if (undone === null) throw new Error("expected undo entry");
-    current = applyDiagramSnapshotContent(undone);
-    expect(current.annotations[0]).toMatchObject({ x: 10, y: 20 });
-  });
-
-  it("resizing an annotation (scale) is undone", () => {
-    const stack = createHistoryStack<DiagramContent>();
-    let current: DiagramContent = {
-      ...emptyContent(),
-      annotations: [{ text: "note", x: 0, y: 0, scale: 1 }],
-    };
-
-    pushHistory(stack, snapshotDiagramContent(current), 100);
-    current = {
-      ...current,
-      annotations: [{ text: "note", x: 0, y: 0, scale: 2 }],
-    };
-
-    const undone = undoHistory(stack, snapshotDiagramContent(current), 100);
-    if (undone === null) throw new Error("expected undo entry");
-    current = applyDiagramSnapshotContent(undone);
-    expect(current.annotations[0]?.scale).toBe(1);
+    check(current.annotations[0] as never);
   });
 
   it("snapshots do not alias the annotations array", () => {

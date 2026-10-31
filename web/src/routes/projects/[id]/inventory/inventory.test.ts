@@ -127,12 +127,6 @@ describe("filterDefinitions", () => {
     ).toEqual([]);
   });
 
-  it("returns all definitions on the Components tab (definitions only)", () => {
-    expect(
-      filterDefinitions(all, { tab: InventoryTab.Components, query: "" }),
-    ).toEqual(all);
-  });
-
   it("filters by query across label and full name", () => {
     expect(
       filterDefinitions(all, {

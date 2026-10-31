@@ -22,35 +22,17 @@ describe("isConnectionDrawn", () => {
     ).toBe(true);
   });
 
-  it("skips when an endpoint is unplaced", () => {
+  it.each([
+    ["unplaced endpoint", new Set([0]), inSystem([0, 1]), hidden([])],
+    ["outside the view's system", new Set([0, 1]), inSystem([0]), hidden([])],
+    ["hidden label", new Set([0, 1]), inSystem([0, 1]), hidden(["a"])],
+  ])("skips when %s", (_reason, placed, inSys, isHidden) => {
     expect(
       isConnectionDrawn(
         { label: "a", from: 0, to: 1 },
-        new Set([0]),
-        inSystem([0, 1]),
-        hidden([]),
-      ),
-    ).toBe(false);
-  });
-
-  it("skips when an endpoint is outside the view's system", () => {
-    expect(
-      isConnectionDrawn(
-        { label: "a", from: 0, to: 1 },
-        new Set([0, 1]),
-        inSystem([0]),
-        hidden([]),
-      ),
-    ).toBe(false);
-  });
-
-  it("skips when hidden", () => {
-    expect(
-      isConnectionDrawn(
-        { label: "a", from: 0, to: 1 },
-        new Set([0, 1]),
-        inSystem([0, 1]),
-        hidden(["a"]),
+        placed as Set<number>,
+        inSys as (index: number) => boolean,
+        isHidden as (label: string) => boolean,
       ),
     ).toBe(false);
   });
