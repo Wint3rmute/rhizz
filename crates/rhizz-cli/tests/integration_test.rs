@@ -25,36 +25,18 @@ fn parse_args(args: &[&str]) -> Cli {
 }
 
 #[test]
-fn build_drone_exits_0() {
-    let cli = parse_args(&[
-        "build",
-        example_dir("drone").to_str().unwrap(),
-        "--no-color",
-    ]);
-    let code = run(&cli);
-    assert_eq!(code, 0, "drone build should exit 0");
-}
-
-#[test]
-fn build_social_media_exits_0() {
-    let cli = parse_args(&[
-        "build",
-        example_dir("social-media").to_str().unwrap(),
-        "--no-color",
-    ]);
-    let code = run(&cli);
-    assert_eq!(code, 0, "social-media build should exit 0");
-}
-
-#[test]
-fn build_software_house_exits_0() {
-    let cli = parse_args(&[
-        "build",
-        example_dir("software-house").to_str().unwrap(),
-        "--no-color",
-    ]);
-    let code = run(&cli);
-    assert_eq!(code, 0, "software-house build should exit 0");
+fn build_examples_exit_0() {
+    // Table-driven consolidation of the former build_{drone, social_media,
+    // software_house}_exits_0 tests: same build + exit 0, only example differs.
+    for example in ["drone", "social-media", "software-house"] {
+        let cli = parse_args(&[
+            "build",
+            example_dir(example).to_str().unwrap(),
+            "--no-color",
+        ]);
+        let code = run(&cli);
+        assert_eq!(code, 0, "{example} build should exit 0");
+    }
 }
 
 #[test]
