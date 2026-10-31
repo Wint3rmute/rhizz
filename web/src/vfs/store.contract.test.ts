@@ -183,41 +183,32 @@ export function runProjectStoreContractTests(
         ).rejects.toThrow();
       });
 
-      it("rejects creating a file when a sibling file already has that name", async () => {
-        const store = makeStore();
-        const project = await store.createProject("p");
-        await store.createFile(project.id, null, "a.hcl", "first");
-        await expect(
-          store.createFile(project.id, null, "a.hcl", "second"),
-        ).rejects.toThrow();
-      });
-
-      it("rejects creating a directory when a sibling directory already has that name", async () => {
-        const store = makeStore();
-        const project = await store.createProject("p");
-        await store.createDirectory(project.id, null, "components");
-        await expect(
-          store.createDirectory(project.id, null, "components"),
-        ).rejects.toThrow();
-      });
-
-      it("rejects creating a directory when a sibling file already has that name", async () => {
-        const store = makeStore();
-        const project = await store.createProject("p");
-        await store.createFile(project.id, null, "components", "");
-        await expect(
-          store.createDirectory(project.id, null, "components"),
-        ).rejects.toThrow();
-      });
-
-      it("rejects creating a file when a sibling directory already has that name", async () => {
-        const store = makeStore();
-        const project = await store.createProject("p");
-        await store.createDirectory(project.id, null, "components");
-        await expect(
-          store.createFile(project.id, null, "components", ""),
-        ).rejects.toThrow();
-      });
+      it.each([
+        ["file", "file"],
+        ["directory", "directory"],
+        ["file", "directory"],
+        ["directory", "file"],
+      ])(
+        "rejects creating a %s when a sibling %s already has that name",
+        async (existingKind, newKind) => {
+          const store = makeStore();
+          const project = await store.createProject("p");
+          if (existingKind === "file") {
+            await store.createFile(project.id, null, "components", "");
+          } else {
+            await store.createDirectory(project.id, null, "components");
+          }
+          if (newKind === "file") {
+            await expect(
+              store.createFile(project.id, null, "components", ""),
+            ).rejects.toThrow();
+          } else {
+            await expect(
+              store.createDirectory(project.id, null, "components"),
+            ).rejects.toThrow();
+          }
+        },
+      );
 
       it("allows two siblings with the same name under different parents", async () => {
         const store = makeStore();

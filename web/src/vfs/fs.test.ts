@@ -211,29 +211,30 @@ describe("rename", () => {
     expect(await fs.readFile("components/b.hcl")).toBe("content");
   });
 
-  it("rejects with ENOENT when the source doesn't exist", async () => {
-    expect(await codeOf(fs.rename("nope.hcl", "a.hcl"))).toBe("ENOENT");
-  });
+  it.each([["nope.hcl", "a.hcl"], ["a.hcl", "nope/a.hcl"]])(
+    "rejects with ENOENT when renaming %s to %s with a missing side",
+    async (from, to) => {
+      if (from !== "nope.hcl") await fs.writeFile(from, "");
+      expect(await codeOf(fs.rename(from, to))).toBe("ENOENT");
+    },
+  );
 
-  it("rejects with ENOENT when the destination directory doesn't exist", async () => {
-    await fs.writeFile("a.hcl", "");
-    expect(await codeOf(fs.rename("a.hcl", "nope/a.hcl"))).toBe("ENOENT");
-  });
-
-  it("rejects with EEXIST when the destination path is already taken by a different file", async () => {
-    await fs.writeFile("a.hcl", "a-content");
-    await fs.writeFile("b.hcl", "b-content");
-    expect(await codeOf(fs.rename("a.hcl", "b.hcl"))).toBe("EEXIST");
-    // Neither side should have been touched.
-    expect(await fs.readFile("a.hcl")).toBe("a-content");
-    expect(await fs.readFile("b.hcl")).toBe("b-content");
-  });
-
-  it("rejects with EEXIST when the destination path is already taken by a directory", async () => {
-    await fs.writeFile("a.hcl", "");
-    await fs.mkdir("b");
-    expect(await codeOf(fs.rename("a.hcl", "b"))).toBe("EEXIST");
-  });
+  it.each([["b.hcl"], ["b"]])(
+    "rejects with EEXIST when the destination %s is already taken",
+    async (dest) => {
+      await fs.writeFile("a.hcl", "a-content");
+      if (dest === "b") {
+        await fs.mkdir(dest);
+      } else {
+        await fs.writeFile(dest, "b-content");
+      }
+      expect(await codeOf(fs.rename("a.hcl", dest))).toBe("EEXIST");
+      expect(await fs.readFile("a.hcl")).toBe("a-content");
+      if (dest === "b.hcl") {
+        expect(await fs.readFile("b.hcl")).toBe("b-content");
+      }
+    },
+  );
 
   it("does not reject when the destination path resolves to the same node (no-op rename)", async () => {
     await fs.writeFile("a.hcl", "content");
@@ -262,18 +263,15 @@ describe("rename", () => {
 });
 
 describe("stat", () => {
-  it("reports isFile() for a file", async () => {
+  it("distinguishes files from directories", async () => {
     await fs.writeFile("a.hcl", "");
-    const stats = await fs.stat("a.hcl");
-    expect(stats.isFile()).toBe(true);
-    expect(stats.isDirectory()).toBe(false);
-  });
-
-  it("reports isDirectory() for a directory", async () => {
     await fs.mkdir("components");
-    const stats = await fs.stat("components");
-    expect(stats.isFile()).toBe(false);
-    expect(stats.isDirectory()).toBe(true);
+    const fileStats = await fs.stat("a.hcl");
+    expect(fileStats.isFile()).toBe(true);
+    expect(fileStats.isDirectory()).toBe(false);
+    const dirStats = await fs.stat("components");
+    expect(dirStats.isFile()).toBe(false);
+    expect(dirStats.isDirectory()).toBe(true);
   });
 
   it("rejects with ENOENT for a missing path", async () => {
