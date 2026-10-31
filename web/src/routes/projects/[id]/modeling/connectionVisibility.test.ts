@@ -22,17 +22,23 @@ describe("isConnectionDrawn", () => {
     ).toBe(true);
   });
 
-  it.each([
+  const skips: [
+    string,
+    Set<number>,
+    (index: number) => boolean,
+    (label: string) => boolean,
+  ][] = [
     ["unplaced endpoint", new Set([0]), inSystem([0, 1]), hidden([])],
     ["outside the view's system", new Set([0, 1]), inSystem([0]), hidden([])],
     ["hidden label", new Set([0, 1]), inSystem([0, 1]), hidden(["a"])],
-  ])("skips when %s", (_reason, placed, inSys, isHidden) => {
+  ];
+  it.each(skips)("skips when %s", (_reason, placed, inSys, isHidden) => {
     expect(
       isConnectionDrawn(
         { label: "a", from: 0, to: 1 },
-        placed as Set<number>,
-        inSys as (index: number) => boolean,
-        isHidden as (label: string) => boolean,
+        placed,
+        inSys,
+        isHidden,
       ),
     ).toBe(false);
   });

@@ -146,9 +146,7 @@ describe("resolveViewToOpen", () => {
     },
   ])("$name", ({ input, expected }) => {
     expect(
-      resolveViewToOpen(
-        input as Parameters<typeof resolveViewToOpen>[0],
-      ),
+      resolveViewToOpen(input as Parameters<typeof resolveViewToOpen>[0]),
     ).toBe(expected);
   });
 });

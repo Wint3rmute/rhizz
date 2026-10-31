@@ -211,7 +211,10 @@ describe("rename", () => {
     expect(await fs.readFile("components/b.hcl")).toBe("content");
   });
 
-  it.each([["nope.hcl", "a.hcl"], ["a.hcl", "nope/a.hcl"]])(
+  it.each([
+    ["nope.hcl", "a.hcl"],
+    ["a.hcl", "nope/a.hcl"],
+  ])(
     "rejects with ENOENT when renaming %s to %s with a missing side",
     async (from, to) => {
       if (from !== "nope.hcl") await fs.writeFile(from, "");

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Annotation } from "../../../../rhizz_wasm_wrapper";
 import {
   createHistoryStack,
   pushHistory,
@@ -64,20 +65,25 @@ describe("annotation undo/redo (unified layout history)", () => {
       name: "editing annotation text",
       start: [{ text: "before", x: 0, y: 0 }],
       next: [{ text: "after", x: 0, y: 0 }],
-      check: (a: { text: string }) => expect(a.text).toBe("before"),
+      check: (a: Annotation) => {
+        expect(a.text).toBe("before");
+      },
     },
     {
       name: "dragging an annotation",
       start: [{ text: "note", x: 10, y: 20 }],
       next: [{ text: "note", x: 99, y: 88 }],
-      check: (a: { x: number; y: number }) =>
-        expect(a).toMatchObject({ x: 10, y: 20 }),
+      check: (a: Annotation) => {
+        expect(a).toMatchObject({ x: 10, y: 20 });
+      },
     },
     {
       name: "resizing an annotation (scale)",
       start: [{ text: "note", x: 0, y: 0, scale: 1 }],
       next: [{ text: "note", x: 0, y: 0, scale: 2 }],
-      check: (a: { scale?: number }) => expect(a.scale).toBe(1),
+      check: (a: Annotation) => {
+        expect(a.scale).toBe(1);
+      },
     },
   ])("$name is undone", ({ start, next, check }) => {
     const stack = createHistoryStack<DiagramContent>();
@@ -92,7 +98,9 @@ describe("annotation undo/redo (unified layout history)", () => {
     const undone = undoHistory(stack, snapshotDiagramContent(current), 100);
     if (undone === null) throw new Error("expected undo entry");
     current = applyDiagramSnapshotContent(undone);
-    check(current.annotations[0] as never);
+    const first = current.annotations[0];
+    if (!first) throw new Error("expected annotation entry");
+    check(first);
   });
 
   it("snapshots do not alias the annotations array", () => {
