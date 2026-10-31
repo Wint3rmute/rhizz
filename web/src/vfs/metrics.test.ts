@@ -14,17 +14,10 @@ vi.mock("@sentry/sveltekit", () => ({
 import { reportVfsSizeBytes, VFS_SIZE_METRIC } from "./metrics";
 
 describe("reportVfsSizeBytes", () => {
-  it("records the blob size as a byte-unit gauge", () => {
-    reportVfsSizeBytes(12345);
-    expect(mocks.gauge).toHaveBeenCalledWith(VFS_SIZE_METRIC, 12345, {
-      unit: "byte",
-    });
-  });
-
-  it("reports zero, not nothing, for an empty blob", () => {
+  it.each([12345, 0])("records blob size %i as a byte-unit gauge", (size) => {
     mocks.gauge.mockClear();
-    reportVfsSizeBytes(0);
-    expect(mocks.gauge).toHaveBeenCalledWith(VFS_SIZE_METRIC, 0, {
+    reportVfsSizeBytes(size);
+    expect(mocks.gauge).toHaveBeenCalledWith(VFS_SIZE_METRIC, size, {
       unit: "byte",
     });
   });

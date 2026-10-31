@@ -77,75 +77,78 @@ describe("lastView storage", () => {
 });
 
 describe("resolveViewToOpen", () => {
-  it("prefers the requested view (deep link, back/forward)", () => {
-    expect(
-      resolveViewToOpen({
+  it.each([
+    {
+      name: "prefers the requested view (deep link, back/forward)",
+      input: {
         requested: "main.hcl",
         remembered: "other.hcl",
         open: "other.hcl",
         first: "main.hcl",
         exists: () => true,
-      }),
-    ).toBe("main.hcl");
-  });
-
-  it("falls back to the remembered view when nothing is requested", () => {
-    expect(
-      resolveViewToOpen({
+      },
+      expected: "main.hcl",
+    },
+    {
+      name: "falls back to the remembered view when nothing is requested",
+      input: {
         requested: "",
         remembered: "other.hcl",
         open: null,
         first: "main.hcl",
         exists: () => true,
-      }),
-    ).toBe("other.hcl");
-  });
-
-  it("ignores a remembered view that no longer exists", () => {
-    expect(
-      resolveViewToOpen({
+      },
+      expected: "other.hcl",
+    },
+    {
+      name: "ignores a remembered view that no longer exists",
+      input: {
         requested: "",
         remembered: "deleted.hcl",
         open: null,
         first: "main.hcl",
-        exists: (path) => path === "main.hcl",
-      }),
-    ).toBe("main.hcl");
-  });
-
-  it("keeps the open view when neither request nor memory applies", () => {
-    expect(
-      resolveViewToOpen({
+        exists: (path: string) => path === "main.hcl",
+      },
+      expected: "main.hcl",
+    },
+    {
+      name: "keeps the open view when neither request nor memory applies",
+      input: {
         requested: "",
         remembered: null,
         open: "other.hcl",
         first: "main.hcl",
         exists: () => true,
-      }),
-    ).toBe("other.hcl");
-  });
-
-  it("opens the first view when nothing else applies", () => {
-    expect(
-      resolveViewToOpen({
+      },
+      expected: "other.hcl",
+    },
+    {
+      name: "opens the first view when nothing else applies",
+      input: {
         requested: "",
         remembered: null,
         open: null,
         first: "main.hcl",
         exists: () => true,
-      }),
-    ).toBe("main.hcl");
-  });
-
-  it("opens nothing when the project has no views at all", () => {
-    expect(
-      resolveViewToOpen({
+      },
+      expected: "main.hcl",
+    },
+    {
+      name: "opens nothing when the project has no views at all",
+      input: {
         requested: "",
         remembered: null,
         open: null,
         first: null,
         exists: () => true,
-      }),
-    ).toBeNull();
+      },
+      expected: null,
+    },
+  ])("$name", ({ input, expected }) => {
+    expect(
+      resolveViewToOpen(
+        input as Parameters<typeof resolveViewToOpen>[0],
+      ),
+    ).toBe(expected);
   });
 });

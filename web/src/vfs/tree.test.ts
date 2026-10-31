@@ -49,13 +49,12 @@ describe("descendantsOf", () => {
     expect(result.map((n) => n.name)).toEqual(["imu.hcl"]);
   });
 
-  it("returns an empty array for a leaf file", () => {
-    expect(descendantsOf("p1", "file-imu", fixture())).toEqual([]);
-  });
-
-  it("returns an empty array for a node with no descendants at all", () => {
-    expect(descendantsOf("p1", "file-drone", fixture())).toEqual([]);
-  });
+  it.each([["file-imu"], ["file-drone"]])(
+    "returns an empty array for a node with no descendants (%s)",
+    (id) => {
+      expect(descendantsOf("p1", id, fixture())).toEqual([]);
+    },
+  );
 
   it("does not walk into another project's nodes", () => {
     // Same ids, different project: without the scope, `mid` below would be
@@ -150,17 +149,12 @@ describe("resolveNode", () => {
     expect(resolveNode(fixture(), "components")?.id).toBe("dir-components");
   });
 
-  it("returns undefined for a missing path", () => {
-    expect(resolveNode(fixture(), "nope.hcl")).toBeUndefined();
-  });
-
-  it("returns undefined when an intermediate segment doesn't exist", () => {
-    expect(resolveNode(fixture(), "nope/imu.hcl")).toBeUndefined();
-  });
-
-  it("returns undefined for the root path itself", () => {
-    expect(resolveNode(fixture(), "")).toBeUndefined();
-  });
+  it.each([["nope.hcl"], ["nope/imu.hcl"], [""]])(
+    "returns undefined for an unresolvable path (%s)",
+    (path) => {
+      expect(resolveNode(fixture(), path)).toBeUndefined();
+    },
+  );
 });
 
 describe("resolveDirectory", () => {

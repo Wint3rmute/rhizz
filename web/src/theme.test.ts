@@ -12,38 +12,19 @@ import {
 } from "./theme";
 
 describe("loadSelection", () => {
-  it("defaults to auto when nothing is stored", () => {
-    expect(loadSelection(null)).toBe("auto");
-  });
-
-  it("reads an explicitly pinned dark selection (legacy raw format)", () => {
-    expect(loadSelection("dark")).toBe("dark");
-  });
-
-  it("reads an explicitly pinned light selection (legacy raw format)", () => {
-    expect(loadSelection("light")).toBe("light");
-  });
-
-  it("reads an explicit auto selection", () => {
-    expect(loadSelection("auto")).toBe("auto");
-  });
-
-  it("accepts JSON-encoded values for backward compatibility", () => {
-    expect(loadSelection(JSON.stringify("dark"))).toBe("dark");
-    expect(loadSelection(JSON.stringify("auto"))).toBe("auto");
-  });
-
-  it("falls back to auto on corrupt JSON", () => {
-    expect(loadSelection("{not json")).toBe("auto");
-  });
-
-  it("falls back to auto on an unknown value", () => {
-    expect(loadSelection("blue")).toBe("auto");
-    expect(loadSelection(JSON.stringify("blue"))).toBe("auto");
-  });
-
-  it("is robust to surrounding whitespace", () => {
-    expect(loadSelection("  dark  ")).toBe("dark");
+  it.each([
+    [null, "auto"],
+    ["dark", "dark"],
+    ["light", "light"],
+    ["auto", "auto"],
+    [JSON.stringify("dark"), "dark"],
+    [JSON.stringify("auto"), "auto"],
+    ["{not json", "auto"],
+    ["blue", "auto"],
+    [JSON.stringify("blue"), "auto"],
+    ["  dark  ", "dark"],
+  ])("loadSelection(%j) = %j", (stored, expected) => {
+    expect(loadSelection(stored as string | null)).toBe(expected);
   });
 });
 
