@@ -1454,23 +1454,53 @@ mod tests {
     }
 
     #[test]
-    fn unknown_attr_on_component_is_error() {
-        assert_e000_with_key(r#"component "c" { descripton = "typo" }"#, "descripton");
-    }
-
-    #[test]
-    fn unknown_attr_on_system_is_error() {
-        assert_e000_with_key(r#"system "s" { descripton = "typo" }"#, "descripton");
-    }
-
-    #[test]
-    fn unknown_attr_on_project_is_error() {
-        assert_e000_with_key(r#"project { nam = "a" }"#, "nam");
-    }
-
-    #[test]
-    fn unknown_attr_on_protocol_is_error() {
-        assert_e000_with_key(r#"protocol "p" { descripton = "x" }"#, "descripton");
+    fn unknown_attr_on_any_block_is_error() {
+        // Table-driven consolidation of the former `unknown_attr_on_*` tests:
+        // each case names a different block type / typo key, all must fail
+        // with E000 naming the unknown key. Same helper, same assertion.
+        let cases: &[(&str, &str)] = &[
+            (r#"component "c" { descripton = "typo" }"#, "descripton"),
+            (r#"system "s" { descripton = "typo" }"#, "descripton"),
+            (r#"project { nam = "a" }"#, "nam"),
+            (r#"protocol "p" { descripton = "x" }"#, "descripton"),
+            (
+                r#"component "c" { port "p" { descripton = "x" } }"#,
+                "descripton",
+            ),
+            (
+                r#"system "s" { connection "c" { from = "a" to = "b" sorce = "x" } }"#,
+                "sorce",
+            ),
+            (
+                r#"protocol "p" { message "m" { descripton = "x" } }"#,
+                "descripton",
+            ),
+            (
+                r#"protocol "p" { message "m" { field "f" { typ = "uint8" } } }"#,
+                "typ",
+            ),
+            (
+                r#"protocol "p" { leaf = true  encapsulate = ["x"] }"#,
+                "encapsulate",
+            ),
+            (
+                r#"system "s" { connection "c" { from = "a" to = "b" realised_by = ["d"] } }"#,
+                "realised_by",
+            ),
+            (
+                r#"system "s" {
+  connection "c" {
+    from         = "a"
+    to           = "b"
+    encapsulates = ["d"]
+  }
+}"#,
+                "encapsulates",
+            ),
+        ];
+        for (src, key) in cases {
+            assert_e000_with_key(src, key);
+        }
     }
 
     #[test]
@@ -1491,68 +1521,6 @@ mod tests {
             r#"system "s" { connection "c" { from = "a" to = "b" realized_by = "d" } }"#,
         );
         assert_eq!(err.code, DiagnosticCode::E000);
-    }
-
-    #[test]
-    fn connection_encapsulates_is_rejected_as_unknown() {
-        assert_e000_with_key(
-            r#"system "s" {
-  connection "c" {
-    from         = "a"
-    to           = "b"
-    encapsulates = ["d"]
-  }
-}"#,
-            "encapsulates",
-        );
-    }
-
-    #[test]
-    fn unknown_attr_next_to_new_protocol_attrs_is_error() {
-        assert_e000_with_key(
-            r#"protocol "p" { leaf = true  encapsulate = ["x"] }"#,
-            "encapsulate",
-        );
-    }
-
-    #[test]
-    fn unknown_attr_next_to_realized_by_is_error() {
-        assert_e000_with_key(
-            r#"system "s" { connection "c" { from = "a" to = "b" realised_by = ["d"] } }"#,
-            "realised_by",
-        );
-    }
-
-    #[test]
-    fn unknown_attr_on_port_is_error() {
-        assert_e000_with_key(
-            r#"component "c" { port "p" { descripton = "x" } }"#,
-            "descripton",
-        );
-    }
-
-    #[test]
-    fn unknown_attr_on_connection_is_error() {
-        assert_e000_with_key(
-            r#"system "s" { connection "c" { from = "a" to = "b" sorce = "x" } }"#,
-            "sorce",
-        );
-    }
-
-    #[test]
-    fn unknown_attr_on_message_is_error() {
-        assert_e000_with_key(
-            r#"protocol "p" { message "m" { descripton = "x" } }"#,
-            "descripton",
-        );
-    }
-
-    #[test]
-    fn unknown_attr_on_field_is_error() {
-        assert_e000_with_key(
-            r#"protocol "p" { message "m" { field "f" { typ = "uint8" } } }"#,
-            "typ",
-        );
     }
 
     #[test]
