@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0004.2 Per-project writes + server enforcement
+
+Replaces whole-VFS `PUT /api/vfs` (now 410 Gone) with per-project writes, so one client can no longer overwrite or delete another's projects. `GET /api/vfs` stays for bootstrapping.
+
+- `storage::write_project` (`PROJECT_WRITE_LOCK` inner CAS + lock admission): creates missing projects, validates entries (`resolve_confined_path` per path, no hidden/absolute/escape/dupes, parents listed), applies via `apply_plan` scoped to the project dir, resets idle, returns the new version. Only the one directory is ever touched (siblings, non-projects, hidden, symlinks never listed/written/deleted — tested).
+- `mutate_project` takes `locks` + `user`: free auto-acquires, held-by-other is `Locked{holder}` (file untouched). MCP passes hardcoded `"AI"` through the shared manager (HTTP and MCP contend on one lock — covered by an RPC test: human-held refuses naming Alice, free auto-acquires and applies).
+- New routes: `PUT /api/projects/{id}/files {base_version?, files}` (400/404/409-stale with current/409-locked/500) and `DELETE /api/projects/{id}` (lock-guarded, frees the lock so the address is reusable). Lock/state/heartbeat now resolve via `resolve_project_dir` (address + dir, no model-source gate) so empty shells work; model compilation still gates on `resolve_project`.
+- Web migration (minimal, no polling UI yet): `web/src/collab/identity.ts` (`getOrCreateUsername`, landed early — writes need an identity), `httpBackend` does lock-free `PUT` per project (server auto-acquires) + `DELETE` for removed ids (tracked `knownIds`, seeded on read — covers create/rename/delete), identity memoized per backend (storage-blocked browsers would self-lockout on the second write otherwise; a rename needs a fresh backend — 0004.3's problem).
+- Lenient `project_version` (address + dir, no model gate) shared by state and writes via `hash_found_entries`; strict model-source gating stays in `resolve_project`.
+- Tests: 9 storage (persist/version/creation/refusals/sibling-isolation/unwritable-paths/bad-address/mutate-locked), 8 endpoint (410/round-trip/stranger/stale/unwritable/siblings/delete ×2), 2 MCP (refused-while-held, auto-acquire), vitest fakes rewritten to the per-project protocol + `pathOfNode`/`projectFiles` + identity tests. `load_vfs`/`GET` untouched.
+- SPEC: `cli.md` endpoint list + `frontend.md` persistence section rewritten.
+- Heads-up for 0004.3: web sends no `base_version` yet (no versions without polling); same-username tabs share the holder, so the CAS layer only kicks in once polling lands. `PUT /api/vfs` tests removed (410 covered).
+
+Validation: `just test` green (165 Rust + 1244 vitest + 164 e2e), `just lint` clean, `just build` green (note: new files must be `git add`ed or the nix `web-build` snapshot misses them).
+Branch: `feat/0004-2-per-project-writes`.
+
+---
+
 ## Task <N> — 0004.1 Server lock manager + project state
 
 Server half of [0004](book/src/proposals/0004-locking-and-collab.md): per-project in-memory locks and a pollable project version. No frontend yet, no `PUT /api/vfs` change.

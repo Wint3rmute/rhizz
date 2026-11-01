@@ -194,7 +194,6 @@ impl LockManager {
     pub fn get(&self, project: &str) -> Option<LockInfo> {
         self.get_at(project, Instant::now())
     }
-
     /// Reports who holds `project`, if anyone, at `now`, pruning lapsed
     /// entries so idle and expired locks free their project on read.
     fn get_at(&self, project: &str, now: Instant) -> Option<LockInfo> {
@@ -224,6 +223,46 @@ impl LockManager {
         self.inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Records an edit by the holder: resets the idle timer so an actively
+    /// edited project never frees itself. Heartbeats deliberately do not do
+    /// this (see [`LockManager::heartbeat`]). Returns whether the project
+    /// was held by `user` — edits from anyone else, or on a free project,
+    /// change nothing.
+    #[must_use]
+    pub fn note_edit(&self, project: &str, user: &str) -> bool {
+        self.note_edit_at(project, user, Instant::now())
+    }
+
+    /// Records an edit by the holder at `now`.
+    fn note_edit_at(&self, project: &str, user: &str, now: Instant) -> bool {
+        let mut locks = self.lock_or_poisoned();
+        let outcome = match locks.get(project).cloned() {
+            Some(lock) if lock.live(now) && lock.holder == user => {
+                locks.insert(
+                    project.to_owned(),
+                    Lock {
+                        holder: user.to_owned(),
+                        lease_expires: lock.lease_expires,
+                        last_edit: now,
+                    },
+                );
+                true
+            }
+            _ => false,
+        };
+        drop(locks);
+        outcome
+    }
+
+    /// Frees `project` unconditionally. Used after a guarded delete: the
+    /// project is gone, so any lock on it is meaningless and must not block
+    /// re-creating the same address.
+    pub fn release(&self, project: &str) {
+        let mut locks = self.lock_or_poisoned();
+        locks.remove(project);
+        drop(locks);
     }
 }
 
@@ -397,6 +436,76 @@ mod tests {
             HeartbeatOutcome::NotHeld { holder: None }
         ));
         assert!(manager.get_at("drone", after).is_none());
+    }
+
+    #[test]
+    fn note_edit_resets_the_idle_timer_for_the_holder() {
+        let start = Instant::now();
+        let manager = held_at("drone", "alice", start);
+
+        // Keep the lease alive with steady heartbeats, as a live tab would.
+        for secs in [10, 20, 30, 40, 50] {
+            assert!(matches!(
+                manager.heartbeat_at("drone", "alice", start + Duration::from_secs(secs)),
+                HeartbeatOutcome::Renewed
+            ));
+        }
+        // An edit at 55s keeps the project alive past the original
+        // start + 60s idle cutoff …
+        assert!(manager.note_edit_at("drone", "alice", start + Duration::from_secs(55)));
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(61))
+                .is_some()
+        );
+        // … until a minute passes without another one.
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(116))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn note_edit_ignores_strangers_and_free_projects() {
+        let start = Instant::now();
+        let manager = held_at("drone", "alice", start);
+
+        assert!(!manager.note_edit_at("drone", "bob", start + Duration::from_secs(55)));
+        assert!(!manager.note_edit_at("web-app", "alice", start + Duration::from_secs(55)));
+        // The stranger's edit changed nothing: still idle at 61s.
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(61))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn note_edit_on_a_lapsed_lock_changes_nothing() {
+        let start = Instant::now();
+        let manager = held_at("drone", "alice", start);
+
+        // Past the lease: the lock is gone, so there is nothing to stamp —
+        // the writer must re-acquire first (which every write path does).
+        let after = start + LEASE_DURATION + Duration::from_secs(1);
+        assert!(!manager.note_edit_at("drone", "alice", after));
+        assert!(manager.get_at("drone", after).is_none());
+    }
+
+    #[test]
+    fn release_frees_the_project_for_anyone() {
+        let start = Instant::now();
+        let manager = held_at("drone", "alice", start);
+
+        manager.release("drone");
+        assert!(manager.get_at("drone", start).is_none());
+        assert!(matches!(
+            manager.acquire_at("drone", "bob", start),
+            AcquireOutcome::Acquired
+        ));
+        // Releasing a free project is a no-op.
+        manager.release("drone");
     }
 
     #[test]

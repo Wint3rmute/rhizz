@@ -50,8 +50,21 @@ The server exposes:
 
 - `GET /healthz` — liveness probe, returns `ok`
 - `GET /api/vfs` — fetch the entire VFS state (all projects + nodes)
-- `PUT /api/vfs` — persist the entire VFS state (authoritative; projects absent
-  from the payload are deleted)
+- `GET /api/projects/{id}/state` — the project's content-hash version plus
+  who holds its lock (`lockedBy`, `lockExpiresAt`), if anyone. Watchers poll
+  this to follow the editor.
+- `POST /api/projects/{id}/lock` — take (or renew) the project's lock for
+  the `x-rhizz-user` caller. Held by someone else, the edit is refused with
+  409 naming the holder.
+- `POST /api/projects/{id}/heartbeat` — renew the lease without touching
+  the idle timer. Not held by this user, the client must re-acquire (409).
+- `PUT /api/projects/{id}/files` — replace one project's tree
+  (`{ user, base_version?, files: [{ path, content? }] }`), creating the
+  project when needed. The lock is taken first (free projects
+  auto-acquire); only this project's directory is ever touched. (`PUT
+  /api/vfs` is gone — replaced by per-project writes — and answers 410.)
+- `DELETE /api/projects/{id}` — remove one project's directory (lock taken
+  first, then freed), so one client can never delete another's projects.
 - `GET /*` — the embedded SPA frontend (falls back to the shell for client-side
   routes)
 

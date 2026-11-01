@@ -186,22 +186,6 @@ Definition of done:
 ---
 
 
-## Task <N> — 0004.2 Per-project writes + server enforcement
-
-Replaces whole-VFS `PUT /api/vfs` with per-project writes so one client can no longer overwrite or delete another's projects. Depends on 0004.1.
-
-- New write path: `PUT /api/projects/:id/files { user, baseVersion?, files }` via `storage::write_project` + `write_atomic`; non-holder writes rejected, file untouched (same refusal contract as `mutate_project`/`DOC_EDIT_LOCK`).
-- Wrap `mutate_project` (all 16 `ModelOp` tools) with `acquire_or_check`: free → auto-acquire on first edit; held by other → refuse.
-- `GET /api/vfs` stays for bootstrap/list; `PUT /api/vfs` returns 410. Update `SPEC/cli.md` + bundled frontend together.
-- Rust tests: holder writes + persists, non-holder refused byte-identical, stale `baseVersion` refused, missing project on disk not deleted by another project's write.
-
-Definition of done:
-
-- `just test`, `just lint`, `just build` pass.
-- No whole-blob overwrite path remains.
-
----
-
 ## Task <N> — 0004.3 Web identity + lock polling + read-only UI
 
 Web half of 0004. Depends on 0004.1-0004.2.

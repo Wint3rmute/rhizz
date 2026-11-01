@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { FsDirectory, FsNode } from "./types";
 import {
   descendantsOf,
+  pathOfNode,
+  projectFiles,
   resolveDirectory,
   resolveNode,
   splitBasename,
@@ -196,5 +198,50 @@ describe("splitBasename", () => {
   it("throws for the root path itself, which has no basename", () => {
     expect(() => splitBasename("")).toThrow();
     expect(() => splitBasename(".")).toThrow();
+  });
+});
+
+describe("pathOfNode", () => {
+  it("resolves nested and root-level node ids to paths", () => {
+    const nodes = fixture();
+    expect(pathOfNode("p1", "file-imu", nodes)).toBe("components/imu.hcl");
+    expect(pathOfNode("p1", "file-overview", nodes)).toBe(
+      "views/overview.json",
+    );
+    expect(pathOfNode("p1", "dir-views", nodes)).toBe("views");
+    expect(pathOfNode("p1", "file-drone", nodes)).toBe("drone.hcl");
+  });
+
+  it("returns undefined for unknown, dangling, and foreign nodes", () => {
+    const nodes = fixture();
+    expect(pathOfNode("p1", "ghost", nodes)).toBeUndefined();
+    expect(
+      pathOfNode("p1", "orphan", [
+        ...nodes,
+        file("orphan", "x.hcl", "missing-parent"),
+      ]),
+    ).toBeUndefined();
+    expect(pathOfNode("p2", "file-imu", nodes)).toBeUndefined();
+  });
+});
+
+describe("projectFiles", () => {
+  it("lists one project's entries as server-write payloads, sorted", () => {
+    expect(projectFiles("p1", fixture())).toEqual([
+      { path: "components" },
+      { path: "components/imu.hcl", content: 'component "imu" {}' },
+      { path: "drone.hcl", content: 'system "drone" {}' },
+      { path: "views" },
+      { path: "views/overview.json", content: "{}" },
+    ]);
+  });
+
+  it("scopes to the project it was called for", () => {
+    const nodes: FsNode[] = [
+      ...fixture(),
+      { ...dir("other", "other", null), projectId: "p2" },
+    ];
+    expect(projectFiles("p2", nodes)).toEqual([{ path: "other" }]);
+    expect(projectFiles("p1", nodes)).toHaveLength(5);
   });
 });

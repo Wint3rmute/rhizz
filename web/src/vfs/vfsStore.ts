@@ -10,6 +10,8 @@ import * as ops from "./operations";
 import { emptyVfsData, sanitizeVfsData, type VfsData } from "./operations";
 import type { ProjectStore } from "./store";
 import type { FsDirectory, FsFile, FsNode, Project } from "./types";
+import { projectFiles } from "./tree";
+import { getOrCreateUsername } from "../collab/identity";
 
 /** How one backend loads and persists the whole VFS blob. */
 export interface VfsBackend {
@@ -89,38 +91,89 @@ export function localStorageBackend(
 }
 
 /**
- * A backend over the rhizz-server HTTP API. The whole blob is fetched before
- * each mutation and dumped back afterwards — deliberately naive, matching the
- * task directive ("dump the entire VFS state to the server on save, no
- * optimisation for now"). The server expands that payload into one directory
- * of ordinary files per project (see rhizz-server's `storage` module), so
- * nothing about this side of the wire changes. With the server unavailable
- * every operation rejects, so callers see the same rejected-promise surface as
- * elsewhere.
+ * A backend over the rhizz-server HTTP API. Reads bootstrap from the
+ * whole-VFS `GET /api/vfs`; writes go per project, so one client can never
+ * overwrite or delete another's projects the way the old whole-blob PUT
+ * could:
+ *
+ * - every project in the blob is replaced through
+ *   `PUT /api/projects/{id}/files` (the lock auto-acquires server-side;
+ *   a 409 names the holder and rejects the whole mutation, like any other
+ *   failed write);
+ * - projects the blob no longer names are removed through
+ *   `DELETE /api/projects/{id}` (this is what project deletes and renames
+ *   — renames move the id — funnel through).
+ *
+ * With the server unavailable every operation rejects, so callers see the
+ * same rejected-promise surface as elsewhere.
  */
 export function httpBackend(
   baseUrl: string,
   fetchImpl: FetchLike = globalThis.fetch,
+  getUser: () => string = getOrCreateUsername,
 ): VfsBackend {
   const origin = baseUrl.replace(/\/+$/, "");
-  const url = `${origin}${VFS_ENDPOINT}`;
+  // Resolved once: without persistence every `getUser()` call mints a fresh
+  // guest name, and the second write would lock itself out. (A renamed user
+  // needs a fresh backend — see 0004.3.)
+  let me: string | null = null;
+  const userHeaders = (): Record<string, string> => {
+    me ??= getUser();
+    return { "x-rhizz-user": me };
+  };
+  // Project ids the server last saw from this backend, so removals (and
+  // renames, which move the id) delete the directory the blob no longer
+  // names. Seeded on read; a backend that never read deletes nothing.
+  let knownIds: Set<string> | null = null;
+
+  const putProject = async (
+    projectId: string,
+    files: { path: string; content?: string }[],
+  ): Promise<void> => {
+    const response = await fetchImpl(
+      `${origin}/api/projects/${projectId}/files`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...userHeaders() },
+        body: JSON.stringify({ files }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Project save failed: HTTP ${String(response.status)}`);
+    }
+  };
+
+  const deleteProjectOnServer = async (projectId: string): Promise<void> => {
+    const response = await fetchImpl(`${origin}/api/projects/${projectId}`, {
+      method: "DELETE",
+      headers: { ...userHeaders() },
+    });
+    if (!response.ok) {
+      throw new Error(`Project delete failed: HTTP ${String(response.status)}`);
+    }
+  };
+
   return {
     read: async () => {
-      const response = await fetchImpl(url);
+      const response = await fetchImpl(`${origin}${VFS_ENDPOINT}`);
       if (!response.ok) {
         throw new Error(`VFS fetch failed: HTTP ${String(response.status)}`);
       }
-      return sanitizeVfsData(await response.json());
+      const data = sanitizeVfsData(await response.json());
+      knownIds = new Set(data.projects.map((p) => p.id));
+      return data;
     },
     write: async (data) => {
-      const response = await fetchImpl(url, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) {
-        throw new Error(`VFS save failed: HTTP ${String(response.status)}`);
+      const current = new Set(data.projects.map((p) => p.id));
+      for (const project of data.projects) {
+        await putProject(project.id, projectFiles(project.id, data.nodes));
       }
+      if (knownIds !== null) {
+        for (const id of knownIds) {
+          if (!current.has(id)) await deleteProjectOnServer(id);
+        }
+      }
+      knownIds = current;
     },
   };
 }
@@ -392,11 +445,12 @@ export class ServerProjectStore extends VfsProjectStore {
     opts: {
       now?: () => string;
       fetch?: FetchLike;
+      getUser?: () => string;
       onPersisted?: (bytes: number) => void;
     } = {},
   ) {
     super(
-      httpBackend(baseUrl, opts.fetch),
+      httpBackend(baseUrl, opts.fetch, opts.getUser),
       opts.now,
       undefined,
       opts.onPersisted,

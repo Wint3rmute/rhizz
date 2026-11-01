@@ -499,6 +499,31 @@ pub enum ProjectError {
     Io(#[from] std::io::Error),
 }
 
+/// Resolves `project_id` to its directory inside `data_dir`, without judging
+/// whether it holds a model source.
+///
+/// Refuses ids that are not valid addresses and roots that are missing,
+/// symlinks, or not directories. Unlike [`resolve_project`], a directory
+/// without a model source still resolves — locks, versions, and writes must
+/// work on project shells that do not resolve yet (a just-created project
+/// has no files at all).
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for non-address ids and missing or
+/// non-directory roots, and [`ProjectError::Io`] when the filesystem cannot
+/// be inspected.
+pub fn resolve_project_dir(data_dir: &Path, project_id: &str) -> Result<PathBuf, ProjectError> {
+    if !is_address(project_id) {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    }
+    let root = data_dir.join(project_id);
+    match fs::symlink_metadata(&root) {
+        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => Ok(root),
+        Ok(_) | Err(_) => Err(ProjectError::Unknown(project_id.to_owned())),
+    }
+}
+
 /// Resolves `project_id` to its directory inside `data_dir`.
 ///
 /// Refuses ids that are not valid addresses (which would otherwise be path
@@ -633,25 +658,10 @@ pub fn file_version(content: &str) -> String {
     hex_digest(&Sha256::digest(content.as_bytes()))
 }
 
-/// The content-hash version of a whole project: SHA-256 over every file's
-/// project-relative path and content, sorted by path.
-///
-/// Watchers poll this to follow the editor: any outside edit (git, a text
-/// editor on the data dir) flips it, while a content-preserving rewrite
-/// leaves it unchanged. Hidden entries and symlinks are excluded, exactly as
-/// the VFS walker excludes them, so `.git` internals never move the version.
-///
-/// # Errors
-///
-/// Returns [`ProjectError::Unknown`] for unknown projects and
-/// [`ProjectError::Io`] when the project directory cannot be walked.
-pub fn project_version(data_dir: &Path, project_id: &str) -> Result<String, ProjectError> {
+/// Hashes walked entries into the project version: SHA-256 over every
+/// file's project-relative path and content, sorted by path.
+fn hash_found_entries(project_id: &str, found: &[Found]) -> String {
     use sha2::{Digest, Sha256};
-
-    let found = collect_project_entries(data_dir, project_id).map_err(ProjectError::Io)?;
-    let Some(found) = found else {
-        return Err(ProjectError::Unknown(project_id.to_owned()));
-    };
 
     let mut files: Vec<(&str, &str)> = found
         .iter()
@@ -671,15 +681,39 @@ pub fn project_version(data_dir: &Path, project_id: &str) -> Result<String, Proj
         hasher.update(content.as_bytes());
         hasher.update([0u8]);
     }
-    Ok(hex_digest(&hasher.finalize()))
+    hex_digest(&hasher.finalize())
 }
 
-/// Walks `project_id`'s directory and returns its entries.
+/// The content-hash version of a whole project: SHA-256 over every file's
+/// project-relative path and content, sorted by path.
 ///
-/// Returns `None` when it is not a project at all: missing, not an address,
-/// a symlink, or holding no model source. Mirrors `load_vfs`'s discovery
-/// rules one-to-one.
-fn collect_project_entries(
+/// Watchers poll this to follow the editor: any outside edit (git, a text
+/// editor on the data dir) flips it, while a content-preserving rewrite
+/// leaves it unchanged. Hidden entries and symlinks are excluded, exactly as
+/// the VFS walker excludes them, so `.git` internals never move the version.
+/// A directory without a model source still has a version (possibly of
+/// nothing at all) — versions must work on project shells that do not
+/// resolve yet.
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for non-address ids and missing or
+/// non-directory roots, and [`ProjectError::Io`] when the project directory
+/// cannot be walked.
+pub fn project_version(data_dir: &Path, project_id: &str) -> Result<String, ProjectError> {
+    let found = collect_dir_entries(data_dir, project_id).map_err(ProjectError::Io)?;
+    let Some(found) = found else {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    };
+    Ok(hash_found_entries(project_id, &found))
+}
+
+/// Walks `project_id`'s directory and returns its entries, without judging
+/// whether it is a project at all: missing, not an address, a symlink, or
+/// not a directory yields `None`. Unlike [`collect_project_entries`], a
+/// directory without a model source still yields its entries — writes and
+/// version checks must work on project shells that do not resolve yet.
+fn collect_dir_entries(
     data_dir: &Path,
     project_id: &str,
 ) -> Result<Option<Vec<Found>>, std::io::Error> {
@@ -697,6 +731,21 @@ fn collect_project_entries(
     let mut found = Vec::new();
     let mut stats = (i64::MAX, i64::MIN);
     walk_project(project_id, &dir, Path::new(""), &mut found, &mut stats)?;
+    Ok(Some(found))
+}
+
+/// Walks `project_id`'s directory and returns its entries.
+///
+/// Returns `None` when it is not a project at all: missing, not an address,
+/// a symlink, or holding no model source. Mirrors `load_vfs`'s discovery
+/// rules one-to-one.
+fn collect_project_entries(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<Found>>, std::io::Error> {
+    let Some(found) = collect_dir_entries(data_dir, project_id)? else {
+        return Ok(None);
+    };
     if !has_model_source(project_id, &found) {
         return Ok(None);
     }
@@ -1122,6 +1171,12 @@ pub enum MutateProjectError {
     /// No project with this id.
     #[error("unknown project `{0}`")]
     Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project is locked by `{holder}`")]
+    Locked {
+        /// The username holding the project.
+        holder: String,
+    },
     /// The filesystem refused to read or write.
     #[error("{0}")]
     Io(#[from] std::io::Error),
@@ -1138,11 +1193,13 @@ pub enum MutateProjectError {
 /// Applies one [`rhizz_core::mutation::ModelOp`] to a project's single
 /// primary model file (`system.hcl`, falling back to `main.hcl`).
 ///
-/// The file is read, passed through `rhizz_core::mutate_to_hcl`, and on
+/// The project lock is taken first (free projects are auto-acquired by the
+/// writer; held-by-other is refused with [`MutateProjectError::Locked`]),
+/// then the file is read, passed through `rhizz_core::mutate_to_hcl`, and on
 /// success the canonical HCL is written back through `write_atomic`. On
 /// refusal — a guard refusal (`applied: false`) or resolver diagnostics —
 /// the file is left untouched and the diagnostics are returned for the
-/// caller to report.
+/// caller to report. A successful write resets the lock's idle timer.
 ///
 /// Confinement mirrors the read-only tools: the project is resolved with
 /// [`resolve_project`] and the primary file with [`resolve_confined_path`],
@@ -1152,18 +1209,27 @@ pub enum MutateProjectError {
 /// # Errors
 ///
 /// Returns [`MutateProjectError::Unknown`] for unknown projects,
+/// [`MutateProjectError::Locked`] when someone else holds the lock,
 /// [`MutateProjectError::Io`] when the filesystem fails,
 /// [`MutateProjectError::Refused`] with the resolver diagnostics, and
 /// [`MutateProjectError::NotApplied`] for guard refusals.
 pub fn mutate_project(
     data_dir: &Path,
+    locks: &crate::locks::LockManager,
     project_id: &str,
+    user: &str,
     op: &rhizz_core::mutation::ModelOp,
 ) -> Result<rhizz_core::mutation::MutationResult, MutateProjectError> {
     let root = resolve_project(data_dir, project_id).map_err(|e| match e {
         ProjectError::Unknown(id) => MutateProjectError::Unknown(id),
         ProjectError::Io(err) => MutateProjectError::Io(err),
     })?;
+    match locks.acquire(project_id, user) {
+        crate::locks::AcquireOutcome::Acquired | crate::locks::AcquireOutcome::Renewed => {}
+        crate::locks::AcquireOutcome::Refused { holder } => {
+            return Err(MutateProjectError::Locked { holder });
+        }
+    }
 
     let mut primary: Option<(PathBuf, String)> = None;
     for candidate in ["system.hcl", "main.hcl"] {
@@ -1197,11 +1263,244 @@ pub fn mutate_project(
                 }
                 SaveVfsError::Io(err) => MutateProjectError::Io(err),
             })?;
+            // The model changed: the idle timer restarts. (Always held here —
+            // the acquire above succeeded.)
+            let _ = locks.note_edit(project_id, user);
             Ok(result)
         }
         Ok(_) => Err(MutateProjectError::NotApplied),
         Err(diagnostics) => Err(MutateProjectError::Refused(diagnostics)),
     }
+}
+
+/// One entry of a per-project write: `content` set means a file, absent
+/// means a directory. Paths are project-relative (`system.hcl`,
+/// `views/main.hcl`).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ProjectFileJson {
+    /// The project-relative path of the file or directory.
+    pub path: String,
+    /// The file content, or `None` for a directory.
+    #[serde(default)]
+    pub content: Option<String>,
+}
+
+/// Why a per-project write was not persisted. Every variant leaves the
+/// project exactly as it was.
+#[derive(Debug, Error)]
+pub enum WriteProjectError {
+    /// No project with this id (and it could not be created from the
+    /// payload): unknown, not a valid address, or not a directory.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project `{project}` is locked by `{holder}`")]
+    Locked {
+        /// The project that was written.
+        project: String,
+        /// The username holding the project.
+        holder: String,
+    },
+    /// `base_version` did not match the version on disk; carries the current
+    /// version so the client can re-read and retry.
+    #[error("version mismatch: project changed (current version {current})")]
+    StaleVersion {
+        /// The version on disk.
+        current: String,
+    },
+    /// A payload entry is not a writable path (absolute, escaping, hidden,
+    /// duplicate, or a file whose parent directory is not listed).
+    #[error("{0}")]
+    Malformed(String),
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Serializes per-project writes within this process, so two writes sent
+/// with the same base version cannot both pass the check. The project lock
+/// (proposal 0004) is the outer admission check; this is the inner
+/// compare-and-swap, mirroring [`MODEL_WRITE_LOCK`] and [`DOC_EDIT_LOCK`].
+static PROJECT_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Replaces one project's directory tree with `files`, creating the project
+/// when it does not exist yet.
+///
+/// The project lock is taken first (free projects are auto-acquired by the
+/// writer; held-by-other is refused with [`WriteProjectError::Locked`]).
+/// Then, under one process-local lock, the on-disk version is compared
+/// against `base_version` (a mismatch is refused with
+/// [`WriteProjectError::StaleVersion` carrying the current version; `None`
+/// skips the check), the payload is validated, and the directory is brought
+/// to exactly the described state through `write_atomic` — entries absent
+/// from the payload are deleted. A successful write resets the lock's idle
+/// timer and the new version is returned for chaining.
+///
+/// Only this project's directory is ever touched: sibling projects (and
+/// non-project directories, hidden entries, and symlinks) are never listed,
+/// written, or deleted. Parent directories of files must be listed as
+/// directory entries, mirroring how whole-VFS payloads carry them.
+///
+/// # Errors
+///
+/// Returns [`WriteProjectError::Unknown`] for non-address ids and roots that
+/// cannot become a project directory, [`WriteProjectError::Locked`] when
+/// someone else holds the lock, [`WriteProjectError::StaleVersion`] on a
+/// base-version mismatch, [`WriteProjectError::Malformed`] for unwritable
+/// paths, and [`WriteProjectError::Io`] when the filesystem fails.
+pub fn write_project(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+    base_version: Option<&str>,
+    files: &[ProjectFileJson],
+) -> Result<String, WriteProjectError> {
+    use crate::locks::AcquireOutcome;
+
+    if !is_address(project_id) {
+        return Err(WriteProjectError::Unknown(project_id.to_owned()));
+    }
+    let _guard = PROJECT_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(WriteProjectError::Locked {
+                project: project_id.to_owned(),
+                holder,
+            });
+        }
+    }
+
+    let root = data_dir.join(project_id);
+    match fs::symlink_metadata(&root) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => {
+            return Err(WriteProjectError::Unknown(project_id.to_owned()));
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(&root)?;
+        }
+        Err(err) => return Err(WriteProjectError::Io(err)),
+    }
+
+    if let Some(expected) = base_version {
+        let current = hash_dir_version(data_dir, project_id)?;
+        if current != expected {
+            return Err(WriteProjectError::StaleVersion { current });
+        }
+    }
+
+    let plan = plan_project_files(&root, files)?;
+
+    apply_plan(&root, &plan).map_err(|err| match err {
+        SaveVfsError::Malformed(message) => WriteProjectError::Malformed(message),
+        SaveVfsError::Io(err) => WriteProjectError::Io(err),
+    })?;
+
+    // The tree changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
+    hash_dir_version(data_dir, project_id)
+}
+
+/// Validates per-project write entries into the tree the project directory
+/// should hold. Paths resolve against `root` with the same confinement as
+/// the read-only tools, duplicates are refused, and every file's ancestors
+/// must be listed as directories.
+///
+/// # Errors
+///
+/// Returns [`WriteProjectError::Malformed`] for unwritable paths.
+fn plan_project_files(
+    root: &Path,
+    files: &[ProjectFileJson],
+) -> Result<ProjectPlan, WriteProjectError> {
+    let mut plan: ProjectPlan = HashMap::new();
+    for file in files {
+        let relative = Path::new(&file.path);
+        let absolute = resolve_confined_path(root, relative).map_err(|err| match err {
+            ConfinedPathError::Outside => WriteProjectError::Malformed(format!(
+                "path `{}` must be relative and stay inside the project",
+                file.path
+            )),
+            ConfinedPathError::Excluded => WriteProjectError::Malformed(format!(
+                "path `{}` traverses a hidden entry or symlink",
+                file.path
+            )),
+        })?;
+        let relative = absolute
+            .strip_prefix(root)
+            .map(Path::to_path_buf)
+            .map_err(|_| {
+                WriteProjectError::Malformed(format!(
+                    "path `{}` is not inside the project",
+                    file.path
+                ))
+            })?;
+        if relative.as_os_str().is_empty() {
+            return Err(WriteProjectError::Malformed(
+                "path must not be the project root itself".to_owned(),
+            ));
+        }
+        let wanted = file
+            .content
+            .as_ref()
+            .map_or(Wanted::Dir, |content| Wanted::File(content.clone()));
+        if plan.insert(relative.clone(), wanted).is_some() {
+            return Err(WriteProjectError::Malformed(format!(
+                "two entries resolve to the same path `{}`",
+                relative.display()
+            )));
+        }
+    }
+    // Every file's parents must be listed as directories, so a missing
+    // parent is the client's fault (400) rather than a filesystem failure.
+    let mut ordered: Vec<&PathBuf> = plan.keys().collect();
+    ordered.sort();
+    for path in ordered {
+        if !matches!(plan.get(path), Some(Wanted::File(_))) {
+            continue;
+        }
+        let mut parent = path.parent();
+        while let Some(dir) = parent {
+            if dir.as_os_str().is_empty() {
+                break;
+            }
+            match plan.get(dir) {
+                Some(Wanted::Dir) => {}
+                Some(Wanted::File(_)) => {
+                    return Err(WriteProjectError::Malformed(format!(
+                        "parent `{}` of `{}` is a file, not a directory",
+                        dir.display(),
+                        path.display()
+                    )));
+                }
+                None => {
+                    return Err(WriteProjectError::Malformed(format!(
+                        "file `{}` has no parent directory entry for `{}`",
+                        path.display(),
+                        dir.display()
+                    )));
+                }
+            }
+            parent = dir.parent();
+        }
+    }
+    Ok(plan)
+}
+
+/// The version of whatever is on disk for `project_id`, without judging
+/// whether it is a project: the hash over its walked entries, or over an
+/// empty set when the directory does not exist yet.
+fn hash_dir_version(data_dir: &Path, project_id: &str) -> Result<String, WriteProjectError> {
+    let found = collect_dir_entries(data_dir, project_id).map_err(WriteProjectError::Io)?;
+    let empty: Vec<Found> = Vec::new();
+    let found = found.as_ref().unwrap_or(&empty);
+    Ok(hash_found_entries(project_id, found))
 }
 
 /// Serializes whole-model overwrites within this process, so two overwrites
@@ -2493,7 +2792,7 @@ mod tests {
     }
 
     #[test]
-    fn project_version_is_unknown_for_non_projects() {
+    fn project_version_is_unknown_for_missing_or_bad_addresses() {
         let dir = data_dir_with_drone();
         assert!(matches!(
             project_version(dir.path(), "ghost"),
@@ -2503,11 +2802,298 @@ mod tests {
             project_version(dir.path(), "../escape"),
             Err(ProjectError::Unknown(_))
         ));
+    }
+
+    #[test]
+    fn project_version_covers_directories_without_a_model_source() {
+        // Versions must work on project shells that do not resolve yet: a
+        // just-created project has no files at all, and locks, heartbeats,
+        // and writes all key off the version.
+        let dir = data_dir_with_drone();
         write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        fs::create_dir_all(dir.path().join("empty")).unwrap();
+
+        let notes = project_version(dir.path(), "notes").unwrap();
+        let empty = project_version(dir.path(), "empty").unwrap();
+        assert_eq!(notes.len(), 64);
+        assert_eq!(empty.len(), 64);
+        assert_ne!(notes, empty);
+        assert_ne!(empty, project_version(dir.path(), "drone").unwrap());
+    }
+
+    // ── Per-project writes ─────────────────────────────────────────────
+
+    /// One `write_project` entry: `None` content means a directory.
+    fn project_file(path: &str, content: Option<&str>) -> ProjectFileJson {
+        ProjectFileJson {
+            path: path.to_owned(),
+            content: content.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn write_project_persists_and_returns_the_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let version = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            None,
+            &[
+                project_file("system.hcl", Some("system \"drone\" {}\n")),
+                project_file("views", None),
+                project_file("views/main.hcl", Some("view \"main\" {}\n")),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(version.len(), 64);
+        assert_eq!(version, project_version(dir.path(), "drone").unwrap());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"drone\" {}\n"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap(),
+            "view \"main\" {}\n"
+        );
+        // The write acquired the lock for the writer.
+        assert_eq!(
+            locks.get("drone").expect("lock must be held").holder,
+            "alice"
+        );
+    }
+
+    #[test]
+    fn write_project_creates_an_empty_project_shell() {
+        // `createProject` lands as a blob entry with no nodes: the write
+        // creates an empty directory, which stays invisible to the project
+        // listing until a model source lands in it.
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let version = write_project(dir.path(), &locks, "drone", "alice", None, &[]).unwrap();
+
+        assert!(dir.path().join("drone").is_dir());
+        assert_eq!(version, project_version(dir.path(), "drone").unwrap());
+        assert!(
+            load_vfs(dir.path()).unwrap()["projects"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn write_project_refuses_a_strangers_write_byte_identical() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let before = fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+
         assert!(matches!(
-            project_version(dir.path(), "notes"),
-            Err(ProjectError::Unknown(_))
+            locks.acquire("drone", "alice"),
+            crate::locks::AcquireOutcome::Acquired
         ));
+        let refused = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "bob",
+            None,
+            &[project_file("system.hcl", Some("system \"hijacked\" {}\n"))],
+        );
+        assert!(matches!(
+            refused,
+            Err(WriteProjectError::Locked { ref holder, .. }) if holder == "alice"
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "a refused write must leave the file untouched"
+        );
+    }
+
+    #[test]
+    fn write_project_refuses_a_stale_base_version() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let stale = project_version(dir.path(), "drone").unwrap();
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"edited-elsewhere\" {}\n",
+        );
+        let current = project_version(dir.path(), "drone").unwrap();
+
+        let refused = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            Some(&stale),
+            &[project_file("system.hcl", Some("system \"mine\" {}\n"))],
+        );
+        assert!(matches!(
+            refused,
+            Err(WriteProjectError::StaleVersion { current: ref on_disk }) if on_disk == &current
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"edited-elsewhere\" {}\n"
+        );
+
+        // The current version applies — and the holder keeps the lock, since
+        // the refused write never gave it away.
+        let version = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            Some(&current),
+            &[project_file("system.hcl", Some("system \"mine\" {}\n"))],
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"mine\" {}\n"
+        );
+        assert_eq!(version, project_version(dir.path(), "drone").unwrap());
+    }
+
+    #[test]
+    fn write_project_only_manages_its_own_project() {
+        // The whole-VFS PUT is gone: writing one project must neither touch
+        // its siblings nor anything that is not a project.
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("web-app/system.hcl"),
+            "system \"web\" {}\n",
+        );
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        write_file(&dir.path().join("README.md"), "readme\n");
+        let web_before = fs::read_to_string(dir.path().join("web-app/system.hcl")).unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        // A payload that drops every file still only manages `drone`.
+        write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            None,
+            &[project_file(
+                "system.hcl",
+                Some("system \"quadcopter\" {}\n"),
+            )],
+        )
+        .unwrap();
+
+        assert!(!dir.path().join("drone/views").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("web-app/system.hcl")).unwrap(),
+            web_before
+        );
+        assert!(dir.path().join("notes/scratch.md").exists());
+        assert!(dir.path().join("README.md").exists());
+        assert_eq!(
+            project_ids(&load_vfs(dir.path()).unwrap()),
+            vec!["drone", "web-app"]
+        );
+    }
+
+    #[test]
+    fn write_project_rejects_unwritable_paths() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let before = fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+
+        for files in [
+            vec![project_file("../escape.hcl", Some("x"))],
+            vec![project_file("/etc/passwd", Some("x"))],
+            vec![project_file("views/.hidden", Some("x"))],
+            // A file whose parent directory is not listed.
+            vec![project_file("views/main.hcl", Some("x"))],
+            // A parent that is a file, not a directory.
+            vec![
+                project_file("views", Some("x")),
+                project_file("views/main.hcl", Some("y")),
+            ],
+            // Two entries for one path.
+            vec![
+                project_file("dup.hcl", Some("x")),
+                project_file("dup.hcl", Some("y")),
+            ],
+            // The project root itself.
+            vec![project_file("", Some("x"))],
+        ] {
+            assert!(
+                matches!(
+                    write_project(dir.path(), &locks, "drone", "alice", None, &files),
+                    Err(WriteProjectError::Malformed(_))
+                ),
+                "must be refused: {files:?}"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "refused writes must leave the tree untouched"
+        );
+    }
+
+    #[test]
+    fn write_project_is_unknown_for_bad_addresses() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        assert!(matches!(
+            write_project(
+                dir.path(),
+                &locks,
+                "../escape",
+                "alice",
+                None,
+                &[project_file("system.hcl", Some("x"))]
+            ),
+            Err(WriteProjectError::Unknown(_))
+        ));
+        assert!(!dir.path().parent().unwrap().join("escape").exists());
+    }
+
+    #[test]
+    fn mutate_project_refuses_when_locked_by_someone_else() {
+        use rhizz_core::mutation::ModelOp;
+
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let new_system = |label: &str| ModelOp::AddSystem {
+            label: label.to_owned(),
+            full_name: String::new(),
+        };
+
+        // Alice's edit acquires the project lock and applies …
+        let applied = mutate_project(dir.path(), &locks, "drone", "alice", &new_system("extra"))
+            .expect("a free project takes the edit");
+        assert!(applied.applied);
+        assert_eq!(
+            locks.get("drone").expect("lock must be held").holder,
+            "alice"
+        );
+
+        // … so Bob is refused with Alice named, and the file is untouched
+        // since Alice's write.
+        let since_alice = fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let refused = mutate_project(dir.path(), &locks, "drone", "bob", &new_system("another"));
+        assert!(matches!(
+            refused,
+            Err(MutateProjectError::Locked { ref holder }) if holder == "alice"
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            since_alice,
+            "a refused mutation must leave the file untouched"
+        );
     }
 
     #[test]
