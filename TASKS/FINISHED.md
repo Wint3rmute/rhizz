@@ -4,6 +4,34 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Fix component instance rename refusing when connections exist
+
+`rename` in `crates/rhizz-core/src/mutation.rs` only rewrote the instance
+label and left `connection.from/to` (and `realized_by`) pointing at the old
+name, so `mutate_to_hcl` re-resolve failed with `E011/E002: connection
+\`link\` references undefined component \`a\`` and the whole op was refused
+(file untouched) — exactly the reported `test-connection … undefined
+component test` popup.
+
+Fix: `rename` now rewrites connections in the renamed scope (relative
+`a/p`, `./a/p`, absolute `/demo/a/p`, bare `a`; `realized_by` with a
+component prefix, bare connection labels untouched) plus ancestor system
+connections that reach a nested instance via `outer/inner/p` or
+`/demo/outer/inner/p`. `..`-prefixed paths (parent, not child) never match.
+
+Tests (red first, then green): `rename_rewrites_connections_in_same_scope`,
+`rename_rewrites_to_side_and_absolute_and_dotslash` (table: relative /
+absolute / `./` + to-side rename), `rename_rewrites_nested_ancestor_endpoints`
+(`demo/outer/inner` → `z` rewrites system `outer/inner/p`), and
+`rename_rewrites_realized_by_through_instance` (`outer/sub` → `z/sub`).
+
+Validation: `cargo test -p rhizz-core` green (298 passed), `just lint`
+(clippy / cargo doc / eslint / svelte-check) clean, `just test` green (Rust +
+1231 vitest + 161 e2e), `just build` green.
+Branch: `fix/component-instance-rename`.
+
+---
+
 ## Task <N> — Deduplicate and consolidate Rust unit tests
 
 Removed 22 redundant Rust tests and merged them into 5 table-driven loop

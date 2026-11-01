@@ -1161,10 +1161,301 @@ fn rename(raw: &mut RawFile, path: &str, new_label: &str) -> Result<ApplyOutcome
         return Ok(idle());
     };
     new_label.clone_into(&mut entry.label);
+    // Connections name instances textually (`a/p`, `/demo/a/p`, …), so a
+    // rename must rewrite the endpoints in this scope or the re-resolve
+    // refuses the whole op with E002/E011 (undefined component).
+    rewrite_connections_for_rename(raw, scope, old_label, new_label)?;
+    // Ancestor system connections can reach the renamed instance through a
+    // longer path (`outer/inner/p`); rewrite those too.
+    rewrite_ancestor_connections_for_rename(raw, &parent_path, old_label, new_label);
     Ok(applied(vec![LoggedAction::RenameComponent {
         path: path.to_owned(),
         new_label: new_label.to_owned(),
     }]))
+}
+
+/// Rewrite one endpoint that names `old` as its first component segment.
+/// Handles relative (`a/p`, `a/b/p`, bare `a`), `./`-prefixed (`./a/p`),
+/// and absolute (`/sys/a/p`) spellings. `..`-prefixed paths name the parent,
+/// not a child, so they never match.
+fn rewrite_endpoint_for_rename(
+    endpoint: &str,
+    scope_system: Option<&str>,
+    old: &str,
+    new: &str,
+) -> Option<String> {
+    let ep = endpoint.trim();
+    if ep.is_empty() {
+        return None;
+    }
+    if ep.starts_with('/') {
+        let segments: Vec<&str> = ep.split('/').filter(|s| !s.is_empty()).collect();
+        let sys = scope_system?;
+        if segments.len() >= 2 && segments.first() == Some(&sys) && segments.get(1) == Some(&old) {
+            let mut owned: Vec<String> = segments.iter().map(|s| (*s).to_owned()).collect();
+            if let Some(slot) = owned.get_mut(1) {
+                new.clone_into(slot);
+            }
+            return Some(format!("/{}", owned.join("/")));
+        }
+        return None;
+    }
+    if let Some(rest) = ep.strip_prefix("./") {
+        if rest == old {
+            return Some(format!("./{new}"));
+        }
+        if let Some(suffix) = rest.strip_prefix(&format!("{old}/")) {
+            return Some(format!("./{new}/{suffix}"));
+        }
+        return None;
+    }
+    if ep == old {
+        return Some(new.to_owned());
+    }
+    if let Some(suffix) = ep.strip_prefix(&format!("{old}/")) {
+        return Some(format!("{new}/{suffix}"));
+    }
+    None
+}
+
+/// Rewrite one `realized_by` entry that routes through `old`. Unlike
+/// endpoints, a bare entry names a connection (not an instance), so only
+/// entries with a component prefix (`a/conn`, `./a/conn`, `/sys/a/conn`)
+/// can match.
+fn rewrite_realized_by_entry_for_rename(
+    entry: &str,
+    scope_system: Option<&str>,
+    old: &str,
+    new: &str,
+) -> Option<String> {
+    let ep = entry.trim();
+    if ep.is_empty() || !ep.contains('/') {
+        return None;
+    }
+    if ep.starts_with('/') {
+        let segments: Vec<&str> = ep.split('/').filter(|s| !s.is_empty()).collect();
+        let sys = scope_system?;
+        // `/sys/old/conn` or deeper; last segment is always the connection.
+        if segments.len() >= 3 && segments.first() == Some(&sys) && segments.get(1) == Some(&old) {
+            let mut owned: Vec<String> = segments.iter().map(|s| (*s).to_owned()).collect();
+            if let Some(slot) = owned.get_mut(1) {
+                new.clone_into(slot);
+            }
+            return Some(format!("/{}", owned.join("/")));
+        }
+        return None;
+    }
+    if let Some(rest) = ep.strip_prefix("./") {
+        if let Some(suffix) = rest.strip_prefix(&format!("{old}/")) {
+            return Some(format!("./{new}/{suffix}"));
+        }
+        return None;
+    }
+    if ep.starts_with("../") || ep == ".." || ep == "." {
+        return None;
+    }
+    if let Some(suffix) = ep.strip_prefix(&format!("{old}/")) {
+        return Some(format!("{new}/{suffix}"));
+    }
+    None
+}
+
+/// Rewrite `from`/`to`/`realized_by` in the renamed instance's own scope.
+fn rewrite_connections_for_rename(
+    raw: &mut RawFile,
+    scope: Scope,
+    old: &str,
+    new: &str,
+) -> Result<(), MutationError> {
+    let scope_system = match scope {
+        Scope::System(i) => raw.systems.get(i).map(|s| s.label.clone()),
+        Scope::Definition(_) => None,
+    };
+    let connections = scope_connections_mut(raw, scope)?;
+    for connection in &mut *connections {
+        if let Some(from) = connection.inner.from.clone()
+            && let Some(rewritten) =
+                rewrite_endpoint_for_rename(&from, scope_system.as_deref(), old, new)
+        {
+            connection.inner.from = Some(rewritten);
+        }
+        if let Some(to) = connection.inner.to.clone()
+            && let Some(rewritten) =
+                rewrite_endpoint_for_rename(&to, scope_system.as_deref(), old, new)
+        {
+            connection.inner.to = Some(rewritten);
+        }
+        for entry in &mut connection.inner.realized_by {
+            if let Some(rewritten) =
+                rewrite_realized_by_entry_for_rename(entry, scope_system.as_deref(), old, new)
+            {
+                *entry = rewritten;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Rewrite ancestor system connections that reach the renamed instance via a
+/// longer path. E.g. renaming `demo/outer/inner` to `z` rewrites system
+/// `demo` endpoints `outer/inner/p` and `/demo/outer/inner/p` to
+/// `outer/z/p` and `/demo/outer/z/p`.
+fn rewrite_ancestor_connections_for_rename(
+    raw: &mut RawFile,
+    parent_path: &str,
+    old: &str,
+    new: &str,
+) {
+    let parent_segments: Vec<&str> = parent_path.split('/').filter(|s| !s.is_empty()).collect();
+    let Some((system_label, parent_rest)) = parent_segments.split_first() else {
+        return;
+    };
+    // Parent is a bare definition (no system prefix): no ancestor system path
+    // to rewrite. Shared-definition siblings across systems stay as-is.
+    let Some(system_index) = find_system(raw, system_label) else {
+        return;
+    };
+    if parent_rest.is_empty() {
+        return;
+    }
+    let Some(system) = raw.systems.get_mut(system_index) else {
+        return;
+    };
+    for connection in &mut system.inner.connections {
+        for endpoint in [&mut connection.inner.from, &mut connection.inner.to] {
+            let Some(current) = endpoint.clone() else {
+                continue;
+            };
+            if let Some(rewritten) =
+                rewrite_nested_endpoint(&current, system_label, parent_rest, old, new)
+            {
+                *endpoint = Some(rewritten);
+            }
+        }
+        for entry in &mut connection.inner.realized_by {
+            if let Some(rewritten) =
+                rewrite_nested_realized_by(entry, system_label, parent_rest, old, new)
+            {
+                *entry = rewritten;
+            }
+        }
+    }
+}
+
+/// Rewrite `outer/inner/p` (relative to the ancestor system) or
+/// `/sys/outer/inner/p` (absolute) when `parent_rest` is `["outer"]` and
+/// `old` is `"inner"`.
+fn rewrite_nested_endpoint(
+    endpoint: &str,
+    system_label: &str,
+    parent_rest: &[&str],
+    old: &str,
+    new: &str,
+) -> Option<String> {
+    let ep = endpoint.trim();
+    if ep.is_empty() {
+        return None;
+    }
+    if ep.starts_with('/') {
+        let segments: Vec<&str> = ep.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.first() != Some(&system_label) {
+            return None;
+        }
+        let after_system: &[&str] = segments.get(1..)?;
+        let needed = parent_rest.len().saturating_add(2);
+        if after_system.len() < needed {
+            return None;
+        }
+        if after_system.get(..parent_rest.len()) != Some(parent_rest) {
+            return None;
+        }
+        if after_system.get(parent_rest.len()) != Some(&old) {
+            return None;
+        }
+        let mut owned: Vec<String> = segments.iter().map(|s| (*s).to_owned()).collect();
+        let idx = 1_usize.saturating_add(parent_rest.len());
+        if let Some(slot) = owned.get_mut(idx) {
+            new.clone_into(slot);
+        }
+        return Some(format!("/{}", owned.join("/")));
+    }
+    if ep.starts_with("./") || ep.starts_with("../") || ep == "." || ep == ".." {
+        return None;
+    }
+    let segments: Vec<&str> = ep.split('/').collect();
+    let needed = parent_rest.len().saturating_add(2);
+    if segments.len() < needed {
+        return None;
+    }
+    if segments.get(..parent_rest.len()) != Some(parent_rest) {
+        return None;
+    }
+    if segments.get(parent_rest.len()) != Some(&old) {
+        return None;
+    }
+    let mut owned: Vec<String> = segments.iter().map(|s| (*s).to_owned()).collect();
+    if let Some(slot) = owned.get_mut(parent_rest.len()) {
+        new.clone_into(slot);
+    }
+    Some(owned.join("/"))
+}
+
+/// Rewrite `outer/inner-conn` style `realized_by` entries in ancestor systems.
+/// The last segment is always the connection label, so at least one segment
+/// must remain after the renamed instance.
+fn rewrite_nested_realized_by(
+    entry: &str,
+    system_label: &str,
+    parent_rest: &[&str],
+    old: &str,
+    new: &str,
+) -> Option<String> {
+    let ep = entry.trim();
+    if ep.is_empty() || !ep.contains('/') {
+        return None;
+    }
+    if ep.starts_with('/') {
+        let segments: Vec<&str> = ep.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.first() != Some(&system_label) {
+            return None;
+        }
+        let after_system: &[&str] = segments.get(1..)?;
+        let needed = parent_rest.len().saturating_add(2);
+        if after_system.len() < needed {
+            return None;
+        }
+        if after_system.get(..parent_rest.len()) != Some(parent_rest) {
+            return None;
+        }
+        if after_system.get(parent_rest.len()) != Some(&old) {
+            return None;
+        }
+        let mut owned: Vec<String> = segments.iter().map(|s| (*s).to_owned()).collect();
+        let idx = 1_usize.saturating_add(parent_rest.len());
+        if let Some(slot) = owned.get_mut(idx) {
+            new.clone_into(slot);
+        }
+        return Some(format!("/{}", owned.join("/")));
+    }
+    if ep.starts_with("./") || ep.starts_with("../") || ep == "." || ep == ".." {
+        return None;
+    }
+    let segments: Vec<&str> = ep.split('/').collect();
+    let needed = parent_rest.len().saturating_add(2);
+    if segments.len() < needed {
+        return None;
+    }
+    if segments.get(..parent_rest.len()) != Some(parent_rest) {
+        return None;
+    }
+    if segments.get(parent_rest.len()) != Some(&old) {
+        return None;
+    }
+    let mut owned: Vec<String> = segments.iter().map(|s| (*s).to_owned()).collect();
+    if let Some(slot) = owned.get_mut(parent_rest.len()) {
+        new.clone_into(slot);
+    }
+    Some(owned.join("/"))
 }
 
 fn update(
@@ -1909,6 +2200,286 @@ mod tests {
         let hcl = renamed.hcl.expect("hcl");
         assert!(hcl.contains(r#"instance "z" { source = "c" }"#));
         assert_eq!(renamed.actions.len(), 1);
+    }
+
+    #[test]
+    fn rename_rewrites_connections_in_same_scope() {
+        let hcl = mutate(
+            "",
+            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"b","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"a/p","to":"b/p"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+
+        let renamed = mutate(
+            &hcl,
+            r#"{"kind":"rename_component","path":"demo/a","newLabel":"z"}"#,
+        )
+        .expect("rename with connections must apply");
+        assert!(renamed.applied);
+        let hcl = renamed.hcl.expect("hcl");
+        assert!(
+            hcl.contains(r#"instance "z" { source = "cpu" }"#),
+            "hcl:\n{hcl}"
+        );
+        // Serialization emits absolute endpoint paths (spacing is aligned).
+        assert!(hcl.contains("/demo/z/p"), "hcl:\n{hcl}");
+        assert!(hcl.contains("/demo/b/p"), "hcl:\n{hcl}");
+        assert!(!hcl.contains("/demo/a/p"), "hcl:\n{hcl}");
+    }
+
+    #[test]
+    fn rename_rewrites_to_side_and_absolute_and_dotslash() {
+        // Table-driven: same setup, different `from` spellings + renaming the
+        // `to` side. Serialization is always absolute, so assertions check the
+        // absolute form.
+        let cases = [
+            ("a/p", "b/p", "demo/a", "z", "/demo/z/p", "/demo/b/p"),
+            (
+                "/demo/a/p",
+                "/demo/b/p",
+                "demo/a",
+                "z",
+                "/demo/z/p",
+                "/demo/b/p",
+            ),
+            ("./a/p", "./b/p", "demo/a", "z", "/demo/z/p", "/demo/b/p"),
+            ("a/p", "b/p", "demo/b", "y", "/demo/a/p", "/demo/y/p"),
+        ];
+        for (from, to, path, new_label, expect_from, expect_to) in cases {
+            let hcl = mutate(
+                "",
+                r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
+            )
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+            let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
+                .expect("ok")
+                .hcl
+                .expect("hcl");
+            let hcl = mutate(
+                &hcl,
+                r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
+            )
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+            let hcl = mutate(
+                &hcl,
+                r#"{"kind":"add_instance","parentPath":"demo","label":"b","source":"cpu"}"#,
+            )
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+            let hcl = mutate(
+                &hcl,
+                &format!(
+                    r#"{{"kind":"add_connection","scopePath":"demo","label":"link","from":"{from}","to":"{to}"}}"#
+                ),
+            )
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+
+            let renamed = mutate(
+                &hcl,
+                &format!(
+                    r#"{{"kind":"rename_component","path":"{path}","newLabel":"{new_label}"}}"#
+                ),
+            )
+            .unwrap_or_else(|e| panic!("rename {path} -> {new_label} must apply: {e:?}"));
+            assert!(renamed.applied, "from {from} to {to}");
+            let hcl = renamed.hcl.expect("hcl");
+            assert!(hcl.contains(expect_from), "hcl:\n{hcl}");
+            assert!(hcl.contains(expect_to), "hcl:\n{hcl}");
+        }
+    }
+
+    #[test]
+    fn rename_rewrites_nested_ancestor_endpoints() {
+        // outer-def contains inner; system demo connects outer/inner/p.
+        // Renaming demo/outer/inner must rewrite the system connection.
+        let hcl = mutate(
+            "",
+            r#"{"kind":"add_component_definition","label":"inner-def","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_component_definition","label":"outer-def"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"outer-def","label":"inner","source":"inner-def"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"outer","source":"outer-def"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"other","source":"inner-def"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"outer/inner/p","to":"other/p"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+
+        let renamed = mutate(
+            &hcl,
+            r#"{"kind":"rename_component","path":"demo/outer/inner","newLabel":"z"}"#,
+        )
+        .expect("nested rename must apply");
+        assert!(renamed.applied);
+        let hcl = renamed.hcl.expect("hcl");
+        assert!(hcl.contains("/demo/outer/z/p"), "hcl:\n{hcl}");
+        assert!(!hcl.contains("outer/inner/p"), "hcl:\n{hcl}");
+    }
+
+    #[test]
+    fn rename_rewrites_realized_by_through_instance() {
+        // outer-def declares connection sub; system demo realizes top via
+        // outer/sub. Renaming outer must rewrite the realized_by entry.
+        let hcl = mutate(
+            "",
+            r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_component_definition","label":"outer-def"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"outer-def","label":"x","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"outer-def","label":"y","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_connection","scopePath":"outer-def","label":"sub","from":"x/p","to":"y/p"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
+            .expect("ok")
+            .hcl
+            .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"outer","source":"outer-def"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_instance","parentPath":"demo","label":"b","source":"cpu"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"add_connection","scopePath":"demo","label":"top","from":"a/p","to":"b/p"}"#,
+        )
+        .expect("ok")
+        .hcl
+        .expect("hcl");
+        // Attach realized_by via update_connection.
+        let hcl = mutate(
+            &hcl,
+            r#"{"kind":"update_connection","scopePath":"demo","label":"top","patch":{"realized_by":[{"scopePath":"demo/outer","label":"sub"}]}}"#,
+        )
+        .expect("realized_by attach must apply")
+        .hcl
+        .expect("hcl");
+        assert!(
+            hcl.contains("outer/sub") || hcl.contains("/demo/outer/sub"),
+            "hcl:\n{hcl}"
+        );
+
+        let renamed = mutate(
+            &hcl,
+            r#"{"kind":"rename_component","path":"demo/outer","newLabel":"z"}"#,
+        )
+        .expect("rename outer with realized_by must apply");
+        assert!(renamed.applied);
+        let hcl = renamed.hcl.expect("hcl");
+        assert!(
+            hcl.contains("z/sub") || hcl.contains("/demo/z/sub"),
+            "hcl:\n{hcl}"
+        );
+        assert!(!hcl.contains("outer/sub"), "hcl:\n{hcl}");
     }
 
     #[test]
