@@ -13,17 +13,8 @@ const meta = {
     layout: "fullscreen",
   },
   args: {
-    snapEnabled: false,
-    snapActive: false,
-    snapGridSize: SNAP_GRID_SIZE_OPTIONS[0],
-    snapGridSizeOptions: SNAP_GRID_SIZE_OPTIONS,
     gridVisible: true,
-    autoLayoutRunning: false,
-    onautolayout: () => {},
     onzoomtofill: () => {},
-    onresetview: () => {},
-    onaddcomponent: () => {},
-    onaddannotation: () => {},
   },
 } satisfies Meta<typeof DiagramToolbar>;
 
@@ -31,12 +22,27 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+const fullArgs = {
+  snapEnabled: false,
+  snapActive: false,
+  snapGridSize: SNAP_GRID_SIZE_OPTIONS[0],
+  snapGridSizeOptions: SNAP_GRID_SIZE_OPTIONS,
+  gridVisible: true,
+  autoLayoutRunning: false,
+  onautolayout: () => {},
+  onzoomtofill: () => {},
+  onresetview: () => {},
+  onaddcomponent: () => {},
+  onaddannotation: () => {},
+};
+
 export const Default: Story = {
-  args: {},
+  args: fullArgs,
 };
 
 export const SnapActive: Story = {
   args: {
+    ...fullArgs,
     snapEnabled: true,
     snapActive: true,
   },
@@ -44,8 +50,16 @@ export const SnapActive: Story = {
 
 export const AutoLayoutRunning: Story = {
   args: {
+    ...fullArgs,
     autoLayoutRunning: true,
   },
+};
+
+// The minimal toolbar re-used on explore/ and inventory/: only "Toggle Grid"
+// and "Zoom to Fill". Omitting the snap/auto-layout/reset/add callbacks
+// hides those buttons — this story locks that subset in (VRT).
+export const Minimal: Story = {
+  args: {},
 };
 
 // Constrains this story to a tablet-width viewport, unlike the other
@@ -55,7 +69,7 @@ export const AutoLayoutRunning: Story = {
 // caught the text-overflow/wrapping bug that only showed up once
 // deployed, not in a full-width story.
 export const NarrowCanvas: Story = {
-  args: {},
+  args: fullArgs,
   globals: {
     viewport: { value: "tablet" },
   },

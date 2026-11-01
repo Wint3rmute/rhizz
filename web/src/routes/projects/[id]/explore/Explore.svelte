@@ -9,6 +9,7 @@
   import { type Dirent, openProjectFs } from "../../../../vfs/fs";
   import FileTree from "../code/FileTree.svelte";
   import DiagramViewer from "../modeling/DiagramViewer.svelte";
+  import DiagramToolbar from "../modeling/DiagramToolbar.svelte";
   import EmbedDiagramButton from "../modeling/EmbedDiagramButton.svelte";
   import {
     readDiagramLayoutFile,
@@ -27,6 +28,11 @@
   let effectiveProjectId = $derived(projectId ?? getCurrentProjectId());
   let diagramEntries = $state<Dirent[]>([]);
   let selectedDiagramPath = $state<string | null>(null);
+
+  // Minimal toolbar state (explore re-uses the modeling toolbar with only
+  // "Zoom to Fill" and "Toggle Grid"). Grid defaults on, matching modeling.
+  let gridVisible = $state(true);
+  let viewer = $state<{ zoomToFill: () => void } | undefined>(undefined);
 
   function navigateToDiagram(path: string, replace = false) {
     // `page.url` is readonly, so the `diagram` param is set on a mutable copy
@@ -211,9 +217,15 @@
     >
       {#if selectedDiagramPath}
         <DiagramViewer
+          bind:this={viewer}
           projectId={effectiveProjectId}
           diagramPath={selectedDiagramPath}
+          {gridVisible}
           onOpenDiagram={navigateToDiagram}
+        />
+        <DiagramToolbar
+          bind:gridVisible
+          onzoomtofill={() => viewer?.zoomToFill()}
         />
       {:else}
         <div

@@ -55,6 +55,7 @@
     whenEmpty,
     whenMissing,
     children,
+    gridVisible = false,
   }: {
     projectId?: string | null;
     /** Path relative to `views/`, e.g. `overview.hcl`. */
@@ -80,7 +81,15 @@
     whenMissing?: Snippet | undefined;
     /** Picture to draw. Omit for the read-only static view (Explore). */
     children?: Snippet<[DiagramView]> | undefined;
+    /** Whether the background grid is drawn. Explore and inventory bind this to their minimal toolbar. */
+    gridVisible?: boolean;
   } = $props();
+
+  let sceneView = $state<{ zoomToFill: () => void } | undefined>(undefined);
+
+  export function zoomToFill(): void {
+    sceneView?.zoomToFill();
+  }
 
   // Compiled model and sources come from the project-scoped context; the
   // viewer only owns the diagram-layout and docs reads that are specific to it.
@@ -312,12 +321,14 @@
     })}
   {:else}
     <DiagramSceneView
+      bind:this={sceneView}
       scene={desiredScene}
       viewKey={diagramPath}
       linkNodes={clickable}
       {linkLabel}
       onNodeClick={clickable ? onnodeclick : undefined}
       onNodeHover={onnodehover}
+      {gridVisible}
     />
   {/if}
   {#if hoveredDoc && hoverPos}
