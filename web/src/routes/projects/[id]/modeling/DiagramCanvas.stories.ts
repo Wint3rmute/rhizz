@@ -382,3 +382,28 @@ export const DotsShownWhenEdgeSelected: Story = {
     ).toBe(4);
   },
 };
+
+// Connection labels render as pills like port labels.
+export const ConnectionLabelPill: Story = {
+  args: { scene: dotScene({ selectNode: false, selectEdge: false }) },
+  play: async ({ canvasElement }) => {
+    const edge = canvasElement.querySelector("[data-testid=diagram-edge]");
+    const rect = edge?.querySelector("rect");
+    await expect(rect?.getAttribute("fill")).toBe("var(--color-base-content)");
+    const text = edge?.querySelector("text");
+    await expect(text?.textContent).toBe("wire");
+    await expect(text?.getAttribute("fill")).toBe("var(--color-base-200)");
+  },
+};
+
+export const ConnectionLabelSelectedPill: Story = {
+  args: { scene: dotScene({ selectNode: false, selectEdge: true }) },
+  play: async ({ canvasElement }) => {
+    const edge = canvasElement.querySelector("[data-testid=diagram-edge]");
+    const rect = edge?.querySelector("rect");
+    await expect(rect?.getAttribute("fill")).toBe("var(--color-primary)");
+    const text = edge?.querySelector("text");
+    await expect(text?.textContent).toBe("wire");
+    await expect(text?.getAttribute("fill")).toBe("var(--color-base-200)");
+  },
+};

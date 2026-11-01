@@ -9,6 +9,7 @@
   // path strings.
   import { SvelteMap } from "svelte/reactivity";
   import AnnotationText from "./AnnotationText.svelte";
+  import DiagramConnectionLabel from "./DiagramConnectionLabel.svelte";
   import DiagramNodeBody from "./DiagramNodeBody.svelte";
   import DiagramPortLabel from "./DiagramPortLabel.svelte";
   import {
@@ -458,22 +459,12 @@
       fill-opacity={conn.selected ? 1 : 0.5}
       style="pointer-events: none"
     />
-    <text
+    <DiagramConnectionLabel
+      label={conn.label}
+      selected={conn.selected}
       x={(a.x + b.x) / 2}
       y={(a.y + b.y) / 2 - 6}
-      fill={conn.selected
-        ? "var(--color-primary)"
-        : "var(--color-base-content)"}
-      fill-opacity={conn.selected ? 1 : 0.5}
-      font-size="10"
-      font-weight={conn.selected ? "bold" : undefined}
-      text-anchor="middle"
-      style={edgeInteractive
-        ? "user-select: none"
-        : "pointer-events: none; user-select: none"}
-    >
-      {conn.label}
-    </text>
+    />
   </g>
 {/each}
 
