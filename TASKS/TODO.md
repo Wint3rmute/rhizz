@@ -16,7 +16,7 @@ How to work on this file:
 
 ---
 
-## Task <N> - display grid in inventory/ and explore/
+## Task <N> - toolbar & grid display in inventory/ and explore/
 
 Re-use the modeling toolbar (the one with "toggle grid", "zoom to fill" etc) on
 inventory/ and explore/ pages, but with only a subset of buttons: "zoom to fill"
