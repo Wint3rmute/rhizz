@@ -2,6 +2,7 @@
 
 ### Feat
 
+- add grid and zoom-to-fill toolbar to explore and inventory diagrams
 - **modeling**: allow selecting which ports to remove on delete
 - **modeling**: hide port labels unused by drawn edges
 - **mcp**: add overwrite_model whole-file repair tool
@@ -36,6 +37,7 @@
 
 ### Refactor
 
+- reuse modeling toolbar with grid and zoom-to-fill on inventory and explore
 - **modeling**: unify port types on DiagramStaticPort, drop dead code
 - **web**: copy landing backgrounds in vrt-accept recipe
 - **modeling**: require portsByIndex on all diagram views
