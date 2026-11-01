@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **server**: replace whole-VFS PUT with per-project writes
 - **server**: add per-project lock manager and project state
 
 ## 0.9.0 (2026-11-01)
