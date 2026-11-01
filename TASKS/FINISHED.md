@@ -4,6 +4,25 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Toolbar & grid display in inventory/ and explore/
+
+Re-used the modeling toolbar on inventory/ and explore/ with only the
+"Zoom to Fill" and "Toggle Grid" subset: `DiagramToolbar` now hides snap /
+auto-layout / reset / add buttons when their props are omitted, `DiagramSceneView`
+gains an opt-in graduated background grid (`diagram-grid`) plus an exported
+`zoomToFill()`, `DiagramViewer` forwards both, and Explore/Inventory host the
+minimal toolbar over their canvas. Book example keeps its plain backdrop
+(grid defaults off there).
+
+Validation: new `inventory-explore-toolbar.spec.ts` red→green (3 e2e:
+minimal subset on both pages, grid toggle hides/shows), `just test` green
+(Rust + 1232 vitest + 164 e2e), `just lint` (clippy / cargo doc / eslint /
+svelte-check / cz check) clean, `just build` green. VRT: new
+`DiagramToolbar/Minimal` baselines + 46 explore/inventory baselines re-accepted.
+Branch: `feat/inventory-explore-toolbar`.
+
+---
+
 ## Task <N> — Fix component instance rename refusing when connections exist
 
 `rename` in `crates/rhizz-core/src/mutation.rs` only rewrote the instance

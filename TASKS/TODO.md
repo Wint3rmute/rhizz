@@ -16,12 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - toolbar & grid display in inventory/ and explore/
-
-Re-use the modeling toolbar (the one with "toggle grid", "zoom to fill" etc) on
-inventory/ and explore/ pages, but with only a subset of buttons: "zoom to fill"
-and "toggle grid". Don't show the remaining buttons.
-
 ## Task <N> - exploring diagrams in embed mode
 
 When browsing system diagrams in Embed mode (/modeling/embed/), it's not
