@@ -18,6 +18,7 @@
     computePortPositions,
     computeResizeHandles,
     computeVisibleConnections,
+    connectionLabelPoint,
     type ConnectionSide,
     elbowPath,
     type PortAnchor,
@@ -414,6 +415,7 @@
   dodging nodes is a separate routing change.
 -->
 {#each visibleEdges as { conn, a, b, orientation, endOrientation } (conn.id)}
+  {@const labelPoint = connectionLabelPoint(a, b, orientation, endOrientation)}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <g
@@ -462,8 +464,8 @@
     <DiagramConnectionLabel
       label={conn.label}
       selected={conn.selected}
-      x={(a.x + b.x) / 2}
-      y={(a.y + b.y) / 2 - 6}
+      x={labelPoint.x}
+      y={labelPoint.y}
     />
   </g>
 {/each}
