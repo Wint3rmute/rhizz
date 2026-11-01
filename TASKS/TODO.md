@@ -186,24 +186,6 @@ Definition of done:
 ---
 
 
-## Task <N> — 0004.1 Server lock manager + project state
-
-Implements the server half of [0004](book/src/proposals/0004-locking-and-collab.md) (draft): per-project in-memory locks and a pollable project version. No frontend yet.
-
-- New module `crates/rhizz-server/src/locks.rs`: `LockManager { HashMap<ProjectId, Lock> }` behind `tokio::Mutex`, `Lock { holder, lease_expires, last_edit }`.
-- Identity PoC: trusted `X-Rhizz-User` header on HTTP; MCP hardcodes `"AI"` server-side (never a client param).
-- Semantics: free/expired/idle (>60s since `last_edit`) → acquire as `user`; same `user` → renew lease + touch `last_edit` on write; other `user` → refuse naming holder. Lease e.g. 10-15s, heartbeat renews; idle frees even while heartbeating. No force-unlock. Restart clears.
-- Project `version`: `SHA256(sorted(path + file_version(content)))` over project files, so outside-git edits show up as a version bump. Do not reuse mtime `revision`.
-- New routes: `GET /api/projects/:id/state -> { version, lockedBy?, lockExpiresAt? }`, `POST /api/projects/:id/lock`, `POST /api/projects/:id/heartbeat`.
-- Rust unit tests: acquire/renew/refuse, lease expiry, idle release, same-user tab handling (`user#tabId` decision documented), version stable on same-content rewrite and flips on change.
-
-Definition of done:
-
-- `just test`, `just lint`, `just build` pass.
-- No `PUT /api/vfs` behavior change in this task.
-
----
-
 ## Task <N> — 0004.2 Per-project writes + server enforcement
 
 Replaces whole-VFS `PUT /api/vfs` with per-project writes so one client can no longer overwrite or delete another's projects. Depends on 0004.1.

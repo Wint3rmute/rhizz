@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0004.1 Server lock manager + project state
+
+Server half of [0004](book/src/proposals/0004-locking-and-collab.md): per-project in-memory locks and a pollable project version. No frontend yet, no `PUT /api/vfs` change.
+
+- New `crates/rhizz-server/src/locks.rs`: `LockManager` (`Arc<Mutex<HashMap<ProjectId, Lock>>>`, `Lock { holder, lease_expires, last_edit }`), 15s lease + 60s idle (heartbeat renews the lease, never the idle timer). Trusted `X-Rhizz-User` PoC identity; same-username tabs share the holder (documented decision, no self-lockout). No force-unlock; restart clears.
+- `storage::project_version`: SHA-256 over sorted path+content pairs (hidden/symlinks excluded, like the walker), stable on same-content rewrite, flips on any file add/remove/change including outside-git edits. Reuses `file_version`; `format_rfc3339_millis`/`millis_since_epoch` now `pub(crate)`.
+- Routes: `GET /api/projects/{id}/state -> { version, lockedBy, lockExpiresAt? }`, `POST .../lock` and `POST .../heartbeat` (400 missing user, 404 unknown project, 409 naming holder; successes also carry `version`). `AppState { data_dir, locks }` built inside `app()` — no signature change, `PUT /api/vfs` untouched.
+- Tests: 11 locks unit tests (acquire/renew/refuse, expiry, idle-despite-heartbeat, per-project, shared tabs), 5 `project_version` tests, 7 HTTP tests (state/lock/heartbeat incl. outside-edit version move).
+
+Validation: `just test` green (149 Rust + web vitest + 164 e2e), `just lint` (clippy / cargo doc / eslint / svelte-check / cz check) clean, `just build` green.
+Branch: `feat/0004-1-lock-manager`.
+
+---
+
 ## Task <N> — Toolbar & grid display in inventory/ and explore/
 
 Re-used the modeling toolbar on inventory/ and explore/ with only the
