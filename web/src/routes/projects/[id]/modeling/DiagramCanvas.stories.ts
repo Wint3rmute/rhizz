@@ -291,3 +291,94 @@ export const ReadOnlyLinks: Story = {
     ).toBe(false);
   },
 };
+
+// Dots are selection-gated: labels show for drawn edges, dots only when selected.
+const dotScene = (opts: {
+  selectNode: boolean;
+  selectEdge: boolean;
+}): DiagramScene => ({
+  nodes: [
+    {
+      id: "sys/a",
+      index: 0,
+      label: "A",
+      box: { x: 0, y: 0, width: 100, height: 60, textAlign: "center" },
+      selected: opts.selectNode,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [{ label: "out", role: "provider" }],
+      handles: "none",
+    },
+    {
+      id: "sys/b",
+      index: 1,
+      label: "B",
+      box: { x: 200, y: 0, width: 100, height: 60, textAlign: "center" },
+      selected: false,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [{ label: "in", role: "consumer" }],
+      handles: "none",
+    },
+  ],
+  edges: [
+    {
+      id: "wire:0:1",
+      label: "wire",
+      from: 0,
+      to: 1,
+      fromPort: "out",
+      toPort: "in",
+      selected: opts.selectEdge,
+    },
+  ],
+  notes: [],
+  overlays: [],
+});
+
+export const DotsHiddenWhenNothingSelected: Story = {
+  args: {
+    scene: dotScene({ selectNode: false, selectEdge: false }),
+    onPortPointerDown: () => {},
+  },
+  play: async ({ canvasElement }) => {
+    const ports = canvasElement.querySelectorAll("[data-testid=diagram-port]");
+    await expect(ports.length).toBe(2);
+    await expect(canvasElement.textContent).toContain("out");
+    await expect(canvasElement.textContent).toContain("in");
+    await expect(
+      canvasElement.querySelectorAll("[data-testid=diagram-port] circle")
+        .length,
+    ).toBe(0);
+  },
+};
+
+export const DotsShownWhenNodeSelected: Story = {
+  args: {
+    scene: dotScene({ selectNode: true, selectEdge: false }),
+    onPortPointerDown: () => {},
+  },
+  play: async ({ canvasElement }) => {
+    const ports = canvasElement.querySelectorAll("[data-testid=diagram-port]");
+    await expect(ports.length).toBe(2);
+    await expect(
+      canvasElement.querySelectorAll("[data-testid=diagram-port] circle")
+        .length,
+    ).toBe(2);
+  },
+};
+
+export const DotsShownWhenEdgeSelected: Story = {
+  args: {
+    scene: dotScene({ selectNode: false, selectEdge: true }),
+    onPortPointerDown: () => {},
+  },
+  play: async ({ canvasElement }) => {
+    const ports = canvasElement.querySelectorAll("[data-testid=diagram-port]");
+    await expect(ports.length).toBe(2);
+    await expect(
+      canvasElement.querySelectorAll("[data-testid=diagram-port] circle")
+        .length,
+    ).toBe(4);
+  },
+};

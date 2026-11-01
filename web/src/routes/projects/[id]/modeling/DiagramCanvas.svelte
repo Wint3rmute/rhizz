@@ -483,11 +483,13 @@
   would then bury the dot (worse when selected: thicker + primary). This
   layer re-draws ports on top of every edge.
 
-  Visibility: a label and its dot show only for ports a drawn edge names
-  (or while a connection drag reveals all drop targets) — ports whose
-  connections are not in this view stay hidden, no matter what is selected
-  or which subpage hosts the diagram. Positions stay stable (computed from
-  all ports) so showing or hiding labels never reflows the outline.
+  Visibility: a label shows for every port a drawn edge names (or while a
+  connection drag reveals all drop targets) — ports whose connections are
+  not in this view stay hidden. The dot (hit area + dot) is an editing
+  affordance and shows only for those named ports when their component is
+  selected, or when a selected connection names that port, or while a drag
+  reveals all drop targets. Positions stay stable (computed from all ports)
+  so showing or hiding labels never reflows the outline.
 -->
 {#each scene.nodes as node (node.id)}
   {@const allPortPositions =
@@ -498,13 +500,20 @@
     visibleEdges.map((visible) => visible.conn),
     node.index,
   )}
+  {@const selectedPortLabels = portsUsedByEdges(
+    visibleEdges.map((visible) => visible.conn).filter((conn) => conn.selected),
+    node.index,
+  )}
   {#each allPortPositions as port (port.label)}
     {@const portKey = `${String(node.index)}:${port.label}`}
     {@const hovered = hoveredPortKey === portKey}
     {@const world = worldPoint(node, port)}
     {@const labelVisible = revealAllPorts || usedPortLabels.has(port.label)}
     {@const dotVisible =
-      portsInteractive && (revealAllPorts || usedPortLabels.has(port.label))}
+      portsInteractive &&
+      (revealAllPorts ||
+        (usedPortLabels.has(port.label) &&
+          (node.selected || selectedPortLabels.has(port.label))))}
     {#if labelVisible || dotVisible}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <g
