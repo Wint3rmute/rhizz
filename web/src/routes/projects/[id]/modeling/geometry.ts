@@ -598,6 +598,37 @@ export function elbowPath(
   ].join(" ");
 }
 
+// Baseline anchor for a connection label pill (the `y` is the text baseline,
+// 6px above the wire). Double-knee and straight routes use the endpoint
+// midpoint, which lands on the middle segment (or the line). Single-knee
+// L-shapes would float the endpoint midpoint in empty space, so anchor to
+// the middle of the longer leg instead, keeping the pill on the wire.
+export function connectionLabelPoint(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  orientation: ConnectionOrientation,
+  endOrientation: ConnectionOrientation,
+): { x: number; y: number } {
+  if (endOrientation !== orientation) {
+    const corner =
+      orientation === "horizontal" ? { x: b.x, y: a.y } : { x: a.x, y: b.y };
+    const lenLeave =
+      orientation === "horizontal"
+        ? Math.abs(corner.x - a.x)
+        : Math.abs(corner.y - a.y);
+    const lenArrive =
+      orientation === "horizontal"
+        ? Math.abs(b.y - corner.y)
+        : Math.abs(b.x - corner.x);
+    const mid =
+      lenLeave >= lenArrive
+        ? { x: (a.x + corner.x) / 2, y: (a.y + corner.y) / 2 }
+        : { x: (corner.x + b.x) / 2, y: (corner.y + b.y) / 2 };
+    return { x: mid.x, y: mid.y - 6 };
+  }
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 6 };
+}
+
 // Number of parent hops from the model root to `index`, following
 // `parentOf` (typically `(i) => components[i]?.parent_component_index`).
 // Takes a lookup function rather than the component array directly so this

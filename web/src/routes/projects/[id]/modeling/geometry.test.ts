@@ -15,6 +15,7 @@ import {
   computeResizeHandles,
   computeVisibleConnections,
   type ConnectionSide,
+  connectionLabelPoint,
   depthOf,
   elbowPath,
   findConnectTarget,
@@ -444,6 +445,59 @@ describe("elbowPath", () => {
     expect(elbowPath(0, 0, 200, 100, "horizontal", 10, "horizontal")).toBe(
       elbowPath(0, 0, 200, 100, "horizontal"),
     );
+  });
+});
+
+describe("connectionLabelPoint", () => {
+  it("puts double-knee labels at the endpoint midpoint (on the middle segment)", () => {
+    expect(
+      connectionLabelPoint(
+        { x: 0, y: 0 },
+        { x: 200, y: 100 },
+        "horizontal",
+        "horizontal",
+      ),
+    ).toEqual({ x: 100, y: 44 });
+  });
+  it("puts straight labels at the endpoint midpoint", () => {
+    expect(
+      connectionLabelPoint(
+        { x: 0, y: 50 },
+        { x: 200, y: 50 },
+        "horizontal",
+        "horizontal",
+      ),
+    ).toEqual({ x: 100, y: 44 });
+  });
+  it("anchors single-knee labels to the longer leave leg", () => {
+    expect(
+      connectionLabelPoint(
+        { x: 0, y: 0 },
+        { x: 200, y: 100 },
+        "horizontal",
+        "vertical",
+      ),
+    ).toEqual({ x: 100, y: -6 });
+  });
+  it("anchors single-knee labels to the longer arrive leg (screenshot repro)", () => {
+    expect(
+      connectionLabelPoint(
+        { x: 100, y: 0 },
+        { x: 400, y: 200 },
+        "vertical",
+        "horizontal",
+      ),
+    ).toEqual({ x: 250, y: 194 });
+  });
+  it("prefers the leave leg on ties", () => {
+    expect(
+      connectionLabelPoint(
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+        "horizontal",
+        "vertical",
+      ),
+    ).toEqual({ x: 50, y: -6 });
   });
 });
 
