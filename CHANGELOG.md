@@ -14,6 +14,7 @@
 
 ### Fix
 
+- rewrite connections on component instance rename
 - revert bundled landing images to unblock VRT, keep port baselines
 - run vrt-accept landing steps under nix for reproducibility
 - unify port visibility to drawn connections only
