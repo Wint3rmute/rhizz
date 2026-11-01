@@ -16,14 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - Investigate weird component instance rename behavior
-
-Behavior I noticed when using the app:
-
-1. Create a new system
-2. Create 2 component instances, connect them via a connection (with ports and everything)
-3. Go to the component inspector and try renaming the component instance
-
 ## Task <N> - display grid in inventory/ and explore/
 
 Re-use the modeling toolbar (the one with "toggle grid", "zoom to fill" etc) on
@@ -35,24 +27,6 @@ and "toggle grid". Don't show the remaining buttons.
 When browsing system diagrams in Embed mode (/modeling/embed/), it's not
 possible to navigate defined system views, as it is possible in the explore/
 view. Please make it possible to navigate back and forth through linked views.
-
----
-
-#### Expected result
-
-Component instance is renamed, "it just works".
-
-#### Actual result
-
-Error appears in the UI popup:
-
-> Change refused: connection test-connection references undefined component test in 'to'; connection test-connection references undefined component test in 'from'
-
-#### Expected resolution
-
-Make sure this behavior reproduces via some kind of test (unit/integration/e2e).
-If it does not reproduce, abort and inform the user. If it reproduces, treat the
-reproduction test as a red test and fix the behavior.
 
 ## Task <N> - more advanced connection routing on canvas
 
