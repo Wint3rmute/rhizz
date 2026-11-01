@@ -5,6 +5,11 @@
 - **server**: replace whole-VFS PUT with per-project writes
 - **server**: add per-project lock manager and project state
 
+### Fix
+
+- anchor single-knee connection labels to the longer leg
+- render connection labels as pills like port labels
+
 ## 0.9.0 (2026-11-01)
 
 ### Feat
