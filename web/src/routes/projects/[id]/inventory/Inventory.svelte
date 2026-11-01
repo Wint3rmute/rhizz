@@ -35,6 +35,7 @@
   import { openProjectFs } from "../../../../vfs/fs";
   import { TOUR_TARGETS } from "../../../../tour/tourTargets";
   import DiagramViewer from "../modeling/DiagramViewer.svelte";
+  import DiagramToolbar from "../modeling/DiagramToolbar.svelte";
   import CreateComponentModal from "../modeling/CreateComponentModal.svelte";
   import CreateSystemModal from "../modeling/CreateSystemModal.svelte";
   import {
@@ -155,6 +156,14 @@
   // reloads. Resizes clamp via the store; hide/restore preserve widths so a
   // restored panel comes back exactly as it was.
   let layout = $state(inventoryPanes.read());
+
+  // Minimal toolbar state for the diagram preview (same subset as explore:
+  // only "Zoom to Fill" and "Toggle Grid"). Grid defaults on, matching
+  // modeling.
+  let previewGridVisible = $state(true);
+  let previewViewer = $state<{ zoomToFill: () => void } | undefined>(
+    undefined,
+  );
 
   $effect(() => {
     inventoryPanes.write(layout);
@@ -995,8 +1004,10 @@
           </div>
         {:else if selectedDefinition}
           <DiagramViewer
+            bind:this={previewViewer}
             {projectId}
             diagramPath={`${selectedDefinition.label}.hcl`}
+            gridVisible={previewGridVisible}
             onSelectComponent={handleSelectNode}
             linkLabel={(node) => `${node.label}, open in inventory`}
           >
@@ -1033,6 +1044,10 @@
               </div>
             {/snippet}
           </DiagramViewer>
+          <DiagramToolbar
+            bind:gridVisible={previewGridVisible}
+            onzoomtofill={() => previewViewer?.zoomToFill()}
+          />
         {:else}
           <div
             class="flex h-full w-full items-center justify-center text-sm text-base-content/60 p-4 text-center"

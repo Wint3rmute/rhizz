@@ -14,6 +14,11 @@
   import DiagramCanvas from "./DiagramCanvas.svelte";
   import type { DiagramNode, DiagramScene } from "./scene";
   import { createDiagramTransition } from "./transition.svelte";
+  import {
+    buildGraduatedGridPatterns,
+    GRID_BASE_SPACING,
+    GRID_GRADUATIONS,
+  } from "./grid";
 
   let {
     scene,
@@ -22,6 +27,7 @@
     linkLabel,
     onNodeClick,
     onNodeHover,
+    gridVisible = false,
   }: {
     /** The scene to present; tweens to it when `viewKey` changes. */
     scene: DiagramScene;
@@ -36,7 +42,32 @@
     onNodeClick?: ((index: number) => void) | undefined;
     onNodeHover?:
       ((index: number | null, event?: MouseEvent) => void) | undefined;
+    /** Whether the background grid is drawn. Defaults off so existing
+     * read-only hosts (book example) keep their plain backdrop; explore and
+     * inventory opt in and wire it to the minimal toolbar. */
+    gridVisible?: boolean;
   } = $props();
+
+  const gridPatterns = buildGraduatedGridPatterns(
+    GRID_GRADUATIONS,
+    GRID_BASE_SPACING,
+    "Grid",
+  );
+  const gridFillId = gridPatterns[gridPatterns.length - 1]?.id ?? "Grid";
+
+  export function zoomToFill(): void {
+    if (viewportWidth === 0 || viewportHeight === 0) return;
+    const current = stage.shown ? stage.scene : scene;
+    const bounds = sceneBounds(current);
+    if (!bounds) return;
+    const fit = fitCamera(bounds, {
+      width: viewportWidth,
+      height: viewportHeight,
+    });
+    untrack(() => {
+      stage.show(current, fit, { transition: false, moveCamera: true });
+    });
+  }
 
   const stage = createDiagramTransition();
   let viewportWidth = $state(0);
@@ -83,6 +114,48 @@
     viewBox="{stage.camera.x} {stage.camera.y} {Math.max(viewportWidth, 1) /
       stage.camera.zoom} {Math.max(viewportHeight, 1) / stage.camera.zoom}"
   >
+    <defs>
+      {#each gridPatterns as pattern (pattern.id)}
+        <pattern
+          id={pattern.id}
+          width={pattern.size}
+          height={pattern.size}
+          patternUnits="userSpaceOnUse"
+        >
+          {#if pattern.fill}
+            <rect width={pattern.size} height={pattern.size} fill="url(#{pattern.fill})" />
+          {/if}
+          <line
+            x1={pattern.size}
+            y1="0"
+            x2={pattern.size}
+            y2={pattern.size}
+            stroke={pattern.stroke ?? "var(--color-base-content)"}
+            stroke-opacity={pattern.strokeOpacity}
+            stroke-width={pattern.strokeWidth}
+          />
+          <line
+            x1="0"
+            y1={pattern.size}
+            x2={pattern.size}
+            y2={pattern.size}
+            stroke={pattern.stroke ?? "var(--color-base-content)"}
+            stroke-opacity={pattern.strokeOpacity}
+            stroke-width={pattern.strokeWidth}
+          />
+        </pattern>
+      {/each}
+    </defs>
+    {#if gridVisible}
+      <rect
+        data-testid="diagram-grid"
+        fill="url(#{gridFillId})"
+        x={stage.camera.x}
+        y={stage.camera.y}
+        width={Math.max(viewportWidth, 1) / stage.camera.zoom}
+        height={Math.max(viewportHeight, 1) / stage.camera.zoom}
+      />
+    {/if}
     <DiagramCanvas
       scene={stage.shown ? stage.scene : scene}
       {linkNodes}
