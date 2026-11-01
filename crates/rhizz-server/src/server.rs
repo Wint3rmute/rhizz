@@ -12,7 +12,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::{HeaderMap, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
-use axum::{Json, Router, routing::get, routing::post};
+use axum::{Json, Router, routing::delete, routing::get, routing::post, routing::put};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -38,9 +38,13 @@ struct AppState {
 /// Keep this as the single place that registers routes; the binary only
 /// binds a listener and hands it to [`axum::serve()`].
 pub fn app(data_dir: PathBuf) -> Router {
+    // One lock manager for the whole server: HTTP writes and MCP mutations
+    // contend on the same per-project locks (proposal 0004).
+    let locks = LockManager::new();
     let mcp_data_dir = data_dir.clone();
+    let mcp_locks = locks.clone();
     let mcp = StreamableHttpService::new(
-        move || Ok(RhizzMcp::new(mcp_data_dir.clone())),
+        move || Ok(RhizzMcp::new(mcp_data_dir.clone(), mcp_locks.clone())),
         Arc::new(LocalSessionManager::default()),
         StreamableHttpServerConfig::default().with_allowed_hosts([
             "localhost",
@@ -52,10 +56,12 @@ pub fn app(data_dir: PathBuf) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/version", get(version))
-        .route("/api/vfs", get(get_vfs).put(put_vfs))
+        .route("/api/vfs", get(get_vfs).put(put_vfs_gone))
         .route("/api/projects/{id}/state", get(project_state))
         .route("/api/projects/{id}/lock", post(acquire_lock))
         .route("/api/projects/{id}/heartbeat", post(heartbeat_lock))
+        .route("/api/projects/{id}/files", put(write_project_files))
+        .route("/api/projects/{id}", delete(delete_project))
         .route(
             "/api/sentry",
             post(sentry_tunnel).layer(DefaultBodyLimit::max(SENTRY_ENVELOPE_LIMIT)),
@@ -63,10 +69,7 @@ pub fn app(data_dir: PathBuf) -> Router {
         // TODO: auth (bearer token / OAuth 2.1) before exposing beyond localhost
         .nest_service("/mcp", mcp)
         .fallback(get(spa_fallback))
-        .with_state(AppState {
-            data_dir,
-            locks: LockManager::new(),
-        })
+        .with_state(AppState { data_dir, locks })
 }
 
 /// Handles `GET /healthz`, used by orchestrators/tests to probe liveness.
@@ -124,31 +127,147 @@ async fn get_vfs(State(state): State<AppState>) -> Response {
     }
 }
 
-/// Persists the entire VFS state the frontend dumped on save. The payload
-/// is authoritative: project directories absent from it are deleted.
-async fn put_vfs(State(state): State<AppState>, body: Bytes) -> Response {
-    let payload: Value = match serde_json::from_slice(&body) {
-        Ok(payload) => payload,
+/// The whole-VFS `PUT /api/vfs` is gone: per-project writes
+/// (`PUT /api/projects/{id}/files`) replaced it, so one client can no
+/// longer overwrite or delete another client's projects. `GET /api/vfs`
+/// stays for bootstrapping the project list.
+async fn put_vfs_gone() -> Response {
+    error_response(
+        StatusCode::GONE,
+        "PUT /api/vfs is gone; write per project with PUT /api/projects/{id}/files",
+    )
+}
+
+/// Body of `PUT /api/projects/{id}/files`: the whole tree of one project.
+/// `content` set means a file, absent means a directory; paths are
+/// project-relative.
+#[derive(Debug, serde::Deserialize)]
+struct WriteFilesRequest {
+    /// The version the writer based its edit on, from `GET .../state` or a
+    /// lock response. `None` skips the check (lock-only).
+    base_version: Option<String>,
+    /// Every file and directory the project should hold; entries absent
+    /// from the payload are deleted.
+    files: Vec<storage::ProjectFileJson>,
+}
+
+/// Handles `PUT /api/projects/{id}/files`: replaces one project's tree
+/// with the payload, creating the project when it does not exist yet.
+/// The lock is taken first (free projects are auto-acquired; held-by-other
+/// is 409 naming the holder), then an optional base-version check, then the
+/// write — only this project's directory is ever touched.
+async fn write_project_files(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let Some(user) = request_user(&headers) else {
+        return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
+    };
+    let request: WriteFilesRequest = match serde_json::from_slice(&body) {
+        Ok(request) => request,
         Err(err) => {
-            tracing::debug!(?err, "rejected non-JSON VFS payload");
+            tracing::debug!(?err, "rejected non-JSON project files payload");
             return error_response(StatusCode::BAD_REQUEST, "invalid JSON");
         }
     };
-    match storage::save_vfs(&state.data_dir, &payload) {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => {
-            // A malformed payload is the client's fault (400); a filesystem
-            // failure is ours (500). The typed error keeps this distinction
-            // reliable — downcasting through the anyhow context chain would
-            // not be.
-            let status = match err {
-                storage::SaveVfsError::Malformed(_) => StatusCode::BAD_REQUEST,
-                storage::SaveVfsError::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    match storage::write_project(
+        &state.data_dir,
+        &state.locks,
+        &id,
+        &user,
+        request.base_version.as_deref(),
+        &request.files,
+    ) {
+        Ok(version) => {
+            let Some(info) = state.locks.get(&id) else {
+                tracing::error!("lock vanished right after writing the project");
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
             };
-            tracing::error!(?err, ?status, "failed to persist VFS");
-            error_response(status, "failed to persist VFS")
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "lockedBy": info.holder,
+                    "lockExpiresAt": lock_expiry_response(info.expires_at),
+                    "version": version,
+                })),
+            )
+                .into_response()
+        }
+        Err(storage::WriteProjectError::Unknown(_)) => {
+            error_response(StatusCode::NOT_FOUND, "unknown project")
+        }
+        Err(storage::WriteProjectError::Locked { holder, .. }) => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "lockedBy": holder,
+                "message": format!("project `{id}` is locked by `{holder}`"),
+            })),
+        )
+            .into_response(),
+        Err(storage::WriteProjectError::StaleVersion { current }) => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "version": current,
+                "message": format!("project `{id}` changed since it was read; re-read and retry"),
+            })),
+        )
+            .into_response(),
+        Err(storage::WriteProjectError::Malformed(message)) => {
+            (StatusCode::BAD_REQUEST, message).into_response()
+        }
+        Err(storage::WriteProjectError::Io(err)) => {
+            tracing::error!(?err, "failed to write project");
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to write project")
         }
     }
+}
+
+/// Handles `DELETE /api/projects/{id}`: removes one project's directory.
+/// The lock is taken first (free projects are auto-acquired; held-by-other
+/// is 409 naming the holder), then the directory is removed and the lock
+/// freed, so the address is immediately reusable.
+async fn delete_project(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(user) = request_user(&headers) else {
+        return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
+    };
+    let root = match storage::resolve_project_dir(&state.data_dir, &id) {
+        Ok(root) => root,
+        Err(storage::ProjectError::Unknown(_)) => {
+            return error_response(StatusCode::NOT_FOUND, "unknown project");
+        }
+        Err(storage::ProjectError::Io(err)) => {
+            tracing::error!(?err, "failed to read project");
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
+        }
+    };
+    match state.locks.acquire(&id, &user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "lockedBy": holder,
+                    "message": format!("project `{id}` is locked by `{holder}`"),
+                })),
+            )
+                .into_response();
+        }
+    }
+    if let Err(err) = std::fs::remove_dir_all(&root) {
+        tracing::error!(?err, "failed to delete project");
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to delete project",
+        );
+    }
+    state.locks.release(&id);
+    StatusCode::NO_CONTENT.into_response()
 }
 
 /// Reads the `PoC` identity: the trimmed, non-empty [`crate::locks::USER_HEADER`].
@@ -210,7 +329,7 @@ async fn acquire_lock(
     let Some(user) = request_user(&headers) else {
         return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
     };
-    match storage::resolve_project(&state.data_dir, &id) {
+    match storage::resolve_project_dir(&state.data_dir, &id) {
         Ok(_) => {}
         Err(storage::ProjectError::Unknown(_)) => {
             return error_response(StatusCode::NOT_FOUND, "unknown project");
@@ -268,7 +387,7 @@ async fn heartbeat_lock(
     let Some(user) = request_user(&headers) else {
         return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
     };
-    match storage::resolve_project(&state.data_dir, &id) {
+    match storage::resolve_project_dir(&state.data_dir, &id) {
         Ok(_) => {}
         Err(storage::ProjectError::Unknown(_)) => {
             return error_response(StatusCode::NOT_FOUND, "unknown project");
@@ -647,49 +766,72 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_then_get_vfs_round_trips_through_the_directory_tree() {
+    async fn put_vfs_is_gone() {
+        // The whole-VFS PUT is replaced by per-project writes: one client
+        // can no longer overwrite or delete another's projects. GET stays
+        // for bootstrapping the project list.
         let tmp = tempfile::tempdir().unwrap();
-        let payload = json!({
-            "version": 1,
-            "projects": [
-                { "id": "p1", "name": "Drone", "createdAt": "t0", "updatedAt": "t1" }
-            ],
-            "nodes": [
-                { "id": "n1", "projectId": "p1", "parentId": null, "name": "system.hcl",
-                  "kind": "file", "content": "system \"drone\" {}\n", "revision": 2, "updatedAt": "t2" },
-                { "id": "n2", "projectId": "p1", "parentId": "n3", "name": "main.hcl",
-                  "kind": "file", "content": "view \"main\" {}\n", "revision": 1, "updatedAt": "t2" },
-                { "id": "n3", "projectId": "p1", "parentId": null, "name": "views",
-                  "kind": "directory" }
-            ]
-        });
-
         let response = app_at(&tmp)
             .oneshot(
                 Request::builder()
                     .method("PUT")
                     .uri("/api/vfs")
                     .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(payload.to_string()))
+                    .body(Body::from(
+                        json!({ "version": 1, "projects": [], "nodes": [] }).to_string(),
+                    ))
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(response.status(), StatusCode::GONE);
+    }
 
-        // The payload landed as real files, addressed by node *name* — the
-        // client-side ids are its own bookkeeping and do not reach disk.
-        let project_dir = tmp.path().join("p1");
+    #[tokio::test]
+    async fn put_files_creates_a_project_and_round_trips_through_get_vfs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app_at(&tmp);
+        let payload = json!({
+            "files": [
+                { "path": "system.hcl", "content": "system \"drone\" {}\n" },
+                { "path": "views" },
+                { "path": "views/main.hcl", "content": "view \"main\" {}\n" },
+            ]
+        });
+
+        let response = app
+            .clone()
+            .oneshot(put_files_request(
+                "/api/projects/p1/files",
+                Some("alice"),
+                &payload,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert_eq!(body["lockedBy"], json!("alice"));
+        assert!(
+            body["lockExpiresAt"].as_str().is_some(),
+            "expiry must be present: {body}"
+        );
         assert_eq!(
-            std::fs::read_to_string(project_dir.join("system.hcl")).unwrap(),
+            body["version"],
+            json!(storage::project_version(tmp.path(), "p1").unwrap())
+        );
+
+        // The payload landed as real files, addressed by path.
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("p1/system.hcl")).unwrap(),
             "system \"drone\" {}\n"
         );
         assert_eq!(
-            std::fs::read_to_string(project_dir.join("views/main.hcl")).unwrap(),
+            std::fs::read_to_string(tmp.path().join("p1/views/main.hcl")).unwrap(),
             "view \"main\" {}\n"
         );
 
-        let response = app_at(&tmp)
+        // And GET /api/vfs now lists the new project.
+        let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/vfs")
@@ -703,21 +845,262 @@ mod tests {
             .unwrap();
         let loaded: Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(loaded["projects"][0]["id"], json!("p1"));
-        let ids: Vec<&str> = loaded["nodes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|n| n["id"].as_str().unwrap())
-            .collect();
-        assert_eq!(ids, vec!["p1/system.hcl", "p1/views", "p1/views/main.hcl"]);
-        let main = loaded["nodes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|n| n["id"] == json!("p1/views/main.hcl"))
+    }
+
+    #[tokio::test]
+    async fn put_files_refuses_a_strangers_write_and_leaves_the_disk_untouched() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+        let before = std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap();
+
+        // Alice takes the lock …
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
+            .await
             .unwrap();
-        assert_eq!(main["content"], json!("view \"main\" {}\n"));
-        assert_eq!(main["parentId"], json!("p1/views"));
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // … so Bob's write is refused with Alice named, byte-identical.
+        let payload = json!({
+            "files": [{ "path": "system.hcl", "content": "system \"hijacked\" {}\n" }]
+        });
+        let response = app
+            .oneshot(put_files_request(
+                "/api/projects/drone/files",
+                Some("bob"),
+                &payload,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(body_json(response).await["lockedBy"], json!("alice"));
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "a refused write must leave the file untouched"
+        );
+    }
+
+    #[tokio::test]
+    async fn put_files_refuses_a_stale_base_version() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+        let stale = storage::project_version(tmp.path(), "drone").unwrap();
+        // An outside edit moves the version …
+        std::fs::write(
+            tmp.path().join("drone/system.hcl"),
+            "system \"edited-elsewhere\" {}\n",
+        )
+        .unwrap();
+        let current = storage::project_version(tmp.path(), "drone").unwrap();
+
+        let payload = json!({
+            "base_version": stale,
+            "files": [{ "path": "system.hcl", "content": "system \"mine\" {}\n" }],
+        });
+        let response = app
+            .clone()
+            .oneshot(put_files_request(
+                "/api/projects/drone/files",
+                Some("alice"),
+                &payload,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = body_json(response).await;
+        assert_eq!(body["version"], json!(current));
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap(),
+            "system \"edited-elsewhere\" {}\n"
+        );
+
+        // … and the fresh version applies — the refused write never gave the
+        // auto-acquired lock away.
+        let payload = json!({
+            "base_version": body["version"].as_str().unwrap(),
+            "files": [{ "path": "system.hcl", "content": "system \"mine\" {}\n" }],
+        });
+        let response = app
+            .oneshot(put_files_request(
+                "/api/projects/drone/files",
+                Some("alice"),
+                &payload,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap(),
+            "system \"mine\" {}\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn put_files_rejects_unwritable_paths_and_bad_payloads() {
+        let tmp = data_dir_with_drone();
+        let before = std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap();
+
+        for files in [
+            json!([{ "path": "../escape.hcl", "content": "x" }]),
+            json!([{ "path": "/etc/passwd", "content": "x" }]),
+            json!([{ "path": "views/.hidden", "content": "x" }]),
+            // A file whose parent directory is not listed.
+            json!([{ "path": "views/main.hcl", "content": "x" }]),
+            // A parent that is a file, not a directory.
+            json!([
+                { "path": "views", "content": "x" },
+                { "path": "views/main.hcl", "content": "y" },
+            ]),
+            // Two entries for one path.
+            json!([
+                { "path": "dup.hcl", "content": "x" },
+                { "path": "dup.hcl", "content": "y" },
+            ]),
+        ] {
+            let response = app_at(&tmp)
+                .oneshot(put_files_request(
+                    "/api/projects/drone/files",
+                    Some("alice"),
+                    &json!({ "files": files }),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST, "files: {files}");
+        }
+
+        // Invalid JSON, a missing user, and a bad address are refused too.
+        let bad_json = Request::builder()
+            .method("PUT")
+            .uri("/api/projects/drone/files")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(crate::locks::USER_HEADER, "alice")
+            .body(Body::from("not json at all"))
+            .unwrap();
+        let response = app_at(&tmp).oneshot(bad_json).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let no_user = put_files_request("/api/projects/drone/files", None, &json!({ "files": [] }));
+        let response = app_at(&tmp).oneshot(no_user).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "refused writes must leave the tree untouched"
+        );
+    }
+
+    #[tokio::test]
+    async fn put_files_leaves_sibling_projects_alone() {
+        let tmp = data_dir_with_drone();
+        std::fs::create_dir_all(tmp.path().join("web-app")).unwrap();
+        std::fs::write(tmp.path().join("web-app/system.hcl"), "system \"web\" {}\n").unwrap();
+        let web_before = std::fs::read_to_string(tmp.path().join("web-app/system.hcl")).unwrap();
+
+        // A payload that drops every file still only manages `drone`.
+        let payload = json!({
+            "files": [{ "path": "system.hcl", "content": "system \"q\" {}\n" }]
+        });
+        let response = app_at(&tmp)
+            .oneshot(put_files_request(
+                "/api/projects/drone/files",
+                Some("alice"),
+                &payload,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        assert!(!tmp.path().join("drone/views").exists());
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("web-app/system.hcl")).unwrap(),
+            web_before
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_project_removes_the_directory_and_frees_the_lock() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+
+        let response = app
+            .clone()
+            .oneshot(lock_request("DELETE", "/api/projects/drone", Some("alice")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert!(!tmp.path().join("drone").exists());
+
+        // State is gone too, and the address is immediately reusable.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/projects/drone/state")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let payload = json!({
+            "files": [{ "path": "system.hcl", "content": "system \"again\" {}\n" }]
+        });
+        let response = app
+            .oneshot(put_files_request(
+                "/api/projects/drone/files",
+                Some("alice"),
+                &payload,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn delete_project_refuses_strangers_and_unknown_projects() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(lock_request("DELETE", "/api/projects/drone", Some("bob")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(body_json(response).await["lockedBy"], json!("alice"));
+        assert!(tmp.path().join("drone").is_dir());
+
+        let response = app
+            .clone()
+            .oneshot(lock_request("DELETE", "/api/projects/drone", None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let response = app
+            .oneshot(lock_request("DELETE", "/api/projects/ghost", Some("alice")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
@@ -755,128 +1138,6 @@ mod tests {
         assert_eq!(loaded["nodes"].as_array().unwrap().len(), 3);
     }
 
-    #[tokio::test]
-    async fn put_vfs_rejects_a_project_id_that_would_escape_the_data_dir() {
-        // A project id becomes a directory name, so one carrying `..` would
-        // write outside the data dir. It is the client's fault: 400, not 500.
-        let tmp = tempfile::tempdir().unwrap();
-        let payload = json!({
-            "version": 1,
-            "projects": [{ "id": "../escaped", "name": "x", "createdAt": "t0", "updatedAt": "t1" }],
-            "nodes": []
-        });
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .method("PUT")
-                    .uri("/api/vfs")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(payload.to_string()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(!tmp.path().parent().unwrap().join("escaped").exists());
-    }
-
-    #[tokio::test]
-    async fn put_vfs_rejects_a_node_name_that_is_not_a_path_segment() {
-        let tmp = tempfile::tempdir().unwrap();
-        let payload = json!({
-            "version": 1,
-            "projects": [{ "id": "p1", "name": "P", "createdAt": "t0", "updatedAt": "t1" }],
-            "nodes": [
-                { "id": "n1", "projectId": "p1", "parentId": null, "name": "../escape.hcl",
-                  "kind": "file", "content": "x", "revision": 1, "updatedAt": "t2" }
-            ]
-        });
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .method("PUT")
-                    .uri("/api/vfs")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(payload.to_string()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn put_vfs_rejects_invalid_json() {
-        let tmp = tempfile::tempdir().unwrap();
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .method("PUT")
-                    .uri("/api/vfs")
-                    .body(Body::from("not json at all"))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn put_vfs_rejects_non_object_payload() {
-        let tmp = tempfile::tempdir().unwrap();
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .method("PUT")
-                    .uri("/api/vfs")
-                    .body(Body::from("42"))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn put_vfs_rejects_payload_without_projects() {
-        let tmp = tempfile::tempdir().unwrap();
-        let response = app_at(&tmp)
-            .oneshot(
-                Request::builder()
-                    .method("PUT")
-                    .uri("/api/vfs")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json!({ "version": 1, "nodes": [] }).to_string()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn put_vfs_maps_io_failure_to_500() {
-        // A data dir that cannot be created (it's a regular file) forces a
-        // filesystem error, which must surface as 500, not 400.
-        let tmp = tempfile::tempdir().unwrap();
-        let blocked = tmp.path().join("blocked");
-        std::fs::write(&blocked, "not a directory").unwrap();
-        let response = app(blocked)
-            .oneshot(
-                Request::builder()
-                    .method("PUT")
-                    .uri("/api/vfs")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(
-                        json!({ "version": 1, "projects": [], "nodes": [] }).to_string(),
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
     // ── Project locks (proposal 0004) ───────────────────────────────────
 
     /// A data dir holding one `drone` project with a model source.
@@ -904,6 +1165,19 @@ mod tests {
             builder = builder.header(crate::locks::USER_HEADER, user);
         }
         builder.body(Body::empty()).unwrap()
+    }
+
+    /// Builds a `PUT .../files` request with a JSON body and the `PoC`
+    /// identity header, when `user` is set.
+    fn put_files_request(uri: &str, user: Option<&str>, payload: &Value) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method("PUT")
+            .uri(uri)
+            .header(header::CONTENT_TYPE, "application/json");
+        if let Some(user) = user {
+            builder = builder.header(crate::locks::USER_HEADER, user);
+        }
+        builder.body(Body::from(payload.to_string())).unwrap()
     }
 
     /// Reads a whole response body as JSON.

@@ -16,6 +16,7 @@
   import { InMemoryProjectStore } from "./vfs/vfsStore";
   import { LocalStorageProjectStore } from "./vfs/vfsStore";
   import { ServerProjectStore } from "./vfs/vfsStore";
+  import { getOrCreateUsername } from "./collab/identity";
   import { getSafeStorage } from "./safeStorage";
   import type { ProjectStore } from "./vfs/store";
   import type { Project } from "./vfs/types";
@@ -34,6 +35,7 @@
   function createDefaultStore(): ProjectStore {
     if (serverUrl) {
       return new ServerProjectStore(serverUrl, {
+        getUser: getOrCreateUsername,
         onPersisted: reportVfsSizeBytes,
       });
     }

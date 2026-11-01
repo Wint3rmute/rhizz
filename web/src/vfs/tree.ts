@@ -133,3 +133,51 @@ export function splitBasename(path: string): {
     basename,
   };
 }
+
+// Resolves the project-relative path of the node with `nodeId` (e.g.
+// "views/main.hcl"), or `undefined` when no such node exists in the
+// project. The inverse of resolveNode: walks parentId links up to the
+// project root. Scoped to `projectId`, so a same-id node in another project
+// is never followed.
+export function pathOfNode(
+  projectId: string,
+  nodeId: string,
+  nodes: FsNode[],
+): string | undefined {
+  const byId = new Map(
+    nodes.filter((n) => n.projectId === projectId).map((n) => [n.id, n]),
+  );
+  const segments: string[] = [];
+  const seen = new Set<string>();
+  let id: string | null = nodeId;
+  while (id !== null) {
+    if (seen.has(id)) return undefined; // defensive: a cycle
+    seen.add(id);
+    const node = byId.get(id);
+    if (node === undefined) return undefined; // dangling parent
+    segments.unshift(node.name);
+    id = node.parentId;
+  }
+  return segments.join("/");
+}
+
+// Every file and directory entry of one project as server-write entries:
+// project-relative paths with content for files, bare paths for
+// directories. Used by the HTTP backend's per-project writes; sorted by
+// path so payloads are deterministic.
+export function projectFiles(
+  projectId: string,
+  nodes: FsNode[],
+): { path: string; content?: string }[] {
+  const entries: { path: string; content?: string }[] = [];
+  for (const node of nodes) {
+    if (node.projectId !== projectId) continue;
+    const path = pathOfNode(projectId, node.id, nodes);
+    if (path === undefined) continue; // defensive: dangling parent
+    if (isDirectory(node)) entries.push({ path });
+    else entries.push({ path, content: node.content });
+  }
+  return entries.sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
+}

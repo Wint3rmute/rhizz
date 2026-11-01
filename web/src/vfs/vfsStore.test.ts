@@ -16,10 +16,10 @@ import { openProjectFs } from "./fs";
 import { readProjectSources } from "./compile";
 import { emptyVfsData, type VfsData } from "./operations";
 
-interface FakeFetchOptions {
-  /** In-memory blob the fake server serves; undefined = empty VFS. */
+interface FakeServerFetchOptions {
+  /** In-memory projects the fake server holds, keyed by project id. */
   blob?: unknown;
-  /** Response status for VFS endpoints (default 200 GET / 204 PUT). */
+  /** Response status for failing endpoints (must be >= 400 to take effect). */
   status?: number;
   /** Reject every request instead of responding. */
   networkDown?: boolean;
@@ -27,14 +27,80 @@ interface FakeFetchOptions {
 
 interface FakeServerFetch {
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  calls: { method: string; url: string; body: string | null }[];
+  calls: {
+    method: string;
+    url: string;
+    body: string | null;
+    user: string | null;
+  }[];
 }
 
-// A fake rhizz-server standing in for fetch: serves one in-memory blob
-// with GET/PUT /api/vfs semantics and records every call it receives.
-function makeFakeFetch(options: FakeFetchOptions = {}): FakeServerFetch {
-  const calls: { method: string; url: string; body: string | null }[] = [];
-  let blob: unknown = options.blob;
+// A fake rhizz-server standing in for fetch: serves one in-memory data dir
+// with the per-project protocol (`GET /api/vfs`, `POST .../lock`,
+// `PUT .../files`, `DELETE .../project`) and records every call it receives.
+// Locks behave like the real side: free projects auto-acquire for the
+// writer, held-by-other refuses with 409.
+function makeFakeFetch(options: FakeServerFetchOptions = {}): FakeServerFetch {
+  const calls: FakeServerFetch["calls"] = [];
+  // Project files: path -> content (null means a directory).
+  const projects = new Map<
+    string,
+    { name: string; files: Map<string, string | null> }
+  >();
+  const locks = new Map<string, string>();
+  const versions = new Map<string, number>();
+
+  // Seed from a whole-VFS blob: node ids are client bookkeeping, so paths
+  // are rebuilt from the parent chain like the real server derives them.
+  const seed = (blob: unknown) => {
+    const data = blob as {
+      projects?: { id: string; name: string }[];
+      nodes?: {
+        id: string;
+        projectId: string;
+        parentId: string | null;
+        name: string;
+        kind: string;
+        content?: string;
+      }[];
+    };
+    for (const p of data.projects ?? []) {
+      // First wins, like `sanitizeVfsData`: a hand-edited blob can hold
+      // two projects at one address, and the later one is dropped.
+      if (!projects.has(p.id)) {
+        projects.set(p.id, { name: p.name, files: new Map() });
+        versions.set(p.id, 0);
+      }
+    }
+    const byId = new Map((data.nodes ?? []).map((n) => [n.id, n]));
+    for (const node of data.nodes ?? []) {
+      const segments = [node.name];
+      let parentId = node.parentId;
+      const seen = new Set([node.id]);
+      while (parentId !== null) {
+        if (seen.has(parentId)) break;
+        seen.add(parentId);
+        const parent = byId.get(parentId);
+        if (parent === undefined) break;
+        segments.unshift(parent.name);
+        parentId = parent.parentId;
+      }
+      const entry = projects.get(node.projectId);
+      if (entry === undefined) continue;
+      entry.files.set(
+        segments.join("/"),
+        node.kind === "file" ? (node.content ?? "") : null,
+      );
+    }
+  };
+  if (options.blob !== undefined) seed(options.blob);
+
+  const versionOf = (id: string): string => `v${String(versions.get(id) ?? 0)}`;
+  const userOf = (init?: RequestInit): string | null => {
+    const headers = new Headers(init?.headers);
+    return headers.get("x-rhizz-user");
+  };
+
   const fetchImpl = (
     input: RequestInfo | URL,
     init?: RequestInit,
@@ -47,58 +113,261 @@ function makeFakeFetch(options: FakeFetchOptions = {}): FakeServerFetch {
           : input.url;
     const method = init?.method ?? "GET";
     const body = typeof init?.body === "string" ? init.body : null;
-    calls.push({ method, url, body });
+    calls.push({ method, url, body, user: userOf(init) });
     if (options.networkDown) {
       return Promise.reject(new TypeError("network down"));
     }
-    if (!url.endsWith("/api/vfs")) {
-      return Promise.resolve(new Response("not found", { status: 404 }));
-    }
-    if (method === "PUT") {
-      if (options.status !== undefined && options.status !== 204) {
-        return Promise.resolve(
-          new Response("save failed", { status: options.status }),
-        );
-      }
-      blob = JSON.parse(body ?? "{}");
-      return Promise.resolve(new Response(null, { status: 204 }));
-    }
-    if (options.status !== undefined && options.status !== 200) {
+    if (options.status !== undefined && options.status >= 400) {
       return Promise.resolve(
-        new Response("load failed", { status: options.status }),
+        new Response("failed", { status: options.status }),
       );
     }
-    return Promise.resolve(
-      new Response(
-        JSON.stringify(blob ?? { version: 1, projects: [], nodes: [] }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      ),
-    );
+    const match =
+      /\/api\/projects\/([^/]+)(\/(state|lock|heartbeat|files))?$/.exec(url);
+    if (match === null) {
+      if (!url.endsWith("/api/vfs") || method !== "GET") {
+        return Promise.resolve(new Response("not found", { status: 404 }));
+      }
+      const projectsJson = [...projects].map(([id, entry]) => ({
+        id,
+        name: entry.name,
+        createdAt: "t0",
+        updatedAt: "t0",
+      }));
+      const nodes: unknown[] = [];
+      for (const [id, entry] of projects) {
+        for (const [path, content] of entry.files) {
+          const segments = path.split("/");
+          const name = segments[segments.length - 1] ?? path;
+          const parent =
+            segments.length > 1
+              ? `${id}/${segments.slice(0, -1).join("/")}`
+              : null;
+          nodes.push(
+            content === null
+              ? {
+                  id: `${id}/${path}`,
+                  projectId: id,
+                  parentId: parent,
+                  name,
+                  kind: "directory",
+                }
+              : {
+                  id: `${id}/${path}`,
+                  projectId: id,
+                  parentId: parent,
+                  name,
+                  kind: "file",
+                  content,
+                  revision: 0,
+                  updatedAt: "t0",
+                },
+          );
+        }
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ version: 1, projects: projectsJson, nodes }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    const [, projectId, , action] = match;
+    if (projectId === undefined) {
+      return Promise.resolve(new Response("not found", { status: 404 }));
+    }
+    const user = userOf(init);
+    if (action === "lock" || action === "heartbeat") {
+      if (user === null || user === "") {
+        return Promise.resolve(new Response("missing user", { status: 400 }));
+      }
+      const holder = locks.get(projectId);
+      if (holder !== undefined && holder !== user) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ lockedBy: holder }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      locks.set(projectId, user);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            lockedBy: user,
+            lockExpiresAt: "t1",
+            version: versionOf(projectId),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (method === "PUT") {
+      if (user === null || user === "") {
+        return Promise.resolve(new Response("missing user", { status: 400 }));
+      }
+      const holder = locks.get(projectId);
+      if (holder !== undefined && holder !== user) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ lockedBy: holder }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      locks.set(projectId, user);
+      const parsed = JSON.parse(body ?? "{}") as {
+        base_version?: string;
+        files?: { path: string; content?: string }[];
+      };
+      if (
+        parsed.base_version !== undefined &&
+        parsed.base_version !== versionOf(projectId)
+      ) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ version: versionOf(projectId) }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      let entry = projects.get(projectId);
+      if (entry === undefined) {
+        entry = { name: projectId, files: new Map() };
+        projects.set(projectId, entry);
+      }
+      entry.files.clear();
+      for (const file of parsed.files ?? []) {
+        entry.files.set(file.path, file.content ?? null);
+      }
+      versions.set(projectId, (versions.get(projectId) ?? 0) + 1);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            lockedBy: user,
+            lockExpiresAt: "t1",
+            version: versionOf(projectId),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (method === "DELETE") {
+      if (user === null || user === "") {
+        return Promise.resolve(new Response("missing user", { status: 400 }));
+      }
+      const holder = locks.get(projectId);
+      if (holder !== undefined && holder !== user) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ lockedBy: holder }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (!projects.has(projectId)) {
+        return Promise.resolve(
+          new Response("unknown project", { status: 404 }),
+        );
+      }
+      projects.delete(projectId);
+      locks.delete(projectId);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
   };
   return { fetch: fetchImpl, calls };
 }
 
 describe("ServerProjectStore HTTP behavior", () => {
-  it("fetches before a mutation and dumps the whole VFS on save", async () => {
+  it("fetches before a mutation and writes each project on save", async () => {
     const fake = makeFakeFetch();
     const store = new ServerProjectStore("http://rhizz-server", {
       fetch: fake.fetch,
+      getUser: () => "alice",
     });
     await store.createProject("drone");
     expect(fake.calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
     expect(fake.calls[0]?.url).toBe("http://rhizz-server/api/vfs");
+    expect(fake.calls[1]?.url).toBe(
+      "http://rhizz-server/api/projects/drone/files",
+    );
+    expect(fake.calls[1]?.user).toBe("alice");
 
     const putBody = JSON.parse(fake.calls[1]?.body ?? "{}") as {
-      version: number;
-      projects: { id: string; name: string }[];
-      nodes: unknown[];
+      base_version?: string;
+      files: unknown[];
     };
-    expect(putBody.version).toBe(1);
-    expect(putBody.projects[0]?.name).toBe("drone");
-    expect(putBody.nodes).toEqual([]);
+    // A fresh project holds no nodes yet; the version is lock-only.
+    expect(putBody.base_version).toBeUndefined();
+    expect(putBody.files).toEqual([]);
+  });
+
+  it("sends the edited project as paths on update", async () => {
+    const fake = makeFakeFetch();
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      now: () => "t0",
+    });
+    const project = await store.createProject("drone");
+    await store.createFile(project.id, null, "system.hcl", "system {}");
+    const put = [...fake.calls].reverse().find((c) => c.method === "PUT");
+    expect(put?.url).toBe("http://rhizz-server/api/projects/drone/files");
+    expect(JSON.parse(put?.body ?? "{}")).toEqual({
+      files: [{ path: "system.hcl", content: "system {}" }],
+    });
+  });
+
+  it("deletes the server directory of a removed project", async () => {
+    const fake = makeFakeFetch();
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      now: () => "t0",
+    });
+    const project = await store.createProject("drone");
+    await store.deleteProject(project.id);
+    const last = fake.calls[fake.calls.length - 1];
+    expect(last?.method).toBe("DELETE");
+    expect(last?.url).toBe("http://rhizz-server/api/projects/drone");
+    // Gone from the next bootstrap too.
+    expect(await store.listProjects()).toEqual([]);
+  });
+
+  it("refuses the whole mutation when the server holds the lock for someone else", async () => {
+    const fake = makeFakeFetch({
+      blob: {
+        version: 1,
+        projects: [
+          {
+            id: "drone",
+            name: "drone",
+            createdAt: "t0",
+            updatedAt: "t0",
+          },
+        ],
+        nodes: [],
+      },
+    });
+    // Someone else takes the project directly against the fake server …
+    const locked = await fake.fetch(
+      "http://rhizz-server/api/projects/drone/lock",
+      { method: "POST", headers: { "x-rhizz-user": "bob" } },
+    );
+    expect(locked.status).toBe(200);
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      now: () => "t0",
+    });
+    // … so the store's own write is refused and the cache is dropped,
+    // letting the next read start from the truth rather than the write
+    // that failed.
+    await expect(
+      store.createFile("drone", null, "system.hcl", "system {}"),
+    ).rejects.toThrow(/409/);
+    expect(await store.listNodes("drone")).toEqual([]);
   });
 
   it("strips trailing slashes from the base url", async () => {
@@ -297,9 +566,11 @@ describe("ambiguous ids in a stored blob", () => {
   // ./operations resolves a node against all of `nodes` at once, so two nodes
   // at one id make a write ambiguous -- `updateFileContent` rewrites *every*
   // match, which is how a write in one project landed in another (TASKS/
-  // FINISHED.md, Task 119a). Both projects below hold a `system.hcl`, which is
-  // what a path-derived id scheme produces. Both backends run the same
-  // `sanitizeVfsData`, so both must come out of it with the id unambiguous.
+  // FINISHED.md, Task 119a).
+  //
+  // Only the localStorage backend runs this case now: server blobs carry
+  // path-derived ids (`apollo-11/system.hcl`), which cannot collide this
+  // way, and per-project writes keep them separate structurally.
   const project = (id: string) => ({
     id,
     name: id,
@@ -327,31 +598,24 @@ describe("ambiguous ids in a stored blob", () => {
 
   it("keeps one node when a blob has two at the same id", async () => {
     const map = new Map<string, string>([["ambiguous", JSON.stringify(blob)]]);
-    const stores = [
-      new LocalStorageProjectStore(
-        {
-          getItem: (key) => map.get(key) ?? null,
-          setItem: (key, value) => void map.set(key, value),
-        },
-        "ambiguous",
-      ),
-      new ServerProjectStore("http://rhizz-server", {
-        fetch: makeFakeFetch({ blob }).fetch,
-      }),
-    ];
+    const store = new LocalStorageProjectStore(
+      {
+        getItem: (key) => map.get(key) ?? null,
+        setItem: (key, value) => void map.set(key, value),
+      },
+      "ambiguous",
+    );
 
-    for (const store of stores) {
-      expect((await store.listNodes("apollo-11")).map((n) => n.id)).toEqual([
-        "shared",
-      ]);
-      expect(await store.listNodes("drone")).toEqual([]);
-      // The consequence that matters: writing the survivor no longer reaches
-      // across into the project that shared its id.
-      await store.updateFileContent("apollo-11", "shared", "edited");
-      const survivors = await store.listNodes("apollo-11");
-      expect(survivors).toHaveLength(1);
-      expect(survivors[0]).toMatchObject({ content: "edited", revision: 1 });
-    }
+    expect((await store.listNodes("apollo-11")).map((n) => n.id)).toEqual([
+      "shared",
+    ]);
+    expect(await store.listNodes("drone")).toEqual([]);
+    // The consequence that matters: writing the survivor no longer reaches
+    // across into the project that shared its id.
+    await store.updateFileContent("apollo-11", "shared", "edited");
+    const survivors = await store.listNodes("apollo-11");
+    expect(survivors).toHaveLength(1);
+    expect(survivors[0]).toMatchObject({ content: "edited", revision: 1 });
   });
 });
 

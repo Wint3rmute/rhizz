@@ -189,9 +189,14 @@ after `node:fs/promises`) is the only thing pages use; the id-based
 
 - **Browser** (default): one JSON document in `localStorage` under
   `rhizz:vfs:v1`.
-- **`rhizz web`** (when the build sets `VITE_RHIZZ_SERVER_URL`): a
-  `GET`/`PUT /api/vfs` pair carrying the whole VFS as
-  `{ version, projects, nodes }`.
+- **`rhizz web`** (when the build sets `VITE_RHIZZ_SERVER_URL`): `GET
+  /api/vfs` fetches the whole VFS for bootstrapping, then each project is
+  written on its own through `PUT /api/projects/{id}/files`
+  (`{ user, base_version?, files: [{ path, content? }] }`, paths
+  project-relative) and removed through `DELETE /api/projects/{id}`. Every
+  write takes the project's lock first (free projects auto-acquire; held
+  elsewhere the write is refused) — so one tab can no longer overwrite or
+  delete another tab's projects. (`PUT /api/vfs` is gone and answers 410.)
 
 The server does not invent a container format for that payload: it expands a
 project into a **directory of ordinary files** — `system.hcl`, `views/*.hcl`,
