@@ -186,6 +186,87 @@ Definition of done:
 ---
 
 
+## Task <N> — 0004.1 Server lock manager + project state
+
+Implements the server half of [0004](book/src/proposals/0004-locking-and-collab.md) (draft): per-project in-memory locks and a pollable project version. No frontend yet.
+
+- New module `crates/rhizz-server/src/locks.rs`: `LockManager { HashMap<ProjectId, Lock> }` behind `tokio::Mutex`, `Lock { holder, lease_expires, last_edit }`.
+- Identity PoC: trusted `X-Rhizz-User` header on HTTP; MCP hardcodes `"AI"` server-side (never a client param).
+- Semantics: free/expired/idle (>60s since `last_edit`) → acquire as `user`; same `user` → renew lease + touch `last_edit` on write; other `user` → refuse naming holder. Lease e.g. 10-15s, heartbeat renews; idle frees even while heartbeating. No force-unlock. Restart clears.
+- Project `version`: `SHA256(sorted(path + file_version(content)))` over project files, so outside-git edits show up as a version bump. Do not reuse mtime `revision`.
+- New routes: `GET /api/projects/:id/state -> { version, lockedBy?, lockExpiresAt? }`, `POST /api/projects/:id/lock`, `POST /api/projects/:id/heartbeat`.
+- Rust unit tests: acquire/renew/refuse, lease expiry, idle release, same-user tab handling (`user#tabId` decision documented), version stable on same-content rewrite and flips on change.
+
+Definition of done:
+
+- `just test`, `just lint`, `just build` pass.
+- No `PUT /api/vfs` behavior change in this task.
+
+---
+
+## Task <N> — 0004.2 Per-project writes + server enforcement
+
+Replaces whole-VFS `PUT /api/vfs` with per-project writes so one client can no longer overwrite or delete another's projects. Depends on 0004.1.
+
+- New write path: `PUT /api/projects/:id/files { user, baseVersion?, files }` via `storage::write_project` + `write_atomic`; non-holder writes rejected, file untouched (same refusal contract as `mutate_project`/`DOC_EDIT_LOCK`).
+- Wrap `mutate_project` (all 16 `ModelOp` tools) with `acquire_or_check`: free → auto-acquire on first edit; held by other → refuse.
+- `GET /api/vfs` stays for bootstrap/list; `PUT /api/vfs` returns 410. Update `SPEC/cli.md` + bundled frontend together.
+- Rust tests: holder writes + persists, non-holder refused byte-identical, stale `baseVersion` refused, missing project on disk not deleted by another project's write.
+
+Definition of done:
+
+- `just test`, `just lint`, `just build` pass.
+- No whole-blob overwrite path remains.
+
+---
+
+## Task <N> — 0004.3 Web identity + lock polling + read-only UI
+
+Web half of 0004. Depends on 0004.1-0004.2.
+
+- Identity: `web/src/collab/identity.ts` via `safeStorage`, key `rhizz-username`, `getOrCreateUsername()` + rename UI. Follow `lastView.ts`/`tourRequest` idioms, never raw `localStorage`.
+- State: `ProjectLock.svelte.ts` context in `routes/projects/[id]/+layout.svelte` (`{ version, lockedBy, isMine, readonly }`), polls `GET state` every ~3-5s only when `ServerProjectStore` is active (local/memory backends stay always-mine).
+- Write gate: single choke point in `vfs/vfsStore.ts::mutate()` — attach `{ user, baseVersion }`, map 409/423 → discard drafts + `projectModel.reload()` + toast ("lock lost"). Auto-acquire at `planModelMutation`/transaction `do()`, not at debounced flush. Add `store.invalidate()` for poll-triggered reload (today cache only drops on write failure).
+- Read-only: thread `readonly` into `MonacoEditor`, `ModelingPage.runModelLayoutTransaction` early-return (push nothing on refusal), `Inventory` modals, `FileTree` ops. `DiagramViewer`/`Explore` already write-free. Clear undo stack on lock loss.
+- UI: lock badge (lock icon + holder on click) in `Navbar.svelte` desktop/mobile + `ProjectStatusBar`/`DiagnosticsStatusBar` next to score. Project-list icons deferred (open question in 0004).
+- Tests: vitest for lock context/gate mapping + Playwright two-tab (tab A edits, tab B refused + follows version, idle release lets B in). VRT for lock badge.
+
+Definition of done:
+
+- `just test`, `just lint`, `just build` pass; `just vrt-accept` for new badge baselines.
+
+---
+
+## Task <N> — 0004.4 MCP `AI` holder + lock/version on reads
+
+MCP half of 0004. Depends on 0004.1-0004.2.
+
+- In `mcp.rs::call_tool` (or `run_mutation`/`overwrite_model`/`create_doc`/`edit_documentation` wrappers) hardcode `user = "AI"`: free → auto-acquire as `AI` (each tool call = activity, resets idle); held by human → tool error naming holder, file untouched; held by `AI` → proceed with existing `DOC_EDIT_LOCK`/`MODEL_WRITE_LOCK` as inner CAS mutex.
+- Expose lock/version on reads: `list_files` (+`check_project`, `fetch_projects` entries) return `version + lockedBy/lockExpiresAt?` so an AI loop (`read -> check -> mutate`) sees staleness without extra calls.
+- Update 0003 proposal notes + every tool description that says "0004 is not implemented".
+- Tests through `/mcp` RPC: `AI` acquires free project, refused while human holds (byte-identical), expiry/idle frees for `AI`, read tools echo `version+lock`.
+
+Definition of done:
+
+- `cargo test -p rhizz-server`, `just lint-rust`, `just format` pass.
+
+---
+
+## Task <N> — 0004.5 Lock/poll timing tune + hardening
+
+Final pass over 0004.1-0004.4. Mark [0004](book/src/proposals/0004-locking-and-collab.md) implemented.
+
+- Tune lease length, heartbeat interval, poll interval, 60s idle (proposal leaves timings to implementation). Document chosen values in proposal + `SPEC/frontend.md`/`SPEC/architecture.md`.
+- Harden: same-user two-tab self-lockout decision (`user#tabId` vs shared holder), heartbeat stops on `pagehide`, poll backoff on failure, `pagehide` best-effort heartbeat-stop/release.
+- Flip proposal status draft → implemented, close open questions (project-list icons yes/no).
+- Full validation: `just test`, `just lint`, `just build`, relevant e2e re-run.
+
+Definition of done:
+
+- Timings documented, proposal status flipped, full suite green.
+
+---
+
 ## Task <NUMBER> — Task template
 
 - Task description here
