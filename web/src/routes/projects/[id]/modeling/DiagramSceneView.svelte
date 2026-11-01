@@ -123,7 +123,11 @@
           patternUnits="userSpaceOnUse"
         >
           {#if pattern.fill}
-            <rect width={pattern.size} height={pattern.size} fill="url(#{pattern.fill})" />
+            <rect
+              width={pattern.size}
+              height={pattern.size}
+              fill="url(#{pattern.fill})"
+            />
           {/if}
           <line
             x1={pattern.size}

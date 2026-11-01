@@ -29,9 +29,9 @@ test("explore shows a minimal toolbar with only zoom-to-fill and toggle-grid", a
   await expect(
     toolbar.getByRole("button", { name: "Auto Layout" }),
   ).toHaveCount(0);
-  await expect(
-    toolbar.getByRole("button", { name: "Reset View" }),
-  ).toHaveCount(0);
+  await expect(toolbar.getByRole("button", { name: "Reset View" })).toHaveCount(
+    0,
+  );
   await expect(
     toolbar.getByRole("button", { name: "+ Component" }),
   ).toHaveCount(0);
@@ -65,9 +65,9 @@ test("inventory shows a minimal toolbar with only zoom-to-fill and toggle-grid",
   await expect(
     toolbar.getByRole("button", { name: "Auto Layout" }),
   ).toHaveCount(0);
-  await expect(
-    toolbar.getByRole("button", { name: "Reset View" }),
-  ).toHaveCount(0);
+  await expect(toolbar.getByRole("button", { name: "Reset View" })).toHaveCount(
+    0,
+  );
 });
 
 test("explore toggle-grid hides and shows the background grid", async ({

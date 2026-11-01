@@ -161,9 +161,7 @@
   // only "Zoom to Fill" and "Toggle Grid"). Grid defaults on, matching
   // modeling.
   let previewGridVisible = $state(true);
-  let previewViewer = $state<{ zoomToFill: () => void } | undefined>(
-    undefined,
-  );
+  let previewViewer = $state<{ zoomToFill: () => void } | undefined>(undefined);
 
   $effect(() => {
     inventoryPanes.write(layout);
