@@ -53,8 +53,7 @@ struct Lock {
 impl Lock {
     /// Whether the lock still blocks other users at `now`.
     fn live(&self, now: Instant) -> bool {
-        now < self.lease_expires
-            && now.saturating_duration_since(self.last_edit) < IDLE_TIMEOUT
+        now < self.lease_expires && now.saturating_duration_since(self.last_edit) < IDLE_TIMEOUT
     }
 }
 
@@ -222,7 +221,9 @@ impl LockManager {
     /// Locks the map, carrying a poisoned mutex through rather than
     /// deadlocking the server on a previous panic.
     fn lock_or_poisoned(&self) -> std::sync::MutexGuard<'_, HashMap<String, Lock>> {
-        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
@@ -280,8 +281,16 @@ mod tests {
 
         // The original 15s lease would have lapsed at start + 15s; renewed at
         // start + 5s it lives until start + 20s.
-        assert!(manager.get_at("drone", start + Duration::from_secs(16)).is_some());
-        assert!(manager.get_at("drone", start + Duration::from_secs(21)).is_none());
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(16))
+                .is_some()
+        );
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(21))
+                .is_none()
+        );
     }
 
     #[test]
@@ -338,19 +347,23 @@ mod tests {
         // Keep the lease alive with steady heartbeats.
         for secs in [10, 20, 30, 40, 50] {
             assert!(matches!(
-                manager.heartbeat_at(
-                    "drone",
-                    "alice",
-                    start + Duration::from_secs(secs)
-                ),
+                manager.heartbeat_at("drone", "alice", start + Duration::from_secs(secs)),
                 HeartbeatOutcome::Renewed
             ));
         }
         // Still live at 55s: the lease runs to 65s and only 55s passed
         // without an edit …
-        assert!(manager.get_at("drone", start + Duration::from_secs(55)).is_some());
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(55))
+                .is_some()
+        );
         // … but idle at 61s even though the lease would run to 65s.
-        assert!(manager.get_at("drone", start + Duration::from_secs(61)).is_none());
+        assert!(
+            manager
+                .get_at("drone", start + Duration::from_secs(61))
+                .is_none()
+        );
     }
 
     #[test]

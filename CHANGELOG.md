@@ -1,3 +1,9 @@
+## Unreleased
+
+### Feat
+
+- **server**: add per-project lock manager and project state
+
 ## 0.9.0 (2026-11-01)
 
 ### Feat
