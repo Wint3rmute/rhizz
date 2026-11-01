@@ -192,7 +192,7 @@ fn sorted_entries(dir: &Path) -> Result<Vec<(String, fs::DirEntry)>, std::io::Er
 }
 
 /// Milliseconds from the Unix epoch to `time`, or `0` for a pre-epoch stamp.
-fn millis_since_epoch(time: SystemTime) -> i64 {
+pub(crate) fn millis_since_epoch(time: SystemTime) -> i64 {
     // A pre-epoch stamp is representable but outside anything meaningful, so
     // it clamps to the epoch rather than becoming a negative date.
     time.duration_since(UNIX_EPOCH).map_or(0, |delta| {
@@ -207,7 +207,7 @@ fn millis_since_epoch(time: SystemTime) -> i64 {
 /// shape, and the frontend parses it with `new Date(...)`. Every step
 /// saturates rather than panicking, so a nonsensical stamp still yields a
 /// string instead of taking the server down.
-fn format_rfc3339_millis(millis: i64) -> String {
+pub(crate) fn format_rfc3339_millis(millis: i64) -> String {
     let days = millis.div_euclid(MILLIS_PER_DAY);
     let time_of_day = millis.rem_euclid(MILLIS_PER_DAY);
 
@@ -608,6 +608,19 @@ pub fn resolve_confined_path(root: &Path, relative: &Path) -> Result<PathBuf, Co
     Ok(resolved)
 }
 
+/// Hex-encodes a SHA-256 digest (64 lowercase chars).
+fn hex_digest(digest: &[u8]) -> String {
+    const HEX: [u8; 16] = *b"0123456789abcdef";
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        let hi = HEX.get(usize::from(byte >> 4)).copied().unwrap_or(b'0');
+        let lo = HEX.get(usize::from(byte & 0x0f)).copied().unwrap_or(b'0');
+        out.push(char::from(hi));
+        out.push(char::from(lo));
+    }
+    out
+}
+
 /// The MCP file `version`: hex SHA-256 of the file's content.
 ///
 /// Step 3's compare-and-swap edits key off this value, so it is deliberately
@@ -617,16 +630,48 @@ pub fn resolve_confined_path(root: &Path, relative: &Path) -> Result<PathBuf, Co
 pub fn file_version(content: &str) -> String {
     use sha2::{Digest, Sha256};
 
-    const HEX: [u8; 16] = *b"0123456789abcdef";
-    let digest = Sha256::digest(content.as_bytes());
-    let mut out = String::with_capacity(64);
-    for byte in digest {
-        let hi = HEX.get(usize::from(byte >> 4)).copied().unwrap_or(b'0');
-        let lo = HEX.get(usize::from(byte & 0x0f)).copied().unwrap_or(b'0');
-        out.push(char::from(hi));
-        out.push(char::from(lo));
+    hex_digest(&Sha256::digest(content.as_bytes()))
+}
+
+/// The content-hash version of a whole project: SHA-256 over every file's
+/// project-relative path and content, sorted by path.
+///
+/// Watchers poll this to follow the editor: any outside edit (git, a text
+/// editor on the data dir) flips it, while a content-preserving rewrite
+/// leaves it unchanged. Hidden entries and symlinks are excluded, exactly as
+/// the VFS walker excludes them, so `.git` internals never move the version.
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for unknown projects and
+/// [`ProjectError::Io`] when the project directory cannot be walked.
+pub fn project_version(data_dir: &Path, project_id: &str) -> Result<String, ProjectError> {
+    use sha2::{Digest, Sha256};
+
+    let found = collect_project_entries(data_dir, project_id).map_err(ProjectError::Io)?;
+    let Some(found) = found else {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    };
+
+    let mut files: Vec<(&str, &str)> = found
+        .iter()
+        .filter_map(|entry| match entry {
+            Found::File { id, content, .. } => {
+                Some((relative_of(project_id, id), content.as_str()))
+            }
+            Found::Dir { .. } => None,
+        })
+        .collect();
+    files.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut hasher = Sha256::new();
+    for (path, content) in files {
+        hasher.update(path.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(content.as_bytes());
+        hasher.update([0u8]);
     }
-    out
+    Ok(hex_digest(&hasher.finalize()))
 }
 
 /// Walks `project_id`'s directory and returns its entries.
@@ -2394,6 +2439,75 @@ mod tests {
         assert_eq!(file_version("system \"s\" {}\n"), version);
         assert_ne!(file_version("system \"s\" {}"), version);
         assert_ne!(file_version(""), version);
+    }
+
+    #[test]
+    fn project_version_is_stable_for_the_same_tree() {
+        let dir = data_dir_with_drone();
+        let first = project_version(dir.path(), "drone").unwrap();
+        let second = project_version(dir.path(), "drone").unwrap();
+        assert_eq!(first.len(), 64, "hex SHA-256 is 64 chars");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn project_version_flips_when_a_file_changes() {
+        let dir = data_dir_with_drone();
+        let before = project_version(dir.path(), "drone").unwrap();
+
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"changed\" {}\n",
+        );
+
+        assert_ne!(project_version(dir.path(), "drone").unwrap(), before);
+    }
+
+    #[test]
+    fn project_version_flips_when_files_are_added_or_removed() {
+        let dir = data_dir_with_drone();
+        let before = project_version(dir.path(), "drone").unwrap();
+
+        write_file(
+            &dir.path().join("drone/views/second.hcl"),
+            "view \"second\" {}\n",
+        );
+        let added = project_version(dir.path(), "drone").unwrap();
+        assert_ne!(added, before);
+
+        fs::remove_file(dir.path().join("drone/views/second.hcl")).unwrap();
+        assert_eq!(project_version(dir.path(), "drone").unwrap(), before);
+    }
+
+    #[test]
+    fn project_version_ignores_hidden_entries() {
+        // `.git` internals churn on every commit; they must not look like
+        // model edits to a watching client.
+        let dir = data_dir_with_drone();
+        let before = project_version(dir.path(), "drone").unwrap();
+
+        write_file(&dir.path().join(".git/config"), "[core]\n");
+        write_file(&dir.path().join("drone/.DS_Store"), "junk");
+
+        assert_eq!(project_version(dir.path(), "drone").unwrap(), before);
+    }
+
+    #[test]
+    fn project_version_is_unknown_for_non_projects() {
+        let dir = data_dir_with_drone();
+        assert!(matches!(
+            project_version(dir.path(), "ghost"),
+            Err(ProjectError::Unknown(_))
+        ));
+        assert!(matches!(
+            project_version(dir.path(), "../escape"),
+            Err(ProjectError::Unknown(_))
+        ));
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        assert!(matches!(
+            project_version(dir.path(), "notes"),
+            Err(ProjectError::Unknown(_))
+        ));
     }
 
     #[test]

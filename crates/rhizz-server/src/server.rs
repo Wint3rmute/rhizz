@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::body::{Body, Bytes};
-use axum::extract::{DefaultBodyLimit, State};
-use axum::http::{StatusCode, Uri, header};
+use axum::extract::{DefaultBodyLimit, Path, State};
+use axum::http::{HeaderMap, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router, routing::get, routing::post};
 use rmcp::transport::streamable_http_server::{
@@ -20,8 +20,18 @@ use rust_embed::EmbeddedFile;
 use serde_json::Value;
 
 use crate::assets::StaticAssets;
+use crate::locks::{AcquireOutcome, HeartbeatOutcome, LockManager};
 use crate::mcp::RhizzMcp;
 use crate::{sentry, storage};
+
+/// Shared axum state: the data dir plus the in-memory project locks.
+#[derive(Clone)]
+struct AppState {
+    /// Data dir holding one directory per project.
+    data_dir: PathBuf,
+    /// Who holds which project (proposal 0004).
+    locks: LockManager,
+}
 
 /// Builds the complete axum router for the server.
 ///
@@ -43,6 +53,9 @@ pub fn app(data_dir: PathBuf) -> Router {
         .route("/healthz", get(healthz))
         .route("/api/version", get(version))
         .route("/api/vfs", get(get_vfs).put(put_vfs))
+        .route("/api/projects/{id}/state", get(project_state))
+        .route("/api/projects/{id}/lock", post(acquire_lock))
+        .route("/api/projects/{id}/heartbeat", post(heartbeat_lock))
         .route(
             "/api/sentry",
             post(sentry_tunnel).layer(DefaultBodyLimit::max(SENTRY_ENVELOPE_LIMIT)),
@@ -50,7 +63,10 @@ pub fn app(data_dir: PathBuf) -> Router {
         // TODO: auth (bearer token / OAuth 2.1) before exposing beyond localhost
         .nest_service("/mcp", mcp)
         .fallback(get(spa_fallback))
-        .with_state(data_dir)
+        .with_state(AppState {
+            data_dir,
+            locks: LockManager::new(),
+        })
 }
 
 /// Handles `GET /healthz`, used by orchestrators/tests to probe liveness.
@@ -98,8 +114,8 @@ async fn version() -> Json<Value> {
 
 /// Fetches the entire VFS state (all projects + nodes), expanded from the
 /// project directories under the data dir.
-async fn get_vfs(State(data_dir): State<PathBuf>) -> Response {
-    match storage::load_vfs(&data_dir) {
+async fn get_vfs(State(state): State<AppState>) -> Response {
+    match storage::load_vfs(&state.data_dir) {
         Ok(vfs) => (StatusCode::OK, Json(vfs)).into_response(),
         Err(err) => {
             tracing::error!(?err, "failed to load VFS");
@@ -110,7 +126,7 @@ async fn get_vfs(State(data_dir): State<PathBuf>) -> Response {
 
 /// Persists the entire VFS state the frontend dumped on save. The payload
 /// is authoritative: project directories absent from it are deleted.
-async fn put_vfs(State(data_dir): State<PathBuf>, body: Bytes) -> Response {
+async fn put_vfs(State(state): State<AppState>, body: Bytes) -> Response {
     let payload: Value = match serde_json::from_slice(&body) {
         Ok(payload) => payload,
         Err(err) => {
@@ -118,7 +134,7 @@ async fn put_vfs(State(data_dir): State<PathBuf>, body: Bytes) -> Response {
             return error_response(StatusCode::BAD_REQUEST, "invalid JSON");
         }
     };
-    match storage::save_vfs(&data_dir, &payload) {
+    match storage::save_vfs(&state.data_dir, &payload) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => {
             // A malformed payload is the client's fault (400); a filesystem
@@ -132,6 +148,170 @@ async fn put_vfs(State(data_dir): State<PathBuf>, body: Bytes) -> Response {
             tracing::error!(?err, ?status, "failed to persist VFS");
             error_response(status, "failed to persist VFS")
         }
+    }
+}
+
+/// Reads the `PoC` identity: the trimmed, non-empty [`crate::locks::USER_HEADER`].
+fn request_user(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(crate::locks::USER_HEADER)?
+        .to_str()
+        .ok()
+        .map(str::trim)
+        .filter(|user| !user.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+/// Formats a lock expiry for API responses.
+fn lock_expiry_response(expires_at: std::time::SystemTime) -> Value {
+    Value::String(storage::format_rfc3339_millis(storage::millis_since_epoch(
+        expires_at,
+    )))
+}
+
+/// Handles `GET /api/projects/{id}/state`: the project's content-hash
+/// version plus who holds its lock, if anyone. Watchers poll this to follow
+/// the editor; edits made outside the web app (git, a text editor on the
+/// data dir) show up as a version change.
+async fn project_state(State(state): State<AppState>, Path(id): Path<String>) -> Response {
+    let version = match storage::project_version(&state.data_dir, &id) {
+        Ok(version) => version,
+        Err(storage::ProjectError::Unknown(_)) => {
+            return error_response(StatusCode::NOT_FOUND, "unknown project");
+        }
+        Err(storage::ProjectError::Io(err)) => {
+            tracing::error!(?err, "failed to read project");
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
+        }
+    };
+    let mut state_body = serde_json::Map::new();
+    state_body.insert("version".to_owned(), Value::String(version));
+    state_body.insert("lockedBy".to_owned(), Value::Null);
+    if let Some(info) = state.locks.get(&id) {
+        state_body.insert("lockedBy".to_owned(), Value::String(info.holder));
+        state_body.insert(
+            "lockExpiresAt".to_owned(),
+            lock_expiry_response(info.expires_at),
+        );
+    }
+    (StatusCode::OK, Json(Value::Object(state_body))).into_response()
+}
+
+/// Handles `POST /api/projects/{id}/lock`: takes (or renews) the project's
+/// lock for the `x-rhizz-user` caller. Held by someone else, the edit is
+/// refused with 409 naming the holder. Successes also carry the project's
+/// current version, so the new holder can chain its first write without
+/// another round trip (0004.2).
+async fn acquire_lock(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(user) = request_user(&headers) else {
+        return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
+    };
+    match storage::resolve_project(&state.data_dir, &id) {
+        Ok(_) => {}
+        Err(storage::ProjectError::Unknown(_)) => {
+            return error_response(StatusCode::NOT_FOUND, "unknown project");
+        }
+        Err(storage::ProjectError::Io(err)) => {
+            tracing::error!(?err, "failed to read project");
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
+        }
+    }
+    match state.locks.acquire(&id, &user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {
+            let Some(info) = state.locks.get(&id) else {
+                tracing::error!("lock vanished right after acquiring it");
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
+            };
+            let version = match storage::project_version(&state.data_dir, &id) {
+                Ok(version) => version,
+                Err(err) => {
+                    tracing::error!(?err, "failed to read project");
+                    return error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to read project",
+                    );
+                }
+            };
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "lockedBy": info.holder,
+                    "lockExpiresAt": lock_expiry_response(info.expires_at),
+                    "version": version,
+                })),
+            )
+                .into_response()
+        }
+        AcquireOutcome::Refused { holder } => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "lockedBy": holder,
+                "message": format!("project `{id}` is locked by `{holder}`"),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// Handles `POST /api/projects/{id}/heartbeat`: renews the lease for the
+/// `x-rhizz-user` holder without touching the idle timer. Not held by this
+/// user, the client must re-acquire through the lock endpoint (409).
+async fn heartbeat_lock(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(user) = request_user(&headers) else {
+        return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
+    };
+    match storage::resolve_project(&state.data_dir, &id) {
+        Ok(_) => {}
+        Err(storage::ProjectError::Unknown(_)) => {
+            return error_response(StatusCode::NOT_FOUND, "unknown project");
+        }
+        Err(storage::ProjectError::Io(err)) => {
+            tracing::error!(?err, "failed to read project");
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
+        }
+    }
+    match state.locks.heartbeat(&id, &user) {
+        HeartbeatOutcome::Renewed => {
+            let Some(info) = state.locks.get(&id) else {
+                tracing::error!("lock vanished right after renewing it");
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
+            };
+            let version = match storage::project_version(&state.data_dir, &id) {
+                Ok(version) => version,
+                Err(err) => {
+                    tracing::error!(?err, "failed to read project");
+                    return error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to read project",
+                    );
+                }
+            };
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "lockedBy": info.holder,
+                    "lockExpiresAt": lock_expiry_response(info.expires_at),
+                    "version": version,
+                })),
+            )
+                .into_response()
+        }
+        HeartbeatOutcome::NotHeld { holder } => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "lockedBy": holder,
+                "message": format!("project `{id}` is not held by `{user}`"),
+            })),
+        )
+            .into_response(),
     }
 }
 
@@ -695,6 +875,263 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // ── Project locks (proposal 0004) ───────────────────────────────────
+
+    /// A data dir holding one `drone` project with a model source.
+    fn data_dir_with_drone() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("drone/views")).unwrap();
+        std::fs::write(
+            tmp.path().join("drone/system.hcl"),
+            "system \"quadcopter\" {}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join("drone/views/main.hcl"),
+            "view \"main\" {}\n",
+        )
+        .unwrap();
+        tmp
+    }
+
+    /// Builds a lock/heartbeat/state request carrying the `PoC` identity
+    /// header, when `user` is set.
+    fn lock_request(method: &str, uri: &str, user: Option<&str>) -> Request<Body> {
+        let mut builder = Request::builder().method(method).uri(uri);
+        if let Some(user) = user {
+            builder = builder.header(crate::locks::USER_HEADER, user);
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    /// Reads a whole response body as JSON.
+    async fn body_json(response: Response) -> Value {
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn project_state_returns_version_and_no_lock_for_a_free_project() {
+        let tmp = data_dir_with_drone();
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/projects/drone/state")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert_eq!(
+            body["version"],
+            json!(storage::project_version(tmp.path(), "drone").unwrap())
+        );
+        assert_eq!(body["lockedBy"], json!(null));
+        assert!(body.get("lockExpiresAt").is_none());
+    }
+
+    #[tokio::test]
+    async fn project_state_is_404_for_an_unknown_project() {
+        let tmp = data_dir_with_drone();
+        let response = app_at(&tmp)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/projects/ghost/state")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn lock_acquire_reports_the_holder_and_refuses_strangers() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = body_json(response).await;
+        assert_eq!(body["lockedBy"], json!("alice"));
+        assert!(
+            body["lockExpiresAt"]
+                .as_str()
+                .is_some_and(|expires| expires.contains('T')),
+            "expiry must be a timestamp: {body}"
+        );
+        assert_eq!(
+            body["version"],
+            json!(storage::project_version(tmp.path(), "drone").unwrap())
+        );
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("bob"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(body_json(response).await["lockedBy"], json!("alice"));
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/projects/drone/state")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = body_json(response).await;
+        assert_eq!(body["lockedBy"], json!("alice"));
+        assert!(body["lockExpiresAt"].as_str().is_some());
+
+        // The holder renews instead of refusing itself.
+        let response = app
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn lock_requires_a_username() {
+        let tmp = data_dir_with_drone();
+        for user in [None, Some(""), Some("   ")] {
+            let response = app_at(&tmp)
+                .oneshot(lock_request("POST", "/api/projects/drone/lock", user))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST, "user: {user:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn lock_is_404_for_an_unknown_project() {
+        let tmp = data_dir_with_drone();
+        let response = app_at(&tmp)
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/ghost/lock",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn heartbeat_renews_for_the_holder_and_refuses_strangers() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+
+        // Nobody holds it yet: the heartbeat has nothing to renew.
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/heartbeat",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(body_json(response).await["lockedBy"], json!(null));
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/heartbeat",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_json(response).await["lockedBy"], json!("alice"));
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/heartbeat",
+                Some("bob"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(body_json(response).await["lockedBy"], json!("alice"));
+
+        let response = app
+            .oneshot(lock_request("POST", "/api/projects/drone/heartbeat", None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn state_version_moves_after_an_outside_edit() {
+        // Edits made outside the web app are not covered by locks, but they
+        // still show up to watchers as a version change.
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+        let state = || async {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/projects/drone/state")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            body_json(response).await
+        };
+
+        let before = state().await;
+        std::fs::write(
+            tmp.path().join("drone/system.hcl"),
+            "system \"edited-elsewhere\" {}\n",
+        )
+        .unwrap();
+        let after = state().await;
+        assert_ne!(before["version"], after["version"]);
     }
 
     fn assert_content_type(response: &axum::response::Response, expected: &str) {

@@ -26,5 +26,8 @@ pub mod mcp;
 /// Filesystem persistence for the VFS API: one directory per project.
 pub mod storage;
 
+/// Per-project edit locks: one in-memory holder per project (proposal 0004).
+pub mod locks;
+
 /// Forwarding of browser Sentry envelopes to Sentry.
 mod sentry;
