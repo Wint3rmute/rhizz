@@ -15,6 +15,7 @@
 
 ### Fix
 
+- gate port dots on selection in modeling canvas
 - rewrite connections on component instance rename
 - revert bundled landing images to unblock VRT, keep port baselines
 - run vrt-accept landing steps under nix for reproducibility
