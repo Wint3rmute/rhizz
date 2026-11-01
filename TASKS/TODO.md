@@ -16,12 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - During view transitions, connection arrows don't fade out
-
-It appears that connection arrows don't fade out when the component to which the
-arrow points to is not supposed to exist in the target view. They stay fully
-visible until the transition completes, then disappear abruptly.
-
 ## Task <N> - Investigate weird component instance rename behavior
 
 Behavior I noticed when using the app:
@@ -29,6 +23,20 @@ Behavior I noticed when using the app:
 1. Create a new system
 2. Create 2 component instances, connect them via a connection (with ports and everything)
 3. Go to the component inspector and try renaming the component instance
+
+## Task <N> - display grid in inventory/ and explore/
+
+Re-use the modeling toolbar (the one with "toggle grid", "zoom to fill" etc) on
+inventory/ and explore/ pages, but with only a subset of buttons: "zoom to fill"
+and "toggle grid". Don't show the remaining buttons.
+
+## Task <N> - exploring diagrams in embed mode
+
+When browsing system diagrams in Embed mode (/modeling/embed/), it's not
+possible to navigate defined system views, as it is possible in the explore/
+view. Please make it possible to navigate back and forth through linked views.
+
+---
 
 #### Expected result
 
@@ -45,22 +53,6 @@ Error appears in the UI popup:
 Make sure this behavior reproduces via some kind of test (unit/integration/e2e).
 If it does not reproduce, abort and inform the user. If it reproduces, treat the
 reproduction test as a red test and fix the behavior.
-
-## Task <N> - Changing project name does not respect lower/uppercase
-
-Steps to reproduce:
-
-1. Create a new project "test"
-2. Go back to projects list, click on rename and enter "Test" as the project name, click "ok"
-3. Notice that the project's name changed to "Test" - that's correct
-4. Refresh the page
-5. Project's name is back to "test"
-
-I believe that the project name should live in the `project` metadata,
-filesystem-based name should only be used when a project does not have a name
-set under `project`. Think about how GitLab/GitHub handle this - there's a
-separate project name and project **path**. Right now, the path is used for
-everything and it also appears that it does not respect upper/lowercase.
 
 ## Task <N> - more advanced connection routing on canvas
 
@@ -153,15 +145,6 @@ Definition of done:
   - If you made changes - verify again and commit the updated configuration
 
 
-## (For later brainstorming) Task <N> - routing multiple connections between 2 components
-
-When 2 components have more than one connection between them, connection routing
-rules cause connections to be drawn over each other. Instead, a better routing algorithm should be implemented.
-I'm thinking about a PCB-style routing that lines up multiple connections along a shared path, but with some extra
-offset to avoid overlapping.
-
----
-
 ## (For later) Task <N> — Allow for panning & zooming in the Explore view
 
 Currently, only the Diagrams page allows panning & zooming. I want to extract
@@ -177,21 +160,6 @@ Definition of done:
 - Panning & zooming now works in Explore/Inventory/Embedded diagrams viewer
 
 --
-
-## (For later) Task <N> — Multi-file workspace tabs and project import/export
-
-Add a unified workspace view that lets users inspect the generated `system.hcl` and `views.hcl` files side-by-side with the visual canvas, and import/export projects.
-
-- Tabbed workspace switcher:
-  - "Canvas" (interactive visual modeler, default)
-  - "system.hcl" (live code viewer / editor for the core architectural model)
-  - "views.hcl" (live code viewer / editor for layout coordinates and view filters)
-- File Import / Export:
-  - "Export Project" downloads `system.hcl` and `views.hcl`.
-  - "Open / Import" loads existing `.hcl` files into the GUI and auto-populates the visual model.
-- Validate with `deno task check`, `deno task test`, `deno task build`.
-
----
 
 ## Task <N> - exploring diagrams in embed mode
 
