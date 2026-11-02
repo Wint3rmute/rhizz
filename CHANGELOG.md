@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: follow project locks with read-only UI
 - **server**: replace whole-VFS PUT with per-project writes
 - **server**: add per-project lock manager and project state
 
