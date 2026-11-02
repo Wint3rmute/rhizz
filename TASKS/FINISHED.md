@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0004.4 MCP `AI` holder + lock/version on reads
+
+MCP half of 0004: every write contends as the hardcoded `AI` user, and every read echoes the version and holder so an AI loop sees staleness without another call.
+
+- Writes: `mutate_project` (0004.2) plus `overwrite_model`, `edit_documentation`, `create_doc` now take `locks` + `user`; free auto-acquires as `AI`, held-by-other is `Locked{holder}` (new `OverwriteModelError`/`EditDocError` variants mapped to tool errors naming the holder, file untouched), success resets idle. Inner `MODEL/DOC_WRITE_LOCK` CAS mutexes kept as the second layer. MCP wrappers pass the shared manager + `"AI"`.
+- Reads: `list_files`, `check_project`, and per-entry `fetch_projects` echo `version` (content-hash) + `lockedBy` (+`lockExpiresAt` when held) via a shared `lock_state` helper. All read-tool descriptions updated; `tools/list` unchanged (no new tools).
+- Docs: every "0004 is not implemented" / last-writer-wins sentence in tool descriptions, rustdoc headers, and the 0003 proposal rewritten (read echo documented in step 1, AI-holder contention in steps 2–3). The step-2 open question on mutation versions stays open (mutations still take no version; CAS lives in overwrite/docs writes).
+- Tests through `/mcp` RPC: human-held refuses overwrite/edit/create byte-identical naming her; AI auto-acquires on a free project and shows as `lockedBy: "AI"` in HTTP state; a 16s sleep proves the lease expiry frees the project for AI; reads echo version + holder on free and held projects.
+- Lease vs idle: expiry/idle paths are holder-agnostic and covered by fake-clock manager unit tests; the sleep test covers expiry end-to-end. Idle (60s) has no end-to-end test — too slow for CI.
+
+Validation: `just test` green (171 Rust — incl. the 16s expiry test — + vitest + e2e untouched), `just lint-rust` + `cargo doc` clean, `just book` green. No web changes.
+Branch: `feat/0004-4-mcp-ai-lock`.
+
+---
+
+
 ## Task <N> — 0004.3 Web identity + lock polling + read-only UI
 
 Web half of 0004: the editor follows the lock, goes read-only under others, and names the holder. No `PUT /api/vfs` behavior left to change.

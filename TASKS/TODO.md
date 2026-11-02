@@ -186,21 +186,6 @@ Definition of done:
 ---
 
 
-## Task <N> — 0004.4 MCP `AI` holder + lock/version on reads
-
-MCP half of 0004. Depends on 0004.1-0004.2.
-
-- In `mcp.rs::call_tool` (or `run_mutation`/`overwrite_model`/`create_doc`/`edit_documentation` wrappers) hardcode `user = "AI"`: free → auto-acquire as `AI` (each tool call = activity, resets idle); held by human → tool error naming holder, file untouched; held by `AI` → proceed with existing `DOC_EDIT_LOCK`/`MODEL_WRITE_LOCK` as inner CAS mutex.
-- Expose lock/version on reads: `list_files` (+`check_project`, `fetch_projects` entries) return `version + lockedBy/lockExpiresAt?` so an AI loop (`read -> check -> mutate`) sees staleness without extra calls.
-- Update 0003 proposal notes + every tool description that says "0004 is not implemented".
-- Tests through `/mcp` RPC: `AI` acquires free project, refused while human holds (byte-identical), expiry/idle frees for `AI`, read tools echo `version+lock`.
-
-Definition of done:
-
-- `cargo test -p rhizz-server`, `just lint-rust`, `just format` pass.
-
----
-
 ## Task <N> — 0004.5 Lock/poll timing tune + hardening
 
 Final pass over 0004.1-0004.4. Mark [0004](book/src/proposals/0004-locking-and-collab.md) implemented.
