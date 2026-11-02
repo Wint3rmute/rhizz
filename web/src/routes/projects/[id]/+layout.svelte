@@ -7,8 +7,10 @@
   import {
     clearCurrentProject,
     getCurrentProject,
+    getServerBaseUrl,
     setCurrentProject,
   } from "../../../ProjectState.svelte";
+  import { projectLock } from "../../../collab/projectLock.svelte";
   import ProjectTour from "../../../tour/ProjectTour.svelte";
   import PaletteHost from "../../../commands/PaletteHost.svelte";
   import {
@@ -33,6 +35,7 @@
   // project so nothing (navbar links, tour flow) keeps acting on it.
   onDestroy(() => {
     clearCurrentProject();
+    projectLock.stop();
   });
 
   $effect(() => {
@@ -43,6 +46,9 @@
     setCurrentProject(id).then(() => {
       loading = false;
     });
+    // Track this project's lock (a no-op poller for local/memory
+    // backends): the badge and every editor's read-only flag follow it.
+    projectLock.start(id, getServerBaseUrl());
   });
 
   // Diagram embeds are project-scoped, so they sit under this layout like

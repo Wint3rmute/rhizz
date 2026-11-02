@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0004.3 Web identity + lock polling + read-only UI
+
+Web half of 0004: the editor follows the lock, goes read-only under others, and names the holder. No `PUT /api/vfs` behavior left to change.
+
+- `collab/projectLock.svelte.ts`: module-singleton `ProjectLock` (`$state` fields; no context needed — Navbar lives outside the layout). `start(projectId, serverUrl)` polls `GET state` every 4s and heartbeats every 10s while holding (under the 15s lease); local/memory backends pass null and stay lock-free. `readonly` = held by someone else; `getLockBaseVersion()` feeds the HTTP CAS token; `handleLockLost(reload)` refreshes, reloads, and toasts ("locked by X" / "changed elsewhere").
+- `collab/identity.ts` (+ rename): `getOrCreateUsername` (memoized per backend instance so storage-blocked browsers don't self-lock), `setUsername` (trimmed, blank refused). Rename while holding hands the lock to the old name until its lease lapses (noted in the badge dropdown).
+- Write gate: `applyModelMutation` returns `locked` on 409/423 (server error carries `status` via `statusError`/`isLockRefusal`); Modeling transactions refuse up front when read-only, reset undo history + reload + toast on loss, and their `undo()` handles lock loss the same way. Code debounced writes and CRUD ops catch 409 — clear draft, reload, reset editor text to disk. Inventory ops check `locked` after every `applyModelMutation`; view/doc writes catch 409 the same way.
+- Read-only UI: Monaco `readOnly` prop (reactive `updateOptions`, cursor/scroll/undo survive); `FileTree` callbacks and toolbar mutating buttons (`onautolayout/onresetview/onaddcomponent/onaddannotation`) become `undefined` when locked (prop types widened with `| undefined`); Inventory "+ New"/"Create view" disabled. Canvas drags still move locally but never persist (blocked at the debounced write).
+- Badge: `LockBadge.svelte` (DaisyUI dropdown: holder, your name + rename) in the navbar center (desktop) + mobile menu top + status-bar strip next to the strictness control. Only renders when locked, so existing VRT baselines are untouched.
+- Deviation from the sketch: no `store.invalidate()` (the store already drops its cache on any failed write, which *is* the reload path); Code keeps drafts except on lock loss, where the debounce window is dropped and the editor resets to disk; same-user tabs share the holder, so the new `base_version` CAS only bites once polling lands. Playwright two-tab test skipped: e2e runs the localStorage backend with no server — contention is covered by a vitest two-store/one-fake test, and the badge by VRT stories.
+- Tests: 7 lock-client (poll/heartbeat/loss/stop), 2 contention + version-attach, identity rename, 2 story plays (badge text); new `Locked`/`LockedByMe` VRT baselines (4 screenshots).
+- Heads-up for 0004.4/0004.5: heartbeat has no `pagehide` flush and no backoff; rename needs a backend/store refresh to take full effect; canvas interactions stay live (writes refused, local state transient).
+
+Validation: `just test` green (165 Rust + 1262 vitest + 164 e2e), `just lint` clean, `just build` green, `just vrt` 334 unchanged (4 new baselines accepted).
+Branch: `feat/0004-3-weblock-ui`.
+
+---
+
 ## Task <N> — 0004.2 Per-project writes + server enforcement
 
 Replaces whole-VFS `PUT /api/vfs` (now 410 Gone) with per-project writes, so one client can no longer overwrite or delete another's projects. `GET /api/vfs` stays for bootstrapping.

@@ -5,6 +5,7 @@
 // "VfsProjectStore read cache" suite at the bottom of this file, and the
 // create/delete console announcements are in the suite after it.
 import { describe, expect, it, vi } from "vitest";
+import { getLockBaseVersion, projectLock } from "../collab/projectLock.svelte";
 import {
   LocalStorageProjectStore,
   memoryBackend,
@@ -368,6 +369,55 @@ describe("ServerProjectStore HTTP behavior", () => {
       store.createFile("drone", null, "system.hcl", "system {}"),
     ).rejects.toThrow(/409/);
     expect(await store.listNodes("drone")).toEqual([]);
+  });
+
+  it("lets two clients share one server: second writer is refused, then follows", async () => {
+    // Tab A (alice) and tab B (bob) on one fake server: A's write holds the
+    // project, B's write is refused, and B reads A's version afterwards.
+    const fake = makeFakeFetch();
+    const tabA = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      now: () => "t0",
+    });
+    const tabB = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "bob",
+      now: () => "t0",
+    });
+    const project = await tabA.createProject("drone");
+    await tabA.createFile(project.id, null, "system.hcl", "system {}");
+
+    await expect(
+      tabB.createFile(project.id, null, "other.hcl", "other {}"),
+    ).rejects.toThrow(/409/);
+    // B follows A's version on the next read.
+    expect(await tabB.listNodes(project.id)).toHaveLength(1);
+  });
+
+  it("attaches the lock version as the write's base version", async () => {
+    const fake = makeFakeFetch();
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      getBaseVersion: getLockBaseVersion,
+      now: () => "t0",
+    });
+    projectLock.me = "alice";
+    projectLock.projectId = "drone";
+    projectLock.serverUrl = "http://rhizz-server";
+    try {
+      const project = await store.createProject("drone");
+      // The polled version (here, the fake's counter after the create).
+      projectLock.version = "v1";
+      await store.createFile(project.id, null, "system.hcl", "system {}");
+      const put = [...fake.calls].reverse().find((c) => c.method === "PUT");
+      expect(JSON.parse(put?.body ?? "{}")).toMatchObject({
+        base_version: "v1",
+      });
+    } finally {
+      projectLock.stop();
+    }
   });
 
   it("strips trailing slashes from the base url", async () => {

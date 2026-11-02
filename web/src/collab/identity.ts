@@ -28,3 +28,14 @@ export function getOrCreateUsername(): string {
   safeSetItem(USERNAME_KEY, fresh);
   return fresh;
 }
+
+/**
+ * Renames the stored username (trimmed; blank is refused with null).
+ * Returns the stored name, or null when the name was blank. Never throws.
+ */
+export function setUsername(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === "") return null;
+  safeSetItem(USERNAME_KEY, trimmed);
+  return trimmed;
+}

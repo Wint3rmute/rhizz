@@ -29,6 +29,11 @@
     protocolUsage,
   } from "../../../../modelView";
   import { toastState } from "../../../../ToastState.svelte";
+  import {
+    handleLockLost,
+    projectLock,
+  } from "../../../../collab/projectLock.svelte";
+  import { isLockRefusal } from "../../../../vfs/vfsStore";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { projectStore } from "../../../../ProjectState.svelte";
   import { primaryHclPath } from "../../../../vfs/compile";
@@ -86,6 +91,17 @@
 
   // ── Model state (shared with the status bar and the other pages) ───────────
   const projectModel = getProjectModel();
+
+  // Someone else holding the project turns this page read-only: creation
+  // buttons disable, and every mutation refuses up front.
+  const readonly = $derived(projectLock.readonly);
+
+  // Runs when a write is refused for a lock: reloads the model and tells
+  // the user who holds the project. No undo stacks live on this page —
+  // every edit is a single already-guarded op.
+  async function handleInventoryLockLost(): Promise<void> {
+    await handleLockLost(() => projectModel.reload());
+  }
   let model = $derived(projectModel.model);
   let raw = $derived(projectModel.raw);
   // Whether the model has been read (or found unreadable) — see `modelReady`
@@ -435,8 +451,14 @@
     const id = projectId;
     if (!id) return;
     const fs = openProjectFs(projectStore, id);
-    await fs.mkdir("docs", { recursive: true });
-    await fs.writeFile(`docs/${label}.md`, content);
+    try {
+      await fs.mkdir("docs", { recursive: true });
+      await fs.writeFile(`docs/${label}.md`, content);
+    } catch (error) {
+      if (!isLockRefusal(error)) throw error;
+      await handleInventoryLockLost();
+      return;
+    }
     // A debounced write can land after an entity switch: only refresh the
     // viewer state when its entity is still selected, otherwise the new
     // selection would flash "Loading…" until its own load lands. Reopening
@@ -472,7 +494,7 @@
 
   async function handleAddEntity(): Promise<void> {
     const id = projectId;
-    if (!id || creatingEntity) return;
+    if (!id || creatingEntity || readonly) return;
     if (activeTab === InventoryTab.Protocols) {
       isCreateProtocolModalOpen = true;
       return;
@@ -506,6 +528,10 @@
         kind: "add_system",
         label: trimmed,
       });
+      if (result.locked) {
+        await handleInventoryLockLost();
+        return;
+      }
       if (!result.applied) return;
       await projectModel.reload();
       selectLabel(trimmed);
@@ -550,6 +576,10 @@
           ports: data.ports,
         },
       });
+      if (result.locked) {
+        await handleInventoryLockLost();
+        return;
+      }
       if (!result.applied) return;
       await projectModel.reload();
       selectLabel(label);
@@ -589,6 +619,10 @@
         ...op,
         path: label,
       });
+      if (result.locked) {
+        await handleInventoryLockLost();
+        return;
+      }
       if (!result.applied) return;
       await projectModel.reload();
     } catch (error) {
@@ -651,6 +685,10 @@
       );
       const content = await fs.readFile(targetPath).catch(() => "");
       const result = await applyModelMutation(fs, targetPath, content, op);
+      if (result.locked) {
+        await handleInventoryLockLost();
+        return false;
+      }
       if (!result.applied) {
         toastState.show(
           `Change refused: ${result.refusal ?? "the model would become invalid"}`,
@@ -762,6 +800,10 @@
           ? { kind: "delete_system", path: label }
           : { kind: "delete_component", path: label },
       );
+      if (result.locked) {
+        await handleInventoryLockLost();
+        return;
+      }
       if (!result.applied) return;
       await projectModel.reload();
       selectLabel(null);
@@ -793,12 +835,18 @@
             def.label,
           );
       const path = defaultViewPath(def.label);
-      await writeDiagramLayoutFile(
-        fs,
-        path,
-        emptyDiagramLayout(system),
-        system,
-      );
+      try {
+        await writeDiagramLayoutFile(
+          fs,
+          path,
+          emptyDiagramLayout(system),
+          system,
+        );
+      } catch (error) {
+        if (!isLockRefusal(error)) throw error;
+        await handleInventoryLockLost();
+        return;
+      }
       // The view's own path relative to `views/` — the modeling route is a rest
       // param, so this is a plain path suffix, `views/` already being implied.
       await goto(
@@ -873,7 +921,7 @@
           <button
             type="button"
             class="btn btn-primary btn-xs ml-auto"
-            disabled={creatingEntity}
+            disabled={creatingEntity || readonly}
             onclick={() => void handleAddEntity()}
             data-testid="inventory-add-entity"
           >
@@ -1027,7 +1075,7 @@
                     <button
                       type="button"
                       class="btn btn-primary btn-sm mt-3"
-                      disabled={creatingView}
+                      disabled={creatingView || readonly}
                       onclick={() => void handleCreateView()}
                       data-testid="inventory-create-view"
                     >

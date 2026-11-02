@@ -186,23 +186,6 @@ Definition of done:
 ---
 
 
-## Task <N> — 0004.3 Web identity + lock polling + read-only UI
-
-Web half of 0004. Depends on 0004.1-0004.2.
-
-- Identity: `web/src/collab/identity.ts` via `safeStorage`, key `rhizz-username`, `getOrCreateUsername()` + rename UI. Follow `lastView.ts`/`tourRequest` idioms, never raw `localStorage`.
-- State: `ProjectLock.svelte.ts` context in `routes/projects/[id]/+layout.svelte` (`{ version, lockedBy, isMine, readonly }`), polls `GET state` every ~3-5s only when `ServerProjectStore` is active (local/memory backends stay always-mine).
-- Write gate: single choke point in `vfs/vfsStore.ts::mutate()` — attach `{ user, baseVersion }`, map 409/423 → discard drafts + `projectModel.reload()` + toast ("lock lost"). Auto-acquire at `planModelMutation`/transaction `do()`, not at debounced flush. Add `store.invalidate()` for poll-triggered reload (today cache only drops on write failure).
-- Read-only: thread `readonly` into `MonacoEditor`, `ModelingPage.runModelLayoutTransaction` early-return (push nothing on refusal), `Inventory` modals, `FileTree` ops. `DiagramViewer`/`Explore` already write-free. Clear undo stack on lock loss.
-- UI: lock badge (lock icon + holder on click) in `Navbar.svelte` desktop/mobile + `ProjectStatusBar`/`DiagnosticsStatusBar` next to score. Project-list icons deferred (open question in 0004).
-- Tests: vitest for lock context/gate mapping + Playwright two-tab (tab A edits, tab B refused + follows version, idle release lets B in). VRT for lock badge.
-
-Definition of done:
-
-- `just test`, `just lint`, `just build` pass; `just vrt-accept` for new badge baselines.
-
----
-
 ## Task <N> — 0004.4 MCP `AI` holder + lock/version on reads
 
 MCP half of 0004. Depends on 0004.1-0004.2.

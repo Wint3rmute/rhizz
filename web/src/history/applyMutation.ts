@@ -21,6 +21,7 @@ import type {
 } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
 import { apply_model_op } from "../rhizz_wasm_wrapper";
+import { isLockRefusal } from "../vfs/vfsStore";
 
 // Minimal filesystem surface the dispatcher needs; `ProjectFs` satisfies it
 // structurally.
@@ -113,6 +114,8 @@ export interface ApplyMutationResult {
   path?: string;
   /** Why the op was refused (`applied: false` only): the resolver's error messages, for the user. */
   refusal?: string;
+  /** The write was refused because someone else holds the project lock (`applied: false` only). */
+  locked?: boolean;
 }
 
 type MutationPlan =
@@ -188,7 +191,14 @@ export async function applyModelMutation(
 ): Promise<ApplyMutationResult> {
   const plan = planModelMutation(primaryPath, baselineContent, op);
   if (!plan.ok) return { applied: false, refusal: plan.refusal };
-  await fs.writeFile(primaryPath, plan.hcl);
+  try {
+    await fs.writeFile(primaryPath, plan.hcl);
+  } catch (error) {
+    if (isLockRefusal(error)) {
+      return { applied: false, refusal: "project is locked", locked: true };
+    }
+    throw error;
+  }
   for (const action of plan.actions) recordModelAction(action);
   if (plan.path === undefined) return { applied: true };
   return { applied: true, path: plan.path };
