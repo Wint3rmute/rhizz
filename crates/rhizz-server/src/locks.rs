@@ -264,6 +264,29 @@ impl LockManager {
         locks.remove(project);
         drop(locks);
     }
+
+    /// Frees `project` when `user` holds it (for example on tab close), so
+    /// the address is immediately reusable instead of waiting out the lease.
+    /// Anyone else's live lock is left alone — there is no force-unlock.
+    /// Lapsed entries are pruned like everywhere else.
+    #[must_use]
+    pub fn release_if_held_by(&self, project: &str, user: &str) -> bool {
+        let now = Instant::now();
+        let mut locks = self.lock_or_poisoned();
+        let outcome = match locks.get(project).cloned() {
+            Some(lock) if lock.live(now) && lock.holder == user => {
+                locks.remove(project);
+                true
+            }
+            Some(lock) if lock.live(now) => false,
+            _ => {
+                locks.remove(project);
+                false
+            }
+        };
+        drop(locks);
+        outcome
+    }
 }
 
 #[cfg(test)]
@@ -506,6 +529,29 @@ mod tests {
         ));
         // Releasing a free project is a no-op.
         manager.release("drone");
+    }
+
+    #[test]
+    fn release_if_held_by_frees_only_the_holders_lock() {
+        let start = Instant::now();
+        let manager = held_at("drone", "alice", start);
+
+        // A stranger cannot release someone else's live lock.
+        assert!(!manager.release_if_held_by("drone", "bob"));
+        assert_eq!(manager.get_at("drone", start).unwrap().holder, "alice");
+
+        // The holder frees it immediately — no waiting out the lease.
+        assert!(manager.release_if_held_by("drone", "alice"));
+        assert!(manager.get_at("drone", start).is_none());
+        assert!(matches!(
+            manager.acquire_at("drone", "bob", start),
+            AcquireOutcome::Acquired
+        ));
+
+        // … and so does the next holder. Releasing a free project reports
+        // nothing to free.
+        assert!(manager.release_if_held_by("drone", "bob"));
+        assert!(!manager.release_if_held_by("drone", "bob"));
     }
 
     #[test]
