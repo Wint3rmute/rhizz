@@ -1505,8 +1505,8 @@ fn hash_dir_version(data_dir: &Path, project_id: &str) -> Result<String, WritePr
 
 /// Serializes whole-model overwrites within this process, so two overwrites
 /// sent with the same version cannot both pass the version check. This is
-/// compare-and-swap without a project lock (proposal 0004 is not
-/// implemented), mirroring [`DOC_EDIT_LOCK`] for docs.
+/// the inner compare-and-swap; the project lock (proposal 0004) is the
+/// outer admission check, mirroring [`DOC_EDIT_LOCK`] for docs.
 static MODEL_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// The outcome of an `overwrite_model` call.
@@ -1528,6 +1528,12 @@ pub enum OverwriteModelError {
     /// No project with this id.
     #[error("unknown project `{0}`")]
     Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project is locked by `{holder}`")]
+    Locked {
+        /// The username holding the project.
+        holder: String,
+    },
     /// The filesystem refused to read or write.
     #[error("{0}")]
     Io(#[from] std::io::Error),
@@ -1555,9 +1561,12 @@ pub enum OverwriteModelError {
 /// Compare-and-swap: `version` must equal [`file_version`] of the file on
 /// disk when the file exists — overwriting without a version, or with a
 /// stale one, is refused. When no primary file exists yet the target defaults
-/// to `system.hcl` and `version` is ignored. The check and the write happen
+/// to `system.hcl` and `version` is ignored. The lock is taken first (free
+/// projects auto-acquire; held-by-other is refused with
+/// [`OverwriteModelError::Locked`]), then the check and the write happen
 /// under the same `MODEL_WRITE_LOCK`, so two overwrites sent with the same
-/// version cannot both apply.
+/// version cannot both apply. A successful write resets the lock's idle
+/// timer.
 ///
 /// Confinement mirrors [`mutate_project`]: the project is resolved with
 /// [`resolve_project`] and the primary file is one of the two known names,
@@ -1567,24 +1576,35 @@ pub enum OverwriteModelError {
 /// # Errors
 ///
 /// Returns [`OverwriteModelError::Unknown`] for unknown projects,
+/// [`OverwriteModelError::Locked`] when someone else holds the lock,
 /// [`OverwriteModelError::Io`] when the filesystem fails,
 /// [`OverwriteModelError::Refused`] with a human-readable reason for
 /// version mismatches, and [`OverwriteModelError::Invalid`] with the resolver
 /// diagnostics when the new content does not resolve.
 pub fn overwrite_model(
     data_dir: &Path,
+    locks: &crate::locks::LockManager,
     project_id: &str,
+    user: &str,
     content: &str,
     version: Option<&str>,
 ) -> Result<OverwriteModelResult, OverwriteModelError> {
-    let _guard = MODEL_WRITE_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    use crate::locks::AcquireOutcome;
 
     let root = resolve_project(data_dir, project_id).map_err(|e| match e {
         ProjectError::Unknown(id) => OverwriteModelError::Unknown(id),
         ProjectError::Io(err) => OverwriteModelError::Io(err),
     })?;
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(OverwriteModelError::Locked { holder });
+        }
+    }
+
+    let _guard = MODEL_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let mut primary: Option<(PathBuf, String)> = None;
     for candidate in ["system.hcl", "main.hcl"] {
@@ -1632,6 +1652,9 @@ pub fn overwrite_model(
         SaveVfsError::Malformed(message) => OverwriteModelError::Io(std::io::Error::other(message)),
         SaveVfsError::Io(err) => OverwriteModelError::Io(err),
     })?;
+    // The model changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
     Ok(OverwriteModelResult {
         version: file_version(&hcl),
         total_lines: hcl.lines().count(),
@@ -1641,8 +1664,8 @@ pub fn overwrite_model(
 
 /// Serializes `edit_documentation` read-check-write sequences within this
 /// process, so two edits sent with the same version cannot both pass the
-/// version check. This is compare-and-swap without a project lock (proposal
-/// 0004 is not implemented).
+/// version check. This is the inner compare-and-swap; the project lock
+/// (proposal 0004) is the outer admission check.
 static DOC_EDIT_LOCK: Mutex<()> = Mutex::new(());
 
 /// The outcome of an `edit_documentation` call.
@@ -1662,6 +1685,12 @@ pub enum EditDocError {
     /// No project with this id.
     #[error("unknown project `{0}`")]
     Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project is locked by `{holder}`")]
+    Locked {
+        /// The username holding the project.
+        holder: String,
+    },
     /// The filesystem refused to read or write.
     #[error("{0}")]
     Io(#[from] std::io::Error),
@@ -1673,7 +1702,9 @@ pub enum EditDocError {
 /// Replaces one exact span of text in an existing Markdown doc under
 /// `docs/`.
 ///
-/// The read, the version check, and the write happen under one held lock, so
+/// The project lock is taken first (free projects auto-acquire; held-by-other
+/// is refused with [`EditDocError::Locked`]). Then the read, the version
+/// check, and the write happen under one held lock, so
 /// two edits sent with the same version cannot both apply: the loser sees
 /// the winner's version and is refused. `old_text` must occur exactly once;
 /// zero matches, several matches, and an empty `old_text` are all refused.
@@ -1691,24 +1722,36 @@ pub enum EditDocError {
 /// # Errors
 ///
 /// Returns [`EditDocError::Unknown`] for unknown projects,
+/// [`EditDocError::Locked`] when someone else holds the lock,
 /// [`EditDocError::Io`] when the filesystem fails, and
 /// [`EditDocError::Refused`] with a human-readable reason otherwise.
+#[allow(clippy::too_many_arguments)]
 pub fn edit_documentation(
     data_dir: &Path,
+    locks: &crate::locks::LockManager,
     project_id: &str,
+    user: &str,
     doc_path: &str,
     old_text: &str,
     new_text: &str,
     version: &str,
 ) -> Result<EditDocResult, EditDocError> {
-    let _guard = DOC_EDIT_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    use crate::locks::AcquireOutcome;
 
     let root = resolve_project(data_dir, project_id).map_err(|e| match e {
         ProjectError::Unknown(id) => EditDocError::Unknown(id),
         ProjectError::Io(err) => EditDocError::Io(err),
     })?;
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(EditDocError::Locked { holder });
+        }
+    }
+
+    let _guard = DOC_EDIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let relative = Path::new(doc_path);
     let absolute =
@@ -1767,6 +1810,9 @@ pub fn edit_documentation(
         SaveVfsError::Malformed(message) => EditDocError::Io(std::io::Error::other(message)),
         SaveVfsError::Io(err) => EditDocError::Io(err),
     })?;
+    // The doc changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
     Ok(EditDocResult {
         version: file_version(&updated),
         total_lines: updated.lines().count(),
@@ -1775,6 +1821,9 @@ pub fn edit_documentation(
 
 /// Creates a new Markdown doc under `docs/`, or overwrites an existing one
 /// whole.
+///
+/// The project lock is taken first (free projects auto-acquire; held-by-other
+/// is refused with [`EditDocError::Locked`]).
 ///
 /// A missing doc is created with `content` (parent directories are created as
 /// needed); an existing doc is replaced whole, but only when `version` equals
@@ -1794,23 +1843,34 @@ pub fn edit_documentation(
 /// # Errors
 ///
 /// Returns [`EditDocError::Unknown`] for unknown projects,
+/// [`EditDocError::Locked`] when someone else holds the lock,
 /// [`EditDocError::Io`] when the filesystem fails, and
 /// [`EditDocError::Refused`] with a human-readable reason otherwise.
 pub fn create_doc(
     data_dir: &Path,
+    locks: &crate::locks::LockManager,
     project_id: &str,
+    user: &str,
     doc_path: &str,
     content: &str,
     version: Option<&str>,
 ) -> Result<EditDocResult, EditDocError> {
-    let _guard = DOC_EDIT_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    use crate::locks::AcquireOutcome;
 
     let root = resolve_project(data_dir, project_id).map_err(|e| match e {
         ProjectError::Unknown(id) => EditDocError::Unknown(id),
         ProjectError::Io(err) => EditDocError::Io(err),
     })?;
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(EditDocError::Locked { holder });
+        }
+    }
+
+    let _guard = DOC_EDIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     let relative = Path::new(doc_path);
     let absolute =
@@ -1861,6 +1921,9 @@ pub fn create_doc(
         SaveVfsError::Malformed(message) => EditDocError::Io(std::io::Error::other(message)),
         SaveVfsError::Io(err) => EditDocError::Io(err),
     })?;
+    // The doc changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
     Ok(EditDocResult {
         version: file_version(content),
         total_lines: content.lines().count(),
@@ -3282,9 +3345,10 @@ mod tests {
         );
         let current = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
         let version = file_version(&current);
+        let locks = crate::locks::LockManager::new();
 
         let fixed = "system \"quadcopter\" {\n  full_name = \"Quad\"\n}\n";
-        let result = overwrite_model(dir.path(), "drone", fixed, Some(&version))
+        let result = overwrite_model(dir.path(), &locks, "drone", "alice", fixed, Some(&version))
             .expect("valid content must apply");
         let stored = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
         assert_eq!(result.version.len(), 64);
@@ -3297,16 +3361,117 @@ mod tests {
     }
 
     #[test]
+    fn doc_writes_refuse_when_locked_by_someone_else() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/docs/guide.md"),
+            "# Guide\nOld text.\n",
+        );
+        let before = std::fs::read_to_string(dir.path().join("drone/docs/guide.md")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+        assert!(matches!(
+            locks.acquire("drone", "alice"),
+            crate::locks::AcquireOutcome::Acquired
+        ));
+
+        let refused = edit_documentation(
+            dir.path(),
+            &locks,
+            "drone",
+            "bob",
+            "docs/guide.md",
+            "Old text.",
+            "New text.",
+            &version,
+        );
+        assert!(
+            matches!(
+                refused,
+                Err(EditDocError::Locked { ref holder }) if holder == "alice"
+            ),
+            "must name the holder: {refused:?}"
+        );
+        let refused = create_doc(
+            dir.path(),
+            &locks,
+            "drone",
+            "bob",
+            "docs/guide.md",
+            "# Replaced\n",
+            Some(&version),
+        );
+        assert!(
+            matches!(
+                refused,
+                Err(EditDocError::Locked { ref holder }) if holder == "alice"
+            ),
+            "must name the holder: {refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/guide.md")).unwrap(),
+            before,
+            "lock-refused doc writes must not touch the file"
+        );
+
+        // The holder's own edit applies and keeps the lock.
+        let applied = edit_documentation(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/guide.md",
+            "Old text.",
+            "New text.",
+            &version,
+        )
+        .expect("the holder's edit must apply");
+        assert_eq!(applied.version.len(), 64);
+        assert_eq!(
+            locks.get("drone").expect("lock must be held").holder,
+            "alice"
+        );
+    }
+
+    #[test]
+    fn overwrite_model_refuses_when_locked_by_someone_else() {
+        let dir = data_dir_with_drone();
+        let before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+        assert!(matches!(
+            locks.acquire("drone", "alice"),
+            crate::locks::AcquireOutcome::Acquired
+        ));
+
+        let fixed = "system \"quadcopter\" {\n  full_name = \"Quad\"\n}\n";
+        let refused = overwrite_model(dir.path(), &locks, "drone", "bob", fixed, Some(&version));
+        assert!(
+            matches!(
+                refused,
+                Err(OverwriteModelError::Locked { ref holder }) if holder == "alice"
+            ),
+            "must name the holder: {refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "a lock-refused overwrite must not touch the file"
+        );
+    }
+
+    #[test]
     fn overwrite_model_refuses_invalid_content_and_stale_versions() {
         let dir = data_dir_with_drone();
         let before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
         let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
 
         // Broken replacement: unknown source is E014, so nothing is written.
         let broken = "system \"quadcopter\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
         assert!(
             matches!(
-                overwrite_model(dir.path(), "drone", broken, Some(&version)),
+                overwrite_model(dir.path(), &locks, "drone", "alice", broken, Some(&version)),
                 Err(OverwriteModelError::Invalid(_))
             ),
             "unresolvable content must be refused"
@@ -3320,11 +3485,18 @@ mod tests {
         // Stale and missing versions are refused without touching the file.
         let fixed = "system \"quadcopter\" {\n  full_name = \"Quad\"\n}\n";
         assert!(matches!(
-            overwrite_model(dir.path(), "drone", fixed, Some("0".repeat(64).as_str())),
+            overwrite_model(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                fixed,
+                Some("0".repeat(64).as_str())
+            ),
             Err(OverwriteModelError::Refused(_))
         ));
         assert!(matches!(
-            overwrite_model(dir.path(), "drone", fixed, None),
+            overwrite_model(dir.path(), &locks, "drone", "alice", fixed, None),
             Err(OverwriteModelError::Refused(_))
         ));
         assert_eq!(
@@ -3332,7 +3504,7 @@ mod tests {
             before
         );
         assert!(matches!(
-            overwrite_model(dir.path(), "ghost", fixed, None),
+            overwrite_model(dir.path(), &locks, "ghost", "alice", fixed, None),
             Err(OverwriteModelError::Unknown(_))
         ));
     }
