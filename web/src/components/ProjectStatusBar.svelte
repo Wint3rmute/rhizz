@@ -4,6 +4,7 @@
   // fixtures) while the app feeds it the same compile every page sees.
   import DiagnosticsStatusBar from "./DiagnosticsStatusBar.svelte";
   import { getProjectModel } from "../ProjectModel.svelte";
+  import { projectLock } from "../collab/projectLock.svelte";
 
   const projectModel = getProjectModel();
 </script>
@@ -11,4 +12,6 @@
 <DiagnosticsStatusBar
   diagnostics={projectModel.diagnostics}
   score={projectModel.score ?? null}
+  lockedBy={projectLock.lockedBy}
+  lockMe={projectLock.me}
 />

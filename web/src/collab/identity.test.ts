@@ -2,7 +2,12 @@
 // `safeStorage` degrades to missing/null — exactly the storage-blocked case
 // the identity helper must survive.
 import { describe, expect, it } from "vitest";
-import { USERNAME_KEY, getOrCreateUsername, getUsername } from "./identity";
+import {
+  USERNAME_KEY,
+  getOrCreateUsername,
+  getUsername,
+  setUsername,
+} from "./identity";
 import { safeGetItem } from "../safeStorage";
 
 describe("collab identity", () => {
@@ -17,5 +22,11 @@ describe("collab identity", () => {
     expect(first).toMatch(/^guest-[0-9a-f]{8}$/);
     // Without persistence every call mints a fresh one instead of crashing.
     expect(second).toMatch(/^guest-[0-9a-f]{8}$/);
+  });
+
+  it("renames with trimming and refuses blanks", () => {
+    expect(setUsername("  bob  ")).toBe("bob");
+    expect(setUsername("   ")).toBeNull();
+    expect(setUsername("")).toBeNull();
   });
 });

@@ -56,6 +56,11 @@
   // reporting is a browser-only concern the store itself stays free of.
   export const projectStore: ProjectStore = createDefaultStore();
 
+  /** The rhizz-server origin, or null for local/memory backends. */
+  export function getServerBaseUrl(): string | null {
+    return serverUrl ?? null;
+  }
+
   let currentProjectId = $state<string | null>(null);
   let currentProject = $state<Project | null>(null);
 

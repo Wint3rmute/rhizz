@@ -6,6 +6,7 @@ import {
   projectStore,
   setCurrentProject,
 } from "../ProjectState.svelte";
+import { projectLock } from "../collab/projectLock.svelte";
 import { projectSlug } from "../vfs/slug";
 import Navbar from "./Navbar.svelte";
 import { paletteShortcutHint } from "./palette/commandPalette";
@@ -120,5 +121,23 @@ export const MobileExpanded: Story = {
   },
   args: {
     isOpen: true,
+  },
+};
+
+// A locked project shows who holds it next to the title. Opted out of VRT:
+// like ProjectOpen, the project (and the lock) is seeded in the test
+// runner, while the static VRT build would capture a plain navbar.
+export const LockedProject: Story = {
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    projectLock.me = "alice";
+    projectLock.lockedBy = "bob";
+    try {
+      const canvas = within(canvasElement);
+      const badge = await canvas.findByTestId("lock-badge");
+      await expect(badge).toHaveTextContent("🔒 bob");
+    } finally {
+      projectLock.stop();
+    }
   },
 };

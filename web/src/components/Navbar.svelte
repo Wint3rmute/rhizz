@@ -21,6 +21,8 @@
   import { WORKSPACE_PAGES } from "../commands/workspacePages";
   import { requestPalette } from "../commands/paletteRequest.svelte";
   import { paletteShortcutHint } from "./palette/commandPalette";
+  import LockBadge from "./LockBadge.svelte";
+  import { projectLock } from "../collab/projectLock.svelte";
 
   // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
   // renders `<Navbar />` with no props and reads everything from the shared
@@ -115,9 +117,10 @@
     <!-- Center: project title, truly centered regardless of side widths -->
     {#if activeProject}
       <span
-        class="absolute left-1/2 -translate-x-1/2 truncate max-w-35 sm:max-w-50 hidden sm:block"
+        class="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-2 max-w-35 sm:max-w-50"
       >
-        {activeProject.name}
+        <span class="truncate">{activeProject.name}</span>
+        <LockBadge holder={projectLock.lockedBy} />
       </span>
     {/if}
 
@@ -201,6 +204,7 @@
       class="md:hidden border-t border-base-300 bg-base-100 p-3 flex flex-col gap-2 shadow-lg"
     >
       {#if activeProjectId}
+        <LockBadge holder={projectLock.lockedBy} />
         <div class="flex flex-col gap-1">
           {#each NAV_LINKS as link (link.label)}
             <a

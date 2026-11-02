@@ -12,6 +12,22 @@ import type { ProjectStore } from "./store";
 import type { FsDirectory, FsFile, FsNode, Project } from "./types";
 import { projectFiles } from "./tree";
 import { getOrCreateUsername } from "../collab/identity";
+import { getLockBaseVersion } from "../collab/projectLock.svelte";
+
+/** An HTTP failure carrying its status, so callers can tell a lock refusal (409) from other failures. */
+export function statusError(message: string, status: number): Error {
+  return Object.assign(new Error(message), { status });
+}
+
+/** Whether `error` is a server lock refusal (409): someone else holds the project. */
+export function isLockRefusal(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    ((error as { status?: unknown }).status === 409 ||
+      (error as { status?: unknown }).status === 423)
+  );
+}
 
 /** How one backend loads and persists the whole VFS blob. */
 export interface VfsBackend {
@@ -111,6 +127,7 @@ export function httpBackend(
   baseUrl: string,
   fetchImpl: FetchLike = globalThis.fetch,
   getUser: () => string = getOrCreateUsername,
+  getBaseVersion: () => string | null = getLockBaseVersion,
 ): VfsBackend {
   const origin = baseUrl.replace(/\/+$/, "");
   // Resolved once: without persistence every `getUser()` call mints a fresh
@@ -130,16 +147,23 @@ export function httpBackend(
     projectId: string,
     files: { path: string; content?: string }[],
   ): Promise<void> => {
+    const baseVersion = getBaseVersion();
     const response = await fetchImpl(
       `${origin}/api/projects/${projectId}/files`,
       {
         method: "PUT",
         headers: { "content-type": "application/json", ...userHeaders() },
-        body: JSON.stringify({ files }),
+        body: JSON.stringify({
+          files,
+          ...(baseVersion === null ? {} : { base_version: baseVersion }),
+        }),
       },
     );
     if (!response.ok) {
-      throw new Error(`Project save failed: HTTP ${String(response.status)}`);
+      throw statusError(
+        `Project save failed: HTTP ${String(response.status)}`,
+        response.status,
+      );
     }
   };
 
@@ -149,7 +173,10 @@ export function httpBackend(
       headers: { ...userHeaders() },
     });
     if (!response.ok) {
-      throw new Error(`Project delete failed: HTTP ${String(response.status)}`);
+      throw statusError(
+        `Project delete failed: HTTP ${String(response.status)}`,
+        response.status,
+      );
     }
   };
 
@@ -446,11 +473,12 @@ export class ServerProjectStore extends VfsProjectStore {
       now?: () => string;
       fetch?: FetchLike;
       getUser?: () => string;
+      getBaseVersion?: () => string | null;
       onPersisted?: (bytes: number) => void;
     } = {},
   ) {
     super(
-      httpBackend(baseUrl, opts.fetch, opts.getUser),
+      httpBackend(baseUrl, opts.fetch, opts.getUser, opts.getBaseVersion),
       opts.now,
       undefined,
       opts.onPersisted,

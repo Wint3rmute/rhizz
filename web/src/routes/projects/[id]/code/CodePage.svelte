@@ -2,6 +2,10 @@
   import { page } from "$app/state";
   import { onDestroy, untrack } from "svelte";
   import MonacoEditor from "../../../../components/MonacoEditor.svelte";
+  import {
+    handleLockLost,
+    projectLock,
+  } from "../../../../collab/projectLock.svelte";
   import { createDebounced } from "../../../../debounce";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { projectStore } from "../../../../ProjectState.svelte";
@@ -19,6 +23,7 @@
   } from "../../../../components/modular_ui/viewport";
   import FileTree from "./FileTree.svelte";
   import { codePanes } from "./panes";
+  import { isLockRefusal } from "../../../../vfs/vfsStore";
 
   let {
     projectId,
@@ -41,6 +46,11 @@
   // (and thus the bar) reflects unsaved keystrokes, while the debounced write
   // persists them.
   const projectModel = getProjectModel();
+
+  // Someone else holding the project turns this page read-only: the editor
+  // stops accepting input, the file tree hides its mutating buttons, and
+  // writes refuse up front.
+  const readonly = $derived(projectLock.readonly);
 
   let entries = $state<Dirent[]>([]);
   let selectedPath = $state<string | null>(null);
@@ -100,6 +110,23 @@
   let lastWrittenContent = "";
   let fileLoaded = $state(false);
 
+  // Runs when a debounced write or file-tree op is refused for a lock:
+  // drops the editor draft (it was never persisted), reloads the shared
+  // model and the tree, resets the editor to the file on disk, and tells
+  // the user who holds the project.
+  async function handleCodeLockLost(): Promise<void> {
+    if (loadedPath !== null) projectModel.clearDraft(loadedPath);
+    await handleLockLost(async () => {
+      await projectModel.reload();
+      await refreshEntries();
+      if (loadedPath !== null) {
+        const fresh = await fs.readFile(loadedPath).catch(() => "");
+        content = fresh;
+        lastWrittenContent = fresh;
+      }
+    });
+  }
+
   // Every write persists the whole VFS blob, so writing on every keystroke
   // turned a typed sentence into one full-blob transfer per character. Trailing
   // debounce instead: the write happens once the typing pauses. The `fs` handle
@@ -108,7 +135,9 @@
   const WRITE_DEBOUNCE_MS = 700;
   const scheduleFileWrite = createDebounced(
     (file: ProjectFs, path: string, text: string) => {
-      void file.writeFile(path, text);
+      void file.writeFile(path, text).catch((error: unknown) => {
+        if (isLockRefusal(error)) void handleCodeLockLost();
+      });
     },
     WRITE_DEBOUNCE_MS,
   );
@@ -167,6 +196,7 @@
   // "is the editor's text already accounted for", not "is it on disk yet".
   $effect(() => {
     const file = fs;
+    if (readonly) return;
     if (fileLoaded && loadedPath !== null && content !== lastWrittenContent) {
       lastWrittenContent = content;
       // Reflect the edit in the shared model immediately, before the debounced
@@ -205,6 +235,10 @@
       await refreshEntries();
       selectedPath = path;
     } catch (error) {
+      if (isLockRefusal(error)) {
+        await handleCodeLockLost();
+        return;
+      }
       reportError(error);
     }
   }
@@ -218,6 +252,10 @@
       await fs.mkdir(joinPath(parentPath, name));
       await refreshEntries();
     } catch (error) {
+      if (isLockRefusal(error)) {
+        await handleCodeLockLost();
+        return;
+      }
       reportError(error);
     }
   }
@@ -238,6 +276,10 @@
       if (selectedPath === path) selectedPath = newPath;
       await refreshEntries();
     } catch (error) {
+      if (isLockRefusal(error)) {
+        await handleCodeLockLost();
+        return;
+      }
       reportError(error);
     }
   }
@@ -255,6 +297,10 @@
       await refreshEntries();
       if (selectedPath === null) selectedPath = firstHclPath();
     } catch (error) {
+      if (isLockRefusal(error)) {
+        await handleCodeLockLost();
+        return;
+      }
       reportError(error);
     }
   }
@@ -283,10 +329,10 @@
       <FileTree
         {entries}
         bind:selectedPath
-        oncreatefile={handleCreateFile}
-        oncreatedirectory={handleCreateDirectory}
-        onrename={handleRename}
-        ondelete={handleDelete}
+        oncreatefile={readonly ? undefined : handleCreateFile}
+        oncreatedirectory={readonly ? undefined : handleCreateDirectory}
+        onrename={readonly ? undefined : handleRename}
+        ondelete={readonly ? undefined : handleDelete}
       />
     </div>
   </Pane>
@@ -333,6 +379,7 @@
           bind:value={content}
           language={selectedPath?.endsWith(".md") ? "markdown" : "hcl"}
           surface="base-100"
+          readOnly={readonly}
         />
       </div>
     {/if}

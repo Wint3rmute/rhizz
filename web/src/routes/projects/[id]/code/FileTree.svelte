@@ -25,12 +25,15 @@
   }: {
     entries: Dirent[];
     selectedPath: string | null;
+    /**
+     * `parentPath` is "" for the project root. Pass `undefined` (e.g. when
+     * read-only) to hide the corresponding buttons.
+     */
+    oncreatefile?: ((parentPath: string) => void) | undefined;
     /** `parentPath` is "" for the project root. */
-    oncreatefile?: (parentPath: string) => void;
-    /** `parentPath` is "" for the project root. */
-    oncreatedirectory?: (parentPath: string) => void;
-    onrename?: (path: string) => void;
-    ondelete?: (path: string) => void;
+    oncreatedirectory?: ((parentPath: string) => void) | undefined;
+    onrename?: ((path: string) => void) | undefined;
+    ondelete?: ((path: string) => void) | undefined;
   } = $props();
 
   // Shallow-adapt the path tree built by buildPathTree into the shell's

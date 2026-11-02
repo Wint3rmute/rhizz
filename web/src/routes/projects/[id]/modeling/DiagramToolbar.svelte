@@ -20,12 +20,12 @@
     /** Whether an auto-layout pass is currently running (disables/pulses the button). */
     autoLayoutRunning?: boolean;
     /** Omit to hide the Auto Layout button (minimal toolbar). */
-    onautolayout?: () => void;
+    onautolayout?: (() => void) | undefined;
     onzoomtofill: () => void;
     /** Omit to hide the Reset View button (minimal toolbar). */
-    onresetview?: () => void;
-    onaddcomponent?: () => void;
-    onaddannotation?: () => void;
+    onresetview?: (() => void) | undefined;
+    onaddcomponent?: (() => void) | undefined;
+    onaddannotation?: (() => void) | undefined;
   }
 
   let {

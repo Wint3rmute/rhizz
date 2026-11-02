@@ -6,6 +6,8 @@
   interface Props {
     value: string;
     language?: string;
+    /** Makes the editor non-editable (reactive, unlike `options`). */
+    readOnly?: boolean;
     /** Monaco options merged over the defaults below. Create-time only. */
     options?: monaco.editor.IStandaloneEditorConstructionOptions;
     /** The live editor, for callers that need `focus()` or a selection. */
@@ -23,6 +25,7 @@
   let {
     value = $bindable(),
     language = "plaintext",
+    readOnly = false,
     options = {},
     editor = $bindable(undefined),
     surface = "base-200",
@@ -81,7 +84,7 @@
       lineNumbers: "off",
       roundedSelection: false,
       scrollBeyondLastLine: false,
-      readOnly: false,
+      readOnly: untrack(() => readOnly),
       theme: themeName,
       automaticLayout: true,
       // Untracked like `value`, and for a sharper reason: callers pass this
@@ -134,6 +137,12 @@
     if (editor && value !== editor.getValue()) {
       editor.setValue(value);
     }
+  });
+
+  // Reactive read-only flip (e.g. a project lock): no teardown, so the
+  // cursor, the scroll position, and the undo stack survive the flip.
+  $effect(() => {
+    editor?.updateOptions({ readOnly });
   });
 </script>
 

@@ -14,6 +14,11 @@
   import { onDestroy, tick, untrack } from "svelte";
   import persisted from "../../../../Persisted.svelte";
   import { toastState } from "../../../../ToastState.svelte";
+  import {
+    handleLockLost,
+    projectLock,
+  } from "../../../../collab/projectLock.svelte";
+  import { isLockRefusal } from "../../../../vfs/vfsStore";
   import { createDebounced } from "../../../../debounce";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { projectStore } from "../../../../ProjectState.svelte";
@@ -241,6 +246,30 @@
   const projectModel = getProjectModel();
 
   let fs = $derived(openProjectFs(projectStore, projectId));
+
+  // Someone else holding the project turns every editor on this page
+  // read-only: model transactions refuse up front, layout/view writes are
+  // caught at the write, and the toolbar/FileTree hide their mutating
+  // buttons. Canvas drags still move nodes locally but never persist.
+  const readonly = $derived(projectLock.readonly);
+
+  // Runs when a write is refused for a lock (or the page was already
+  // read-only): drops undo history (every entry would refuse the same way),
+  // reloads the model, and tells the user who holds the project.
+  async function handleModelingLockLost(): Promise<void> {
+    resetUndoHistory();
+    await handleLockLost(() => projectModel.reload());
+  }
+
+  // Reports a failed write: lock refusals go through the lock-loss path
+  // (reload + holder toast), everything else keeps the old alert.
+  function reportWriteError(error: unknown): void {
+    if (isLockRefusal(error)) {
+      void handleModelingLockLost();
+      return;
+    }
+    reportDiagramError(error);
+  }
 
   // ── Modular side panels ─────────────────────────────────────────────────────
   // Inspector (+ diagram picker) on the left, component tree on the right:
@@ -723,18 +752,28 @@
                   full_name: "Main system",
                 },
               );
+              if (ensured.locked) {
+                await handleModelingLockLost();
+                return;
+              }
               if (ensured.applied) {
                 await projectModel.reload();
               }
             }
             systemName = existing[0]?.label || "main";
           }
-          await writeDiagramLayoutFile(
-            fs,
-            `${VIEW_LAYOUT_DIR}/main.hcl`,
-            emptyDiagramLayout(systemName),
-            systemName,
-          );
+          try {
+            await writeDiagramLayoutFile(
+              fs,
+              `${VIEW_LAYOUT_DIR}/main.hcl`,
+              emptyDiagramLayout(systemName),
+              systemName,
+            );
+          } catch (error) {
+            if (!isLockRefusal(error)) throw error;
+            await handleModelingLockLost();
+            return;
+          }
           await refreshDiagramEntries();
         }
       })
@@ -788,7 +827,15 @@
       layout: DiagramLayout,
       systemName: string,
     ) => {
-      void writeDiagramLayoutFile(file, path, layout, systemName);
+      // Checked at fire time, not schedule time: a drag that starts free
+      // can end locked, and only the write must be refused.
+      if (projectLock.readonly) return;
+      void writeDiagramLayoutFile(file, path, layout, systemName).catch(
+        (error: unknown) => {
+          if (isLockRefusal(error)) void handleModelingLockLost();
+          else console.error("Failed to persist diagram layout:", error);
+        },
+      );
     },
     LAYOUT_WRITE_DEBOUNCE_MS,
   );
@@ -994,7 +1041,7 @@
       // (back returns to the view they came from).
       selectView(path);
     } catch (error) {
-      reportDiagramError(error);
+      reportWriteError(error);
     }
   }
 
@@ -1009,7 +1056,7 @@
       });
       await refreshDiagramEntries();
     } catch (error) {
-      reportDiagramError(error);
+      reportWriteError(error);
     }
   }
 
@@ -1037,7 +1084,7 @@
       if (selectedDiagramPath === path) selectView(newPath, true);
       await refreshDiagramEntries();
     } catch (error) {
-      reportDiagramError(error);
+      reportWriteError(error);
     }
   }
 
@@ -1061,7 +1108,7 @@
       // rewritten to the fallback rather than pushed as a dead entry.
       selectView(firstDiagramPath(), true);
     } catch (error) {
-      reportDiagramError(error);
+      reportWriteError(error);
     }
   }
 
@@ -1453,7 +1500,15 @@
 
   async function undoUnifiedEntry(): Promise<boolean> {
     if (!unifiedHistory.canUndo) return false;
-    if (await unifiedHistory.undo()) {
+    let undone: boolean;
+    try {
+      undone = await unifiedHistory.undo();
+    } catch (error) {
+      if (!isLockRefusal(error)) throw error;
+      await handleModelingLockLost();
+      return false;
+    }
+    if (undone) {
       const seq = unifiedUndoSeqs.pop();
       if (seq !== undefined) {
         unifiedRedoSeqs.push(seq);
@@ -1585,6 +1640,17 @@
     op: ModelMutationOp,
     layoutApply?: (createdPath?: string) => void,
   ): Promise<boolean> {
+    if (readonly) {
+      const holder = projectLock.lockedBy;
+      toastState.show(
+        holder !== null
+          ? `This project is locked by ${holder} — read-only`
+          : "This project is read-only",
+        "warning",
+        8_000,
+      );
+      return false;
+    }
     const diagramBefore = snapshotDiagram();
     const { path: targetPath, content: systemBefore } = await readMainContent();
     const tx = {
@@ -1592,6 +1658,10 @@
       do: async (): Promise<boolean> => {
         const cur = await readMainContent();
         const result = await applyModelMutation(fs, cur.path, cur.content, op);
+        if (result.locked) {
+          await handleModelingLockLost();
+          return false;
+        }
         if (!result.applied) {
           showRefusal(result.refusal);
           return false;
@@ -1602,7 +1672,13 @@
         return true;
       },
       undo: async (): Promise<void> => {
-        await fs.writeFile(targetPath, systemBefore);
+        try {
+          await fs.writeFile(targetPath, systemBefore);
+        } catch (error) {
+          if (!isLockRefusal(error)) throw error;
+          await handleModelingLockLost();
+          return;
+        }
         await projectModel.reload();
         applyDiagramSnapshot(diagramBefore);
         noteDiagramEdited();
@@ -1820,12 +1896,17 @@
       textAlign: box?.textAlign ?? DEFAULT_TEXT_ALIGN,
     };
 
-    await writeDiagramLayoutFile(
-      fs,
-      `${VIEW_LAYOUT_DIR}/${path}`,
-      layout,
-      system,
-    );
+    try {
+      await writeDiagramLayoutFile(
+        fs,
+        `${VIEW_LAYOUT_DIR}/${path}`,
+        layout,
+        system,
+      );
+    } catch (error) {
+      reportWriteError(error);
+      return;
+    }
     await refreshDiagramEntries();
     selectView(path);
   }
@@ -1877,7 +1958,7 @@
       await refreshDiagramEntries();
       selectView(path);
     } catch (error) {
-      reportDiagramError(error);
+      reportWriteError(error);
     }
   }
 
@@ -2416,8 +2497,14 @@
     try {
       await fs.readFile(docPath);
     } catch {
-      await fs.mkdir("docs", { recursive: true });
-      await fs.writeFile(docPath, `# ${label}\n`);
+      try {
+        await fs.mkdir("docs", { recursive: true });
+        await fs.writeFile(docPath, `# ${label}\n`);
+      } catch (error) {
+        if (!isLockRefusal(error)) throw error;
+        await handleModelingLockLost();
+        return;
+      }
     }
     await goto(
       `${resolve("/projects/[id]/code", { id: projectId })}?file=${encodeURIComponent(
@@ -4187,10 +4274,10 @@
             if (path) selectView(path);
           }
         }
-        oncreatefile={handleCreateDiagram}
-        oncreatedirectory={handleCreateDiagramFolder}
-        onrename={handleRenameDiagram}
-        ondelete={handleDeleteDiagram}
+        oncreatefile={readonly ? undefined : handleCreateDiagram}
+        oncreatedirectory={readonly ? undefined : handleCreateDiagramFolder}
+        onrename={readonly ? undefined : handleRenameDiagram}
+        ondelete={readonly ? undefined : handleDeleteDiagram}
       />
     </div>
   </Pane>
@@ -4391,11 +4478,11 @@
         snapGridSizeOptions={SNAP_GRID_SIZE_OPTIONS}
         bind:gridVisible
         {autoLayoutRunning}
-        onautolayout={runAutoLayout}
+        onautolayout={readonly ? undefined : runAutoLayout}
         onzoomtofill={zoomToFill}
-        onresetview={() => reset_view(editor_state)}
-        onaddcomponent={() => openCreateComponentModal()}
-        onaddannotation={() => addAnnotationHandler()}
+        onresetview={readonly ? undefined : () => reset_view(editor_state)}
+        onaddcomponent={readonly ? undefined : () => openCreateComponentModal()}
+        onaddannotation={readonly ? undefined : () => addAnnotationHandler()}
       />
 
       <div
