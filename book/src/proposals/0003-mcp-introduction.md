@@ -41,7 +41,8 @@ same text a human would in a text editor. Paths are confined to the project's
 directory, with the same exclusions as the VFS storage (hidden entries,
 symlinks).
 
-**Implemented (2026-10):** all four tools ship on `/mcp` in `rhizz-server`.
+**Implemented (2026-10, extended 2026-11):** all four tools ship on `/mcp`
+in `rhizz-server`.
 The version for `read_file` and `list_files` files is hex SHA-256 of the whole
 file content — deliberately not the VFS's mtime-based `revision` — and is the
 value step 3's compare-and-swap edits will require. `read_file`'s `offset` is
@@ -50,6 +51,10 @@ value step 3's compare-and-swap edits will require. `read_file`'s `offset` is
 entries carry `kind` (`"file"`/`"directory"`); files also carry `revision`
 and `version`. Unknown projects, confinement violations, and reading a
 directory or missing path are tool errors (`isError`), not protocol errors.
+`list_files`, `check_project`, and `fetch_projects` entries also echo the
+project-level content-hash `version` and the lock holder (`lockedBy`, and
+`lockExpiresAt` when held), so an AI loop sees staleness without another
+call.
 
 ### Step 2: mutations
 
@@ -109,10 +114,10 @@ one tool per op, with the op's name and parameters.
   `delete_protocol` ship on `/mcp`, completing the step-2 surface: every
   `ModelOp` except `create_component` is now exposed.
 - **Locking:** mutations are writes like any other and respect project locking
-  ([0004](0004-locking-and-collab.md)). An op acquires the lock and is
-  refused while a human holds it. Mutations act as the hardcoded user `AI`,
-  the identity 0004 reserves for MCP clients. The mutation step should not
-  ship before 0004, or must accept last-writer-wins.
+  ([0004](0004-locking-and-collab.md)): every tool acquires the lock as the
+  hardcoded user `AI` (the identity 0004 reserves for MCP clients) and is
+  refused — file untouched — while a human holds the project. A successful
+  mutation counts as an edit and resets the lock's idle timer.
 - **No auth:** like the rest of the server, the endpoint has no authentication
   at this stage of the project and assumes a trusted environment.
 
@@ -142,16 +147,18 @@ text-oriented interface rather than `ModelOp`s. The tools are:
 - **Writes:** atomic, through the same write path as the VFS save, so a
   failed write never leaves a partial file.
 - **Locking and identity:** as in step 2, the edit acquires the project lock
-  and is refused while a human holds it, and acts as user `AI`.
-- **Implemented (2026-10):** `edit_documentation` and `create_doc` ship on
-  `/mcp`. `edit_documentation` replaces one exact span in an existing
-  `docs/**.md` file; `create_doc` creates a new doc (parents included) or
-  overwrites an existing one whole, requiring the `version` `read_file`
-  returned when the file already exists. Both return the new `version` and
-  `totalLines`. 0004 is not implemented, so this is compare-and-swap only,
-  with no project lock and no `AI` identity: reads, version checks, and
-  writes happen under one held lock inside the blocking task, so two writes
-  sent with the same version cannot both apply.
+  as user `AI` and is refused while a human holds it. A successful edit
+  counts as an edit and resets the lock's idle timer.
+- **Implemented (2026-10, updated 2026-11):** `edit_documentation` and
+  `create_doc` ship on `/mcp`. `edit_documentation` replaces one exact span
+  in an existing `docs/**.md` file; `create_doc` creates a new doc (parents
+  included) or overwrites an existing one whole, requiring the `version`
+  `read_file` returned when the file already exists. Both return the new
+  `version` and `totalLines`. Since 0004 the tools also take the project lock
+  as the hardcoded `AI` user and are refused while a human holds the
+  project: reads, version checks, and writes still happen under one held
+  inner lock inside the blocking task, so two writes sent with the same
+  version cannot both apply.
 - **Scope:** docs only. Changes to `system.hcl` still go through the step 2
   ops.
 
