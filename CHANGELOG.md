@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **server,web**: tune and harden project locks, mark 0004 implemented
 - **server**: add voluntary lock release endpoint
 - **mcp**: enforce AI project lock on writes, echo version and lock on reads
 - **web**: follow project locks with read-only UI
