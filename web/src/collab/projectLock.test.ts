@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LOCK_HEARTBEAT_MS,
+  LOCK_POLL_MAX_MS,
   LOCK_POLL_MS,
   ProjectLock,
 } from "./projectLock.svelte";
@@ -10,12 +11,16 @@ import {
 interface FakeServer {
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   calls: { method: string; url: string; user: string | null }[];
-  state: { version: string; lockedBy: string | null };
+  state: { version: string; lockedBy: string | null; down: boolean };
 }
 
 function makeFakeServer(): FakeServer {
   const calls: FakeServer["calls"] = [];
-  const state = { version: "v1", lockedBy: null as string | null };
+  const state = {
+    version: "v1",
+    lockedBy: null as string | null,
+    down: false,
+  };
   const fetch = (
     input: RequestInfo | URL,
     init?: RequestInit,
@@ -29,6 +34,7 @@ function makeFakeServer(): FakeServer {
     const method = init?.method ?? "GET";
     const headers = new Headers(init?.headers);
     calls.push({ method, url, user: headers.get("x-rhizz-user") });
+    if (state.down) return Promise.reject(new Error("network down"));
     if (url.endsWith("/state")) {
       return Promise.resolve(
         new Response(
@@ -149,5 +155,46 @@ describe("ProjectLock", () => {
     const calls = fake.calls.length;
     await vi.advanceTimersByTimeAsync(LOCK_POLL_MS * 3);
     expect(fake.calls).toHaveLength(calls);
+  });
+
+  it("backs the poll off while the server is unreachable", async () => {
+    const fake = makeFakeServer();
+    fake.state.down = true;
+    const lock = new ProjectLock();
+    lock.me = "alice";
+    lock.start("drone", "http://server", fake.fetch);
+    // The immediate refresh fails; the chain backs off: 4s, 16s, 30s, …
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.calls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(LOCK_POLL_MS);
+    expect(fake.calls).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(LOCK_POLL_MS * 2);
+    expect(fake.calls).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(LOCK_POLL_MS * 2);
+    expect(fake.calls).toHaveLength(3);
+    // Recovery resets the interval.
+    fake.state.down = false;
+    await vi.advanceTimersByTimeAsync(LOCK_POLL_MAX_MS);
+    expect(fake.calls).toHaveLength(4);
+    expect(lock.version).toBe("v1");
+    const steady = fake.calls.length;
+    await vi.advanceTimersByTimeAsync(LOCK_POLL_MS);
+    expect(fake.calls).toHaveLength(steady + 1);
+    lock.stop();
+  });
+
+  it("sends a best-effort release on the way out", async () => {
+    const fake = makeFakeServer();
+    fake.state.lockedBy = "alice";
+    const lock = new ProjectLock();
+    lock.me = "alice";
+    lock.start("drone", "http://server", fake.fetch);
+    await vi.advanceTimersByTimeAsync(0);
+
+    await lock.release();
+    const goodbye = fake.calls.find((c) => c.url.endsWith("/release"));
+    expect(goodbye?.method).toBe("POST");
+    expect(goodbye?.user).toBe("alice");
+    lock.stop();
   });
 });

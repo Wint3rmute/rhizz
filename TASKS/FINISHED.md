@@ -4,6 +4,42 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0004.5 Lock/poll timing tune + hardening
+
+Final pass over 0004.1–0004.4. Proposal
+[0004](book/src/proposals/0004-locking-and-collab.md) is now `implemented`.
+
+- Timings (lease 15 s, heartbeat 10 s, poll 4 s backing off to 30 s while the
+  server is unreachable, idle 60 s) documented in the proposal (new "Tuned
+  timings" section, with the shared-tab decision), plus the `.../release`
+  route in `SPEC/cli.md` and the poll/heartbeat/read-only/badge behavior in
+  `SPEC/frontend.md`. Open questions closed: no project-list icons
+  (deferred), timings as tuned.
+- `POST /api/projects/{id}/release` (new): the holder's voluntary goodbye —
+  only the holder can release their own lock (others get 409 naming the
+  holder, free is a 204 no-op). No force-unlock, unchanged. `LockManager`
+  gained `release_if_held_by` (check-and-remove under one mutex) with unit
+  tests; the delete path keeps using unconditional `release()`.
+- Web: poll loop is a `setTimeout` chain with doubling backoff (cap 30 s,
+  reset on success); `pagehide` in the project layout sends a keepalive
+  `release()` and stops the client; rename re-reads state so the badge
+  tells the truth right away (the old name still holds the lock until its
+  lease lapses — noted in the dropdown).
+- Same-user tabs keep sharing one holder (no self-lockout; `user#tabId` can
+  come later without a protocol change). Canvas interactions stay live with
+  writes refused; `store.invalidate()` stayed out (cache-drop on failed write
+  already is the reload path).
+- Tests: lock-manager release unit tests, release endpoint (held/stranger/
+  free/unknown/no-user + immediate re-acquire), backoff + release vitest,
+  full `just test` / `lint` / `build` / `book` / `vrt-quick` (334 unchanged).
+
+Validation: `just test` green (174 Rust + 1264 vitest + 164 e2e), `just lint`
+clean, `just build` green, `just vrt-quick` 334 unchanged.
+Branch: `feat/0004-5-lock-harden`.
+
+---
+
+
 ## Task <N> — 0004.4 MCP `AI` holder + lock/version on reads
 
 MCP half of 0004: every write contends as the hardcoded `AI` user, and every read echoes the version and holder so an AI loop sees staleness without another call.

@@ -58,6 +58,9 @@ The server exposes:
   409 naming the holder.
 - `POST /api/projects/{id}/heartbeat` — renew the lease without touching
   the idle timer. Not held by this user, the client must re-acquire (409).
+- `POST /api/projects/{id}/release` — free the project when the caller holds
+  it (a closing tab's goodbye). Anyone else's live lock is left alone (409);
+  releasing a free project is a no-op (204).
 - `PUT /api/projects/{id}/files` — replace one project's tree
   (`{ user, base_version?, files: [{ path, content? }] }`), creating the
   project when needed. The lock is taken first (free projects

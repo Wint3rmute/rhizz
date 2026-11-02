@@ -33,7 +33,9 @@
     }
     projectLock.me = stored;
     // Locks are keyed by name: renaming while holding one hands it to the
-    // old name until its lease lapses.
+    // old name until its lease lapses. Re-read so the badge tells the truth
+    // right away.
+    void projectLock.refresh();
     if (wasHolding) {
       toastState.show(
         "Renamed — your old name still holds the lock until its lease lapses.",

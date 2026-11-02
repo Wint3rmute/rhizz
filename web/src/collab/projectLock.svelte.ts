@@ -16,6 +16,9 @@ import { toastState } from "../ToastState.svelte";
 /** How often the lock state is re-read while a project is open. */
 export const LOCK_POLL_MS = 4_000;
 
+/** Upper bound for the poll interval when the server is unreachable. */
+export const LOCK_POLL_MAX_MS = 30_000;
+
 /** How often the holder renews its lease (must stay under the 15s lease). */
 export const LOCK_HEARTBEAT_MS = 10_000;
 
@@ -52,8 +55,9 @@ export class ProjectLock {
   active = $derived(this.projectId !== null && this.serverUrl !== null);
 
   private fetchImpl: LockFetch = globalThis.fetch;
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private pollFailures = 0;
 
   /**
    * Starts tracking `projectId` against `serverUrl` (null for local/memory
@@ -70,17 +74,18 @@ export class ProjectLock {
     this.fetchImpl = fetchImpl;
     this.me ??= getOrCreateUsername();
     if (serverUrl === null) return;
+    this.pollFailures = 0;
     void this.refresh();
-    this.pollTimer = setInterval(() => void this.refresh(), LOCK_POLL_MS);
+    this.schedulePoll();
     this.heartbeatTimer = setInterval(
       () => void this.maybeHeartbeat(),
       LOCK_HEARTBEAT_MS,
     );
   }
 
-  /** Stops polling and forgets the project. */
+  /** Stops polling and heartbeats and forgets the project. */
   stop(): void {
-    if (this.pollTimer !== null) clearInterval(this.pollTimer);
+    if (this.pollTimer !== null) clearTimeout(this.pollTimer);
     if (this.heartbeatTimer !== null) clearInterval(this.heartbeatTimer);
     this.pollTimer = null;
     this.heartbeatTimer = null;
@@ -89,6 +94,24 @@ export class ProjectLock {
     this.version = null;
     this.lockedBy = null;
     this.lockExpiresAt = null;
+  }
+
+  /** Schedules the next poll, backing off while the server is unreachable. */
+  private schedulePoll(): void {
+    const delay = Math.min(
+      LOCK_POLL_MS * 2 ** this.pollFailures,
+      LOCK_POLL_MAX_MS,
+    );
+    this.pollTimer = setTimeout(() => void this.pollOnce(), delay);
+  }
+
+  private async pollOnce(): Promise<void> {
+    this.pollTimer = null;
+    const id = this.projectId;
+    if (id === null) return;
+    await this.refresh();
+    if (this.projectId !== id) return;
+    this.schedulePoll();
   }
 
   /** Re-reads the project's lock state. Never throws. */
@@ -101,6 +124,7 @@ export class ProjectLock {
         `${serverUrl.replace(/\/+$/, "")}/api/projects/${projectId}/state`,
       );
     } catch {
+      this.notePollFailure(projectId);
       return;
     }
     // Unmounted or switched projects while the request was in flight.
@@ -109,13 +133,18 @@ export class ProjectLock {
       this.version = null;
       this.lockedBy = null;
       this.lockExpiresAt = null;
+      this.pollFailures = 0;
       return;
     }
-    if (!response.ok) return;
+    if (!response.ok) {
+      this.notePollFailure(projectId);
+      return;
+    }
     let body: unknown;
     try {
       body = await response.json();
     } catch {
+      this.notePollFailure(projectId);
       return;
     }
     if (this.projectId !== projectId) return;
@@ -129,6 +158,36 @@ export class ProjectLock {
     this.lockedBy = typeof state.lockedBy === "string" ? state.lockedBy : null;
     this.lockExpiresAt =
       typeof state.lockExpiresAt === "string" ? state.lockExpiresAt : null;
+    this.pollFailures = 0;
+  }
+
+  /** Counts one failed poll (unless the project moved on meanwhile). */
+  private notePollFailure(projectId: string): void {
+    if (this.projectId !== projectId) return;
+    this.pollFailures += 1;
+  }
+
+  /**
+   * Best-effort goodbye for tab close: frees the project when this client
+   * holds it, so the address is reusable at once instead of waiting out the
+   * lease. Fire-and-forget with `keepalive` — the lease lapses on its own if
+   * the request never lands.
+   */
+  async release(): Promise<void> {
+    const { projectId, serverUrl, me } = this;
+    if (projectId === null || serverUrl === null || me === null) return;
+    try {
+      await this.fetchImpl(
+        `${serverUrl.replace(/\/+$/, "")}/api/projects/${projectId}/release`,
+        {
+          method: "POST",
+          headers: { "x-rhizz-user": me },
+          keepalive: true,
+        },
+      );
+    } catch {
+      // Best effort: the lease lapses without it.
+    }
   }
 
   /** Renews the lease while this client holds it. Never throws. */
