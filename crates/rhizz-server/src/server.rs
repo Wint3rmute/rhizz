@@ -60,6 +60,7 @@ pub fn app(data_dir: PathBuf) -> Router {
         .route("/api/projects/{id}/state", get(project_state))
         .route("/api/projects/{id}/lock", post(acquire_lock))
         .route("/api/projects/{id}/heartbeat", post(heartbeat_lock))
+        .route("/api/projects/{id}/release", post(release_lock))
         .route("/api/projects/{id}/files", put(write_project_files))
         .route("/api/projects/{id}", delete(delete_project))
         .route(
@@ -221,6 +222,51 @@ async fn write_project_files(
             tracing::error!(?err, "failed to write project");
             error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to write project")
         }
+    }
+}
+
+/// Handles `POST /api/projects/{id}/release`: frees the project when the
+/// `x-rhizz-user` caller holds it — a closing tab's goodbye, so the address
+/// is immediately reusable instead of waiting out the lease. Anyone else's
+/// live lock is left alone (409 naming the holder): there is no
+/// force-unlock. Releasing a free project is a no-op.
+async fn release_lock(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(user) = request_user(&headers) else {
+        return error_response(StatusCode::BAD_REQUEST, "missing x-rhizz-user");
+    };
+    match storage::resolve_project_dir(&state.data_dir, &id) {
+        Ok(_) => {}
+        Err(storage::ProjectError::Unknown(_)) => {
+            return error_response(StatusCode::NOT_FOUND, "unknown project");
+        }
+        Err(storage::ProjectError::Io(err)) => {
+            tracing::error!(?err, "failed to read project");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to read project",
+            );
+        }
+    }
+    if state.locks.release_if_held_by(&id, &user) {
+        return StatusCode::NO_CONTENT.into_response();
+    }
+    match state.locks.get(&id) {
+        Some(info) => {
+            let message = format!("project `{id}` is locked by `{}`", info.holder);
+            (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "lockedBy": info.holder,
+                    "message": message,
+                })),
+            )
+                .into_response()
+        }
+        None => StatusCode::NO_CONTENT.into_response(),
     }
 }
 
@@ -1375,6 +1421,100 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn release_lock_frees_the_holders_project_immediately() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+
+        // Alice holds it …
+        let response = app
+            .clone()
+            .oneshot(lock_request("POST", "/api/projects/drone/lock", Some("alice")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // … and her goodbye frees it at once: no waiting out the lease.
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/release",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Bob takes it right away.
+        let response = app
+            .oneshot(lock_request("POST", "/api/projects/drone/lock", Some("bob")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            body_json(response).await["lockedBy"],
+            json!("bob")
+        );
+    }
+
+    #[tokio::test]
+    async fn release_lock_leaves_other_holders_and_free_projects_alone() {
+        let tmp = data_dir_with_drone();
+        let app = app_at(&tmp);
+
+        // Releasing a free project is a no-op …
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/release",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // … while someone else's live lock refuses with their name: there is
+        // no force-unlock.
+        let response = app
+            .clone()
+            .oneshot(lock_request("POST", "/api/projects/drone/lock", Some("alice")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/release",
+                Some("bob"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert_eq!(body_json(response).await["lockedBy"], json!("alice"));
+
+        // Missing users and unknown projects are refused as usual.
+        let response = app
+            .clone()
+            .oneshot(lock_request("POST", "/api/projects/drone/release", None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let response = app
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/ghost/release",
+                Some("alice"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
