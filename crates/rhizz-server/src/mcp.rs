@@ -10,9 +10,11 @@
 //! `docs/**.md` file under a compare-and-swap version guard. A refused op
 //! leaves the file untouched.
 //!
-//! This is a POC: there is no authentication and no project locking (proposal
-//! 0004 is not implemented), so writes are last-writer-wins and doc edits are
-//! compare-and-swap only. It must not be exposed beyond localhost.
+//! This is a POC: there is no authentication. Writes take the project lock
+//! as the hardcoded `AI` user (proposal 0004): a project held by a human is
+//! refused naming the holder, and doc/model overwrites additionally
+//! compare-and-swap on the file version. It must not be exposed beyond
+//! localhost.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -556,7 +558,7 @@ impl RhizzMcp {
     /// the next page.
     #[tool(
         name = "fetch_projects",
-        description = "List Rhizz projects on this server (id, name, createdAt, updatedAt), most recently updated first, 10 per page. Pass the 1-based `page` to request a specific page (omitted means page 1). The result reports `page`, `pageSize`, `totalProjects`, and `totalPages`."
+        description = "List Rhizz projects on this server (id, name, createdAt, updatedAt), most recently updated first, 10 per page. Pass the 1-based `page` to request a specific page (omitted means page 1). The result reports `page`, `pageSize`, `totalProjects`, and `totalPages`. Every entry also carries the content-hash `version` and the lock holder (`lockedBy`, if any), so an AI loop sees staleness without another call."
     )]
     async fn fetch_projects(
         &self,
@@ -605,10 +607,57 @@ impl RhizzMcp {
             .saturating_mul(PAGE_SIZE)
             .min(total_projects);
         let end = start.saturating_add(PAGE_SIZE).min(total_projects);
-        let page_projects = projects
+        let mut page_projects = projects
             .get(start..end)
             .map(<[Value]>::to_vec)
             .unwrap_or_default();
+
+        // The version and lock ride on every entry so an AI loop sees
+        // staleness without another call. One walk per listed project.
+        let version_dir = self.data_dir.clone();
+        let version_ids: Vec<String> = page_projects
+            .iter()
+            .map(|entry| project_id(entry).to_owned())
+            .collect();
+        let versioned = tokio::task::spawn_blocking(move || {
+            version_ids
+                .iter()
+                .map(|id| storage::project_version(&version_dir, id).ok())
+                .collect::<Vec<_>>()
+        })
+        .await;
+        let versions = match versioned {
+            Ok(versions) => versions,
+            Err(err) => {
+                tracing::error!(?err, "fetch_projects: version task failed");
+                return Ok(tool_error("failed to load projects"));
+            }
+        };
+        for (entry, version) in page_projects.iter_mut().zip(versions) {
+            let id = project_id(entry).to_owned();
+            let lock = self.locks.get(&id);
+            let Some(obj) = entry.as_object_mut() else {
+                continue;
+            };
+            obj.insert(
+                "version".to_owned(),
+                version.map_or(Value::Null, Value::String),
+            );
+            match lock {
+                Some(info) => {
+                    obj.insert("lockedBy".to_owned(), Value::String(info.holder));
+                    obj.insert(
+                        "lockExpiresAt".to_owned(),
+                        Value::String(storage::format_rfc3339_millis(storage::millis_since_epoch(
+                            info.expires_at,
+                        ))),
+                    );
+                }
+                None => {
+                    obj.insert("lockedBy".to_owned(), Value::Null);
+                }
+            }
+        }
 
         let result = json!({
             "projects": page_projects,
@@ -630,7 +679,7 @@ impl RhizzMcp {
     /// hidden entries and symlinks are excluded.
     #[tool(
         name = "list_files",
-        description = "List the files of one Rhizz project: pass the project id from fetch_projects. Returns `files` as JSON objects with `path` and `kind` (\"file\" or \"directory\"); files also carry the mtime-based `revision` and a content-hash `version`. An unknown project is reported as a tool error."
+        description = "List the files of one Rhizz project: pass the project id from fetch_projects. Returns `files` as JSON objects with `path` and `kind` (\"file\" or \"directory\"); files also carry the mtime-based `revision` and a content-hash `version`. The result also carries the project-level content-hash `version` and the lock holder (`lockedBy`, if any). An unknown project is reported as a tool error."
     )]
     async fn list_files(
         &self,
@@ -677,7 +726,33 @@ impl RhizzMcp {
                 }),
             })
             .collect();
-        match serde_json::to_string(&json!({ "files": files })) {
+        // The project version rides along so an AI loop sees staleness
+        // without another call. Computed separately: entries and versions
+        // come from different helpers with no shared snapshot to reuse.
+        let version_dir = self.data_dir.clone();
+        let version_project = project.clone();
+        let versioned = tokio::task::spawn_blocking(move || {
+            storage::project_version(&version_dir, &version_project)
+        })
+        .await;
+        let version = match versioned {
+            Ok(Ok(version)) => version,
+            Ok(Err(storage::ProjectError::Unknown(_))) => {
+                return Ok(tool_error(format!("unknown project `{project}`")));
+            }
+            Ok(Err(err)) => {
+                tracing::error!(?err, "list_files: failed to version project");
+                return Ok(tool_error("failed to read project"));
+            }
+            Err(err) => {
+                tracing::error!(?err, "list_files: version task failed");
+                return Ok(tool_error("failed to read project"));
+            }
+        };
+        let mut payload = serde_json::Map::new();
+        payload.insert("files".to_owned(), Value::Array(files));
+        payload.extend(lock_state(&self.locks, &project, version));
+        match serde_json::to_string(&Value::Object(payload)) {
             Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
             Err(err) => {
                 tracing::error!(?err, "list_files: failed to encode entries");
@@ -763,13 +838,14 @@ impl RhizzMcp {
     /// Compiles one project and reports diagnostics plus the completion score.
     #[tool(
         name = "check_project",
-        description = "Compile one Rhizz project (as `rhizz check` would) and return its `diagnostics` (code, severity, file, line, message) and the completion `score` when the model resolved. Pass the project id from fetch_projects."
+        description = "Compile one Rhizz project (as `rhizz check` would) and return its `diagnostics` (code, severity, file, line, message) and the completion `score` when the model resolved. Pass the project id from fetch_projects. The result also carries the project-level content-hash `version` and the lock holder (`lockedBy`, if any)."
     )]
     async fn check_project(
         &self,
         params: Parameters<CheckProjectParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let data_dir = self.data_dir.clone();
+        let locks = self.locks.clone();
         let project = params.0.project;
         let loaded = tokio::task::spawn_blocking(move || {
             let sources = match storage::project_sources(&data_dir, &project) {
@@ -780,6 +856,13 @@ impl RhizzMcp {
                     return Ok(tool_error("failed to read project"));
                 }
             };
+            let version = match storage::project_version(&data_dir, &project) {
+                Ok(version) => version,
+                Err(err) => {
+                    tracing::error!(?err, "check_project: failed to version project");
+                    return Ok(tool_error("failed to read project"));
+                }
+            };
             let result = rhizz_core::compile(&sources);
             let diagnostics: Vec<Value> = result.diagnostics.iter().map(diagnostic_json).collect();
             let score = result
@@ -787,7 +870,10 @@ impl RhizzMcp {
                 .as_ref()
                 .map(rhizz_core::score)
                 .map(|report| score_json(&report));
-            let payload = json!({ "diagnostics": diagnostics, "score": score });
+            let mut payload = json!({ "diagnostics": diagnostics, "score": score });
+            if let Value::Object(ref mut map) = payload {
+                map.extend(lock_state(&locks, &project, version));
+            }
             match serde_json::to_string(&payload) {
                 Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
                 Err(err) => {
@@ -804,12 +890,11 @@ impl RhizzMcp {
         })
     }
 
-    /// Adds a system block. Last-writer-wins: proposal 0004 locking is not
-    /// implemented, so no lock is taken and a concurrent human edit can be
-    /// overwritten.
+    /// Adds a system block. Takes the project lock as the hardcoded `AI`
+    /// user (proposal 0004); a project held by a human is refused.
     #[tool(
         name = "add_system",
-        description = "Add a system block to a Rhizz project (`ModelOp add_system`). Pass the project id, the new `label`, and optional `full_name`. Returns `applied`, `warnings`, and no `path`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched; a mutation can never persist a broken model."
+        description = "Add a system block to a Rhizz project (`ModelOp add_system`). Pass the project id, the new `label`, and optional `full_name`. Returns `applied`, `warnings`, and no `path`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched; a mutation can never persist a broken model."
     )]
     async fn add_system(
         &self,
@@ -822,11 +907,11 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Adds a top-level component definition. Last-writer-wins: proposal 0004
-    /// locking is not implemented, so no lock is taken.
+    /// Adds a top-level component definition. Takes the project lock as the
+    /// hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "add_component_definition",
-        description = "Add a top-level component definition to a Rhizz project (`ModelOp add_component_definition`). Pass the project id, the new `label`, and optional `options` (leaf, full_name, tags, icon, color, border, font, ports). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Add a top-level component definition to a Rhizz project (`ModelOp add_component_definition`). Pass the project id, the new `label`, and optional `options` (leaf, full_name, tags, icon, color, border, font, ports). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn add_component_definition(
         &self,
@@ -845,11 +930,11 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Adds an instance of a definition. Last-writer-wins: proposal 0004
-    /// locking is not implemented, so no lock is taken.
+    /// Adds an instance of a definition. Takes the project lock as the
+    /// hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "add_instance",
-        description = "Add an instance of a top-level component inside a system or definition (`ModelOp add_instance`). Pass the project id, `parentPath` (a bare system/definition label or a nested instance path), `label`, and `source` (a top-level component label). Returns `applied`, the created `path`, and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Add an instance of a top-level component inside a system or definition (`ModelOp add_instance`). Pass the project id, `parentPath` (a bare system/definition label or a nested instance path), `label`, and `source` (a top-level component label). Returns `applied`, the created `path`, and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn add_instance(
         &self,
@@ -863,11 +948,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Renames a placed instance. Last-writer-wins: proposal 0004 locking is
-    /// not implemented, so no lock is taken.
+    /// Renames a placed instance. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "rename_component",
-        description = "Rename a placed instance (`ModelOp rename_component`). Pass the project id, the instance `path` (e.g. `demo/motor`), and `newLabel`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
+        description = "Rename a placed instance (`ModelOp rename_component`). Pass the project id, the instance `path` (e.g. `demo/motor`), and `newLabel`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
     )]
     async fn rename_component(
         &self,
@@ -880,11 +964,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Moves a placed instance between containers. Last-writer-wins: proposal
-    /// 0004 locking is not implemented, so no lock is taken.
+    /// Moves a placed instance between containers. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "reparent_component",
-        description = "Move a placed instance between containers (`ModelOp reparent_component`). Pass the project id, `sourcePath` (e.g. `demo/motor`), and `targetParentPath`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
+        description = "Move a placed instance between containers (`ModelOp reparent_component`). Pass the project id, `sourcePath` (e.g. `demo/motor`), and `targetParentPath`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
     )]
     async fn reparent_component(
         &self,
@@ -897,11 +980,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Patches a definition's attributes. Last-writer-wins: proposal 0004
-    /// locking is not implemented, so no lock is taken.
+    /// Patches a definition's attributes. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "update_component",
-        description = "Patch a component definition's attributes (`ModelOp update_component`; instance paths redirect to their definition). Pass the project id, `path`, and `patch` (full_name, icon, color, border, font, tags, leaf, ports). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Patch a component definition's attributes (`ModelOp update_component`; instance paths redirect to their definition). Pass the project id, `path`, and `patch` (full_name, icon, color, border, font, tags, leaf, ports). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_component(
         &self,
@@ -914,11 +996,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Patches a system's attributes. Last-writer-wins: proposal 0004 locking
-    /// is not implemented, so no lock is taken.
+    /// Patches a system's attributes. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "update_system",
-        description = "Patch a system's attributes (`ModelOp update_system`; only `full_name` and `icon` are honored). Pass the project id, bare system `path`, and `patch`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Patch a system's attributes (`ModelOp update_system`; only `full_name` and `icon` are honored). Pass the project id, bare system `path`, and `patch`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_system(
         &self,
@@ -934,11 +1015,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Deletes a definition or a placed instance. Last-writer-wins: proposal
-    /// 0004 locking is not implemented, so no lock is taken.
+    /// Deletes a definition or a placed instance. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "delete_component",
-        description = "Delete a component definition (bare label) or a placed instance (e.g. `demo/motor`) (`ModelOp delete_component`). A definition still in use is refused by the resolver. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Delete a component definition (bare label) or a placed instance (e.g. `demo/motor`) (`ModelOp delete_component`). A definition still in use is refused by the resolver. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_component(
         &self,
@@ -950,11 +1030,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Deletes a system. Last-writer-wins: proposal 0004 locking is not
-    /// implemented, so no lock is taken.
+    /// Deletes a system. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "delete_system",
-        description = "Delete a system by bare label (`ModelOp delete_system`). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Delete a system by bare label (`ModelOp delete_system`). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_system(
         &self,
@@ -966,11 +1045,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Adds a connection inside a scope. Last-writer-wins: proposal 0004
-    /// locking is not implemented, so no lock is taken.
+    /// Adds a connection inside a scope. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "add_connection",
-        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (`comp/port` or relative paths ending in a port). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
+        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (`comp/port` or relative paths ending in a port). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
     )]
     async fn add_connection(
         &self,
@@ -985,11 +1063,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Deletes a connection by label. Last-writer-wins: proposal 0004 locking
-    /// is not implemented, so no lock is taken.
+    /// Deletes a connection by label. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "delete_connection_by_label",
-        description = "Delete a connection by label, searching systems then definitions (`ModelOp delete_connection_by_label`). Pass the project id, `label`, optional `removePorts` to also delete endpoint ports no other connection uses (ports still used elsewhere are kept while the unshared ones are removed), and optional `ports` (`definition/port` entries) to delete only a subset of the unshared endpoint ports. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Delete a connection by label, searching systems then definitions (`ModelOp delete_connection_by_label`). Pass the project id, `label`, optional `removePorts` to also delete endpoint ports no other connection uses (ports still used elsewhere are kept while the unshared ones are removed), and optional `ports` (`definition/port` entries) to delete only a subset of the unshared endpoint ports. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_connection_by_label(
         &self,
@@ -1005,11 +1082,10 @@ impl RhizzMcp {
 
     /// Creates a connection together with the ports it ends on. This is the
     /// documented connection path for AI clients: one atomic op instead of
-    /// separate port patches plus `add_connection`. Last-writer-wins: proposal
-    /// 0004 locking is not implemented, so no lock is taken.
+    /// separate port patches plus `add_connection`. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "connect_components",
-        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. This is the documented connection path for AI clients. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. This is the documented connection path for AI clients. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn connect_components(
         &self,
@@ -1033,11 +1109,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Patches a connection's attributes. Last-writer-wins: proposal 0004
-    /// locking is not implemented, so no lock is taken.
+    /// Patches a connection's attributes. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "update_connection",
-        description = "Patch a connection's attributes (`ModelOp update_connection`). Pass the project id, `scopePath`, `label`, and `patch` (`full_name`, `tags`, `level`, `realized_by` as `{scopePath, label}` refs). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op (E017/E018/E019) is a tool error and leaves system.hcl untouched."
+        description = "Patch a connection's attributes (`ModelOp update_connection`). Pass the project id, `scopePath`, `label`, and `patch` (`full_name`, `tags`, `level`, `realized_by` as `{scopePath, label}` refs). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op (E017/E018/E019) is a tool error and leaves system.hcl untouched."
     )]
     async fn update_connection(
         &self,
@@ -1051,11 +1126,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Adds a top-level protocol. Last-writer-wins: proposal 0004 locking is
-    /// not implemented, so no lock is taken.
+    /// Adds a top-level protocol. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "add_protocol",
-        description = "Add a top-level protocol (`ModelOp add_protocol`). Pass the project id, `label`, and optional `options` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates`). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op (blank/`/`-containing/existing label) is a tool error and leaves system.hcl untouched."
+        description = "Add a top-level protocol (`ModelOp add_protocol`). Pass the project id, `label`, and optional `options` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates`). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op (blank/`/`-containing/existing label) is a tool error and leaves system.hcl untouched."
     )]
     async fn add_protocol(
         &self,
@@ -1073,11 +1147,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Patches a protocol's attributes. Last-writer-wins: proposal 0004
-    /// locking is not implemented, so no lock is taken.
+    /// Patches a protocol's attributes. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "update_protocol",
-        description = "Patch a protocol's attributes (`ModelOp update_protocol`; labels never change). Pass the project id, `path` (the protocol label), and `patch` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates` as full replacements). Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Patch a protocol's attributes (`ModelOp update_protocol`; labels never change). Pass the project id, `path` (the protocol label), and `patch` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates` as full replacements). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_protocol(
         &self,
@@ -1090,11 +1163,10 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Deletes a top-level protocol. Last-writer-wins: proposal 0004 locking
-    /// is not implemented, so no lock is taken.
+    /// Deletes a top-level protocol. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "delete_protocol",
-        description = "Delete a top-level protocol (`ModelOp delete_protocol`). Refused while a port names it or another protocol lists it in `encapsulates`. Pass the project id and `path`. Returns `applied` and `warnings`. Last-writer-wins: no project lock is taken (0004 is not implemented). A refused op is a tool error and leaves system.hcl untouched."
+        description = "Delete a top-level protocol (`ModelOp delete_protocol`). Refused while a port names it or another protocol lists it in `encapsulates`. Pass the project id and `path`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_protocol(
         &self,
@@ -1110,24 +1182,31 @@ impl RhizzMcp {
     /// hatch for models that incremental `ModelOp` mutations can no longer
     /// touch: a broken model refuses every op (a mutation can never persist
     /// a broken model), so the only way forward is to replace the file whole
-    /// and validate once. Compare-and-swap only: proposal 0004 locking is not
-    /// implemented, so no project lock is taken and there is no `AI`
-    /// identity — concurrent writes to the same file are serialized and an
-    /// overwrite needs the version `read_file` returned.
+    /// and validate once. Compare-and-swap on the file version, under the
+    /// project lock taken as the hardcoded `AI` identity (proposal 0004):
+    /// a project held by a human is refused — concurrent writes to the same
+    /// file are serialized and an overwrite needs the version `read_file`
+    /// returned.
     #[tool(
         name = "overwrite_model",
-        description = "Replace a project's primary model file (`system.hcl`, falling back to `main.hcl`) whole with new HCL content. The content is parsed and resolved; on resolver errors nothing is written and the diagnostics are returned. On success the canonical HCL is persisted (exactly what the web editor writes) and the new content-hash `version` and `totalLines` are returned with any warnings. When the file already exists, the `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed when no primary file exists yet is ignored. Compare-and-swap only: no project lock is taken and there is no `AI` identity (0004 is not implemented). Any refusal leaves the file untouched and never touches views or docs."
+        description = "Replace a project's primary model file (`system.hcl`, falling back to `main.hcl`) whole with new HCL content. The content is parsed and resolved; on resolver errors nothing is written and the diagnostics are returned. On success the canonical HCL is persisted (exactly what the web editor writes) and the new content-hash `version` and `totalLines` are returned with any warnings. When the file already exists, the `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed when no primary file exists yet is ignored. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched and never touches views or docs."
     )]
     async fn overwrite_model(
         &self,
         params: Parameters<OverwriteModelParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let data_dir = self.data_dir.clone();
+        let locks = self.locks.clone();
         let params = params.0;
+        let name = params.project.clone();
+        // MCP clients have no username of their own: every write contends
+        // as the hardcoded `AI` identity (proposal 0004).
         let loaded = tokio::task::spawn_blocking(move || {
             storage::overwrite_model(
                 &data_dir,
+                &locks,
                 &params.project,
+                "AI",
                 &params.content,
                 params.version.as_deref(),
             )
@@ -1137,6 +1216,11 @@ impl RhizzMcp {
             Ok(Ok(result)) => result,
             Ok(Err(storage::OverwriteModelError::Unknown(id))) => {
                 return Ok(tool_error(format!("unknown project `{id}`")));
+            }
+            Ok(Err(storage::OverwriteModelError::Locked { holder })) => {
+                return Ok(tool_error(format!(
+                    "project `{name}` is locked by `{holder}`; retry after they release it"
+                )));
             }
             Ok(Err(storage::OverwriteModelError::Io(err))) => {
                 tracing::error!(?err, "overwrite_model: failed to read or write model");
@@ -1170,24 +1254,30 @@ impl RhizzMcp {
     }
 
     /// Creates a new Markdown doc, or overwrites an existing one whole.
-    /// Compare-and-swap only: proposal 0004 locking is not implemented, so no
-    /// project lock is taken and there is no `AI` identity — concurrent writes
+    /// Compare-and-swap on the file version, under the project lock taken as
+    /// the hardcoded `AI` identity (proposal 0004) — concurrent writes
     /// to the same path are serialized and an overwrite needs the version
     /// `read_file` returned.
     #[tool(
         name = "create_doc",
-        description = "Create a new Markdown doc in a Rhizz project, or overwrite an existing one whole (proposal 0003 step 3; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. Returns the new `version` and `totalLines` so another write can chain without re-reading. Compare-and-swap only: no project lock is taken and there is no `AI` identity (0004 is not implemented). Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
+        description = "Create a new Markdown doc in a Rhizz project, or overwrite an existing one whole (proposal 0003 step 3; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. Returns the new `version` and `totalLines` so another write can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
     )]
     async fn create_doc(
         &self,
         params: Parameters<CreateDocParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let data_dir = self.data_dir.clone();
+        let locks = self.locks.clone();
         let params = params.0;
+        let name = params.project.clone();
+        // MCP clients have no username of their own: every write contends
+        // as the hardcoded `AI` identity (proposal 0004).
         let loaded = tokio::task::spawn_blocking(move || {
             storage::create_doc(
                 &data_dir,
+                &locks,
                 &params.project,
+                "AI",
                 &params.path,
                 &params.content,
                 params.version.as_deref(),
@@ -1198,6 +1288,11 @@ impl RhizzMcp {
             Ok(Ok(result)) => result,
             Ok(Err(storage::EditDocError::Unknown(id))) => {
                 return Ok(tool_error(format!("unknown project `{id}`")));
+            }
+            Ok(Err(storage::EditDocError::Locked { holder })) => {
+                return Ok(tool_error(format!(
+                    "project `{name}` is locked by `{holder}`; retry after they release it"
+                )));
             }
             Ok(Err(storage::EditDocError::Io(err))) => {
                 tracing::error!(?err, "create_doc: failed to read or write doc");
@@ -1223,23 +1318,29 @@ impl RhizzMcp {
     }
 
     /// Replaces one exact span of text in an existing Markdown doc.
-    /// Compare-and-swap only: proposal 0004 locking is not implemented, so no
-    /// project lock is taken and there is no `AI` identity — concurrent edits
+    /// Compare-and-swap on the file version, under the project lock taken as
+    /// the hardcoded `AI` identity (proposal 0004) — concurrent edits
     /// sent with the same version are serialized and only one applies.
     #[tool(
         name = "edit_documentation",
-        description = "Replace one exact span of text in an existing Markdown doc in a Rhizz project (proposal 0003 step 3, editing only; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), `old_text` (must occur exactly once in the file; empty is refused), `new_text`, and the content-hash `version` `read_file` returned. Returns the new `version` and `totalLines` so another edit can chain without re-reading. Compare-and-swap only: no project lock is taken and there is no `AI` identity (0004 is not implemented) — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
+        description = "Replace one exact span of text in an existing Markdown doc in a Rhizz project (proposal 0003 step 3, editing only; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), `old_text` (must occur exactly once in the file; empty is refused), `new_text`, and the content-hash `version` `read_file` returned. Returns the new `version` and `totalLines` so another edit can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
     )]
     async fn edit_documentation(
         &self,
         params: Parameters<EditDocumentationParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let data_dir = self.data_dir.clone();
+        let locks = self.locks.clone();
         let params = params.0;
+        let name = params.project.clone();
+        // MCP clients have no username of their own: every write contends
+        // as the hardcoded `AI` identity (proposal 0004).
         let loaded = tokio::task::spawn_blocking(move || {
             storage::edit_documentation(
                 &data_dir,
+                &locks,
                 &params.project,
+                "AI",
                 &params.path,
                 &params.old_text,
                 &params.new_text,
@@ -1251,6 +1352,11 @@ impl RhizzMcp {
             Ok(Ok(result)) => result,
             Ok(Err(storage::EditDocError::Unknown(id))) => {
                 return Ok(tool_error(format!("unknown project `{id}`")));
+            }
+            Ok(Err(storage::EditDocError::Locked { holder })) => {
+                return Ok(tool_error(format!(
+                    "project `{name}` is locked by `{holder}`; retry after they release it"
+                )));
             }
             Ok(Err(storage::EditDocError::Io(err))) => {
                 tracing::error!(?err, "edit_documentation: failed to read or write doc");
@@ -1523,6 +1629,29 @@ fn mutation_not_applied() -> CallToolResult {
 /// protocol error, so the model can see it and the session stays usable.
 fn tool_error(message: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message.into())])
+}
+
+/// The lock/version tail appended to read-tool payloads so an AI loop sees
+/// staleness without another call: the content-hash `version` plus who holds
+/// the lock (`lockedBy`, and `lockExpiresAt` when held).
+fn lock_state(
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    version: String,
+) -> serde_json::Map<String, Value> {
+    let mut state = serde_json::Map::new();
+    state.insert("version".to_owned(), Value::String(version));
+    state.insert("lockedBy".to_owned(), Value::Null);
+    if let Some(info) = locks.get(project_id) {
+        state.insert("lockedBy".to_owned(), Value::String(info.holder));
+        state.insert(
+            "lockExpiresAt".to_owned(),
+            Value::String(storage::format_rfc3339_millis(storage::millis_since_epoch(
+                info.expires_at,
+            ))),
+        );
+    }
+    state
 }
 
 /// The `updatedAt` stamp of a project, or an empty string when absent.
@@ -2574,6 +2703,238 @@ mod tests {
 
         let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
         assert!(content.contains("system \"other\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_ai_holder_is_visible_to_http_watchers() {
+        // After an AI mutation auto-acquires, HTTP state names `AI` as the
+        // holder — the same lock both frontends contend on.
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            202,
+            "add_system",
+            json!({ "project": "demo", "label": "other" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/projects/demo/state")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let state: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(state["lockedBy"], json!("AI"));
+        assert!(state["lockExpiresAt"].as_str().is_some());
+        assert_eq!(state["version"].as_str().unwrap().len(), 64);
+    }
+
+    #[tokio::test]
+    async fn tools_call_writes_refuse_while_a_human_holds_the_lock() {
+        // Every MCP write tool contends as `AI`: held by a human, model
+        // overwrites, doc edits, and doc creates are all refused naming the
+        // holder, with every file byte-identical.
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let model_before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        let doc_before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
+
+        let lock = Request::builder()
+            .method("POST")
+            .uri("/api/projects/demo/lock")
+            .header("x-rhizz-user", "alice")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(lock).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // The lock is checked before versions or matches, so no version is
+        // needed to prove the refusal.
+        for (id, name, arguments) in [
+            (
+                203,
+                "overwrite_model",
+                json!({ "project": "demo", "content": "system \"demo\" {}\n" }),
+            ),
+            (
+                204,
+                "edit_documentation",
+                json!({
+                    "project": "demo",
+                    "path": "docs/note.md",
+                    "old_text": "alpha",
+                    "new_text": "ALPHA",
+                    "version": "whatever",
+                }),
+            ),
+            (
+                205,
+                "create_doc",
+                json!({
+                    "project": "demo",
+                    "path": "docs/note.md",
+                    "content": "# Replaced\n",
+                    "version": "whatever",
+                }),
+            ),
+        ] {
+            let payload = call_tool(&app, &session, id, name, arguments).await;
+            let text = tool_error_text(&payload);
+            assert!(
+                text.contains("alice"),
+                "{name}: expected the holder in the refusal: {text}"
+            );
+        }
+        assert_eq!(
+            std::fs::read(tmp.path().join("demo/system.hcl")).unwrap(),
+            model_before,
+            "refused writes must not touch system.hcl"
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap(),
+            doc_before,
+            "refused writes must not touch the doc"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_ai_lock_expires_and_frees_the_project() {
+        // A human lock lapses after its lease (15s): the AI mutation refused
+        // while it was held applies once it has expired.
+        let tmp = tempfile::tempdir().unwrap();
+        write_mutation_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let lock = Request::builder()
+            .method("POST")
+            .uri("/api/projects/demo/lock")
+            .header("x-rhizz-user", "alice")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(lock).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let payload = call_tool(
+            &app,
+            &session,
+            206,
+            "add_system",
+            json!({ "project": "demo", "label": "other" }),
+        )
+        .await;
+        assert!(
+            tool_error_text(&payload).contains("alice"),
+            "held lock must refuse the AI: {payload}"
+        );
+
+        tokio::time::sleep(std::time::Duration::from_secs(16)).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            207,
+            "add_system",
+            json!({ "project": "demo", "label": "other" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true));
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("system \"other\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_tools_echo_version_and_lock() {
+        // `list_files`, `check_project`, and `fetch_projects` all echo the
+        // content-hash version plus the holder, so an AI loop sees staleness
+        // without another call.
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let expected = crate::storage::project_version(tmp.path(), "demo").unwrap();
+
+        let payload = call_tool(
+            &app,
+            &session,
+            208,
+            "list_files",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        let result = result_value(&payload);
+        assert_eq!(result["version"], json!(expected));
+        assert_eq!(result["lockedBy"], json!(null));
+        assert!(result.get("lockExpiresAt").is_none());
+
+        let payload = call_tool(
+            &app,
+            &session,
+            209,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        let result = result_value(&payload);
+        assert_eq!(result["version"], json!(expected));
+        assert_eq!(result["lockedBy"], json!(null));
+
+        let payload = call_tool(&app, &session, 210, "fetch_projects", json!({})).await;
+        let result = result_value(&payload);
+        let entries = result["projects"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["version"], json!(expected));
+        assert_eq!(entries[0]["lockedBy"], json!(null));
+
+        // Held by a human, every read tool names her.
+        let lock = Request::builder()
+            .method("POST")
+            .uri("/api/projects/demo/lock")
+            .header("x-rhizz-user", "alice")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(lock).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let payload = call_tool(
+            &app,
+            &session,
+            211,
+            "list_files",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        let result = result_value(&payload);
+        assert_eq!(result["version"], json!(expected));
+        assert_eq!(result["lockedBy"], json!("alice"));
+        assert!(result["lockExpiresAt"].as_str().is_some());
+
+        let payload = call_tool(&app, &session, 212, "fetch_projects", json!({})).await;
+        let entries = result_value(&payload)["projects"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(entries[0]["lockedBy"], json!("alice"));
+        assert!(entries[0]["lockExpiresAt"].as_str().is_some());
     }
 
     /// Writes a project with two instances for connection tests.
